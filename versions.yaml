@@ -141,7 +141,7 @@ assets:
           version: *default-image-version
         mariner:
           name: "cbl-mariner"
-          version: "2.0"
+          version: "3.0"
         nvidia-gpu:
           name: *default-image-name
           version: "jammy"
