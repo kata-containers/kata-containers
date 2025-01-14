@@ -60,7 +60,7 @@ setup_nvidia-gpu-admin-tools() {
 
 	rm -rf dist
 	# Installed via pipx local python environment
-	"${HOME}"/local/bin/pyinstaller -s -F gpu-admin-tools/nvidia_gpu_tools.py
+	/usr/local/bin/pyinstaller -s -F gpu-admin-tools/nvidia_gpu_tools.py
 
 	cp dist/nvidia_gpu_tools ../destdir/sbin/.
 
