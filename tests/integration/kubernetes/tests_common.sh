@@ -317,6 +317,21 @@ add_requests_to_policy_settings() {
 	done
 }
 
+# Change Rego rules to allow one or more ttrpc requests from the Host to the Guest.
+allow_requests() {
+	declare -r settings_dir="$1"
+	shift
+	declare -r requests=("$@")
+
+	auto_generate_policy_enabled || return 0
+
+	for request in "${requests[@]}"
+	do
+		info "${settings_dir}/rules.rego: allowing ${request}"
+		sed -i "s/^default \(${request}\).\+/default \1 := true/" "${settings_dir}"/rules.rego
+	done
+}
+
 # Change genpolicy settings to allow executing on the Guest VM the commands
 # used by "kubectl cp" from the Host to the Guest.
 add_copy_from_host_to_policy_settings() {
