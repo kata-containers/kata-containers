@@ -91,6 +91,7 @@ else
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
+		"k8s-trusted-ephemeral-data-storage.bats" \
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)

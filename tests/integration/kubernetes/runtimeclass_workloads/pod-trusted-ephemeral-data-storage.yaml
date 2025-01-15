@@ -1,0 +1,22 @@
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: trusted-ephemeral-data-storage
+  annotations:
+    io.katacontainers.config.hypervisor.block_device_driver: virtio-blk
+spec:
+  runtimeClassName: kata
+  terminationGracePeriodSeconds: 0
+  restartPolicy: Never
+  containers:
+  - image: quay.io/prometheus/busybox:latest
+    name: busybox
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: temp-encrypted
+      mountPath: /mnt/temp-encrypted
+  volumes:
+  - name: temp-encrypted
+    emptyDir:
+      sizeLimit: 10G
