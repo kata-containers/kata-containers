@@ -9,6 +9,8 @@ source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
+AZ_REGION="${AZ_REGION:-eastus}"
+AZ_NODEPOOL_TAGS="${AZ_NODEPOOL_TAGS:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
@@ -106,7 +108,7 @@ function create_cluster() {
 		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
-		-l eastus \
+		-l "${AZ_REGION}" \
 		-n "${rg}"
 
 	# Required by e.g. AKS App Routing for KBS installation.
@@ -123,7 +125,8 @@ function create_cluster() {
 		-s "$(_print_instance_type)" \
 		--node-count 1 \
 		--generate-ssh-keys \
-		--tags "${tags[@]}"
+		--tags "${tags[@]}" \
+		$([ -n "${AZ_NODEPOOL_TAGS}" ] && echo "--nodepool-tags "${AZ_NODEPOOL_TAGS}"")
 }
 
 function install_bats() {
