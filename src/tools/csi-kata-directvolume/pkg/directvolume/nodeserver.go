@@ -10,8 +10,10 @@ package directvolume
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -95,8 +97,12 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
 	}
 
-	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
-		targetPath, fsType, devicePath, readOnly, volumeID)
+	klog.Infoln("target", targetPath)
+	klog.Infoln("volType", volType)
+	klog.Infoln("fstype", fsType)
+	klog.Infoln("device", devicePath)
+	klog.Infoln("readonly", readOnly)
+	klog.Infoln("volumeID", volumeID)
 
 	options := []string{"bind"}
 	if readOnly {
@@ -120,13 +126,20 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		return nil, status.Error(codes.Aborted, errMsg)
 	}
 
+	var guestOptions []string
+	if isLoopDevice(attrib) {
+		guestOptions = []string{}
+	} else {
+		guestOptions = options
+	}
+
 	// kata-containers DirectVolume add
 	mountInfo := utils.MountInfo{
 		VolumeType: volType,
 		Device:     devicePath,
 		FsType:     fsType,
 		Metadata:   attrib,
-		Options:    options,
+		Options:    guestOptions,
 	}
 	if err := utils.AddDirectVolume(targetPath, mountInfo); err != nil {
 		klog.Errorf("add direct volume with source %s and mountInfo %v failed", targetPath, mountInfo)
@@ -223,8 +236,27 @@ func (dv *directVolume) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUn
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
+func parseBool(s string) bool {
+	if b, err := strconv.ParseBool(s); err != nil {
+		return false
+	} else {
+		return b
+	}
+}
+
 func isDirectVolume(VolumeCtx map[string]string) bool {
-	return VolumeCtx[utils.IsDirectVolume] == "True"
+	return parseBool(VolumeCtx[utils.IsDirectVolume])
+}
+
+func isLoopDevice(VolumeCtx map[string]string) bool {
+	return parseBool(VolumeCtx[utils.KataContainersDirectLoop])
+}
+
+// getDeviceSymlinkPath returns the path of the symlink that is used to
+// point to the loop device from inside the specified stagingTargetPath
+// directory.
+func getDeviceSymlinkPath(stagingTargetPath string) string {
+	return filepath.Join(stagingTargetPath, "device")
 }
 
 func (dv *directVolume) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
@@ -234,10 +266,6 @@ func (dv *directVolume) NodeStageVolume(ctx context.Context, req *csi.NodeStageV
 	// Check arguments
 	if len(volumeID) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "Volume ID missing in request")
-	}
-	stagingTargetPath := req.GetStagingTargetPath()
-	if stagingTargetPath == "" {
-		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
 	}
 	if req.GetVolumeCapability() == nil {
 		return nil, status.Error(codes.InvalidArgument, "Volume Capability missing in request")
@@ -270,6 +298,24 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
+
+	deviceLink := getDeviceSymlinkPath(stagingTargetPath)
+
+	if _, err := os.Stat(deviceLink); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, status.Errorf(codes.Internal, "failed to stat file %s: %v", deviceLink, err)
+		}
+		// Else this volume didn't use a loop device, so do nothing.
+	} else {
+		// We have to resolve the symlink first because losetup won't follow it.
+		canonicalDevice, err := filepath.EvalSymlinks(deviceLink)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to resolve device symlink %s: %v", deviceLink, err)
+		}
+		if err := exec.Command("losetup", "-d", canonicalDevice).Run(); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to detach loop device %s: %v", deviceLink, err)
+		}
+	}
 
 	// Unmount only if the target path is really a mount point.
 	if isMnt, err := dv.config.safeMounter.IsMountPoint(stagingTargetPath); err != nil {
@@ -425,16 +471,20 @@ func (dv *directVolume) stageSPDKVolume(req *csi.NodeStageVolumeRequest, volumeI
 }
 
 func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volumeID string) (*csi.NodeStageVolumeResponse, error) {
+	stagingTargetPath := req.GetStagingTargetPath()
+	if stagingTargetPath == "" {
+		return nil, status.Error(codes.InvalidArgument, "Target path missing in request")
+	}
+
 	capacityInBytes := req.VolumeContext[utils.CapabilityInBytes]
-	devicePath, err := utils.CreateDirectBlockDevice(volumeID, capacityInBytes, dv.config.StoragePath)
+	imagePath, err := utils.CreateDirectBlockDevice(volumeID, capacityInBytes, dv.config.StoragePath)
 	if err != nil {
 		errMsg := status.Errorf(codes.Internal, "setup storage for volume '%s' failed", volumeID)
 		return &csi.NodeStageVolumeResponse{}, errMsg
 	}
 
 	// /full_path_on_host/VolumeId/
-	stagingTargetPath := req.GetStagingTargetPath()
-	deviceUpperPath := filepath.Dir(*devicePath)
+	imageUpperPath := filepath.Dir(*imagePath)
 	if canMnt, err := utils.CanDoBindmount(dv.config.safeMounter, stagingTargetPath); err != nil {
 		return nil, err
 	} else if !canMnt {
@@ -443,8 +493,8 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 	}
 
 	options := []string{"bind"}
-	if err := dv.config.safeMounter.DoBindmount(deviceUpperPath, stagingTargetPath, "", options); err != nil {
-		klog.Errorf("safe mounter: %v do bind mount %v failed, with error: %v", deviceUpperPath, stagingTargetPath, err.Error())
+	if err := dv.config.safeMounter.DoBindmount(imageUpperPath, stagingTargetPath, "", options); err != nil {
+		klog.Errorf("safe mounter: %v do bind mount %v failed, with error: %v", imageUpperPath, stagingTargetPath, err.Error())
 		return nil, err
 	}
 
@@ -454,11 +504,33 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 		fsType = utils.DefaultFsType
 	}
 
-	if err := dv.config.safeMounter.SafeFormatWithFstype(*devicePath, fsType, options); err != nil {
+	if err := dv.config.safeMounter.SafeFormatWithFstype(*imagePath, fsType, options); err != nil {
 		return nil, err
 	}
 
-	dv.config.VolumeDevices[volumeID] = *devicePath
+	if isLoopDevice(req.VolumeContext) {
+		deviceLink := getDeviceSymlinkPath(stagingTargetPath)
+
+		losetupOut, err := exec.Command("losetup", "-f", "--show", *imagePath).Output()
+		if err != nil {
+			var stderr []byte
+			if exitErr, isExitError := err.(*exec.ExitError); isExitError {
+				stderr = exitErr.Stderr
+			}
+			errMsg := status.Errorf(codes.Internal, "failed to set up loop device from %s: %v: %s", *imagePath, err, stderr)
+			return &csi.NodeStageVolumeResponse{}, errMsg
+		}
+
+		devicePath := strings.TrimSuffix(string(losetupOut), "\n")
+
+		if err := os.Symlink(devicePath, deviceLink); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create symlink at %s: %v", deviceLink, err)
+		}
+
+		dv.config.VolumeDevices[volumeID] = devicePath
+	} else {
+		dv.config.VolumeDevices[volumeID] = *imagePath
+	}
 
 	klog.Infof("directvolume: volume %s has been staged.", stagingTargetPath)
 
