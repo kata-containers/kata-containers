@@ -205,7 +205,7 @@ spec:
         # vhost there.
         - hostPath:
             path: /var/lib/spdk/vhost
-            type: Directory
+            type: DirectoryOrCreate
           name: vhost-dir
         # rawdisk there.
         - hostPath:
@@ -215,7 +215,5 @@ spec:
         # spdk socket stored there.
         - hostPath:
             path: /var/tmp
-            type: Directory
+            type: DirectoryOrCreate
           name: spdk-dir
-
-
