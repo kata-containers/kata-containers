@@ -9,9 +9,12 @@ package drivers
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -155,6 +158,92 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 		return true, nil
 	}
 	return false, nil
+}
+
+func getMajorMinorFromDevPath(devPath string) (uint32, uint32, error) {
+	fi, err := os.Stat(devPath)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	dev := fi.Sys().(*syscall.Stat_t)
+	return uint32(dev.Rdev >> 8), uint32(dev.Rdev & 0xff), nil
+}
+
+func extractIndex(devicePath string) (string, error) {
+
+	base := filepath.Base(devicePath)
+
+	const prefix = "vfio"
+	if !strings.HasPrefix(base, prefix) {
+		return "0", fmt.Errorf("unexpected device name format: %s", base)
+	}
+	return strings.TrimPrefix(base, prefix), nil
+}
+
+func getBdfFromVFIODev(major uint32, minor uint32) (string, error) {
+	devPath := fmt.Sprintf("/sys/dev/char/%d:%d", major, minor)
+	realPath, err := filepath.EvalSymlinks(devPath)
+	if err != nil {
+		return "", fmt.Errorf("Failed to resolve symlink for %s: %v", devPath, err)
+	}
+
+	bdfRegex := regexp.MustCompile(`([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])`)
+	matches := bdfRegex.FindAllString(realPath, -1)
+	if len(matches) == 0 {
+		return "", fmt.Errorf("No BDF found in resolved path: %s", realPath)
+	}
+	return matches[len(matches)-1], nil
+}
+
+// GetDeviceFromVFIODev return the host device associated with the VFIO device
+// There is only one device per VFIO device in the case of IOMMUFD
+func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
+	// The way we get the host BDF is by reading the symlink of the char
+	// device major:minor entries in /sys/chart/major:minor
+	// $ ls -l /dev/vfio/devices/vfio0
+	// crw------- 1 root root 237, 0 Jan 15 16:53 /dev/vfio/devices/vfio0
+	major, minor, err := getMajorMinorFromDevPath(device.HostPath)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get major:minor from %s: %v", device.HostPath, err)
+	}
+	// $ ls -l /sys/dev/char/237:0
+	// /sys/dev/char/237:0 -> ../../devices/pci0000:64/0000:64:00.0/0000:65:00.0/vfio-dev/vfio0
+	deviceBDF, err := getBdfFromVFIODev(major, minor)
+	if err != nil {
+		return nil, err
+	}
+
+	deviceSysfsDev := path.Join(config.SysBusPciDevicesPath, deviceBDF)
+	vfioDeviceType, err := GetVFIODeviceType(deviceSysfsDev)
+	if err != nil {
+		return nil, err
+	}
+
+	vendorID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
+	deviceID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
+	pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
+
+	id, err := extractIndex(device.HostPath)
+	if err != nil {
+		return nil, err
+	}
+
+	vfio := config.VFIODev{
+		ID:       id,
+		Type:     vfioDeviceType,
+		BDF:      deviceBDF,
+		SysfsDev: deviceSysfsDev,
+		IsPCIe:   IsPCIeDevice(deviceBDF),
+		Class:    pciClass,
+		VendorID: vendorID,
+		DeviceID: deviceID,
+		Port:     device.Port,
+		HostPath: device.HostPath,
+	}
+	vfioDevs := []*config.VFIODev{&vfio}
+
+	return vfioDevs, nil
 }
 
 // GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group

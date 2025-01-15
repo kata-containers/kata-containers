@@ -28,6 +28,7 @@ const (
 	iommuGroupPath        = "/sys/bus/pci/devices/%s/iommu_group"
 	vfioDevPath           = "/dev/vfio/%s"
 	vfioAPSysfsDir        = "/sys/devices/vfio_ap"
+	IommufdDevPath        = "/dev/vfio/devices"
 )
 
 // VFIODevice is a vfio device meant to be passed to the hypervisor
@@ -64,9 +65,18 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 	}()
 
-	device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo)
-	if err != nil {
-		return err
+	// This work for IOMMUFD enabled kernels > 6.x
+	// In the case of IOMMUFD the device.HostPath will look like
+	// /dev/vfio/devices/vfio0
+	// (1) Check if we have the new IOMMUFD or old container based VFIO
+	if strings.HasPrefix(device.DeviceInfo.HostPath, IommufdDevPath) {
+		device.VfioDevs, err = GetDeviceFromVFIODev(*device.DeviceInfo)
+	} else {
+		// Once we have
+		device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, vfio := range device.VfioDevs {
