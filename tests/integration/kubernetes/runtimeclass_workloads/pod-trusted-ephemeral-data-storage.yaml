@@ -1,0 +1,26 @@
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: trusted-ephemeral-data-storage
+spec:
+  runtimeClassName: kata
+  terminationGracePeriodSeconds: 0
+  restartPolicy: Never
+  containers:
+  - image: quay.io/prometheus/busybox:latest
+    name: busybox
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: temp-encrypted
+      mountPath: /mnt/temp-encrypted
+  volumes:
+  - name: temp-encrypted
+    ephemeral:
+      volumeClaimTemplate:
+        spec:
+          accessModes: [ReadWriteOncePod]
+          storageClassName: csi-kata-directvolume-sc
+          resources:
+            requests:
+              storage: 10G
