@@ -25,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 )
 
 // Machine describes the machine type qemu will emulate.
@@ -1869,6 +1871,9 @@ func (b PCIeSwitchDownstreamPortDevice) Valid() bool {
 
 // VFIODevice represents a qemu vfio device meant for direct access by guest OS.
 type VFIODevice struct {
+	// ID index of the vfio device in devfs or sysfs used for IOMMUFD
+	ID string
+
 	// Bus-Device-Function of device
 	BDF string
 
@@ -1944,6 +1949,12 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 
 	if vfioDev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vfioDev.DevNo))
+	}
+
+	if strings.HasPrefix(vfioDev.SysfsDev, drivers.IommufdDevPath) {
+		qemuParams = append(qemuParams, "-object")
+		qemuParams = append(qemuParams, fmt.Sprintf("iommufd,id=iommufd%s", vfioDev.ID))
+		deviceParams = append(deviceParams, fmt.Sprintf("iommufd=iommufd%s", vfioDev.ID))
 	}
 
 	qemuParams = append(qemuParams, "-device")

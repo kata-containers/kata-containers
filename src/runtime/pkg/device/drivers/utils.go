@@ -233,7 +233,7 @@ func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
 		ID:       id,
 		Type:     vfioDeviceType,
 		BDF:      deviceBDF,
-		SysfsDev: deviceSysfsDev,
+		SysfsDev: device.HostPath,
 		IsPCIe:   IsPCIeDevice(deviceBDF),
 		Class:    pciClass,
 		VendorID: vendorID,
