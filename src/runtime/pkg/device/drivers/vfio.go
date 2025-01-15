@@ -71,6 +71,9 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	// (1) Check if we have the new IOMMUFD or old container based VFIO
 	if strings.HasPrefix(device.DeviceInfo.HostPath, IommufdDevPath) {
 		device.VfioDevs, err = GetDeviceFromVFIODev(*device.DeviceInfo)
+		if err != nil {
+			return err
+		}
 	} else {
 		// Once we have
 		device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo)

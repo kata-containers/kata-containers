@@ -792,7 +792,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			return fmt.Errorf("Cannot get host path for device: %v err: %v", dev, err)
 		}
 
-		vfioDevices := []*config.VFIODev{}
+		var vfioDevices []*config.VFIODev
 		// This works for IOMMUFD enabled kernels > 6.x
 		// In the case of IOMMUFD the device.HostPath will look like
 		// /dev/vfio/devices/vfio0
