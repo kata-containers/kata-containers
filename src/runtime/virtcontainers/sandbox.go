@@ -1275,12 +1275,15 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 
 	go func() {
 		for scanner.Scan() {
-			s.Logger().WithFields(logrus.Fields{
-				"console-protocol": cw.proto,
-				"console-url":      cw.consoleURL,
-				"sandbox":          s.id,
-				"vmconsole":        scanner.Text(),
-			}).Debug("reading guest console")
+			text := scanner.Text()
+			if text != "" {
+				s.Logger().WithFields(logrus.Fields{
+					"console-protocol": cw.proto,
+					"console-url":      cw.consoleURL,
+					"sandbox":          s.id,
+					"vmconsole":        text,
+				}).Debug("reading guest console")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
