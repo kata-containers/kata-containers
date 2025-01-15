@@ -33,6 +33,47 @@ k8s_wait_pod_be_ready() {
 	kubectl wait --timeout="${wait_time}s" --for=condition=ready "pods/$pod_name"
 }
 
+# Create a pod with a given number of retries if an output includes a timeout.
+#
+# Parameters:
+#	$1 - the pod configuration file.
+#
+retry_kubectl_apply() {
+    local file_path=$1
+    local retries=5
+    local delay=5
+    local attempt=1
+    local func_name="${FUNCNAME[0]}"
+
+    while true; do
+        output=$(kubectl apply -f "$file_path" 2>&1) || true
+        echo ""
+        echo "$func_name: Attempt $attempt/$retries"
+        echo "$output"
+
+        # Check for timeout and retry if needed
+        if echo "$output" | grep -iq "timed out"; then
+            if [ $attempt -ge $retries ]; then
+                echo "$func_name: Max ${retries} retries reached. Failed due to timeout."
+                return 1
+            fi
+            echo "$func_name: Timeout encountered, retrying in $delay seconds..."
+            sleep $delay
+            attempt=$((attempt + 1))
+            continue
+        fi
+
+        # Check for any other kind of error
+        if echo "$output" | grep -iq "error"; then
+            echo "$func_name: Error detected in kubectl output. Aborting."
+            return 1
+        fi
+
+        echo "$func_name: Resource created successfully."
+        return 0
+    done
+}
+
 # Create a pod and wait it be ready, otherwise fail.
 #
 # Parameters:
@@ -49,7 +90,7 @@ k8s_create_pod() {
 		return 1
 	fi
 
-	kubectl apply -f "${config_file}"
+	retry_kubectl_apply "${config_file}"
 	if ! pod_name=$(kubectl get pods -o jsonpath='{.items..metadata.name}'); then
 		echo "Failed to create the pod"
 		return 1
@@ -143,7 +184,7 @@ assert_pod_fail() {
 	echo "In assert_pod_fail: $container_config"
 	echo "Attempt to create the container but it should fail"
 
-	kubectl apply -f "${container_config}"
+	retry_kubectl_apply "${container_config}"
 	if ! pod_name=$(kubectl get pods -o jsonpath='{.items..metadata.name}'); then
 		echo "Failed to create the pod"
 		return 1
