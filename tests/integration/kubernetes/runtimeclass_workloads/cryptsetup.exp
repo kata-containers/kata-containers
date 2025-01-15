@@ -1,0 +1,12 @@
+# Copyright (c) 2025 Microsoft Corporation
+# SPDX-License-Identifier: Apache-2.0
+set timeout 60
+
+set POD_ID [lindex $argv 0]
+set DM_DEVICE [lindex $argv 1]
+
+spawn /opt/kata/bin/kata-runtime exec $POD_ID
+expect "# "
+send "cryptsetup status $DM_DEVICE\n"
+send "exit\n"
+expect eof
