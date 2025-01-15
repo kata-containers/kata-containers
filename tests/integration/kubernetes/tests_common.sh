@@ -37,6 +37,8 @@ K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+GENPOLICY_BINARY="${GENPOLICY_BINARY:-"/opt/kata/bin/genpolicy"}"
+GENPOLICY_SETTINGS_DIR="${GENPOLICY_SETTINGS_DIR:-"/opt/kata/share/defaults/kata-containers"}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
@@ -160,12 +162,11 @@ install_genpolicy_drop_ins() {
 # genpolicy-settings.json and genpolicy-settings.d/*.json (drop-ins).
 create_common_genpolicy_settings() {
 	declare -r genpolicy_settings_dir="$1"
-	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
 
 	auto_generate_policy_enabled || return 0
 
-	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
-	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
+	cp "${GENPOLICY_SETTINGS_DIR}/genpolicy-settings.json" "${genpolicy_settings_dir}"
+	cp "${GENPOLICY_SETTINGS_DIR}/rules.rego" "${genpolicy_settings_dir}"
 
 	mkdir -p "${genpolicy_settings_dir}/genpolicy-settings.d"
 	install_genpolicy_drop_ins \
@@ -222,7 +223,7 @@ auto_generate_policy_no_added_flags() {
 	declare -r additional_flags="${4:-""}"
 
 	auto_generate_policy_enabled || return 0
-	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
+	local genpolicy_command="RUST_LOG=info ${GENPOLICY_BINARY} -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}"
 
