@@ -113,6 +113,10 @@ is_k3s_or_rke2() {
 	esac
 }
 
+is_runtime_rs() {
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
+}
+
 # Copy the right combination of drop-ins from drop-in-examples/ into
 # genpolicy-settings.d/. Drop-ins are layered: 10-* for platform base,
 # 20-* for OCI version and other overlays.
@@ -143,6 +147,11 @@ install_genpolicy_drop_ins() {
 	# 20-* experimental force guest pull overlay
 	if [[ "${PULL_TYPE:-}" == "experimental-force-guest-pull" ]]; then
 		cp "${examples_dir}/20-experimental-force-guest-pull-drop-in.json" "${settings_d}/"
+	fi
+
+	# 20-* runtime-rs overlay (disable encrypted emptyDir, not supported yet)
+	if is_runtime_rs; then
+		cp "${examples_dir}/20-runtime-rs-drop-in.json" "${settings_d}/"
 	fi
 }
 
@@ -279,6 +288,21 @@ add_requests_to_policy_settings() {
 		info "Allowing ${request} in ${overrides_file}"
 		jq --arg req "${request}" '. + [{"op":"replace","path":("/request_defaults/" + $req),"value":true}]' \
 			"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
+	done
+}
+
+# Change Rego rules to allow one or more ttrpc requests from the Host to the Guest.
+allow_requests() {
+	declare -r settings_dir="$1"
+	shift
+	declare -r requests=("$@")
+
+	auto_generate_policy_enabled || return 0
+
+	for request in "${requests[@]}"
+	do
+		info "${settings_dir}/rules.rego: allowing ${request}"
+		sed -i "s/^default \(${request}\).\+/default \1 := true/" "${settings_dir}"/rules.rego
 	done
 }
 
