@@ -857,7 +857,7 @@ fn mount_from(
         dest.as_str(),
         Some(mount_typ.as_str()),
         flags,
-        Some(d.as_str()),
+        Some(d.as_str()).filter(|s| !s.is_empty()),
     )
     .inspect_err(|e| log_child!(cfd_log, "mount error: {:?}", e))?;
 
