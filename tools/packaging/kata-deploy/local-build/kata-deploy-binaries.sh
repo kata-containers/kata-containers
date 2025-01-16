@@ -475,7 +475,10 @@ install_initrd_confidential() {
 # For all nvidia_gpu targets we can customize the stack that is enbled
 # in the VM by setting the NVIDIA_GPU_STACK= environment variable
 #
-# latest | lts -> use the latest and greatest driver or lts release
+# latest | lts | version
+#              -> use the latest and greatest driver,
+#                 lts release or e.g. version=550.127.1
+# driver       -> enable open or closed drivers
 # debug        -> enable debugging support
 # compute      -> enable the compute GPU stack, includes utility
 # graphics     -> enable the graphics GPU stack, includes compute
