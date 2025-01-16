@@ -5,13 +5,13 @@
 //
 
 use std::convert::TryFrom;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::str::FromStr;
 
 use agent::IPFamily;
 use anyhow::{anyhow, Context, Result};
-use netlink_packet_route::nlas::address::Nla;
-use netlink_packet_route::{AddressMessage, AF_INET, AF_INET6};
+use netlink_packet_route::address::AddressAttribute;
+use netlink_packet_route::address::AddressMessage;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Address {
@@ -29,59 +29,47 @@ pub struct Address {
 impl TryFrom<AddressMessage> for Address {
     type Error = anyhow::Error;
     fn try_from(msg: AddressMessage) -> Result<Self> {
-        let AddressMessage { header, nlas } = msg;
+        let AddressMessage {
+            header, attributes, ..
+        } = msg;
         let mut addr = Address {
             addr: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             peer: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             broadcast: IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             label: String::default(),
             flags: 0,
-            scope: header.scope,
+            scope: u8::from(header.scope),
             perfix_len: header.prefix_len,
             prefered_lft: 0,
             valid_ltf: 0,
         };
 
-        for nla in nlas.into_iter() {
+        for nla in attributes.into_iter() {
             match nla {
-                Nla::Address(a) => {
-                    addr.addr = parse_ip(&a, header.family)?;
+                AddressAttribute::Address(a) => {
+                    addr.addr = a;
                 }
-                Nla::Broadcast(b) => {
-                    addr.broadcast = parse_ip(&b, header.family)?;
+                AddressAttribute::Broadcast(b) => {
+                    addr.broadcast = IpAddr::V4(b);
                 }
-                Nla::Label(l) => {
+                AddressAttribute::Label(l) => {
                     addr.label = l;
                 }
-                Nla::Flags(f) => {
-                    addr.flags = f;
+                AddressAttribute::Flags(f) => {
+                    //since the AddressAttribute::Flags(f) didn't implemented the u32 from trait,
+                    //thus here just implemeted a simple transformer.
+                    let mut d: u32 = 0;
+                    for flag in &f {
+                        d += u32::from(*flag);
+                    }
+                    addr.flags = d;
                 }
-                Nla::CacheInfo(_c) => {}
+                AddressAttribute::CacheInfo(_c) => {}
                 _ => {}
             }
         }
 
         Ok(addr)
-    }
-}
-
-pub(crate) fn parse_ip(ip: &[u8], family: u8) -> Result<IpAddr> {
-    let support_len = if family as u16 == AF_INET { 4 } else { 16 };
-    if ip.len() != support_len {
-        return Err(anyhow!(
-            "invalid ip addresses {:?} support {}",
-            &ip,
-            support_len
-        ));
-    }
-    match family as u16 {
-        AF_INET => Ok(IpAddr::V4(Ipv4Addr::new(ip[0], ip[1], ip[2], ip[3]))),
-        AF_INET6 => {
-            let mut octets = [0u8; 16];
-            octets.copy_from_slice(&ip[..16]);
-            Ok(IpAddr::V6(Ipv6Addr::from(octets)))
-        }
-        _ => Err(anyhow!("unknown IP network family {}", family)),
     }
 }
 
@@ -123,28 +111,6 @@ pub(crate) fn ip_family_from_ip_addr(ip_addr: &IpAddr) -> IPFamily {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_parse_ip() {
-        let test_ipv4 = [10, 25, 64, 128];
-        let ipv4 = parse_ip(test_ipv4.as_slice(), AF_INET as u8).unwrap();
-        let expected_ipv4 = IpAddr::V4(Ipv4Addr::new(10, 25, 64, 128));
-        assert_eq!(ipv4, expected_ipv4);
-
-        let test_ipv6 = [0, 2, 4, 0, 0, 2, 4, 0, 0, 2, 4, 0, 0, 2, 4, 0];
-        let ipv6 = parse_ip(test_ipv6.as_slice(), AF_INET6 as u8).unwrap();
-        // two u8 => one u16, (0u8, 2u8 => 0x0002), (4u8, 0u8 => 0x0400)
-        let expected_ipv6 = IpAddr::V6(Ipv6Addr::new(
-            0x0002, 0x0400, 0x0002, 0x0400, 0x0002, 0x0400, 0x0002, 0x0400,
-        ));
-        assert_eq!(ipv6, expected_ipv6);
-
-        let fail_ipv4 = [10, 22, 33, 44, 55];
-        assert!(parse_ip(fail_ipv4.as_slice(), AF_INET as u8).is_err());
-
-        let fail_ipv6 = [1, 2, 3, 4, 5, 6, 7, 8, 2, 3];
-        assert!(parse_ip(fail_ipv6.as_slice(), AF_INET6 as u8).is_err());
-    }
 
     #[test]
     fn test_parse_ip_cidr() {
