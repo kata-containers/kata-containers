@@ -157,7 +157,7 @@ pub async fn create_link(
         handle
             .link()
             .set(base.index)
-            .master(base.master_index)
+            .controller(base.master_index)
             .execute()
             .await
             .context("set index")?;
