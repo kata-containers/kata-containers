@@ -17,7 +17,7 @@ GITHUB_TOKEN="..." REQUIRED_JOBS="skipper / skipper"
 REQUIRED_REGEXPS=".*" REQUIRED_LABELS="ok-to-test;bar"
 COMMIT_HASH=b8382cea886ad9a8f77d237bcfc0eba0c98775dd
 GITHUB_REPOSITORY=kata-containers/kata-containers
-PR_NUMBER=123 python3 jobs.py
+GH_PR_NUMBER=123 python3 jobs.py
 """
 
 import os
@@ -43,7 +43,7 @@ class Checker:
     """Object to keep watching required GH action workflows"""
     def __init__(self):
         self.latest_commit_sha = os.getenv("COMMIT_HASH")
-        self.pr_number = os.getenv("PR_NUMBER")
+        self.pr_number = os.getenv("GH_PR_NUMBER")
         required_labels = os.getenv("REQUIRED_LABELS")
         if required_labels:
             self.required_labels = set(required_labels.split(";"))
@@ -213,7 +213,7 @@ class Checker:
             return True
 
         if not self.pr_number:
-            print("The PR_NUMBER not specified, skipping the "
+            print("The GH_PR_NUMBER not specified, skipping the "
                   f"required-labels-check ({self.required_labels})")
             return True
 
