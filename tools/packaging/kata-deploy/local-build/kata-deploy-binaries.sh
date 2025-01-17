@@ -454,8 +454,12 @@ install_initrd() {
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
+		# No variant is passed, it means vanilla kata containers
 		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.name")"
 		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.version")"
+		if [ "${os_name}" = "alpine" ]; then
+			export AGENT_INIT=yes
+		fi
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
