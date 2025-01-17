@@ -379,7 +379,6 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
-
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SNPGuest:
@@ -388,8 +387,7 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
 		objectParams = append(objectParams, "kernel-hashes=on")
-		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
-		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
+		config.Bios = object.File
 	case SecExecGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
