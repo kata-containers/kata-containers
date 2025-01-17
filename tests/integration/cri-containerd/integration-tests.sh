@@ -660,7 +660,9 @@ function main() {
 			break
 		else
 			TestKilledVmmCleanup
-			TestDeviceCgroup
+
+			info "Skipping TestDeviceCgroup till the test is adapted to cgroupsv2"
+			#TestDeviceCgroup
 		fi
 	fi
 
