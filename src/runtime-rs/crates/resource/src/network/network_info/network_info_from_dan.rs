@@ -74,6 +74,7 @@ impl NetworkInfoFromDan {
                     source: route.source.clone(),
                     scope: route.scope,
                     family,
+                    flags: route.flags,
                 })
             })
             .collect();
@@ -159,6 +160,7 @@ mod tests {
                     source: "172.18.0.1".to_owned(),
                     gateway: "172.18.31.1".to_owned(),
                     scope: 0,
+                    flags: 0,
                 }],
                 neighbors: vec![DanARPNeighbor {
                     ip_address: Some("192.168.0.3/16".to_owned()),
@@ -194,6 +196,7 @@ mod tests {
             source: "172.18.0.1".to_owned(),
             scope: 0,
             family: IPFamily::V4,
+            flags: 0,
         }];
         assert_eq!(routes, network_info.routes().await.unwrap());
 

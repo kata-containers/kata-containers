@@ -168,6 +168,11 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
         return Ok(None);
     }
 
+    let mut flags: u32 = 0;
+    for flag in &route_msg.header.flags {
+        flags += u32::from(*flag);
+    }
+
     let mut route = Route {
         scope: u8::from(route_msg.header.scope) as u32,
         device: name.to_string(),
@@ -176,6 +181,7 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
         } else {
             IPFamily::V6
         },
+        flags,
         ..Default::default()
     };
 
