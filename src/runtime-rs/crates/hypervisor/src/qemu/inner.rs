@@ -5,6 +5,7 @@
 
 use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
+use crate::device::topology::PCIePort;
 use crate::{
     hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
     VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
@@ -123,6 +124,24 @@ impl QemuInner {
                         &network.config.host_dev_name,
                         network.config.guest_mac.clone().unwrap(),
                     )?;
+                }
+                DeviceType::PortDevice(port_device) => {
+                    let total_ports = port_device.config.total_ports;
+                    let port_type = port_device.config.port_type;
+                    let mem_reserve = port_device.config.memsz_reserve;
+                    let pref64_reserve = port_device.config.pref64_reserve;
+
+                    match port_type {
+                        PCIePort::RootPort => {
+                            cmdline.add_pcie_root_port(total_ports, mem_reserve, pref64_reserve)?
+                        }
+                        PCIePort::SwitchPort => cmdline.add_pcie_switch_port(
+                            total_ports,
+                            mem_reserve,
+                            pref64_reserve,
+                        )?,
+                        _ => info!(sl!(), "no need to add {} ports", port_type),
+                    }
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
