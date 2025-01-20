@@ -227,9 +227,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
 /// A sandbox annotation that is used to enable/disable virtio-mem.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM: &str =
     "io.katacontainers.config.hypervisor.enable_virtio_mem";
-/// A sandbox annotation to enable swap of vm memory.
-pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP: &str =
-    "io.katacontainers.config.hypervisor.enable_swap";
 /// A sandbox annotation to enable swap in the guest.
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP: &str =
     "io.katacontainers.config.hypervisor.enable_guest_swap";
@@ -781,14 +778,6 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             hv.memory_info.enable_virtio_mem = r.unwrap_or_default();
-                        }
-                        Err(_e) => {
-                            return Err(bool_err);
-                        }
-                    },
-                    KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP => match self.get_value::<bool>(key) {
-                        Ok(r) => {
-                            hv.memory_info.enable_swap = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);

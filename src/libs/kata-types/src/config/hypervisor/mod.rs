@@ -708,12 +708,6 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_virtio_mem: bool,
 
-    /// Enable swap of vm memory. Default false.
-    ///
-    /// The behaviour is undefined if mem_prealloc is also set to true
-    #[serde(default)]
-    pub enable_swap: bool,
-
     /// Enable swap in the guest. Default false.
     ///
     /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device if the
