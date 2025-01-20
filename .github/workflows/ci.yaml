@@ -59,6 +59,13 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
+  build-kata-static-tarball-nvidia-gpu-arm64:
+      uses: ./.github/workflows/build-kata-static-tarball-nvidia-gpu-arm64.yaml
+      with:
+        tarball-suffix: -${{ inputs.tag }}
+        commit-hash: ${{ inputs.commit-hash }}
+        target-branch: ${{ inputs.target-branch }}
+
   build-kata-static-tarball-s390x:
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
     with:
