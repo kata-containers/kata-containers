@@ -9,7 +9,7 @@ use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use netlink_packet_route::address::{AddressAttribute, AddressMessage};
 use netlink_packet_route::link::{LinkAttribute, LinkMessage};
 use netlink_packet_route::neighbour::{self, NeighbourFlag};
-use netlink_packet_route::route::{RouteHeader, RouteProtocol, RouteScope, RouteType};
+use netlink_packet_route::route::{RouteFlag, RouteHeader, RouteProtocol, RouteScope, RouteType};
 use netlink_packet_route::{
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourState},
     route::{RouteAddress, RouteAttribute, RouteMessage},
@@ -53,6 +53,25 @@ const ALL_RULE_FLAGS: [NeighbourFlag; 8] = [
     NeighbourFlag::Offloaded,
     NeighbourFlag::Sticky,
     NeighbourFlag::Router,
+];
+
+const ALL_ROUTE_FLAGS: [RouteFlag; 16] = [
+    RouteFlag::Dead,
+    RouteFlag::Pervasive,
+    RouteFlag::Onlink,
+    RouteFlag::Offload,
+    RouteFlag::Linkdown,
+    RouteFlag::Unresolved,
+    RouteFlag::Trap,
+    RouteFlag::Notify,
+    RouteFlag::Cloned,
+    RouteFlag::Equalize,
+    RouteFlag::Prefix,
+    RouteFlag::LookupTable,
+    RouteFlag::FibMatch,
+    RouteFlag::RtOffload,
+    RouteFlag::RtTrap,
+    RouteFlag::OffloadFailed,
 ];
 
 /// A filter to query addresses.
@@ -389,7 +408,7 @@ impl Handle {
             use RouteAttribute as Nla;
 
             // Build a common indeterminate ip request
-            let request = self
+            let mut request = self
                 .handle
                 .route()
                 .add()
@@ -397,6 +416,23 @@ impl Handle {
                 .kind(uni_cast)
                 .protocol(boot_prot)
                 .scope(scope);
+
+            let message = request.message_mut();
+
+            // calculate the Flag vec from the u32 flags
+            let mut got: u32 = 0;
+            let mut flags = Vec::new();
+            for flag in ALL_ROUTE_FLAGS {
+                if (route.flags & (u32::from(flag))) > 0 {
+                    flags.push(flag);
+                    got += u32::from(flag);
+                }
+            }
+            if got != route.flags {
+                flags.push(RouteFlag::Other(route.flags - got));
+            }
+
+            message.header.flags = flags;
 
             // `rtnetlink` offers a separate request builders for different IP versions (IP v4 and v6).
             // This if branch is a bit clumsy because it does almost the same.
