@@ -40,8 +40,9 @@ tokio = { version = "1.39.0", features = ["full"] }
 tokio-vsock = "0.3.4"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
-rtnetlink = "0.8.0"
-netlink-packet-utils = "0.4.1"
+rtnetlink = "0.14.0"
+netlink-packet-route = "0.19.0"
+netlink-packet-core = "0.7.0"
 ipnetwork = "0.17.0"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
