@@ -7,6 +7,7 @@
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 
+AZ_REGION="${AZ_REGION:-eastus}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
@@ -101,7 +102,7 @@ function create_cluster() {
 		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
-		-l eastus \
+		-l "${AZ_REGION}" \
 		-n "${rg}"
 
 	az aks create \

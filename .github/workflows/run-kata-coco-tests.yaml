@@ -334,6 +334,8 @@ jobs:
 
       - name: Create AKS cluster
         timeout-minutes: 10
+        env:
+          AZ_REGION: ${{ vars.AZ_REGION }}
         run: bash tests/integration/kubernetes/gha-run.sh create-cluster
 
       - name: Install `bats`
