@@ -58,7 +58,7 @@ setup_hotplug() {
 
 setup_coldplug() {
     echo "Set up the configuration file for Coldplug"
-    setup_config_file "vfio_mode" "replace" "guest-kernel"
+    setup_config_file "vfio_mode" "replace" "vfio"
     setup_config_file "hot_plug_vfio" "comment_out"
     setup_config_file "cold_plug_vfio" "replace" "bridge-port"
     show_config_file
@@ -91,7 +91,7 @@ cleanup() {
     echo 0x$(printf -- 'f%.0s' {1..64}) | sudo tee /sys/bus/ap/aqmask > /dev/null
 
     # Remove files used for testing
-    rm -f ${script_path}/zcrypttest ${script_path}/container-config.json
+    rm -f ${script_path}/zcrypttest
 }
 
 validate_env() {
@@ -202,46 +202,22 @@ create_mediated_device() {
 
 run_test() {
     local run_index=$1
-    local container_cli=$2
-    local test_message=$3
-    local extra_cmd=${4:-}
+    local test_message=$2
+    local extra_cmd=${3:-}
     local start_time=$(date +"%Y-%m-%d %H:%M:%S")
     [ -n "${dev_index}" ] || { echo "No dev_index" >&2; exit 1; }
 
     # Set time granularity to a second for capturing the log
     sleep 1
 
-    if [ "${container_cli}" == "crictl" ]; then
-        sudo crictl pull ${test_image_name}
-        # Prepare container-config.json
-        IMAGE_NAME="${test_image_name}" DEVICE_INDEX="${dev_index}" \
-            envsubst < ${script_path}/container-config.json.in > ${script_path}/container-config.json
-        # Create a container and run the test
-        POD_ID=$(sudo crictl runp --runtime=kata ${script_path}/sandbox-config.json)
-        sudo crictl pods
-        CONTAINER_ID=$(sudo crictl create $POD_ID ${script_path}/container-config.json ${script_path}/sandbox-config.json)
-        sudo crictl start $CONTAINER_ID
-        sudo crictl ps
-        # Give enough time for the container to start
-        sleep 5
-        sudo crictl exec $CONTAINER_ID \
-            bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"
+    sudo ctr image pull --plain-http ${test_image_name}
+    # Create a container and run the test
+    sudo ctr run --runtime io.containerd.run.kata.v2 --rm \
+        --privileged --privileged-without-host-devices \
+        --device ${dev_base}/${dev_index} ${test_image_name} test \
+        bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"
 
-        [ $? -eq 0 ] && result=0 || result=1
-
-        # Clean up the container
-        echo "Clean up the container"
-        sudo crictl stopp $POD_ID
-        sudo crictl rmp $POD_ID
-    elif [ "${container_cli}" == "ctr" ]; then
-        sudo ctr image pull --plain-http ${test_image_name}
-        # Create a container and run the test
-        sudo ctr run --runtime io.containerd.run.kata.v2 --rm \
-            --device ${dev_base}/${dev_index} ${test_image_name} test \
-            bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN}"
-
-        [ $? -eq 0 ] && result=0 || result=1
-    fi
+    [ $? -eq 0 ] && result=0 || result=1
 
     if [ $result -eq 0 ]; then
         echo "ok ${run_index} ${test_category} ${test_message}"
@@ -254,10 +230,10 @@ run_test() {
 
 run_tests() {
     setup_hotplug
-    run_test "1" "crictl" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug" "&& zcrypttest -a -v"
+    run_test "1" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug" "&& zcrypttest -a -v"
 
     setup_coldplug
-    run_test "2" "ctr" "Test can assign a CEX device inside the guest via VFIO-AP Coldplug"
+    run_test "2" "Test can assign a CEX device inside the guest via VFIO-AP Coldplug" "&& zcrypttest -a -v"
 }
 
 main() {
