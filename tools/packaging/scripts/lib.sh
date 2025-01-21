@@ -67,6 +67,7 @@ arch_to_golang()
 	case "$arch" in
 		aarch64) echo "arm64";;
 		ppc64le) echo "$arch";;
+		riscv64) echo "$arch";;
 		x86_64) echo "amd64";;
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
@@ -198,6 +199,9 @@ get_virtiofsd_image_name() {
 	                libc="musl"
 	                ;;
 	        "ppc64le")
+	                libc="gnu"
+	                ;;
+	        "riscv64")
 	                libc="gnu"
 	                ;;
 	        "s390x")
