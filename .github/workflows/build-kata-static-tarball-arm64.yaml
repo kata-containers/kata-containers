@@ -32,7 +32,6 @@ jobs:
           - firecracker
           - kernel
           - kernel-dragonball-experimental
-          - kernel-nvidia-gpu
           - nydus
           - qemu
           - stratovirt
@@ -89,7 +88,6 @@ jobs:
         asset:
           - rootfs-image
           - rootfs-initrd
-          - rootfs-nvidia-gpu-initrd
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}

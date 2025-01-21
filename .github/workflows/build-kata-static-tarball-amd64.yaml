@@ -147,7 +147,6 @@ jobs:
           - rootfs-image-mariner
           - rootfs-initrd
           - rootfs-initrd-confidential
-          - rootfs-nvidia-gpu-initrd
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
