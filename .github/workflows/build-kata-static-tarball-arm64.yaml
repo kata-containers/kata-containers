@@ -23,7 +23,7 @@ on:
 
 jobs:
   build-asset:
-    runs-on: arm64-builder
+    runs-on: ubuntu-22.04-arm
     strategy:
       matrix:
         asset:
@@ -81,7 +81,7 @@ jobs:
           if-no-files-found: error
 
   build-asset-rootfs:
-    runs-on: arm64-builder
+    runs-on: ubuntu-22.04-arm
     needs: build-asset
     strategy:
       matrix:
@@ -155,7 +155,7 @@ jobs:
           name: kata-artifacts-arm64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
-    runs-on: arm64-builder
+    runs-on: ubuntu-22.04-arm
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Login to Kata Containers quay.io
@@ -210,13 +210,9 @@ jobs:
           if-no-files-found: error
 
   create-kata-tarball:
-    runs-on: arm64-builder
+    runs-on: ubuntu-22.04-arm
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
