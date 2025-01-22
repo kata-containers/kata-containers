@@ -499,7 +499,7 @@ pub struct DeviceInfo {
     ///
     /// Enabling this will result in the VM balloon device having f_reporting=on set
     #[serde(default)]
-    pub enable_balloon_f_reporting: bool,
+    pub reclaim_guest_freed_memory: bool,
 }
 
 impl DeviceInfo {
