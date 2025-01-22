@@ -33,7 +33,7 @@ log = "0.4.22"
 nix = "0.23.0"
 libc = "0.2.112"
 # XXX: Must be the same as the version used by the agent
-ttrpc = "0.8"
+ttrpc = "0.8.4"
 
 # For parsing timeouts
 humantime = "2.1.0"
