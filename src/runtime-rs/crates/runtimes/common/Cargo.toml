@@ -20,7 +20,7 @@ slog-scope = "4.4.0"
 strum = { version = "0.24.0", features = ["derive"] }
 thiserror = "^1.0"
 tokio = { version = "1.38.0", features = ["rt-multi-thread", "process", "fs"] }
-ttrpc = "0.8"
+ttrpc = "0.8.4" 
 persist = { path = "../../persist" }
 agent = { path = "../../agent" }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
