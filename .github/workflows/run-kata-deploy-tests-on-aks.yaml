@@ -71,8 +71,13 @@ jobs:
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
       - name: Create AKS cluster
-        timeout-minutes: 10
-        run: bash tests/functional/kata-deploy/gha-run.sh create-cluster
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 20
+          retry_on: error
+          retry_wait_seconds: 10
+          command: bash tests/integration/kubernetes/gha-run.sh create-cluster
 
       - name: Install `bats`
         run: bash tests/functional/kata-deploy/gha-run.sh install-bats
@@ -85,7 +90,7 @@ jobs:
 
       - name: Run tests
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
-      
+
       - name: Delete AKS cluster
         if: always()
         run: bash tests/functional/kata-deploy/gha-run.sh delete-cluster
