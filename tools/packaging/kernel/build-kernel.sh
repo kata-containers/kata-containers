@@ -123,6 +123,7 @@ arch_to_kernel() {
 		aarch64) echo "arm64" ;;
 		ppc64le) echo "powerpc" ;;
 		s390x) echo "s390" ;;
+		riscv64) echo "riscv" ;;
 		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
 	esac
