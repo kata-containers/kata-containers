@@ -16,7 +16,7 @@ jobs:
 
   kata-deploy:
     needs: build-kata-static-tarball-arm64
-    runs-on: arm64-builder
+    runs-on: ubuntu-22.04-arm
     steps:
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@v3

@@ -24,12 +24,8 @@ on:
 
 jobs:
   kata-payload:
-    runs-on: arm64-builder
+    runs-on: ubuntu-22.04-arm
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}

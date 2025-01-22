@@ -7,7 +7,7 @@
 self-hosted-runner:
   # Labels of self-hosted runner that linter should ignore
   labels:
-    - arm64-builder
+    - ubuntu-22.04-arm
     - garm-ubuntu-2004
     - garm-ubuntu-2004-smaller
     - garm-ubuntu-2204
