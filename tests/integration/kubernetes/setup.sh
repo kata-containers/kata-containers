@@ -101,19 +101,29 @@ add_annotations_to_yaml() {
 
 add_cbl_mariner_specific_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and image path and annotations for cbl-mariner"
+		info "Adding annotations for cbl-mariner"
+
+		# Kernel path.
 		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
 		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
 
+		# Rootfs image file.
 		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
 		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
 
+		# Bypass GetKernelRootParams and use the root params from the kernel_params annotation.
+		local mariner_annotation_rootfs_type="io.katacontainers.config.hypervisor.rootfs_type"
+		local mariner_rootfs_type="custom"
+
+		# kernel_params.
 		local mariner_annotation_kernel_params="io.katacontainers.config.hypervisor.kernel_params"
-		local mariner_kernel_params="SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 systemd.legacy_systemd_cgroup_controller=yes systemd.unified_cgroup_hierarchy=0"
+		local mariner_kernel_params="$(get_mariner_kernel_params false)"
+
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_rootfs_type}" "${mariner_rootfs_type}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel_params}" "${mariner_kernel_params}"
 		done
 	fi

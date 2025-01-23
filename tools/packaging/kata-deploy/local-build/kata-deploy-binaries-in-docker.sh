@@ -103,6 +103,7 @@ PULL_TYPE="${PULL_TYPE:-default}"
 USE_CACHE="${USE_CACHE:-}"
 BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE:-}
 NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK:-}"
+DM_VERITY_FORMAT=${DM_VERITY_FORMAT:-veritysetup}
 
 docker run \
 	-v $HOME/.docker:/root/.docker \
@@ -139,6 +140,7 @@ docker run \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
+	--env DM_VERITY_FORMAT="${DM_VERITY_FORMAT:-}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@

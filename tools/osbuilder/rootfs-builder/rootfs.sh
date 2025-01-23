@@ -35,6 +35,7 @@ AGENT_TARBALL=${AGENT_TARBALL:-""}
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
 PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
+DM_VERITY_FORMAT=${DM_VERITY_FORMAT:-veritysetup}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -372,6 +373,8 @@ check_env_variables()
 	fi
 
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
+
+	[ "$DM_VERITY_FORMAT" == "veritysetup" -o "$DM_VERITY_FORMAT" == "kernelinit" ] || die "DM_VERITY_FORMAT($DM_VERITY_FORMAT) is invalid (must be veritysetup or kernelinit)"
 }
 
 # Builds a rootfs based on the distro name provided as argument
@@ -515,6 +518,7 @@ build_rootfs_distro()
 			--env AGENT_POLICY_FILE="${AGENT_POLICY_FILE}" \
 			--env ARCH="${ARCH}" \
 			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+			--env DM_VERITY_FORMAT="${DM_VERITY_FORMAT}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \

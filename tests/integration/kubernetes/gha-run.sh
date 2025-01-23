@@ -200,7 +200,7 @@ function deploy_kata() {
 	fi
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		yq -i ".env.allowedHypervisorAnnotations = \"image kernel default_vcpus kernel_params\"" "${values_yaml}"
+		yq -i ".env.allowedHypervisorAnnotations = \"image kernel default_vcpus kernel_params rootfs_type\"" "${values_yaml}"
 		yq -i ".env.hostOS = \"${KATA_HOST_OS}\""                                   "${values_yaml}"
 	fi
 
