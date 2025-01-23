@@ -655,13 +655,14 @@ function configure_containerd() {
 		cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
 	fi
 
+	for shim in "${shims[@]}"; do
+		configure_containerd_runtime "$1" $shim
+	done
+
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
 		tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
 	fi
 
-	for shim in "${shims[@]}"; do
-		configure_containerd_runtime "$1" $shim
-	done
 }
 
 function remove_artifacts() {
