@@ -1086,6 +1086,22 @@ mod tests {
                 ..Default::default()
             },
             TestData {
+                contents: "cgroup_no_v1=1",
+                cgroup_no_v1: "",
+                ..Default::default()
+            },
+            TestData {
+                contents: "cgroup_no_v1=all",
+                cgroup_no_v1: "all",
+                ..Default::default()
+            },
+            TestData {
+                contents: "cgroup_no_v1=0 systemd.unified_cgroup_hierarchy=1",
+                cgroup_no_v1: "",
+                unified_cgroup_hierarchy: true,
+                ..Default::default()
+            },
+            TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 systemd.unified_cgroup_hierarchy=a",
                 debug_console: true,
                 dev_mode: true,
@@ -1520,6 +1536,7 @@ mod tests {
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
+            assert_eq!(d.cgroup_no_v1, config.cgroup_no_v1, "{}", msg);
             assert_eq!(
                 d.unified_cgroup_hierarchy, config.unified_cgroup_hierarchy,
                 "{}",
