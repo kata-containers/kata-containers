@@ -592,14 +592,14 @@ function configure_containerd_runtime() {
 	local runtime="kata-${adjusted_shim_to_multi_install}"
 	local configuration="configuration-${shim}"
 	local pluginid=cri
-	local configuration_file="${containerd_conf_file}"
+	local configuration_file="$3"
 
 	# Properly set the configuration file in case drop-in files are supported
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
 		configuration_file="/host${containerd_drop_in_conf_file}"
 	fi
 
-	local containerd_root_conf_file="$containerd_conf_file"
+	local containerd_root_conf_file="$configuration_file"
 	if [[ "$1" =~ ^(k0s-worker|k0s-controller)$ ]]; then
 		containerd_root_conf_file="/etc/containerd/containerd.toml"
 	fi
@@ -649,15 +649,33 @@ function configure_containerd() {
 
 	mkdir -p /etc/containerd/
 
-	if [ $use_containerd_drop_in_conf_file = "false" ] && [ -f "$containerd_conf_file" ]; then
-		# only backup in case drop-in files are not supported, and when doing the backup
-		# only do it if a backup doesn't already exist (don't override original)
-		cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
-	fi
+	# To avoid problems when this pod gets re-created let's be a bit paranoiac
+	# and try to configure/backup the most recent configuration more-less
+	# atomically. This shouldn't be that needed for drop-in configuration
+	# but shouldn't harm either.
+	local tmp_config_file=$(mktemp)
+	( for i in {1..10}; do
+		local pre_config="$(cat "$containerd_conf_file")"
+		echo "$pre_config" > "$tmp_config_file"
 
-	for shim in "${shims[@]}"; do
-		configure_containerd_runtime "$1" "$shim"
-	done
+		for shim in "${shims[@]}"; do
+			configure_containerd_runtime "$1" "$shim" "$tmp_config_file"
+		done
+
+		if [ "$(cat "$containerd_conf_file")" == "$pre_config" ]; then
+			# Nobody modified the containerd file, write our changes in
+			# least dangerous way (no atomicity of this section...)
+			if [ $use_containerd_drop_in_conf_file = "false" ] && [ -f "$containerd_conf_file" ]; then
+				# only backup in case drop-in files are not supported, and when doing the backup
+				# only do it if a backup doesn't already exist (don't override original)
+				cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
+			fi
+			mv -f "$tmp_config_file" "$containerd_conf_file"
+			exit 0
+		fi
+		sleep $(($RANDOM / 1000))
+	done ) || die "Failed to configure containerd in 10 iterations, is someone else modifying ${containerd_conf_file}?"
+	rm -f "$tmp_config_file"
 
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
 		tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
