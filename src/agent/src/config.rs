@@ -252,7 +252,7 @@ macro_rules! parse_cmdline_param {
     ($param:ident, $key:ident, $field:expr, $func:ident, $guard:expr) => {
         if $param.starts_with(format!("{}=", $key).as_str()) {
             let val = $func($param)?;
-            if $guard(val) {
+            if $guard(&val) {
                 $field = val;
             }
             continue;
@@ -477,7 +477,7 @@ impl AgentConfig {
                 HOTPLUG_TIMOUT_OPTION,
                 config.hotplug_timeout,
                 get_timeout,
-                |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
+                |hotplug_timeout: &time::Duration| hotplug_timeout.as_secs() > 0
             );
 
             // ensure the timeout is a positive value
@@ -486,7 +486,7 @@ impl AgentConfig {
                 CDH_API_TIMOUT_OPTION,
                 config.cdh_api_timeout,
                 get_timeout,
-                |cdh_api_timeout: time::Duration| cdh_api_timeout.as_secs() > 0
+                |cdh_api_timeout: &time::Duration| cdh_api_timeout.as_secs() > 0
             );
 
             // vsock port should be positive values
@@ -495,21 +495,21 @@ impl AgentConfig {
                 DEBUG_CONSOLE_VPORT_OPTION,
                 config.debug_console_vport,
                 get_number_value,
-                |port| port > 0
+                |port: &i32| *port > 0
             );
             parse_cmdline_param!(
                 param,
                 LOG_VPORT_OPTION,
                 config.log_vport,
                 get_number_value,
-                |port| port > 0
+                |port: &i32| *port > 0
             );
             parse_cmdline_param!(
                 param,
                 PASSFD_LISTENER_PORT,
                 config.passfd_listener_port,
                 get_number_value,
-                |port| port > 0
+                |port: &i32| *port > 0
             );
             parse_cmdline_param!(
                 param,
@@ -522,7 +522,7 @@ impl AgentConfig {
                 CGROUP_NO_V1,
                 config.cgroup_no_v1,
                 get_string_value,
-                | no_v1 | no_v1 == "all"
+                |no_v1| no_v1 == "all"
             );
             parse_cmdline_param!(
                 param,
@@ -722,7 +722,7 @@ where
 
     fields[1]
         .parse::<T>()
-        .map_err(|e| anyhow!("parse from {} failed: {:?}", &fields[1], e))
+        .map_err(|e| anyhow!("parse from {} failed: {:?}", fields[1], e))
 }
 
 // Map logrus (https://godoc.org/github.com/sirupsen/logrus)
