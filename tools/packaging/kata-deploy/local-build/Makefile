@@ -51,6 +51,7 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
 	kernel-confidential-tarball \
+	kernel-cca-confidential-tarball \
 	kernel-tarball \
 	qemu-tarball \
 	qemu-cca-experimental-tarball \
@@ -144,6 +145,9 @@ kernel-tarball:
 	${MAKE} $@-build
 
 kernel-confidential-tarball:
+	${MAKE} $@-build
+
+kernel-cca-confidential-tarball:
 	${MAKE} $@-build
 
 nydus-tarball:
