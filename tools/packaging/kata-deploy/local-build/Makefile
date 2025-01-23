@@ -52,6 +52,7 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
 	kernel-confidential-tarball \
+	kernel-cca-confidential-tarball \
 	kernel-tarball \
 	qemu-tarball \
 	qemu-cca-experimental-tarball \
@@ -147,6 +148,9 @@ kernel-tarball:
 kernel-confidential-tarball:
 	${MAKE} $@-build
 
+kernel-cca-confidential-tarball:
+	${MAKE} $@-build
+
 nydus-tarball:
 	${MAKE} $@-build
 
@@ -211,6 +215,12 @@ rootfs-cca-confidential-initrd-tarball: agent-tarball pause-image-tarball coco-g
 
 shim-v2-tarball:
 	${MAKE} $@-build
+
+# The shim-v2 build for aarch64 needs the kernel-headers tar file from kernel-cca-confidential kernel.
+ifeq ($(ARCH), aarch64)
+shim-v2-tarball-build: kernel-cca-confidential-tarball-build
+	$(call BUILD,shim-v2)
+endif
 
 trace-forwarder-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
