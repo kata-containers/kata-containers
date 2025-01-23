@@ -108,13 +108,10 @@ add_cbl_mariner_specific_annotations() {
 		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
 		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
 
-		local mariner_annotation_kernel_params="io.katacontainers.config.hypervisor.kernel_params"
-		local mariner_kernel_params="SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 systemd.legacy_systemd_cgroup_controller=yes systemd.unified_cgroup_hierarchy=0"
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel_params}" "${mariner_kernel_params}"
 		done
 	fi
 }
