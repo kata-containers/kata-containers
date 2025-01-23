@@ -26,6 +26,7 @@ const CDH_API_TIMOUT_OPTION: &str = "agent.cdh_api_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
+const CGROUP_NO_V1: &str = "cgroup_no_v1";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
@@ -136,6 +137,7 @@ pub struct AgentConfig {
     pub container_pipe_size: i32,
     pub server_addr: String,
     pub passfd_listener_port: i32,
+    pub cgroup_no_v1: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
     pub supports_seccomp: bool,
@@ -271,6 +273,7 @@ impl Default for AgentConfig {
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, DEFAULT_AGENT_VSOCK_PORT),
             passfd_listener_port: 0,
+            cgroup_no_v1: String::from(""),
             unified_cgroup_hierarchy: false,
             tracing: false,
             supports_seccomp: rpc::have_seccomp(),
@@ -513,6 +516,13 @@ impl AgentConfig {
                 CONTAINER_PIPE_SIZE_OPTION,
                 config.container_pipe_size,
                 get_container_pipe_size
+            );
+            parse_cmdline_param!(
+                param,
+                CGROUP_NO_V1,
+                config.cgroup_no_v1,
+                get_string_value,
+                | no_v1 | no_v1 == "all"
             );
             parse_cmdline_param!(
                 param,
@@ -898,6 +908,7 @@ mod tests {
             hotplug_timeout: time::Duration,
             container_pipe_size: i32,
             server_addr: &'a str,
+            cgroup_no_v1: &'a str,
             unified_cgroup_hierarchy: bool,
             tracing: bool,
             https_proxy: &'a str,
@@ -927,6 +938,7 @@ mod tests {
                     hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                     container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                     server_addr: TEST_SERVER_ADDR,
+                    cgroup_no_v1: "",
                     unified_cgroup_hierarchy: false,
                     tracing: false,
                     https_proxy: "",
