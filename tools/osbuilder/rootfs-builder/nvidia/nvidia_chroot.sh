@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #!/bin/bash
-set -xe
+set -xeuo pipefail
 
 shopt -s nullglob
 shopt -s extglob

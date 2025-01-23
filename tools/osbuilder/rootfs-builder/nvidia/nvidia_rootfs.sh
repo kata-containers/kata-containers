@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -euo pipefail
 [ -n "$DEBUG" ] && set -x
 
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
