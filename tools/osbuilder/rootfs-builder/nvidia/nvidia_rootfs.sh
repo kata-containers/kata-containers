@@ -253,15 +253,15 @@ chisseled_init() {
 	tar xvf "${BUILD_DIR}"/kata-static-busybox.tar.xz -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
-		 usr/share/nvidia lib/x86_64-linux-gnu lib64
+		 usr/share/nvidia lib/x86_64-linux-gnu lib64 usr/bin
 
 	ln -sf ../run var/run
 
 	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
 
-	ln -sf  /bin/NVRC init
+	ln -sf  /bin/NVRC sbin/init
 
-	cp -a "${stage_one}"/sbin/init            sbin/.
+	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	cp -a "${stage_one}"/etc/kata-opa         etc/.
 	cp -a "${stage_one}"/etc/resolv.conf      etc/.
 	cp -a "${stage_one}"/supported-gpu.devids .
