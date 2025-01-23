@@ -11,7 +11,7 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_CTLPATH,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES,
-        KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP,
+        KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS
         KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
         KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH,
         KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC,
@@ -130,10 +130,6 @@ mod tests {
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP.to_string(),
-            "false".to_string(),
-        );
-        anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR.to_string(),
             "./test_file_backend_mem_root".to_string(),
         );
@@ -201,7 +197,6 @@ mod tests {
             assert_eq!(hv.memory_info.default_memory, 100);
             assert!(!hv.enable_iothreads);
             assert!(!hv.enable_iothreads);
-            assert!(!hv.memory_info.enable_swap);
             assert_eq!(
                 hv.memory_info.file_mem_backend,
                 "./test_file_backend_mem_root"
