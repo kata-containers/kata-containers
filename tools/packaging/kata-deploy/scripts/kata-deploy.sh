@@ -720,9 +720,10 @@ function cleanup_containerd() {
 		return
 	fi
 
-	rm -f $containerd_conf_file
 	if [ -f "$containerd_conf_file_backup" ]; then
-		mv "$containerd_conf_file_backup" "$containerd_conf_file"
+		mv -f "$containerd_conf_file_backup" "$containerd_conf_file"
+	else
+		rm -f $containerd_conf_file
 	fi
 }
 
