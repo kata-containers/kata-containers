@@ -645,7 +645,7 @@ function configure_containerd() {
 	fi
 
 	for shim in "${shims[@]}"; do
-		configure_containerd_runtime "$1" $shim
+		configure_containerd_runtime "$1" "$shim"
 	done
 
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
