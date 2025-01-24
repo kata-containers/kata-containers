@@ -6,6 +6,7 @@
 use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
+use super::qemu_s390x::{enable_s390x_protection, SEC_EXEC_ID};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::VIRTIO_SCSI;
@@ -48,6 +49,12 @@ trait ToQemuParams: Send + Sync {
     // nothing but UTF-8 (in fact probably just ASCII) switching to OsStrings
     // now seems pointless.
     async fn qemu_params(&self) -> Result<Vec<String>>;
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TeeType {
+    Se, // IBM Secure Execution
+    None,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -453,7 +460,7 @@ impl CcwSubChannel {
 }
 
 #[derive(Debug)]
-struct Machine {
+pub struct Machine {
     r#type: String,
     accel: String,
     options: String,
@@ -507,6 +514,15 @@ impl Machine {
 
     fn set_kernel_irqchip(&mut self, kernel_irqchip: &str) -> &mut Self {
         self.kernel_irqchip = Some(kernel_irqchip.to_owned());
+        self
+    }
+
+    pub fn get_options(&self) -> String {
+        self.options.clone()
+    }
+
+    pub fn set_options(&mut self, options: &str) -> &mut Self {
+        self.options = options.to_owned();
         self
     }
 }
@@ -1702,6 +1718,51 @@ impl ToQemuParams for ObjectIoThread {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ObjectType {
+    S390PvGuest,
+}
+
+impl ObjectType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ObjectType::S390PvGuest => "s390-pv-guest",
+        }
+    }
+}
+
+impl Display for ObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+#[derive(Debug)]
+struct Object {
+    id: String,
+    object_type: ObjectType,
+}
+
+impl Object {
+    fn new(id: &str, object_type: ObjectType) -> Self {
+        Object {
+            id: id.to_owned(),
+            object_type,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Object {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(self.object_type.to_string());
+        params.push(format!("id={}", self.id));
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1730,6 +1791,7 @@ fn should_disable_modern() -> bool {
 pub struct QemuCmdLine<'a> {
     id: String,
     config: &'a HypervisorConfig,
+    tee_type: TeeType,
 
     // In principle, all objects implementing ToQemuParams could be just stored
     // in the `devices` container.  However, there are several special cases
@@ -1755,13 +1817,19 @@ pub struct QemuCmdLine<'a> {
 
 impl<'a> QemuCmdLine<'a> {
     pub fn new(id: &str, config: &'a HypervisorConfig) -> Result<QemuCmdLine<'a>> {
-        let ccw_subchannel = match bus_type(config) {
-            VirtioBusType::Ccw => Some(CcwSubChannel::new()),
-            _ => None,
+        let tee_type = if config.security_info.confidential_guest {
+            match bus_type(config) {
+                VirtioBusType::Ccw => TeeType::Se,
+                _ => TeeType::None, // Add other TEE types as needed
+            }
+        } else {
+            TeeType::None
         };
+
         let mut qemu_cmd_line = QemuCmdLine {
             id: id.to_string(),
             config,
+            tee_type,
             kernel: Kernel::new(config)?,
             memory: Memory::new(config),
             smp: Smp::new(config),
@@ -1770,8 +1838,13 @@ impl<'a> QemuCmdLine<'a> {
             qmp_socket: QmpSocket::new(MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
             devices: Vec::new(),
-            ccw_subchannel,
+            ccw_subchannel: match bus_type(config) {
+                VirtioBusType::Ccw => Some(CcwSubChannel::new()),
+                _ => None,
+            },
         };
+
+        qemu_cmd_line.enable_protection()?;
 
         if config.device_info.enable_iommu {
             qemu_cmd_line.add_iommu();
@@ -1820,6 +1893,23 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(rng_object));
         self.devices.push(Box::new(rng_device));
+    }
+
+    fn enable_protection(&mut self) -> Result<()> {
+        match self.tee_type {
+            TeeType::Se => {
+                enable_s390x_protection(&mut self.machine)?;
+                self.devices
+                    .push(Box::new(Object::new(SEC_EXEC_ID, ObjectType::S390PvGuest)));
+            }
+            TeeType::None => {
+                info!(
+                    sl!(),
+                    "No TEE type configured, skipping hardware protection features"
+                );
+            }
+        }
+        Ok(())
     }
 
     fn add_iommu(&mut self) {

@@ -5,6 +5,7 @@
 
 mod cmdline_generator;
 mod inner;
+mod qemu_s390x;
 mod qmp;
 
 use crate::device::DeviceType;
