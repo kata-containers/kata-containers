@@ -122,6 +122,9 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   run-k8s-tests-on-sev:
+    #Skipping the test
+    #to install nydus permanently
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -188,6 +191,9 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
   run-k8s-tests-sev-snp:
+    #skipping the test to 
+    #install nydus permanently
+    if: false
     strategy:
       fail-fast: false
       matrix:
