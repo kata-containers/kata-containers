@@ -37,8 +37,10 @@ fn get_uds_with_sid(short_id: &str, path: &str) -> Result<String> {
         return Ok(format!("unix://{}", p.display()));
     }
 
-    let _ = fs::create_dir_all(kata_run_path.join(short_id))
-            .context(format!("failed to create directory {:?}", kata_run_path.join(short_id)));
+    let _ = fs::create_dir_all(kata_run_path.join(short_id)).context(format!(
+        "failed to create directory {:?}",
+        kata_run_path.join(short_id)
+    ));
 
     let target_ids: Vec<String> = fs::read_dir(&kata_run_path)?
         .filter_map(|e| {
