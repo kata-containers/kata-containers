@@ -36,7 +36,7 @@ EOF
 [intel-sgx]
 source=https://download.01.org/intel-sgx/sgx_repo/ubuntu
 suite=$UBUNTU_CODENAME
-packages=libtdx-attest=1.20\*
+packages=libtdx-attest=1.22\*
 EOF
 	fi
 
