@@ -159,10 +159,6 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: Deploy Snapshotter
-        timeout-minutes: 5
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
-
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-sev
@@ -182,10 +178,6 @@ jobs:
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-sev
-
-      - name: Delete Snapshotter
-        if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
   run-k8s-tests-sev-snp:
     strategy:
@@ -227,10 +219,6 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: Deploy Snapshotter
-        timeout-minutes: 5
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
-
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-snp
@@ -258,10 +246,6 @@ jobs:
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snp
-
-      - name: Delete Snapshotter
-        if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
       - name: Delete CoCo KBS
         if: always()
