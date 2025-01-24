@@ -39,6 +39,9 @@ case ${ARCH} in
 	"ppc64le")
 		libc="gnu"
 		;;
+	"riscv64")
+		libc="gnu"
+		;;
 	"s390x")
 		libc="gnu"
 		;;
