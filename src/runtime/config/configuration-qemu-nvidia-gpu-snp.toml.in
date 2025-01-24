@@ -70,7 +70,7 @@ valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS@"
+kernel_params = "@KERNELSNPPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
@@ -617,7 +617,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_NV@
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful

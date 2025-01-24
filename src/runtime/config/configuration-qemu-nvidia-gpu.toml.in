@@ -638,7 +638,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_NV@
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
