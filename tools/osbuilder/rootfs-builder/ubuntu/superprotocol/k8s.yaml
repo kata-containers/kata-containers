@@ -385,6 +385,10 @@ metadata:
   namespace: argocd
 rules:
 - apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list"]
+
+- apiGroups: [""]
   resources: ["pods", "configmaps", "secrets"]
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 - apiGroups: ["apps", "extensions"]
