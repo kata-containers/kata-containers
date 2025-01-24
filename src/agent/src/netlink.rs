@@ -94,12 +94,6 @@ impl Handle {
             self.enable_link(link.index(), false).await?;
         }
 
-        // Delete all addresses associated with the link
-        let addresses = self
-            .list_addresses(AddressFilter::LinkIndex(link.index()))
-            .await?;
-        self.delete_addresses(addresses).await?;
-
         // Add new ip addresses from request
         for ip_address in &iface.IPAddresses {
             let ip = IpAddr::from_str(ip_address.address())?;
@@ -190,26 +184,6 @@ impl Handle {
     pub async fn handle_localhost(&self) -> Result<()> {
         let link = self.find_link(LinkFilter::Name("lo")).await?;
         self.enable_link(link.index(), true).await?;
-        Ok(())
-    }
-
-    pub async fn update_routes<I>(&mut self, list: I) -> Result<()>
-    where
-        I: IntoIterator<Item = Route>,
-    {
-        let old_routes = self
-            .query_routes(None)
-            .await
-            .with_context(|| "Failed to query old routes")?;
-
-        self.delete_routes(old_routes)
-            .await
-            .with_context(|| "Failed to delete old routes")?;
-
-        self.add_routes(list)
-            .await
-            .with_context(|| "Failed to add new routes")?;
-
         Ok(())
     }
 
@@ -389,10 +363,11 @@ impl Handle {
         Ok(result)
     }
 
-    /// Adds a list of routes from iterable object `I`.
+    /// Add a list of routes from iterable object `I`.
+    /// If the route existed, then replace it with the latest.
     /// It can accept both a collection of routes or a single item (via `iter::once()`).
     /// It'll also take care of proper order when adding routes (gateways first, everything else after).
-    async fn add_routes<I>(&mut self, list: I) -> Result<()>
+    pub async fn update_routes<I>(&mut self, list: I) -> Result<()>
     where
         I: IntoIterator<Item = Route>,
     {
@@ -436,7 +411,8 @@ impl Handle {
                 let mut request = request
                     .v6()
                     .destination_prefix(dest_addr.ip(), dest_addr.prefix())
-                    .output_interface(link.index());
+                    .output_interface(link.index())
+                    .replace();
 
                 if !route.source.is_empty() {
                     let network = Ipv6Network::from_str(&route.source)?;
@@ -479,7 +455,8 @@ impl Handle {
                 let mut request = request
                     .v4()
                     .destination_prefix(dest_addr.ip(), dest_addr.prefix())
-                    .output_interface(link.index());
+                    .output_interface(link.index())
+                    .replace();
 
                 if !route.source.is_empty() {
                     let network = Ipv4Network::from_str(&route.source)?;
@@ -517,41 +494,6 @@ impl Handle {
         Ok(())
     }
 
-    async fn delete_routes<I>(&mut self, routes: I) -> Result<()>
-    where
-        I: IntoIterator<Item = RouteMessage>,
-    {
-        for route in routes.into_iter() {
-            if u8::from(route.header.protocol) == libc::RTPROT_KERNEL {
-                continue;
-            }
-
-            let mut link_index = None;
-            for routeattr in &route.attributes {
-                if let RouteAttribute::Oif(index) = routeattr {
-                    link_index = Some(*index);
-                    break;
-                }
-            }
-
-            let index = match link_index {
-                None => continue,
-                Some(index) => index,
-            };
-
-            let link = self.find_link(LinkFilter::Index(index)).await?;
-
-            let name = link.name();
-            if name.contains("lo") || name.contains("::1") {
-                continue;
-            }
-
-            self.handle.route().del(route).execute().await?;
-        }
-
-        Ok(())
-    }
-
     async fn list_addresses<F>(&self, filter: F) -> Result<Vec<Address>>
     where
         F: Into<Option<AddressFilter>>,
@@ -573,6 +515,8 @@ impl Handle {
         Ok(list)
     }
 
+    // add the addresses to the specified interface, if the addresses existed,
+    // replace it with the latest one.
     async fn add_addresses<I>(&mut self, index: u32, list: I) -> Result<()>
     where
         I: IntoIterator<Item = IpNetwork>,
@@ -581,20 +525,10 @@ impl Handle {
             self.handle
                 .address()
                 .add(index, net.ip(), net.prefix())
+                .replace()
                 .execute()
                 .await
                 .map_err(|err| anyhow!("Failed to add address {}: {:?}", net.ip(), err))?;
-        }
-
-        Ok(())
-    }
-
-    async fn delete_addresses<I>(&mut self, list: I) -> Result<()>
-    where
-        I: IntoIterator<Item = Address>,
-    {
-        for addr in list.into_iter() {
-            self.handle.address().del(addr.0).execute().await?;
         }
 
         Ok(())
@@ -1012,7 +946,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn add_delete_addresses() {
+    async fn add_update_addresses() {
         skip_if_not_root!();
 
         let list = vec![
@@ -1041,9 +975,9 @@ mod tests {
 
             assert!(result.is_some());
 
-            // Delete it
+            // Update it
             handle
-                .delete_addresses(iter::once(result.unwrap()))
+                .add_addresses(lo.index(), iter::once(network))
                 .await
                 .expect("Failed to delete address");
         }
