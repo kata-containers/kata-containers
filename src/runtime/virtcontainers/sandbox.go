@@ -714,6 +714,13 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	// the correct amount of ports to reserve for the hypervisor.
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
+	var port config.PCIePort
+	if hotPlugVFIO {
+		port = sandboxConfig.HypervisorConfig.HotPlugVFIO
+	} else if coldPlugVFIO {
+		port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
+	}
+
 	//modeIsGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
 	// modeIsVFIO is needed at the container level not the sandbox level.
 	// modeIsVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
@@ -746,51 +753,30 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 			}
 
 			for _, dev := range cdiSpec.Linux.Devices {
-				isVFIODevice := deviceManager.IsVFIODevice(dev.Path)
-				if hotPlugVFIO && isVFIODevice {
-					vfioDev := config.DeviceInfo{
-						ColdPlug:      true,
-						ContainerPath: dev.Path,
-						Port:          sandboxConfig.HypervisorConfig.HotPlugVFIO,
-						DevType:       dev.Type,
-						Major:         dev.Major,
-						Minor:         dev.Minor,
-					}
-					if dev.FileMode != nil {
-						vfioDev.FileMode = *dev.FileMode
-					}
-					if dev.UID != nil {
-						vfioDev.UID = *dev.UID
-					}
-					if dev.GID != nil {
-						vfioDev.GID = *dev.GID
-					}
-
-					vfioDevices = append(vfioDevices, vfioDev)
+				if !deviceManager.IsVFIODevice(dev.Path) {
 					continue
 				}
-				if coldPlugVFIO && isVFIODevice {
-					vfioDev := config.DeviceInfo{
-						ColdPlug:      true,
-						ContainerPath: dev.Path,
-						Port:          sandboxConfig.HypervisorConfig.ColdPlugVFIO,
-						DevType:       dev.Type,
-						Major:         dev.Major,
-						Minor:         dev.Minor,
-					}
-					if dev.FileMode != nil {
-						vfioDev.FileMode = *dev.FileMode
-					}
-					if dev.UID != nil {
-						vfioDev.UID = *dev.UID
-					}
-					if dev.GID != nil {
-						vfioDev.GID = *dev.GID
-					}
 
-					vfioDevices = append(vfioDevices, vfioDev)
-					continue
+				vfioDev := config.DeviceInfo{
+					ColdPlug:      true,
+					ContainerPath: dev.Path,
+					Port:          port,
+					DevType:       dev.Type,
+					Major:         dev.Major,
+					Minor:         dev.Minor,
 				}
+				if dev.FileMode != nil {
+					vfioDev.FileMode = *dev.FileMode
+				}
+				if dev.UID != nil {
+					vfioDev.UID = *dev.UID
+				}
+				if dev.GID != nil {
+					vfioDev.GID = *dev.GID
+				}
+
+				vfioDevices = append(vfioDevices, vfioDev)
+				continue
 			}
 		}
 		// As stated before the single_container will have the  CDI
@@ -801,21 +787,14 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
 				continue
 			}
-			isVFIODevice := deviceManager.IsVFIODevice(device.ContainerPath)
-			if hotPlugVFIO && isVFIODevice {
-				device.ColdPlug = false
-				device.Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
-				vfioDevices = append(vfioDevices, device)
-				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
+			if !deviceManager.IsVFIODevice(device.ContainerPath) {
 				continue
 			}
-			if coldPlugVFIO && isVFIODevice {
-				device.ColdPlug = true
-				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
-				vfioDevices = append(vfioDevices, device)
-				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
-				continue
-			}
+
+			device.ColdPlug = coldPlugVFIO
+			device.Port = port
+			vfioDevices = append(vfioDevices, device)
+			sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = port
 		}
 	}
 
