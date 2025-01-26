@@ -512,6 +512,13 @@ impl QemuInner {
 
         Ok((new_total_mem_mb, MemoryConfig::default()))
     }
+
+    pub(crate) async fn is_running(&self) -> bool {
+        if let Some(qemu_process) = self.qemu_process.lock().await.as_ref() {
+            return qemu_process.id().is_some();
+        }
+        false
+    }
 }
 
 async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Result<()> {

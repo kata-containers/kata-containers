@@ -130,6 +130,10 @@ impl CloudHypervisorInner {
     pub fn hypervisor_config(&self) -> HypervisorConfig {
         self.config.clone().unwrap_or_default()
     }
+
+    pub(crate) fn is_running(&self) -> bool {
+        self.state == VmmState::VmRunning
+    }
 }
 
 impl Default for CloudHypervisorInner {

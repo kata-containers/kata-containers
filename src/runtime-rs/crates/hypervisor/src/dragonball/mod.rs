@@ -243,6 +243,11 @@ impl Hypervisor for Dragonball {
         let inner = self.inner.read().await;
         inner.get_passfd_listener_addr().await
     }
+
+    async fn is_running(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.is_running()
+    }
 }
 
 #[async_trait]
