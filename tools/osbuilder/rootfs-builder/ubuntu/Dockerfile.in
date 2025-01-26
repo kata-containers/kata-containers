@@ -84,4 +84,4 @@ RUN ARCH=$(uname -m); \
 	esac; \
     rustup target add "${rust_arch}-unknown-linux-${libc}"
 
-RUN pip install --no-cache-dir pyinstaller==6.9.0
+RUN pip install --no-cache-dir pyinstaller==6.9.0 || pip install --no-cache-dir pyinstaller==6.9.0 --break-system-packages
