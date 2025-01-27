@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Usage: FROM [image name]
-FROM ubuntu:20.04
+FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
