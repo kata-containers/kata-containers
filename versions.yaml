@@ -120,10 +120,10 @@ assets:
         version: "latest"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
       ppc64le:
         name: "ubuntu"
         version: "latest"
@@ -144,10 +144,10 @@ assets:
           version: "3.0"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
 
   initrd:
     description: |
@@ -160,7 +160,7 @@ assets:
         version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
           version: "jammy"
@@ -183,10 +183,10 @@ assets:
           version: "focal" # 20.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy" # 22.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
