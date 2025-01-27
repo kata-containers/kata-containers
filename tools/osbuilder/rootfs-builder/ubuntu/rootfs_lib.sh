@@ -45,7 +45,14 @@ EOF
 	apt update
 
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
-		build_dbus $rootfs_dir
+		if [ "$OS_VERSION" = "focal" ]; then	
+			echo "WARN: multistrap failed, proceed with hack for Ubuntu 20.04"
+			build_dbus $rootfs_dir
+		else
+			echo "ERROR: multistrap failed, cannot proceed" && exit 1
+		fi
+	else
+		echo "INFO: multistrap succeeded"
 	fi
 	rm -rf "$rootfs_dir/var/run"
 	ln -s /run "$rootfs_dir/var/run"
