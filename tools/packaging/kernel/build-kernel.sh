@@ -293,6 +293,9 @@ get_kernel_frag_path() {
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
+
+		local tmpfs_configs="$(ls ${common_path}/confidential_containers/tmpfs.conf)"
+		all_configs="${all_configs} ${tmpfs_configs}"
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
