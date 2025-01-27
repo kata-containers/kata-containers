@@ -117,7 +117,7 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "focal" # 20.04 LTS
+        version: "jammy" # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy" # 22.04 LTS
@@ -126,19 +126,19 @@ assets:
           version: "jammy" # 22.04 LTS
       ppc64le:
         name: "ubuntu"
-        version: "focal" # 20.04 LTS
+        version: "jammy" # 22.04 LTS
       s390x:
         name: "ubuntu"
-        version: "focal" # 20.04 LTS
+        version: "jammy" # 22.04 LTS
         confidential:
           name: "ubuntu"
-          version: "focal" # 20.04 LTS
+          version: "jammy" # 22.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "focal" # 20.04 lTS
+        version: "jammy" # 22.04 lTS
         confidential:
           name: "ubuntu"
-          version: "focal" # 20.04 LTS
+          version: "oracular" # 24.10
         mariner:
           name: "cbl-mariner"
           version: "3.0"
@@ -168,13 +168,13 @@ assets:
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "focal" # 20.04 LTS
+        version: "jammy" # 22.04 LTS
       s390x:
         name: "ubuntu"
-        version: "focal" # 20.04 LTS
+        version: "jammy" # 22.04 LTS
         confidential:
           name: "ubuntu"
-          version: "focal" # 20.04 LTS
+          version: "jammy" # 22.04 LTS
       x86_64:
         name: "alpine"
         version: "3.18"

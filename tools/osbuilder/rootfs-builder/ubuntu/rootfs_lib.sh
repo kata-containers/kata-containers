@@ -31,11 +31,15 @@ EOF
 		curl -fsSL https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key |
 			gpg --dearmour -o $rootfs_dir/etc/apt/trusted.gpg.d/intel-sgx-deb.gpg
 		sed -i -e "s/bootstrap=Ubuntu/bootstrap=Ubuntu intel-sgx/" $multistrap_conf
+		SUITE=$OS_VERSION
+		# Intel does not release sgx stuff for non-LTS, thus if using oracular (24.10),
+		# we need to enforce getting libtdx-attest from noble.
+		[ "$SUITE" = "oracular" ] && SUITE="noble"
 		cat >> $multistrap_conf << EOF
 
 [intel-sgx]
 source=https://download.01.org/intel-sgx/sgx_repo/ubuntu
-suite=$OS_VERSION
+suite=$SUITE
 packages=libtdx-attest=1.22\*
 EOF
 	fi
