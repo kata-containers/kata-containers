@@ -174,7 +174,8 @@ struct Kernel {
 impl Kernel {
     fn new(config: &HypervisorConfig) -> Result<Kernel> {
         // get kernel params
-        let is_secure_exec = config.boot_info.vm_rootfs_driver.ends_with("ccw") && config.security_info.confidential_guest;
+        let is_secure_exec = config.boot_info.vm_rootfs_driver.ends_with("ccw")
+            && config.security_info.confidential_guest;
         // We don't append the basic params if IBM SE is enabled
         let mut kernel_params = KernelParams::new(config.debug_info.enable_debug, !is_secure_exec);
 
@@ -392,7 +393,7 @@ enum CcwError {
 
 /// Represents a CCW subchannel for managing devices
 #[derive(Debug)]
-struct CcwSubChannel {
+pub struct CcwSubChannel {
     devices: HashMap<String, u32>, // Maps device IDs to slot indices
     addr: u32,                     // Subchannel address
     next_slot: u32,                // Next available slot index
@@ -1202,17 +1203,26 @@ pub struct DeviceVirtioNet {
 
     num_queues: u32,
     iommu_platform: bool,
+    bus_type: VirtioBusType,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioNet {
-    fn new(netdev_id: &str, mac_address: Address) -> DeviceVirtioNet {
+    fn new(
+        netdev_id: &str,
+        mac_address: Address,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> DeviceVirtioNet {
         DeviceVirtioNet {
-            device_driver: "virtio-net-pci".to_owned(),
+            device_driver: format!("virtio-net-{}", bus_type),
             netdev_id: netdev_id.to_owned(),
             mac_address,
             disable_modern: false,
             num_queues: 1,
             iommu_platform: false,
+            bus_type,
+            devno,
         }
     }
 
@@ -1270,8 +1280,14 @@ impl ToQemuParams for DeviceVirtioNet {
             params.push("iommu_platform=on".to_owned());
         }
 
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
+
         params.push("mq=on".to_owned());
-        params.push(format!("vectors={}", 2 * self.num_queues + 2));
+        if self.bus_type == VirtioBusType::Pci {
+            params.push(format!("vectors={}", 2 * self.num_queues + 2));
+        }
 
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -2077,8 +2093,12 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_network_device(&mut self, host_dev_name: &str, guest_mac: Address) -> Result<()> {
-        let (netdev, virtio_net_device) =
-            get_network_device(self.config, host_dev_name, guest_mac)?;
+        let (netdev, virtio_net_device) = get_network_device(
+            self.config,
+            host_dev_name,
+            guest_mac,
+            &mut self.ccw_subchannel,
+        )?;
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
@@ -2141,6 +2161,7 @@ pub fn get_network_device(
     config: &HypervisorConfig,
     host_dev_name: &str,
     guest_mac: Address,
+    ccw_subchannel: &mut Option<CcwSubChannel>,
 ) -> Result<(Netdev, DeviceVirtioNet)> {
     let mut netdev = Netdev::new(
         &format!("network-{}", host_dev_name),
@@ -2151,7 +2172,9 @@ pub fn get_network_device(
         netdev.set_disable_vhost_net(true);
     }
 
-    let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
+    let devno = get_devno_ccw(ccw_subchannel, &netdev.id);
+    let mut virtio_net_device =
+        DeviceVirtioNet::new(&netdev.id, guest_mac, bus_type(config), devno);
 
     if should_disable_modern() {
         virtio_net_device.set_disable_modern(true);
