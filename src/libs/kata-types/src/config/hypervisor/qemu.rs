@@ -149,6 +149,12 @@ impl ConfigPlugin for QemuConfig {
                     MIN_QEMU_MEMORY_SIZE_MB
                 ));
             }
+
+            if qemu.memory_info.enable_guest_swap {
+                return Err(eother!(
+                    "Qemu hypervisor doesn't support enable_guest_swap"
+                ));
+            }
         }
 
         Ok(())

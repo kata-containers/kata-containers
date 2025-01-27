@@ -123,5 +123,6 @@ impl_agent!(
     resize_volume | crate::ResizeVolumeRequest | crate::Empty | None,
     online_cpu_mem | crate::OnlineCPUMemRequest | crate::Empty | None,
     get_metrics | crate::Empty | crate::MetricsResponse | None,
-    get_guest_details | crate::GetGuestDetailsRequest | crate::GuestDetailsResponse | None
+    get_guest_details | crate::GetGuestDetailsRequest | crate::GuestDetailsResponse | None,
+    add_swap | crate::AddSwapRequest | crate::Empty | None
 );

@@ -7,3 +7,4 @@
 pub mod cpu;
 pub mod initial_size;
 pub mod mem;
+pub mod swap;

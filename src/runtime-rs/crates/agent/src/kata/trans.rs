@@ -13,7 +13,7 @@ use protocols::{
 
 use crate::{
     types::{
-        ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AgentDetails, BlkioStats,
+        ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapRequest, AgentDetails, BlkioStats,
         BlkioStatsEntry, CgroupStats, CheckRequest, CloseStdinRequest, ContainerID,
         CopyFileRequest, CpuStats, CpuUsage, CreateContainerRequest, CreateSandboxRequest, Device,
         Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy, GetIPTablesRequest,
@@ -871,6 +871,15 @@ impl From<ResizeVolumeRequest> for agent::ResizeVolumeRequest {
         Self {
             volume_guest_path: from.volume_guest_path,
             size: from.size,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<AddSwapRequest> for agent::AddSwapRequest {
+    fn from(from: AddSwapRequest) -> Self {
+        Self {
+            PCIPath: from.pci_path,
             ..Default::default()
         }
     }

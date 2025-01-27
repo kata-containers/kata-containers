@@ -710,16 +710,37 @@ pub struct MemoryInfo {
 
     /// Enable swap in the guest. Default false.
     ///
-    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device if the
-    /// swappiness of a container (set by annotation "io.katacontainers.container.resource.swappiness")
-    /// is bigger than 0.
-    ///
-    /// The size of the swap device should be swap_in_bytes (set by annotation
-    /// "io.katacontainers.container.resource.swap_in_bytes") - memory_limit_in_bytes.
-    /// If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
-    /// If swap_in_bytes and memory_limit_in_bytes is not set, the size should be default_memory.
+    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
     #[serde(default)]
     pub enable_guest_swap: bool,
+
+    /// If enable_guest_swap is enabled, the swap device will be created in the guest
+    /// at this path. Default "/run/kata-containers/swap".
+    #[serde(default = "default_guest_swap_path")]
+    pub guest_swap_path: String,
+
+    /// The percentage of the total memory to be used as swap device.
+    /// Default 100.
+    #[serde(default = "default_guest_swap_size_percent")]
+    pub guest_swap_size_percent: u64,
+
+    /// The threshold in seconds to create swap device in the guest.
+    /// Kata will wait guest_swap_create_threshold_secs seconds before creating swap device.
+    /// Default 60.
+    #[serde(default = "default_guest_swap_create_threshold_secs")]
+    pub guest_swap_create_threshold_secs: u64,
+}
+
+fn default_guest_swap_size_percent() -> u64 {
+    100
+}
+
+fn default_guest_swap_path() -> String {
+    "/run/kata-containers/swap".to_string()
+}
+
+fn default_guest_swap_create_threshold_secs() -> u64 {
+    60
 }
 
 impl MemoryInfo {
