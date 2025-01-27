@@ -168,19 +168,19 @@ assets:
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "20.04"
+        version: "focal" # 20.04 LTS
       s390x:
         name: "ubuntu"
-        version: "20.04"
+        version: "focal" # 20.04 LTS
         confidential:
           name: "ubuntu"
-          version: "20.04"
+          version: "focal" # 20.04 LTS
       x86_64:
         name: "alpine"
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "20.04"
+          version: "focal" # 20.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"
