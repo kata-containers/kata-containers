@@ -22,7 +22,7 @@ bootstrap=Ubuntu
 [Ubuntu]
 source=$REPO_URL
 keyring=ubuntu-keyring
-suite=$UBUNTU_CODENAME
+suite=$OS_VERSION
 packages=$PACKAGES $EXTRA_PKGS
 EOF
 
@@ -35,7 +35,7 @@ EOF
 
 [intel-sgx]
 source=https://download.01.org/intel-sgx/sgx_repo/ubuntu
-suite=$UBUNTU_CODENAME
+suite=$OS_VERSION
 packages=libtdx-attest=1.20\*
 EOF
 	fi
