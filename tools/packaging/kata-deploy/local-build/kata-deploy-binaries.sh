@@ -332,8 +332,12 @@ install_image() {
 	local variant="${1:-}"
 
 	image_type="image"
+	os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
+	os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
 	if [ -n "${variant}" ]; then
 		image_type+="-${variant}"
+		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
 	fi
 
 	local component="rootfs-${image_type}"
@@ -349,7 +353,7 @@ install_image() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 
-	latest_artefact="$(get_kata_version)-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
@@ -371,16 +375,10 @@ install_image() {
 	info "Create image"
 
 	if [ -n "${variant}" ]; then
-		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
-		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
-
 		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
-	else
-		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
-		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
@@ -406,8 +404,12 @@ install_initrd() {
 	local variant="${1:-}"
 
 	initrd_type="initrd"
+	os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.name")"
+	os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.version")"
 	if [ -n "${variant}" ]; then
 		initrd_type+="-${variant}"
+		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
 	fi
 
 	local component="rootfs-${initrd_type}"
@@ -422,7 +424,7 @@ install_initrd() {
 		"$(get_last_modification "${repo_root_dir}/src/agent")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
-	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
+	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
@@ -446,17 +448,12 @@ install_initrd() {
 	info "Create initrd"
 
 	if [ -n "${variant}" ]; then
-		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
-		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
-
 		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
 		# No variant is passed, it means vanilla kata containers
-		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.name")"
-		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.version")"
 		if [ "${os_name}" = "alpine" ]; then
 			export AGENT_INIT=yes
 		fi

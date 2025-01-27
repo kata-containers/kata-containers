@@ -22,7 +22,7 @@ bootstrap=Ubuntu
 [Ubuntu]
 source=$REPO_URL
 keyring=ubuntu-keyring
-suite=$UBUNTU_CODENAME
+suite=$OS_VERSION
 packages=$PACKAGES $EXTRA_PKGS
 EOF
 
@@ -31,12 +31,16 @@ EOF
 		curl -fsSL https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key |
 			gpg --dearmour -o $rootfs_dir/etc/apt/trusted.gpg.d/intel-sgx-deb.gpg
 		sed -i -e "s/bootstrap=Ubuntu/bootstrap=Ubuntu intel-sgx/" $multistrap_conf
+		SUITE=$OS_VERSION
+		# Intel does not release sgx stuff for non-LTS, thus if using oracular (24.10),
+		# we need to enforce getting libtdx-attest from noble.
+		[ "$SUITE" = "oracular" ] && SUITE="noble"
 		cat >> $multistrap_conf << EOF
 
 [intel-sgx]
 source=https://download.01.org/intel-sgx/sgx_repo/ubuntu
-suite=$UBUNTU_CODENAME
-packages=libtdx-attest=1.20\*
+suite=$SUITE
+packages=libtdx-attest=1.22\*
 EOF
 	fi
 
@@ -45,7 +49,14 @@ EOF
 	apt update
 
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
-		build_dbus $rootfs_dir
+		if [ "$OS_VERSION" = "focal" ]; then	
+			echo "WARN: multistrap failed, proceed with hack for Ubuntu 20.04"
+			build_dbus $rootfs_dir
+		else
+			echo "ERROR: multistrap failed, cannot proceed" && exit 1
+		fi
+	else
+		echo "INFO: multistrap succeeded"
 	fi
 	rm -rf "$rootfs_dir/var/run"
 	ln -s /run "$rootfs_dir/var/run"
