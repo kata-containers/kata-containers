@@ -116,41 +116,38 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-image-name "ubuntu"
-        version: &default-image-version "latest"
+        name: "ubuntu"
+        version: "latest"
         nvidia-gpu:
-          name: *default-image-name
+          name: "ubuntu"
           version: "jammy"
         nvidia-gpu-confidential:
-          name: *default-image-name
+          name: "ubuntu"
           version: "jammy"
       ppc64le:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "latest"
       s390x:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "latest"
         confidential:
-          name: *default-image-name
-          version: *default-image-version
+          name: "ubuntu"
+          version: "latest"
       x86_64:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "latest"
         confidential:
-          name: *default-image-name
-          version: *default-image-version
+          name: "ubuntu"
+          version: "latest"
         mariner:
           name: "cbl-mariner"
           version: "3.0"
         nvidia-gpu:
-          name: *default-image-name
+          name: "ubuntu"
           version: "jammy"
         nvidia-gpu-confidential:
-          name: *default-image-name
+          name: "ubuntu"
           version: "jammy"
-
-    meta:
-      image-type: *default-image-name
 
   initrd:
     description: |
@@ -159,8 +156,8 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.18"
+        name: "alpine"
+        version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"
@@ -170,25 +167,25 @@ assets:
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
-        name: &glibc-initrd-name "ubuntu"
-        version: &glibc-initrd-version "20.04"
+        name: "ubuntu"
+        version: "20.04"
       s390x:
-        name: *glibc-initrd-name
-        version: *glibc-initrd-version
+        name: "ubuntu"
+        version: "20.04"
         confidential:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
+          name: "ubuntu"
+          version: "20.04"
       x86_64:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: "alpine"
+        version: "3.18"
         confidential:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
+          name: "ubuntu"
+          version: "20.04"
         nvidia-gpu:
-          name: *glibc-initrd-name
+          name: "ubuntu"
           version: "jammy"
         nvidia-gpu-confidential:
-          name: *glibc-initrd-name
+          name: "ubuntu"
           version: "jammy"
 
   kernel:
