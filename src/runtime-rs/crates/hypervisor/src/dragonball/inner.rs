@@ -139,7 +139,7 @@ impl DragonballInner {
         self.set_vm_base_config().context("set vm base config")?;
 
         // get kernel params
-        let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
+        let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug, true);
 
         if self.config.boot_info.initrd.is_empty() {
             // get rootfs driver

@@ -174,19 +174,24 @@ struct Kernel {
 impl Kernel {
     fn new(config: &HypervisorConfig) -> Result<Kernel> {
         // get kernel params
-        let mut kernel_params = KernelParams::new(config.debug_info.enable_debug);
+        let is_secure_exec = config.boot_info.vm_rootfs_driver.ends_with("ccw") && config.security_info.confidential_guest;
+        // We don't append the basic params if IBM SE is enabled
+        let mut kernel_params = KernelParams::new(config.debug_info.enable_debug, !is_secure_exec);
 
         if config.boot_info.initrd.is_empty() {
             // QemuConfig::validate() has already made sure that if initrd is
             // empty, image cannot be so we don't need to re-check that here
 
-            kernel_params.append(
-                &mut KernelParams::new_rootfs_kernel_params(
-                    &config.boot_info.vm_rootfs_driver,
-                    &config.boot_info.rootfs_type,
-                )
-                .context("adding rootfs params failed")?,
-            );
+            // We don't append the rootfs params if IBM SE is enabled
+            if !is_secure_exec {
+                kernel_params.append(
+                    &mut KernelParams::new_rootfs_kernel_params(
+                        &config.boot_info.vm_rootfs_driver,
+                        &config.boot_info.rootfs_type,
+                    )
+                    .context("adding rootfs params failed")?,
+                );
+            }
         }
 
         kernel_params.append(&mut KernelParams::from_string(

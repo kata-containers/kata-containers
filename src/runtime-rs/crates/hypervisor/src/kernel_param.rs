@@ -53,14 +53,15 @@ pub(crate) struct KernelParams {
 }
 
 impl KernelParams {
-    pub(crate) fn new(debug: bool) -> Self {
+    pub(crate) fn new(debug: bool, append_basic_params: bool) -> Self {
         // default kernel params
-        let mut params = vec![
-            Param::new("reboot", "k"),
-            Param::new("panic", "1"),
-            Param::new("systemd.unit", "kata-containers.target"),
-            Param::new("systemd.mask", "systemd-networkd.service"),
-        ];
+        let mut params = vec![Param::new("panic", "1")];
+
+        if append_basic_params {
+            params.push(Param::new("reboot", "k"));
+            params.push(Param::new("systemd.unit", "kata-containers.target"));
+            params.push(Param::new("systemd.mask", "systemd-networkd.service"));
+        }
 
         if debug {
             params.push(Param::new(LOG_VPORT_OPTION, VSOCK_LOGS_PORT));
