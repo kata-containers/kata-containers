@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG cryptsetup_repo=${cryptsetup_repo}
@@ -13,9 +13,6 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV TZ=UTC
 RUN apt-get update &&\
-    apt-get --no-install-recommends install -y software-properties-common &&\
-    add-apt-repository ppa:git-core/ppa -y &&\
-    apt-get update && apt-get upgrade -y && \
     apt-get --no-install-recommends install -y \
 	    apt-utils \
 	    asciidoctor \
