@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-use crate::rpc;
+
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use serde::Deserialize;
 use std::env;
@@ -140,7 +140,6 @@ pub struct AgentConfig {
     pub cgroup_no_v1: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
-    pub supports_seccomp: bool,
     pub https_proxy: String,
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
@@ -276,7 +275,6 @@ impl Default for AgentConfig {
             cgroup_no_v1: String::from(""),
             unified_cgroup_hierarchy: false,
             tracing: false,
-            supports_seccomp: rpc::have_seccomp(),
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
