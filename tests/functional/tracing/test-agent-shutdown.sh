@@ -286,7 +286,7 @@ show_procs()
 	local regex
 	regex="(${pattern_list})"
 
-	ps -efww | egrep -i "$regex" || true
+	ps -efww | grep -i -E "$regex" || true
 }
 
 kill_tmux_sessions()
@@ -612,7 +612,7 @@ cleanup()
 
 	# Check that clh socket was deleted
 	if [ $configured_hypervisor = "clh" ] && [ ! -z $clh_socket_path ]; then
-		[ -f $clh_socket_path ] && die "CLH socket path $clh_socket_path was not properly cleaned up" 
+		[ -f $clh_socket_path ] && die "CLH socket path $clh_socket_path was not properly cleaned up"
 	fi
 
 	sudo systemctl restart containerd
@@ -961,7 +961,7 @@ get_addresses()
 
 	if [ $configured_hypervisor = "qemu" ]; then
                 addresses=$(ss -Hp --vsock |\
-                        egrep -v "\<socat\>" |\
+                        grep -v -E "\<socat\>" |\
                         awk '$2 ~ /^ESTAB$/ {print $6}' |\
                         grep ":${EXPECTED_VSOCK_PORT}$")
 	elif [ $configured_hypervisor = "clh" ]; then
@@ -1166,7 +1166,7 @@ validate_agent()
 	# Regular expression that describes possible agent failures
 	local regex="(slog::Fuse|Drain|Custom|serialization error|thread.*panicked|stack backtrace:)"
 
-	egrep -q "$regex" "$log_file" && cat $log_file && die "Found agent error in log file: '$log_file'"
+	grep -q -E "$regex" "$log_file" && cat $log_file && die "Found agent error in log file: '$log_file'"
 
 	local entry
 	entry=$(get_shutdown_test_type_entry "$shutdown_test_type" || true)
@@ -1186,7 +1186,7 @@ validate_agent()
 		# The message the agent writes to stderr just before it exits.
 		local done_msg="\<shutdown complete\>"
 
-		egrep -q "$done_msg" "$log_file" || (cat $log_file && die "missing agent shutdown message")
+		grep -q -E "$done_msg" "$log_file" || (cat $log_file && die "missing agent shutdown message")
 	else
 		# We can only check for the shutdown message if the agent debug
 		# logs are available.
