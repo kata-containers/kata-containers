@@ -446,8 +446,6 @@ pub struct VmConfig {
     pub numa: Option<Vec<NumaConfig>>,
     #[serde(default)]
     pub watchdog: bool,
-    #[cfg(feature = "guest_debug")]
-    pub gdb: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform: Option<PlatformConfig>,
 }
