@@ -1065,7 +1065,7 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
 
-        let test_pids = [std::i32::MIN, -1, 0, 1, std::i32::MAX];
+        let test_pids = [i32::MIN, -1, 0, 1, i32::MAX];
 
         for test_pid in test_pids {
             let mut s = Sandbox::new(&logger).unwrap();
