@@ -32,6 +32,7 @@ use tokio::io::AsyncWriteExt;
 /// Container image properties obtained from an OCI repository.
 #[derive(Clone, Debug, Default)]
 pub struct Container {
+    #[allow(dead_code)]
     pub image: String,
     pub config_layer: DockerConfigLayer,
     pub image_layers: Vec<ImageLayer>,
