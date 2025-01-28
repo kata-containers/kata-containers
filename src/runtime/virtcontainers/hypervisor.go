@@ -601,6 +601,10 @@ type HypervisorConfig struct {
 	// enable debug output where available.
 	Debug bool
 
+	// HypervisorLoglevel determines the level of logging emitted
+	// from the hypervisor. Accepts values 0-3.
+	HypervisorLoglevel uint32
+
 	// MemPrealloc specifies if the memory should be pre-allocated
 	MemPrealloc bool
 
