@@ -103,6 +103,7 @@ struct CommandLineOptions {
 /// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
+    #[allow(dead_code)]
     pub use_cache: bool,
     pub insecure_registries: Vec<String>,
     pub runtime_class_names: Vec<String>,
