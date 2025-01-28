@@ -9,12 +9,12 @@ use safe_path::scoped_join;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::{Path};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
-use image_rs::image::ImageClient;
 use image_rs::builder::ClientBuilder;
+use image_rs::image::ImageClient;
 use kata_sys_util::validate::verify_id;
 use oci_spec::runtime as oci;
 use tokio::sync::Mutex;
@@ -59,8 +59,7 @@ pub struct ImageService {
 
 impl ImageService {
     pub async fn new() -> Result<Self> {
-        let image_client_builder = ClientBuilder::default()
-            .work_dir(KATA_IMAGE_WORK_DIR.into());
+        let image_client_builder = ClientBuilder::default().work_dir(KATA_IMAGE_WORK_DIR.into());
         #[cfg(feature = "guest-pull")]
         let image_client_builder = {
             let image_client_builder = if !AGENT_CONFIG.image_registry_auth.is_empty() {
@@ -68,8 +67,7 @@ impl ImageService {
                 debug!(sl(), "Set registry auth file {:?}", registry_auth);
 
                 image_client_builder.authenticated_registry_credentials_uri(registry_auth.into())
-            }
-            else {
+            } else {
                 image_client_builder
             };
 
@@ -79,14 +77,14 @@ impl ImageService {
                 "Enable image signature verification: {:?}", enable_signature_verification
             );
 
-            let image_client_builder = if !AGENT_CONFIG.image_policy_file.is_empty() && *enable_signature_verification {
-                let image_policy_file = &AGENT_CONFIG.image_policy_file;
-                debug!(sl(), "Use image policy file {:?}", image_policy_file);
-                image_client_builder.image_security_policy_uri(image_policy_file.into())
-            }
-            else {
-                image_client_builder
-            };
+            let image_client_builder =
+                if !AGENT_CONFIG.image_policy_file.is_empty() && *enable_signature_verification {
+                    let image_policy_file = &AGENT_CONFIG.image_policy_file;
+                    debug!(sl(), "Use image policy file {:?}", image_policy_file);
+                    image_client_builder.image_security_policy_uri(image_policy_file.into())
+                } else {
+                    image_client_builder
+                };
             image_client_builder
         };
         let image_client = image_client_builder.build().await?;
