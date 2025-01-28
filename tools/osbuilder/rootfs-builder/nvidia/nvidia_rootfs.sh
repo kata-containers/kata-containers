@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -euo pipefail
 [ -n "$DEBUG" ] && set -x
 
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
@@ -17,6 +17,7 @@ DEBUG=""
 
 setup_nvidia-nvrc() {
 	local TARGET="nvidia-nvrc"
+	local TARGET_VERSION="main"
 	local PROJECT="nvrc"
 	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
 	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
@@ -45,6 +46,7 @@ setup_nvidia-nvrc() {
 
 setup_nvidia-gpu-admin-tools() {
 	local TARGET="nvidia-gpu-admin-tools"
+	local TARGET_VERSION="v2024.12.06"
 	local TARGET_GIT="https://github.com/NVIDIA/gpu-admin-tools"
 	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
 	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
@@ -72,6 +74,7 @@ setup_nvidia-gpu-admin-tools() {
 
 setup_nvidia-dcgm-exporter() {
 	local TARGET="nvidia-dcgm-exporter"
+	local TARGET_VERSION="3.3.9-3.6.1"
 	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
 	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
 	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
@@ -85,7 +88,7 @@ setup_nvidia-dcgm-exporter() {
 	local dex="dcgm-exporter"
 
 	rm -rf "${dex}"
-	git clone https://github.com/NVIDIA/${dex}
+	git clone --branch "${TARGET_VERSION}" https://github.com/NVIDIA/${dex}
 	make -C ${dex} binary
 
 	mkdir -p ../destdir/bin
@@ -151,14 +154,8 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount --make-rslave ./dev
 	mount -t proc /proc ./proc
 
-	local driver_version="latest"
-	if echo "$NVIDIA_GPU_STACK" | grep -q '\<latest\>'; then
-		driver_version="latest"
-	elif echo "$NVIDIA_GPU_STACK" | grep -q '\<lts\>'; then
-		driver_version="lts"
-	fi
-
-	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} ${run_fm_file_name} ${ARCH} ${driver_version}"
+	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} \
+		${run_fm_file_name} ${ARCH} ${NVIDIA_GPU_STACK}"
 
 	umount -R ./dev
 	umount ./proc
@@ -256,15 +253,15 @@ chisseled_init() {
 	tar xvf "${BUILD_DIR}"/kata-static-busybox.tar.xz -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
-		 usr/share/nvidia lib/x86_64-linux-gnu lib64
+		 usr/share/nvidia lib/x86_64-linux-gnu lib64 usr/bin
 
 	ln -sf ../run var/run
 
 	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
 
-	ln -sf  /bin/NVRC init
+	ln -sf  /bin/NVRC sbin/init
 
-	cp -a "${stage_one}"/sbin/init            sbin/.
+	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	cp -a "${stage_one}"/etc/kata-opa         etc/.
 	cp -a "${stage_one}"/etc/resolv.conf      etc/.
 	cp -a "${stage_one}"/supported-gpu.devids .
