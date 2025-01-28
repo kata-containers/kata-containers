@@ -23,5 +23,5 @@ api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", cra
 
 kata-types = { path = "../../../../libs/kata-types"}
 kata-sys-util = { path = "../../../../libs/kata-sys-util"}
-nix = "0.26.2"
+nix = "0.29.0"
 thiserror = "1.0.38"

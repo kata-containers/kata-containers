@@ -48,7 +48,7 @@ dependencies = [
  "kata-types",
  "log",
  "logging",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "protobuf 3.2.0",
  "protocols",
@@ -437,6 +437,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
+
+[[package]]
 name = "cgroups-rs"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -457,7 +463,7 @@ dependencies = [
  "api_client",
  "kata-sys-util",
  "kata-types",
- "nix 0.26.2",
+ "nix 0.29.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -509,7 +515,7 @@ dependencies = [
  "kata-sys-util",
  "kata-types",
  "lazy_static",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "persist",
  "protobuf 3.2.0",
@@ -794,7 +800,7 @@ dependencies = [
  "arc-swap",
  "lazy_static",
  "libc",
- "nix 0.23.2",
+ "nix 0.29.0",
  "thiserror",
  "vm-memory",
  "vmm-sys-util 0.11.1",
@@ -930,7 +936,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.24.3",
+ "nix 0.29.0",
  "nydus-api",
  "nydus-rafs",
  "nydus-storage",
@@ -1091,7 +1097,7 @@ dependencies = [
  "libc",
  "linux-loader",
  "log",
- "nix 0.24.3",
+ "nix 0.29.0",
  "procfs 0.12.0",
  "prometheus",
  "seccompiler",
@@ -1693,7 +1699,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "logging",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "path-clean",
  "persist",
@@ -1860,7 +1866,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "libc",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "once_cell",
  "rand 0.8.5",
@@ -1935,9 +1941,9 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
-version = "0.2.153"
+version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
+checksum = "b5aba8db14291edd000dfcc4d620c7ebfb122c613afb886ca8803fa4e128a20a"
 
 [[package]]
 name = "libz-sys"
@@ -2239,22 +2245,19 @@ dependencies = [
  "bitflags 1.3.2",
  "cfg-if 1.0.0",
  "libc",
- "memoffset 0.6.5",
- "pin-utils",
 ]
 
 [[package]]
 name = "nix"
-version = "0.26.2"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfdda3d196821d6af13126e40375cdf7da646a96114af134d5f417a9a1dc8e1a"
+checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
 dependencies = [
  "bitflags 1.3.2",
  "cfg-if 1.0.0",
  "libc",
  "memoffset 0.7.1",
  "pin-utils",
- "static_assertions",
 ]
 
 [[package]]
@@ -2267,6 +2270,18 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "memoffset 0.9.0",
+]
+
+[[package]]
+name = "nix"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
+dependencies = [
+ "bitflags 2.3.3",
+ "cfg-if 1.0.0",
+ "cfg_aliases",
+ "libc",
 ]
 
 [[package]]
@@ -2810,7 +2825,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "059a34f111a9dee2ce1ac2826a68b24601c4298cfeb1a587c3cb493d5ab46f52"
 dependencies = [
  "libc",
- "nix 0.27.1",
+ "nix 0.23.2",
 ]
 
 [[package]]
@@ -3352,7 +3367,7 @@ dependencies = [
  "netlink-packet-route",
  "netlink-sys",
  "netns-rs",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "persist",
  "rand 0.7.3",
@@ -3420,7 +3435,7 @@ dependencies = [
  "linux_container",
  "logging",
  "netns-rs",
- "nix 0.25.1",
+ "nix 0.29.0",
  "oci-spec",
  "opentelemetry",
  "opentelemetry-jaeger",
@@ -3791,7 +3806,7 @@ dependencies = [
  "libc",
  "log",
  "logging",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "protobuf 3.2.0",
  "rand 0.8.5",
@@ -3833,7 +3848,7 @@ dependencies = [
  "hyperlocal",
  "kata-sys-util",
  "kata-types",
- "nix 0.24.3",
+ "nix 0.29.0",
  "tokio",
 ]
 
@@ -3967,12 +3982,6 @@ dependencies = [
  "libc",
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "static_assertions"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "strsim"
@@ -4129,7 +4138,7 @@ dependencies = [
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "nix 0.24.3",
+ "nix 0.29.0",
 ]
 
 [[package]]
@@ -4454,7 +4463,7 @@ dependencies = [
  "home",
  "libc",
  "log",
- "nix 0.26.2",
+ "nix 0.26.4",
  "protobuf 3.2.0",
  "protobuf-codegen 3.2.0",
  "thiserror",
@@ -4635,7 +4644,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "logging",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec",
  "persist",
  "protobuf 3.2.0",

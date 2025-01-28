@@ -3037,7 +3037,7 @@ dependencies = [
  "mem-agent",
  "netlink-packet-utils",
  "netlink-sys",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec 0.6.8",
  "opentelemetry",
  "procfs 0.12.0",
@@ -3090,7 +3090,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "libc",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec 0.6.8",
  "once_cell",
  "rand",
@@ -3500,7 +3500,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "lazy_static",
- "nix 0.23.2",
+ "nix 0.29.0",
  "page_size",
  "slog",
  "slog-scope",
@@ -5292,7 +5292,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libseccomp",
- "nix 0.24.3",
+ "nix 0.29.0",
  "oci-spec 0.6.8",
  "path-absolutize",
  "protobuf 3.5.1",
@@ -6136,7 +6136,7 @@ dependencies = [
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "nix 0.24.3",
+ "nix 0.29.0",
 ]
 
 [[package]]
@@ -6776,7 +6776,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "libc",
- "nix 0.24.3",
+ "nix 0.29.0",
  "opentelemetry",
  "serde",
  "slog",

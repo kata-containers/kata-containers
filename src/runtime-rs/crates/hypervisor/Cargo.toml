@@ -13,7 +13,7 @@ anyhow = "^1.0"
 async-trait = "0.1.48"
 go-flag = "0.1.0"
 libc = ">=0.2.39"
-nix = "0.24.2"
+nix = "0.29.0"
 persist = { path = "../persist" }
 rust-ini = "0.18.0"
 seccompiler = "0.2.0"
