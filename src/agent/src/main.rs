@@ -228,8 +228,9 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         })?;
 
         lazy_static::initialize(&AGENT_CONFIG);
+        let cgroup_v2 = AGENT_CONFIG.unified_cgroup_hierarchy || AGENT_CONFIG.cgroup_no_v1 == "all";
 
-        init_agent_as_init(&logger, AGENT_CONFIG.unified_cgroup_hierarchy)?;
+        init_agent_as_init(&logger, cgroup_v2)?;
         drop(logger_async_guard);
     } else {
         lazy_static::initialize(&AGENT_CONFIG);
