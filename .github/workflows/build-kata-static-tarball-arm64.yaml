@@ -34,15 +34,15 @@ jobs:
         asset:
           - agent
           - busybox
-          - cloud-hypervisor
-          - firecracker
-          - kernel
-          - kernel-dragonball-experimental
+#          - cloud-hypervisor
+#          - firecracker
+#          - kernel
+#          - kernel-dragonball-experimental
           - kernel-nvidia-gpu
-          - nydus
-          - qemu
-          - stratovirt
-          - virtiofsd
+#          - nydus
+#          - qemu
+#          - stratovirt
+#          - virtiofsd
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
@@ -132,8 +132,8 @@ jobs:
     strategy:
       matrix:
         asset:
-          - rootfs-image
-          - rootfs-initrd
+#          - rootfs-image
+#          - rootfs-initrd
           - rootfs-nvidia-gpu-initrd
     steps:
       - name: Login to Kata Containers quay.io
