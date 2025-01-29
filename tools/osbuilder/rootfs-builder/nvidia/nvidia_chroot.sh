@@ -17,6 +17,7 @@ nvidia_gpu_stack="$5"
 driver_version=""
 driver_type="-open"
 supported_gpu_devids="/supported-gpu.devids"
+base_os="jammy"
 
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
@@ -153,7 +154,6 @@ prepare_run_file_drivers() {
 		echo "chroot: Resetting driver version not supported with run-file"
 	fi
 
-
 	echo "chroot: Prepare NVIDIA run file drivers"
 	pushd / >> /dev/null
 	chmod +x "${run_file_name}"
@@ -239,21 +239,19 @@ setup_apt_repositories() {
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
 
-	if [ "${arch_target}" == "aarch64" ]; then
-		cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/jammy.list
-			deb http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe multiverse
-			deb http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
- 			deb http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse
- 			deb http://ports.ubuntu.com/ubuntu-ports/ jammy-backports main restricted universe multiverse
-		CHROOT_EOF
-	else
-		cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/noble.list
-			deb http://us.archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse
-			deb http://us.archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse
-			deb http://us.archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse
-			deb http://us.archive.ubuntu.com/ubuntu/ jammy-backports main restricted universe multiverse
-		CHROOT_EOF
-	fi
+	# Changing the reference here also means changes needed for cuda_keyring
+	# and cuda apt repository see install_dcgm for details
+	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/${base_os}.list
+		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
+		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
+		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
+		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
+
+		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
+		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
+		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
+		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
+	CHROOT_EOF
 
 	apt update
 
@@ -298,18 +296,15 @@ install_nvidia_dcgm() {
 		return
 	}
 
-	curl -O https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb
-	dpkg -i cuda-keyring_1.0-1_all.deb && rm -f cuda-keyring_1.0-1_all.deb
+	arch="x86_64"
+	[[ ${arch_target} == "aarch64" ]] && arch="sbsa"
+	# shellcheck disable=SC2015
+	[[ ${base_os} == "jammy" ]] && osver="ubuntu2204" || die "Unknown base_os ${base_os} used"
 
-	if [ "${arch_target}" == "aarch64" ]; then
-		cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/cuda.list
-			deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/arm64/ /
-		CHROOT_EOF
-	else
-		cat <<-'CHROOT_EOF' > /etc/apt/sources.list.d/cuda.list
-			deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /
-		CHROOT_EOF
-	fi
+	keyring="cuda-keyring_1.1-1_all.deb"
+        curl -O https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}
+        dpkg -i ${keyring} && rm -f ${keyring}
+
 	apt update
 	eval "${APT_INSTALL}" datacenter-gpu-manager
 }

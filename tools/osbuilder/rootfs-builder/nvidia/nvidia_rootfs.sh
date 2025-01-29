@@ -15,6 +15,16 @@ readonly SCRIPT_DIR="${script_dir}/nvidia"
 # This will control how much output the inird/image will produce
 DEBUG=""
 
+machine_arch=${ARCH}
+
+if [[ "$machine_arch" == "aarch64" ]]; then
+    distro_arch="arm64"
+elif [[ "$machine_arch" == "x86_64" ]]; then
+    distro_arch="amd64"
+else
+    die "Unsupported architecture: ${machine_arch}"
+fi
+
 setup_nvidia-nvrc() {
 	local TARGET="nvidia-nvrc"
 	local TARGET_VERSION="main"
@@ -33,8 +43,8 @@ setup_nvidia-nvrc() {
 
 	pushd "${PROJECT}" > /dev/null || exit 1
 
-	cargo build --release --target=x86_64-unknown-linux-musl
-	cp target/x86_64-unknown-linux-musl/release/NVRC ../../destdir/bin/.
+	cargo build --release --target="${machine_arch}"-unknown-linux-gnu
+	cp target/"${machine_arch}"-unknown-linux-gnu/release/NVRC ../../destdir/bin/.
 
 	popd > /dev/null || exit 1
 
@@ -155,7 +165,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount -t proc /proc ./proc
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} \
-		${run_fm_file_name} ${ARCH} ${NVIDIA_GPU_STACK}"
+		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK}"
 
 	umount -R ./dev
 	umount ./proc
@@ -168,8 +178,8 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	popd  >> /dev/null
 
 	pushd "${BUILD_DIR}" >> /dev/null
-	curl -LO https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-amd64_linux.tar.xz
-	tar xvf upx-4.2.4-amd64_linux.tar.xz
+	curl -LO "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
+	tar xvf "upx-4.2.4-${distro_arch}_linux.tar.xz"
 	popd  >> /dev/null
 }
 
@@ -180,12 +190,12 @@ chisseled_iptables() {
 	ln -s ../sbin/xtables-nft-multi sbin/iptables-restore
 	ln -s ../sbin/xtables-nft-multi sbin/iptables-save
 
-	libdir="lib/x86_64-linux-gnu"
-	cp -a "${stage_one}"/${libdir}/libmnl.so.0*      lib/.
+	libdir=lib/"${machine_arch}"-linux-gnu
+	cp -a "${stage_one}/${libdir}"/libmnl.so.0*      lib/.
 
-	libdir="usr/lib/x86_64-linux-gnu"
- 	cp -a "${stage_one}"/${libdir}/libnftnl.so.11*   lib/.
- 	cp -a "${stage_one}"/${libdir}/libxtables.so.12* lib/.
+	libdir=usr/lib/"${machine_arch}"-linux-gnu
+	cp -a "${stage_one}/${libdir}"/libnftnl.so.11*   lib/.
+	cp -a "${stage_one}/${libdir}"/libxtables.so.12* lib/.
 }
 
 chisseled_nvswitch() {
@@ -198,10 +208,10 @@ chisseled_dcgm() {
 	echo "nvidia: chisseling DCGM"
 
 	mkdir -p etc/dcgm-exporter
-	libdir="lib/x86_64-linux-gnu"
+	libdir=lib/"${machine_arch}"-linux-gnu
 
-	cp -a "${stage_one}"/usr/${libdir}/libdcgm.*     ${libdir}/.
-	cp -a "${stage_one}"/${libdir}/libgcc_s.so.1*    ${libdir}/.
+	cp -a "${stage_one}"/usr/"${libdir}"/libdcgm.*     "${libdir}"/.
+	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 	cp -a "${stage_one}"/usr/bin/nv-hostengine   bin/.
 
 	tar xvf "${BUILD_DIR}"/kata-static-nvidia-dcgm-exporter.tar.zst -C .
@@ -217,22 +227,24 @@ chisseled_compute() {
 
 	cp -a "${stage_one}"/lib/modules/* lib/modules/.
 
-	libdir="lib/x86_64-linux-gnu"
-	cp -a "${stage_one}"/${libdir}/libdl.so.2*        lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libz.so.1*         lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libpthread.so.0*   lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libresolv.so.2*    lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libc.so.6*         lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libm.so.6*         lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/librt.so.1*        lib/x86_64-linux-gnu/.
+	libdir="lib/${machine_arch}-linux-gnu"
+	cp -a "${stage_one}/${libdir}"/libdl.so.2*        "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libz.so.1*         "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libpthread.so.0*   "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libresolv.so.2*    "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libc.so.6*         "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libm.so.6*         "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/librt.so.1*        "${libdir}"/.
 
-	libdir="lib64"
-	cp -aL "${stage_one}"/${libdir}/ld-linux-x86-64.so.* lib64/.
+	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
+	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
 
-	libdir="usr/lib/x86_64-linux-gnu"
-	cp -a "${stage_one}"/${libdir}/libnvidia-ml.so.*  lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libcuda.so.*       lib/x86_64-linux-gnu/.
-	cp -a "${stage_one}"/${libdir}/libnvidia-cfg.so.* lib/x86_64-linux-gnu/.
+	cp -aL "${stage_one}/${libdir}"/ld-linux-* "${libdir}"/.
+
+	libdir=usr/lib/"${machine_arch}"-linux-gnu
+	cp -a "${stage_one}/${libdir}"/libnvidia-ml.so.*  lib/"${machine_arch}"-linux-gnu/.
+	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
+	cp -a "${stage_one}/${libdir}"/libnvidia-cfg.so.* lib/"${machine_arch}"-linux-gnu/.
 
 	# basich GPU admin tools
 	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.
@@ -253,7 +265,7 @@ chisseled_init() {
 	tar xvf "${BUILD_DIR}"/kata-static-busybox.tar.xz -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
-		 usr/share/nvidia lib/x86_64-linux-gnu lib64 usr/bin
+		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64 usr/bin
 
 	ln -sf ../run var/run
 
@@ -282,14 +294,17 @@ compress_rootfs() {
 
 	find . -type f -executable | while IFS= read -r file; do
 		strip "${file}"
-		${BUILD_DIR}/upx-4.2.4-amd64_linux/upx --best --lzma "${file}"
+		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
 	done
 
  	# While I was playing with compression the executable flag on
 	# /lib64/ld-linux-x86-64.so.2 was lost...
 	# Since this is the program interpreter, it needs to be executable
 	# as well.. sigh
-	chmod +x lib64/ld-linux-x86-64.so.2
+	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
+	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
+
+	chmod +x "${libdir}"/ld-linux-*
 
 }
 
