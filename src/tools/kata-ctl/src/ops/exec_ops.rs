@@ -46,6 +46,7 @@ macro_rules! sl {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Error {
     EpollWait(io::Error),
     EpollCreate(io::Error),
