@@ -421,7 +421,7 @@ impl CcwSubChannel {
     ///
     /// # Returns
     /// - `Result<(), CcwError>`: Ok(()) if the device was removed
-    ///  or an error if the device was not found
+    ///   or an error if the device was not found
     #[allow(dead_code)]
     fn remove_device(&mut self, dev_id: &str) -> Result<(), CcwError> {
         if self.devices.remove(dev_id).is_some() {
