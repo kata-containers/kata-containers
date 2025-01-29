@@ -491,7 +491,7 @@ impl DeviceManager {
             let id = format!("{:x}", rand_bytes);
 
             // check collision in devices
-            if self.devices.get(&id).is_none() {
+            if !self.devices.contains_key(&id) {
                 return Ok(id);
             }
         }
