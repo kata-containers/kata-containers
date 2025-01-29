@@ -560,11 +560,8 @@ impl PCIeDevice for VfioDevice {
             ))?;
             hostdev.guest_pci_path = Some(pci_path.clone());
 
-            self.device_options.push(format!(
-                "0000:{}={}",
-                hostdev.bus_slot_func,
-                pci_path.to_string()
-            ));
+            self.device_options
+                .push(format!("0000:{}={}", hostdev.bus_slot_func, pci_path));
         }
 
         Ok(())
