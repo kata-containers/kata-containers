@@ -177,6 +177,7 @@ pub struct HostDevice {
     pub guest_pci_path: Option<PciPath>,
 
     /// vfio_vendor for vendor's some special cases.
+    #[allow(unexpected_cfgs)]
     #[cfg(feature = "enable-vendor")]
     pub vfio_vendor: VfioVendor,
 }
