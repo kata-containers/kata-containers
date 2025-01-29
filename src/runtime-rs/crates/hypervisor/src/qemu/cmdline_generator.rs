@@ -1540,13 +1540,14 @@ impl MonitorProtocol {
     }
 }
 
-impl ToString for MonitorProtocol {
-    fn to_string(&self) -> String {
-        match *self {
+impl std::fmt::Display for MonitorProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_string = match *self {
             MonitorProtocol::Hmp => "monitor".to_string(),
             MonitorProtocol::QmpPretty => "qmp-pretty".to_string(),
             _ => "qmp".to_string(),
-        }
+        };
+        write!(f, "{}", to_string)
     }
 }
 
@@ -1604,7 +1605,7 @@ impl QmpSocket {
 #[async_trait]
 impl ToQemuParams for QmpSocket {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        let param_qmp = format!("-{}", self.protocol.to_string());
+        let param_qmp = format!("-{}", self.protocol);
 
         let mut params: Vec<String> = Vec::new();
 
