@@ -96,7 +96,7 @@ impl FcInner {
         ));
         let mut parameters = String::new().to_owned();
 
-        for param in &kernel_params.to_string() {
+        if let Ok(param) = &kernel_params.to_string() {
             parameters.push_str(&param.to_string());
         }
 
