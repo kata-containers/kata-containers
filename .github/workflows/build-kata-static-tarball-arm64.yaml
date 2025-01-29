@@ -28,10 +28,12 @@ jobs:
       matrix:
         asset:
           - agent
+          - busybox
           - cloud-hypervisor
           - firecracker
           - kernel
           - kernel-dragonball-experimental
+          - kernel-nvidia-gpu
           - nydus
           - qemu
           - stratovirt
@@ -80,6 +82,15 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+      - name: store-extratarballs-artifact ${{ matrix.asset }}
+        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-artifacts-arm64-${{ matrix.asset }}-headers${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}-headers.tar.xz
+          retention-days: 15
+          if-no-files-found: error
+
   build-asset-rootfs:
     runs-on: ubuntu-22.04-arm
     needs: build-asset
@@ -88,6 +99,7 @@ jobs:
         asset:
           - rootfs-image
           - rootfs-initrd
+          - rootfs-nvidia-gpu-initrd
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
