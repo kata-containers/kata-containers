@@ -13,9 +13,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
-    NetworkDevice, ShareFsDevice, VfioDevice, VhostUserConfig, VhostUserNetDevice, VsockDevice,
-    KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
-    VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    NetworkDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
+    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -250,7 +250,7 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
-                DeviceType::HybridVsock(_) | DeviceType::Vsock(_) => {
+                DeviceType::HybridVsock(_) | DeviceType::Vsock(_) | DeviceType::Protection(_) => {
                     continue;
                 }
             }
@@ -385,6 +385,13 @@ impl DeviceManager {
                 }
 
                 Arc::new(Mutex::new(ShareFsDevice::new(&device_id, config)))
+            }
+            DeviceConfig::ProtectionDevCfg(pconfig) => {
+                // No need to do find device for protection device.
+                Arc::new(Mutex::new(ProtectionDevice::new(
+                    device_id.clone(),
+                    pconfig,
+                )))
             }
         };
 
