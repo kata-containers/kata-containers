@@ -20,10 +20,12 @@ type Endpoint interface {
 	HardwareAddr() string
 	Type() EndpointType
 	PciPath() vcTypes.PciPath
+	CcwDevice() *vcTypes.CcwDevice
 	NetworkPair() *NetworkInterfacePair
 
 	SetProperties(NetworkInfo)
 	SetPciPath(vcTypes.PciPath)
+	SetCcwDevice(vcTypes.CcwDevice)
 	Attach(context.Context, *Sandbox) error
 	Detach(ctx context.Context, netNsCreated bool, netNsPath string) error
 	HotAttach(context.Context, *Sandbox) error

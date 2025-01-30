@@ -197,8 +197,8 @@ type Interface struct {
 	Mtu         uint64       `protobuf:"varint,4,opt,name=mtu,proto3" json:"mtu,omitempty"`
 	HwAddr      string       `protobuf:"bytes,5,opt,name=hwAddr,proto3" json:"hwAddr,omitempty"`
 	// Path for the device (see the pci::Path (Rust) and types.PciPath
-	// (Go) or ccw::Device (Rust) types for format details, depending on
-	// architecture)
+	// (Go) or ccw::Device (Rust) and types.CcwDevice (Go) types for
+	// format details, depending on architecture)
 	DevicePath string `protobuf:"bytes,6,opt,name=devicePath,proto3" json:"devicePath,omitempty"`
 	// Type defines the type of interface described by this structure.
 	// The expected values are the one that are defined by the netlink

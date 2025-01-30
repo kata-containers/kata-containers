@@ -39,8 +39,8 @@ message Interface {
 	string hwAddr = 5;
 
 	// Path for the device (see the pci::Path (Rust) and types.PciPath
-	// (Go) or ccw::Device (Rust) types for format details, depending on
-	// architecture)
+	// (Go) or ccw::Device (Rust) and types.CcwDevice (Go) types for
+	// format details, depending on architecture)
 	string devicePath = 6;
 
 	// Type defines the type of interface described by this structure.
