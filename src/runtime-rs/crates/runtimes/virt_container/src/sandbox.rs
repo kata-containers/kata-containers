@@ -29,8 +29,11 @@ use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
+use hypervisor::{ProtectionDeviceConfig, SevSnpConfig};
 use kata_sys_util::hooks::HookStates;
+use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::CapabilityBits;
+use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 #[cfg(not(target_arch = "s390x"))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
@@ -154,6 +157,15 @@ impl VirtSandbox {
         {
             let vm_rootfs = ResourceConfig::VmRootfs(block_config);
             resource_configs.push(vm_rootfs);
+        }
+
+        // prepare protection device config
+        if let Some(protection_dev_config) = self
+            .prepare_protection_device_config(&self.hypervisor.hypervisor_config().await)
+            .await
+            .context("failed to prepare protection device config")?
+        {
+            resource_configs.push(ResourceConfig::Protection(protection_dev_config));
         }
 
         Ok(resource_configs)
@@ -300,6 +312,63 @@ impl VirtSandbox {
         };
 
         Ok(vm_socket)
+    }
+
+    async fn prepare_protection_device_config(
+        &self,
+        hypervisor_config: &HypervisorConfig,
+    ) -> Result<Option<ProtectionDeviceConfig>> {
+        if !hypervisor_config.security_info.confidential_guest {
+            return Ok(None);
+        }
+
+        let available_protection = available_guest_protection()?;
+        info!(
+            sl!(),
+            "sandbox: available protection: {:?}", available_protection
+        );
+
+        match available_protection {
+            GuestProtection::Sev(details) => {
+                if hypervisor_config.boot_info.firmware.is_empty() {
+                    return Err(anyhow!("SEV protection requires a path to firmaware"));
+                }
+
+                Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
+                    is_snp: false,
+                    cbitpos: details.cbitpos,
+                    firmware: hypervisor_config.boot_info.firmware.clone(),
+                    certs_path: "".to_owned(),
+                })))
+            }
+            GuestProtection::Snp(details) => {
+                if hypervisor_config.boot_info.firmware.is_empty() {
+                    return Err(anyhow!("SEV-SNP protection requires a path to firmaware"));
+                }
+
+                // If we got here SEV-SNP is available.  However, if
+                // 'sev_snp_guest' is 'false' in the configuration file we
+                // still have to revert to SEV.
+                let is_snp = hypervisor_config.security_info.sev_snp_guest;
+                if !is_snp {
+                    info!(sl!(), "reverting to SEV even though SEV-SNP is available as requested by 'sev_snp_guest'");
+                }
+
+                let certs_path = if is_snp {
+                    hypervisor_config.security_info.snp_certs_path.clone()
+                } else {
+                    "".to_owned()
+                };
+
+                Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
+                    is_snp,
+                    cbitpos: details.cbitpos,
+                    firmware: hypervisor_config.boot_info.firmware.clone(),
+                    certs_path,
+                })))
+            }
+            _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
+        }
     }
 
     fn has_prestart_hooks(
