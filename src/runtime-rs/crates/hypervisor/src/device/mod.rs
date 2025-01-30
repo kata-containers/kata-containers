@@ -9,8 +9,9 @@ use std::fmt;
 use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::{
     BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
-    NetworkConfig, NetworkDevice, ShareFsConfig, ShareFsDevice, VfioConfig, VfioDevice,
-    VhostUserConfig, VhostUserNetDevice, VsockConfig, VsockDevice,
+    NetworkConfig, NetworkDevice, ProtectionDevice, ProtectionDeviceConfig, ShareFsConfig,
+    ShareFsDevice, VfioConfig, VfioDevice, VhostUserConfig, VhostUserNetDevice, VsockConfig,
+    VsockDevice,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -35,6 +36,7 @@ pub enum DeviceConfig {
     VfioCfg(VfioConfig),
     VsockCfg(VsockConfig),
     HybridVsockCfg(HybridVsockConfig),
+    ProtectionDevCfg(ProtectionDeviceConfig),
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +49,7 @@ pub enum DeviceType {
     ShareFs(ShareFsDevice),
     HybridVsock(HybridVsockDevice),
     Vsock(VsockDevice),
+    Protection(ProtectionDevice),
 }
 
 impl fmt::Display for DeviceType {
