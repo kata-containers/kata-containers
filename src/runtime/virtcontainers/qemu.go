@@ -1942,16 +1942,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			}
 		}()
 
-		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
-		if err != nil {
-			return err
-		}
-		devSlot, err := types.PciSlotFromString(addr)
-		if err != nil {
-			return err
-		}
-		pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
-		endpoint.SetPciPath(pciPath)
+		q.arch.setEndpointDevicePath(endpoint, bridge.Addr, addr)
 
 		var machine govmmQemu.Machine
 		machine, err = q.getQemuMachine()
