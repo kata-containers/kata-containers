@@ -439,7 +439,7 @@ build_rootfs_distro()
 	fi
 
 	if [ -d "${ROOTFS_DIR}" ] && [ "${ROOTFS_DIR}" != "/" ]; then
-		rm -rf "${ROOTFS_DIR}"/*
+		sudo rm -rf "${ROOTFS_DIR}"/*
 	else
 		mkdir -p ${ROOTFS_DIR}
 	fi
