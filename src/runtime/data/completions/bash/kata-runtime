@@ -24,7 +24,7 @@ _kata_get_subcmd_options()
     local subcmd="$1"
 
     "$_kataruntime" "$subcmd" --help |\
-        egrep -- "^ *--[^ ]*[ ][^ ]*" |\
+        grep -E -- "^ *--[^ ]*[ ][^ ]*" |\
         awk '{print $1}' |\
         tr -d \, |\
         sort

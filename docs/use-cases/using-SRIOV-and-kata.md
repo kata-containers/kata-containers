@@ -42,7 +42,7 @@ The following is an example of how to use `lspci` to check if your NIC supports
 SR-IOV.
 
 ```
-$ lspci | fgrep -i ethernet
+$ lspci | grep -i -F ethernet
 01:00.0 Ethernet controller: Intel Corporation Ethernet Controller 10-Gigabit X540-AT2 (rev 03)
 
 ...
