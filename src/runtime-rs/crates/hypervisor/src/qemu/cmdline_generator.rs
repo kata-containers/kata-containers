@@ -1748,7 +1748,6 @@ struct ObjectSevSnpGuest {
     kernel_hashes: bool,
 
     is_snp: bool,
-    certs_path: String,
 }
 
 impl ObjectSevSnpGuest {
@@ -1759,13 +1758,7 @@ impl ObjectSevSnpGuest {
             reduced_phys_bits: 1,
             kernel_hashes: true,
             is_snp,
-            certs_path: "".to_owned(),
         }
-    }
-
-    fn set_certs_path(&mut self, certs_path: &str) -> &mut Self {
-        self.certs_path = certs_path.to_owned();
-        self
     }
 }
 
@@ -1789,9 +1782,6 @@ impl ToQemuParams for ObjectSevSnpGuest {
                 "kernel-hashes={}",
                 if self.kernel_hashes { "on" } else { "off" }
             ));
-            if !self.certs_path.is_empty() {
-                params.push(format!("certs-path={}", self.certs_path));
-            }
         }
         Ok(vec!["-object".to_owned(), params.join(",")])
     }
@@ -2124,14 +2114,8 @@ impl<'a> QemuCmdLine<'a> {
             .set_nvdimm(false);
     }
 
-    pub fn add_sev_snp_protection_device(
-        &mut self,
-        cbitpos: u32,
-        firmware: &str,
-        certs_path: &str,
-    ) {
-        let mut sev_snp_object = ObjectSevSnpGuest::new(true, cbitpos);
-        sev_snp_object.set_certs_path(certs_path);
+    pub fn add_sev_snp_protection_device(&mut self, cbitpos: u32, firmware: &str) {
+        let sev_snp_object = ObjectSevSnpGuest::new(true, cbitpos);
         self.devices.push(Box::new(sev_snp_object));
 
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
