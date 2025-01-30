@@ -864,7 +864,15 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
 	// Sort the devices starting with device #1 being the VFIO control group
 	// device and the next the actuall device(s) /dev/vfio/<group>
-	deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+	if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
+		// DeviceInfo should still be added to the sandbox's device manager
+		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
+		// This ensures that ociSpec.Linux.Devices is updated with
+		// this information before the container is created on the guest.
+		deviceInfos = sortContainerVFIODevices(coldPlugDevices)
+	} else {
+		deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+	}
 
 	for _, info := range deviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
