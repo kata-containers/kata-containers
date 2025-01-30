@@ -338,7 +338,6 @@ impl VirtSandbox {
                     is_snp: false,
                     cbitpos: details.cbitpos,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
-                    certs_path: "".to_owned(),
                 })))
             }
             GuestProtection::Snp(details) => {
@@ -354,17 +353,10 @@ impl VirtSandbox {
                     info!(sl!(), "reverting to SEV even though SEV-SNP is available as requested by 'sev_snp_guest'");
                 }
 
-                let certs_path = if is_snp {
-                    hypervisor_config.security_info.snp_certs_path.clone()
-                } else {
-                    "".to_owned()
-                };
-
                 Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
                     is_snp,
                     cbitpos: details.cbitpos,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
-                    certs_path,
                 })))
             }
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
