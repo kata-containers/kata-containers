@@ -55,9 +55,14 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
+#[cfg(target_arch = "s390x")]
+use crate::ccw;
 use crate::cdh;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
-use crate::device::network_device_handler::wait_for_net_interface;
+#[cfg(target_arch = "s390x")]
+use crate::device::network_device_handler::wait_for_ccw_net_interface;
+#[cfg(not(target_arch = "s390x"))]
+use crate::device::network_device_handler::wait_for_pci_net_interface;
 use crate::device::{add_devices, handle_cdi_devices, update_env_pci};
 use crate::features::get_build_features;
 #[cfg(feature = "guest-pull")]
@@ -1000,15 +1005,27 @@ impl agent_ttrpc::AgentService for AgentService {
             "empty update interface request",
         )?;
 
-        // For network devices passed on the pci bus, check for the network interface
+        // For network devices passed, check for the network interface
         // to be available first.
         if !interface.devicePath.is_empty() {
-            let pcipath = pci::Path::from_str(&interface.devicePath)
-                .map_ttrpc_err(|e| format!("Unexpected pci-path for network interface: {:?}", e))?;
-
-            wait_for_net_interface(&self.sandbox, &pcipath)
-                .await
-                .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+            #[cfg(not(target_arch = "s390x"))]
+            {
+                let pcipath = pci::Path::from_str(&interface.devicePath).map_ttrpc_err(|e| {
+                    format!("Unexpected pci-path for network interface: {:?}", e)
+                })?;
+                wait_for_pci_net_interface(&self.sandbox, &pcipath)
+                    .await
+                    .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+            }
+            #[cfg(target_arch = "s390x")]
+            {
+                let ccw_dev = ccw::Device::from_str(&interface.devicePath).map_ttrpc_err(|e| {
+                    format!("Unexpected CCW path for network interface: {:?}", e)
+                })?;
+                wait_for_ccw_net_interface(&self.sandbox, &ccw_dev)
+                    .await
+                    .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+            }
         }
 
         self.sandbox
