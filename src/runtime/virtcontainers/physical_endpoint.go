@@ -34,6 +34,7 @@ type PhysicalEndpoint struct {
 	Driver             string
 	VendorDeviceID     string
 	PCIPath            vcTypes.PciPath
+	CCWDevice          *vcTypes.CcwDevice
 }
 
 // Properties returns the properties of the physical interface.
@@ -64,6 +65,16 @@ func (endpoint *PhysicalEndpoint) PciPath() vcTypes.PciPath {
 // SetPciPath sets the PCI path of the endpoint.
 func (endpoint *PhysicalEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
 	endpoint.PCIPath = pciPath
+}
+
+// CcwDevice returns the CCW device of the endpoint.
+func (endpoint *PhysicalEndpoint) CcwDevice() *vcTypes.CcwDevice {
+	return endpoint.CCWDevice
+}
+
+// SetCcwDevice sets the CCW device of the endpoint.
+func (endpoint *PhysicalEndpoint) SetCcwDevice(ccwDev vcTypes.CcwDevice) {
+	endpoint.CCWDevice = &ccwDev
 }
 
 // SetProperties sets the properties of the physical endpoint.
