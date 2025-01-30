@@ -348,22 +348,29 @@ impl ToQemuParams for Smp {
 
 #[derive(Debug)]
 struct Cpu {
+    r#type: String,
     cpu_features: String,
 }
 
 impl Cpu {
     fn new(config: &HypervisorConfig) -> Cpu {
         Cpu {
+            // '-cpu host' has always to be used when using KVM
+            r#type: "host".to_owned(),
             cpu_features: config.cpu_info.cpu_features.clone(),
         }
+    }
+
+    fn set_type(&mut self, cpu_type: &str) -> &mut Self {
+        self.r#type = cpu_type.to_owned();
+        self
     }
 }
 
 #[async_trait]
 impl ToQemuParams for Cpu {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        // '-cpu host' has always to be used when using KVM
-        let mut params = vec!["host".to_owned()];
+        let mut params = vec![self.r#type.clone()];
         params.push(self.cpu_features.clone());
         Ok(vec!["-cpu".to_owned(), params.join(",")])
     }
@@ -459,6 +466,7 @@ struct Machine {
     options: String,
     nvdimm: bool,
     kernel_irqchip: Option<String>,
+    confidential_guest_support: String,
 
     is_nvdimm_supported: bool,
     memory_backend: Option<String>,
@@ -487,6 +495,7 @@ impl Machine {
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
             kernel_irqchip: None,
+            confidential_guest_support: "".to_owned(),
             is_nvdimm_supported,
             memory_backend: None,
         }
@@ -509,6 +518,11 @@ impl Machine {
         self.kernel_irqchip = Some(kernel_irqchip.to_owned());
         self
     }
+
+    fn set_confidential_guest_support(&mut self, scheme: &str) -> &mut Self {
+        self.confidential_guest_support = scheme.to_owned();
+        self
+    }
 }
 
 #[async_trait]
@@ -529,7 +543,31 @@ impl ToQemuParams for Machine {
         if let Some(mem_backend) = &self.memory_backend {
             params.push(format!("memory-backend={}", mem_backend));
         }
+        if !self.confidential_guest_support.is_empty() {
+            params.push(format!(
+                "confidential-guest-support={}",
+                self.confidential_guest_support
+            ));
+        }
         Ok(vec!["-machine".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct Bios {
+    filepath: String,
+}
+
+impl Bios {
+    fn new(filepath: String) -> Self {
+        Bios { filepath }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Bios {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec!["-bios".to_owned(), self.filepath.clone()])
     }
 }
 
@@ -1702,6 +1740,63 @@ impl ToQemuParams for ObjectIoThread {
     }
 }
 
+#[derive(Debug)]
+struct ObjectSevSnpGuest {
+    id: String,
+    cbitpos: u32,
+    reduced_phys_bits: u32,
+    kernel_hashes: bool,
+
+    is_snp: bool,
+    certs_path: String,
+}
+
+impl ObjectSevSnpGuest {
+    fn new(is_snp: bool, cbitpos: u32) -> Self {
+        ObjectSevSnpGuest {
+            id: (if is_snp { "snp" } else { "sev" }).to_owned(),
+            cbitpos,
+            reduced_phys_bits: 1,
+            kernel_hashes: true,
+            is_snp,
+            certs_path: "".to_owned(),
+        }
+    }
+
+    fn set_certs_path(&mut self, certs_path: &str) -> &mut Self {
+        self.certs_path = certs_path.to_owned();
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectSevSnpGuest {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(
+            (if self.is_snp {
+                "sev-snp-guest"
+            } else {
+                "sev-guest"
+            })
+            .to_owned(),
+        );
+        params.push(format!("id={}", self.id));
+        params.push(format!("cbitpos={}", self.cbitpos));
+        params.push(format!("reduced-phys-bits={}", self.reduced_phys_bits));
+        if self.is_snp {
+            params.push(format!(
+                "kernel-hashes={}",
+                if self.kernel_hashes { "on" } else { "off" }
+            ));
+            if !self.certs_path.is_empty() {
+                params.push(format!("certs-path={}", self.certs_path));
+            }
+        }
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -2016,6 +2111,36 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_virtio_balloon(&mut self) {
         let balloon_device = DeviceVirtioBalloon::new();
         self.devices.push(Box::new(balloon_device));
+    }
+
+    pub fn add_sev_protection_device(&mut self, cbitpos: u32, firmware: &str) {
+        let sev_object = ObjectSevSnpGuest::new(false, cbitpos);
+        self.devices.push(Box::new(sev_object));
+
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        self.machine
+            .set_confidential_guest_support("sev")
+            .set_nvdimm(false);
+    }
+
+    pub fn add_sev_snp_protection_device(
+        &mut self,
+        cbitpos: u32,
+        firmware: &str,
+        certs_path: &str,
+    ) {
+        let mut sev_snp_object = ObjectSevSnpGuest::new(true, cbitpos);
+        sev_snp_object.set_certs_path(certs_path);
+        self.devices.push(Box::new(sev_snp_object));
+
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        self.machine
+            .set_confidential_guest_support("snp")
+            .set_nvdimm(false);
+
+        self.cpu.set_type("EPYC-v4");
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
