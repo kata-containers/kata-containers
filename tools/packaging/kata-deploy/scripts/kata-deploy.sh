@@ -150,12 +150,15 @@ function delete_runtimeclasses() {
 function get_container_runtime() {
 
 	local runtime=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}')
+	local microk8s=$(kubectl get node $NODE_NAME -o jsonpath='{.metadata.labels.microk8s\.io\/cluster}')
 	if [ "$?" -ne 0 ]; then
                 die "invalid node name"
 	fi
 
 	if echo "$runtime" | grep -qE "cri-o"; then
 		echo "cri-o"
+	elif [ "$microk8s" == "true" ]; then
+		echo "microk8s"
 	elif echo "$runtime" | grep -qE 'containerd.*-k3s'; then
 		if host_systemctl is-active --quiet rke2-agent; then
 			echo "rke2-agent"
@@ -193,6 +196,12 @@ function is_containerd_capable_of_using_drop_in_files() {
 		return
 	fi
 
+	if [ "$runtime" == "microk8s" ]; then
+		# microk8s use snap containerd
+		echo "false"
+		return
+	fi
+ 
 	local version_major=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | cut -d'.' -f1)
 	if [ $version_major -lt 2 ]; then
 		# Only containerd 2.0 does the merge of the plugins section from different snippets,
@@ -465,13 +474,15 @@ function configure_cri_runtime() {
 	crio)
 		configure_crio
 		;;
-	containerd | k3s | k3s-agent | rke2-agent | rke2-server | k0s-controller | k0s-worker)
+	containerd | k3s | k3s-agent | rke2-agent | rke2-server | k0s-controller | k0s-worker | microk8s)
 		configure_containerd "$1"
 		;;
 	esac
 	if [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
 		# do nothing, k0s will automatically load the config on the fly
 		:
+	elif [ "$1" == "microk8s" ]; then
+		host_systemctl restart snap.microk8s.daemon-containerd.service
 	else
 		host_systemctl daemon-reload
 		host_systemctl restart "$1"
@@ -658,6 +669,8 @@ function restart_cri_runtime() {
 	if [ "${runtime}" == "k0s-worker" ] || [ "${runtime}" == "k0s-controller" ]; then
 		# do nothing, k0s will automatically unload the config on the fly
 		:
+	elif [ "$1" == "microk8s" ]; then
+		host_systemctl restart snap.microk8s.daemon-containerd.service
 	else
 		host_systemctl daemon-reload
 		host_systemctl restart "${runtime}"
@@ -669,7 +682,7 @@ function cleanup_cri_runtime() {
 	crio)
 		cleanup_crio
 		;;
-	containerd | k3s | k3s-agent | rke2-agent | rke2-server | k0s-controller | k0s-worker)
+	containerd | k3s | k3s-agent | rke2-agent | rke2-server | k0s-controller | k0s-worker | microk8s)
 		cleanup_containerd
 		;;
 	esac
@@ -793,6 +806,9 @@ function main() {
 	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
 	if [ "$runtime" == "cri-o" ]; then
 		runtime="crio"
+	elif [ "$runtime" == "microk8s" ]; then
+		containerd_conf_file="/etc/containerd/containerd-template.toml"
+		containerd_conf_file_backup="${containerd_conf_file}.bak"
 	elif [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
 		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
@@ -809,7 +825,7 @@ function main() {
 
 
 	# only install / remove / update if we are dealing with CRIO or containerd
-	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server|k0s-worker|k0s-controller)$ ]]; then
+	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server|k0s-worker|k0s-controller|microk8s)$ ]]; then
 		if [ "$runtime" != "crio" ]; then
 			containerd_snapshotter_version_check
 			snapshotter_handler_mapping_validation_check

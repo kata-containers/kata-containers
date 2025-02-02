@@ -77,6 +77,13 @@ $ sudo k0s kubectl apply -k kata-deploy/overlays/k0s
 $ sudo k0s kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
+#### Microk8s Kubernetes cluster
+
+```bash
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -k https://github.com/kata-containers/kata-containers//tools/packaging/kata-deploy/kata-deploy/overlays/microk8s
+```
+
 #### Vanilla Kubernetes cluster
 
 ```bash
