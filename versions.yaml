@@ -117,37 +117,37 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
       ppc64le:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "jammy" # 22.04 lTS
+        version: "jammy"  # 22.04 lTS
         confidential:
           name: "ubuntu"
-          version: "oracular" # 24.10
+          version: "oracular"  # 24.10
         mariner:
           name: "cbl-mariner"
           version: "3.0"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
 
   initrd:
     description: |
@@ -160,7 +160,7 @@ assets:
         version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
           version: "jammy"
@@ -168,25 +168,25 @@ assets:
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
       x86_64:
         name: "alpine"
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "focal" # 20.04 LTS
+          version: "focal"  # 20.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
