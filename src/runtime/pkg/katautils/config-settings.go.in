@@ -116,5 +116,3 @@ const defaultPCIeSwitchPort = 0
 
 const defaultRemoteHypervisorSocket = "/run/peerpod/hypervisor.sock"
 const defaultRemoteHypervisorTimeout = 600
-
-const defaultSnpCertsPath = "/opt/snp/cert_chain.cert"

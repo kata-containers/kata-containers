@@ -13,7 +13,7 @@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUSNPPATH@"
+path = "@QEMUPATH@"
 kernel = "@KERNELCONFIDENTIALPATH@"
 #image = "@IMAGEPATH@"
 initrd = "@INITRDCONFIDENTIALPATH@"
@@ -44,11 +44,6 @@ confidential_guest = true
 # enable SEV SNP VMs
 sev_snp_guest = true
 
-# The path to the file containing the SNP certificate chain (including
-# VCEK/VLEK certificates). This wil be used to get the extended attestation
-# report from the guest. The default path is @SNPCERTSPATH@.
-snp_certs_path = "@SNPCERTSPATH@"
-
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
@@ -63,7 +58,7 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having

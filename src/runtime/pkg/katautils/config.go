@@ -104,7 +104,6 @@ type hypervisor struct {
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
 	BlockDeviceAIO                 string                    `toml:"block_device_aio"`
 	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
-	SnpCertsPath                   string                    `toml:"snp_certs_path"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
@@ -283,34 +282,6 @@ func (h hypervisor) firmware() (string, error) {
 	}
 
 	return ResolvePath(p)
-}
-
-func (h hypervisor) snpCertsPath() (string, error) {
-	// snpCertsPath only matter when using Confidential Guests
-	if !h.ConfidentialGuest {
-		return "", nil
-	}
-
-	// snpCertsPath only matter for SNP guests
-	if !h.SevSnpGuest {
-		return "", nil
-	}
-
-	p := h.SnpCertsPath
-
-	if p == "" {
-		p = defaultSnpCertsPath
-	}
-
-	path, err := ResolvePath(p)
-	if err != nil {
-		if p == defaultSnpCertsPath {
-			msg := fmt.Sprintf("failed to resolve SNP certificates path: %s", defaultSnpCertsPath)
-			kataUtilsLogger.Warn(msg)
-			return "", nil
-		}
-	}
-	return path, err
 }
 
 func (h hypervisor) coldPlugVFIO() config.PCIePort {
@@ -872,11 +843,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	snpCertsPath, err := h.snpCertsPath()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
 	machineAccelerators := h.machineAccelerators()
 	cpuFeatures := h.cpuFeatures()
 	kernelParams := h.kernelParams()
@@ -941,7 +907,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:               rootfsType,
 		FirmwarePath:             firmware,
 		FirmwareVolumePath:       firmwareVolume,
-		SnpCertsPath:             snpCertsPath,
 		PFlash:                   pflashes,
 		MachineAccelerators:      machineAccelerators,
 		CPUFeatures:              cpuFeatures,

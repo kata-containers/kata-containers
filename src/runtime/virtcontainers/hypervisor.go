@@ -461,10 +461,6 @@ type HypervisorConfig struct {
 	// The user maps to the uid.
 	User string
 
-	// The path to the file containing the AMD SEV-SNP certificate chain
-	// (including VCEK/VLEK certificates).
-	SnpCertsPath string
-
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
