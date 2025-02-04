@@ -370,7 +370,21 @@ impl RuntimeHandlerManager {
             state: state.clone(),
         };
 
-        inner.try_init(sandbox_config, Some(spec), options).await
+        // Load config to check hypervisor settings
+        let config = load_config(&sandbox_config.annotations, options).context("load config")?;
+        let mut amended_spec = spec.clone();
+        if let Some(hypervisor_config) = config.hypervisor.get(&config.runtime.hypervisor_name) {
+            if hypervisor_config.disable_guest_selinux {
+                if let Some(ref mut process) = amended_spec.process_mut() {
+                    process.set_selinux_label(None);
+                }
+                if let Some(ref mut linux) = amended_spec.linux_mut() {
+                    linux.set_mount_label(None);
+                }
+            }
+        }
+
+        inner.try_init(sandbox_config, Some(&amended_spec), options).await
     }
 
     #[instrument]
