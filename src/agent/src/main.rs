@@ -134,7 +134,7 @@ lazy_static! {
 
 #[cfg(feature = "agent-policy")]
 lazy_static! {
-    static ref AGENT_POLICY: Mutex<policy::AgentPolicy> = Mutex::new(AgentPolicy::new());
+    static ref AGENT_POLICY: Mutex<AgentPolicy> = Mutex::new(AgentPolicy::new());
 }
 
 #[derive(Parser)]
@@ -633,7 +633,15 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 
 #[cfg(feature = "agent-policy")]
 async fn initialize_policy() -> Result<()> {
-    AGENT_POLICY.lock().await.initialize().await
+    AGENT_POLICY
+        .lock()
+        .await
+        .initialize(
+            AGENT_CONFIG.log_level.as_usize(),
+            AGENT_CONFIG.policy_file.clone(),
+            None,
+        )
+        .await
 }
 
 // The Rust standard library had suppressed the default SIGPIPE behavior,
@@ -651,7 +659,7 @@ use crate::config::AgentConfig;
 use std::os::unix::io::{FromRawFd, RawFd};
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::AgentPolicy;
+use kata_agent_policy::policy::AgentPolicy;
 
 #[cfg(test)]
 mod tests {
