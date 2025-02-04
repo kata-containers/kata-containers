@@ -445,11 +445,11 @@ ifneq (,$(QEMUCMD))
     DEFAULTVFIOPORT_NV = root-port
     DEFAULTPCIEROOTPORT_NV = 8
 
-    KERNELPARAMS_NV =  "agent.hotplug_timeout=20"
-    KERNELPARAMS_NV += $(KERNELPARAMS)
-
-    KERNELTDXPARAMS_NV = "authorize_allow_devs=pci:ALL"
-    KERNELTDXPARAMS_NV += $(KERNELTDXPARAMS)
+    KERNELPARAMS_NV =  "agent.hotplug_timeout=20 cgroup_no_v1=all"
+    KERNELTDXPARAMS_NV = "authorize_allow_devs=pci:ALL cgroup_no_v1=all"
+    # Setting this to false can lead to cgroup leakages in the host
+    # Best practice for production is to set this to true
+    DEFSANDBOXCGROUPONLY_NV = true
 endif
 
 ifneq (,$(CLHCMD))
