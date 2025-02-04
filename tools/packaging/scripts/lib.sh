@@ -230,8 +230,9 @@ get_agent_image_name() {
 		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")")
 	agent_dir="${repo_root_dir}/tools/packaging/static-build/agent"
+	rust_toolchain="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 
-	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification ${agent_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification ${agent_dir})-${rust_toolchain}-$(uname -m)"
 }
 
 get_coco_guest_components_image_name() {

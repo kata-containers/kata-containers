@@ -8,5 +8,5 @@ pre-build = ["dpkg --add-architecture arm64 && apt-get update && apt-get install
 pre-build = ["dpkg --add-architecture amd64 && apt-get update && apt-get install -y libssl-dev:amd64"]
 
 # Powerpc compile seems to be broken, due to `ring` crate not being supported on powerpc.
-[target.powerpc64le-unknown-linux-gnu]
+[target.powerpc64-unknown-linux-gnu]
 pre-build = ["dpkg --add-architecture ppc64le && apt-get update && apt-get install -y libssl-dev:ppc64le"]

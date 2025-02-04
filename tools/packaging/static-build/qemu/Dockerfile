@@ -67,7 +67,6 @@ RUN apt-get update && apt-get upgrade -y && \
 	    rsync \
 	    zlib1g-dev${DPKG_ARCH} && \
     if [ "${ARCH}" != s390x ]; then apt-get install -y --no-install-recommends libpmem-dev${DPKG_ARCH}; fi && \
-    GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64le"; fi && \
+    GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64"; fi && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${GCC_ARCH}"-linux-gnu; fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/
-
