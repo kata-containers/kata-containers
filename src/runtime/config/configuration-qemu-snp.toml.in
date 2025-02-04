@@ -330,7 +330,7 @@ pflashes = []
 # that it is running on top a VMM. This will result in the runtime
 # behaving as it would when running on bare metal.
 #
-#disable_nesting_checks = true
+disable_nesting_checks = true
 
 # This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
