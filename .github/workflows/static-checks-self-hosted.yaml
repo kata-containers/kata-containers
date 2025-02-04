@@ -29,6 +29,7 @@ jobs:
           - "ubuntu-22.04-arm"
           - "s390x"
           - "ppc64le"
+          - "riscv64"
     uses: ./.github/workflows/build-checks.yaml
     with:
       instance: ${{ matrix.instance }}
