@@ -59,5 +59,5 @@ The table below summarized when and where those different hooks will be executed
 
 + `Hook Path` specifies where hook's path be resolved.
 + `Exec Place` specifies in which namespace those hooks can be executed.
-  + For `CreateContainer` Hooks, OCI requires to run them inside the container namespace while the hook executable path is in the host runtime, which is a non-starter for VM-based containers. So we design to keep them running in the *host vmm namespace.* 
+  + For `CreateContainer` Hooks, OCI requires to run them inside the container namespace while the hook executable path is in the host runtime, which is a non-starter for VM-based containers. So we design to keep them running in the *host vmm namespace.*
 + `Exec Time` specifies at which time point those hooks can be executed.
