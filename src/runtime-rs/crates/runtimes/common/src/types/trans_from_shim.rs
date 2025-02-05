@@ -6,15 +6,25 @@
 
 use super::{
     ContainerConfig, ContainerID, ContainerProcess, ExecProcessRequest, KillRequest,
-    ResizePTYRequest, ShutdownRequest, TaskRequest, UpdateRequest,
+    ResizePTYRequest, SandboxConfig, SandboxID, SandboxNetworkEnv, SandboxRequest,
+    SandboxStatusRequest, ShutdownRequest, StopSandboxRequest, TaskRequest, UpdateRequest,
 };
-use anyhow::{Context, Result};
-use containerd_shim_protos::api;
+
 use kata_types::mount::Mount;
 use std::{
     convert::{From, TryFrom},
     path::PathBuf,
 };
+
+use protobuf::Message;
+use runtime_spec;
+
+use protocols::api as cri_api_v1;
+
+use anyhow::{anyhow, Context, Result};
+use containerd_shim_protos::{api, sandbox_api};
+
+pub const SANDBOX_API_V1: &str = "runtime.v1.PodSandboxConfig";
 
 fn trans_from_shim_mount(from: &api::Mount) -> Mount {
     let options = from.options.to_vec();
@@ -34,6 +44,112 @@ fn trans_from_shim_mount(from: &api::Mount) -> Mount {
         device_id: None,
         host_shared_fs_path: None,
         read_only,
+    }
+}
+
+// There're a lot of information to create a sandbox from CreateSandboxRequest and the internal PodSandboxConfig.
+// At present, we only take out part of it to build SandboxConfig.
+impl TryFrom<sandbox_api::CreateSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::CreateSandboxRequest) -> Result<Self> {
+        let type_url = from.options.type_url.clone();
+        if type_url != SANDBOX_API_V1 {
+            return Err(anyhow!(format!("unsupported type url: {}", type_url)));
+        };
+
+        let config = cri_api_v1::PodSandboxConfig::parse_from_bytes(&from.options.value)?;
+
+        let mut dns: Vec<String> = vec![];
+        config.dns_config.map(|mut dns_config| {
+            dns.append(&mut dns_config.servers);
+            dns.append(&mut dns_config.servers);
+            dns.append(&mut dns_config.options);
+        });
+
+        Ok(SandboxRequest::CreateSandbox(Box::new(SandboxConfig {
+            sandbox_id: from.sandbox_id.clone(),
+            hostname: config.hostname,
+            dns,
+            network_env: SandboxNetworkEnv {
+                netns: Some(from.netns_path),
+                network_created: false,
+            },
+            annotations: config.annotations.clone(),
+            hooks: None,
+            state: runtime_spec::State {
+                version: Default::default(),
+                id: from.sandbox_id,
+                status: runtime_spec::ContainerState::Creating,
+                pid: 0,
+                bundle: from.bundle_path,
+                annotations: config.annotations,
+            },
+        })))
+    }
+}
+
+impl TryFrom<sandbox_api::StartSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::StartSandboxRequest) -> Result<Self> {
+        Ok(SandboxRequest::StartSandbox(SandboxID {
+            sandbox_id: from.sandbox_id,
+        }))
+    }
+}
+
+impl TryFrom<sandbox_api::PlatformRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::PlatformRequest) -> Result<Self> {
+        Ok(SandboxRequest::Platform(SandboxID {
+            sandbox_id: from.sandbox_id,
+        }))
+    }
+}
+
+impl TryFrom<sandbox_api::StopSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::StopSandboxRequest) -> Result<Self> {
+        Ok(SandboxRequest::StopSandbox(StopSandboxRequest {
+            sandbox_id: from.sandbox_id,
+            timeout_secs: from.timeout_secs,
+        }))
+    }
+}
+
+impl TryFrom<sandbox_api::WaitSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::WaitSandboxRequest) -> Result<Self> {
+        Ok(SandboxRequest::WaitSandbox(SandboxID {
+            sandbox_id: from.sandbox_id,
+        }))
+    }
+}
+
+impl TryFrom<sandbox_api::SandboxStatusRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::SandboxStatusRequest) -> Result<Self> {
+        Ok(SandboxRequest::SandboxStatus(SandboxStatusRequest {
+            sandbox_id: from.sandbox_id,
+            verbose: from.verbose,
+        }))
+    }
+}
+
+impl TryFrom<sandbox_api::PingRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::PingRequest) -> Result<Self> {
+        Ok(SandboxRequest::Ping(SandboxID {
+            sandbox_id: from.sandbox_id,
+        }))
+    }
+}
+
+impl TryFrom<sandbox_api::ShutdownSandboxRequest> for SandboxRequest {
+    type Error = anyhow::Error;
+    fn try_from(from: sandbox_api::ShutdownSandboxRequest) -> Result<Self> {
+        Ok(SandboxRequest::ShutdownSandbox(SandboxID {
+            sandbox_id: from.sandbox_id,
+        }))
     }
 }
 

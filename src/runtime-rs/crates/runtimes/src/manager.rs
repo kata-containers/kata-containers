@@ -7,9 +7,13 @@
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
-    types::{ContainerProcess, SandboxConfig, TaskRequest, TaskResponse},
+    types::{
+        ContainerProcess, PlatformInfo, SandboxConfig, SandboxRequest, SandboxResponse,
+        StartSandboxInfo, TaskRequest, TaskResponse,
+    },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
+
 use hypervisor::Param;
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
@@ -29,9 +33,11 @@ use runtime_spec as spec;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use std::{
     collections::HashMap,
+    ops::Deref,
     path::{Path, PathBuf},
     str::from_utf8,
     sync::Arc,
+    time::SystemTime,
 };
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
@@ -374,7 +380,24 @@ impl RuntimeHandlerManager {
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
-    pub async fn handler_message(&self, req: TaskRequest) -> Result<TaskResponse> {
+    pub async fn handler_sandbox_message(&self, req: SandboxRequest) -> Result<SandboxResponse> {
+        if let SandboxRequest::CreateSandbox(sandbox_config) = req {
+            let config = sandbox_config.deref().clone();
+
+            self.sandbox_init_runtime_instance(config)
+                .await
+                .context("init sandboxed runtime")?;
+
+            Ok(SandboxResponse::CreateSandbox)
+        } else {
+            self.handler_sandbox_request(req)
+                .await
+                .context("handler request")
+        }
+    }
+
+    #[instrument(parent = &*(ROOTSPAN))]
+    pub async fn handler_task_message(&self, req: TaskRequest) -> Result<TaskResponse> {
         if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
             let bundler_path = format!(
@@ -429,14 +452,57 @@ impl RuntimeHandlerManager {
 
             Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
-            self.handler_request(req)
+            self.handler_task_request(req)
                 .await
                 .context("handler TaskRequest")
         }
     }
 
+    pub async fn handler_sandbox_request(&self, req: SandboxRequest) -> Result<SandboxResponse> {
+        let instance = self
+            .get_runtime_instance()
+            .await
+            .context("get runtime instance")?;
+        let sandbox = instance.sandbox.clone();
+
+        match req {
+            SandboxRequest::CreateSandbox(req) => Err(anyhow!("Unreachable request {:?}", req)),
+            SandboxRequest::StartSandbox(_) => {
+                sandbox
+                    .start()
+                    .await
+                    .context("start sandbox in sandbox handler")?;
+                Ok(SandboxResponse::StartSandbox(StartSandboxInfo {
+                    pid: std::process::id(),
+                    create_time: Some(SystemTime::now()),
+                }))
+            }
+            SandboxRequest::Platform(_) => Ok(SandboxResponse::Platform(PlatformInfo {
+                os: std::env::consts::OS.to_string(),
+                architecture: std::env::consts::ARCH.to_string(),
+            })),
+            SandboxRequest::StopSandbox(_) => {
+                sandbox.stop().await.context("stop sandbox")?;
+
+                Ok(SandboxResponse::StopSandbox)
+            }
+            SandboxRequest::WaitSandbox(_) => {
+                unimplemented!()
+            }
+            SandboxRequest::SandboxStatus(_) => {
+                unimplemented!()
+            }
+            SandboxRequest::Ping(_) => Ok(SandboxResponse::Ping),
+            SandboxRequest::ShutdownSandbox(_) => {
+                sandbox.shutdown().await.context("shutdown sandbox")?;
+
+                Ok(SandboxResponse::ShutdownSandbox)
+            }
+        }
+    }
+
     #[instrument(parent = &(*ROOTSPAN))]
-    pub async fn handler_request(&self, req: TaskRequest) -> Result<TaskResponse> {
+    pub async fn handler_task_request(&self, req: TaskRequest) -> Result<TaskResponse> {
         let instance = self
             .get_runtime_instance()
             .await
