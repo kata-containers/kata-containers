@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
@@ -224,22 +224,22 @@ func TestContainerType(t *testing.T) {
 		},
 		{
 			description:     "crio unexpected annotation, expect error",
-			annotationKey:   podmanAnnotations.ContainerType,
+			annotationKey:   crioAnnotations.ContainerType,
 			annotationValue: "foo",
 			expectedType:    vc.UnknownContainerType,
 			expectedErr:     true,
 		},
 		{
 			description:     "crio sandbox",
-			annotationKey:   podmanAnnotations.ContainerType,
-			annotationValue: string(podmanAnnotations.ContainerTypeSandbox),
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: string(crioAnnotations.ContainerTypeSandbox),
 			expectedType:    vc.PodSandbox,
 			expectedErr:     false,
 		},
 		{
 			description:     "crio container",
-			annotationKey:   podmanAnnotations.ContainerType,
-			annotationValue: string(podmanAnnotations.ContainerTypeContainer),
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: string(crioAnnotations.ContainerTypeContainer),
 			expectedType:    vc.PodContainer,
 			expectedErr:     false,
 		},
@@ -287,7 +287,7 @@ func TestSandboxIDSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
 	ociSpec.Annotations = map[string]string{
-		podmanAnnotations.SandboxID: testSandboxID,
+		crioAnnotations.SandboxID: testSandboxID,
 	}
 
 	sandboxID, err := SandboxID(ociSpec)
@@ -987,15 +987,15 @@ func TestIsCRIOContainerManager(t *testing.T) {
 		result      bool
 	}{
 		{
-			annotations: map[string]string{podmanAnnotations.ContainerType: "abc"},
+			annotations: map[string]string{crioAnnotations.ContainerType: "abc"},
 			result:      false,
 		},
 		{
-			annotations: map[string]string{podmanAnnotations.ContainerType: podmanAnnotations.ContainerTypeSandbox},
+			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeSandbox},
 			result:      true,
 		},
 		{
-			annotations: map[string]string{podmanAnnotations.ContainerType: podmanAnnotations.ContainerTypeContainer},
+			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeContainer},
 			result:      true,
 		},
 	}
