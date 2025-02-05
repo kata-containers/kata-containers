@@ -9,7 +9,7 @@ use common::{
     message::Message,
     types::{
         ContainerProcess, PlatformInfo, SandboxConfig, SandboxRequest, SandboxResponse,
-        StartSandboxInfo, TaskRequest, TaskResponse,
+        SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -487,10 +487,20 @@ impl RuntimeHandlerManager {
                 Ok(SandboxResponse::StopSandbox)
             }
             SandboxRequest::WaitSandbox(_) => {
-                unimplemented!()
+                let exit_info = sandbox.wait().await.context("wait sandbox")?;
+
+                Ok(SandboxResponse::WaitSandbox(exit_info))
             }
             SandboxRequest::SandboxStatus(_) => {
-                unimplemented!()
+                let status = sandbox.status().await?;
+
+                Ok(SandboxResponse::SandboxStatus(SandboxStatusInfo {
+                    sandbox_id: status.sandbox_id,
+                    pid: status.pid,
+                    state: status.state,
+                    created_at: None,
+                    exited_at: None,
+                }))
             }
             SandboxRequest::Ping(_) => Ok(SandboxResponse::Ping),
             SandboxRequest::ShutdownSandbox(_) => {
