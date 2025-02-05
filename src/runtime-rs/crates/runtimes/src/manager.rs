@@ -299,6 +299,7 @@ impl RuntimeHandlerManager {
         Ok(inner.get_kata_tracer())
     }
 
+    //init the sandbox for the normal task api
     #[instrument]
     async fn task_init_runtime_instance(
         &self,
@@ -306,6 +307,14 @@ impl RuntimeHandlerManager {
         state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
+        let mut inner: tokio::sync::RwLockWriteGuard<'_, RuntimeHandlerManagerInner> =
+            self.inner.write().await;
+
+        // return if runtime instance has init
+        if inner.runtime_instance.is_some() {
+            return Ok(());
+        }
+
         let mut dns: Vec<String> = vec![];
 
         let spec_mounts = spec.mounts().clone().unwrap_or_default();
@@ -345,9 +354,6 @@ impl RuntimeHandlerManager {
             network_created,
         };
 
-        let mut inner: tokio::sync::RwLockWriteGuard<'_, RuntimeHandlerManagerInner> =
-            self.inner.write().await;
-
         let sandbox_config = SandboxConfig {
             sandbox_id: inner.id.clone(),
             dns,
@@ -361,15 +367,11 @@ impl RuntimeHandlerManager {
         inner.try_init(sandbox_config, Some(spec), options).await
     }
 
+    //init the sandbox for the sandbox api
     #[instrument]
-    async fn init_runtime_instance(
-        &self,
-        sandbox_config: SandboxConfig,
-        spec: Option<&oci::Spec>,
-        options: &Option<Vec<u8>>,
-    ) -> Result<()> {
+    async fn sandbox_init_runtime_instance(&self, sandbox_config: SandboxConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(sandbox_config, spec, options).await
+        inner.try_init(sandbox_config, None, &None).await
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
