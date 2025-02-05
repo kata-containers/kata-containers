@@ -9,7 +9,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e01ed3140b2f8d422c68afa1ed2e85d996ea619c988ac834d255db32138655cb"
 dependencies = [
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -238,7 +238,7 @@ checksum = "cc6dde6e4ed435a4c1ee4e73592f5ba9da2151af10076cc04858746af9352d09"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -316,7 +316,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78d456f91b4c1fdebf2698214e599fec3d7f8b46e3140fb254a9ea88c970ab0a"
 dependencies = [
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -412,7 +412,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "190baaad529bcfbde9e1a19022c42781bdb6ff9de25721abdb8fd98c0807730b"
 dependencies = [
  "libc",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -446,7 +446,7 @@ dependencies = [
  "log",
  "nix 0.25.1",
  "regex",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -460,7 +460,7 @@ dependencies = [
  "nix 0.26.2",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
 ]
 
@@ -495,7 +495,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f190f3c954f7bca3c6296d0ec561c739bdbe6c7e990294ed168d415f6e1b5b01"
 dependencies = [
  "nix 0.27.1",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -519,7 +519,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "strum 0.24.1",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
  "ttrpc",
 ]
@@ -570,7 +570,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "signal-hook-tokio",
- "thiserror",
+ "thiserror 1.0.44",
  "time 0.3.31",
  "tokio",
  "windows-sys 0.48.0",
@@ -749,7 +749,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -771,7 +771,7 @@ checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
  "darling_core 0.20.10",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -795,7 +795,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "nix 0.23.2",
- "thiserror",
+ "thiserror 1.0.44",
  "vm-memory",
  "vmm-sys-util 0.11.1",
 ]
@@ -804,7 +804,7 @@ dependencies = [
 name = "dbs-allocator"
 version = "0.1.1"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -815,7 +815,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "memoffset 0.6.5",
- "thiserror",
+ "thiserror 1.0.44",
  "vm-memory",
  "vmm-sys-util 0.11.1",
 ]
@@ -829,7 +829,7 @@ dependencies = [
  "kvm-ioctls",
  "lazy_static",
  "libc",
- "thiserror",
+ "thiserror 1.0.44",
  "vm-fdt",
  "vm-memory",
 ]
@@ -838,7 +838,7 @@ dependencies = [
 name = "dbs-device"
 version = "0.2.0"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -880,7 +880,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "thiserror",
+ "thiserror 1.0.44",
  "vfio-bindings",
  "vfio-ioctls",
  "vm-memory",
@@ -894,7 +894,7 @@ dependencies = [
  "dbs-utils",
  "dbs-virtio-devices",
  "log",
- "thiserror",
+ "thiserror 1.0.44",
  "timerfd",
 ]
 
@@ -907,7 +907,7 @@ dependencies = [
  "libc",
  "log",
  "serde",
- "thiserror",
+ "thiserror 1.0.44",
  "timerfd",
  "vmm-sys-util 0.11.1",
 ]
@@ -938,7 +938,7 @@ dependencies = [
  "sendfd",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.44",
  "threadpool",
  "timerfd",
  "vhost",
@@ -998,7 +998,7 @@ dependencies = [
  "darling 0.20.10",
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -1008,7 +1008,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "206868b8242f27cecce124c19fd88157fbd0dd334df2587f36417bafbc85097b"
 dependencies = [
  "derive_builder_core",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -1100,7 +1100,7 @@ dependencies = [
  "serde_json",
  "slog",
  "slog-scope",
- "thiserror",
+ "thiserror 1.0.44",
  "tracing",
  "vfio-bindings",
  "vfio-ioctls",
@@ -1359,7 +1359,7 @@ checksum = "89ca545a94061b6365f2c7355b4b32bd20df3ff95f02da9329b34ccc3bd6ee72"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -1715,7 +1715,7 @@ dependencies = [
  "tempdir",
  "test-utils",
  "tests_utils",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
  "tracing",
  "ttrpc",
@@ -1871,7 +1871,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "subprocess",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -1894,7 +1894,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "sysinfo",
- "thiserror",
+ "thiserror 1.0.44",
  "toml 0.5.11",
 ]
 
@@ -2003,9 +2003,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.19"
+version = "0.4.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b06a4cde4c0f271a446782e3eff8de789548ce57dbc8eca9292c27f4a42004b4"
+checksum = "04cbf5b083de1c7e0222a7a51dbfdba1cbe1c6ab0b15e29fff3f6c077fd9cd9f"
 dependencies = [
  "value-bag",
 ]
@@ -2130,26 +2130,25 @@ dependencies = [
 
 [[package]]
 name = "netlink-packet-core"
-version = "0.4.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "345b8ab5bd4e71a2986663e88c56856699d060e78e152e6e9d7966fcd5491297"
+checksum = "72724faf704479d67b388da142b186f916188505e7e0b26719019c525882eda4"
 dependencies = [
  "anyhow",
  "byteorder",
- "libc",
  "netlink-packet-utils",
 ]
 
 [[package]]
 name = "netlink-packet-route"
-version = "0.13.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5dee5ed749373c298237fe694eb0a51887f4cc1a27370c8464bac4382348f1a"
+checksum = "74c171cd77b4ee8c7708da746ce392440cb7bcf618d122ec9ecc607b12938bf4"
 dependencies = [
  "anyhow",
- "bitflags 1.3.2",
  "byteorder",
  "libc",
+ "log",
  "netlink-packet-core",
  "netlink-packet-utils",
 ]
@@ -2163,21 +2162,21 @@ dependencies = [
  "anyhow",
  "byteorder",
  "paste",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
 name = "netlink-proto"
-version = "0.10.0"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65b4b14489ab424703c092062176d52ba55485a89c076b4f9db05092b7223aa6"
+checksum = "86b33524dc0968bfad349684447bfce6db937a9ac3332a1fe60c0c5a5ce63f21"
 dependencies = [
  "bytes",
  "futures 0.3.28",
  "log",
  "netlink-packet-core",
  "netlink-sys",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
 ]
 
@@ -2201,7 +2200,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23541694f1d7d18cd1a0da3a1352a6ea48b01cbb4a8e7a6e547963823fd5276e"
 dependencies = [
  "nix 0.23.2",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -2428,7 +2427,7 @@ dependencies = [
  "serde_json",
  "strum 0.26.3",
  "strum_macros 0.26.4",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -2466,7 +2465,7 @@ checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -2537,7 +2536,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry-semantic-conventions",
- "thiserror",
+ "thiserror 1.0.44",
  "thrift",
  "tokio",
 ]
@@ -2564,7 +2563,7 @@ dependencies = [
  "js-sys",
  "once_cell",
  "pin-project-lite",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -2584,7 +2583,7 @@ dependencies = [
  "opentelemetry_api",
  "percent-encoding",
  "rand 0.8.5",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
  "tokio-stream",
 ]
@@ -2748,7 +2747,7 @@ checksum = "ec2e072ecce94ec471b13398d5402c188e76ac03cf74dd1a975161b23a3f6d9c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -2833,9 +2832,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.75"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907a61bd0f64c2f29cd1cf1dc34d05176426a3f504a78010f08416ddb7b13708"
+checksum = "60946a68e5f9d28b0dc1c21bb8a97ee7d018a8b322fa57838ba31cc878e22d99"
 dependencies = [
  "unicode-ident",
 ]
@@ -2882,7 +2881,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "procfs 0.14.2",
  "protobuf 2.28.0",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -2950,7 +2949,7 @@ checksum = "b55bad9126f378a853655831eb7363b7b01b81d19f8cb1218861086ca4a1a61e"
 dependencies = [
  "once_cell",
  "protobuf-support",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -2974,7 +2973,7 @@ dependencies = [
  "protobuf-parse",
  "regex",
  "tempfile",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -2989,7 +2988,7 @@ dependencies = [
  "protobuf 3.2.0",
  "protobuf-support",
  "tempfile",
- "thiserror",
+ "thiserror 1.0.44",
  "which",
 ]
 
@@ -2999,7 +2998,7 @@ version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5d4d7b8601c814cfb36bcebb79f0e61e45e1e93640cf778837833bbed05c372"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -3247,7 +3246,7 @@ checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
 dependencies = [
  "getrandom 0.2.10",
  "redox_syscall 0.2.16",
- "thiserror",
+ "thiserror 1.0.44",
 ]
 
 [[package]]
@@ -3375,16 +3374,19 @@ dependencies = [
 
 [[package]]
 name = "rtnetlink"
-version = "0.11.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46f1cfa18f8cebe685373a2697915d7e0db3b4554918bba118385e0f71f258a7"
+checksum = "b684475344d8df1859ddb2d395dd3dac4f8f3422a1aa0725993cb375fc5caba5"
 dependencies = [
  "futures 0.3.28",
  "log",
+ "netlink-packet-core",
  "netlink-packet-route",
+ "netlink-packet-utils",
  "netlink-proto",
- "nix 0.24.3",
- "thiserror",
+ "netlink-sys",
+ "nix 0.27.1",
+ "thiserror 1.0.44",
  "tokio",
 ]
 
@@ -3635,7 +3637,7 @@ checksum = "a3385e45322e8f9931410f01b3031ec534c3947d0e94c18049af4d9f9907d4e0"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -3705,7 +3707,7 @@ checksum = "91d129178576168c589c9ec973feedf7d3126c01ac2bf08795109aa35b69fb8f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -3800,7 +3802,7 @@ dependencies = [
  "slog-stdlog",
  "tempfile",
  "tests_utils",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
@@ -4012,7 +4014,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -4044,9 +4046,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.48"
+version = "2.0.96"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f3531638e407dfc0814761abb7c00a5b54992b849452a0646b7f65c9f770f3f"
+checksum = "d5d0adab1ae378d7f53bdebc67a39f1f151407ef230f0ce2883572f5d8985c80"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4141,7 +4143,16 @@ version = "1.0.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "611040a08a0439f8248d1990b111c95baa9c704c805fa1f62104b39655fd7f90"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.44",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
+dependencies = [
+ "thiserror-impl 2.0.11",
 ]
 
 [[package]]
@@ -4152,7 +4163,18 @@ checksum = "090198534930841fab3a5d1bb637cde49e339654e606195f8d9c76eeb081dc96"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -4280,7 +4302,7 @@ checksum = "5f5ae998a069d4b5aba8ee9dad856af7d520c3699e6159b185c2acd48155d39a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -4375,7 +4397,7 @@ checksum = "5f4f31f56159e98206da9efd823404b79b6ef3143b4a7ab76e67b1751b25a4ab"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -4449,7 +4471,7 @@ dependencies = [
  "nix 0.26.2",
  "protobuf 3.2.0",
  "protobuf-codegen 3.2.0",
- "thiserror",
+ "thiserror 1.0.44",
  "tokio",
  "tokio-vsock",
  "windows-sys 0.48.0",
@@ -4558,9 +4580,9 @@ checksum = "830b7e5d4d90034032940e4ace0d9a9a057e7a45cd94e6c007832e39edb82f6d"
 
 [[package]]
 name = "value-bag"
-version = "1.4.1"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d92ccd67fb88503048c01b59152a04effd0782d035a83a6d256ce6085f08f4a3"
+checksum = "3ef4c4aa54d5d05a279399bfa921ec387b7aba77caf7a682ae8d86785b8fdad2"
 
 [[package]]
 name = "vcpkg"
@@ -4591,7 +4613,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "thiserror",
+ "thiserror 2.0.11",
  "vfio-bindings",
  "vm-memory",
  "vmm-sys-util 0.11.1",
@@ -4770,7 +4792,7 @@ dependencies = [
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
  "wasm-bindgen-shared",
 ]
 
@@ -4804,7 +4826,7 @@ checksum = "54681b18a46765f095758388f2d0cf16eb8d4169b639ab575a8f5693af210c7b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.96",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]

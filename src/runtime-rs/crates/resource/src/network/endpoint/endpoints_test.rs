@@ -10,7 +10,6 @@ mod tests {
 
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
-    use netlink_packet_route::MACVLAN_MODE_PRIVATE;
     use scopeguard::defer;
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
@@ -204,11 +203,7 @@ mod tests {
                 if let Ok(()) = handle
                     .link()
                     .add()
-                    .macvlan(
-                        manual_macvlan_iface_name.clone(),
-                        dummy_index,
-                        MACVLAN_MODE_PRIVATE,
-                    )
+                    .macvlan(manual_macvlan_iface_name.clone(), dummy_index, 1)
                     .execute()
                     .await
                     .context("failed to create manual macvlan pair")

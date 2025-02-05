@@ -14,7 +14,7 @@ pub use manager::get_link_from_message;
 
 use std::os::unix::io::RawFd;
 
-use netlink_packet_route::link::nlas::State;
+use netlink_packet_route::link::State;
 
 #[cfg(test)]
 pub use create::net_test_utils;
