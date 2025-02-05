@@ -336,11 +336,11 @@ impl Container for LinuxContainer {
     }
 }
 
-pub fn init_child() {
+pub fn init_child(expose_configfs: bool) {
     let cwfd = std::env::var(CWFD_FD).unwrap().parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD).unwrap().parse::<i32>().unwrap();
 
-    match do_init_child(cwfd) {
+    match do_init_child(cwfd, expose_configfs) {
         Ok(_) => log_child!(cfd_log, "temporary parent process exit successfully"),
         Err(e) => {
             log_child!(cfd_log, "temporary parent process exit:child exit: {:?}", e);
@@ -349,7 +349,7 @@ pub fn init_child() {
     }
 }
 
-fn do_init_child(cwfd: RawFd) -> Result<()> {
+fn do_init_child(cwfd: RawFd, expose_configfs: bool) -> Result<()> {
     lazy_static::initialize(&NAMESPACES);
     lazy_static::initialize(&DEFAULT_DEVICES);
 
@@ -601,10 +601,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
                 &systemd_cm.paths,
                 &systemd_cm.mounts,
                 bind_device,
+                expose_configfs,
             )?;
         } else {
             let fs_cm = fs_cm.unwrap();
-            mount::init_rootfs(cfd_log, &spec, &fs_cm.paths, &fs_cm.mounts, bind_device)?;
+            mount::init_rootfs(
+                cfd_log,
+                &spec,
+                &fs_cm.paths,
+                &fs_cm.mounts,
+                bind_device,
+                expose_configfs,
+            )?;
         }
     }
 
@@ -2159,7 +2167,7 @@ mod tests {
 
     #[test]
     fn test_linuxcontainer_do_init_child() {
-        let ret = do_init_child(std::io::stdin().as_raw_fd());
+        let ret = do_init_child(std::io::stdin().as_raw_fd(), false);
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 }
