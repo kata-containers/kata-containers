@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_init_container_create_launcher() {
-        #[cfg(target_arch = "powerpc64")]
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let root_dir = tempdir().unwrap();

@@ -105,7 +105,12 @@ pub fn get_distro_details(os_release: &str, os_release_clr: &str) -> Result<(Str
     Ok((name, version))
 }
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
+#[cfg(any(
+    target_arch = "s390x",
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    all(target_arch = "powerpc64", target_endian = "little"),
+))]
 pub fn get_generic_cpu_details(cpu_info_file: &str) -> Result<(String, String)> {
     let cpu_info = kata_sys_util::cpu::get_single_cpu_info(cpu_info_file, "\n\n")?;
     let lines = cpu_info.lines();

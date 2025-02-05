@@ -371,6 +371,7 @@ impl ToQemuParams for Cpu {
 
 /// Error type for CCW Subchannel operations
 #[derive(Debug)]
+#[allow(dead_code)]
 enum CcwError {
     DeviceAlreadyExists(String), // Error when trying to add an existing device
     #[allow(dead_code)]
@@ -420,7 +421,7 @@ impl CcwSubChannel {
     ///
     /// # Returns
     /// - `Result<(), CcwError>`: Ok(()) if the device was removed
-    ///  or an error if the device was not found
+    ///   or an error if the device was not found
     #[allow(dead_code)]
     fn remove_device(&mut self, dev_id: &str) -> Result<(), CcwError> {
         if self.devices.remove(dev_id).is_some() {
@@ -467,14 +468,14 @@ impl Machine {
     fn new(config: &HypervisorConfig) -> Machine {
         #[cfg(any(
             target_arch = "aarch64",
-            target_arch = "powerpc64",
+            all(target_arch = "powerpc64", target_endian = "little"),
             target_arch = "x86",
             target_arch = "x86_64",
         ))]
         let is_nvdimm_supported = config.machine_info.machine_type != "microvm";
         #[cfg(not(any(
             target_arch = "aarch64",
-            target_arch = "powerpc64",
+            all(target_arch = "powerpc64", target_endian = "little"),
             target_arch = "x86",
             target_arch = "x86_64",
         )))]
@@ -1539,13 +1540,14 @@ impl MonitorProtocol {
     }
 }
 
-impl ToString for MonitorProtocol {
-    fn to_string(&self) -> String {
-        match *self {
+impl std::fmt::Display for MonitorProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_string = match *self {
             MonitorProtocol::Hmp => "monitor".to_string(),
             MonitorProtocol::QmpPretty => "qmp-pretty".to_string(),
             _ => "qmp".to_string(),
-        }
+        };
+        write!(f, "{}", to_string)
     }
 }
 
@@ -1603,7 +1605,7 @@ impl QmpSocket {
 #[async_trait]
 impl ToQemuParams for QmpSocket {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        let param_qmp = format!("-{}", self.protocol.to_string());
+        let param_qmp = format!("-{}", self.protocol);
 
         let mut params: Vec<String> = Vec::new();
 

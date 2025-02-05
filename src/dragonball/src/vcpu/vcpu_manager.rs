@@ -484,6 +484,7 @@ impl VcpuManager {
     /// Get available vcpus to create with target vcpu_count
     /// Argument:
     /// * vcpu_count: target vcpu_count online in VcpuManager.
+    ///
     /// Return:
     /// * return available vcpu ids to create vcpu .
     fn calculate_available_vcpus(&self, vcpu_count: u8) -> Vec<u8> {

@@ -537,6 +537,7 @@ mod tests {
 
         OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(test_file_filename)
             .expect("failed to create test file");
