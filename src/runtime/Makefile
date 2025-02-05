@@ -206,7 +206,7 @@ DEFMEMSZ := 2048
 # - hugepage memory
 DEFMEMSLOTS := 10
 # Default maximum memory in MiB
-DEFMAXMEMSZ := 0
+DEFMAXMEMSZ := 10240
 #Default number of bridges
 DEFBRIDGES := 1
 DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\"]
