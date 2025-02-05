@@ -139,14 +139,6 @@ impl RuntimeHandlerManagerInner {
     }
 
     #[instrument]
-    async fn start_runtime_handler(&self) -> Result<()> {
-        if let Some(instance) = self.runtime_instance.as_ref() {
-            instance.sandbox.start().await.context("start sandbox")?;
-        }
-        Ok(())
-    }
-
-    #[instrument]
     async fn try_init(
         &mut self,
         mut sandbox_config: SandboxConfig,
@@ -199,10 +191,6 @@ impl RuntimeHandlerManagerInner {
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
             .await
             .context("init runtime handler")?;
-
-        self.start_runtime_handler()
-            .await
-            .context("start runtime handler")?;
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
@@ -410,6 +398,12 @@ impl RuntimeHandlerManager {
                 .get_runtime_instance()
                 .await
                 .context("get runtime instance")?;
+
+            instance
+                .sandbox
+                .start()
+                .await
+                .context("start sandbox in task handler")?;
 
             let container_id = container_config.container_id.clone();
             let shim_pid = instance
