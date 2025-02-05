@@ -21,19 +21,19 @@ pub struct PersistentVolumeClaim {
     kind: Option<String>,
 
     pub metadata: obj_meta::ObjectMeta,
-    spec: PersistentVolumeClaimSpec,
+    pub spec: PersistentVolumeClaimSpec,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / PersistentVolumeClaim.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct PersistentVolumeClaimSpec {
+pub struct PersistentVolumeClaimSpec {
     resources: ResourceRequirements,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     accessModes: Option<Vec<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    storageClassName: Option<String>,
+    pub storageClassName: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     volumeMode: Option<String>,

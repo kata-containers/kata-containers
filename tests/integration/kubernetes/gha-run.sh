@@ -20,6 +20,10 @@ tools_dir="${repo_root_dir}/tools"
 helm_chart_dir="${tools_dir}/packaging/kata-deploy/helm-chart/kata-deploy"
 kata_tarball_dir="${2:-kata-artifacts}"
 
+csi_dir="${repo_root_dir}/src/tools/csi-kata-directvolume"
+csi_deploy_dir="${csi_dir}/deploy"
+csi_storage_class="${csi_dir}/examples/pod-with-directvol/csi-storageclass.yaml"
+
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
 DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
@@ -558,6 +562,40 @@ function cleanup_nydus_snapshotter() {
 	echo "::endgroup::"
 }
 
+function deploy_csi_driver() {
+	echo "::group::deploy_csi_driver"
+	ensure_yq
+
+	csi_image_selector="image: ghcr.io/kata-containers/csi-kata-directvolume:${GH_PR_NUMBER}"
+	csi_plugin="${csi_deploy_dir}/kata-directvolume/csi-directvol-plugin.yaml"
+
+	# Deploy the driver pods.
+	sed -i "s|image: localhost/kata-directvolume:v1.0.18|${csi_image_selector}|" "${csi_plugin}"
+	grep -q "${csi_image_selector}" "${csi_plugin}" # Ensure the substitution took place.
+	bash "${csi_deploy_dir}/deploy.sh"
+
+	# Deploy the storage class.
+	yq -i ".parameters.\"katacontainers.direct.volume/volumetype\" = \"blk\"" "${csi_storage_class}"
+	yq -i ".parameters.\"katacontainers.direct.volume/loop\" = \"True\"" "${csi_storage_class}"
+	yq -i ".parameters.\"katacontainers.direct.volume/cocoephemeral\" = \"True\"" "${csi_storage_class}"
+	yq -i ".volumeBindingMode = \"WaitForFirstConsumer\"" "${csi_storage_class}"
+	kubectl apply -f "${csi_storage_class}"
+
+	echo "::endgroup::"
+}
+
+function delete_csi_driver() {
+	echo "::group::delete_csi_driver"
+
+	# Delete the storage class.
+	kubectl delete --ignore-not-found -f "${csi_storage_class}"
+
+	# Delete the driver pods.
+	kubectl delete --ignore-not-found -f "${csi_deploy_dir}/kata-directvolume/"
+
+	echo "::endgroup::"
+}
+
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
@@ -578,7 +616,7 @@ function main() {
 		install-kbs-client) install_kbs_client ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
-		deploy-csi-driver) return 0 ;;
+		deploy-csi-driver) deploy_csi_driver ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
@@ -600,7 +638,7 @@ function main() {
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
-		delete-csi-driver) return 0 ;;
+		delete-csi-driver) delete_csi_driver ;;
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;

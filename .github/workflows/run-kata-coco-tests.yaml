@@ -118,6 +118,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
 
       - name: Delete CSI driver
+        if: always()
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
@@ -176,6 +177,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete CSI driver
+        if: always()
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
@@ -268,6 +270,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
 
       - name: Delete CSI driver
+        if: always()
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 

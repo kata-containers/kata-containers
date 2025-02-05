@@ -83,6 +83,8 @@ image-rs = { git = "https://github.com/confidential-containers/guest-components"
 # Agent Policy
 regorus = { version = "0.2.6", default-features = false, features = [
     "arc",
+    "base64",
+    "base64url",
     "regex",
     "std",
 ], optional = true }

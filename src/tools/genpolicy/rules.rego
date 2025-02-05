@@ -571,8 +571,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
         allow_mount(p_oci, i_mount, bundle_id, sandbox_id)
     }
 
-    # TODO: enable allow_storages() after fixing https://github.com/kata-containers/kata-containers/issues/8833
-    # allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
+    allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
 
     print("allow_by_bundle_or_sandbox_id: true")
 }
@@ -883,37 +882,77 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 
     print("mount_source_allows 2: true")
 }
+mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
+    print("mount_source_allows 3: i_mount.source=", i_mount.source)
+
+    i_source_parts = split(i_mount.source, "/")
+    b64_device_id = i_source_parts[count(i_source_parts) - 1]
+
+    base64.is_valid(b64_device_id)
+
+    source1 := p_mount.source
+    print("mount_source_allows 3: source1 =", source1)
+
+    source2 := replace(source1, "$(spath)", policy_data.common.spath)
+    print("mount_source_allows 3: source2 =", source2)
+
+    source3 := replace(source2, "$(b64_device_id)", b64_device_id)
+    print("mount_source_allows 3: source3 =", source3)
+
+    source3 == i_mount.source
+
+    print("mount_source_allows 3: true")
+}
 
 ######################################################################
 # Create container Storages
 
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
-    p_count := count(p_storages)
-    i_count := count(i_storages)
+    # TODO: Remove this filtering when we implement generic storage 
+    # support in genpolicy. For now this ensures the `p_count == i_count`
+    # comparison below passes. 
+    # https://github.com/kata-containers/kata-containers/issues/8833
+    p_storages1 := [
+        p_storage | p_storage := p_storages[_];
+        p_storage.driver == "blk";
+        p_storage.fstype != "tar"
+    ]
+    i_storages1 := [
+        i_storage | i_storage := i_storages[_];
+        # No need to filter out "tar" as that's not used in main yet.
+        i_storage.driver == "blk"
+    ]
+
+    p_count := count(p_storages1)
+    i_count := count(i_storages1)
     print("allow_storages: p_count =", p_count, "i_count =", i_count)
 
     p_count == i_count
 
-    # Get the container image layer IDs and verity root hashes, from the "overlayfs" storage.
-    some overlay_storage in p_storages
-    overlay_storage.driver == "overlayfs"
-    print("allow_storages: overlay_storage =", overlay_storage)
-    count(overlay_storage.options) == 2
+    # TODO: Reimplement this functionality when we add generic storage
+    # support to genpolicy.
+    # https://github.com/kata-containers/kata-containers/issues/8833
+    #
+    # # Get the container image layer IDs and verity root hashes, from the "overlayfs" storage.
+    # some overlay_storage in p_storages1
+    # overlay_storage.driver == "overlayfs"
+    # print("allow_storages: overlay_storage =", overlay_storage)
+    # count(overlay_storage.options) == 2
 
-    layer_ids := split(overlay_storage.options[0], ":")
-    print("allow_storages: layer_ids =", layer_ids)
+    # layer_ids := split(overlay_storage.options[0], ":")
+    # print("allow_storages: layer_ids =", layer_ids)
 
-    root_hashes := split(overlay_storage.options[1], ":")
-    print("allow_storages: root_hashes =", root_hashes)
+    # root_hashes := split(overlay_storage.options[1], ":")
+    # print("allow_storages: root_hashes =", root_hashes)
 
-    every i_storage in i_storages {
-        allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes)
+    every i_storage in i_storages1 {
+        allow_storage(p_storages1, i_storage, bundle_id, sandbox_id) # layer_ids, root_hashes)
     }
 
     print("allow_storages: true")
 }
 
-allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id) {
     some p_storage in p_storages
 
     print("allow_storage: p_storage =", p_storage)
@@ -921,26 +960,26 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
 
     p_storage.driver           == i_storage.driver
     p_storage.driver_options   == i_storage.driver_options
+    p_storage.fstype           == i_storage.fstype
     p_storage.fs_group         == i_storage.fs_group
 
-    allow_storage_options(p_storage, i_storage, layer_ids, root_hashes)
-    allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids)
+    allow_storage_options(p_storage, i_storage)
+    allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id)
 
     # TODO: validate the source field too.
 
     print("allow_storage: true")
 }
 
-allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
+allow_storage_options(p_storage, i_storage) {
     print("allow_storage_options 1: start")
 
-    p_storage.driver != "blk"
     p_storage.driver != "overlayfs"
     p_storage.options == i_storage.options
 
     print("allow_storage_options 1: true")
 }
-allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
+allow_storage_options(p_storage, i_storage) {
     print("allow_storage_options 2: start")
 
     p_storage.driver == "overlayfs"
@@ -948,7 +987,9 @@ allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
 
     policy_ids := split(p_storage.options[0], ":")
     print("allow_storage_options 2: policy_ids =", policy_ids)
-    policy_ids == layer_ids
+    # TODO: Reimplement this when we add generic storage support to genpolicy.
+    # https://github.com/kata-containers/kata-containers/issues/8833
+    # policy_ids == layer_ids
 
     policy_hashes := split(p_storage.options[1], ":")
     print("allow_storage_options 2: policy_hashes =", policy_hashes)
@@ -980,7 +1021,7 @@ allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
 
     print("allow_storage_options 2: true")
 }
-allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
+allow_storage_options(p_storage, i_storage) {
     print("allow_storage_options 3: start")
 
     p_storage.driver == "blk"
@@ -994,14 +1035,18 @@ allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
     i := to_number(hash_index)
     print("allow_storage_options 3: i =", i)
 
-    hash_option := concat("=", ["io.katacontainers.fs-opt.root-hash", root_hashes[i]])
-    print("allow_storage_options 3: hash_option =", hash_option)
+    # TODO: Reimplement this when we add generic storage support to genpolicy.
+    # https://github.com/kata-containers/kata-containers/issues/8833
+    # hash_option := concat("=", ["io.katacontainers.fs-opt.root-hash", root_hashes[i]])
+    # print("allow_storage_options 3: hash_option =", hash_option)
 
     count(i_storage.options) == 4
     i_storage.options[0] == "ro"
     i_storage.options[1] == "io.katacontainers.fs-opt.block_device=file"
     i_storage.options[2] == "io.katacontainers.fs-opt.is-layer"
-    i_storage.options[3] == hash_option
+    # TODO: Reimplement this when we add generic storage support to genpolicy.
+    # https://github.com/kata-containers/kata-containers/issues/8833
+    # i_storage.options[3] == hash_option
 
     print("allow_storage_options 3: true")
 }
@@ -1024,7 +1069,7 @@ allow_overlay_layer(policy_id, policy_hash, i_option) {
     print("allow_overlay_layer: true")
 }
 
-allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) {
     p_storage.fstype == "tar"
 
     startswith(p_storage.mount_point, "$(layer")
@@ -1035,17 +1080,20 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     i := to_number(layer_index)
     print("allow_mount_point 1: i =", i)
 
-    layer_id := layer_ids[i]
-    print("allow_mount_point 1: layer_id =", layer_id)
-
-    p_mount := concat("/", ["/run/kata-containers/sandbox/layers", layer_id])
-    print("allow_mount_point 1: p_mount =", p_mount)
-
-    p_mount == i_storage.mount_point
+    # TODO: Reimplement this when we add generic storage support to genpolicy.
+    # https://github.com/kata-containers/kata-containers/issues/8833
+    #
+    # layer_id := layer_ids[i]
+    # print("allow_mount_point 1: layer_id =", layer_id)
+    #
+    # p_mount := concat("/", ["/run/kata-containers/sandbox/layers", layer_id])
+    # print("allow_mount_point 1: p_mount =", p_mount)
+    #
+    # p_mount == i_storage.mount_point
 
     print("allow_mount_point 1: true")
 }
-allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) {
     p_storage.fstype == "fuse3.kata-overlay"
 
     mount1 := replace(p_storage.mount_point, "$(cpath)", policy_data.common.cpath)
@@ -1056,7 +1104,7 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
 
     print("allow_mount_point 2: true")
 }
-allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) {
     p_storage.fstype == "local"
 
     mount1 := p_storage.mount_point
@@ -1072,7 +1120,7 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
 
     print("allow_mount_point 3: true")
 }
-allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) {
     p_storage.fstype == "bind"
 
     mount1 := p_storage.mount_point
@@ -1088,7 +1136,7 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
 
     print("allow_mount_point 4: true")
 }
-allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) {
     p_storage.fstype == "tmpfs"
 
     mount1 := p_storage.mount_point
@@ -1097,6 +1145,25 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     regex.match(mount1, i_storage.mount_point)
 
     print("allow_mount_point 5: true")
+}
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) {
+    # This rule is for storages shared via the direct volume assignment API,
+    # which can have any fstype, hence we don't filter on fstype here.
+    # Regardless, fstype is validated in allow_storage().
+
+    mount1 := p_storage.mount_point
+    print("allow_mount_point 6: mount1 =", mount1)
+
+    mount2 := replace(mount1, "$(spath)", policy_data.common.spath)
+    print("allow_mount_point 6: mount2 =", mount2)
+
+    device_id := i_storage.source
+    mount3 := replace(mount2, "$(b64_device_id)", base64url.encode(device_id))
+    print("allow_mount_point 6: mount3 =", mount3)
+
+    mount3 == i_storage.mount_point
+
+    print("allow_mount_point 6: true")
 }
 
 # process.Capabilities
