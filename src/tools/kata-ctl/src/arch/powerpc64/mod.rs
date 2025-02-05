@@ -4,7 +4,7 @@
 //
 
 use crate::types::*;
-#[cfg(target_arch = "powerpc64le")]
+#[cfg(target_arch = "powerpc64")]
 pub use arch_specific::*;
 
 mod arch_specific {
