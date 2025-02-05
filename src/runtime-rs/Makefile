@@ -135,7 +135,7 @@ DEFMEMSZ := 2048
 # - hugepage memory
 DEFMEMSLOTS := 10
 # Default maximum memory in MiB
-DEFMAXMEMSZ := 0
+DEFMAXMEMSZ := 10240
 ##VAR DEFBRIDGES=<number> Default number of bridges
 DEFBRIDGES := 0
 DEFENABLEANNOTATIONS := [\"kernel_params\"]
