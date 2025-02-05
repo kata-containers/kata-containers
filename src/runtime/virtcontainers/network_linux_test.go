@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -92,8 +93,14 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 		{Family: utils.ConvertAddressFamily(netlink.FAMILY_V6), Address: "2001:db8:1::242:ac11:2", Mask: "64"},
 	}
 
+	expectedPci := ""
+	if runtime.GOARCH == "s390x" {
+		// PCI assumes an empty path, which is an empty string. CCW assumes an unspecified device, which is 0.0.0000.
+		expectedPci = "0.0.0000"
+	}
+
 	expectedInterfaces := []*pbTypes.Interface{
-		{Device: "eth0", Name: "eth0", IPAddresses: expectedAddresses, Mtu: 1500, HwAddr: "02:00:ca:fe:00:04"},
+		{Device: "eth0", Name: "eth0", IPAddresses: expectedAddresses, Mtu: 1500, HwAddr: "02:00:ca:fe:00:04", PciPath: expectedPci},
 	}
 
 	expectedRoutes := []*pbTypes.Route{
