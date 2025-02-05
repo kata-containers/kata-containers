@@ -15,7 +15,7 @@ oci-spec = { version = "0.6.8", features = ["runtime"] }
 protocols = { path ="../../libs/protocols" }
 kata-sys-util = { path = "../../libs/kata-sys-util" }
 caps = "0.5.0"
-nix = "0.24.2"
+nix = "0.29.0"
 scopeguard = "1.0.0"
 capctl = "0.2.0"
 lazy_static = "1.3.0"

@@ -21,7 +21,7 @@ ttrpc = "0.8.4"
 tokio = { version = "1.38.0", features = ["fs", "rt"] }
 tracing = "0.1.36"
 url = "2.2.2"
-nix = "0.24.2"
+nix = "0.29.0"
 
 kata-types = { path = "../../../libs/kata-types"}
 logging = { path = "../../../libs/logging"}

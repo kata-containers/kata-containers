@@ -1749,7 +1749,7 @@ pub async fn start(
     let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
     #[cfg(feature = "guest-pull")]
-    image::init_image_service().await;
+    image::init_image_service().await?;
 
     let server = TtrpcServer::new()
         .bind(server_address)?
