@@ -457,6 +457,8 @@ ifneq (,$(QEMUCMD))
     # Setting this to false can lead to cgroup leakages in the host
     # Best practice for production is to set this to true
     DEFSANDBOXCGROUPONLY_NV = true
+    # The latest OVMF build should be good for both TDX and SNP
+    FIRMWAREPATH_NV := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 endif
 
 ifneq (,$(CLHCMD))
@@ -627,6 +629,7 @@ USER_VARS += KERNELTDXPARAMS_NV
 USER_VARS += KERNELSNPPARAMS_NV
 USER_VARS += DEFAULTTIMEOUT_NV
 USER_VARS += DEFSANDBOXCGROUPONLY_NV
+USER_VARS += FIRMWAREPATH_NV
 USER_VARS += DEFROOTFSTYPE
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
