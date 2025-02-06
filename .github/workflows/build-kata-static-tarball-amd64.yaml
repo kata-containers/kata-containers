@@ -34,6 +34,7 @@ jobs:
         asset:
           - agent
           - agent-ctl
+          - busybox
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - coco-guest-components
@@ -136,6 +137,15 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+      - name: store-extratarballs-artifact ${{ matrix.asset }}
+        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset }}-headers${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}-headers.tar.xz
+          retention-days: 15
+          if-no-files-found: error
+
   build-asset-rootfs:
     runs-on: ubuntu-22.04
     needs: build-asset
@@ -147,6 +157,7 @@ jobs:
           - rootfs-image-mariner
           - rootfs-initrd
           - rootfs-initrd-confidential
+          - rootfs-nvidia-gpu-initrd
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
