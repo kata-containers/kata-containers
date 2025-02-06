@@ -78,9 +78,9 @@ pub struct ContainerID {
     pub container_id: String,
 }
 
-impl ToString for ContainerID {
-    fn to_string(&self) -> String {
-        self.container_id.clone()
+impl std::fmt::Display for ContainerID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.container_id)
     }
 }
 

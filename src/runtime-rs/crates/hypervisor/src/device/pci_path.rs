@@ -33,9 +33,9 @@ impl PciSlot {
     }
 }
 
-impl ToString for PciSlot {
-    fn to_string(&self) -> String {
-        format!("{:02x}", self.0)
+impl std::fmt::Display for PciSlot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:02x}", self.0)
     }
 }
 
@@ -116,14 +116,17 @@ impl PciPath {
     }
 }
 
-impl ToString for PciPath {
-    // method to format the PciPath into a string
-    fn to_string(&self) -> String {
-        self.slots
-            .iter()
-            .map(|pci_slot| format!("{:02x}", pci_slot.0))
-            .collect::<Vec<String>>()
-            .join("/")
+impl std::fmt::Display for PciPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.slots
+                .iter()
+                .map(|pci_slot| format!("{:02x}", pci_slot.0))
+                .collect::<Vec<String>>()
+                .join("/")
+        )
     }
 }
 

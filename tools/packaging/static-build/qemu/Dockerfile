@@ -70,4 +70,3 @@ RUN apt-get update && apt-get upgrade -y && \
     GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64le"; fi && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${GCC_ARCH}"-linux-gnu; fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/
-

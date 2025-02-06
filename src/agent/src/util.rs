@@ -18,14 +18,14 @@ const BUF_SIZE: usize = 8192;
 
 // Interruptable I/O copy using readers and writers
 // (an interruptable version of "io::copy()").
-pub async fn interruptable_io_copier<R: Sized, W: Sized>(
+pub async fn interruptable_io_copier<R, W>(
     mut reader: R,
     mut writer: W,
     mut shutdown: Receiver<bool>,
 ) -> io::Result<u64>
 where
-    R: tokio::io::AsyncRead + Unpin,
-    W: tokio::io::AsyncWrite + Unpin,
+    R: tokio::io::AsyncRead + Unpin + Sized,
+    W: tokio::io::AsyncWrite + Unpin + Sized,
 {
     let mut total_bytes: u64 = 0;
 
@@ -181,13 +181,13 @@ mod tests {
         }
     }
 
-    impl ToString for BufWriter {
-        fn to_string(&self) -> String {
+    impl std::fmt::Display for BufWriter {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let data_ref = self.data.clone();
             let output = data_ref.lock().unwrap();
             let s = (*output).clone();
 
-            String::from_utf8(s).unwrap()
+            write!(f, "{}", String::from_utf8(s).unwrap())
         }
     }
 

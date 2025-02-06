@@ -147,7 +147,7 @@ pub async fn unseal_file(path: &str) -> Result<()> {
             continue;
         }
 
-        let target_path = fs::canonicalize(&entry.path())?;
+        let target_path = fs::canonicalize(entry.path())?;
         info!(sl(), "sealed source entry target path: {:?}", target_path);
 
         // Skip if the target path is not a file (e.g., it's a symlink pointing to the secret file).
@@ -177,8 +177,8 @@ pub async fn unseal_file(path: &str) -> Result<()> {
             fs::write(&unsealed_filename, unsealed_value)?;
 
             // Remove the original sealed symlink and create a symlink to the unsealed file
-            fs::remove_file(&entry.path())?;
-            symlink(unsealed_filename_symlink, &entry.path())?;
+            fs::remove_file(entry.path())?;
+            symlink(unsealed_filename_symlink, entry.path())?;
         }
     }
     Ok(())

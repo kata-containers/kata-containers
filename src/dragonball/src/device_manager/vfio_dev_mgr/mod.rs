@@ -729,10 +729,10 @@ mod tests {
     use vm_memory::{GuestAddress, GuestMemoryMmap, MmapRegion};
 
     use super::*;
-    use crate::config_manager::DeviceInfoGroup;
+    use crate::config_manager::DeviceConfigInfo;
     use crate::test_utils::tests::create_vm_for_test;
 
-    type VfioDeviceInfo = DeviceInfoGroup<VfioDeviceConfigInfo, VfioDeviceError>;
+    type VfioDeviceInfo = DeviceConfigInfo<VfioDeviceConfigInfo, VfioDeviceError>;
 
     fn get_vfio_dev_mgr() -> VfioDeviceMgr {
         let kvm = Kvm::new().unwrap();
