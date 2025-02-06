@@ -12,6 +12,9 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 check_and_skip() {
 	case "${KATA_HYPERVISOR}" in
 		qemu-tdx|qemu-coco-dev)
+			if [ "$(uname -m)" == "s390x" ]; then
+				skip "measured rootfs tests not implemented for s390x"
+			fi
 			return
 			;;
 		*)

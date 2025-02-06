@@ -389,7 +389,11 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 	export PULL_TYPE=default
 	install_image "confidential"
 }
@@ -467,7 +471,11 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 	export PULL_TYPE=default
 	install_initrd "confidential"
 }
@@ -610,7 +618,11 @@ install_kernel() {
 }
 
 install_kernel_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 
 	install_kernel_helper \
 		"assets.kernel.confidential" \
@@ -850,6 +862,9 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 	export MEASURED_ROOTFS
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	fi
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
