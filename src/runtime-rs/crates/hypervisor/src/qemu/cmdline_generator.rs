@@ -852,13 +852,13 @@ struct BlockBackend {
 }
 
 impl BlockBackend {
-    fn new(id: &str, path: &str) -> BlockBackend {
+    fn new(id: &str, path: &str, cache_direct: bool) -> BlockBackend {
         BlockBackend {
             driver: "file".to_owned(),
             id: id.to_owned(),
             path: path.to_owned(),
             aio: "threads".to_owned(),
-            cache_direct: true,
+            cache_direct,
             cache_no_flush: false,
             read_only: true,
         }
@@ -1959,9 +1959,9 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
-    pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
+    pub fn add_block_device(&mut self, device_id: &str, path: &str, is_direct: bool) -> Result<()> {
         self.devices
-            .push(Box::new(BlockBackend::new(device_id, path)));
+            .push(Box::new(BlockBackend::new(device_id, path, is_direct)));
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
         self.devices.push(Box::new(DeviceVirtioBlk::new(
             device_id,

@@ -109,6 +109,7 @@ impl QemuInner {
                         "ccw" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
+                            self.config.blockdev_info.block_device_cache_direct,
                         )?,
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
