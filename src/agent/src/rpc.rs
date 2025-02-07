@@ -1002,8 +1002,8 @@ impl agent_ttrpc::AgentService for AgentService {
 
         // For network devices passed on the pci bus, check for the network interface
         // to be available first.
-        if !interface.pciPath.is_empty() {
-            let pcipath = pci::Path::from_str(&interface.pciPath)
+        if !interface.devicePath.is_empty() {
+            let pcipath = pci::Path::from_str(&interface.devicePath)
                 .map_ttrpc_err(|e| format!("Unexpected pci-path for network interface: {:?}", e))?;
 
             wait_for_net_interface(&self.sandbox, &pcipath)

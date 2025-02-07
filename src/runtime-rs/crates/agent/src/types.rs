@@ -93,7 +93,7 @@ pub struct Interface {
     pub mtu: u64,
     pub hw_addr: String,
     #[serde(default)]
-    pub pci_addr: String,
+    pub device_path: String,
     #[serde(default)]
     pub field_type: String,
     #[serde(default)]
