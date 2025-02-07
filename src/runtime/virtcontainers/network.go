@@ -271,7 +271,7 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			Type:        string(endpoint.Type()),
 			RawFlags:    noarp,
 			HwAddr:      endpoint.HardwareAddr(),
-			PciPath:     endpoint.PciPath().String(),
+			DevicePath:  endpoint.PciPath().String(),
 		}
 
 		ifaces = append(ifaces, &ifc)
