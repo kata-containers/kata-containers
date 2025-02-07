@@ -56,6 +56,10 @@ build_virtiofsd_from_source() {
 	git clone --branch main ${virtiofsd_repo} virtiofsd
 	pushd virtiofsd
 
+	# Fetch the specific version before resetting to it
+	# Sometimes it is necessary for a shallow clone:
+	# ${virtiofsd_version} is likely older than the single commit you cloned
+	git fetch $(git remote) ${virtiofsd_version}
 	git reset --hard ${virtiofsd_version}
 
 	export RUSTFLAGS='-C target-feature=+crt-static'${EXTRA_RUST_FLAGS}
