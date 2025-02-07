@@ -44,24 +44,25 @@ impl LogForwarder {
         let logger = sl!().clone();
         let address = address.to_string();
         let task_handler = tokio::spawn(async move {
-            loop {
-                info!(logger, "try to connect to get agent log");
-                let sock = match sock::new(&address, port) {
-                    Ok(sock) => sock,
-                    Err(err) => {
-                        error!(
-                            sl!(),
-                            "failed to new sock for address {:?} port {} error {:?}",
-                            address,
-                            port,
-                            err
-                        );
-                        return;
-                    }
-                };
+            let sock = match sock::new(&address, port) {
+                Ok(sock) => sock,
+                Err(err) => {
+                    error!(
+                        sl!(),
+                        "failed to new sock for address {:?} port {} error {:?}",
+                        address,
+                        port,
+                        err
+                    );
+                    return;
+                }
+            };
+            info!(logger, "try to connect to agent log through {:?}", sock);
 
+            loop {
                 match sock.connect(&config).await {
                     Ok(stream) => {
+                        info!(logger, "connect to agent log successfully");
                         let stream = BufReader::new(stream);
                         let mut lines = stream.lines();
                         while let Ok(Some(l)) = lines.next_line().await {
@@ -76,7 +77,11 @@ impl LogForwarder {
                         }
                     }
                     Err(err) => {
-                        warn!(logger, "connect agent vsock failed: {:?}", err);
+                        trace!(
+                            logger,
+                            "failed to connect agent log through vsock: {:?}",
+                            err
+                        );
                     }
                 }
             }
