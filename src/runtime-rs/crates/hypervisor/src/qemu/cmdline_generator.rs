@@ -472,7 +472,7 @@ pub struct Machine {
 }
 
 impl Machine {
-    fn new(config: &HypervisorConfig) -> Machine {
+    pub fn new(config: &HypervisorConfig) -> Machine {
         #[cfg(any(
             target_arch = "aarch64",
             all(target_arch = "powerpc64", target_endian = "little"),
