@@ -39,11 +39,12 @@ jobs:
           - devmapper
         k8s:
           - k3s
-        include:
-          - vmm: qemu
-            container_runtime: crio
-            snapshotter: ""
-            k8s: k0s
+# Temporarily disable CRI-O jobs due https://github.com/kata-containers/kata-containers/issues/10861
+#        include:
+#          - vmm: qemu
+#            container_runtime: crio
+#            snapshotter: ""
+#            k8s: k0s
     runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
