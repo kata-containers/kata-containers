@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ARG GO_TOOLCHAIN
 ARG RUST_TOOLCHAIN
 
@@ -51,8 +51,3 @@ RUN kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \
     curl -OL "https://storage.googleapis.com/golang/go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
     tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
     rm "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz"
-
-# cmake looks for musl binutils
-# For setting CMAKE_AR, find_program searches for musl-ar.
-# Symlink to system ar.
-RUN ln -s "$(which ar)" /usr/bin/musl-ar
