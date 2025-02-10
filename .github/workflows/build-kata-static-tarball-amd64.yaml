@@ -218,9 +218,24 @@ jobs:
     strategy:
       matrix:
         asset:
-          - agent
+          - busybox
           - coco-guest-components
+          - kernel-nvidia-gpu-headers
+          - kernel-nvidia-gpu-confidential-headers
           - pause-image
+    steps:
+      - uses: geekyeggo/delete-artifact@v5
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
+  remove-rootfs-binary-artifacts-for-release:
+    runs-on: ubuntu-22.04
+    needs: build-asset-rootfs
+    strategy:
+      matrix:
+        asset:
+          - agent
     steps:
       - uses: geekyeggo/delete-artifact@v5
         if: ${{ inputs.stage == 'release' }}
@@ -229,7 +244,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: ubuntu-22.04
-    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts, remove-rootfs-binary-artifacts-for-release]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
