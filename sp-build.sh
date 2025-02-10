@@ -43,7 +43,7 @@ pushd "${SCRIPT_DIR}/build"
 qemu-img create -f qcow2 state.qcow2 ${STATE_DISK_SIZE}G
 
 # temporarily store the firmware in the repository
-cp "${SCRIPT_DIR}/tools/osbuilder/rootfs-builder/ubuntu/superprotocol/OVMF.fd" "${SCRIPT_DIR}/build"
+cp "${SCRIPT_DIR}/tools/osbuilder/rootfs-builder/ubuntu/superprotocol"/{OVMF.fd,OVMF_AMD.fd} "${SCRIPT_DIR}/build"
 
 ROOT_HASH=$(grep 'Root hash' root_hash.txt | awk '{print $3}')
 
