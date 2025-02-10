@@ -69,6 +69,13 @@ run_postbuild() {
 	cp "${script_dir}/hardening-vm.sh" "${rootfs_dir}/usr/local/bin/"
 	ln -s /etc/systemd/system/hardening-vm.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/hardening-vm.service"
 
+    # Disable SSH, local TTY
+    rm -f "${rootfs_dir}/etc/systemd/system/sshd.service"
+    rm -f "${rootfs_dir}/etc/systemd/system/multi-user.target.wants/ssh.service"
+    rm -f "${rootfs_dir}/etc/systemd/system/sockets.target.wants/ssh.socket"
+    rm -f "${rootfs_dir}/etc/systemd/system/ssh.service.requires/ssh.socket"
+    rm -f "${rootfs_dir}/etc/systemd/system/getty.target.wants/serial-getty@ttyS0.service"
+
 	set +x
 	umount ${rootfs_dir}/dev/pts
 	umount ${rootfs_dir}/dev

@@ -1,15 +1,7 @@
 #!/bin/bash
 
-# if NOT DEBUG, then close VM via firewall and stopping from SSH, and TTY terminal
+# if NOT DEBUG, then close VM via firewall
 if ! grep -q 'sp-debug=true' /proc/cmdline; then
-    # Stop services
-    systemctl stop serial-getty@ttyS0.service
-    systemctl stop ssh
-
-    # Disable services, but this is not working on RO system
-    # systemctl disable serial-getty@ttyS0.service
-    # systemctl disable ssh
-
     # Set default policy to DROP for INPUT
     iptables -P INPUT DROP
 
@@ -31,8 +23,13 @@ if ! grep -q 'sp-debug=true' /proc/cmdline; then
     # @TODO this will ignore NetworkPolicies in k8s, refactor in future
     iptables -I INPUT -s 10.43.0.0/16 -j ACCEPT
     iptables -I INPUT -s 10.42.0.0/16 -j ACCEPT
-fi
 
-if grep -q 'sp-debug=true' /proc/cmdline; then
-  chmod 400 /sp/authorized_keys || echo 'authorized_keys not found'
+#if DEBUG, then make vm accesable from SSH, and TTY terminal
+else
+    # Start services
+    systemctl start serial-getty@ttyS0.service
+    systemctl start ssh
+
+    # set the proper rights on the provider config
+    chmod 400 /sp/authorized_keys || echo 'authorized_keys not found'
 fi

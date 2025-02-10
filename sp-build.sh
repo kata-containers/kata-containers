@@ -1,5 +1,7 @@
 #/bin/bash
 
+set -euo pipefail;
+
 STATE_DISK_SIZE=300
 VM_MEMORY=128
 VM_CPU=8
