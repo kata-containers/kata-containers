@@ -104,6 +104,11 @@ assets:
       url: "https://github.com/confidential-containers/qemu.git"
       tag: "gpu-snp-20250211"
 
+    qemu-tdx-experimental:
+      description: "QEMU with GPU+TDX support"
+      url: "https://github.com/confidential-containers/qemu.git"
+      tag: "gpu-tdx-20250211"
+
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"
       url: "https://github.com/openeuler-mirror/stratovirt"
