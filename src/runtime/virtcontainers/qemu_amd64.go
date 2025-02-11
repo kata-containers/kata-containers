@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/intel-go/cpuid"
@@ -33,6 +34,10 @@ type qemuAmd64 struct {
 	sgxEPCSize int64
 
 	qgsPort uint32
+
+	snpIdBlock string
+
+	snpIdAuth string
 }
 
 const (
@@ -125,9 +130,11 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			protection:           noneProtection,
 			legacySerial:         config.LegacySerial,
 		},
-		vmFactory: factory,
-		snpGuest:  config.SevSnpGuest,
-		qgsPort:   config.QgsPort,
+		vmFactory:  factory,
+		snpGuest:   config.SevSnpGuest,
+		qgsPort:    config.QgsPort,
+		snpIdBlock: config.SnpIdBlock,
+		snpIdAuth:  config.SnpIdAuth,
 	}
 
 	if config.ConfidentialGuest {
@@ -233,7 +240,8 @@ func (q *qemuAmd64) enableProtection() error {
 		"machine":                 q.qemuMachine,
 		"kernel-params-debug":     q.kernelParamsDebug,
 		"kernel-params-non-debug": q.kernelParamsNonDebug,
-		"kernel-params":           q.kernelParams})
+		"kernel-params":           q.kernelParams,
+	})
 
 	switch q.protection {
 	case tdxProtection:
@@ -303,15 +311,23 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				ReducedPhysBits: 1,
 			}), "", nil
 	case snpProtection:
-		return append(devices,
-			govmmQemu.Object{
-				Type:            govmmQemu.SNPGuest,
-				ID:              "snp",
-				Debug:           false,
-				File:            firmware,
-				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
-				ReducedPhysBits: 1,
-			}), "", nil
+		obj := govmmQemu.Object{
+			Type:            govmmQemu.SNPGuest,
+			ID:              "snp",
+			Debug:           false,
+			File:            firmware,
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+		}
+		if q.snpIdBlock != "" && q.snpIdAuth != "" {
+			obj.SnpIdBlock = q.snpIdBlock
+			obj.SnpIdAuth = q.snpIdAuth
+		} else if q.snpIdBlock != "" {
+			return nil, "", errors.New("specifying SNP IDBlock without SNP IDAuth is not allowed")
+		} else if q.snpIdAuth != "" {
+			return nil, "", errors.New("specifying SNP IDAuth without SNP IDBlock is not allowed")
+		}
+		return append(devices, obj), "", nil
 	case noneProtection:
 
 		return devices, firmware, nil
