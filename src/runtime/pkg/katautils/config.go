@@ -107,6 +107,8 @@ type hypervisor struct {
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
 	BlockDeviceAIO                 string                    `toml:"block_device_aio"`
 	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
+	SnpIdBlock                     string                    `toml:"snp_id_block"`
+	SnpIdAuth                      string                    `toml:"snp_id_auth"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
@@ -986,6 +988,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeLinux:           h.DisableSeLinux,
 		DisableGuestSeLinux:      h.DisableGuestSeLinux,
 		ExtraMonitorSocket:       extraMonitorSocket,
+		SnpIdBlock:               h.SnpIdBlock,
+		SnpIdAuth:                h.SnpIdAuth,
 	}, nil
 }
 
