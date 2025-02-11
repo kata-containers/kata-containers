@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 set -euo pipefail;
 
@@ -81,7 +81,7 @@ ${NVIDIA_PASSTHROUGH} \\
 if [ -n "${PROVIDER_CONFIG_DST}" ]; then
     PROVIDER_CONFIG_SRC="\${SCRIPT_DIR}/config"
     QEMU_COMMAND+=" -fsdev local,security_model=passthrough,id=fsdev0,path=${PROVIDER_CONFIG_SRC} \\
-                  -device virtio-9p-pci,fsdev=fsdev0,mount_tag=sharedfolder"
+    -device virtio-9p-pci,fsdev=fsdev0,mount_tag=sharedfolder"
 fi
 
 echo "${PWD_COMMAND}" > run_vm.sh
