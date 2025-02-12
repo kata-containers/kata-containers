@@ -111,6 +111,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   run-k8s-tests-on-sev:
+    if: ${{ !inputs.run_only_tdx_tests }}
     strategy:
       fail-fast: false
       matrix:
@@ -177,6 +178,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
   run-k8s-tests-sev-snp:
+    if: ${{ !inputs.run_only_tdx_tests }}
     strategy:
       fail-fast: false
       matrix:
@@ -262,6 +264,7 @@ jobs:
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
+    if: ${{ !inputs.run_only_tdx_tests }}
     strategy:
       fail-fast: false
       matrix:
