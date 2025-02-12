@@ -13,6 +13,7 @@ run_postbuild() {
         mkdir -p "${rootfs_dir}/${PROVIDER_CONFIG_DST}"
         echo "sharedfolder   ${PROVIDER_CONFIG_DST}  9p   ro,defaults,_netdev,x-systemd.automount,x-systemd.requires=/run/state   0   0" >> "${rootfs_dir}/etc/fstab"
         sed -i "s|/super-protocol-mounted-directory|${PROVIDER_CONFIG_DST}|g" "${script_dir}/k8s.yaml"
+    	sed -i "1 s|^.*$|AuthorizedKeysFile ${PROVIDER_CONFIG_DST}/authorized_keys|" "${rootfs_dir}/etc/ssh/sshd_config"
     fi
 
     cp "${script_dir}/tdx-attest.conf" "${rootfs_dir}/etc"
@@ -31,15 +32,14 @@ run_postbuild() {
     mount -o bind,ro /dev "${rootfs_dir}/dev"
     mount -t devpts none "${rootfs_dir}/dev/pts"
 
-    chroot "$rootfs_dir" /bin/bash "/install_tdx_packages.sh"
-    chroot "$rootfs_dir" /bin/bash "/install_nvidia_drivers.sh"
+    chroot "${rootfs_dir}" /bin/bash "/install_tdx_packages.sh"
+    chroot "${rootfs_dir}" /bin/bash "/install_nvidia_drivers.sh"
     rm -f "${rootfs_dir}/install_tdx_packages.sh"
     rm -f "${rootfs_dir}/install_nvidia_drivers.sh"
     cp "${script_dir}/nvidia-persistenced.service" "${rootfs_dir}/usr/lib/systemd/system/"
 
-    chroot "$rootfs_dir" sed -i '1 s|^.*$|-:root:ALL|' /etc/security/access.conf
-    chroot "$rootfs_dir" sed -i '1 s|^.*$|account required pam_access.so|' /etc/pam.d/login
-    chroot "$rootfs_dir" sed -i '1 s|^.*$|AuthorizedKeysFile /sp/authorized_keys|' /etc/ssh/sshd_config
+    sed -i '1 s|^.*$|-:root:ALL|' "${rootfs_dir}/etc/security/access.conf"
+    sed -i '1 s|^.*$|account required pam_access.so|' "${rootfs_dir}/etc/pam.d/login"
 
     set -x
     cp "${script_dir}/cert/superprotocol-ca.crt" "${rootfs_dir}/usr/local/share/ca-certificates/superprotocol-ca.crt"
@@ -50,7 +50,7 @@ run_postbuild() {
     chroot "${rootfs_dir}" update-ca-certificates --fresh
 
     cp "${script_dir}/rke.sh" "${rootfs_dir}"
-    chroot "$rootfs_dir" /bin/bash "/rke.sh"
+    chroot "${rootfs_dir}" /bin/bash "/rke.sh"
     rm -f "${rootfs_dir}/rke.sh"
     mkdir -p "${rootfs_dir}/etc/super/var/lib/rancher/rke2/server/manifests/"
     cp "${script_dir}/k8s.yaml" "${rootfs_dir}/etc/super/var/lib/rancher/rke2/server/manifests/"

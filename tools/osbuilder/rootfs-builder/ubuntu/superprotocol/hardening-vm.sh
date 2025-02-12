@@ -29,7 +29,4 @@ else
     # Start services
     systemctl start serial-getty@ttyS0.service
     systemctl start ssh
-
-    # set the proper rights on the provider config
-    chmod 400 /sp/authorized_keys || echo 'authorized_keys not found'
 fi
