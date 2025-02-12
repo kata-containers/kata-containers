@@ -1246,7 +1246,12 @@ handle_build() {
 				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
 
 				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar rvf kernel-headers.tar {} +
+				mv kata-linux-*/certs/signing_key.pem .
+				mv kata-linux-*/certs/signing_key.x509 .
+				tar -rvf kernel-headers.tar signing_key.pem signing_key.x509 --remove-files
+				xz -T0 kernel-headers.tar
+				mv kernel-headers.tar.xz "${kernel_headers_final_tarball_path}"
 				popd
 			fi
 			tar tvf "${kernel_headers_final_tarball_path}"
