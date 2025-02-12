@@ -444,7 +444,7 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -458,7 +458,7 @@ function deploy_snapshotter() {
 }
 
 function cleanup_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
