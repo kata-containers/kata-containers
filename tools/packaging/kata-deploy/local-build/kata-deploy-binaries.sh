@@ -1247,9 +1247,12 @@ handle_build() {
 
 				pushd "${kernel_headers_dir}"
 				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar rvf kernel-headers.tar {} +
-				mv kata-linux-*/certs/signing_key.pem .
-				mv kata-linux-*/certs/signing_key.x509 .
-				tar -rvf kernel-headers.tar signing_key.pem signing_key.x509 --remove-files
+				if [ -n "${KBUILD_SIGN_PIN}" ]; then
+					head -n1 kata-linux-*/certs/signing_key.pem | grep -q "ENCRYPTED PRIVATE KEY" || die "signing_key.pem is not encrypted"
+					mv kata-linux-*/certs/signing_key.pem .
+					mv kata-linux-*/certs/signing_key.x509 .
+					tar -rvf kernel-headers.tar signing_key.pem signing_key.x509 --remove-files
+				fi
 				xz -T0 kernel-headers.tar
 				mv kernel-headers.tar.xz "${kernel_headers_final_tarball_path}"
 				popd
