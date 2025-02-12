@@ -27,7 +27,7 @@ pub struct CloudHypervisorInner {
     pub(crate) api_socket: Option<UnixStream>,
     pub(crate) extra_args: Option<Vec<String>>,
 
-    pub(crate) config: Option<HypervisorConfig>,
+    pub(crate) config: HypervisorConfig,
 
     pub(crate) process: Option<Child>,
     pub(crate) pid: Option<u32>,
@@ -101,7 +101,7 @@ impl CloudHypervisorInner {
             process: None,
             pid: None,
 
-            config: None,
+            config: Default::default(),
             state: VmmState::NotReady,
             timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
             id: String::default(),
@@ -124,11 +124,11 @@ impl CloudHypervisorInner {
     }
 
     pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
-        self.config = Some(config);
+        self.config = config;
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
-        self.config.clone().unwrap_or_default()
+        self.config.clone()
     }
 }
 
@@ -168,7 +168,7 @@ impl Persist for CloudHypervisorInner {
         let (tx, rx) = channel(true);
 
         let mut ch = Self {
-            config: Some(hypervisor_state.config),
+            config: hypervisor_state.config,
             state: VmmState::NotReady,
             id: hypervisor_state.id,
             vm_path: hypervisor_state.vm_path,
