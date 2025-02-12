@@ -32,6 +32,7 @@ readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # xPU vendor
 readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
+readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 
 #Path to kernel directory
 kernel_path=""
@@ -492,6 +493,15 @@ build_kernel_headers() {
 	fi
 	if [ "$linux_headers" == "rpm" ]; then
 		make -j $(nproc) rpm-pkg ARCH="${arch_target}"
+	fi
+	# If we encrypt the key earlier it will break the kernel_headers build.
+	# At this stage the kernel has created the certs/signing_key.pem
+	# encrypt it for later usage in another job or out-of-tree build
+	# only encrypt if we have KBUILD_SIGN_PIN set
+	local key="certs/signing_key.pem"
+	if [ -n "${KBUILD_SIGN_PIN}" ]; then
+		[ -e "${key}" ] || die "${key} missing but KBUILD_SIGN_PIN is set"
+		openssl rsa -aes256 -in ${key} -out ${key} -passout env:KBUILD_SIGN_PIN
 	fi
 
 	popd >>/dev/null
