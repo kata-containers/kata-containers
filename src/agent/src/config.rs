@@ -780,7 +780,10 @@ fn get_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
     ensure!(fields.len() == 2, ERR_INVALID_TIMEOUT);
     ensure!(
-        matches!(fields[0], HOTPLUG_TIMOUT_OPTION | CDH_API_TIMOUT_OPTION | CDI_TIMEOUT_OPTION),
+        matches!(
+            fields[0],
+            HOTPLUG_TIMOUT_OPTION | CDH_API_TIMOUT_OPTION | CDI_TIMEOUT_OPTION
+        ),
         ERR_INVALID_TIMEOUT_KEY
     );
 
