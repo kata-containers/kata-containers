@@ -229,8 +229,8 @@ impl Endpoint {
                 })?;
 
             regions.push(VhostUserMemoryRegionInfo {
-                guest_phys_addr: guest_phys_addr.raw_value() as u64,
-                memory_size: region.len() as u64,
+                guest_phys_addr: guest_phys_addr.raw_value(),
+                memory_size: region.len(),
                 userspace_addr: userspace_addr as *const u8 as u64,
                 mmap_offset: file_offset.start(),
                 mmap_handle: file_offset.file().as_raw_fd(),
@@ -330,8 +330,8 @@ impl Endpoint {
                 .map_err(|_| VirtioError::InvalidGuestAddress(guest_phys_addr))?;
 
             regions.push(VhostUserMemoryRegionInfo {
-                guest_phys_addr: guest_phys_addr.raw_value() as u64,
-                memory_size: region.len() as u64,
+                guest_phys_addr: guest_phys_addr.raw_value(),
+                memory_size: region.len(),
                 userspace_addr: userspace_addr as *const u8 as u64,
                 mmap_offset: file_offset.start(),
                 mmap_handle: file_offset.file().as_raw_fd(),
@@ -342,7 +342,7 @@ impl Endpoint {
 
         // 9. setup vrings
         for queue_cfg in config.virtio_config.queues.iter() {
-            master.set_vring_num(queue_cfg.index() as usize, queue_cfg.actual_size() as u16)?;
+            master.set_vring_num(queue_cfg.index() as usize, queue_cfg.actual_size())?;
             info!(
                 "{}: set_vring_num(idx: {}, size: {})",
                 self.name,
