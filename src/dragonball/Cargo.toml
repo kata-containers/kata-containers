@@ -9,23 +9,41 @@ repository = "https://github.com/kata-containers/kata-containers.git"
 license = "Apache-2.0"
 edition = "2018"
 
+[workspace]
+members = [
+  "dbs_acpi",
+  "dbs_address_space",
+  "dbs_allocator",
+  "dbs_arch",
+  "dbs_boot",
+  "dbs_device",
+  "dbs_interrupt",
+  "dbs_legacy_devices",
+  "dbs_pci",
+  "dbs_tdx",
+  "dbs_upcall",
+  "dbs_utils",
+  "dbs_virtio_devices",
+]
+resolver = "2"
+
 [dependencies]
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
-dbs-address-space = { path = "./src/dbs_address_space" }
-dbs-allocator = { path = "./src/dbs_allocator" }
-dbs-arch = { path = "./src/dbs_arch" }
-dbs-boot = { path = "./src/dbs_boot" }
-dbs-device = { path = "./src/dbs_device" }
-dbs-interrupt = { path = "./src/dbs_interrupt", features = ["kvm-irq"] }
-dbs-legacy-devices = { path = "./src/dbs_legacy_devices" }
-dbs-upcall = { path = "./src/dbs_upcall", optional = true }
-dbs-utils = { path = "./src/dbs_utils" }
-dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = [
-    "virtio-mmio",
+dbs-address-space = { path = "dbs_address_space" }
+dbs-allocator = { path = "dbs_allocator" }
+dbs-arch = { path = "dbs_arch" }
+dbs-boot = { path = "dbs_boot" }
+dbs-device = { path = "dbs_device" }
+dbs-interrupt = { path = "dbs_interrupt", features = ["kvm-irq"] }
+dbs-legacy-devices = { path = "dbs_legacy_devices" }
+dbs-upcall = { path = "dbs_upcall", optional = true }
+dbs-utils = { path = "dbs_utils" }
+dbs-virtio-devices = { path = "dbs_virtio_devices", optional = true, features = [
+  "virtio-mmio",
 ] }
-dbs-pci = { path = "./src/dbs_pci", optional = true }
+dbs-pci = { path = "dbs_pci", optional = true }
 derivative = "2.2.0"
 kvm-bindings = "0.6.0"
 kvm-ioctls = "0.12.0"
