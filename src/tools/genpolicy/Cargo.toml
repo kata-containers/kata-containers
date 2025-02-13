@@ -73,4 +73,5 @@ containerd-client = "0.4.0"
 tar = "0.4.41"
 
 [dev-dependencies]
-regorus = { version = "0.1.4", default-features = false, features = ["arc", "regex"]}
+kata-agent-policy = { path = "../../agent/policy" }
+slog = "2.5.2"
