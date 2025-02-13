@@ -271,7 +271,7 @@ pub async fn handle_cdi_devices(
     let options: Vec<CdiOption> = vec![with_auto_refresh(false), with_spec_dirs(&[spec_dir])];
     let cache: Arc<std::sync::Mutex<cdi::cache::Cache>> = new_cache(options);
 
-    for _ in 0..=cdi_timeout.as_secs() {
+    for i in 0..=cdi_timeout.as_secs() {
         let inject_result = {
             // Lock cache within this scope, std::sync::Mutex has no Send
             // and await will not work with time::sleep
@@ -294,8 +294,13 @@ pub async fn handle_cdi_devices(
                 return Ok(());
             }
             Err(e) => {
-                info!(logger, "error injecting devices: {:?}", e);
-                println!("error injecting devices: {:?}", e);
+                info!(
+                    logger,
+                    "waiting for CDI spec(s) to be generated ({} of {} max tries) {:?}",
+                    i,
+                    cdi_timeout.as_secs(),
+                    e
+                );
             }
         }
         time::sleep(Duration::from_secs(1)).await;
@@ -1245,8 +1250,13 @@ mod tests {
 
         let cdi_timeout = Duration::from_secs(0);
 
-        let res =
-            handle_cdi_devices(&logger, &mut spec, temp_dir.path().to_str().unwrap(), cdi_timeout).await;
+        let res = handle_cdi_devices(
+            &logger,
+            &mut spec,
+            temp_dir.path().to_str().unwrap(),
+            cdi_timeout,
+        )
+        .await;
         println!("modfied spec {:?}", spec);
         assert!(res.is_ok(), "{}", res.err().unwrap());
 
