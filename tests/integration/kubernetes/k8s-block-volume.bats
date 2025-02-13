@@ -10,7 +10,13 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10373"
+	 case "${KATA_HYPERVISOR}" in
+	 	qemu-runtime-rs)
+			skip "See: https://github.com/kata-containers/kata-containers/issues/10373" ;;
+		fc|stratovirt)
+			skip "See: https://github.com/kata-containers/kata-containers/issues/10873" ;;
+	 esac
+
 	get_pod_config_dir
 
 	node="$(get_one_kata_node)"
@@ -66,8 +72,13 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10373"
-	# Debugging information
+	case "${KATA_HYPERVISOR}" in
+	 	qemu-runtime-rs)
+			skip "See: https://github.com/kata-containers/kata-containers/issues/10373" ;;
+		fc|stratovirt)
+			skip "See: https://github.com/kata-containers/kata-containers/issues/10873" ;;
+	 esac
+	 # Debugging information
 	kubectl describe "pod/$pod_name"
 
 	# Delete k8s resources
