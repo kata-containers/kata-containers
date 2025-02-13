@@ -12,15 +12,15 @@ readme = "README.md"
 
 [dependencies]
 dbs-arch = { path = "../dbs_arch" }
-kvm-bindings = { version = "0.6.0", features = ["fam-wrappers"] }
-kvm-ioctls = "0.12.0"
+kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
+kvm-ioctls = {workspace = true}
 lazy_static = "1"
 libc = "0.2.39"
 thiserror = "1"
-vm-memory = "0.10.0"
-vm-fdt = "0.2.0"
+vm-memory = {workspace = true}
+vm-fdt = {workspace= true}
 
 [dev-dependencies]
-vm-memory = { version = "0.10.0", features = ["backend-mmap"] }
+vm-memory = { workspace = true, features = ["backend-mmap"] }
 device_tree = ">=1.1.0"
 dbs-device = { path = "../dbs_device" }

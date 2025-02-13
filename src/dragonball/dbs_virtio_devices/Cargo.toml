@@ -24,8 +24,8 @@ dbs-boot = { path = "../dbs_boot" }
 epoll = ">=4.3.1, <4.3.2"
 io-uring = "0.5.2"
 fuse-backend-rs = { version = "0.10.5", optional = true }
-kvm-bindings = "0.6.0"
-kvm-ioctls = "0.12.0"
+kvm-bindings = { workspace = true}
+kvm-ioctls = {workspace = true}
 libc = "0.2.119"
 log = "0.4.14"
 nix = "0.24.3"
@@ -37,16 +37,16 @@ serde = "1.0.27"
 serde_json = "1.0.9"
 thiserror = "1"
 threadpool = "1"
-virtio-bindings = "0.1.0"
-virtio-queue = "0.7.0"
-vmm-sys-util = "0.11.0"
-vm-memory = { version = "0.10.0", features = ["backend-mmap"] }
+virtio-bindings = {workspace = true}
+virtio-queue = {workspace = true}
+vmm-sys-util = {workspace = true}
+vm-memory = { workspace = true, features = ["backend-mmap"] }
 sendfd = "0.4.3"
 vhost-rs = { version = "0.6.1", package = "vhost", optional = true }
 timerfd = "1.0"
 
 [dev-dependencies]
-vm-memory = { version = "0.10.0", features = [
+vm-memory = { workspace = true, features = [
     "backend-mmap",
     "backend-atomic",
 ] }

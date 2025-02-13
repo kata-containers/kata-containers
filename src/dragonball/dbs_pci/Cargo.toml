@@ -23,16 +23,16 @@ dbs-interrupt = { path = "../dbs_interrupt", features = [
 ] }
 downcast-rs = "1.2.0"
 byteorder = "1.4.3"
-vm-memory = "0.10.0"
-kvm-ioctls = "0.12.0"
-kvm-bindings = "0.6.0"
-vfio-ioctls = "0.1.0"
-vfio-bindings = "0.3.0"
+vm-memory = {workspace = true}
+kvm-ioctls = {workspace = true}
+kvm-bindings = {workspace = true}
+vfio-ioctls = {workspace = true}
+vfio-bindings = {workspace = true}
 libc = "0.2.39"
 
 [dev-dependencies]
 dbs-arch = { path = "../dbs_arch" }
-kvm-ioctls = "0.12.0"
+kvm-ioctls = {workspace = true}
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [

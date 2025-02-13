@@ -12,15 +12,15 @@ readme = "README.md"
 
 [dependencies]
 memoffset = "0.6"
-kvm-bindings = { version = "0.6.0", features = ["fam-wrappers"] }
-kvm-ioctls = "0.12.0"
+kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
+kvm-ioctls = {workspace = true}
 thiserror = "1"
-vm-memory = { version = "0.10" }
-vmm-sys-util = "0.11.0"
+vm-memory = { workspace = true }
+vmm-sys-util = {workspace = true}
 libc = ">=0.2.39"
 
 [dev-dependencies]
-vm-memory = { version = "0.10", features = ["backend-mmap"] }
+vm-memory = { workspace = true, features = ["backend-mmap"] }
 
 [package.metadata.docs.rs]
 all-features = true
