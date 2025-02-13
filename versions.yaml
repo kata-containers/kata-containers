@@ -261,10 +261,11 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.6.8"
-    lts: "v1.6"
-    active: "v1.7"
-    # add containerd 2.0.0 for sandbox api test
+    version: "v1.7.25"
+    lts: "v1.7"
+    active: "v2.0"
+    # keep the latest version to make the current PR ci work, once it was
+    # merged,we can remove the latest version.
     latest: "v2.0"
 
   critools:
