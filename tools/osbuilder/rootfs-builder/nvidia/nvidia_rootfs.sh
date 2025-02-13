@@ -14,6 +14,7 @@ readonly SCRIPT_DIR="${script_dir}/nvidia"
 
 # This will control how much output the inird/image will produce
 DEBUG=""
+KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 
 machine_arch=${ARCH}
 
@@ -165,7 +166,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount -t proc /proc ./proc
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} \
-		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK}"
+		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK} ${KBUILD_SIGN_PIN}"
 
 	umount -R ./dev
 	umount ./proc
