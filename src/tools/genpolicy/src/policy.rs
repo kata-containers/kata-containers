@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use sha2::{Digest, Sha256};
 use std::boxed;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::read_to_string;
 use std::io::Write;
 
@@ -366,6 +366,9 @@ pub struct CommonData {
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
 
+    /// Path to the shared sandbox storage - e.g., "/run/kata-containers/sandbox/storage".
+    pub spath: String,
+
     /// Regex for an IPv4 address.
     pub ipv4_a: String,
 
@@ -383,6 +386,22 @@ pub struct CommonData {
 
     /// Default capabilities for a privileged container.
     pub privileged_caps: Vec<String>,
+
+    /// A mapping of storage classes to configurations, which determines
+    /// the behavior of storage classes.
+    pub storage_classes: HashMap<String, StorageConfig>,
+}
+
+/// A subset of the `agent::Storage` gRPC object sent by the shim. This
+/// prescribes the values for the fields of that object. This is
+/// necessary with e.g. CSI drivers, as genpolicy cannot possibly infer
+/// the content of the gRPC object on its own in such cases.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StorageConfig {
+    pub driver: String,
+    pub driver_options: Vec<String>,
+    pub fs_type: String,
+    pub options: Vec<String>,
 }
 
 /// Configuration from "kubectl config".

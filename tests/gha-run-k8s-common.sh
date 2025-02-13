@@ -7,6 +7,8 @@
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 
+AZ_REGION="${AZ_REGION:-eastus}"
+AZ_NODEPOOL_TAGS="${AZ_NODEPOOL_TAGS:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
@@ -101,7 +103,7 @@ function create_cluster() {
 		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
-		-l eastus \
+		-l "${AZ_REGION}" \
 		-n "${rg}"
 
 	az aks create \
@@ -112,7 +114,8 @@ function create_cluster() {
 		--node-count 1 \
 		--generate-ssh-keys \
 		--tags "${tags[@]}" \
-		$([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
+		$([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation") \
+		$([ -n "${AZ_NODEPOOL_TAGS}" ] && echo "--nodepool-tags "${AZ_NODEPOOL_TAGS}"")
 }
 
 function install_bats() {

@@ -5,7 +5,7 @@
 //
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -16,6 +16,7 @@ use kata_types::device::{
     DRIVER_SCSI_TYPE,
 };
 use kata_types::mount::StorageDevice;
+use nix::sys::stat::{major, minor};
 use protocols::agent::Storage;
 use tracing::instrument;
 
@@ -28,8 +29,8 @@ use crate::device::block_device_handler::{
 };
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
-use crate::pci;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
+use crate::{cdh, pci, AGENT_CONFIG};
 
 #[derive(Debug)]
 pub struct VirtioBlkMmioHandler {}
@@ -73,6 +74,8 @@ impl StorageHandler for VirtioBlkPciHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
+        let dev_num;
+
         // If hot-plugged, get the device node path based on the PCI path
         // otherwise use the virt path provided in Storage Source
         if storage.source.starts_with("/dev") {
@@ -82,10 +85,33 @@ impl StorageHandler for VirtioBlkPciHandler {
             if mode & libc::S_IFBLK == 0 {
                 return Err(anyhow!("Invalid device {}", &storage.source));
             }
+            let dev_id = metadata.rdev();
+            dev_num = format!("{}:{}", major(dev_id), minor(dev_id));
         } else {
             let pcipath = pci::Path::from_str(&storage.source)?;
             let dev_path = get_virtio_blk_pci_device_name(ctx.sandbox, &pcipath).await?;
             storage.source = dev_path;
+            let metadata = fs::metadata(&storage.source)
+                .context(format!("get metadata on file {:?}", &storage.source))?;
+            let dev_id = metadata.rdev();
+            dev_num = format!("{}:{}", major(dev_id), minor(dev_id));
+        }
+
+        let confidential = storage
+            .driver_options
+            .contains(&"confidential=true".to_string());
+        let ephemeral = storage
+            .driver_options
+            .contains(&"ephemeral=true".to_string());
+
+        if confidential && ephemeral {
+            let integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
+            let options = std::collections::HashMap::from([
+                ("deviceId".to_string(), dev_num),
+                ("encryptType".to_string(), "LUKS".to_string()),
+                ("dataIntegrity".to_string(), integrity),
+            ]);
+            cdh::secure_mount("BlockDevice", &options, vec![], &storage.mount_point).await?;
         }
 
         let path = common_storage_handler(ctx.logger, &storage)?;
