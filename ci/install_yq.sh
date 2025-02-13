@@ -29,7 +29,7 @@ function verify_yq_exists() {
 # Install via binary download, as we may not have golang installed at this point
 function install_yq() {
 	local yq_pkg="github.com/mikefarah/yq"
-	local yq_version=v4.40.7
+	local yq_version=v4.44.5
 	local precmd=""
 	local yq_path=""
 	INSTALL_IN_GOPATH=${INSTALL_IN_GOPATH:-true}
@@ -81,6 +81,9 @@ function install_yq() {
 		else 
 			goarch=arm64
 		fi
+		;;
+	"riscv64")
+		goarch=riscv64
 		;;
 	"ppc64le")
 		goarch=ppc64le
