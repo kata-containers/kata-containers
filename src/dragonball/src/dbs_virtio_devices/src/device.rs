@@ -340,9 +340,11 @@ pub trait VirtioRegionHandler: Send {
 /// - query device's resource requirement and allocate resources for it.
 /// - handle guest register access by forwarding requests to the device.
 /// - call activate()/reset() when the device is activated/reset by the guest.
+///
 /// The lifecycle of a virtio device is to be moved to a virtio transport, which will then query the
 /// device. Once the guest driver has configured the device, `VirtioDevice::activate` will be called
 /// and all the events, memory, and queues for device operation will be moved into the device.
+///
 /// Optionally, a virtio device can implement device reset in which it returns said resources and
 /// resets its internal.
 pub trait VirtioDevice<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>: Send {

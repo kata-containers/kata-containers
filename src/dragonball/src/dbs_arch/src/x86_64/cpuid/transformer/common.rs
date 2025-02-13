@@ -119,6 +119,7 @@ pub fn update_extended_topology_entry(
 /// topology enumeration data. Software must detect the presence of CPUID leaf 1FH by verifying
 /// - the highest leaf index supported by CPUID is >= 1FH
 /// - CPUID.1FH:EBX[15:0] reports a non-zero value
+///
 /// If leaf_0x1f is not implemented in cpu used in host, guest OS should turn to leaf_0xb to
 /// determine the cpu topology.
 pub fn update_extended_topology_v2_entry(

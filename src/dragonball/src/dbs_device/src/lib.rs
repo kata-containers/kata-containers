@@ -107,7 +107,7 @@ impl TryFrom<IoSize> for PioSize {
 
     #[inline]
     fn try_from(size: IoSize) -> Result<Self, Self::Error> {
-        if size.raw_value() <= std::u16::MAX as u64 {
+        if size.raw_value() <= u16::MAX as u64 {
             Ok(PioSize(size.raw_value() as PioAddressType))
         } else {
             Err(size)
@@ -153,7 +153,7 @@ impl TryFrom<IoAddress> for PioAddress {
 
     #[inline]
     fn try_from(addr: IoAddress) -> Result<Self, Self::Error> {
-        if addr.0 <= std::u16::MAX as u64 {
+        if addr.0 <= u16::MAX as u64 {
             Ok(PioAddress(addr.raw_value() as PioAddressType))
         } else {
             Err(addr)

@@ -306,7 +306,9 @@ mod tests {
         let addr_in = net_gen::sockaddr_in {
             sin_family: net_gen::AF_INET as u16,
             sin_port: 0,
-            sin_addr: unsafe { mem::transmute(ip_addr.octets()) },
+            sin_addr: unsafe {
+                mem::transmute::<[u8; 4], crate::net::net_gen::inn::in_addr>(ip_addr.octets())
+            },
             __pad: [0; 8usize],
         };
 

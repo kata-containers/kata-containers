@@ -360,7 +360,7 @@ impl VhostUserBlockDevice {
             if !Path::new(self.vhost_socket.as_str()).exists() {
                 return Err(ActivateError::InternalError);
             }
-            let master = Master::connect(&String::from(self.vhost_socket.as_str()), 1)
+            let master = Master::connect(String::from(self.vhost_socket.as_str()), 1)
                 .map_err(VirtIoError::VhostError)?;
 
             self.endpoint.set_master(master);

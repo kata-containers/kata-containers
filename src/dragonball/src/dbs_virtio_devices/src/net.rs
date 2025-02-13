@@ -238,7 +238,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> NetEpollH
     // `frame_buf` should contain the frame bytes in a slice of exact length.
     // Returns whether MMDS consumed the frame.
     fn write_to_tap(frame_buf: &[u8], tap: &mut Tap, metrics: &Arc<NetDeviceMetrics>) {
-        match tap.write(frame_buf) {
+        match tap.write_all(frame_buf) {
             Ok(_) => {
                 metrics.tx_bytes_count.add(frame_buf.len());
                 metrics.tx_packets_count.inc();

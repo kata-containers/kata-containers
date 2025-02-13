@@ -34,10 +34,10 @@ const DEVICE_STATUS_DRIVER_OK: u32 = DEVICE_STATUS_FEATURE_OK | DEVICE_DRIVER_OK
 /// This requires 3 points of installation to work with a VM:
 ///
 /// 1. Mmio reads and writes must be sent to this device at what is referred to here as MMIO base.
-/// 1. `Mmio::queue_evts` must be installed at `MMIO_NOTIFY_REG_OFFSET` offset from the MMIO
-/// base. Each event in the array must be signaled if the index is written at that offset.
-/// 1. `Mmio::interrupt_evt` must signal an interrupt that the guest driver is listening to when it
-/// is written to.
+/// 2. `Mmio::queue_evts` must be installed at `MMIO_NOTIFY_REG_OFFSET` offset from the MMIO
+///    base. Each event in the array must be signaled if the index is written at that offset.
+/// 3. `Mmio::interrupt_evt` must signal an interrupt that the guest driver is listening to when it
+///    is written to.
 ///
 /// Typically one page (4096 bytes) of MMIO address space is sufficient to handle this transport
 /// and inner virtio device.

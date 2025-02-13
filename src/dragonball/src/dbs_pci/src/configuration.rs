@@ -1000,18 +1000,18 @@ impl PciConfiguration {
             .ok_or(Error::BarAddressInvalid(config.addr, config.size))?;
         match config.bar_type {
             PciBarRegionType::IoRegion => {
-                if config.size < 0x4 || config.size > u64::from(u32::max_value()) {
+                if config.size < 0x4 || config.size > u64::from(u32::MAX) {
                     return Err(Error::BarSizeInvalid(config.size));
                 }
-                if end_addr > u64::from(u32::max_value()) {
+                if end_addr > u64::from(u32::MAX) {
                     return Err(Error::BarAddressInvalid(config.addr, config.size));
                 }
             }
             PciBarRegionType::Memory32BitRegion => {
-                if config.size < 0x10 || config.size > u64::from(u32::max_value()) {
+                if config.size < 0x10 || config.size > u64::from(u32::MAX) {
                     return Err(Error::BarSizeInvalid(config.size));
                 }
-                if end_addr > u64::from(u32::max_value()) {
+                if end_addr > u64::from(u32::MAX) {
                     return Err(Error::BarAddressInvalid(config.addr, config.size));
                 }
             }
@@ -1021,9 +1021,6 @@ impl PciConfiguration {
                 }
                 if self.bar_used(config.bar_idx + 1) {
                     return Err(Error::BarInUse64(config.bar_idx));
-                }
-                if end_addr > u64::max_value() {
-                    return Err(Error::BarAddressInvalid(config.addr, config.size));
                 }
 
                 self.registers[reg_idx + 1] = (config.addr >> 32) as u32;
@@ -1085,7 +1082,7 @@ impl PciConfiguration {
             .bitand(!(u64::from(!ROM_BAR_ADDR_MASK)))
             .checked_add(config.size - 1)
             .ok_or(Error::RomBarAddressInvalid(config.addr, config.size))?;
-        if end_addr > u64::from(u32::max_value()) {
+        if end_addr > u64::from(u32::MAX) {
             return Err(Error::RomBarAddressInvalid(config.addr, config.size));
         }
 

@@ -78,7 +78,7 @@ pub struct VsockPacketHdr {
     /// - VSOCK_OP_RW: a data packet;
     /// - VSOCK_OP_REQUEST: connection request;
     /// - VSOCK_OP_RST: forcefull connection termination;
-    /// etc (see `super::defs::uapi` for the full list).
+    /// - etc (see `super::defs::uapi` for the full list).
     pub op: u16,
     /// Additional options (flags) associated with the current operation (`op`).
     /// Currently, only used with shutdown requests (VSOCK_OP_SHUTDOWN).

@@ -223,6 +223,7 @@ impl AddressSpaceRegion {
                     .read(true)
                     .write(true)
                     .create(true)
+                    .truncate(true)
                     .open(mem_file_path)
                     .map_err(AddressSpaceError::OpenFile)?;
                 nix::unistd::unlink(mem_file_path).map_err(AddressSpaceError::UnlinkFile)?;

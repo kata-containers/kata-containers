@@ -93,7 +93,7 @@ impl Range {
     {
         let umin = u64::from(base);
         let umax = u64::from(size).checked_add(umin).unwrap();
-        if umin > umax || (umin == 0 && umax == std::u64::MAX) {
+        if umin > umax || (umin == 0 && umax == u64::MAX) {
             panic!("interval_tree: Range({}, {}) is invalid", umin, umax);
         }
         Range {
@@ -910,7 +910,7 @@ impl<T> IntervalTree<T> {
                 }
             }
         }
-        if range.max < std::u64::MAX {
+        if range.max < u64::MAX {
             if let Some((r, v)) = self.get_superset(&Range::new(range.max + 1, range.max + 1)) {
                 if v.is_free() {
                     range.max = r.max;

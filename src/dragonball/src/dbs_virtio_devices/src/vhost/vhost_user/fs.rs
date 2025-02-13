@@ -669,7 +669,7 @@ where
         // Request for DAX window. The memory needs to be 2MiB aligned in order to support
         // huge pages, and needs to be above 4G to avoid conflicts with lapic/ioapic devices.
         requests.push(ResourceConstraint::MmioAddress {
-            range: Some((0x1_0000_0000, std::u64::MAX)),
+            range: Some((0x1_0000_0000, u64::MAX)),
             align: 0x0020_0000,
             size: device.cache_size,
         });

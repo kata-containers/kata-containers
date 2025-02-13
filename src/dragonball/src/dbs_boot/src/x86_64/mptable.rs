@@ -133,8 +133,8 @@ const MPC_SPEC: i8 = 4;
 const MPC_OEM: [c_char; 8] = char_array!(c_char; 'A', 'L', 'I', 'C', 'L', 'O', 'U', 'D');
 const MPC_PRODUCT_ID: [c_char; 12] =
     char_array!(c_char; 'D', 'R', 'A', 'G', 'O', 'N', 'B', 'A', 'L', 'L', '1', '0');
-const BUS_TYPE_ISA: [u8; 6] = char_array!(u8; 'I', 'S', 'A', ' ', ' ', ' ');
-const BUS_TYPE_PCI: [u8; 6] = char_array!(u8; 'P', 'C', 'I', ' ', ' ', ' ');
+const BUS_TYPE_ISA: [u8; 6] = char_array!(u8; b'I', b'S', b'A', b' ', b' ', b' ');
+const BUS_TYPE_PCI: [u8; 6] = char_array!(u8; b'P', b'C', b'I', b' ', b' ', b' ');
 const IO_APIC_DEFAULT_PHYS_BASE: u32 = 0xfec0_0000; // source: linux/arch/x86/include/asm/apicdef.h
 const APIC_DEFAULT_PHYS_BASE: u32 = 0xfee0_0000; // source: linux/arch/x86/include/asm/apicdef.h
 
