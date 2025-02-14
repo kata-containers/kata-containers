@@ -207,3 +207,16 @@ function create_coco_pod_yaml_with_annotations() {
 		set_node "${kata_pod}" "$node"
 	fi
 }
+
+confidential_teardown_common() {
+	local node="$1"
+	local node_start_time="$2"
+
+	# Run common teardown
+	teardown_common "${node}" ${node_start_time}
+
+	# Also try and print the kbs logs on failure
+	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
+		kbs_k8s_print_logs "${node_start_time}"
+	fi
+}
