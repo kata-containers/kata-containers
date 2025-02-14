@@ -112,6 +112,9 @@ pub struct Agent {
     pub reconnect_timeout_ms: u32,
 
     /// Agent request timeout value in millisecond
+    /// This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
+    /// It's also used to ensure that workloads, especially those involving large image pulls within the guest,
+    /// have sufficient time to complete.
     #[serde(default = "default_request_timeout")]
     pub request_timeout_ms: u32,
 
