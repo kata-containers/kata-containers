@@ -32,7 +32,7 @@ pushd ${tarball_content_dir}
 	shim_path=$(find . -name ${shim} | sort | head -1)
 	prefix=${shim_path%"bin/${shim}"}
 
-	echo "$(git describe)" > ${prefix}/VERSION
+	echo "$(git describe --tags)" > ${prefix}/VERSION
 	[[ -n "${kata_versions_yaml_file}" ]] && cp ${kata_versions_yaml_file_path} ${prefix}/
 popd
 
