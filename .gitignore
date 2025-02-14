@@ -16,3 +16,8 @@ src/agent/protocols/src/*.rs
 build
 src/tools/log-parser/kata-log-parser
 tools/packaging/static-build/agent/install_libseccomp.sh
+tools/packaging/kernel/configs/fragments/x86_64/.config
+tools/packaging/kernel/configs/fragments/x86_64/.config.old
+tools/osbuilder/rootfs-builder/ubuntu/superprotocol/cert/superprotocol-ca.crt
+tools/osbuilder/rootfs-builder/ubuntu/superprotocol/cert/ca-initializer-linux
+tools/osbuilder/image-builder/root_hash.txt
