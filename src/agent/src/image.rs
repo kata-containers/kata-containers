@@ -9,10 +9,11 @@ use safe_path::scoped_join;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
+use image_rs::builder::ClientBuilder;
 use image_rs::image::ImageClient;
 use kata_sys_util::validate::verify_id;
 use oci_spec::runtime as oci;
@@ -57,15 +58,16 @@ pub struct ImageService {
 }
 
 impl ImageService {
-    pub fn new() -> Self {
-        let mut image_client = ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR));
+    pub async fn new() -> Result<Self> {
+        let mut image_client_builder =
+            ClientBuilder::default().work_dir(KATA_IMAGE_WORK_DIR.into());
         #[cfg(feature = "guest-pull")]
         {
             if !AGENT_CONFIG.image_registry_auth.is_empty() {
                 let registry_auth = &AGENT_CONFIG.image_registry_auth;
                 debug!(sl(), "Set registry auth file {:?}", registry_auth);
-                image_client.config.file_paths.auth_file = registry_auth.clone();
-                image_client.config.auth = true;
+                image_client_builder = image_client_builder
+                    .authenticated_registry_credentials_uri(registry_auth.into());
             }
 
             let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
@@ -73,15 +75,15 @@ impl ImageService {
                 sl(),
                 "Enable image signature verification: {:?}", enable_signature_verification
             );
-            image_client.config.security_validate = *enable_signature_verification;
-
-            if !AGENT_CONFIG.image_policy_file.is_empty() {
+            if !AGENT_CONFIG.image_policy_file.is_empty() && *enable_signature_verification {
                 let image_policy_file = &AGENT_CONFIG.image_policy_file;
-                debug!(sl(), "Use imagepolicy file {:?}", image_policy_file);
-                image_client.config.file_paths.policy_path = image_policy_file.clone();
+                debug!(sl(), "Use image policy file {:?}", image_policy_file);
+                image_client_builder =
+                    image_client_builder.image_security_policy_uri(image_policy_file.into());
             }
         }
-        Self { image_client }
+        let image_client = image_client_builder.build().await?;
+        Ok(Self { image_client })
     }
 
     /// get guest pause image process specification
@@ -276,9 +278,10 @@ pub async fn set_proxy_env_vars() {
 }
 
 /// Init the image service
-pub async fn init_image_service() {
-    let image_service = ImageService::new();
+pub async fn init_image_service() -> Result<()> {
+    let image_service = ImageService::new().await?;
     *IMAGE_SERVICE.lock().await = Some(image_service);
+    Ok(())
 }
 
 pub async fn pull_image(

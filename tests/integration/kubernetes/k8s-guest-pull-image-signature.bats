@@ -97,7 +97,7 @@ EOF
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "Security validate failed: Validate image failed: Cannot pull manifest"
+    assert_logs_contain "${node}" kata "${node_start_time}" "image security validation failed"
 }
 
 @test "Create a pod from a signed image, on a 'restricted registry' is successful" {
@@ -123,7 +123,7 @@ EOF
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "Security validate failed: Validate image failed: \[PublicKeyVerifier"
+    assert_logs_contain "${node}" kata "${node_start_time}" "image security validation failed"
 }
 
 @test "Create a pod from an unsigned image, on a 'restricted registry' works if policy files isn't set" {
