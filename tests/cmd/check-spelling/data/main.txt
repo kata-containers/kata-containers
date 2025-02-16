@@ -23,6 +23,7 @@ cryptoprocessor/AB
 DaemonSet/AB
 deliverable/AB
 dev
+devmapper/B
 devicemapper/B
 deploy
 dialer
@@ -98,6 +99,7 @@ runtime/AB
 scalability
 serverless
 signoff/A
+snapshotter/AB
 stalebot/B
 startup
 subdirectory/A
