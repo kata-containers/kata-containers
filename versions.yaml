@@ -191,11 +191,11 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.8"
+    version: "v6.12.13"
     confidential:
       description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.12.8"
+      version: "v6.12.13"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -228,7 +228,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "3df6c412059f29127715c3fdbac9fa41f56cfce4"
+    version: "514c561d933cb11a0f1628621a0b930157af76cd"
     toolchain: "1.80.0"
 
   coco-trustee:
