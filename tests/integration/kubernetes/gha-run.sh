@@ -345,6 +345,54 @@ function run_tests() {
 	popd
 }
 
+# Print a report about tests executed.
+#
+# Crawl over the output files found on each "reports/yyyy-mm-dd-hh:mm:ss"
+# directory.
+#
+function report_tests() {
+	local reports_dir="${kubernetes_dir}/reports"
+	local reports
+	local ok
+	local not_ok
+	local flaky
+	local status
+
+	if [ ! -d "$reports_dir" ]; then
+		info "no reports directory found: $reports_dir"
+		return
+	fi
+
+	reports=$(ls "$reports_dir")
+	for report in $reports; do
+		ok=($(find "${reports_dir}/${report}" -name "ok-*.out"))
+		not_ok=($(find "${reports_dir}/${report}" -name "not_ok-*.out"))
+		flaky=($(find "${reports_dir}/${report}" -name "flaky-*.out"))
+
+		cat <<-EOF
+		SUMMARY ($(basename "$report")):
+		 Pass:  ${#ok[*]}
+		 Fail:  ${#not_ok[*]}
+		 Flaky: ${#flaky[*]}
+		EOF
+
+		echo -e "\nSTATUSES:"
+		for out in "${not_ok[@]}" "${flaky[@]}" "${ok[@]}"; do
+			status=$(basename "$out" | cut -d '-' -f1)
+			bats=$(basename "$out" | cut -d '-' -f2- | sed 's/.out$//')
+			echo " $status $bats"
+		done
+
+		echo -e "\nOUTPUTS:"
+		for out in "${not_ok[@]}" "${flaky[@]}" "${ok[@]}"; do
+			bats=$(basename "$out" | cut -d '-' -f2- | sed 's/.out$//')
+			echo "::group::$bats"
+			cat "$out"
+			echo "::endgroup::"
+		done
+	done
+}
+
 function collect_artifacts() {
 	if [ -z "${start_time:-}" ]; then
 		warn "tests start time is not defined. Cannot gather journal information"
@@ -589,6 +637,7 @@ function main() {
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
 		deploy-snapshotter) deploy_snapshotter ;;
+		report-tests) report_tests ;;
 		run-tests) run_tests ;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
