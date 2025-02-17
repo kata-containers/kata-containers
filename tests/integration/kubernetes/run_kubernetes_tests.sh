@@ -26,6 +26,9 @@ K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
+# Setting greater than zero enables the retrying of failed tests. The value
+# of that variable is used for waiting between the executions.
+K8S_TEST_RETRY="${K8S_TEST_RETRY:-0}"
 
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
@@ -140,9 +143,23 @@ do
 	info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
 	# Output file will be prefixed with either "ok" or "not_ok" in case of
-	# success or fail, respectively.
+	# success or fail, respectively. If retry is enable and failed tests
+	# pass on 2nd try then it will be prefixed with "flaky".
 	out_file="${report_dir}/${K8S_TEST_ENTRY}.out"
 	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "$out_file"; then
+		# This will retry only the individual failed tests from the suite. It
+		# needs to filter the failed ones, concatenate their names with "|"
+		# (OR regexp) to finally execute bats again.
+		#
+		if [ "${K8S_TEST_RETRY}" -gt 0 ]; then
+			failed="$(grep "^not ok [0-9]\+" "$out_file" | sed -e 's/^not ok [0-9]\+ //g' | tr '\n' '|' | sed 's/|$//')"
+			sleep "${K8S_TEST_RETRY}"
+			info "Retrying failed tests from ${K8S_TEST_ENTRY}"
+			if bats --show-output-of-passing-tests -f "$failed" "${K8S_TEST_ENTRY}" | tee -a "$out_file"; then
+				mv "${out_file}" "$(dirname "${out_file}")/flaky-$(basename "${out_file}")"
+				continue
+			fi
+		fi
 		tests_fail+=("${K8S_TEST_ENTRY}")
 		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
 		[ "${K8S_TEST_FAIL_FAST}" = "yes" ] && break
