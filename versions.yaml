@@ -117,37 +117,37 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
       ppc64le:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "jammy" # 22.04 lTS
+        version: "jammy"  # 22.04 lTS
         confidential:
           name: "ubuntu"
-          version: "oracular" # 24.10
+          version: "oracular"  # 24.10
         mariner:
           name: "cbl-mariner"
           version: "3.0"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
 
   initrd:
     description: |
@@ -160,7 +160,7 @@ assets:
         version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
           version: "jammy"
@@ -168,34 +168,34 @@ assets:
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy" # 22.04 LTS
+        version: "jammy"  # 22.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
       x86_64:
         name: "alpine"
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "focal" # 20.04 LTS
+          version: "focal"  # 20.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy" # 22.04 LTS
+          version: "jammy"  # 22.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.8"
+    version: "v6.12.13"
     confidential:
       description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.12.8"
+      version: "v6.12.13"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -228,7 +228,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "3df6c412059f29127715c3fdbac9fa41f56cfce4"
+    version: "514c561d933cb11a0f1628621a0b930157af76cd"
     toolchain: "1.80.0"
 
   coco-trustee:
@@ -259,6 +259,8 @@ externals:
     version: "v1.6.8"
     lts: "v1.6"
     active: "v1.7"
+    # add containerd 2.0.0 for sandbox api test
+    latest: "v2.0"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
@@ -339,7 +341,7 @@ externals:
     url: "https://github.com/tianocore/edk2"
     x86_64:
       description: "Vanilla firmware build"
-      version: "edk2-stable202402"
+      version: "edk2-stable202411"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
 
@@ -364,22 +366,22 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.22.2"
+    version: "1.22.11"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.22.2"
+      newest-version: "1.22.11"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.75.0"
+    version: "1.80.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.75.0"
+      newest-version: "1.80.0"
 
   golangci-lint:
     description: "golangci-lint"

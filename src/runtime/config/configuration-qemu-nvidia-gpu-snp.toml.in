@@ -70,7 +70,7 @@ valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS@"
+kernel_params = "@KERNELSNPPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
@@ -542,7 +542,7 @@ kernel_modules=[]
 
 # Agent connection dialing timeout value in seconds
 # (default: 90)
-dial_timeout = @DEFAULTTIMEOUT_NV@
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -617,7 +617,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_NV@
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
@@ -676,7 +676,7 @@ experimental=@DEFAULTEXPFEATURES@
 # Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
-create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+create_container_timeout = @DEFAULTTIMEOUT_NV@
 
 # Base directory of directly attachable network config.
 # Network devices for VM-based containers are allowed to be placed in the

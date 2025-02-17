@@ -1362,7 +1362,7 @@ func (clh *cloudHypervisor) launchClh() error {
 	}
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
-	if clh.config.Debug {
+	if clh.config.Debug && clh.config.HypervisorLoglevel > 0 {
 		// Cloud hypervisor log levels
 		// 'v' occurrences increase the level
 		//0 =>  Warn
@@ -1382,7 +1382,8 @@ func (clh *cloudHypervisor) launchClh() error {
 		// output. For further details, see the discussion on:
 		//
 		//   https://github.com/kata-containers/kata-containers/pull/2751
-		args = append(args, "-v")
+		verbosityString := fmt.Sprintf("-%s", strings.Repeat("v", int(clh.config.HypervisorLoglevel)))
+		args = append(args, verbosityString)
 	}
 
 	// Enable the `seccomp` feature from Cloud Hypervisor by default

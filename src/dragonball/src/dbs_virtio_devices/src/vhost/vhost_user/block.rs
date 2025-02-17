@@ -165,7 +165,7 @@ where
                 if queue_idx < self.intr_evts.len() {
                     if let Err(e) = self.intr_evts[queue_idx].read() {
                         error!("{}: failed to read queue eventfd, {:?}", self.id, e);
-                    } else if let Err(e) = self.config.queues[queue_idx as usize].notify() {
+                    } else if let Err(e) = self.config.queues[queue_idx].notify() {
                         error!("{}: failed to notify guest, {:?}", self.id, e);
                     }
                 } else {
@@ -249,7 +249,7 @@ impl VhostUserBlockDevice {
             master.set_protocol_features(protocol_featuers)?;
 
             let config_len = mem::size_of::<VirtioBlockConfig>();
-            let config_space: Vec<u8> = vec![0u8; config_len as usize];
+            let config_space: Vec<u8> = vec![0u8; config_len];
 
             let (_, mut config_space) = master
                 .get_config(

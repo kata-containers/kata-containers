@@ -570,6 +570,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		Msize9p:               defaultMsize9p,
 		GuestHookPath:         defaultGuestHookPath,
 		VhostUserStorePath:    defaultVhostUserStorePath,
+		HypervisorLoglevel:    defaultHypervisorLoglevel,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,

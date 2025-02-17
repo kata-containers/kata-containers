@@ -79,8 +79,8 @@ list_issues_for_pr()
     #     "<git-commit> <git-commit-msg>"
     #
     local issues=$(echo "$commits" |\
-        egrep -v "^( |	)" |\
-        egrep -i "fixes:* *(#*[0-9][0-9]*)" |\
+        grep -v -E "^( |	)" |\
+        grep -i -E "fixes:* *(#*[0-9][0-9]*)" |\
         tr ' ' '\n' |\
         grep "[0-9][0-9]*" |\
         sed 's/[.,\#]//g' |\

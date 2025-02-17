@@ -19,7 +19,7 @@ pub trait SystemdInterface {
     fn kill_unit(&self) -> Result<()>;
     fn freeze_unit(&self) -> Result<()>;
     fn thaw_unit(&self) -> Result<()>;
-    fn add_process(&self, pid: i32) -> Result<()>;
+    fn add_process(&self, pid: i32, subcgroup: &str) -> Result<()>;
     fn get_version(&self) -> Result<String>;
     fn unit_exists(&self) -> Result<bool>;
 }
@@ -151,11 +151,10 @@ impl SystemdInterface for DBusClient {
         }
     }
 
-    fn add_process(&self, pid: i32) -> Result<()> {
+    fn add_process(&self, pid: i32, subcgroup: &str) -> Result<()> {
         let proxy = self.build_proxy()?;
-
         proxy
-            .attach_processes_to_unit(&self.unit_name, "/", &[pid as u32])
+            .attach_processes_to_unit(&self.unit_name, subcgroup, &[pid as u32])
             .context(format!(
                 "failed to add process into unit {}",
                 self.unit_name

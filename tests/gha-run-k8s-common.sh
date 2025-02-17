@@ -272,7 +272,7 @@ function create_cluster_kcli() {
 		-P ctlplanes="${CLUSTER_CONTROL_NODES:-1}" \
 		-P workers="${CLUSTER_WORKERS:-1}" \
 		-P network="${LIBVIRT_NETWORK:-default}" \
-		-P image="${CLUSTER_IMAGE:-ubuntu2004}" \
+		-P image="${CLUSTER_IMAGE:-ubuntu2204}" \
 		-P sdn=flannel \
 		-P nfs=false \
 		-P disk_size="${CLUSTER_DISK_SIZE:-20}" \

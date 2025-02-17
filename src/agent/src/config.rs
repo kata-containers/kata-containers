@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-use crate::rpc;
+
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use serde::Deserialize;
 use std::env;
@@ -23,9 +23,11 @@ const SERVER_ADDR_OPTION: &str = "agent.server_addr";
 const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const CDH_API_TIMOUT_OPTION: &str = "agent.cdh_api_timeout";
+const CDI_TIMEOUT_OPTION: &str = "agent.cdi_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
+const CGROUP_NO_V1: &str = "cgroup_no_v1";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
@@ -69,6 +71,7 @@ const MEM_AGENT_COMPACT_FORCE_TIMES: &str = "agent.mem_agent_compact_force_times
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CDH_API_TIMEOUT: time::Duration = time::Duration::from_secs(50);
+const DEFAULT_CDI_TIMEOUT: time::Duration = time::Duration::from_secs(100);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 
@@ -131,14 +134,15 @@ pub struct AgentConfig {
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
     pub cdh_api_timeout: time::Duration,
+    pub cdi_timeout: time::Duration,
     pub debug_console_vport: i32,
     pub log_vport: i32,
     pub container_pipe_size: i32,
     pub server_addr: String,
     pub passfd_listener_port: i32,
+    pub cgroup_no_v1: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
-    pub supports_seccomp: bool,
     pub https_proxy: String,
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
@@ -168,6 +172,7 @@ pub struct AgentConfigBuilder {
     pub log_level: Option<String>,
     pub hotplug_timeout: Option<time::Duration>,
     pub cdh_api_timeout: Option<time::Duration>,
+    pub cdi_timeout: Option<time::Duration>,
     pub debug_console_vport: Option<i32>,
     pub log_vport: Option<i32>,
     pub container_pipe_size: Option<i32>,
@@ -250,7 +255,7 @@ macro_rules! parse_cmdline_param {
     ($param:ident, $key:ident, $field:expr, $func:ident, $guard:expr) => {
         if $param.starts_with(format!("{}=", $key).as_str()) {
             let val = $func($param)?;
-            if $guard(val) {
+            if $guard(&val) {
                 $field = val;
             }
             continue;
@@ -266,14 +271,15 @@ impl Default for AgentConfig {
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             cdh_api_timeout: DEFAULT_CDH_API_TIMEOUT,
+            cdi_timeout: DEFAULT_CDI_TIMEOUT,
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, DEFAULT_AGENT_VSOCK_PORT),
             passfd_listener_port: 0,
+            cgroup_no_v1: String::from(""),
             unified_cgroup_hierarchy: false,
             tracing: false,
-            supports_seccomp: rpc::have_seccomp(),
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
@@ -311,6 +317,7 @@ impl FromStr for AgentConfig {
         );
         config_override!(agent_config_builder, agent_config, hotplug_timeout);
         config_override!(agent_config_builder, agent_config, cdh_api_timeout);
+        config_override!(agent_config_builder, agent_config, cdi_timeout);
         config_override!(agent_config_builder, agent_config, debug_console_vport);
         config_override!(agent_config_builder, agent_config, log_vport);
         config_override!(agent_config_builder, agent_config, container_pipe_size);
@@ -474,7 +481,7 @@ impl AgentConfig {
                 HOTPLUG_TIMOUT_OPTION,
                 config.hotplug_timeout,
                 get_timeout,
-                |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
+                |hotplug_timeout: &time::Duration| hotplug_timeout.as_secs() > 0
             );
 
             // ensure the timeout is a positive value
@@ -483,7 +490,16 @@ impl AgentConfig {
                 CDH_API_TIMOUT_OPTION,
                 config.cdh_api_timeout,
                 get_timeout,
-                |cdh_api_timeout: time::Duration| cdh_api_timeout.as_secs() > 0
+                |cdh_api_timeout: &time::Duration| cdh_api_timeout.as_secs() > 0
+            );
+
+            // ensure the timeout is a positive value
+            parse_cmdline_param!(
+                param,
+                CDI_TIMEOUT_OPTION,
+                config.cdi_timeout,
+                get_timeout,
+                |cdi_timeout: &time::Duration| cdi_timeout.as_secs() > 0
             );
 
             // vsock port should be positive values
@@ -492,27 +508,34 @@ impl AgentConfig {
                 DEBUG_CONSOLE_VPORT_OPTION,
                 config.debug_console_vport,
                 get_number_value,
-                |port| port > 0
+                |port: &i32| *port > 0
             );
             parse_cmdline_param!(
                 param,
                 LOG_VPORT_OPTION,
                 config.log_vport,
                 get_number_value,
-                |port| port > 0
+                |port: &i32| *port > 0
             );
             parse_cmdline_param!(
                 param,
                 PASSFD_LISTENER_PORT,
                 config.passfd_listener_port,
                 get_number_value,
-                |port| port > 0
+                |port: &i32| *port > 0
             );
             parse_cmdline_param!(
                 param,
                 CONTAINER_PIPE_SIZE_OPTION,
                 config.container_pipe_size,
                 get_container_pipe_size
+            );
+            parse_cmdline_param!(
+                param,
+                CGROUP_NO_V1,
+                config.cgroup_no_v1,
+                get_string_value,
+                |no_v1| no_v1 == "all"
             );
             parse_cmdline_param!(
                 param,
@@ -712,7 +735,7 @@ where
 
     fields[1]
         .parse::<T>()
-        .map_err(|e| anyhow!("parse from {} failed: {:?}", &fields[1], e))
+        .map_err(|e| anyhow!("parse from {} failed: {:?}", fields[1], e))
 }
 
 // Map logrus (https://godoc.org/github.com/sirupsen/logrus)
@@ -755,7 +778,10 @@ fn get_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
     ensure!(fields.len() == 2, ERR_INVALID_TIMEOUT);
     ensure!(
-        matches!(fields[0], HOTPLUG_TIMOUT_OPTION | CDH_API_TIMOUT_OPTION),
+        matches!(
+            fields[0],
+            HOTPLUG_TIMOUT_OPTION | CDH_API_TIMOUT_OPTION | CDI_TIMEOUT_OPTION
+        ),
         ERR_INVALID_TIMEOUT_KEY
     );
 
@@ -898,6 +924,7 @@ mod tests {
             hotplug_timeout: time::Duration,
             container_pipe_size: i32,
             server_addr: &'a str,
+            cgroup_no_v1: &'a str,
             unified_cgroup_hierarchy: bool,
             tracing: bool,
             https_proxy: &'a str,
@@ -927,6 +954,7 @@ mod tests {
                     hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
                     container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
                     server_addr: TEST_SERVER_ADDR,
+                    cgroup_no_v1: "",
                     unified_cgroup_hierarchy: false,
                     tracing: false,
                     https_proxy: "",
@@ -1071,6 +1099,22 @@ mod tests {
                 contents: "agent.devmode agent.debug_console",
                 debug_console: true,
                 dev_mode: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "cgroup_no_v1=1",
+                cgroup_no_v1: "",
+                ..Default::default()
+            },
+            TestData {
+                contents: "cgroup_no_v1=all",
+                cgroup_no_v1: "all",
+                ..Default::default()
+            },
+            TestData {
+                contents: "cgroup_no_v1=0 systemd.unified_cgroup_hierarchy=1",
+                cgroup_no_v1: "",
+                unified_cgroup_hierarchy: true,
                 ..Default::default()
             },
             TestData {
@@ -1508,6 +1552,7 @@ mod tests {
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
+            assert_eq!(d.cgroup_no_v1, config.cgroup_no_v1, "{}", msg);
             assert_eq!(
                 d.unified_cgroup_hierarchy, config.unified_cgroup_hierarchy,
                 "{}",
@@ -1677,6 +1722,7 @@ Caused by:
     )))]
     #[case("agent.chd_api_timeout=1", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
     #[case("agent.cdh_api_timeout=600", Ok(time::Duration::from_secs(600)))]
+    #[case("agent.cdi_timeout=320", Ok(time::Duration::from_secs(320)))]
     fn test_timeout(#[case] param: &str, #[case] expected: Result<time::Duration>) {
         let result = get_timeout(param);
         let msg = format!("expected: {:?}, result: {:?}", expected, result);

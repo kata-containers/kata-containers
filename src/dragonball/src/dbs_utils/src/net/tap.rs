@@ -431,6 +431,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Issue #10821 - IO Safety violation: owned file descriptor already closed"]
     fn test_set_options() {
         // This line will fail to provide an initialized FD if the test is not run as root.
         let tap = Tap::new().unwrap();

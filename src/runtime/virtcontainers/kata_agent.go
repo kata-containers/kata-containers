@@ -108,9 +108,10 @@ var (
 	kataVirtioFSDevType              = "virtio-fs"
 	kataOverlayDevType               = "overlayfs"
 	kataWatchableBindDevType         = "watchable-bind"
-	kataVfioPciDevType               = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
-	kataVfioPciGuestKernelDevType    = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
-	kataVfioApDevType                = "vfio-ap"
+	kataVfioPciDevType               = "vfio-pci"     // VFIO PCI device to used as VFIO in the container
+	kataVfioPciGuestKernelDevType    = "vfio-pci-gk"  // VFIO PCI device for consumption by the guest kernel
+	kataVfioApDevType                = "vfio-ap"      // VFIO AP device for hot-plugging
+	kataVfioApColdDevType            = "vfio-ap-cold" // VFIO AP device for cold-plugging
 	sharedDir9pOptions               = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions         = []string{}
 	sharedDirVirtioFSDaxOptions      = "dax"
@@ -1211,6 +1212,15 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	for i, dev := range devList {
 		if dev.Type == config.VFIOAPDeviceMediatedType {
 			kataDevice.Type = kataVfioApDevType
+			coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+			if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
+				// A new device type is required for cold-plugging VFIO-AP.
+				// The VM guest should handle this differently from hot-plugging VFIO-AP
+				// (e.g., wait_for_ap_device).
+				// Note that a device already exists for cold-plugging VFIO-AP
+				// at the time the device type is checked.
+				kataDevice.Type = kataVfioApColdDevType
+			}
 			kataDevice.Options = dev.APDevices
 		} else {
 

@@ -152,7 +152,7 @@ impl Ord for IoRange {
 
 impl PartialOrd for IoRange {
     fn partial_cmp(&self, other: &IoRange) -> Option<Ordering> {
-        self.base.partial_cmp(&other.base)
+        Some(self.cmp(other))
     }
 }
 

@@ -14,7 +14,11 @@ use async_trait::async_trait;
 use common::message::{Action, Message};
 use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
-use common::{types::SandboxConfig, ContainerManager, Sandbox, SandboxNetworkEnv};
+use common::{
+    types::{SandboxConfig, SandboxExitInfo, SandboxStatus},
+    ContainerManager, Sandbox, SandboxNetworkEnv,
+};
+
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
 #[cfg(not(target_arch = "s390x"))]
@@ -38,6 +42,7 @@ use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, Networ
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::sync::Arc;
+use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
 
@@ -51,7 +56,7 @@ pub struct SandboxRestoreArgs {
     pub sender: Sender<Message>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Display)]
 pub enum SandboxState {
     Init,
     Running,
@@ -483,6 +488,28 @@ impl Sandbox for VirtSandbox {
         self.monitor.start(id, self.agent.clone());
         self.save().await.context("save state")?;
         Ok(())
+    }
+
+    async fn status(&self) -> Result<SandboxStatus> {
+        info!(sl!(), "get sandbox status");
+        let inner = self.inner.read().await;
+        let state = inner.state.to_string();
+
+        Ok(SandboxStatus {
+            sandbox_id: self.sid.clone(),
+            pid: std::process::id(),
+            state,
+            ..Default::default()
+        })
+    }
+
+    async fn wait(&self) -> Result<SandboxExitInfo> {
+        info!(sl!(), "wait sandbox");
+        let exit_code = self.hypervisor.wait_vm().await.context("wait vm")?;
+        Ok(SandboxExitInfo {
+            exit_status: exit_code as u32,
+            exited_at: Some(std::time::SystemTime::now()),
+        })
     }
 
     async fn stop(&self) -> Result<()> {

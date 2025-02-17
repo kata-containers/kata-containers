@@ -43,9 +43,19 @@ if [[ "${AGENT_POLICY}" == "yes" ]]; then
 	agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
 fi
 
+INSIDE_CONTAINER=${INSIDE_CONTAINER:-""}
+IMAGE_REGISTRY=${IMAGE_REGISTRY:-""}
+http_proxy=${http_proxy:-""}
+https_proxy=${https_proxy:-""}
+AGENT_POLICY_FILE=${AGENT_POLICY_FILE:-""}
+GRACEFUL_EXIT=${GRACEFUL_EXIT:-""}
+USE_DOCKER=${USE_DOCKER:-""}
+USE_PODMAN=${USE_PODMAN:-""}
+EXTRA_PKGS=${EXTRA_PKGS:-""}
+
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
 nvidia_rootfs="${script_dir}/nvidia/nvidia_rootfs.sh"
-source "$nvidia_rootfs"
+[ "${ARCH}" == "x86_64" ] || [ "${ARCH}" == "aarch64" ] && source "$nvidia_rootfs"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}

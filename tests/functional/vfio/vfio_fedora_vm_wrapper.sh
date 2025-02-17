@@ -76,7 +76,7 @@ create_user_data() {
 	dnf_proxy=""
 	service_proxy=""
 	docker_user_proxy="{}"
-	environment=$(env | egrep "ghprb|WORKSPACE|KATA|GIT|JENKINS|_PROXY|_proxy" | \
+	environment=$(env | grep -E "ghprb|WORKSPACE|KATA|GIT|JENKINS|_PROXY|_proxy" | \
 	                    sed -e "s/'/'\"'\"'/g" \
 	                        -e "s/\(^[[:alnum:]_]\+\)=/\1='/" \
 	                        -e "s/$/'/" \
@@ -210,7 +210,7 @@ create_config_iso() {
 pull_fedora_cloud_image() {
 	fedora_img="$1"
 	fedora_version=38
-	# Add a version to the image cache, otherwise the tests are going to 
+	# Add a version to the image cache, otherwise the tests are going to
 	# use always the same image without rebuilding it, regardless the version
 	# set in fedora_version
 	fedora_img_cache="${fedora_img}.cache.${fedora_version}"

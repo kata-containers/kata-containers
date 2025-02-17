@@ -320,7 +320,7 @@ pub struct Vcpu {
 type VcpuCell = Cell<Option<*const Vcpu>>;
 
 impl Vcpu {
-    thread_local!(static TLS_VCPU_PTR: VcpuCell = Cell::new(None));
+    thread_local!(static TLS_VCPU_PTR: VcpuCell = const { Cell::new(None) });
 
     /// Associates `self` with the current thread.
     ///

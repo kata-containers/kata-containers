@@ -836,6 +836,7 @@ fn mount_from(
         if !src.is_dir() {
             let _ = OpenOptions::new()
                 .create(true)
+                .truncate(true)
                 .write(true)
                 .open(&dest)
                 .map_err(|e| {

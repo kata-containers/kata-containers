@@ -198,7 +198,7 @@ it stores. When messages are suppressed, it is noted in the logs. This can be ch
 for by looking for those notifications, such as:
 
 ```bash
-$ sudo journalctl --since today | fgrep Suppressed
+$ sudo journalctl --since today | grep -F Suppressed
 Jun 29 14:51:17 mymachine systemd-journald[346]: Suppressed 4150 messages from /system.slice/docker.service
 ```
 
@@ -268,7 +268,7 @@ to install `libseccomp` for the agent.
 
 ```bash
 $ mkdir -p ${seccomp_install_path} ${gperf_install_path}
-$ pushd kata-containers/ci 
+$ pushd kata-containers/ci
 $ script -fec 'sudo -E ./install_libseccomp.sh ${seccomp_install_path} ${gperf_install_path}"'
 $ export LIBSECCOMP_LIB_PATH="${seccomp_install_path}/lib"
 $ popd

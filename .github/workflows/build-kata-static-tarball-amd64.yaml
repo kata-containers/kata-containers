@@ -34,6 +34,7 @@ jobs:
         asset:
           - agent
           - agent-ctl
+          - busybox
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - coco-guest-components
@@ -136,6 +137,15 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+      - name: store-extratarballs-artifact ${{ matrix.asset }}
+        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset }}-headers${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}-headers.tar.xz
+          retention-days: 15
+          if-no-files-found: error
+
   build-asset-rootfs:
     runs-on: ubuntu-22.04
     needs: build-asset
@@ -147,6 +157,8 @@ jobs:
           - rootfs-image-mariner
           - rootfs-initrd
           - rootfs-initrd-confidential
+          - rootfs-nvidia-gpu-initrd
+          - rootfs-nvidia-gpu-confidential-initrd
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -207,9 +219,24 @@ jobs:
     strategy:
       matrix:
         asset:
-          - agent
+          - busybox
           - coco-guest-components
+          - kernel-nvidia-gpu-headers
+          - kernel-nvidia-gpu-confidential-headers
           - pause-image
+    steps:
+      - uses: geekyeggo/delete-artifact@v5
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
+  remove-rootfs-binary-artifacts-for-release:
+    runs-on: ubuntu-22.04
+    needs: build-asset-rootfs
+    strategy:
+      matrix:
+        asset:
+          - agent
     steps:
       - uses: geekyeggo/delete-artifact@v5
         if: ${{ inputs.stage == 'release' }}
@@ -218,7 +245,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: ubuntu-22.04
-    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts, remove-rootfs-binary-artifacts-for-release]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}

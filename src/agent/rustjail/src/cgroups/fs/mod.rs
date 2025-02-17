@@ -1170,6 +1170,23 @@ impl Manager {
         })
     }
 
+    pub fn subcgroup(&self) -> &str {
+        // Check if we're in a Docker-in-Docker setup by verifying:
+        // 1. We're using cgroups v2 (which restricts direct process control)
+        // 2. An "init" subdirectory exists (used by DinD for process delegation)
+        let is_dind = cgroups::hierarchies::is_cgroup2_unified_mode()
+            && cgroups::hierarchies::auto()
+                .root()
+                .join(&self.cpath)
+                .join("init")
+                .exists();
+        if is_dind {
+            "/init/"
+        } else {
+            "/"
+        }
+    }
+
     fn get_paths_and_mounts(
         cpath: &str,
     ) -> Result<(HashMap<String, String>, HashMap<String, String>)> {

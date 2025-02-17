@@ -356,9 +356,9 @@ install_image() {
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -388,7 +388,11 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 	export PULL_TYPE=default
 	install_image "confidential"
 }
@@ -427,9 +431,9 @@ install_initrd() {
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -466,7 +470,11 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 	export PULL_TYPE=default
 	install_initrd "confidential"
 }
@@ -474,7 +482,10 @@ install_initrd_confidential() {
 # For all nvidia_gpu targets we can customize the stack that is enbled
 # in the VM by setting the NVIDIA_GPU_STACK= environment variable
 #
-# latest | lts -> use the latest and greatest driver or lts release
+# latest | lts | version
+#              -> use the latest and greatest driver,
+#                 lts release or e.g. version=550.127.1
+# driver       -> enable open or closed drivers
 # debug        -> enable debugging support
 # compute      -> enable the compute GPU stack, includes utility
 # graphics     -> enable the graphics GPU stack, includes compute
@@ -490,7 +501,6 @@ install_initrd_confidential() {
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
 	export EXTRA_PKGS="apt"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu"
@@ -499,7 +509,6 @@ install_image_nvidia_gpu() {
 # Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
 	export EXTRA_PKGS="apt"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_initrd "nvidia-gpu"
@@ -508,7 +517,6 @@ install_initrd_nvidia_gpu() {
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
 	export EXTRA_PKGS="apt"
 	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
@@ -518,7 +526,6 @@ install_image_nvidia_gpu_confidential() {
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
 	export EXTRA_PKGS="apt"
 	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
@@ -610,7 +617,11 @@ install_kernel() {
 }
 
 install_kernel_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 
 	install_kernel_helper \
 		"assets.kernel.confidential" \
@@ -850,6 +861,9 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 	export MEASURED_ROOTFS
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	fi
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }

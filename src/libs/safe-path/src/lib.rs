@@ -49,9 +49,9 @@
 //!
 //! The work is inspired by:
 //! - [`filepath-securejoin`](https://github.com/cyphar/filepath-securejoin): secure_join() written
-//! in Go.
+//!   in Go.
 //! - [CVE-2021-30465](https://github.com/advisories/GHSA-c3xm-pvg7-gh7r): symlink related TOCTOU
-//! flaw in `runC`.
+//!   flaw in `runC`.
 
 #![deny(missing_docs)]
 

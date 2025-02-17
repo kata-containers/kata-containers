@@ -85,7 +85,6 @@ mod tests {
     #[test]
     fn test_i8042_valid_ops() {
         let reset_evt = EventFdTrigger::new(EventFd::new(libc::EFD_NONBLOCK).unwrap());
-        let metrics = Arc::new(I8042DeviceMetrics::default());
         let mut i8042 = I8042Device::new(reset_evt.try_clone().unwrap());
 
         let mut v = [0x00u8; 1];
@@ -106,7 +105,6 @@ mod tests {
     #[test]
     fn test_i8042_invalid_ops() {
         let reset_evt = EventFdTrigger::new(EventFd::new(libc::EFD_NONBLOCK).unwrap());
-        let metrics = Arc::new(I8042DeviceMetrics::default());
         let mut i8042 = I8042Device::new(reset_evt.try_clone().unwrap());
 
         let mut v = [0x00u8; 2];
@@ -125,9 +123,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Issue #10821 - IO Safety violation: owned file descriptor already closed"]
     fn test_i8042_reset_err() {
         let reset_evt = EventFdTrigger::new(unsafe { EventFd::from_raw_fd(i32::MAX) });
-        let metrics = Arc::new(I8042DeviceMetrics::default());
         let mut i8042 = I8042Device::new(reset_evt);
         i8042.pio_write(
             PioAddress(0),

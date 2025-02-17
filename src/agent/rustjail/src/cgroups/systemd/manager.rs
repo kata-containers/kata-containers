@@ -41,7 +41,8 @@ pub struct Manager {
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         if self.dbus_client.unit_exists()? {
-            self.dbus_client.add_process(pid)?;
+            let subcgroup = self.fs_manager.subcgroup();
+            self.dbus_client.add_process(pid, subcgroup)?;
         } else {
             self.dbus_client.start_unit(
                 (pid as u32).try_into().unwrap(),

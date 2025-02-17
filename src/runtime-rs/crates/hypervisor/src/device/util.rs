@@ -138,7 +138,7 @@ mod tests {
         assert!(do_decrease_count(ref_count_3).unwrap());
 
         // Third, ref_count is MAX
-        let mut max_count = std::u64::MAX;
+        let mut max_count = u64::MAX;
         let ref_count_max: &mut u64 = &mut max_count;
         assert!(do_increase_count(ref_count_max).is_err());
     }

@@ -229,6 +229,8 @@ fn real_main() -> Result<(), std::io::Error> {
         false,
     )?;
 
+    codegen("src", &["protos/cri-api/api.proto"], false)?;
+
     // There is a message named 'Box' in oci.proto
     // so there is a struct named 'Box', we should replace Box<Self> to ::std::boxed::Box<Self>
     // to avoid the conflict.

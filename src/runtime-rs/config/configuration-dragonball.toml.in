@@ -204,6 +204,11 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 #    Metadata, data, and pathname lookup are cached in guest and never expire.
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
+# Specifies cache-related options for block devices.
+# Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
+# Default false
+#block_device_cache_direct = true
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.
