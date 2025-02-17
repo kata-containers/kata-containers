@@ -130,8 +130,6 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
 
-const CDI_TIMEOUT_LIMIT: u64 = 100;
-
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
     slog_scope::logger()
@@ -234,7 +232,7 @@ impl AgentService {
         // or other entities for a specifc device.
         // In Kata we only consider the directory "/var/run/cdi", "/etc" may be
         // readonly
-        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", CDI_TIMEOUT_LIMIT).await?;
+        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
 
         cdh_handler(&mut oci).await?;
 
