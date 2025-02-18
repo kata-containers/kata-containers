@@ -1788,6 +1788,9 @@ func (b PCIeRootPortDevice) Valid() bool {
 	if b.ID == "" {
 		return false
 	}
+	if b.Bus == "" {
+		return false
+	}
 	return true
 }
 

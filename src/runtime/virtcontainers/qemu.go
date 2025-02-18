@@ -825,7 +825,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeRootPort {
 			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
 	}
 
@@ -836,12 +836,12 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeSwitchPort {
 			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
 		}
-		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
 	}
 	// If both Root Port and Switch Port are not enabled, check if QemuVirt need add pcie root port.
 	if machineType == QemuVirt {
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
 	}
 	return nil
 }
@@ -2646,9 +2646,6 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, bus string, number 
 	// hence ignore all other machines
 	if machineType != QemuQ35 && machineType != QemuVirt {
 		return devices
-	}
-	if bus == "" {
-		bus = defaultBridgeBus
 	}
 
 	// Using an own ID for the root port, so we do not clash with already
