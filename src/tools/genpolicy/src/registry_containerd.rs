@@ -15,7 +15,7 @@ use containerd_client::{services::v1::GetImageRequest, with_namespace};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use k8s_cri::v1::{image_service_client::ImageServiceClient, AuthConfig};
 use log::{debug, info, warn};
-use oci_distribution::Reference;
+use oci_client::Reference;
 use std::{collections::HashMap, convert::TryFrom, io::Seek, io::Write, path::Path};
 use tokio::{
     io,
