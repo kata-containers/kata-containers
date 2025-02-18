@@ -202,7 +202,7 @@ function get_nodes_and_pods_info() {
 }
 
 function deploy_k0s() {
-	curl -sSLf https://get.k0s.sh | sudo sh
+	curl -sSLf https://get.k0s.sh | sudo K0S_VERSION=v1.31.5+k0s.0 sh
 
 	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
 
@@ -321,7 +321,7 @@ function _get_k0s_kubernetes_version_for_crio() {
 	#
 	# The CRI-O repo for such version of Kubernetes expects something like:
 	# 1.27
-	k0s_version=$(curl -sSLf "https://docs.k0sproject.io/stable.txt")
+	k0s_version="v1.31.5+k0s.0"
 
 	# Remove everything after the second '.'
 	crio_version=${k0s_version%\.*+*}
