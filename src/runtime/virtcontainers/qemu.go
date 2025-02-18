@@ -733,6 +733,20 @@ func (q *qemu) checkBpfEnabled() {
 	}
 }
 
+// The default OVMF MMIO aperture is too small for some PCIe devices with huge
+// BARs so we need to increase it. memSize64bit is in bytes, convert to MB, OVMF
+// expects MB as a string
+func ovmfIOMMUAperture(qemuConfig *govmmQemu.Config, hypervisorConfig *HypervisorConfig, memSize64bit uint64) {
+	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
+		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
+		fwCfg := govmmQemu.FwCfg{
+			Name: "opt/ovmf/X-PciMmio64Mb",
+			Str:  pciMmio64Mb,
+		}
+		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
+	}
+}
+
 // If a user uses 8 GPUs with 4 devices in each IOMMU Group that means we need
 // to hotplug 32 devices. We do not have enough PCIe root bus slots to
 // accomplish this task. Kata will use already some slots for vfio-xxxx-pci
@@ -757,17 +771,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	// Deduce the right values for mem-reserve and pref-64-reserve memory regions
 	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory()
 
-	// The default OVMF MMIO aperture is too small for some PCIe devices
-	// with huge BARs so we need to increase it.
-	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
-	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
-		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
-		fwCfg := govmmQemu.FwCfg{
-			Name: "opt/ovmf/X-PciMmio64Mb",
-			Str:  pciMmio64Mb,
-		}
-		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
-	}
+	ovmfIOMMUAperture(qemuConfig, hypervisorConfig, memSize64bit)
 
 	// Get the number of hot(cold)-pluggable ports needed from the provided
 	// VFIO devices
@@ -824,6 +828,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
 	}
+
 	if vfioOnSwitchPort {
 		if numOfPluggablePorts < numPCIeSwitchPorts {
 			numOfPluggablePorts = numPCIeSwitchPorts
