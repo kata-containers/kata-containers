@@ -150,7 +150,7 @@ type qemuArch interface {
 	appendPCIeExpanderBus(devices []govmmQemu.Device, nodeID uint32, bus string, busNr uint32) []govmmQemu.Device
 
 	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
-	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
+	appendPCIeRootPortDevice(devices []govmmQemu.Device, bus string, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
 	// appendPCIeSwitch appends a ioh3420 device to a pcie-root-port
 	appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
@@ -839,8 +839,8 @@ func (q *qemuArchBase) appendPCIeExpanderBus(devices []govmmQemu.Device, nodeID 
 }
 
 // appendPCIeRootPortDevice appends to devices the given pcie-root-port
-func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
-	return genericAppendPCIeRootPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
+func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, bus string, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+	return genericAppendPCIeRootPort(devices, bus, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
 }
 
 // appendPCIeSwitchPortDevice appends a PCIe Switch with <number> ports

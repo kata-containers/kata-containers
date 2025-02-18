@@ -2589,32 +2589,27 @@ func genericAppendPCIeExpanderBus(devices []govmmQemu.Device, nodeId uint32, bus
 }
 
 // genericAppendPCIeRootPort appends to devices the given pcie-root-port
-func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
-	var (
-		bus           string
-		chassis       string
-		multiFunction bool
-		addr          string
-	)
-	switch machineType {
-	case QemuQ35, QemuVirt:
-		bus = defaultBridgeBus
-		chassis = "0"
-		multiFunction = false
-		addr = "0"
-	default:
+func genericAppendPCIeRootPort(devices []govmmQemu.Device, bus string, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+	if machineType != QemuQ35 && machineType != QemuVirt {
 		return devices
+	}
+
+	chassis := "0"
+	parentBus := ""
+	if bus != "pcie.0" {
+		parentBus = bus
+		chassis = strings.TrimPrefix(bus, "pxb")
 	}
 
 	for i := uint32(0); i < number; i++ {
 		devices = append(devices,
 			govmmQemu.PCIeRootPortDevice{
-				ID:            fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, i),
+				ID:            fmt.Sprintf("%s%s%d", parentBus, config.PCIeRootPortPrefix, i),
 				Bus:           bus,
 				Chassis:       chassis,
 				Slot:          strconv.FormatUint(uint64(i), 10),
-				Multifunction: multiFunction,
-				Addr:          addr,
+				Multifunction: false,
+				Addr:          "0",
 				MemReserve:    fmt.Sprintf("%dB", memSize32bit),
 				Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 			},
