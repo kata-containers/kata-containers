@@ -26,6 +26,7 @@ import (
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/docker/go-units"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -1550,4 +1551,24 @@ func (c *Container) detachDevices(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// GetEphemeralMountsLimit returns the total size limit for ephemeral mounts 
+// in this container, measured in bytes.
+func (c *ContainerConfig) GetEphemeralMountsLimit() (uint64, error) {
+	limitSum := uint64(0)
+	for _, mount := range c.Mounts {
+		if mount.Type == KataEphemeralDevType {
+			mountSize, err := mount.GetMountSize()
+			if err != nil {
+				return 0, err
+			}
+			mountSizeBytes, err := units.RAMInBytes(mountSize)
+			if err != nil {
+				return 0, err
+			}
+			limitSum += uint64(mountSizeBytes)
+		}
+	}
+	return limitSum, nil
 }

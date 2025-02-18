@@ -437,3 +437,19 @@ func HasOptionPrefix(options []string, prefix string) bool {
 	}
 	return false
 }
+
+// GetMountSize returns the mount size specified in the size options 
+// for this mount. The return value is a string that includes both 
+// the numeric value and the unit (e.g., "512M", "2G").
+func (mount *Mount) GetMountSize() (string, error) {
+	for _, opt := range mount.Options {
+		if strings.HasPrefix(opt, "size") {
+			// Get the size mount option
+			sizeOptionSlice := strings.Split(opt, "=")
+			sizeValueIdx := 1
+			size := sizeOptionSlice[sizeValueIdx]
+			return size, nil
+		}
+	}
+	return "", nil
+}
