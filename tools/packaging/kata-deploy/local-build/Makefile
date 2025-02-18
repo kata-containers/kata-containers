@@ -26,7 +26,6 @@ BASE_TARBALLS = serial-targets \
 	kernel-nvidia-gpu-confidential-tarball \
 	kernel-tarball \
 	nydus-tarball \
-	ovmf-sev-tarball \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tarball \
@@ -135,9 +134,6 @@ kernel-confidential-tarball:
 	${MAKE} $@-build
 
 nydus-tarball:
-	${MAKE} $@-build
-
-ovmf-sev-tarball:
 	${MAKE} $@-build
 
 ovmf-tarball:
