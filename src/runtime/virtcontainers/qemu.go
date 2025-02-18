@@ -2256,7 +2256,7 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 			vhostDev.SocketPath = sockPath
 			vhostDev.DevID = id
 
-			q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(ctx, q.qemuConfig.Devices, vhostDev)
+			q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(ctx, q.qemuConfig.Devices, q.qemuConfig.Machine.Type, vhostDev)
 		} else {
 			q.Logger().WithField("volume-type", "virtio-9p").Info("adding volume")
 			q.qemuConfig.Devices, err = q.arch.append9PVolume(ctx, q.qemuConfig.Devices, v)
@@ -2265,13 +2265,13 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
 	case types.VSock:
 		q.fds = append(q.fds, v.VhostFd)
-		q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, q.qemuConfig.Machine.Type, v)
 	case Endpoint:
 		q.qemuConfig.Devices, err = q.arch.appendNetwork(ctx, q.qemuConfig.Devices, v)
 	case config.BlockDrive:
 		q.qemuConfig.Devices, err = q.arch.appendBlockDevice(ctx, q.qemuConfig.Devices, v)
 	case config.VhostUserDeviceAttrs:
-		q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(ctx, q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(ctx, q.qemuConfig.Devices, q.qemuConfig.Machine.Type, v)
 	case config.VFIODev:
 		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
 	default:

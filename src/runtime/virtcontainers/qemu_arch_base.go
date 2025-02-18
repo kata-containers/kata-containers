@@ -99,7 +99,7 @@ type qemuArch interface {
 	appendSocket(devices []govmmQemu.Device, socket types.Socket) []govmmQemu.Device
 
 	// appendVSock appends a vsock PCI to devices
-	appendVSock(ctx context.Context, devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error)
+	appendVSock(ctx context.Context, devices []govmmQemu.Device, machineType string, vsock types.VSock) ([]govmmQemu.Device, error)
 
 	// appendNetwork appends a endpoint device to devices
 	appendNetwork(ctx context.Context, devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error)
@@ -108,7 +108,7 @@ type qemuArch interface {
 	appendBlockDevice(ctx context.Context, devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error)
 
 	// appendVhostUserDevice appends a vhost user device to devices
-	appendVhostUserDevice(ctx context.Context, devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error)
+	appendVhostUserDevice(ctx context.Context, devices []govmmQemu.Device, machineType string, drive config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error)
 
 	// appendVFIODevice appends a VFIO device to devices
 	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev) []govmmQemu.Device
@@ -564,10 +564,16 @@ func (q *qemuArchBase) appendSocket(devices []govmmQemu.Device, socket types.Soc
 	return devices
 }
 
-func (q *qemuArchBase) appendVSock(_ context.Context, devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error) {
+func (q *qemuArchBase) appendVSock(_ context.Context, devices []govmmQemu.Device, machineType string, vsock types.VSock) ([]govmmQemu.Device, error) {
+
+	bus := "" // empty for other architectures
+	if machineType == QemuQ35 || machineType == QemuVirt {
+		bus = "pcie.0"
+	}
 	devices = append(devices,
 		govmmQemu.VSOCKDevice{
 			ID:            fmt.Sprintf("vsock-%d", vsock.ContextID),
+			Bus:           bus,
 			ContextID:     vsock.ContextID,
 			VHostFD:       vsock.VhostFd,
 			DisableModern: q.nestedRun,
@@ -683,8 +689,13 @@ func (q *qemuArchBase) appendBlockDevice(_ context.Context, devices []govmmQemu.
 	return devices, nil
 }
 
-func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
+func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govmmQemu.Device, machineType string, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
 	qemuVhostUserDevice := govmmQemu.VhostUserDevice{}
+
+	qemuVhostUserDevice.Bus = "" // all other architecture empty bus
+	if machineType == QemuQ35 || machineType == QemuVirt {
+		qemuVhostUserDevice.Bus = "pcie.0"
+	}
 
 	switch attr.Type {
 	case config.VhostUserNet:

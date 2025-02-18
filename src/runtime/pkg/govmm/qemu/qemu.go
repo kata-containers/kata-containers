@@ -1409,6 +1409,7 @@ func (dev LoaderDevice) QemuParams(config *Config) []string {
 // in to the guest
 // nolint: govet
 type VhostUserDevice struct {
+	Bus           string
 	SocketPath    string //path to vhostuser socket on host
 	CharDevID     string
 	TypeDevID     string //variable QEMU parameter based on value of VhostUserType
@@ -1580,6 +1581,9 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 	}
 
 	deviceParams = append(deviceParams, driver)
+	if vhostuserDev.Bus != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", vhostuserDev.Bus))
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	deviceParams = append(deviceParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
 	queueSize := uint32(1024)
@@ -2189,6 +2193,8 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 type VSOCKDevice struct {
 	ID string
 
+	Bus string
+
 	ContextID uint64
 
 	// VHostFD vhost file descriptor that holds the ContextID
@@ -2252,6 +2258,9 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf("vhostfd=%d", qemuFDs[0]))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf("id=%s", vsock.ID))
+	if vsock.Bus != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", vsock.Bus))
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf("%s=%d", VSOCKGuestCID, vsock.ContextID))
 
 	if vsock.Transport.isVirtioPCI(config) && vsock.ROMFile != "" {
