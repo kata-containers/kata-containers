@@ -254,9 +254,6 @@ const (
 	// TDXGuest represents a TDX object
 	TDXGuest ObjectType = "tdx-guest"
 
-	// SEVGuest represents an SEV guest object
-	SEVGuest ObjectType = "sev-guest"
-
 	// SNPGuest represents an SNP guest object
 	SNPGuest ObjectType = "sev-snp-guest"
 
@@ -327,8 +324,6 @@ func (object Object) Valid() bool {
 		return object.ID != "" && object.Size != 0
 	case TDXGuest:
 		return object.ID != "" && object.File != "" && object.DeviceID != "" && object.QgsPort != 0
-	case SEVGuest:
-		fallthrough
 	case SNPGuest:
 		return object.ID != "" && object.File != "" && object.CBitPos != 0 && object.ReducedPhysBits != 0
 	case SecExecGuest:
@@ -374,13 +369,6 @@ func (object Object) QemuParams(config *Config) []string {
 	case TDXGuest:
 		objectParams = append(objectParams, prepareTDXObject(object))
 		config.Bios = object.File
-	case SEVGuest:
-		objectParams = append(objectParams, string(object.Type))
-		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
-		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
-		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
-		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
-		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SNPGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
