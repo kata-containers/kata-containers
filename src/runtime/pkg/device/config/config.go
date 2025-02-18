@@ -426,6 +426,10 @@ type VFIODev struct {
 	// HostPath is the path to the device on the host we need it as a reference
 	// to match a /dev/vfio/<num> device to a device in GK mode
 	HostPath string
+
+	// NumaNode is the NUMA node to which the device is attached on the host
+	// and guest, if we enable numa_node we replicate the host topology.
+	NumaNode string
 }
 
 // RNGDev represents a random number generator device
