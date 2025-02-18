@@ -233,7 +233,7 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 	case config.VFIODev:
 		devices = qemuArchBase.appendVFIODevice(devices, s)
 	case config.VhostUserDeviceAttrs:
-		devices, err = qemuArchBase.appendVhostUserDevice(context.Background(), devices, s)
+		devices, err = qemuArchBase.appendVhostUserDevice(context.Background(), devices, "QemuQ35", s)
 	}
 
 	assert.NoError(err)
