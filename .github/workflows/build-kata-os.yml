@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison
       - name: Build Ubuntu image ${{ matrix.arch }}
-        run: cd tools/osbuilder && sudo make USE_DOCKER=true image-ubuntu
+        run: cd tools/osbuilder && sudo make USE_DOCKER=true OS_VERSION=jammy image-ubuntu
       - name: Build Kernel ${{ matrix.kernel_version }}
         run: |
           cd tools/packaging/kernel
@@ -57,7 +57,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: artifacts-arm64
-      - name: 'Create New Release'
+      - name: "Create New Release"
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
         run: |
@@ -69,4 +69,3 @@ jobs:
           gh release upload "${RELEASE_VERSION}" checksum-amd64.sha256
           gh release upload "${RELEASE_VERSION}" checksum-arm64.sha256
           gh release edit ${RELEASE_VERSION} --verify-tag	--draft=false
-
