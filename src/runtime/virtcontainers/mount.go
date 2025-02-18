@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"regexp"
+	"strconv"
 
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -436,4 +438,56 @@ func HasOptionPrefix(options []string, prefix string) bool {
 		}
 	}
 	return false
+}
+
+func validateMountSize(size string) error {
+	// validateMountSize performs basic sanity checks on the mount size string format.
+	// The actual validation of resource quantities is handled by the Kubernetes API server.
+	validSizePattern := `^(\d+)([KMGTPE]i?)$`
+	re := regexp.MustCompile(validSizePattern)
+	matches := re.FindStringSubmatch(size)
+
+	// Proper size should have 3 matches:
+	// full match, numeric part and unit part. i.e, 1024M, 1024 and M
+	validMatchSize := 3
+	if len(matches) != validMatchSize {
+		return fmt.Errorf(
+			"Invalid mount size format: '%s'. " +
+			"Mount size must consist of a positive number followed by a valid unit",
+			size,
+		)
+	}
+	sizeInt, err := strconv.Atoi(matches[1])
+	// Validate positive size
+	if err != nil || sizeInt <= 0 {
+		return fmt.Errorf(
+			"Invalid mount size: invalid non-positive size: %s. Mount size should be a positive integer",
+			size,
+		)
+	}
+	return nil
+}
+
+func (mount *Mount) getMountSize() (string, error) {
+	for _, opt := range mount.Options {
+		if strings.HasPrefix(opt, "size") {
+			// Get the size mount option
+			sizeOptionSlice := strings.Split(opt, "=")
+
+			// Ensure size option contains one '=' character
+			if len(sizeOptionSlice) != 2 {
+				return "", fmt.Errorf("Invalid mount size: Multiple '=' are passed: %s", opt)
+			}
+			sizeValueIdx := 1
+			size := sizeOptionSlice[sizeValueIdx]
+
+			// Validate the size
+			err := validateMountSize(size)
+			if err != nil {
+				return "", err
+			}
+			return size, nil
+		}
+	}
+	return "", nil
 }
