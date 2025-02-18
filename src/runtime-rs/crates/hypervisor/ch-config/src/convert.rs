@@ -2202,13 +2202,6 @@ mod tests {
                 use_image: true,
                 container_rootfs_driver: "container",
                 vm_rootfs_driver: "vm",
-                guest_protection_to_use: GuestProtection::Sev,
-                result: Ok(()),
-            },
-            TestData {
-                use_image: true,
-                container_rootfs_driver: "container",
-                vm_rootfs_driver: "vm",
                 guest_protection_to_use: GuestProtection::Snp,
                 result: Ok(()),
             },

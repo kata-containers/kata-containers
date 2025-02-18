@@ -37,7 +37,6 @@ pub enum GuestProtection {
     #[default]
     NoProtection,
     Tdx(TDXDetails),
-    Sev,
     Snp,
     Pef,
     Se,
@@ -51,7 +50,6 @@ impl fmt::Display for GuestProtection {
                 "tdx (major_version: {}, minor_version: {})",
                 details.major_version, details.minor_version
             ),
-            GuestProtection::Sev => write!(f, "sev"),
             GuestProtection::Snp => write!(f, "snp"),
             GuestProtection::Pef => write!(f, "pef"),
             GuestProtection::Se => write!(f, "se"),
@@ -85,8 +83,6 @@ pub enum ProtectionError {
 #[cfg(target_arch = "x86_64")]
 pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx/";
 #[cfg(target_arch = "x86_64")]
-pub const SEV_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev";
-#[cfg(target_arch = "x86_64")]
 pub const SNP_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev_snp";
 
 // Module directory below TDX_SYS_FIRMWARE_DIR.
@@ -105,7 +101,6 @@ const TDX_MINOR_FILE: &str = "minor_version";
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     arch_guest_protection(
         TDX_SYS_FIRMWARE_DIR,
-        SEV_KVM_PARAMETER_PATH,
         SNP_KVM_PARAMETER_PATH,
     )
 }
@@ -113,7 +108,6 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
 #[cfg(target_arch = "x86_64")]
 pub fn arch_guest_protection(
     tdx_path: &str,
-    sev_path: &str,
     snp_path: &str,
 ) -> Result<GuestProtection, ProtectionError> {
     let metadata = fs::metadata(tdx_path);
@@ -192,10 +186,6 @@ pub fn arch_guest_protection(
 
     if check_contents(snp_path)? {
         return Ok(GuestProtection::Snp);
-    }
-
-    if check_contents(sev_path)? {
-        return Ok(GuestProtection::Sev);
     }
 
     Ok(GuestProtection::NoProtection)
@@ -285,25 +275,6 @@ mod tests {
 
         writeln!(snp_file, "N").unwrap();
         let actual = arch_guest_protection("/xyz/tmp", "/xyz/tmp", path.to_str().unwrap());
-        assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
-    }
-
-    #[test]
-    fn test_arch_guest_protection_sev() {
-        // Test sev
-        let dir = tempdir().unwrap();
-        let sev_file_path = dir.path().join("sev");
-        let sev_path = sev_file_path.clone();
-        let mut sev_file = fs::File::create(sev_file_path).unwrap();
-        writeln!(sev_file, "Y").unwrap();
-
-        let actual = arch_guest_protection("/xyz/tmp", sev_path.to_str().unwrap(), "/xyz/tmp");
-        assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), GuestProtection::Sev);
-
-        writeln!(sev_file, "N").unwrap();
-        let actual = arch_guest_protection("/xyz/tmp", sev_path.to_str().unwrap(), "/xyz/tmp");
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
     }
