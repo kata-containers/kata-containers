@@ -442,8 +442,6 @@ func (clh *cloudHypervisor) enableProtection() error {
 
 		return nil
 
-	case sevProtection:
-		return errors.New("SEV protection is not supported by Cloud Hypervisor")
 	case snpProtection:
 		return errors.New("SEV-SNP protection is not supported by Cloud Hypervisor")
 
