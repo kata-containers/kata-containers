@@ -2640,19 +2640,22 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, bus string, number ui
 //          -------------           --------------
 */
 // genericAppendPCIeSwitch adds a PCIe Swtich
-func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, bus string, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
 
 	// Q35, Virt have the correct PCIe support,
 	// hence ignore all other machines
 	if machineType != QemuQ35 && machineType != QemuVirt {
 		return devices
 	}
+	if bus == "" {
+		bus = defaultBridgeBus
+	}
 
 	// Using an own ID for the root port, so we do not clash with already
 	// existing root ports adding "s" for switch prefix
 	pcieRootPort := govmmQemu.PCIeRootPortDevice{
 		ID:            fmt.Sprintf("%s%s%d", config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
-		Bus:           defaultBridgeBus,
+		Bus:           bus,
 		Chassis:       "1",
 		Slot:          strconv.FormatUint(uint64(0), 10),
 		Multifunction: false,

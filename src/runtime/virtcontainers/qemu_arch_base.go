@@ -153,7 +153,7 @@ type qemuArch interface {
 	appendPCIeRootPortDevice(devices []govmmQemu.Device, bus string, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
 	// appendPCIeSwitch appends a ioh3420 device to a pcie-root-port
-	appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
+	appendPCIeSwitchPortDevice(devices []govmmQemu.Device, bus string, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
 	// append vIOMMU device
 	appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
@@ -844,8 +844,8 @@ func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, bus 
 }
 
 // appendPCIeSwitchPortDevice appends a PCIe Switch with <number> ports
-func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
-	return genericAppendPCIeSwitchPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
+func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, bus string, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+	return genericAppendPCIeSwitchPort(devices, bus, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
 }
 
 // getBARsMaxAddressableMemory we need to know the BAR sizes to configure the
