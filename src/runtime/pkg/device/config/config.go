@@ -135,6 +135,8 @@ var SysBusPciDevicesPath = "/sys/bus/pci/devices"
 
 var getSysDevPath = getSysDevPathImpl
 
+const PCIeExpanderBusPrefix = "pxb"
+
 // PCIePortBusPrefix gives us the correct bus nameing dependeing on the port
 // used to hot(cold)-plug the device
 type PCIePortBusPrefix string

@@ -146,6 +146,9 @@ type qemuArch interface {
 	// setIgnoreSharedMemoryMigrationCaps set bypass-shared-memory capability for migration
 	setIgnoreSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
 
+	// apppendPCIeExpanderBus appends a new root complex for each NUMA node
+	appendPCIeExpanderBus(devices []govmmQemu.Device, nodeID uint32, bus string, busNr uint32) []govmmQemu.Device
+
 	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
 	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
@@ -829,6 +832,10 @@ func (q *qemuArchBase) setBridges(bridges []types.Bridge) {
 
 func (q *qemuArchBase) addBridge(b types.Bridge) {
 	q.Bridges = append(q.Bridges, b)
+}
+
+func (q *qemuArchBase) appendPCIeExpanderBus(devices []govmmQemu.Device, nodeID uint32, bus string, busNr uint32) []govmmQemu.Device {
+	return genericAppendPCIeExpanderBus(devices, nodeID, bus, busNr, q.qemuMachine.Type)
 }
 
 // appendPCIeRootPortDevice appends to devices the given pcie-root-port

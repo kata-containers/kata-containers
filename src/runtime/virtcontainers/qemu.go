@@ -2573,6 +2573,21 @@ func genericNUMAMemoryModles(memoryMb, memoryAlign uint64, numaNodes []types.NUM
 	return memoryModules
 }
 
+func genericAppendPCIeExpanderBus(devices []govmmQemu.Device, nodeId uint32, bus string, busNr uint32, machineType string) []govmmQemu.Device {
+	if machineType != QemuQ35 && machineType != QemuVirt {
+		return devices
+	}
+	devices = append(devices,
+		govmmQemu.PCIeExpanderBusDevice{
+			ID:       fmt.Sprintf("%s%d", config.PCIeExpanderBusPrefix, nodeId),
+			Bus:      bus,
+			BusNr:    fmt.Sprintf("%d", busNr),
+			NumaNode: fmt.Sprintf("%d", nodeId),
+		},
+	)
+	return devices
+}
+
 // genericAppendPCIeRootPort appends to devices the given pcie-root-port
 func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
 	var (

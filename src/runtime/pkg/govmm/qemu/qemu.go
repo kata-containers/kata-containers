@@ -127,6 +127,9 @@ const (
 	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
+	// PCIeExpanderBus is a PCIe root complex with numa affinity
+	PCIeExpanderBus DeviceDriver = "pxb-pcie"
+
 	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
 	PCIeRootPort DeviceDriver = "pcie-root-port"
 
@@ -1655,6 +1658,37 @@ func (vhostuserDev VhostUserDevice) deviceName(config *Config) string {
 	default:
 		return ""
 	}
+}
+
+// PCIeExpanderBusDevice represents a root complex for a numa node
+type PCIeExpanderBusDevice struct {
+	ID       string
+	Bus      string
+	BusNr    string
+	NumaNode string
+}
+
+func (b PCIeExpanderBusDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+	driver := PCIeExpanderBus
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,id=%s", driver, b.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", b.Bus))
+	deviceParams = append(deviceParams, fmt.Sprintf("bus_nr=%s", b.BusNr))
+	deviceParams = append(deviceParams, fmt.Sprintf("numa_node=%s", b.NumaNode))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+
+	return qemuParams
+}
+
+func (b PCIeExpanderBusDevice) Valid() bool {
+	if b.ID == "" || b.Bus == "" || b.BusNr == "" || b.NumaNode == "" {
+		return false
+	}
+	return true
 }
 
 // PCIeRootPortDevice represents a memory balloon device.
