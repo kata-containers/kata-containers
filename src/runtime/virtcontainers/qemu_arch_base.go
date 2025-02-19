@@ -965,7 +965,8 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 	slots = append(slots, devSlot)
 
 	// This only works for Q35 and Virt
-	r, _ := regexp.Compile(`^/machine/.*/pcie.0`)
+	pcie0, _ := regexp.Compile(`^/machine/.*/pcie.0`)
+	pxb, _ := regexp.Compile(`^/machine/unattached/.*/pxb*`)
 
 	var parentPath = qemuID
 	// We do not want to use a forever loop here, a deeper PCIe topology
@@ -985,7 +986,13 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 
 		// If we hit /machine/q35/pcie.0 we're done this is the root bus
 		// we climbed the complete hierarchy
-		if r.Match([]byte(busQOM)) {
+		if pcie0.Match([]byte(busQOM)) {
+			break
+		}
+
+		// If we hit /machine/unattached/q35/pxb* we're done this is the root bus
+		// we climbed the complete hierarchy in case of NUMA
+		if pxb.Match([]byte(busQOM)) {
 			break
 		}
 
