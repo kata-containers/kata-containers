@@ -332,8 +332,8 @@ function restart_systemd_service_with_no_burst_limit() {
 		local unit_file=$(systemctl show "$service.service" -p FragmentPath | cut -d'=' -f2)
 		[ -f "$unit_file" ] || { warn "Can't find $service's unit file: $unit_file"; return 1; }
 
-		# If the unit file is in /lib, copy it to /etc
-		if [[ $unit_file == /lib* ]]; then
+		# If the unit file is in /lib or /usr/lib, copy it to /etc
+		if [[ $unit_file =~ ^/(usr/)?lib/ ]]; then
 			tmp_unit_file="/etc/${unit_file#*lib/}"
 			sudo cp "$unit_file" "$tmp_unit_file"
 			unit_file="$tmp_unit_file"
