@@ -825,7 +825,20 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeRootPort {
 			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
+		numaNodes := hypervisorConfig.NumNUMA()
+		if numaNodes > 0 {
+			baseAddr := uint32(0x20)
+			for nodeID := range numaNodes {
+				parentBus := fmt.Sprintf("%s%d", config.PCIeExpanderBusPrefix, nodeID)
+				numaDevices := numOfPluggablePorts / numaNodes
+				qemuConfig.Devices = q.arch.appendPCIeExpanderBus(qemuConfig.Devices, nodeID, "pcie.0", baseAddr)
+				qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, parentBus, numaDevices, memSize32bit, memSize64bit)
+				baseAddr = baseAddr + 0x20
+			}
+		} else {
+			qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
+		}
+
 		return nil
 	}
 
