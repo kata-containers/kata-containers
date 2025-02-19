@@ -100,9 +100,14 @@ assets:
         .*/v?(\d\S+)\.tar\.gz
 
     qemu-snp-experimental:
-      description: "QEMU with SNP support"
+      description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "amd-snp-202402240000"
+      tag: "gpu-snp-20250211"
+
+    qemu-tdx-experimental:
+      description: "QEMU with GPU+TDX support"
+      url: "https://github.com/confidential-containers/qemu.git"
+      tag: "gpu-tdx-20250211"
 
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"

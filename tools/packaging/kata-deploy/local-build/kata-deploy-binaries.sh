@@ -116,6 +116,7 @@ options:
 	ovmf-sev
 	qemu
 	qemu-snp-experimental
+	qemu-tdx-experimental
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
@@ -706,6 +707,17 @@ install_qemu_snp_experimental() {
 		"${qemu_experimental_builder}"
 }
 
+install_qemu_tdx_experimental() {
+	export qemu_suffix="tdx-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
+}
+
 # Install static firecracker asset
 install_firecracker() {
 	local firecracker_version=$(get_from_kata_deps ".assets.hypervisor.firecracker.version")
@@ -1132,6 +1144,7 @@ handle_build() {
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
+		install_qemu_tdx_experimental
 		install_stratovirt
 		install_runk
 		install_shimv2
@@ -1186,6 +1199,8 @@ handle_build() {
 	qemu) install_qemu ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
+
+	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 
 	stratovirt) install_stratovirt ;;
 
