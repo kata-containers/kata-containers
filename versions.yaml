@@ -119,10 +119,10 @@ assets:
         name: "ubuntu"
         version: "jammy"  # 22.04 LTS
         nvidia-gpu:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
         nvidia-gpu-confidential:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
       ppc64le:
         name: "ubuntu"
@@ -143,14 +143,14 @@ assets:
           name: "cbl-mariner"
           version: "3.0"
         nvidia-gpu:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
         nvidia-gpu-confidential:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
 
     meta:
-      image-type: *default-image-name
+      image-type: "ubuntu"
 
   initrd:
     description: |
@@ -183,12 +183,12 @@ assets:
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "focal"  # 20.04 LTS
+          version: "noble"
         nvidia-gpu:
-          name: *glibc-initrd-name
+          name: "ubuntu"
           version: "noble"
         nvidia-gpu-confidential:
-          name: *glibc-initrd-name
+          name: "ubuntu"
           version: "noble"
 
   kernel:
