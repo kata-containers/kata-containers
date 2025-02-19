@@ -647,11 +647,11 @@ impl AgentService {
 
     async fn do_read_stream(
         &self,
-        req: protocols::agent::ReadStreamRequest,
+        req: &protocols::agent::ReadStreamRequest,
         stdout: bool,
     ) -> Result<protocols::agent::ReadStreamResponse> {
-        let cid = req.container_id;
-        let eid = req.exec_id;
+        let cid = &req.container_id;
+        let eid = &req.exec_id;
 
         let term_exit_notifier;
         let reader = {
@@ -898,8 +898,12 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
-        is_allowed(&req).await?;
-        self.do_read_stream(req, true).await.map_ttrpc_err(same)
+        let mut response = self.do_read_stream(&req, true).await.map_ttrpc_err(same)?;
+        if is_allowed(&req).await.is_err() {
+            // Policy does not allow reading logs, so we redact the log messages.
+            response.clear_data();
+        }
+        Ok(response)
     }
 
     async fn read_stderr(
@@ -907,8 +911,12 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
-        is_allowed(&req).await?;
-        self.do_read_stream(req, false).await.map_ttrpc_err(same)
+        let mut response = self.do_read_stream(&req, false).await.map_ttrpc_err(same)?;
+        if is_allowed(&req).await.is_err() {
+            // Policy does not allow reading logs, so we redact the log messages.
+            response.clear_data();
+        }
+        Ok(response)
     }
 
     async fn close_stdin(
