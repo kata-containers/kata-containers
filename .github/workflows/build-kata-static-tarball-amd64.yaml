@@ -54,6 +54,7 @@ jobs:
           - pause-image
           - qemu
           - qemu-snp-experimental
+          - qemu-tdx-experimental
           - stratovirt
           - trace-forwarder
           - virtiofsd
