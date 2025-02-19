@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{sync::Arc, thread};
+use std::{collections::HashMap, sync::Arc, thread};
 
 use agent::{types::Device, Agent, OnlineCPUMemRequest, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
@@ -257,6 +257,7 @@ impl ResourceManagerInner {
 
     pub async fn handler_rootfs(
         &self,
+        annotations: &HashMap<String, String>,
         cid: &str,
         root: &oci::Root,
         bundle_path: &str,
@@ -264,6 +265,7 @@ impl ResourceManagerInner {
     ) -> Result<Arc<dyn Rootfs>> {
         self.rootfs_resource
             .handler_rootfs(
+                annotations,
                 &self.share_fs,
                 self.device_manager.as_ref(),
                 self.hypervisor.as_ref(),
