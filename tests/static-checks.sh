@@ -413,10 +413,21 @@ static_check_license_headers()
 
 	files=$(get_pr_changed_file_details || true)
 
-	# Strip off status
-	files=$(echo "$files"|awk '{print $NF}')
+	# Strip off status and convert to array
+	files=($(echo "$files"|awk '{print $NF}'))
 
-	# no files were changed
+	text_files=()
+	# Filter out non-text files
+	for file in "${files[@]}"; do
+		if [[ -f "$file" ]] && file --mime-type "$file" | grep -q "text/"; then
+			text_files+=("$file")
+		else
+			info "Ignoring non-text file: $file"
+		fi
+	done
+	files="${text_files[*]}"
+
+	# no text files were changed
 	[ -z "$files" ] && info "No files found" && popd && return
 
 	local header_check
