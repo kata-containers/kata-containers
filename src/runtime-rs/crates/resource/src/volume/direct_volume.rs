@@ -6,11 +6,12 @@
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use hypervisor::device::device_manager::DeviceManager;
+use kata_sys_util::mount::{get_mount_path, get_mount_type};
 use kata_types::mount::DirectVolumeMountInfo;
 use nix::sys::{stat, stat::SFlag};
+use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
-
-use hypervisor::device::device_manager::DeviceManager;
 
 use crate::volume::{
     direct_volumes::{
@@ -47,14 +48,14 @@ pub(crate) async fn handle_direct_volume(
     // If the source is not in the path with error kind *NotFound*, we ignore the error
     // and we treat it as block volume with oci Mount.type *bind*. Just fill in the block
     // volume info in the DirectVolumeMountInfo
-    let mount_info: DirectVolumeMountInfo = match volume_mount_info(&m.source) {
+    let mount_info: DirectVolumeMountInfo = match volume_mount_info(&get_mount_path(m.source())) {
         Ok(mount_info) => mount_info,
         Err(e) => {
             // First, We need filter the non-io::ErrorKind.
             if !e.is::<std::io::ErrorKind>() {
                 return Err(anyhow!(format!(
                     "unexpected error occurs when parse mount info for {:?}, with error {:?}",
-                    &m.source,
+                    &m.source(),
                     e.to_string()
                 )));
             }
@@ -65,7 +66,7 @@ pub(crate) async fn handle_direct_volume(
             if *error_kind != std::io::ErrorKind::NotFound {
                 return Err(anyhow!(format!(
                     "failed to parse volume mount info for {:?}, with error {:?}",
-                    &m.source,
+                    &m.source(),
                     e.to_string()
                 )));
             }
@@ -97,7 +98,9 @@ pub(crate) async fn handle_direct_volume(
 }
 
 pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
-    let mount_type = m.r#type.as_str();
+    let mnt_type = get_mount_type(m);
+    let mount_type = mnt_type.as_str();
+
     // Filter the non-bind volume and non-direct-vol volume
     let vol_types = [
         KATA_MOUNT_BIND_TYPE,
@@ -110,7 +113,7 @@ pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
         return Ok(false);
     }
 
-    match get_direct_volume_path(&m.source) {
+    match get_direct_volume_path(get_mount_path(m.source()).as_str()) {
         Ok(directvol_path) => {
             let fstat = stat::stat(directvol_path.as_str())
                 .context(format!("stat mount source {} failed.", directvol_path))?;

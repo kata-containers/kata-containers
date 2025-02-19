@@ -626,6 +626,13 @@ components:
           $ref: "#/components/schemas/PlatformConfig"
         tpm:
           $ref: "#/components/schemas/TpmConfig"
+        landlock_enable:
+          type: boolean
+          default: false
+        landlock_rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/LandlockConfig"
       description: Virtual machine configuration
 
     CpuAffinity:
@@ -667,11 +674,9 @@ components:
       properties:
         boot_vcpus:
           minimum: 1
-          default: 1
           type: integer
         max_vcpus:
           minimum: 1
-          default: 1
           type: integer
         topology:
           $ref: "#/components/schemas/CpuTopology"
@@ -736,7 +741,6 @@ components:
         size:
           type: integer
           format: int64
-          default: 512 MB
         file:
           type: string
         mergeable:
@@ -772,7 +776,6 @@ components:
         size:
           type: integer
           format: int64
-          default: 512 MB
         hotplug_size:
           type: integer
           format: int64
@@ -857,7 +860,7 @@ components:
           type: string
         rate_limiter_config:
           $ref: "#/components/schemas/RateLimiterConfig"
-    
+
     VirtQueueAffinity:
       required:
         - queue_index
@@ -963,7 +966,6 @@ components:
       properties:
         src:
           type: string
-          default: "/dev/urandom"
         iommu:
           type: boolean
           default: false
@@ -1265,4 +1267,15 @@ components:
       type: object
       properties:
         socket:
+          type: string
+
+    LandlockConfig:
+      required:
+        - path
+        - access
+      type: object
+      properties:
+        path:
+          type: string
+        access:
           type: string

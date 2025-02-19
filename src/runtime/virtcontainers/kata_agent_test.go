@@ -1202,3 +1202,153 @@ func TestKataAgentDirs(t *testing.T) {
 	expected := "/rafs/123/lowerdir"
 	assert.Equal(rafsMountPath(cid), expected)
 }
+
+func TestIsNydusRootFSType(t *testing.T) {
+	testCases := map[string]bool{
+		"nydus":                               false,
+		"nydus-overlayfs":                     false,
+		"fuse.nydus-overlayfs":                true,
+		"fuse./usr/local/bin/nydus-overlayfs": true,
+		"fuse.nydus-overlayfs-e0ae398a2":      true,
+	}
+
+	for test, exp := range testCases {
+		t.Run(test, func(t *testing.T) {
+			assert.Equal(t, exp, IsNydusRootFSType(test))
+		})
+	}
+}
+
+func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
+	assert := assert.New(t)
+
+	// Create temporary directory to mock IOMMU filesystem
+	tmpDir := t.TempDir()
+	iommuPath := filepath.Join(tmpDir, "sys", "kernel", "iommu_groups", "2", "devices")
+	err := os.MkdirAll(iommuPath, 0755)
+	assert.NoError(err)
+
+	// Create a dummy device file to satisfy the IOMMU group check
+	dummyDev := filepath.Join(iommuPath, "0000:00:02.0")
+	err = os.WriteFile(dummyDev, []byte(""), 0644)
+	assert.NoError(err)
+
+	// Save original paths and restore after test
+	origConfigSysIOMMUPath := config.SysIOMMUGroupPath
+	config.SysIOMMUGroupPath = filepath.Join(tmpDir, "sys", "kernel", "iommu_groups")
+	defer func() {
+		config.SysIOMMUGroupPath = origConfigSysIOMMUPath
+	}()
+
+	tests := []struct {
+		name          string
+		hotPlugVFIO   config.PCIePort
+		coldPlugVFIO  config.PCIePort
+		vfioMode      config.VFIOModeType
+		expectVFIODev bool
+	}{
+		{
+			name:          "VFIO device with cold plug enabled",
+			hotPlugVFIO:   config.NoPort,
+			coldPlugVFIO:  config.BridgePort,
+			vfioMode:      config.VFIOModeVFIO,
+			expectVFIODev: true,
+		},
+		{
+			name:          "VFIO device with hot plug enabled",
+			hotPlugVFIO:   config.BridgePort,
+			coldPlugVFIO:  config.NoPort,
+			vfioMode:      config.VFIOModeVFIO,
+			expectVFIODev: true,
+		},
+		{
+			name:          "VFIO device with cold plug enabled but guest kernel mode",
+			hotPlugVFIO:   config.NoPort,
+			coldPlugVFIO:  config.BridgePort,
+			vfioMode:      config.VFIOModeGuestKernel,
+			expectVFIODev: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vfioGroup := "2"
+			vfioPath := filepath.Join("/dev/vfio", vfioGroup)
+
+			vfioDevice := config.DeviceInfo{
+				ContainerPath: vfioPath,
+				HostPath:      vfioPath,
+				DevType:       "c",
+				Major:         10,
+				Minor:         196,
+				ColdPlug:      tt.coldPlugVFIO != config.NoPort,
+				Port:          tt.coldPlugVFIO,
+			}
+
+			// Setup container config with the VFIO device
+			contConfig := &ContainerConfig{
+				DeviceInfos: []config.DeviceInfo{vfioDevice},
+			}
+
+			// Create mock URL for kata agent
+			url, err := mock.GenerateKataMockHybridVSock()
+			assert.NoError(err)
+			defer mock.RemoveKataMockHybridVSock(url)
+
+			hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+			err = hybridVSockTTRPCMock.Start(url)
+			assert.NoError(err)
+			defer hybridVSockTTRPCMock.Stop()
+
+			k := &kataAgent{
+				ctx: context.Background(),
+				state: KataAgentState{
+					URL: url,
+				},
+			}
+
+			mockReceiver := &api.MockDeviceReceiver{}
+
+			sandbox := &Sandbox{
+				config: &SandboxConfig{
+					VfioMode: tt.vfioMode,
+					HypervisorConfig: HypervisorConfig{
+						HotPlugVFIO:  tt.hotPlugVFIO,
+						ColdPlugVFIO: tt.coldPlugVFIO,
+					},
+				},
+				devManager: manager.NewDeviceManager("virtio-scsi", false, "", 0, nil),
+				agent:      k,
+			}
+
+			container := &Container{
+				sandbox: sandbox,
+				id:      "test-container",
+				config:  contConfig,
+			}
+
+			// Call createDevices which should trigger the full flow
+			err = container.createDevices(contConfig)
+			assert.NoError(err)
+
+			// Find the device in device manager using the original device info
+			dev := sandbox.devManager.FindDevice(&vfioDevice)
+
+			if tt.expectVFIODev {
+				// For cases where VFIO device should be handled
+				assert.NotNil(dev, "VFIO device should be found in device manager")
+				if dev != nil {
+					// Manually attach the device to increase attach count
+					err = dev.Attach(context.Background(), mockReceiver)
+					assert.NoError(err, "Device attachment should succeed")
+
+					assert.True(sandbox.devManager.IsDeviceAttached(dev.DeviceID()),
+						"Device should be marked as attached")
+				}
+			} else {
+				// For cases where VFIO device should be skipped
+				assert.Nil(dev, "VFIO device should not be found in device manager")
+			}
+		})
+	}
+}

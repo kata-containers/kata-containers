@@ -20,6 +20,7 @@ use crate::yaml;
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use log::debug;
+use oci_spec::runtime as oci;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
@@ -32,7 +33,7 @@ use std::io::Write;
 /// Intermediary format of policy data.
 pub struct AgentPolicy {
     /// K8s resources described by the input YAML file.
-    resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
+    pub resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
 
     /// K8s ConfigMap resources described by an additional input YAML file
     /// or by the "main" input YAML file, containing additional pod settings.
@@ -56,6 +57,9 @@ pub struct PolicyData {
 
     /// Settings read from genpolicy-settings.json.
     pub common: CommonData,
+
+    /// Sandbox settings read from genpolicy-settings.json.
+    pub sandbox: SandboxData,
 
     /// Settings read from genpolicy-settings.json, related directly to each
     /// kata agent endpoint, that get added to the output policy.
@@ -271,7 +275,7 @@ pub struct ContainerPolicy {
     /// Allow list of ommand lines that are allowed to be executed using
     /// ExecProcessRequest. By default, all ExecProcessRequest calls are blocked
     /// by the policy.
-    exec_commands: Vec<String>,
+    exec_commands: Vec<Vec<String>>,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
@@ -313,8 +317,12 @@ pub struct CreateContainerRequestDefaults {
 /// ExecProcessRequest settings from genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExecProcessRequestDefaults {
+    /// Allow these commands to be executed. This field has been deprecated - use allowed_commands instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub commands: Option<Vec<String>>,
+
     /// Allow these commands to be executed.
-    commands: Vec<String>,
+    pub allowed_commands: Vec<Vec<String>>,
 
     /// Allow commands matching these regexes to be executed.
     regex: Vec<String>,
@@ -339,6 +347,9 @@ pub struct RequestDefaults {
     /// Allow Host reading from Guest containers stdout and stderr.
     pub ReadStreamRequest: bool,
 
+    /// Allow Host to update Guest mounts.
+    pub UpdateEphemeralMountsRequest: bool,
+
     /// Allow Host writing to Guest containers stdin.
     pub WriteStreamRequest: bool,
 }
@@ -348,6 +359,9 @@ pub struct RequestDefaults {
 pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
     pub cpath: String,
+
+    /// Path to the shared container files for mount sources - e.g., "/run/kata-containers/shared/containers".
+    pub mount_source_cpath: String,
 
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
@@ -374,10 +388,15 @@ pub struct CommonData {
 /// Configuration from "kubectl config".
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
-    default_namespace: String,
-
     /// Pause container image reference.
     pub pause_container_image: String,
+}
+
+/// Struct used to read data from the settings file and copy that data into the policy.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SandboxData {
+    /// Expected value of the CreateSandboxRequest storages field.
+    pub storages: Vec<agent::Storage>,
 }
 
 impl AgentPolicy {
@@ -487,6 +506,7 @@ impl AgentPolicy {
             containers: policy_containers,
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
+            sandbox: self.config.settings.sandbox.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -510,15 +530,7 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = match resource.get_namespace() {
-            Some(ns) if !ns.is_empty() => ns,
-            _ => self
-                .config
-                .settings
-                .cluster_config
-                .default_namespace
-                .clone(),
-        };
+        let namespace = resource.get_namespace().unwrap_or_default();
 
         let use_host_network = resource.use_host_network();
         let annotations = get_container_annotations(
@@ -562,10 +574,12 @@ impl AgentPolicy {
         linux.Namespaces = get_kata_namespaces(is_pause_container, use_host_network);
 
         if !c_settings.Linux.MaskedPaths.is_empty() {
-            linux.MaskedPaths = c_settings.Linux.MaskedPaths.clone();
+            linux.MaskedPaths.clone_from(&c_settings.Linux.MaskedPaths);
         }
         if !c_settings.Linux.ReadonlyPaths.is_empty() {
-            linux.ReadonlyPaths = c_settings.Linux.ReadonlyPaths.clone();
+            linux
+                .ReadonlyPaths
+                .clone_from(&c_settings.Linux.ReadonlyPaths);
         }
 
         let sandbox_pidns = if is_pause_container {
@@ -657,8 +671,10 @@ impl AgentPolicy {
 
         substitute_env_variables(&mut process.Env);
         substitute_args_env_variables(&mut process.Args, &process.Env);
+
         c_settings.get_process_fields(&mut process);
-        process.NoNewPrivileges = !yaml_container.allow_privilege_escalation();
+        resource.get_process_fields(&mut process);
+        yaml_container.get_process_fields(&mut process);
 
         process
     }
@@ -712,7 +728,7 @@ fn get_image_layer_storages(
             "previous_chain_id = {}, chain_id = {}",
             &previous_chain_id, &chain_id
         );
-        previous_chain_id = chain_id.clone();
+        previous_chain_id.clone_from(&chain_id);
 
         layer_names.push(name_to_hash(&chain_id));
         layer_hashes.push(layer.verity_hash.to_string());

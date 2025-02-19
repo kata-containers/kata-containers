@@ -1,0 +1,66 @@
+// Copyright (C) 2023 Ant group. All rights reserved.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package MemAgent;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+service Control {
+    rpc MemcgStatus(google.protobuf.Empty) returns (MemcgStatusReply);
+    rpc MemcgSet(MemcgConfig) returns (google.protobuf.Empty);
+    rpc CompactSet(CompactConfig) returns (google.protobuf.Empty);
+}
+
+message EvictionCount {
+    uint64 page = 1;
+    uint64 no_min_lru_file = 2;
+    uint64 min_lru_inc = 3;
+    uint64 other_error = 4;
+    uint64 error = 5;
+    uint64 psi_exceeds_limit = 6;
+}
+
+message StatusNuma {
+    google.protobuf.Timestamp last_inc_time = 1;
+    uint64 max_seq = 2;
+    uint64 min_seq = 3;
+    uint64 run_aging_count = 4;
+    EvictionCount eviction_count = 5;
+}
+
+message MemCgroup {
+    uint32 id = 1;
+    uint64 ino = 2;
+    string path = 3;
+    uint64 sleep_psi_exceeds_limit = 4;
+    map<uint32, StatusNuma> numa = 5;
+}
+
+message MemcgStatusReply {
+    repeated MemCgroup mem_cgroups = 1;
+}
+
+message MemcgConfig {
+    optional bool disabled = 1;
+    optional bool swap = 2;
+    optional uint32 swappiness_max = 3;
+    optional uint64 period_secs = 4;
+    optional uint32 period_psi_percent_limit = 5;
+    optional uint32 eviction_psi_percent_limit = 6;
+    optional uint64 eviction_run_aging_count_min = 7;
+}
+
+message CompactConfig {
+    optional bool disabled = 1;
+    optional uint64 period_secs = 2;
+    optional uint32 period_psi_percent_limit = 3;
+    optional uint32 compact_psi_percent_limit = 4;
+    optional int64 compact_sec_max = 5;
+    optional uint32 compact_order = 6;
+    optional uint64 compact_threshold = 7;
+    optional uint64 compact_force_times = 8;
+}

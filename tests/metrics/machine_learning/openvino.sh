@@ -6,7 +6,7 @@
 
 # Description of the test:
 # This test runs the 'openvino benchmark'
-# https://github.com/v8/web-tooling-benchmark
+# https://openbenchmarking.org/test/pts/openvino
 
 set -o pipefail
 
@@ -42,27 +42,18 @@ function help(){
 cat << EOF
 Usage: $0
    Description:
-       Runs onednn benchmark.
+       Runs openvino benchmark.
 EOF
 }
 
 function save_config() {
 	metrics_json_start_array
 
-	pushd "${DEFAULT_KATA_CONFIG_DIR}"
-	local MEM_AVAIL_MB="$(cat ${DEFAULT_KATA_CONFIG_FNAME} | grep -i "default_memory =" | cut -d "=" -f2 | tr -d ' ' | tr -d '"')"
-	local NUM_CPUS="$(cat ${DEFAULT_KATA_CONFIG_FNAME} | grep -i "default_vcpus =" | cut -d "=" -f2 | tr -d ' ' | tr -d '"')"
-	local SHARED_FS="$(cat ${DEFAULT_KATA_CONFIG_FNAME} | grep shared_fs | cut -d "=" -f2 | tr -d ' ' | tr -d '"')"
-	popd
-
 	local json="$(cat << EOF
 	{
 		"image": "${IMAGE}",
 		"units": "ms",
 		"mode": "Lower Is Better",
-		"shared-fs": "${SHARED_FS}",
-		"num-vcpus": "${NUM_CPUS}",
-		"memory-available-mb": "${MEM_AVAIL_MB}"
 	}
 EOF
 )"
@@ -71,7 +62,6 @@ EOF
 }
 
 function main() {
-	local i=0
 	local cmds=("docker")
 	local RES_DIR="/var/lib/phoronix-test-suite/test-results"
 

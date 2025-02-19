@@ -6,8 +6,9 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams,
-    MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
+    device::DeviceType, firecracker::sl, hypervisor_persist::HypervisorState,
+    kernel_param::KernelParams, MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM,
+    HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -29,8 +30,10 @@ use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use std::cmp::Ordering;
 use std::{collections::HashSet, fs::create_dir_all};
+use tokio::sync::mpsc;
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
+const DRAGONBALL_INITRD: &str = "initrd";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 const BALLOON_DEVICE_ID: &str = "balloon0";
 const MEM_DEVICE_ID: &str = "memmr0";
@@ -87,7 +90,7 @@ pub struct DragonballInner {
 }
 
 impl DragonballInner {
-    pub fn new() -> DragonballInner {
+    pub fn new(exit_notify: mpsc::Sender<i32>) -> DragonballInner {
         let mut capabilities = Capabilities::new();
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
@@ -105,7 +108,7 @@ impl DragonballInner {
             pending_devices: vec![],
             state: VmmState::NotReady,
             jailed: false,
-            vmm_instance: VmmInstance::new(""),
+            vmm_instance: VmmInstance::new("", exit_notify),
             run_dir: "".to_string(),
             cached_block_devices: Default::default(),
             capabilities,
@@ -116,20 +119,38 @@ impl DragonballInner {
         }
     }
 
+    pub(crate) async fn try_insert_balloon_f_reporting(&mut self) {
+        let balloon_config = BalloonDeviceConfigInfo {
+            balloon_id: BALLOON_DEVICE_ID.to_owned(),
+            size_mib: 0,
+            use_shared_irq: None,
+            use_generic_irq: None,
+            f_deflate_on_oom: false,
+            f_reporting: true,
+        };
+        if let Err(e) = self.vmm_instance.insert_balloon_device(balloon_config) {
+            error!(sl(), "failed to insert f_reporting balloon device: {:?}", e);
+        }
+    }
+
     pub(crate) async fn cold_start_vm(&mut self, timeout: i32) -> Result<()> {
         info!(sl!(), "start sandbox cold");
 
         self.set_vm_base_config().context("set vm base config")?;
 
-        // get rootfs driver
-        let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
-
         // get kernel params
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
-        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
-            &rootfs_driver,
-            &self.config.boot_info.rootfs_type,
-        )?);
+
+        if self.config.boot_info.initrd.is_empty() {
+            // get rootfs driver
+            let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
+
+            kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
+                &rootfs_driver,
+                &self.config.boot_info.rootfs_type,
+            )?);
+        }
+
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
@@ -141,10 +162,7 @@ impl DragonballInner {
         }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
-        // set boot source
-        let kernel_path = self.config.boot_info.kernel.clone();
         self.set_boot_source(
-            &kernel_path,
             &kernel_params
                 .to_string()
                 .context("kernel params to string")?,
@@ -259,16 +277,33 @@ impl DragonballInner {
         Ok(abs_path)
     }
 
-    fn set_boot_source(&mut self, kernel_path: &str, kernel_params: &str) -> Result<()> {
+    fn set_boot_source(&mut self, kernel_params: &str) -> Result<()> {
+        // set boot source
+        let kernel_path = self.config.boot_info.kernel.as_str();
+        let initrd_path = self.config.boot_info.initrd.as_str();
+
         info!(
             sl!(),
-            "kernel path {} kernel params {}", kernel_path, kernel_params
+            "kernel path {}, initrd path {}, kernel params {}",
+            kernel_path,
+            initrd_path,
+            kernel_params
         );
+
+        let mut initrd = None;
+
+        if !initrd_path.is_empty() {
+            initrd = Some(
+                self.get_resource(initrd_path, DRAGONBALL_INITRD)
+                    .context("get initrd resource")?,
+            );
+        }
 
         let mut boot_cfg = BootSourceConfig {
             kernel_path: self
                 .get_resource(kernel_path, DRAGONBALL_KERNEL)
-                .context("get resource")?,
+                .context("get kernel resource")?,
+            initrd_path: initrd,
             ..Default::default()
         };
 
@@ -395,7 +430,7 @@ impl DragonballInner {
                         use_shared_irq: None,
                         use_generic_irq: None,
                         f_deflate_on_oom: false,
-                        f_reporting: false,
+                        f_reporting: self.config.device_info.reclaim_guest_freed_memory,
                     };
                     self.vmm_instance
                         .insert_balloon_device(balloon_config)
@@ -427,7 +462,7 @@ impl DragonballInner {
                     use_shared_irq: None,
                     use_generic_irq: None,
                     f_deflate_on_oom: false,
-                    f_reporting: false,
+                    f_reporting: self.config.device_info.reclaim_guest_freed_memory,
                 };
                 self.balloon_size = had_mem_mb - new_mem_mb;
                 self.vmm_instance
@@ -479,7 +514,7 @@ impl DragonballInner {
 #[async_trait]
 impl Persist for DragonballInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<i32>;
 
     /// Save a state of hypervisor
     async fn save(&self) -> Result<Self::State> {
@@ -500,7 +535,7 @@ impl Persist for DragonballInner {
 
     /// Restore hypervisor
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
         Ok(DragonballInner {
@@ -511,7 +546,7 @@ impl Persist for DragonballInner {
             netns: hypervisor_state.netns,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
-            vmm_instance: VmmInstance::new(""),
+            vmm_instance: VmmInstance::new("", hypervisor_args),
             run_dir: hypervisor_state.run_dir,
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,

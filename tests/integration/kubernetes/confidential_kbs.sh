@@ -11,9 +11,14 @@ kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
-source "${kubernetes_dir}/../../../ci/lib.sh"
+source "${kubernetes_dir}/../../../tests/common.bash"
+source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
+# For kata-runtime
+export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+ITA_KEY="${ITA_KEY:-}"
+HTTPS_PROXY="${HTTPS_PROXY:-}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
@@ -21,7 +26,7 @@ readonly COCO_KBS_DIR="${COCO_TRUSTEE_DIR}/kbs"
 # The k8s namespace where the kbs service is deployed
 readonly KBS_NS="coco-tenant"
 # The private key file used for CLI authentication
-readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/config/kubernetes/base/kbs.key"
+readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
 # The kbs ingress name
@@ -57,6 +62,37 @@ kbs_set_resources_policy() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "$KBS_PRIVATE_KEY" set-resource-policy \
 		--policy-file "$file"
+}
+
+# Set resource data in base64 encoded.
+#
+# Parameters:
+#	$1 - repository name (optional)
+#	$2 - resource type (mandatory)
+#	$3 - tag (mandatory)
+#	$4 - resource data in base64
+#
+kbs_set_resource_base64() {
+	local repository="${1:-}"
+	local type="${2:-}"
+	local tag="${3:-}"
+	local data="${4:-}"
+	local file
+	local rc=0
+
+	if [ -z "$data" ]; then
+		>&2 echo "ERROR: missing data parameter"
+		return 1
+	fi
+
+	file=$(mktemp -t kbs-resource-XXXXX)
+	echo "$data" | base64 -d > "$file"
+
+	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
+		rc=$?
+
+	rm -f "$file"
+	return $rc
 }
 
 # Set resource data.
@@ -120,6 +156,15 @@ kbs_set_resource_from_file() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "$KBS_PRIVATE_KEY" set-resource \
 		--path "$path" --resource-file "$file"
+
+	kbs_pod=$(kubectl -n $KBS_NS get pods -o NAME)
+	kbs_repo_path="/opt/confidential-containers/kbs/repository"
+	# Waiting for the resource to be created on the kbs pod
+	if ! kubectl -n $KBS_NS exec -it "$kbs_pod" -- bash -c "for i in {1..30}; do [ -e '$kbs_repo_path/$path' ] && exit 0; sleep 0.5; done; exit -1"; then
+		echo "ERROR: resource '$path' not created in 15s"
+		kubectl -n $KBS_NS exec -it "$kbs_pod" -- bash -c "find $kbs_repo_path"
+		return 1
+	fi
 }
 
 # Build and install the kbs-client binary, unless it is already present.
@@ -130,7 +175,7 @@ kbs_install_cli() {
 	source /etc/os-release || source /usr/lib/os-release
 	case "${ID}" in
 		ubuntu)
-			local pkgs="build-essential"
+			local pkgs="build-essential pkg-config libssl-dev"
 
 			sudo apt-get update -y
 			# shellcheck disable=2086
@@ -180,7 +225,14 @@ kbs_uninstall_cli() {
 #
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
-	kubectl delete -k config/kubernetes/overlays
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		kubectl delete -k config/kubernetes/ita
+	elif [ "${KATA_HYPERVISOR}" = "qemu-se" ]; then
+		kubectl delete -k config/kubernetes/overlays/ibm-se
+	else
+		kubectl delete -k config/kubernetes/overlays/
+	fi
+
 	# Verify that KBS namespace resources were properly deleted
 	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "$cmd"
@@ -212,6 +264,12 @@ function kbs_k8s_deploy() {
 	image=$(get_from_kata_deps ".externals.coco-trustee.image")
 	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
 
+	# Image tag for TDX
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		image=$(get_from_kata_deps ".externals.coco-trustee.ita_image")
+		image_tag=$(get_from_kata_deps ".externals.coco-trustee.ita_image_tag")
+	fi
+
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
 	# current directory). It will be needed to save the cluster's name before
@@ -239,6 +297,15 @@ function kbs_k8s_deploy() {
 	# expects at least one secret served at install time.
 	echo "somesecret" > overlays/key.bin
 
+	# For qemu-se runtime, prepare the necessary resources
+	if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+		mv overlays/key.bin overlays/ibm-se/key.bin
+		prepare_credentials_for_qemu_se
+		# SE_SKIP_CERTS_VERIFICATION should be set to true
+		# to skip the verification of the certificates
+		sed -i "s/false/true/g" overlays/ibm-se/patch.yaml
+	fi
+
 	echo "::group::Update the kbs container image"
 	install_kustomize
 	pushd base
@@ -249,19 +316,42 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		echo "Setting up custom PCCS for TDX"
-		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
-{
- "pccs_url": "https://$(hostname -i):8081/sgx/certification/v4/",
+		echo "::group::Setting up ITA/ITTS for TDX"
+		pushd "${COCO_KBS_DIR}/config/kubernetes/ita/"
+			# Let's replace the "tBfd5kKX2x9ahbodKV1..." sample
+			# `api_key`property by a valid ITA/ITTS API key, in the
+			# ITA/ITTS specific configuration
+			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
+		popd
+		
+		if [ -n "${HTTPS_PROXY}" ]; then
+			# Ideally this should be something kustomizable on trustee side.
+			#
+			# However, for now let's take the bullet and do it here, and revert this as
+			# soon as https://github.com/confidential-containers/trustee/issues/567 is
+			# solved.
+			pushd "${COCO_KBS_DIR}/config/kubernetes/base/"
+				ensure_yq
+				
+				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"$HTTPS_PROXY\"}]" -i deployment.yaml
+			popd
+		fi
 
- // To accept insecure HTTPS certificate, set this option to false
- "use_secure_cert": false
-}
-EOF
-		export DEPLOYMENT_DIR=custom_pccs
+		export DEPLOYMENT_DIR=ita
 	fi
 
 	./deploy-kbs.sh
+
+	# Check the private key used to install the KBS exist and save it in a
+	# well-known location. That's the access key used by the kbs-client.
+	local install_key="${PWD}/base/kbs.key"
+	if [ ! -f "$install_key" ]; then
+		echo "ERROR: KBS private key not found at ${install_key}"
+		return 1
+	fi
+	sudo mkdir -p "$(dirname "$KBS_PRIVATE_KEY")"
+	sudo cp -f "${install_key}" "$KBS_PRIVATE_KEY"
+
 	popd
 
 	if ! waitForProcess "120" "10" "kubectl -n \"$KBS_NS\" get pods | \
@@ -437,7 +527,7 @@ _handle_ingress_aks() {
 		return 1
 	fi
 
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays"
+	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/"
 
 	echo "::group::$(pwd)/ingress.yaml"
 	KBS_INGRESS_CLASS="addon-http-application-routing" \
@@ -455,4 +545,33 @@ _handle_ingress_aks() {
 _handle_ingress_nodeport() {
 	# By exporting this variable the kbs deploy script will install the nodeport service
 	export DEPLOYMENT_DIR=nodeport
+}
+
+
+# Prepare necessary resources for qemu-se runtime
+# Documentation: https://github.com/confidential-containers/trustee/tree/main/attestation-service/verifier/src/se
+prepare_credentials_for_qemu_se() {
+	echo "::group::Prepare credentials for qemu-se runtime"
+	if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+		>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
+		return 1
+	fi
+	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	kata_base_dir=$(dirname $(kata-runtime --config ${config_file_path} env --json | jq -r '.Kernel.Path'))
+	if [ ! -d ${HKD_PATH} ]; then
+		>&2 echo "ERROR: HKD_PATH is not set"
+		return 1
+	fi
+	pushd "${IBM_SE_CREDS_DIR}"
+	mkdir {certs,crls,hdr,hkds,rsa}
+	openssl genrsa -aes256 -passout pass:test1234 -out encrypt_key-psw.pem 4096
+	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -pubout -out rsa/encrypt_key.pub
+	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -out rsa/encrypt_key.pem
+	cp ${kata_base_dir}/kata-containers-se.img hdr/hdr.bin
+	cp ${HKD_PATH}/HKD-*.crt hkds/
+	cp ${HKD_PATH}/ibm-z-host-key-gen2.crl crls/
+	cp ${HKD_PATH}/DigiCertCA.crt ${HKD_PATH}/ibm-z-host-key-signing-gen2.crt certs/
+	popd
+	ls -R ${IBM_SE_CREDS_DIR}
+	echo "::endgroup::"
 }

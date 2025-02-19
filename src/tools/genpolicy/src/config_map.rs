@@ -28,8 +28,10 @@ pub struct ConfigMap {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<BTreeMap<String, String>>,
 
+    // When parsing a YAML file, binaryData is encoded as base64.
+    // Therefore, this is a BTreeMap<String, String> instead of BTreeMap<String, Vec<u8>>.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub binaryData: Option<BTreeMap<String, Vec<u8>>>,
+    pub binaryData: Option<BTreeMap<String, String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     immutable: Option<bool>,
@@ -64,12 +66,37 @@ impl ConfigMap {
 
         None
     }
+
+    pub fn get_key_value_pairs(&self) -> Option<Vec<String>> {
+        //eg ["key1=value1", "key2=value2"]
+        self.data
+            .as_ref()?
+            .keys()
+            .map(|key| {
+                let value = self.data.as_ref().unwrap().get(key).unwrap();
+                format!("{key}={value}")
+            })
+            .collect::<Vec<String>>()
+            .into()
+    }
 }
 
 pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -> Option<String> {
     for config_map in config_maps {
         if let Some(value) = config_map.get_value(value_from) {
             return Some(value);
+        }
+    }
+
+    None
+}
+
+pub fn get_values(config_map_name: &str, config_maps: &Vec<ConfigMap>) -> Option<Vec<String>> {
+    for config_map in config_maps {
+        if let Some(existing_configmap_name) = &config_map.metadata.name {
+            if config_map_name == existing_configmap_name {
+                return config_map.get_key_value_pairs();
+            }
         }
     }
 

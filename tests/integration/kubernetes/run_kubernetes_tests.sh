@@ -10,6 +10,15 @@ set -e
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 source "${kubernetes_dir}/../../common.bash"
 
+cleanup() {
+	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
+	pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
+		| grep '^custom-node-debugger' || true)
+	[ -n "$pods_to_be_deleted" ] && kubectl delete pod -n kube-system $pods_to_be_deleted || true
+}
+
+trap cleanup EXIT
+
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
@@ -24,22 +33,31 @@ else
 	# we need run k8s-guest-pull-image.bats test first, otherwise the test result will be affected
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
+	K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION=( \
+		"k8s-guest-pull-image-encrypted.bats" \
+		"k8s-guest-pull-image-authenticated.bats" \
+		"k8s-guest-pull-image-signature.bats" \
+		"k8s-confidential-attestation.bats" \
+	)
+
 	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-guest-pull-image.bats" \
-		"k8s-confidential-attestation.bats" \
 		"k8s-confidential.bats" \
+		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
+		"k8s-block-volume.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \
 		"k8s-copy-file.bats" \
 		"k8s-cpu-ns.bats" \
 		"k8s-credentials-secrets.bats" \
+		"k8s-cron-job.bats" \
 		"k8s-custom-dns.bats" \
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
-		"k8s-exec-rejected.bats" \
 		"k8s-file-volume.bats" \
+		"k8s-hostname.bats" \
 		"k8s-inotify.bats" \
 		"k8s-job.bats" \
 		"k8s-kill-all-process-in-container.bats" \
@@ -53,6 +71,8 @@ else
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
 		"k8s-pod-quota.bats" \
+		"k8s-policy-hard-coded.bats" \
+		"k8s-policy-deployment.bats" \
 		"k8s-policy-job.bats" \
 		"k8s-policy-pod.bats" \
 		"k8s-policy-pvc.bats" \
@@ -69,10 +89,6 @@ else
 		"k8s-nginx-connectivity.bats" \
 	)
 
-	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
-		K8S_TEST_SMALL_HOST_UNION+=("k8s-pod-manifest-v1.bats")
-	fi
-
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \
@@ -82,14 +98,19 @@ else
 
 	case ${K8S_TEST_HOST_TYPE} in
 		small)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
 			;;
 		normal)
 			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
 		all|baremetal)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			;;
+		baremetal-attestation)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]})
+			;;
+		baremetal-no-attestation)
 			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
-
 			;;
 		*)
 			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
@@ -106,6 +127,8 @@ if [ -f "${arch_config_file}" ]; then
 fi
 
 ensure_yq
+
+info "Running tests with bats version: $(bats --version)"
 
 tests_fail=()
 for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}

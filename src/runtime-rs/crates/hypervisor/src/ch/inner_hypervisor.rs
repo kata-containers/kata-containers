@@ -19,7 +19,6 @@ use ch_config::ch_api::{
 };
 use ch_config::{guest_protection_is_tdx, NamedHypervisorConfig, VmConfig};
 use core::future::poll_fn;
-use futures::executor::block_on;
 use futures::future::join_all;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -37,13 +36,13 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::{Arc, RwLock};
-use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::{Child, Command};
 use tokio::sync::watch::Receiver;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
 const CH_NAME: &str = "cloud-hypervisor";
 
@@ -118,11 +117,7 @@ impl CloudHypervisorInner {
     }
 
     async fn get_kernel_params(&self) -> Result<String> {
-        let cfg = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?;
+        let cfg = &self.config;
 
         let enable_debug = cfg.debug_info.enable_debug;
 
@@ -201,15 +196,10 @@ impl CloudHypervisorInner {
 
         let vsock_socket_path = get_vsock_path(&self.id)?;
 
-        let hypervisor_config = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?;
-
         debug!(
             sl!(),
-            "generic Hypervisor configuration: {:?}", hypervisor_config
+            "generic Hypervisor configuration: {:?}",
+            self.config.clone()
         );
 
         let kernel_params = self.get_kernel_params().await?;
@@ -218,7 +208,7 @@ impl CloudHypervisorInner {
             kernel_params,
             sandbox_path,
             vsock_socket_path,
-            cfg: hypervisor_config.clone(),
+            cfg: self.config.clone(),
             guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
             network_devices,
@@ -325,11 +315,7 @@ impl CloudHypervisorInner {
     async fn cloud_hypervisor_launch(&mut self, _timeout_secs: i32) -> Result<()> {
         self.cloud_hypervisor_ensure_not_launched().await?;
 
-        let cfg = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?;
+        let cfg = &self.config;
 
         let debug = cfg.debug_info.enable_debug;
 
@@ -339,13 +325,7 @@ impl CloudHypervisorInner {
 
         let _ = std::fs::remove_file(api_socket_path.clone());
 
-        let binary_path = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?
-            .path
-            .to_string();
+        let binary_path = cfg.path.to_string();
 
         let path = Path::new(&binary_path).canonicalize()?;
 
@@ -410,7 +390,13 @@ impl CloudHypervisorInner {
             .map_err(|e| anyhow!(e))?
             .clone();
 
-        let ch_outputlogger_task = tokio::spawn(cloud_hypervisor_log_output(child, shutdown));
+        let exit_notify: mpsc::Sender<i32> = self
+            .exit_notify
+            .take()
+            .ok_or_else(|| anyhow!("no exit notify"))?;
+
+        let ch_outputlogger_task =
+            tokio::spawn(cloud_hypervisor_log_output(child, shutdown, exit_notify));
 
         let tasks = vec![ch_outputlogger_task];
 
@@ -562,11 +548,7 @@ impl CloudHypervisorInner {
     // call, if confidential_guest is set, a confidential
     // guest will be created.
     async fn handle_guest_protection(&mut self) -> Result<()> {
-        let cfg = self
-            .config
-            .as_ref()
-            .ok_or("missing hypervisor config")
-            .map_err(|e| anyhow!(e))?;
+        let cfg = &self.config;
 
         let confidential_guest = cfg.security_info.confidential_guest;
 
@@ -634,7 +616,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) fn stop_vm(&mut self) -> Result<()> {
+    pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         // If the container workload exits, this method gets called. However,
         // the container manager always makes a ShutdownContainer request,
         // which results in this method being called potentially a second
@@ -646,9 +628,14 @@ impl CloudHypervisorInner {
 
         self.state = VmmState::NotReady;
 
-        block_on(self.cloud_hypervisor_shutdown()).map_err(|e| anyhow!(e))?;
+        self.cloud_hypervisor_shutdown().await?;
 
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn wait_vm(&self) -> Result<i32> {
+        Ok(0)
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {
@@ -778,7 +765,11 @@ impl CloudHypervisorInner {
 // Log all output from the CH process until a shutdown signal is received.
 // When that happens, stop logging and wait for the child process to finish
 // before returning.
-async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bool>) -> Result<()> {
+async fn cloud_hypervisor_log_output(
+    mut child: Child,
+    mut shutdown: Receiver<bool>,
+    exit_notify: mpsc::Sender<i32>,
+) -> Result<()> {
     let stdout = child
         .stdout
         .as_mut()
@@ -833,7 +824,10 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
     }
 
     // Note that this kills _and_ waits for the process!
-    child.kill().await?;
+    let _ = child.kill().await;
+    if let Ok(status) = child.wait().await {
+        let _ = exit_notify.try_send(status.code().unwrap_or(0));
+    }
 
     Ok(())
 }

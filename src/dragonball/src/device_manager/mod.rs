@@ -553,7 +553,7 @@ impl DeviceOpContext {
         &self,
         dev: &Arc<dyn DeviceIo>,
         callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>>,
-    ) -> Result<()> {
+    ) -> Result<u8> {
         if !self.is_hotplug || !self.pci_hotplug_enabled {
             return Err(DeviceMgrError::InvalidOperation);
         }
@@ -561,7 +561,12 @@ impl DeviceOpContext {
         let (busno, devfn) = DeviceManager::get_pci_device_info(dev)?;
         let req = DevMgrRequest::AddPciDev(PciDevRequest { busno, devfn });
 
-        self.call_hotplug_device(req, callback)
+        self.call_hotplug_device(req, callback)?;
+
+        // Extract the slot number from devfn
+        // Right shift by 3 to remove function bits (2:0) and
+        // align slot bits (7:3) to the least significant position
+        Ok(devfn >> 3)
     }
 
     #[cfg(feature = "host-device")]

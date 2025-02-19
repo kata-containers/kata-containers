@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ARG RUST_TOOLCHAIN
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -55,6 +55,3 @@ RUN ARCH=$(uname -m); \
     	esac; \
     	echo "RUST_ARCH=${rust_arch}" > /etc/profile.d/rust.sh; \
 	rustup target add "${rust_arch}-unknown-linux-${LIBC}"
-
-# aarch64 requires this name -- link for all
-RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"

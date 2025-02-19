@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG IMAGE_REGISTRY=mcr.microsoft.com
-FROM ${IMAGE_REGISTRY}/cbl-mariner/base/core:@OS_VERSION@
+FROM ${IMAGE_REGISTRY}/azurelinux/base/core:@OS_VERSION@
 
 RUN tdnf -y install \
     ca-certificates \

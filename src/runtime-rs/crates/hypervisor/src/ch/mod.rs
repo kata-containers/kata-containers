@@ -11,8 +11,9 @@ use async_trait::async_trait;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use persist::sandbox_persist::Persist;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 // Convenience macro to obtain the scope logger
 #[macro_export]
@@ -29,27 +30,42 @@ mod utils;
 
 use inner::CloudHypervisorInner;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug)]
 pub struct CloudHypervisor {
     inner: Arc<RwLock<CloudHypervisorInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 impl CloudHypervisor {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(CloudHypervisorInner::new())),
+            inner: Arc::new(RwLock::new(CloudHypervisorInner::new(Some(exit_notify)))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
 }
 
+impl Default for CloudHypervisor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Hypervisor for CloudHypervisor {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
@@ -61,7 +77,17 @@ impl Hypervisor for CloudHypervisor {
 
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.stop_vm()
+        inner.stop_vm().await
+    }
+
+    async fn wait_vm(&self) -> Result<i32> {
+        debug!(sl!(), "Waiting CH vmm");
+        let mut waiter = self.exit_waiter.lock().await;
+        if let Some(exitcode) = waiter.0.recv().await {
+            waiter.1 = exitcode;
+        }
+
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -199,12 +225,15 @@ impl Persist for CloudHypervisor {
     }
 
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = CloudHypervisorInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
+        let inner = CloudHypervisorInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

@@ -7,6 +7,6 @@
 set -e
 
 cidir=$(dirname "$0")
-source "${cidir}/lib.sh"
+source "${cidir}/../tests/common.bash"
 
 run_docs_url_alive_check

@@ -60,3 +60,29 @@ Individual test can be run by hand, for example:
 $ cd metrics/machine_learning
 $ ./tensorflow_resnet50_int8.sh 25 60
 ```
+
+# Kata Containers OpenVINO Benchmark
+
+This is a toolkit around neural networks using its built-in benchmarking support
+and analyzing the throughput and latency for various models.
+
+## Running the `OpenVINO` test
+Individual test can be run by hand, for example:
+
+```
+$ cd metrics/machine_learning
+$ ./openvino.sh
+```
+
+# Kata Containers `oneDNN` Benchmark
+
+This is a test of the Intel `oneDNN` as an Intel optimized library for Deep Neural Networks
+and making use of its built-in `benchdnn` functionality.
+
+## Running the `oneDNN` test
+Individual test can be run by hand, for example:
+
+```
+$ cd metrics/machine_learning
+$ ./onednn.sh
+```

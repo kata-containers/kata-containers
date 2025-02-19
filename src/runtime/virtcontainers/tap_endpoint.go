@@ -92,12 +92,13 @@ func (endpoint *TapEndpoint) Detach(ctx context.Context, netNsCreated bool, netN
 }
 
 // HotAttach for the tap endpoint uses hot plug device
-func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
+func (endpoint *TapEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
 	networkLogger().Info("Hot attaching tap endpoint")
 
 	span, ctx := tapTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
+	h := s.hypervisor
 	if err := tapNetwork(endpoint, h.HypervisorConfig().NumVCPUs(), h.HypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging tap ep")
 		return err
@@ -111,7 +112,7 @@ func (endpoint *TapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error 
 }
 
 // HotDetach for the tap endpoint uses hot pull device
-func (endpoint *TapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *TapEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tap endpoint")
 
 	span, ctx := tapTrace(ctx, "HotDetach", endpoint)
@@ -123,6 +124,7 @@ func (endpoint *TapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsC
 		networkLogger().WithError(err).Warn("Error un-bridging tap ep")
 	}
 
+	h := s.hypervisor
 	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach tap ep")
 		return err

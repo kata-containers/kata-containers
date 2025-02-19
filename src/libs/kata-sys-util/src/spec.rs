@@ -4,9 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::path::PathBuf;
-
 use kata_types::container::ContainerType;
+use oci_spec::{runtime as oci, OciSpecError};
+use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -18,7 +18,7 @@ pub enum Error {
     MissingSandboxID,
     /// oci error
     #[error("oci error")]
-    Oci(#[from] oci::Error),
+    Oci(#[from] OciSpecError),
 }
 
 const CRI_CONTAINER_TYPE_KEY_LIST: &[&str] = &[
@@ -50,13 +50,15 @@ pub enum ShimIdInfo {
 
 /// get container type
 pub fn get_container_type(spec: &oci::Spec) -> Result<ContainerType, Error> {
-    for k in CRI_CONTAINER_TYPE_KEY_LIST.iter() {
-        if let Some(type_value) = spec.annotations.get(*k) {
-            match type_value.as_str() {
-                "sandbox" => return Ok(ContainerType::PodSandbox),
-                "podsandbox" => return Ok(ContainerType::PodSandbox),
-                "container" => return Ok(ContainerType::PodContainer),
-                _ => return Err(Error::UnknownContainerType(type_value.clone())),
+    if let Some(annotations) = spec.annotations() {
+        for k in CRI_CONTAINER_TYPE_KEY_LIST.iter() {
+            if let Some(type_value) = annotations.get(*k) {
+                match type_value.as_str() {
+                    "sandbox" => return Ok(ContainerType::PodSandbox),
+                    "podsandbox" => return Ok(ContainerType::PodSandbox),
+                    "container" => return Ok(ContainerType::PodContainer),
+                    _ => return Err(Error::UnknownContainerType(type_value.clone())),
+                }
             }
         }
     }
@@ -70,11 +72,14 @@ pub fn get_shim_id_info() -> Result<ShimIdInfo, Error> {
     match get_container_type(&spec)? {
         ContainerType::PodSandbox | ContainerType::SingleContainer => Ok(ShimIdInfo::Sandbox),
         ContainerType::PodContainer => {
-            for k in CRI_SANDBOX_ID_KEY_LIST {
-                if let Some(sandbox_id) = spec.annotations.get(*k) {
-                    return Ok(ShimIdInfo::Container(sandbox_id.into()));
+            if let Some(annotations) = spec.annotations() {
+                for k in CRI_SANDBOX_ID_KEY_LIST {
+                    if let Some(sandbox_id) = annotations.get(*k) {
+                        return Ok(ShimIdInfo::Container(sandbox_id.into()));
+                    }
                 }
             }
+
             Err(Error::MissingSandboxID)
         }
     }
@@ -86,7 +91,7 @@ pub fn get_bundle_path() -> std::io::Result<PathBuf> {
 }
 
 /// load oci spec
-pub fn load_oci_spec() -> oci::Result<oci::Spec> {
+pub fn load_oci_spec() -> Result<oci::Spec, OciSpecError> {
     let bundle_path = get_bundle_path()?;
     let spec_file = bundle_path.join("config.json");
 

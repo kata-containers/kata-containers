@@ -20,13 +20,14 @@ use slog::Logger;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::device::{DRIVER_EPHEMERAL_TYPE, FS_TYPE_HUGETLB};
 use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{
     common_storage_handler, new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID,
 };
+use kata_types::device::DRIVER_EPHEMERAL_TYPE;
 
+const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 const FS_GID_EQ: &str = "fsgid=";
 const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 
@@ -35,6 +36,11 @@ pub struct EphemeralHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for EphemeralHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_EPHEMERAL_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,
@@ -164,7 +170,7 @@ impl EphemeralHandler {
         let size = size_str
             .unwrap()
             .parse::<u64>()
-            .context(format!("parse size: {:?}", &pagesize_str))?;
+            .context(format!("parse size: {:?}", &size_str))?;
 
         Ok((pagesize, size))
     }

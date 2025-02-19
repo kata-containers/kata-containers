@@ -47,13 +47,16 @@ function parse_results() {
 	local memfree_acu="${3:-0}"
 	local memavailable_acu="${4:-0}"
 
-	local memtotal=$(echo "${raw_results}" | awk '/MemTotal/ {print $2}')
+	local memtotal
+	memtotal=$(echo "${raw_results}" | awk '/MemTotal/ {print $2}')
 	units_memtotal=$(echo "${raw_results}" | awk '/MemTotal/ {print $3}')
 
-	local memfree=$(echo "${raw_results}" | awk '/MemFree/ {print $2}')
+	local memfree
+	memfree=$(echo "${raw_results}" | awk '/MemFree/ {print $2}')
 	units_memfree=$(echo "${raw_results}" | awk '/MemFree/ {print $3}')
 
-	local memavailable=$(echo "${raw_results}" | awk '/MemAvailable/ {print $2}')
+	local memavailable
+	memavailable=$(echo "${raw_results}" | awk '/MemAvailable/ {print $2}')
 	units_memavailable=$(echo "${raw_results}" | awk '/MemAvailable/ {print $3}')
 
 	# check results: if any result is zero or negative, it is considered as invalid, and the test will be repeated.
@@ -118,7 +121,8 @@ function main() {
 	check_images "${IMAGE}"
 	metrics_json_init
 	while [  "${count_iters}" -lt "${num_iterations}" ]; do
-		local output=$(sudo -E "${CTR_EXE}" run --memory-limit $((MEMSIZE*1024)) --rm --runtime="${CTR_RUNTIME}" "${IMAGE}" busybox sh -c "${CMD}" 2>&1)
+		local output
+		output=$(sudo -E "${CTR_EXE}" run --memory-limit $((MEMSIZE*1024)) --rm --runtime="${CTR_RUNTIME}" "${IMAGE}" busybox sh -c "${CMD}" 2>&1)
 		parse_results "${output}" "${memtotalAvg}" "${memfreeAvg}" "${memavailableAvg}"
 
 		# quit if number of attempts exceeds the allowed value.

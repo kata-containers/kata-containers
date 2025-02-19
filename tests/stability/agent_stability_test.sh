@@ -21,12 +21,12 @@ PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 
 function setup {
 	clean_env_ctr
-	sudo ctr image pull $IMAGE
-	sudo ctr run --runtime=$CTR_RUNTIME -d $IMAGE $CONTAINER_NAME sh -c $PAYLOAD_ARGS
+	sudo "${CTR_EXE}" image pull "${IMAGE}"
+	sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
 }
 
 function exec_loop {
-	cmd="sudo ctr t exec --exec-id $(random_name) $CONTAINER_NAME sh -c"
+	cmd="sudo $CTR_EXE t exec --exec-id $(random_name) $CONTAINER_NAME sh -c"
 	$cmd "echo 'hello world' > file"
 	$cmd "ls /file"
 	$cmd "rm -rf /file"

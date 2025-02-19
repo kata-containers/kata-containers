@@ -163,7 +163,7 @@ EOF
 function grab_slab() {
 	# Grabbing slab total from meminfo is easier than doing the math
 	# on slabinfo
-	item=$(fgrep "Slab:" /proc/meminfo | awk '{print $2}')
+	item=$(grep -F "Slab:" /proc/meminfo | awk '{print $2}')
 	((item*=1024))
 
 	local json="$(cat << EOF
@@ -196,11 +196,11 @@ function grab_system() {
 	local free_decr=$((base_mem_free-item))
 
 	# Anon pages
-	local anon=$(fgrep "AnonPages:" /proc/meminfo | awk '{print $2}')
+	local anon=$(grep -F "AnonPages:" /proc/meminfo | awk '{print $2}')
 	((anon*=1024))
 
 	# Mapped pages
-	local mapped=$(egrep "^Mapped:" /proc/meminfo | awk '{print $2}')
+	local mapped=$(grep -E "^Mapped:" /proc/meminfo | awk '{print $2}')
 	((mapped*=1024))
 
 	# Cached

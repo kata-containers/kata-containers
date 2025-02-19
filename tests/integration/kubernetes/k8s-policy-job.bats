@@ -9,6 +9,10 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+        skip "Test not stable on qemu-coco-dev. See issue #10616"
+    fi
+
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     get_pod_config_dir
@@ -131,7 +135,20 @@ test_job_policy_error() {
     test_job_policy_error
 }
 
+@test "Policy failure: unexpected UID = 222" {
+    # Changing the job spec after generating its policy will cause CreateContainer to be denied.
+    yq -i \
+        '.spec.template.spec.securityContext.runAsUser = 222' \
+        "${incorrect_yaml}"
+
+    test_job_policy_error
+}
+
 teardown() {
+    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+        skip "Test not stable on qemu-coco-dev. See issue #10616"
+    fi
+
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     # Debugging information

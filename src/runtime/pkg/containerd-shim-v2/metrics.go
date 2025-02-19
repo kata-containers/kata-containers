@@ -209,12 +209,119 @@ func setMemoryStatsV1(vcMemory vc.MemoryStats) *cgroupsv1.MemoryStat {
 	return memoryStats
 }
 
+// nolint: gocyclo
 func setMemoryStatsV2(vcMemory vc.MemoryStats) *cgroupsv2.MemoryStat {
 	memoryStats := &cgroupsv2.MemoryStat{
 		Usage:      vcMemory.Usage.Usage,
 		UsageLimit: vcMemory.Usage.Limit,
 		SwapUsage:  vcMemory.SwapUsage.Usage,
 		SwapLimit:  vcMemory.SwapUsage.Limit,
+	}
+
+	if v, ok := vcMemory.Stats["anon"]; ok {
+		memoryStats.Anon = v
+	}
+	if v, ok := vcMemory.Stats["file"]; ok {
+		memoryStats.File = v
+	}
+	if v, ok := vcMemory.Stats["kernel_stack"]; ok {
+		memoryStats.KernelStack = v
+	}
+	if v, ok := vcMemory.Stats["slab"]; ok {
+		memoryStats.Slab = v
+	}
+	if v, ok := vcMemory.Stats["sock"]; ok {
+		memoryStats.Sock = v
+	}
+	if v, ok := vcMemory.Stats["shmem"]; ok {
+		memoryStats.Shmem = v
+	}
+	if v, ok := vcMemory.Stats["file_mapped"]; ok {
+		memoryStats.FileMapped = v
+	}
+	if v, ok := vcMemory.Stats["file_dirty"]; ok {
+		memoryStats.FileDirty = v
+	}
+	if v, ok := vcMemory.Stats["file_writeback"]; ok {
+		memoryStats.FileWriteback = v
+	}
+	if v, ok := vcMemory.Stats["anon_thp"]; ok {
+		memoryStats.AnonThp = v
+	}
+	if v, ok := vcMemory.Stats["inactive_anon"]; ok {
+		memoryStats.InactiveAnon = v
+	}
+	if v, ok := vcMemory.Stats["active_anon"]; ok {
+		memoryStats.ActiveAnon = v
+	}
+	if v, ok := vcMemory.Stats["inactive_file"]; ok {
+		memoryStats.InactiveFile = v
+	}
+	if v, ok := vcMemory.Stats["active_file"]; ok {
+		memoryStats.ActiveFile = v
+	}
+	if v, ok := vcMemory.Stats["unevictable"]; ok {
+		memoryStats.Unevictable = v
+	}
+	if v, ok := vcMemory.Stats["slab_reclaimable"]; ok {
+		memoryStats.SlabReclaimable = v
+	}
+	if v, ok := vcMemory.Stats["slab_unreclaimable"]; ok {
+		memoryStats.SlabUnreclaimable = v
+	}
+	if v, ok := vcMemory.Stats["pgfault"]; ok {
+		memoryStats.Pgfault = v
+	}
+	if v, ok := vcMemory.Stats["pgmajfault"]; ok {
+		memoryStats.Pgmajfault = v
+	}
+	if v, ok := vcMemory.Stats["workingset_refault"]; ok {
+		memoryStats.WorkingsetRefault = v
+	}
+	if v, ok := vcMemory.Stats["workingset_activate"]; ok {
+		memoryStats.WorkingsetActivate = v
+	}
+	if v, ok := vcMemory.Stats["workingset_nodereclaim"]; ok {
+		memoryStats.WorkingsetNodereclaim = v
+	}
+	if v, ok := vcMemory.Stats["pgrefill"]; ok {
+		memoryStats.Pgrefill = v
+	}
+	if v, ok := vcMemory.Stats["pgscan"]; ok {
+		memoryStats.Pgscan = v
+	}
+	if v, ok := vcMemory.Stats["pgsteal"]; ok {
+		memoryStats.Pgsteal = v
+	}
+	if v, ok := vcMemory.Stats["pgactivate"]; ok {
+		memoryStats.Pgactivate = v
+	}
+	if v, ok := vcMemory.Stats["pgdeactivate"]; ok {
+		memoryStats.Pgdeactivate = v
+	}
+	if v, ok := vcMemory.Stats["pglazyfree"]; ok {
+		memoryStats.Pglazyfree = v
+	}
+	if v, ok := vcMemory.Stats["pglazyfreed"]; ok {
+		memoryStats.Pglazyfreed = v
+	}
+	if v, ok := vcMemory.Stats["thp_fault_alloc"]; ok {
+		memoryStats.ThpFaultAlloc = v
+	}
+	if v, ok := vcMemory.Stats["thp_collapse_alloc"]; ok {
+		memoryStats.ThpCollapseAlloc = v
+	}
+	if v, ok := vcMemory.Stats["usage"]; ok {
+		memoryStats.Usage = v
+	}
+	if v, ok := vcMemory.Stats["usage_limit"]; ok {
+		memoryStats.UsageLimit = v
+	}
+	if v, ok := vcMemory.Stats["swap_usage"]; ok {
+		memoryStats.SwapUsage = v
+	}
+	if v, ok := vcMemory.Stats["swap_limit"]; ok {
+		memoryStats.SwapLimit = v
 	}
 
 	return memoryStats

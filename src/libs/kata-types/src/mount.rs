@@ -5,9 +5,10 @@
 //
 
 use anyhow::{anyhow, Context, Error, Result};
-use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
 use std::{collections::HashMap, fs, path::PathBuf};
+
+use crate::handler::HandlerManager;
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -58,6 +59,9 @@ pub const KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS: &str = "image_nydus_fs";
 pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS: &str = "layer_nydus_fs";
 /// Download and extra container image inside guest vm.
 pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
+
+/// Manager to manage registered storage device handlers.
+pub type StorageHandlerManager<H> = HandlerManager<H>;
 
 /// Information about a mount.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -439,47 +443,6 @@ pub trait StorageDevice: Send + Sync {
 
     /// Clean up resources related to the storage device.
     fn cleanup(&self) -> Result<()>;
-}
-
-/// Manager to manage registered storage device handlers.
-pub struct StorageHandlerManager<H> {
-    handlers: HashMap<String, H>,
-}
-
-impl<H> Default for StorageHandlerManager<H> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<H> StorageHandlerManager<H> {
-    /// Create a new instance of `StorageHandlerManager`.
-    pub fn new() -> Self {
-        Self {
-            handlers: HashMap::new(),
-        }
-    }
-
-    /// Register a storage device handler.
-    pub fn add_handler(&mut self, id: &str, handler: H) -> Result<()> {
-        match self.handlers.entry(id.to_string()) {
-            Entry::Occupied(_) => Err(anyhow!("storage handler for {} already exists", id)),
-            Entry::Vacant(entry) => {
-                entry.insert(handler);
-                Ok(())
-            }
-        }
-    }
-
-    /// Get storage handler with specified `id`.
-    pub fn handler(&self, id: &str) -> Option<&H> {
-        self.handlers.get(id)
-    }
-
-    /// Get names of registered handlers.
-    pub fn get_handlers(&self) -> Vec<String> {
-        self.handlers.keys().map(|v| v.to_string()).collect()
-    }
 }
 
 /// Join user provided volume path with kata direct-volume root path.

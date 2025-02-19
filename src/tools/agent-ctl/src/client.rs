@@ -5,7 +5,7 @@
 
 // Description: Client side of ttRPC comms
 
-use crate::types::{Config, Options};
+use crate::types::*;
 use crate::utils;
 use anyhow::{anyhow, Result};
 use byteorder::ByteOrder;
@@ -15,8 +15,10 @@ use protocols::agent_ttrpc::*;
 use protocols::health::*;
 use protocols::health_ttrpc::*;
 use slog::{debug, info};
-use std::io;
+use std::convert::TryFrom;
+use std::fs;
 use std::io::Write; // XXX: for flush()
+use std::io::{self, Read, Seek, SeekFrom};
 use std::io::{BufRead, BufReader};
 use std::os::unix::io::{IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
@@ -32,7 +34,7 @@ macro_rules! run_if_auto_values {
         let cfg = $ctx.metadata.get(METADATA_CFG_NS);
 
         if let Some(v) = cfg {
-            if v.contains(&NO_AUTO_VALUES_CFG_NAME.to_string()) {
+            if v.contains(&AUTO_VALUES_CFG_NAME.to_string()) {
                 debug!(sl!(), "Running closure to generate values");
 
                 $closure()?;
@@ -101,9 +103,9 @@ const ERR_API_FAILED: &str = "API failed";
 // Value used as a "namespace" in the ttRPC Context's metadata.
 const METADATA_CFG_NS: &str = "agent-ctl-cfg";
 
-// Special value which if found means do not generate any values
+// Special value which if found means generate any values
 // automatically.
-const NO_AUTO_VALUES_CFG_NAME: &str = "no-auto-values";
+const AUTO_VALUES_CFG_NAME: &str = "auto-values";
 
 static AGENT_CMDS: &[AgentCmd] = &[
     AgentCmd {
@@ -285,6 +287,21 @@ static AGENT_CMDS: &[AgentCmd] = &[
         name: "WriteStdin",
         st: ServiceType::Agent,
         fp: agent_cmd_container_write_stdin,
+    },
+    AgentCmd {
+        name: "SetPolicy",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_set_policy,
+    },
+    AgentCmd {
+        name: "MemAgentMemcgSet",
+        st: ServiceType::Agent,
+        fp: agent_cmd_mem_agent_memcg_set,
+    },
+    AgentCmd {
+        name: "MemAgentCompactSet",
+        st: ServiceType::Agent,
+        fp: agent_cmd_mem_agent_compact_set,
     },
 ];
 
@@ -633,7 +650,7 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
     // of this option.
 
     if !cfg.no_auto_values {
-        ttrpc_ctx.add(METADATA_CFG_NS.into(), NO_AUTO_VALUES_CFG_NAME.to_string());
+        ttrpc_ctx.add(METADATA_CFG_NS.into(), AUTO_VALUES_CFG_NAME.to_string());
 
         debug!(sl!(), "Automatic value generation disabled");
     }
@@ -914,19 +931,17 @@ fn agent_cmd_sandbox_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
     let mut req: CreateSandboxRequest = utils::make_request(args)?;
 
+    // Generate sandbox_id if it is empty
+    if req.sandbox_id.is_empty() {
+        req.set_sandbox_id(utils::random_sandbox_id());
+    }
+
     let ctx = clone_context(ctx);
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let sid = utils::get_option("sid", options, args)?;
-        req.set_sandbox_id(sid);
-
-        Ok(())
-    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -967,26 +982,19 @@ fn agent_cmd_container_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: CreateContainerRequest = utils::make_request(args)?;
+    let input: CreateContainerInput = utils::make_request(args)?;
+
+    if input.image.is_empty() {
+        info!(sl!(), "create container: error image is empty");
+        return Err(anyhow!("CreateContainer needs image reference"));
+    }
 
     let ctx = clone_context(ctx);
 
-    // FIXME: container create: add back "spec=file:///" support
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let cid = utils::get_option("cid", options, args)?;
-        let exec_id = utils::get_option("exec_id", options, args)?;
-        let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
-
-        req.set_container_id(cid);
-        req.set_exec_id(exec_id);
-        req.set_OCI(ttrpc_spec);
-
-        Ok(())
-    });
+    let req = utils::make_create_container_request(input)?;
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1004,18 +1012,12 @@ fn agent_cmd_container_remove(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: RemoveContainerRequest = utils::make_request(args)?;
+    let req: RemoveContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let cid = utils::get_option("cid", options, args)?;
-        req.set_container_id(cid);
-        Ok(())
-    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1025,6 +1027,9 @@ fn agent_cmd_container_remove(
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
+
+    // Un-mount the rootfs mount point.
+    utils::remove_container_image_mount(req.container_id())?;
 
     Ok(())
 }
@@ -1173,19 +1178,12 @@ fn agent_cmd_container_start(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: StartContainerRequest = utils::make_request(args)?;
+    let req: StartContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let cid = utils::get_option("cid", options, args)?;
-
-        req.set_container_id(cid);
-        Ok(())
-    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1705,94 +1703,50 @@ fn agent_cmd_sandbox_copy_file(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: CopyFileRequest = utils::make_request(args)?;
+    let input: CopyFileInput = utils::make_request(args)?;
 
-    let ctx = clone_context(ctx);
+    let mut req: CopyFileRequest = utils::make_copy_file_request(&input)?;
 
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let path = utils::get_option("path", options, args)?;
-        if !path.is_empty() {
-            req.set_path(path);
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    if req.file_size() == 0 {
+        let reply = client
+            .copy_file(clone_context(ctx), &req)
+            .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+        info!(sl!(), "response received"; "response" => format!("{:?}", reply));
+
+        return Ok(());
+    }
+
+    let chunk_size = 1024 * 1024;
+    let mut remaining_bytes = req.file_size();
+    let mut src_file = fs::File::open(&input.src)?;
+    let mut offset = 0;
+    while remaining_bytes > 0 {
+        let mut copy_size = remaining_bytes;
+        if copy_size > chunk_size {
+            copy_size = chunk_size;
         }
 
-        let file_size_str = utils::get_option("file_size", options, args)?;
+        let mut buf = vec![0; usize::try_from(copy_size)?];
+        src_file.read_exact(&mut buf)?;
+        req.set_data(buf);
+        req.set_offset(offset);
 
-        if !file_size_str.is_empty() {
-            let file_size = file_size_str
-                .parse::<i64>()
-                .map_err(|e| anyhow!(e).context("invalid file_size"))?;
+        let reply = client
+            .copy_file(clone_context(ctx), &req)
+            .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
-            req.set_file_size(file_size);
-        }
+        info!(sl!(), "response received"; "response" => format!("{:?}", reply));
 
-        let file_mode_str = utils::get_option("file_mode", options, args)?;
-
-        if !file_mode_str.is_empty() {
-            let file_mode = file_mode_str
-                .parse::<u32>()
-                .map_err(|e| anyhow!(e).context("invalid file_mode"))?;
-
-            req.set_file_mode(file_mode);
-        }
-
-        let dir_mode_str = utils::get_option("dir_mode", options, args)?;
-
-        if !dir_mode_str.is_empty() {
-            let dir_mode = dir_mode_str
-                .parse::<u32>()
-                .map_err(|e| anyhow!(e).context("invalid dir_mode"))?;
-
-            req.set_dir_mode(dir_mode);
-        }
-
-        let uid_str = utils::get_option("uid", options, args)?;
-
-        if !uid_str.is_empty() {
-            let uid = uid_str
-                .parse::<i32>()
-                .map_err(|e| anyhow!(e).context("invalid uid"))?;
-
-            req.set_uid(uid);
-        }
-
-        let gid_str = utils::get_option("gid", options, args)?;
-
-        if !gid_str.is_empty() {
-            let gid = gid_str
-                .parse::<i32>()
-                .map_err(|e| anyhow!(e).context("invalid gid"))?;
-            req.set_gid(gid);
-        }
-
-        let offset_str = utils::get_option("offset", options, args)?;
-
-        if !offset_str.is_empty() {
-            let offset = offset_str
-                .parse::<i64>()
-                .map_err(|e| anyhow!(e).context("invalid offset"))?;
-            req.set_offset(offset);
-        }
-
-        let data_str = utils::get_option("data", options, args)?;
-        if !data_str.is_empty() {
-            let data = utils::str_to_bytes(&data_str)?;
-            req.set_data(data.to_vec());
-        }
-
-        Ok(())
-    });
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .copy_file(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
+        remaining_bytes -= copy_size;
+        offset += copy_size;
+        src_file.seek(SeekFrom::Start(offset as u64))?;
+    }
 
     Ok(())
 }
@@ -2151,6 +2105,78 @@ fn agent_cmd_sandbox_add_swap(
 
     // FIXME: Implement 'AddSwap' fully.
     eprintln!("FIXME: 'AddSwap' not fully implemented");
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_set_policy(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let input: SetPolicyInput = utils::make_request(args)?;
+
+    let req = utils::make_set_policy_request(&input)?;
+
+    let ctx = clone_context(ctx);
+
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .set_policy(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_mem_agent_memcg_set(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    //let req = MemAgentMemcgConfig::default();
+    let req: MemAgentMemcgConfig = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .mem_agent_memcg_set(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_mem_agent_compact_set(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let req: MemAgentCompactConfig = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .mem_agent_compact_set(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));

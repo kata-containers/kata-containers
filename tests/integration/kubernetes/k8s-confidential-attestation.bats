@@ -7,7 +7,6 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
-load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 export KBS="${KBS:-false}"
 export test_key="aatest"
@@ -47,7 +46,10 @@ setup() {
 }
 
 @test "Get CDH resource" {
-	kbs_set_allow_all_resources
+	if ! is_confidential_hardware; then
+		kbs_set_allow_all_resources
+	fi
+
 	kubectl apply -f "${K8S_TEST_YAML}"
 
 	# Retrieve pod name, wait for it to come up, retrieve pod ip
@@ -88,11 +90,5 @@ teardown() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	[ -n "${pod_name:-}" ] && kubectl describe "pod/${pod_name}" || true
-	[ -n "${pod_config_dir:-}" ] && kubectl delete -f "${K8S_TEST_YAML}" || true
-
-	if [[ -n "${node_start_time}:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
-		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
-		print_node_journal "$node" "kata" --since "$node_start_time" || true
-	fi
+	teardown_common "${node}" "${node_start_time:-}"
 }

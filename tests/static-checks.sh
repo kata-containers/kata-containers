@@ -429,7 +429,7 @@ static_check_license_headers()
 
 		info "Checking $desc"
 
-		local missing=$(egrep \
+		local missing=$(grep \
 			--exclude=".git/*" \
 			--exclude=".gitignore" \
 			--exclude=".dockerignore" \
@@ -472,9 +472,11 @@ static_check_license_headers()
 			--exclude="tools/packaging/qemu/default-configs/*" \
 			--exclude="src/libs/protocols/protos/gogo/*.proto" \
 			--exclude="src/libs/protocols/protos/google/*.proto" \
+			--exclude="src/libs/protocols/protos/cri-api/api.proto" \
+			--exclude="src/mem-agent/example/protocols/protos/google/protobuf/*.proto" \
 			--exclude="src/libs/*/test/texture/*" \
 			--exclude="*.dic" \
-			-EL $extra_args "\<${pattern}\>" \
+			-EL $extra_args -E "\<${pattern}\>" \
 			$files || true)
 
 		if [ -n "$missing" ]; then
@@ -782,7 +784,7 @@ static_check_docs()
 
 	local exclude_pattern
 
-	# Convert the list of files into an egrep(1) alternation pattern.
+	# Convert the list of files into an grep(1) alternation pattern.
 	exclude_pattern=$(echo "${exclude_doc_regexs[@]}"|sed 's, ,|,g')
 
 	# Every document in the repo (except a small handful of exceptions)
@@ -791,7 +793,7 @@ static_check_docs()
 	do
 		# Check the ignore list for markdown files that do not need to
 		# be referenced by others.
-		echo "$doc"|egrep -q "(${exclude_pattern})" && continue
+		echo "$doc"|grep -q -E "(${exclude_pattern})" && continue
 
 		grep -q "$doc" "$md_links" || die "Document $doc is not referenced"
 	done
@@ -826,7 +828,7 @@ static_check_docs()
 		if [ "$specific_branch" != "true" ]
 		then
 			# If the URL is new on this PR, it cannot be checked.
-			echo "$new_urls" | egrep -q "\<${url}\>" && \
+			echo "$new_urls" | grep -q -E "\<${url}\>" && \
 				info "ignoring new (but correct) URL: $url" && continue
 		fi
 
@@ -924,12 +926,12 @@ static_check_eof()
 	[ "$file" == "Vagrantfile" ] && return
 
 	local invalid=$(cat "$file" |\
-		egrep -o '<<-* *\w*' |\
+		grep -o -E '<<-* *\w*' |\
 		sed -e 's/^<<-*//g' |\
 		tr -d ' ' |\
 		sort -u |\
-		egrep -v '^$' |\
-		egrep -v "$anchor" || true)
+		grep -v -E '^$' |\
+		grep -v -E "$anchor" || true)
 	[ -z "$invalid" ] || die "Expected '$anchor' here anchor, in $file found: $invalid"
 }
 
@@ -956,7 +958,7 @@ static_check_files()
 	then
 		info "Checking all files in $branch branch"
 
-		files=$(git ls-files | egrep -v "/(.git|vendor|grpc-rs|target)/" || true)
+		files=$(git ls-files | grep -v -E "/(.git|vendor|grpc-rs|target)/" || true)
 	else
 		info "Checking local branch for changed files only"
 
@@ -978,7 +980,7 @@ static_check_files()
 
 		# Look for files containing the specified comment tags but
 		# which do not include a github URL.
-		match=$(egrep -H "\<FIXME\>|\<TODO\>" "$file" |\
+		match=$(grep -H -E "\<FIXME\>|\<TODO\>" "$file" |\
 			grep -v "https://github.com/.*/issues/[0-9]" |\
 			cut -d: -f1 |\
 			sort -u || true)
@@ -1293,7 +1295,7 @@ static_check_dockerfiles()
 	linter_cmd+=" --ignore DL3041"
 	# "DL3033 warning: Specify version with `yum install -y <package>-<version>`"
 	linter_cmd+=" --ignore DL3033"
-	# "DL3018 warning: Pin versions in apk add. Instead of `apk add <package>` use `apk add <package>=<version>`" 
+	# "DL3018 warning: Pin versions in apk add. Instead of `apk add <package>` use `apk add <package>=<version>`"
 	linter_cmd+=" --ignore DL3018"
 	# "DL3003 warning: Use WORKDIR to switch to a directory"
 	# See https://github.com/hadolint/hadolint/issues/70

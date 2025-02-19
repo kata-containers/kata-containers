@@ -43,14 +43,8 @@ const (
 	// HypervisorPath is a sandbox annotation for passing a per container path pointing at the hypervisor that will run the container VM.
 	HypervisorPath = kataAnnotHypervisorPrefix + "path"
 
-	// HypervisorCtlPath is a sandbox annotation for passing a per container path pointing at the hypervisor control binary that will run the container VM.
-	HypervisorCtlPath = kataAnnotHypervisorPrefix + "ctlpath"
-
 	// JailerPath is a sandbox annotation for passing a per container path pointing at the jailer that will constrain the container VM.
 	JailerPath = kataAnnotHypervisorPrefix + "jailer_path"
-
-	// CtlPath is a sandbox annotation for passing a per container path pointing at the acrn ctl binary
-	CtlPath = kataAnnotHypervisorPrefix + "ctlpath"
 
 	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
 	FirmwarePath = kataAnnotHypervisorPrefix + "firmware"
@@ -70,9 +64,6 @@ const (
 
 	// HypervisorHash is an sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
 	HypervisorHash = kataAnnotHypervisorPrefix + "hypervisor_hash"
-
-	// HypervisorCtlHash is a sandbox annotation for passing a container hypervisor control binary SHA-512 hash value.
-	HypervisorCtlHash = kataAnnotHypervisorPrefix + "hypervisorctl_hash"
 
 	// JailerHash is an sandbox annotation for passing a jailer binary SHA-512 hash value.
 	JailerHash = kataAnnotHypervisorPrefix + "jailer_hash"
@@ -140,6 +131,12 @@ const (
 
 	// UseLegacySerial sets legacy serial device for guest console if available and implemented for architecture
 	UseLegacySerial = kataAnnotHypervisorPrefix + "use_legacy_serial"
+
+	// GPU specific annotations used by remote hypervisor for instance selection
+	// Number of GPUs required in the Kata VM
+	DefaultGPUs = kataAnnotHypervisorPrefix + "default_gpus"
+	// GPU model - tesla, h100, radeon etc..
+	DefaultGPUModel = kataAnnotHypervisorPrefix + "default_gpu_model"
 
 	//
 	// CPU Annotations
@@ -243,6 +240,9 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	// Initdata is the initdata passed in when CreateVM
+	Initdata = kataConfAnnotationsPrefix + "runtime.cc_init_data"
 )
 
 // Runtime related annotations
@@ -306,6 +306,8 @@ const (
 	AgentContainerPipeSize       = kataAnnotAgentPrefix + ContainerPipeSizeOption
 	ContainerPipeSizeOption      = "container_pipe_size"
 	ContainerPipeSizeKernelParam = "agent." + ContainerPipeSizeOption
+	CdhApiTimeoutOption          = "cdh_api_timeout"
+	CdhApiTimeoutKernelParam     = "agent." + CdhApiTimeoutOption
 
 	// Policy is an annotation containing the contents of an agent policy file, base64 encoded.
 	Policy = kataAnnotAgentPrefix + "policy"

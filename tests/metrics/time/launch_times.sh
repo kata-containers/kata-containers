@@ -134,7 +134,7 @@ function run_workload() {
 		# We make a presumption here that as we are in a cold-boot VM
 		# kernel, the first dmesg is at '0 seconds', so the timestamp
 		# of that last line is the length of time in the kernel.
-		kernel_last_line=$( (fgrep "Freeing unused kernel" <<- EOF
+		kernel_last_line=$( (grep -F "Freeing unused kernel" <<- EOF
 				${workload_result[@]}
 			EOF
 			) | tail -1 )

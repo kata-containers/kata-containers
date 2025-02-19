@@ -31,12 +31,16 @@ function _print_instance_type() {
 function _print_cluster_name() {
 	local test_type="${1:-k8s}"
 	local short_sha
+	local metadata
 
 	if [ -n "${AKS_NAME:-}" ]; then
 		echo "$AKS_NAME"
 	else
 		short_sha="$(git rev-parse --short=12 HEAD)"
-		echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
+		metadata="${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
+		# Compute the SHA1 digest of the metadata part to keep the name less
+		# than the limit of 63 chars of AKS
+		echo "${test_type}-$(sha1sum <<< "$metadata" | cut -d' ' -f1)"
 	fi
 }
 
@@ -80,11 +84,21 @@ function login_azure() {
 
 function create_cluster() {
 	test_type="${1:-k8s}"
+	local short_sha
+	local tags
 
 	# First ensure it didn't fail to get cleaned up from a previous run.
 	delete_cluster "${test_type}" || true
 
 	local rg="$(_print_rg_name ${test_type})"
+
+	short_sha="$(git rev-parse --short=12 HEAD)"
+	tags=("GH_PR_NUMBER=${GH_PR_NUMBER:-}" \
+		"SHORT_SHA=${short_sha}" \
+		"KATA_HYPERVISOR=${KATA_HYPERVISOR}"\
+		"KATA_HOST_OS=${KATA_HOST_OS:-}" \
+		"K8S_TEST_HOST_TYPE=${K8S_TEST_HOST_TYPE:0:1}" \
+		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
 		-l eastus \
@@ -96,18 +110,17 @@ function create_cluster() {
 		-n "$(_print_cluster_name ${test_type})" \
 		-s "$(_print_instance_type)" \
 		--node-count 1 \
-		--generate-ssh-keys
+		--generate-ssh-keys \
+		--tags "${tags[@]}" \
+		$([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
 }
 
 function install_bats() {
-	# Installing bats from the lunar repo.
-	# This installs newer version of the bats which supports setup_file and teardown_file functions.
-	# These functions are helpful when adding new tests that require one time setup.
-
+	# Installing bats from the noble repo.
 	sudo apt install -y software-properties-common
-	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
+	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
 	sudo apt install -y bats
-	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
+	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
 }
 
 function install_kubectl() {
@@ -211,12 +224,10 @@ function deploy_k0s() {
 
 	# Download the kubectl binary into /usr/bin so we can avoid depending
 	# on `k0s kubectl` command
-	ARCH=$(uname -m)
-	if [ "${ARCH}" = "x86_64" ]; then
-		ARCH=amd64
-	fi
+	ARCH=$(arch_to_golang)
+
 	kubectl_version=$(sudo k0s kubectl version 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
 
 	mkdir -p ~/.kube
@@ -239,12 +250,10 @@ function deploy_k3s() {
 	# Which happens basically because k3s links `/usr/local/bin/kubectl`
 	# to `/usr/local/bin/k3s`, and that does extra stuff that vanilla
 	# `kubectl` doesn't do.
-	ARCH=$(uname -m)
-	if [ "${ARCH}" = "x86_64" ]; then
-		ARCH=amd64
-	fi
+	ARCH=$(arch_to_golang)
+
 	kubectl_version=$(/usr/local/bin/k3s kubectl version --client=true 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/+k3s[0-9]\+//')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
 	sudo rm -rf /usr/local/bin/kubectl
 
@@ -263,7 +272,7 @@ function create_cluster_kcli() {
 		-P ctlplanes="${CLUSTER_CONTROL_NODES:-1}" \
 		-P workers="${CLUSTER_WORKERS:-1}" \
 		-P network="${LIBVIRT_NETWORK:-default}" \
-		-P image="${CLUSTER_IMAGE:-ubuntu2004}" \
+		-P image="${CLUSTER_IMAGE:-ubuntu2204}" \
 		-P sdn=flannel \
 		-P nfs=false \
 		-P disk_size="${CLUSTER_DISK_SIZE:-20}" \
@@ -361,6 +370,17 @@ function set_default_cluster_namespace() {
 }
 
 function delete_test_cluster_namespace() {
-	set_default_cluster_namespace
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
+	set_default_cluster_namespace
+}
+
+function delete_test_runners(){
+	echo "Delete test scripts"
+	local scripts_names=( "run_kubernetes_tests.sh" "bats" )
+	for script_name in "${scripts_names[@]}"; do
+		pids=$(pgrep -f ${script_name})
+		if [ -n "$pids" ]; then
+			echo "$pids" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
+		fi
+	done
 }

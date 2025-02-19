@@ -29,6 +29,7 @@ setup() {
 
 	coco_enabled=""
 	for i in {1..6}; do
+		rm -f "${HOME}/.ssh/known_hosts"
 		if ! pod_ip=$(kubectl get pod -o wide | grep "confidential-unencrypted" | awk '{print $6;}'); then
 			warn "Failed to get pod IP address."
 		else

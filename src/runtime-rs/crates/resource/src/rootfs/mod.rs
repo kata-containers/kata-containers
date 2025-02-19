@@ -16,9 +16,9 @@ use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use std::{sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
-use crate::share_fs::ShareFs;
-
 use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
+use crate::share_fs::ShareFs;
+use oci_spec::runtime as oci;
 
 const ROOTFS: &str = "rootfs";
 const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";
@@ -69,14 +69,14 @@ impl RootFsResource {
     ) -> Result<Arc<dyn Rootfs>> {
         match rootfs_mounts {
             // if rootfs_mounts is empty
-            mounts_vec if mounts_vec.is_empty() => {
+            [] => {
                 if let Some(share_fs) = share_fs {
                     // handle share fs rootfs
                     Ok(Arc::new(
                         share_fs_rootfs::ShareFsRootfs::new(
                             share_fs,
                             cid,
-                            root.path.as_str(),
+                            root.path().display().to_string().as_str(),
                             None,
                         )
                         .await

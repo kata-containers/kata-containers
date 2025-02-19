@@ -476,8 +476,7 @@ func TestAssetPath(t *testing.T) {
 	// The values are "paths" (start with a slash), but end with the
 	// annotation name.
 	cfg := HypervisorConfig{
-		HypervisorPath:    "/" + "io.katacontainers.config.hypervisor.path",
-		HypervisorCtlPath: "/" + "io.katacontainers.config.hypervisor.ctlpath",
+		HypervisorPath: "/" + "io.katacontainers.config.hypervisor.path",
 
 		KernelPath: "/" + "io.katacontainers.config.hypervisor.kernel",
 

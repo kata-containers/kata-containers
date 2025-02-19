@@ -57,8 +57,8 @@ pub fn get_policy_mounts(
                 .find(|m| m.destination.eq(&s_mount.destination))
             {
                 // Update an already existing mount.
-                policy_mount.type_ = mount.type_.clone();
-                policy_mount.source = mount.source.clone();
+                policy_mount.type_.clone_from(&mount.type_);
+                policy_mount.source.clone_from(&mount.source);
                 policy_mount.options = mount.options.iter().map(String::from).collect();
             } else {
                 // Add a new mount.
@@ -94,7 +94,7 @@ fn keep_settings_mount(
 fn adjust_termination_path(mount: &mut policy::KataMount, yaml_container: &pod::Container) {
     if mount.destination == "/dev/termination-log" {
         if let Some(path) = &yaml_container.terminationMessagePath {
-            mount.destination = path.clone();
+            mount.destination.clone_from(path);
         }
     }
 }
@@ -106,6 +106,11 @@ pub fn get_mount_and_storage(
     yaml_volume: &volume::Volume,
     yaml_mount: &pod::VolumeMount,
 ) {
+    debug!(
+        "get_mount_and_storage: adding mount and storage for: {:?}",
+        &yaml_volume
+    );
+
     if let Some(emptyDir) = &yaml_volume.emptyDir {
         let settings_volumes = &settings.volumes;
         let mut volume: Option<&settings::EmptyDirVolume> = None;
@@ -176,6 +181,14 @@ fn get_empty_dir_mount_and_storage(
         &settings_empty_dir.mount_type
     };
 
+    let access = match yaml_mount.readOnly {
+        Some(true) => {
+            debug!("setting read only access for emptyDir mount");
+            "ro"
+        }
+        _ => "rw",
+    };
+
     p_mounts.push(policy::KataMount {
         destination: yaml_mount.mountPath.to_string(),
         type_: mount_type.to_string(),
@@ -183,7 +196,7 @@ fn get_empty_dir_mount_and_storage(
         options: vec![
             "rbind".to_string(),
             "rprivate".to_string(),
-            "rw".to_string(),
+            access.to_string(),
         ],
     });
 }
@@ -204,6 +217,13 @@ fn get_host_path_mount(
         }
     }
 
+    let access = match yaml_mount.readOnly {
+        Some(true) => {
+            debug!("setting read only access for host path mount");
+            "ro"
+        }
+        _ => "rw",
+    };
     // TODO:
     //
     // - When volume.hostPath.path: /dev/ttyS0
@@ -215,7 +235,7 @@ fn get_host_path_mount(
     if !path.starts_with("/dev/") && !path.starts_with("/sys/") {
         debug!("get_host_path_mount: calling get_shared_bind_mount");
         let propagation = if biderectional { "rshared" } else { "rprivate" };
-        get_shared_bind_mount(yaml_mount, p_mounts, propagation, "rw");
+        get_shared_bind_mount(yaml_mount, p_mounts, propagation, access);
     } else {
         let dest = yaml_mount.mountPath.clone();
         let type_ = "bind".to_string();
@@ -223,7 +243,7 @@ fn get_host_path_mount(
         let options = vec![
             "rbind".to_string(),
             mount_option.to_string(),
-            "rw".to_string(),
+            access.to_string(),
         ];
 
         if let Some(policy_mount) = p_mounts.iter_mut().find(|m| m.destination.eq(&dest)) {
@@ -350,4 +370,59 @@ fn get_downward_api_mount(yaml_mount: &pod::VolumeMount, p_mounts: &mut Vec<poli
             options,
         });
     }
+}
+
+pub fn get_image_mount_and_storage(
+    settings: &settings::Settings,
+    p_mounts: &mut Vec<policy::KataMount>,
+    storages: &mut Vec<agent::Storage>,
+    destination: &str,
+) {
+    // https://github.com/kubernetes/examples/blob/master/cassandra/image/Dockerfile
+    // has a volume mount starting with two '/' characters:
+    //
+    // CASSANDRA_DATA=/cassandra_data
+    // VOLUME ["/$CASSANDRA_DATA"]
+    let mut destination_string = destination.to_string();
+    while destination_string.contains("//") {
+        destination_string = destination_string.replace("//", "/");
+    }
+    debug!("get_image_mount_and_storage: image dest = {destination}, dest = {destination_string}");
+
+    for mount in &mut *p_mounts {
+        if mount.destination == destination_string {
+            debug!(
+                "get_image_mount_and_storage: mount {destination_string} already defined by YAML"
+            );
+            return;
+        }
+    }
+
+    let settings_image = &settings.volumes.image_volume;
+    debug!(
+        "get_image_mount_and_storage: settings for container image volumes: {:?}",
+        settings_image
+    );
+
+    storages.push(agent::Storage {
+        driver: settings_image.driver.clone(),
+        driver_options: Vec::new(),
+        source: settings_image.source.clone(),
+        fstype: settings_image.fstype.clone(),
+        options: settings_image.options.clone(),
+        mount_point: destination_string.clone(),
+        fs_group: protobuf::MessageField::none(),
+        special_fields: ::protobuf::SpecialFields::new(),
+    });
+
+    let file_name = Path::new(&destination_string).file_name().unwrap();
+    let name = OsString::from(file_name).into_string().unwrap();
+    let source = format!("{}{name}$", &settings_image.mount_source);
+
+    p_mounts.push(policy::KataMount {
+        destination: destination_string,
+        type_: settings_image.fstype.clone(),
+        source,
+        options: settings_image.options.clone(),
+    });
 }

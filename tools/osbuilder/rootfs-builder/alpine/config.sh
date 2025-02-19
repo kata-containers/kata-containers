@@ -11,7 +11,7 @@ BASE_PACKAGES="alpine-base"
 
 # Alpine mirror to use
 # See a list of mirrors at http://nl.alpinelinux.org/alpine/MIRRORS.txt
-MIRROR=https://mirror.math.princeton.edu/pub/alpinelinux/
+MIRROR=http://dl-cdn.alpinelinux.org/alpine/
 
 PACKAGES="bash iptables ip6tables"
 

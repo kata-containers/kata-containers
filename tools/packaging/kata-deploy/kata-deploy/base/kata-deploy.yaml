@@ -50,6 +50,10 @@ spec:
               value: ""
             - name: PULL_TYPE_MAPPING
               value: ""
+            - name: INSTALLATION_PREFIX
+              value: ""
+            - name: MULTI_INSTALL_SUFFIX
+              value: ""
           securityContext:
             privileged: true
           volumeMounts:
@@ -57,10 +61,6 @@ spec:
               mountPath: /etc/crio/
             - name: containerd-conf
               mountPath: /etc/containerd/
-            - name: kata-artifacts
-              mountPath: /opt/kata/
-            - name: local-bin
-              mountPath: /usr/local/bin/
             - name: host
               mountPath: /host/
       volumes:
@@ -70,13 +70,6 @@ spec:
         - name: containerd-conf
           hostPath:
             path: /etc/containerd/
-        - name: kata-artifacts
-          hostPath:
-            path: /opt/kata/
-            type: DirectoryOrCreate
-        - name: local-bin
-          hostPath:
-            path: /usr/local/bin/
         - name: host
           hostPath:
             path: /

@@ -47,13 +47,16 @@ trap remove_tmp_file EXIT
 # Show help about this script
 function help(){
 cat << EOF
+
 Usage: $0 <count> <wait_time> [auto]
+
    Description:
         <count>      : Number of containers to run.
         <wait_time>  : Time in seconds to wait before taking
                        metrics.
         [auto]       : Optional 'auto KSM settle' mode
                        waits for ksm pages_shared to settle down
+
 EOF
 }
 
@@ -281,11 +284,11 @@ function get_memory_usage(){
 	metrics_json_start_array
 	# Check the runtime in order in order to determine which process will
 	# be measured about PSS
-	if [ "${RUNTIME}" == "runc" ]; then
+	if [ "${CTR_RUNTIME}" == "io.containerd.runc.v2" ]; then
 		runc_workload_mem="$(get_runc_pss_memory)"
 		memory_usage="${runc_workload_mem}"
 
-	local json="$(cat << EOF
+		local json="$(cat << EOF
 	{
 		"average": {
 			"Result": ${memory_usage},
@@ -298,7 +301,7 @@ function get_memory_usage(){
 	}
 EOF
 )"
-	else [ "${RUNTIME}" == "kata-runtime" ] || [ "${RUNTIME}" == "kata-qemu" ]
+	else [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]
 		# Get PSS memory of VM runtime components.
 		# And check that the smem search has found the process - we get a "0"
 		#  back if that procedure fails (such as if a process has changed its name
@@ -324,7 +327,7 @@ EOF
 		fi
 		mem_usage="$(bc -l <<< "scale=2; ${global_hypervisor_mem} + ${global_virtiofsd_mem} + ${global_shim_mem}")"
 
-	local json="$(cat << EOF
+		local json="$(cat << EOF
 	{
 		"average": {
 			"Result": ${mem_usage},
@@ -371,38 +374,30 @@ EOF
 }
 
 function main(){
-	# Collect kata-env data
-	common_init
-
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
-		echo >&2 "error: Not enough arguments [$@]"
 		help
-		exit 1
+		die "Not enough arguments [$@]"
+	fi
+
+	if [ "${CTR_RUNTIME}" != "io.containerd.runc.v2" ] && [ "${CTR_RUNTIME}" != "io.containerd.kata.v2" ]; then
+		die "Unknown runtime: ${CTR_RUNTIME}."
 	fi
 
 	#Check for KSM before reporting test name, as it can modify it
 	check_for_ksm
 	check_cmds "${SMEM_BIN}" bc
-	clean_env_ctr
 	init_env
 	check_images "${IMAGE}"
 
-	if [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]; then
-		export RUNTIME="kata-runtime"
-        elif [ "${CTR_RUNTIME}" == "io.containerd.runc.v2" ]; then
-		export RUNTIME="runc"
-        else
-		die "Unknown runtime ${CTR_RUNTIME}"
-	fi
 	metrics_json_init
 	save_config
 	get_memory_usage
 
-	if [ "${RUNTIME}" == "runc" ]; then
-		get_runc_individual_memory
-	elif [ "${RUNTIME}" == "kata-runtime" ]; then
+	if [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]; then
 		get_individual_memory
+        elif [ "${CTR_RUNTIME}" == "io.containerd.runc.v2" ]; then
+		get_runc_individual_memory
 	fi
 
 	info "memory usage test completed"

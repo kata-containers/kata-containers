@@ -13,8 +13,8 @@ setup() {
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
 	cmd="env"
-	exec_command="sh -c ${cmd}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
 	configmap_yaml_file="${pod_config_dir}/configmap.yaml"
@@ -40,8 +40,8 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Check env
-	kubectl exec $pod_name -- sh -c $cmd | grep "KUBE_CONFIG_1=value-1"
-	kubectl exec $pod_name -- sh -c $cmd | grep "KUBE_CONFIG_2=value-2"
+	kubectl exec $pod_name -- "${exec_command[@]}" | grep "KUBE_CONFIG_1=value-1"
+	kubectl exec $pod_name -- "${exec_command[@]}" | grep "KUBE_CONFIG_2=value-2"
 }
 
 teardown() {

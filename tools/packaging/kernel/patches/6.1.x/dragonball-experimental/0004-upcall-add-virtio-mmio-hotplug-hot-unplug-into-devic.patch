@@ -1,0 +1,417 @@
+From 90ced3463137076b9df2200b5c6ad720660c6bfc Mon Sep 17 00:00:00 2001
+From: Chao Wu <chaowu@linux.alibaba.com>
+Date: Wed, 23 Nov 2022 19:23:47 +0800
+Subject: [PATCH 4/4] upcall: add virtio-mmio hotplug/hot-unplug into device
+ manager service
+
+Add virtio-mmio hotplug/hot-unplug support into device manager. In the
+`devmgr_req` message, `msg_type` ADD_MMIO in `msg_header` will trigger
+`add_mmio_dev` action and DEL_MMIO will trigger `del_mmio_dev` action,
+and we use `mmio_base`, `mmio_size` and `mmio_irq` delivered in
+`add_mmio_dev` to notify how to hotplug the virtio-mmio device
+
+Also `virtio_mmio_add_device` and `virtio_mmio_del_device` are
+introduced under /drivers/virtio/virtio_mmio.c, and we extract
+`vm_add_device` from `vm_cmdline_set` to help hotplug virtio-mmio
+device.
+
+Signed-off-by: Liu Jiang <gerry@linux.alibaba.com>
+Signed-off-by: Zizheng Bian <zizheng.bian@linux.alibaba.com>
+Signed-off-by: Chao Wu <chaowu@linux.alibaba.com>
+Signed-off-by: WangYu <WangYu@linux.alibaba.com>
+Signed-off-by: Xingjun Liu <xingjun.liu@linux.alibaba.com>
+---
+ drivers/misc/dragonball/upcall_srv/Kconfig    |  12 ++
+ .../upcall_srv/dragonball_device_manager.c    | 112 ++++++++++++++
+ drivers/virtio/Kconfig                        |  14 ++
+ drivers/virtio/virtio_mmio.c                  | 138 +++++++++++++++---
+ include/dragonball/device_manager.h           |   5 +
+ 5 files changed, 259 insertions(+), 22 deletions(-)
+
+diff --git a/drivers/misc/dragonball/upcall_srv/Kconfig b/drivers/misc/dragonball/upcall_srv/Kconfig
+index b237882a2928..fc83f03c2edd 100644
+--- a/drivers/misc/dragonball/upcall_srv/Kconfig
++++ b/drivers/misc/dragonball/upcall_srv/Kconfig
+@@ -25,6 +25,18 @@ config DRAGONBALL_DEVICE_MANAGER
+ 
+ 	  If unsure, say N.
+ 
++config DRAGONBALL_HOTPLUG_VIRTIO_MMIO
++	bool "Virtio-MMIO device hotplug/hotunplug support"
++	depends on DRAGONBALL_DEVICE_MANAGER
++	default y
++	help
++	  This configure implements a Virtio-MMIO device hotplug/hotunplug
++	  support, vmm should send hotplug request by vsock which follow
++	  special data structure with command and parameter to hot-pluging
++	  an MMIO device.
++
++	  If unsure, say N.
++
+ config DRAGONBALL_HOTPLUG_CPU
+ 	bool "CPU hotplug/hotunplug support"
+ 	depends on DRAGONBALL_DEVICE_MANAGER
+diff --git a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+index 210ef5d6c9d5..5a95b2ba63e8 100644
+--- a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
++++ b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+@@ -75,6 +75,13 @@ struct devmgr_req {
+ 	struct devmgr_msg_header msg_header;
+ 	union {
+ 		char	pad[DEV_MGR_MSG_SIZE - sizeof(struct devmgr_msg_header)];
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_VIRTIO_MMIO)
++		struct {
++			uint64_t mmio_base;
++			uint64_t mmio_size;
++			uint32_t mmio_irq;
++		} add_mmio_dev;
++#endif
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
+ 		struct {
+ 			uint8_t count;
+@@ -98,6 +105,10 @@ struct devmgr_reply {
+ 	int32_t ret;
+ 	union {
+ 		char	pad[DEV_MGR_MSG_SIZE - sizeof(struct devmgr_msg_header) - sizeof(int32_t)];
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_VIRTIO_MMIO)
++		struct {
++		} add_mmio_dev;
++#endif
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
+ 	struct cpu_dev_reply_info cpu_dev_info;
+ #endif
+@@ -114,6 +125,62 @@ struct task_res {
+ typedef int (*action_route_t) (struct devmgr_req *req,
+ 			       struct devmgr_reply *rep);
+ 
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_VIRTIO_MMIO)
++#ifdef CONFIG_ARM64
++static uint32_t get_device_virq(uint32_t pin)
++{
++	uint32_t virq;
++	struct device_node *node;
++	struct irq_fwspec dummy_fwspec = {
++		.param_count = 3,
++		.param = {0, 0, IRQ_TYPE_EDGE_RISING}
++	};
++
++	node = of_find_node_by_name(NULL, "intc");
++	if (!node) {
++		pr_err("interrupt controller device node not found.");
++		return 0;
++	}
++	dummy_fwspec.param[1] = pin;
++	dummy_fwspec.fwnode = of_node_to_fwnode(node);
++	virq = irq_create_fwspec_mapping(&dummy_fwspec);
++	of_node_put(node);
++	return virq;
++}
++#elif defined(CONFIG_X86_64)
++static inline uint32_t get_device_virq(uint32_t irq)
++{
++	return irq;
++}
++#endif
++
++static int get_dev_resource(struct devmgr_req *req, struct resource *res)
++{
++	uint64_t base = req->msg_load.add_mmio_dev.mmio_base;
++	uint64_t size = req->msg_load.add_mmio_dev.mmio_size;
++	uint32_t irq  = req->msg_load.add_mmio_dev.mmio_irq;
++	uint32_t virq;
++
++	if (req->msg_header.msg_size != sizeof(req->msg_load.add_mmio_dev))
++		return -EINVAL;
++
++	res[0].flags = IORESOURCE_MEM;
++	res[0].start = base;
++	res[0].end   = base + size - 1;
++	res[1].flags = IORESOURCE_IRQ;
++	virq = get_device_virq(irq);
++	if (!virq)
++		return -EINVAL;
++	res[1].start = res[1].end = virq;
++
++	/* detect the irq sharing mode */
++	if (irq == SHARED_IRQ_NO)
++		res[1].flags |= IORESOURCE_IRQ_SHAREABLE;
++
++	return 0;
++}
++#endif
++
+ static void _fill_msg_header(struct devmgr_msg_header *msg, uint32_t msg_size,
+ 			     uint32_t msg_type, uint32_t msg_flags)
+ {
+@@ -154,6 +221,47 @@ static void cpu_event_notification(
+ }
+ #endif
+ 
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_VIRTIO_MMIO)
++static int add_mmio_dev(struct devmgr_req *req,
++			struct devmgr_reply *rep)
++{
++	int ret;
++	struct resource res[2] = {};
++	struct devmgr_msg_header *rep_mh = &rep->msg_header;
++
++	ret = get_dev_resource(req, res);
++	if (ret)
++		return ret;
++
++	ret = virtio_mmio_add_device(res, ARRAY_SIZE(res));
++	if (!ret) {
++		rep->ret = ret;
++		_fill_msg_header(rep_mh, 0, ADD_MMIO, 0);
++	}
++	return ret;
++}
++
++static int del_mmio_dev(struct devmgr_req *req,
++			struct devmgr_reply *rep)
++{
++	int ret;
++	struct resource res[2] = {};
++	struct devmgr_msg_header *rep_mh = &rep->msg_header;
++
++	ret = get_dev_resource(req, res);
++	if (ret)
++		return ret;
++
++	ret = virtio_mmio_del_device(res, ARRAY_SIZE(res));
++	if (!ret) {
++		rep->ret = ret;
++		_fill_msg_header(rep_mh, 0, DEL_MMIO, 0);
++	}
++	return ret;
++}
++#endif
++
++
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
+ static int add_cpu_upcall(int apic_id, uint8_t apic_ver)
+ {
+@@ -328,6 +436,10 @@ static struct {
+ 	enum devmgr_msg_type cmd;
+ 	action_route_t fn;
+ } opt_map[] = {
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_VIRTIO_MMIO)
++	{ADD_MMIO, add_mmio_dev},
++	{DEL_MMIO, del_mmio_dev},
++#endif
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU) && defined(CONFIG_X86_64)
+ 	{ADD_CPU, add_cpu_dev},
+ 	{DEL_CPU, del_cpu_dev},
+
+diff --git a/drivers/virtio/Kconfig b/drivers/virtio/Kconfig
+index 0a53a6123..f599e80a5 100644
+--- a/drivers/virtio/Kconfig
++++ b/drivers/virtio/Kconfig
+@@ -173,4 +173,18 @@ config VIRTIO_DMA_SHARED_BUFFER
+         This option adds a flavor of dma buffers that are backed by
+         virtio resources.
+
++config VIRTIO_MMIO_DRAGONBALL
++       bool "Enable features for Dragonball virtio MMIO devcies"
++       default n
++       depends on VIRTIO_MMIO
++       depends on X86_64 || ARM64
++       select X86_PLATFORM_MSI
++       select VIRTIO_MMIO_MSI
++       help
++        The Dragonball VMM implements several optimizations for MMIO virtio
++        devices. This option enables support of those optimization features:
++        - virtio-mmio hotplug through upcall
++
++        If unsure, say N
++
+ endif # VIRTIO_MENU
+diff --git a/include/dragonball/device_manager.h b/include/dragonball/device_manager.h
+index a1713e9f026d..785761c47f97 100644
+--- a/include/dragonball/device_manager.h
++++ b/include/dragonball/device_manager.h
+@@ -15,4 +15,9 @@
+ 
+ #include <linux/device.h>
+ 
++#if defined(CONFIG_VIRTIO_MMIO_CMDLINE_DEVICES)
++int virtio_mmio_add_device(struct resource *resources, size_t res_size);
++int virtio_mmio_del_device(struct resource *resources, size_t res_size);
++#endif
++
+ #endif /* _DB_DEVICE_MANAGER_H */
+
+diff --git a/drivers/virtio/virtio_mmio.c b/drivers/virtio/virtio_mmio.c
+index de1a08108..2d13dd6e3 100644
+--- a/drivers/virtio/virtio_mmio.c
++++ b/drivers/virtio/virtio_mmio.c
+@@ -700,16 +700,41 @@ static struct device vm_cmdline_parent = {
+ static int vm_cmdline_parent_registered;
+ static int vm_cmdline_id;
+
++static int vm_add_device(struct resource *resources, size_t res_size)
++{
++       int err;
++       struct platform_device *pdev;
++
++       if (!vm_cmdline_parent_registered) {
++               err = device_register(&vm_cmdline_parent);
++               if (err) {
++                       pr_err("Failed to register parent device!\n");
++                       return err;
++               }
++               vm_cmdline_parent_registered = 1;
++       }
++
++       pr_info("Registering device virtio-mmio.%d at 0x%llx-0x%llx, IRQ %d.\n",
++                      vm_cmdline_id,
++                      (unsigned long long)resources[0].start,
++                      (unsigned long long)resources[0].end,
++                  (int)resources[1].start);
++
++       pdev = platform_device_register_resndata(&vm_cmdline_parent,
++                       "virtio-mmio", vm_cmdline_id++,
++                       resources, res_size, NULL, 0);
++
++       return PTR_ERR_OR_ZERO(pdev);
++}
++
+ static int vm_cmdline_set(const char *device,
+ 		const struct kernel_param *kp)
+ {
+-	int err;
+ 	struct resource resources[2] = {};
+ 	char *str;
+ 	long long base, size;
+ 	unsigned int irq;
+ 	int processed, consumed = 0;
+-	struct platform_device *pdev;
+
+ 	/* Consume "size" part of the command line parameter */
+ 	size = memparse(device, &str);
+@@ -734,27 +759,7 @@ static int vm_cmdline_set(const char *device,
+ 	resources[1].flags = IORESOURCE_IRQ;
+ 	resources[1].start = resources[1].end = irq;
+
+-	if (!vm_cmdline_parent_registered) {
+-		err = device_register(&vm_cmdline_parent);
+-		if (err) {
+-			put_device(&vm_cmdline_parent);
+-			pr_err("Failed to register parent device!\n");
+-			return err;
+-		}
+-		vm_cmdline_parent_registered = 1;
+-	}
+-
+-	pr_info("Registering device virtio-mmio.%d at 0x%llx-0x%llx, IRQ %d.\n",
+-		       vm_cmdline_id,
+-		       (unsigned long long)resources[0].start,
+-		       (unsigned long long)resources[0].end,
+-		       (int)resources[1].start);
+-
+-	pdev = platform_device_register_resndata(&vm_cmdline_parent,
+-			"virtio-mmio", vm_cmdline_id++,
+-			resources, ARRAY_SIZE(resources), NULL, 0);
+-
+-	return PTR_ERR_OR_ZERO(pdev);
++	return vm_add_device(resources, ARRAY_SIZE(resources));
+ }
+
+ static int vm_cmdline_get_device(struct device *dev, void *data)
+@@ -804,6 +809,94 @@ static void vm_unregister_cmdline_devices(void)
+ 	}
+ }
+
++#ifdef CONFIG_DRAGONBALL_DEVICE_MANAGER
++static int vm_match_device(struct device *dev, void *data)
++{
++	struct resource *resource = (struct resource *)data;
++	struct platform_device *pdev = to_platform_device(dev);
++
++	if ((pdev->resource[0].start == resource[0].start)  &&
++		(pdev->resource[0].end == resource[0].end) &&
++		(pdev->resource[1].start == resource[1].start))
++		return 1;
++	return 0;
++}
++
++static struct device *vm_find_device(struct resource *res)
++{
++	return device_find_child(&vm_cmdline_parent, res, vm_match_device);
++}
++
++static int vm_device_overlap(struct device *dev, void *data)
++{
++	struct resource *res = (struct resource *)data;
++	struct platform_device *pdev = to_platform_device(dev);
++
++	/* Detect IRQ number conflicts except shared IRQs. */
++	if (!(res[1].flags & IORESOURCE_IRQ_SHAREABLE) &&
++		(pdev->resource[1].start == res[1].start)) {
++		return 1;
++	}
++
++	/* Detect device MMIO addresses overlapping */
++	if ((pdev->resource[0].start < res[0].end) &&
++		(pdev->resource[0].end > res[0].start)) {
++		return 1;
++	}
++
++	return 0;
++}
++
++static struct device *vm_detect_resource(struct resource *res)
++{
++	/* return NULL if no resource overlapped */
++	return device_find_child(&vm_cmdline_parent, res, vm_device_overlap);
++}
++
++int virtio_mmio_add_device(struct resource *resources, size_t res_size)
++{
++	int err;
++	struct device *dev;
++
++	if (res_size < 2 || !resources)
++		return -EINVAL;
++
++	dev = vm_detect_resource(resources);
++	if (dev) {
++		put_device(dev);
++		return -EEXIST;
++	}
++
++	lock_device_hotplug();
++	err = vm_add_device(resources, res_size);
++	unlock_device_hotplug();
++
++	return err;
++}
++EXPORT_SYMBOL_GPL(virtio_mmio_add_device);
++
++int virtio_mmio_del_device(struct resource *resources, size_t res_size)
++{
++	int ret;
++	struct device *dev;
++
++	if (res_size < 2 || !resources)
++		return -EINVAL;
++
++	dev = vm_find_device(resources);
++	if (!dev)
++		return -ENODEV;
++
++	put_device(dev);
++	lock_device_hotplug();
++	ret = vm_unregister_cmdline_device(dev, NULL);
++	unlock_device_hotplug();
++
++	return ret;
++}
++EXPORT_SYMBOL_GPL(virtio_mmio_del_device);
++#endif	/* CONFIG_DRAGONBALL_DEVICE_MANAGER */
++
+ #else
+
+ static void vm_unregister_cmdline_devices(void)
+-- 
+2.19.1.6.gb485710b

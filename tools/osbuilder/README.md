@@ -80,7 +80,7 @@ filesystem components to generate an initrd.
 3. When generating an image, the initrd is extracted to obtain the base rootfs for
 the image.
 
-Ubuntu is the default distro for building the rootfs, to use a different one, you can set `DISTRO=alpine|clearlinux|debian|ubuntu|cbl-mariner`.
+Ubuntu is the default distro for building the rootfs, to use a different one, you can set `DISTRO=alpine|debian|ubuntu|cbl-mariner`.
 For example `make USE_DOCKER=true DISTRO=alpine rootfs` will make an Alpine rootfs using Docker.
 
 ### Rootfs creation

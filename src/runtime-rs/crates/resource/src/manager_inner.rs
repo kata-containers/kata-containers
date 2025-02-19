@@ -20,10 +20,12 @@ use hypervisor::{
 use kata_types::config::{hypervisor::TopologyConfigInfo, TomlConfig};
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxCpu, LinuxResources};
+use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
 use tokio::{runtime, sync::RwLock};
 
 use crate::{
+    cdi_devices::{sort_options_by_pcipath, ContainerDevice, DeviceInfo},
     cgroups::{CgroupArgs, CgroupsResource},
     cpu_mem::{cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource},
     manager::ManagerArgs,
@@ -291,15 +293,17 @@ impl ResourceManagerInner {
             .await
     }
 
-    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
-        for d in linux.devices.iter() {
-            match d.r#type.as_str() {
-                "b" => {
+
+        let linux_devices = linux.devices().clone().unwrap_or_default();
+        for d in linux_devices.iter() {
+            match d.typ() {
+                LinuxDeviceType::B => {
                     let block_driver = get_block_driver(&self.device_manager).await;
                     let dev_info = DeviceConfig::BlockCfg(BlockConfig {
-                        major: d.major,
-                        minor: d.minor,
+                        major: d.major(),
+                        minor: d.minor(),
                         driver_option: block_driver,
                         ..Default::default()
                     });
@@ -321,16 +325,19 @@ impl ResourceManagerInner {
 
                         let agent_device = Device {
                             id,
-                            container_path: d.path.clone(),
+                            container_path: d.path().display().to_string().clone(),
                             field_type: device.config.driver_option,
                             vm_path: device.config.virt_path,
                             ..Default::default()
                         };
-                        devices.push(agent_device);
+                        devices.push(ContainerDevice {
+                            device_info: None,
+                            device: agent_device,
+                        });
                     }
                 }
-                "c" => {
-                    let host_path = get_host_path(DEVICE_TYPE_CHAR, d.major, d.minor)
+                LinuxDeviceType::C => {
+                    let host_path = get_host_path(DEVICE_TYPE_CHAR, d.major(), d.minor())
                         .context("get host path failed")?;
                     // First of all, filter vfio devices.
                     if !host_path.starts_with("/dev/vfio") {
@@ -358,14 +365,33 @@ impl ResourceManagerInner {
 
                     // create agent device
                     if let DeviceType::Vfio(device) = device_info {
+                        let device_options = sort_options_by_pcipath(device.device_options);
                         let agent_device = Device {
                             id: device.device_id, // just for kata-agent
-                            container_path: d.path.clone(),
+                            container_path: d.path().display().to_string().clone(),
                             field_type: vfio_mode,
-                            options: device.device_options,
+                            options: device_options,
                             ..Default::default()
                         };
-                        devices.push(agent_device);
+
+                        let vendor_class = device
+                            .devices
+                            .first()
+                            .unwrap()
+                            .device_vendor_class
+                            .as_ref()
+                            .unwrap()
+                            .get_vendor_class_id()
+                            .context("get vendor class failed")?;
+                        let device_info = Some(DeviceInfo {
+                            vendor_id: vendor_class.0.to_owned(),
+                            class_id: vendor_class.1.to_owned(),
+                            host_path: d.path().clone(),
+                        });
+                        devices.push(ContainerDevice {
+                            device_info,
+                            device: agent_device,
+                        });
                     }
                 }
                 _ => {
@@ -428,7 +454,7 @@ impl ResourceManagerInner {
         linux_resources: Option<&LinuxResources>,
         op: ResourceUpdateOp,
     ) -> Result<Option<LinuxResources>> {
-        let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu.as_ref() }();
+        let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu().as_ref() }();
 
         // if static_sandbox_resource_mgmt, we will not have to update sandbox's cpu or mem resource
         if !self.toml_config.runtime.static_sandbox_resource_mgmt {
@@ -474,8 +500,8 @@ impl ResourceManagerInner {
         // clear the cpuset
         // for example, if there are only 5 vcpus now, and the cpuset in LinuxResources is 0-2,6, guest os will report
         // error when creating the container. so we choose to clear the cpuset here.
-        if let Some(cpu) = &mut resources.cpu {
-            cpu.cpus = String::new();
+        if let Some(cpu) = &mut resources.cpu_mut() {
+            cpu.set_cpus(None);
         }
 
         Ok(Some(resources))

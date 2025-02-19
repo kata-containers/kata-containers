@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
@@ -160,6 +161,9 @@ type RuntimeConfig struct {
 	// CreateContainer timeout which, if provided, indicates the createcontainer request timeout
 	// needed for the workload ( Mostly used for pulling images in the guest )
 	CreateContainerTimeout uint64
+
+	// Base directory of directly attachable network config
+	DanConfig string
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -331,7 +335,11 @@ func containerDeviceInfos(spec specs.Spec) ([]config.DeviceInfo, error) {
 	return devices, nil
 }
 
-func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, error) {
+func getDanConfigPath(danConfigDir string, sandboxID string) string {
+	return filepath.Join(danConfigDir, sandboxID+".json")
+}
+
+func networkConfig(ocispec specs.Spec, sandboxID string, config RuntimeConfig) (vc.NetworkConfig, error) {
 	linux := ocispec.Linux
 	if linux == nil {
 		return vc.NetworkConfig{}, ErrNoLinux
@@ -350,6 +358,12 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
 	netConf.DisableNewNetwork = config.DisableNewNetNs
+
+	// if dan config exits, it will be used to config network in guest VM
+	danConfig := getDanConfigPath(config.DanConfig, sandboxID)
+	if _, err := os.Stat(danConfig); err == nil {
+		netConf.DanConfigPath = danConfig
+	}
 
 	return netConf, nil
 }
@@ -542,6 +556,13 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 		config.HypervisorConfig.SGXEPCSize = size
 	}
+	if initdata, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
+		config.HypervisorConfig.Initdata = initdata
+	}
+
+	if err := addHypervisorGPUOverrides(ocispec, config); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -559,13 +580,6 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 			return fmt.Errorf("jailer %v required from annotation is not valid", value)
 		}
 		config.HypervisorConfig.JailerPath = value
-	}
-
-	if value, ok := ocispec.Annotations[vcAnnotations.CtlPath]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
-			return fmt.Errorf("hypervisor control %v required from annotation is not valid", value)
-		}
-		config.HypervisorConfig.HypervisorCtlPath = value
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
@@ -742,6 +756,26 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
 		return nil
 	})
+}
+
+func addHypervisorGPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if sbConfig.HypervisorType != vc.RemoteHypervisor {
+		return nil
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultGPUs).setUint(func(gpus uint64) {
+		sbConfig.HypervisorConfig.DefaultGPUs = uint32(gpus)
+	}); err != nil {
+		return err
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultGPUModel]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.DefaultGPUModel = value
+		}
+	}
+
+	return nil
 }
 
 func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
@@ -1002,7 +1036,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		return vc.SandboxConfig{}, err
 	}
 
-	networkConfig, err := networkConfig(ocispec, runtime)
+	networkConfig, err := networkConfig(ocispec, cid, runtime)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}
@@ -1065,6 +1099,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+
+		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
 		ociLog.WithFields(logrus.Fields{
 			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,

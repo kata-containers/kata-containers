@@ -110,7 +110,7 @@ fn validate_and_configure_tap(tap: &Tap, vq_pairs: usize) -> VirtioResult<()> {
             TapError::MissingFlags(
                 missing_flags
                     .into_iter()
-                    .map(|flag| *flag)
+                    .copied()
                     .collect::<Vec<&str>>()
                     .join(", "),
             ),
@@ -372,7 +372,7 @@ where
         let intr_evts = config.get_queue_interrupt_eventfds();
         assert_eq!(config.queues.len(), intr_evts.len());
 
-        let vq_pair = vec![
+        let vq_pair = [
             &config.queues[2 * pair_index],
             &config.queues[2 * pair_index + 1],
         ];

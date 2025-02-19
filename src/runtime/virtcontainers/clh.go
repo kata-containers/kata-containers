@@ -513,8 +513,14 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// Create the VM memory config via the constructor to ensure default values are properly assigned
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
-	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
-	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+	// Memory config shared is to be enabled when using vhost_user backends, ex. virtio-fs
+	// or when using HugePages.
+	// If such features are disabled, turn off shared memory config.
+	if clh.config.SharedFS == config.NoSharedFS && !clh.config.HugePages {
+		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(false)
+	} else {
+		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+	}
 	// Enable hugepages if needed
 	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
 	if !clh.config.ConfidentialGuest {
@@ -1356,14 +1362,13 @@ func (clh *cloudHypervisor) launchClh() error {
 	}
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
-	if clh.config.Debug {
+	if clh.config.Debug && clh.config.HypervisorLoglevel > 0 {
 		// Cloud hypervisor log levels
 		// 'v' occurrences increase the level
-		//0 =>  Error
-		//1 =>  Warn
-		//2 =>  Info
-		//3 =>  Debug
-		//4+ => Trace
+		//0 =>  Warn
+		//1 =>  Info
+		//2 =>  Debug
+		//3+ => Trace
 		// Use Info, the CI runs with debug enabled
 		// a high level of logging increases the boot time
 		// and in a nested environment this could increase
@@ -1377,7 +1382,8 @@ func (clh *cloudHypervisor) launchClh() error {
 		// output. For further details, see the discussion on:
 		//
 		//   https://github.com/kata-containers/kata-containers/pull/2751
-		args = append(args, "-v")
+		verbosityString := fmt.Sprintf("-%s", strings.Repeat("v", int(clh.config.HypervisorLoglevel)))
+		args = append(args, verbosityString)
 	}
 
 	// Enable the `seccomp` feature from Cloud Hypervisor by default
@@ -1628,7 +1634,7 @@ func (clh *cloudHypervisor) getDiskRateLimiterConfig() *chclient.RateLimiterConf
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
-	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
+	clh.Logger().WithField("endpoint", e).Debugf("Adding Endpoint of type %v", e.Type())
 
 	mac := e.HardwareAddr()
 	netPair := e.NetworkPair()

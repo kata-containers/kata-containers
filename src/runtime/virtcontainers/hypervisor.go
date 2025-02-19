@@ -42,9 +42,6 @@ const (
 	// QemuHypervisor is the QEMU hypervisor.
 	QemuHypervisor HypervisorType = "qemu"
 
-	// AcrnHypervisor is the ACRN hypervisor.
-	AcrnHypervisor HypervisorType = "acrn"
-
 	// ClhHypervisor is the ICH hypervisor.
 	ClhHypervisor HypervisorType = "clh"
 
@@ -231,9 +228,6 @@ func (hType *HypervisorType) Set(value string) error {
 	case "firecracker":
 		*hType = FirecrackerHypervisor
 		return nil
-	case "acrn":
-		*hType = AcrnHypervisor
-		return nil
 	case "clh":
 		*hType = ClhHypervisor
 		return nil
@@ -261,8 +255,6 @@ func (hType *HypervisorType) String() string {
 		return string(QemuHypervisor)
 	case FirecrackerHypervisor:
 		return string(FirecrackerHypervisor)
-	case AcrnHypervisor:
-		return string(AcrnHypervisor)
 	case ClhHypervisor:
 		return string(ClhHypervisor)
 	case StratovirtHypervisor:
@@ -357,9 +349,6 @@ type HypervisorConfig struct {
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 
-	// HypervisorCtlPath is the hypervisor ctl executable host path.
-	HypervisorCtlPath string
-
 	// JailerPath is the jailer executable host path.
 	JailerPath string
 
@@ -429,9 +418,6 @@ type HypervisorConfig struct {
 
 	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
 	HypervisorPathList []string
-
-	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
-	HypervisorCtlPathList []string
 
 	// JailerPathList is the list of jailer paths names allowed in annotations
 	JailerPathList []string
@@ -611,6 +597,10 @@ type HypervisorConfig struct {
 	// enable debug output where available.
 	Debug bool
 
+	// HypervisorLoglevel determines the level of logging emitted
+	// from the hypervisor. Accepts values 0-3.
+	HypervisorLoglevel uint32
+
 	// MemPrealloc specifies if the memory should be pre-allocated
 	MemPrealloc bool
 
@@ -680,6 +670,15 @@ type HypervisorConfig struct {
 
 	// QgsPort defines Intel Quote Generation Service port exposed from the host
 	QgsPort uint32
+
+	// Initdata defines the initdata passed into guest when CreateVM
+	Initdata string
+
+	// GPU specific annotations (currently only applicable for Remote Hypervisor)
+	//DefaultGPUs specifies the number of GPUs required for the Kata VM
+	DefaultGPUs uint32
+	// DefaultGPUModel specifies GPU model like tesla, h100, readeon etc.
+	DefaultGPUModel string
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -802,8 +801,6 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 		return conf.InitrdPath, nil
 	case types.HypervisorAsset:
 		return conf.HypervisorPath, nil
-	case types.HypervisorCtlAsset:
-		return conf.HypervisorCtlPath, nil
 	case types.JailerAsset:
 		return conf.JailerPath, nil
 	case types.FirmwareAsset:
@@ -857,11 +854,6 @@ func (conf *HypervisorConfig) HypervisorAssetPath() (string, error) {
 
 func (conf *HypervisorConfig) IfPVPanicEnabled() bool {
 	return conf.GuestMemoryDumpPath != ""
-}
-
-// HypervisorCtlAssetPath returns the VM hypervisor ctl path
-func (conf *HypervisorConfig) HypervisorCtlAssetPath() (string, error) {
-	return conf.assetPath(types.HypervisorCtlAsset)
 }
 
 // CustomHypervisorAsset returns true if the hypervisor asset is a custom one, false otherwise.

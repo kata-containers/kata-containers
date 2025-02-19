@@ -1,0 +1,30 @@
+# Copyright (c) 2020 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Define the pod for a http server app.
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: http-server
+  labels:
+    app: http-server-app
+spec:
+  containers:
+    - name: http-server
+      image: docker.io/library/python:3
+      ports:
+        - containerPort: 8080
+      command: ["python3"]
+      args: [ "-m", "http.server", "8080"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+            - ALL
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+  runtimeClassName: ${KATA_RUNTIME}

@@ -16,6 +16,9 @@ source "${cri_containerd_dir}/../../common.bash"
 function install_dependencies() {
 	info "Installing the dependencies needed for running the cri-containerd tests"
 
+	# Remove Docker if it's installed as it conflicts with podman-docker
+	sudo apt-get remove -y docker-ce-cli || true
+
 	# Dependency list of projects that we can rely on the system packages
 	# - build-essential
 	#   - Theoretically we only need `make`, but doesn't hurt to install
@@ -45,6 +48,8 @@ function install_dependencies() {
 	declare -a github_deps
 	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
+	github_deps[2]="runc:$(get_from_kata_deps ".externals.runc.latest")"
+	github_deps[3]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"

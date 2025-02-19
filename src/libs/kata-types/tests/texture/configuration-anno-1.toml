@@ -45,7 +45,6 @@ enable_iommu = true
 enable_iommu_platform = true
 file_mem_backend = "/dev/shm"
 valid_file_mem_backends = ["/dev/shm"]
-enable_swap = true
 pflashes = ["/proc/mounts"]
 enable_debug = true
 msize_9p = 16384

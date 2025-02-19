@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -25,7 +24,7 @@ _kata_get_subcmd_options()
     local subcmd="$1"
 
     "$_kataruntime" "$subcmd" --help |\
-        egrep -- "^ *--[^ ]*[ ][^ ]*" |\
+        grep -E -- "^ *--[^ ]*[ ][^ ]*" |\
         awk '{print $1}' |\
         tr -d \, |\
         sort

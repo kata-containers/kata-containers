@@ -12,6 +12,7 @@ use inner::DragonballInner;
 use persist::sandbox_persist::Persist;
 pub mod vmm_instance;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -23,13 +24,14 @@ use dragonball::api::v1::{
 };
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
 
 use crate::{DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 impl std::fmt::Debug for Dragonball {
@@ -46,17 +48,20 @@ impl Default for Dragonball {
 
 impl Dragonball {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(DragonballInner::new())),
+            inner: Arc::new(RwLock::new(DragonballInner::new(exit_notify))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
 
-    pub async fn set_passfd_listener_port(&mut self, port: u32) {
+    pub async fn set_passfd_listener_port(&self, port: u32) {
         let mut inner = self.inner.write().await;
         inner.set_passfd_listener_port(port)
     }
@@ -65,7 +70,12 @@ impl Dragonball {
 #[async_trait]
 impl Hypervisor for Dragonball {
     #[instrument]
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
@@ -73,12 +83,40 @@ impl Hypervisor for Dragonball {
     #[instrument]
     async fn start_vm(&self, timeout: i32) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.start_vm(timeout).await
+        let ret = inner.start_vm(timeout).await;
+
+        if ret.is_ok() && inner.config.device_info.reclaim_guest_freed_memory {
+            // The virtio-balloon device must be inserted into dragonball and
+            // recognized by the guest kernel only after the dragonball upcall is ready.
+            // The dragonball upcall is not ready immediately after the VM starts,
+            // so here we create an asynchronous task that waits for 5 seconds before
+            // inserting the virtio-balloon device.
+            let inner_clone = self.inner.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                inner_clone
+                    .write()
+                    .await
+                    .try_insert_balloon_f_reporting()
+                    .await;
+            });
+        }
+
+        ret
     }
 
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.stop_vm()
+    }
+
+    async fn wait_vm(&self) -> Result<i32> {
+        let mut waiter = self.exit_waiter.lock().await;
+        if let Some(exit_code) = waiter.0.recv().await {
+            waiter.1 = exit_code;
+        }
+
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -104,10 +142,7 @@ impl Hypervisor for Dragonball {
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
         let mut inner = self.inner.write().await;
-        match inner.add_device(device.clone()).await {
-            Ok(_) => Ok(device),
-            Err(err) => Err(err),
-        }
+        inner.add_device(device.clone()).await
     }
 
     async fn remove_device(&self, device: DeviceType) -> Result<()> {
@@ -221,12 +256,15 @@ impl Persist for Dragonball {
     }
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = DragonballInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
+        let inner = DragonballInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

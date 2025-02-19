@@ -13,7 +13,6 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.31"
 byteorder = "1.4.3"
-cgroups = { package = "cgroups-rs", version = "0.3.2" }
 chrono = "0.4.0"
 common-path = "=1.0.0"
 fail = "0.5.0"
@@ -31,7 +30,8 @@ thiserror = "1.0.30"
 hex = "0.4.3"
 
 kata-types = { path = "../kata-types" }
-oci = { path = "../oci" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+runtime-spec = { path = "../runtime-spec" }
 safe-path = { path = "../safe-path" }
 
 [dev-dependencies]

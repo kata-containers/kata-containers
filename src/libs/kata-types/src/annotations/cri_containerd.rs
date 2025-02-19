@@ -11,7 +11,12 @@ pub const CONTAINER_NAME_LABEL_KEY: &str = "io.kubernetes.cri.container-name";
 pub const SANDBOX: &str = "sandbox";
 pub const CONTAINER: &str = "container";
 
+// SandboxID is the sandbox ID annotation
 pub const SANDBOX_ID_LABEL_KEY: &str = "io.kubernetes.cri.sandbox-id";
+// SandboxName is the name of the sandbox (pod)
+pub const SANDBOX_NAME_LABEL_KEY: &str = "io.kubernetes.cri.sandbox-name";
+// SandboxNamespace is the name of the namespace of the sandbox (pod)
+pub const SANDBOX_NAMESPACE_LABEL_KEY: &str = "io.kubernetes.cri.sandbox-namespace";
 
 // Ref: https://pkg.go.dev/github.com/containerd/containerd@v1.6.7/pkg/cri/annotations
 // SandboxCPU annotations are based on the initial CPU configuration for the sandbox. This is calculated as the

@@ -281,6 +281,8 @@ pub enum VmmData {
     MachineConfiguration(Box<VmConfigInfo>),
     /// Prometheus Metrics represented by String.
     HypervisorMetrics(String),
+    /// Return vfio device's slot number in guest.
+    VfioDeviceData(Option<u8>),
     /// Sync Hotplug
     SyncHotplug((Sender<Option<i32>>, Receiver<Option<i32>>)),
 }
@@ -398,7 +400,9 @@ impl VmmService {
                 self.add_balloon_device(vmm, event_mgr, balloon_cfg)
             }
             #[cfg(feature = "host-device")]
-            VmmAction::InsertHostDevice(hostdev_cfg) => self.add_vfio_device(vmm, hostdev_cfg),
+            VmmAction::InsertHostDevice(mut hostdev_cfg) => {
+                self.add_vfio_device(vmm, &mut hostdev_cfg)
+            }
             #[cfg(feature = "host-device")]
             VmmAction::PrepareRemoveHostDevice(hostdev_id) => {
                 self.prepare_remove_vfio_device(vmm, &hostdev_id)
@@ -850,7 +854,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "host-device")]
-    fn add_vfio_device(&self, vmm: &mut Vmm, config: HostDeviceConfig) -> VmmRequestResult {
+    fn add_vfio_device(&self, vmm: &mut Vmm, config: &mut HostDeviceConfig) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
             VfioDeviceError::InvalidVMID,
         ))?;
@@ -873,7 +877,8 @@ impl VmmService {
             .unwrap()
             .insert_device(&mut ctx, config)
             .map_err(VmmActionError::HostDeviceConfig)?;
-        Ok(VmmData::Empty)
+
+        Ok(VmmData::VfioDeviceData(config.dev_config.guest_dev_id))
     }
 
     // using upcall to unplug the pci device in the guest

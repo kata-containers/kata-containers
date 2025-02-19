@@ -11,7 +11,7 @@ lazy_static = "1.4.0"
 netns-rs = "0.1.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
-tokio = { version = "1.28.1", features = ["rt-multi-thread"] }
+tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
 tracing = "0.1.36"
 tracing-opentelemetry = "0.18.0"
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread", "trace", "rt-tokio"] }
@@ -30,7 +30,8 @@ common = { path = "./common" }
 kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging"}
-oci = { path = "../../../libs/oci" }
+runtime-spec = { path = "../../../libs/runtime-spec" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 shim-interface = { path = "../../../libs/shim-interface" }
 persist = { path = "../persist" }
 hypervisor = { path = "../hypervisor" }

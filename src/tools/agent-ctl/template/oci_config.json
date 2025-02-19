@@ -1,0 +1,170 @@
+{
+	"ociVersion": "1.1.0-rc.1-test",
+	"process": {
+		"user": {
+		},
+		"args": [
+			""
+		],
+		"env": [
+			"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+			"TERM=xterm"
+		],
+		"cwd": "/",
+		"capabilities": {
+			"bounding": [
+				"CAP_CHOWN",
+				"CAP_DAC_OVERRIDE",
+				"CAP_FSETID",
+				"CAP_FOWNER",
+				"CAP_MKNOD",
+				"CAP_NET_RAW",
+				"CAP_SETGID",
+				"CAP_SETUID",
+				"CAP_SETFCAP",
+				"CAP_SETPCAP",
+				"CAP_NET_BIND_SERVICE",
+				"CAP_SYS_CHROOT",
+				"CAP_KILL",
+				"CAP_AUDIT_WRITE"
+			],
+			"effective": [
+				"CAP_CHOWN",
+				"CAP_DAC_OVERRIDE",
+				"CAP_FSETID",
+				"CAP_FOWNER",
+				"CAP_MKNOD",
+				"CAP_NET_RAW",
+				"CAP_SETGID",
+				"CAP_SETUID",
+				"CAP_SETFCAP",
+				"CAP_SETPCAP",
+				"CAP_NET_BIND_SERVICE",
+				"CAP_SYS_CHROOT",
+				"CAP_KILL",
+				"CAP_AUDIT_WRITE"
+			],
+			"permitted": [
+				"CAP_CHOWN",
+				"CAP_DAC_OVERRIDE",
+				"CAP_FSETID",
+				"CAP_FOWNER",
+				"CAP_MKNOD",
+				"CAP_NET_RAW",
+				"CAP_SETGID",
+				"CAP_SETUID",
+				"CAP_SETFCAP",
+				"CAP_SETPCAP",
+				"CAP_NET_BIND_SERVICE",
+				"CAP_SYS_CHROOT",
+				"CAP_KILL",
+				"CAP_AUDIT_WRITE"
+			]
+		},
+		"noNewPrivileges": true
+	},
+	"root": {
+		"path": "rootfs",
+		"readonly": true
+
+	},
+	"mounts": [
+		{
+			"destination": "/proc",
+			"type": "proc",
+			"source": "proc",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev"
+			]
+		},
+		{
+			"destination": "/dev",
+			"type": "tmpfs",
+			"source": "tmpfs",
+			"options": [
+				"nosuid",
+				"strictatime",
+				"mode=755",
+				"size=65536k"
+			]
+		},
+		{
+			"destination": "/dev/pts",
+			"type": "devpts",
+			"source": "devpts",
+			"options": [
+				"nosuid",
+				"noexec",
+				"newinstance",
+				"ptmxmode=0666",
+				"mode=0620",
+				"gid=5"
+			]
+		},
+		{
+			"destination": "/dev/shm",
+			"type": "tmpfs",
+			"source": "shm",
+			"options": [
+                		"nosuid",
+                		"noexec",
+                		"nodev",
+                		"mode=1777",
+                		"size=65536k"
+			]
+		},
+		{
+			"destination": "/dev/mqueue",
+			"type": "mqueue",
+			"source": "mqueue",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev"
+			]
+		},
+		{
+			"destination": "/sys",
+			"type": "sysfs",
+			"source": "sysfs",
+			"options": [
+				"nosuid",
+				"noexec",
+				"nodev",
+				"ro"
+			]
+		}
+	],
+	"annotations": {
+			"io.katacontainers.pkg.oci.container_type": "pod_container",
+			"io.kubernetes.cri.sandbox-id": "",
+			"io.kubernetes.cri.image-name": "" ,
+			"io.kubernetes.cri.container-type": "container",
+			"io.kubernetes.cri.container-name": "",
+			"io.kubernetes.cri.sandbox-namespace": "default",
+			"io.kubernetes.cri.sandbox-name": ""
+	},
+	"linux": {
+		"resources": {
+		},
+		"namespaces": [
+			{
+				"type": "pid"
+			},
+			{
+				"type": "network"
+			},
+			{
+				"type": "ipc"
+			},
+			{
+				"type": "uts"
+			},
+			{
+				"type": "mount"
+			}
+		]
+	}
+}

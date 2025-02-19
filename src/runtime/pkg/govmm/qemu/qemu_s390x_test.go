@@ -19,7 +19,7 @@ var (
 	deviceVFIOString               = "-device vfio-ccw,host=02:10.0,devno=" + DevNo
 	deviceSCSIControllerStr        = "-device virtio-scsi-ccw,id=foo,devno=" + DevNo
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-ccw,id=foo,bus=pci.0,addr=00:04.0,iothread=iothread1,devno=" + DevNo
-	deviceBlockString              = "-device virtio-blk-ccw,drive=hd0,scsi=off,config-wce=off,devno=" + DevNo + ",share-rw=on,serial=hd0 -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly=on"
+	deviceBlockString              = "-device virtio-blk-ccw,drive=hd0,config-wce=off,devno=" + DevNo + ",share-rw=on,serial=hd0 -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly=on"
 	romfile                        = ""
 )
 

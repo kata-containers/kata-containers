@@ -209,7 +209,3 @@ set if necessary.
 ## `checkmetrics`
 
 `checkmetrics` is a CLI tool to check a metrics CI results file. For further reference see the [`checkmetrics`](cmd/checkmetrics).
-
-## Report generator
-
-See the [report generator](report) documentation.

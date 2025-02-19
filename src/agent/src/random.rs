@@ -12,9 +12,9 @@ use std::os::unix::io::{AsRawFd, FromRawFd};
 use tracing::instrument;
 
 pub const RNGDEV: &str = "/dev/random";
-#[cfg(target_arch = "powerpc64")]
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
 pub const RNDADDTOENTCNT: libc::c_uint = 0x80045201;
-#[cfg(target_arch = "powerpc64")]
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
 pub const RNDRESEEDCRNG: libc::c_int = 0x20005207;
 #[cfg(not(target_arch = "powerpc64"))]
 pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;

@@ -17,7 +17,7 @@ build_rootfs() {
 
 	debootstrap --arch=amd64 --variant=minbase --include=${comma_separated_packages} --components=main,universe \
 		noble ${rootfs_dir} http://us.archive.ubuntu.com/ubuntu/
-	
+
 	ret=$?
 	if [ ${ret} -ne 0 ]; then
 		echo "FAILED TO BUILD ROOTFS. DEBOOTSTRAP return ${ret}"

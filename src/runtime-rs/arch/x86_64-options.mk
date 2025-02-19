@@ -5,7 +5,8 @@
 #
 
 MACHINETYPE := q35
-KERNELPARAMS :=
+KERNELPARAMS := cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
+KERNELTDXPARAMS := cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
 MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
@@ -16,3 +17,9 @@ DBCMD := dragonball
 
 # cloud-hypervisor binary name
 CLHCMD := cloud-hypervisor
+
+# firecracker binary (vmm and jailer)
+FCCMD := firecracker
+FCJAILERCMD := jailer
+
+REMOTE := remote

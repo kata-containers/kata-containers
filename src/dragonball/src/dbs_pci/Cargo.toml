@@ -9,14 +9,18 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-pci"
 keywords = ["dragonball", "secure-sandbox", "devices", "pci"]
 readme = "README.md"
- 
+
 [dependencies]
 log = "0.4.14"
 thiserror = "1"
 dbs-allocator = { path = "../dbs_allocator" }
 dbs-boot = { path = "../dbs_boot" }
 dbs-device = { path = "../dbs_device" }
-dbs-interrupt = { path = "../dbs_interrupt", features = ["kvm-irq", "kvm-legacy-irq", "kvm-msi-irq"] }
+dbs-interrupt = { path = "../dbs_interrupt", features = [
+    "kvm-irq",
+    "kvm-legacy-irq",
+    "kvm-msi-irq",
+] }
 downcast-rs = "1.2.0"
 byteorder = "1.4.3"
 vm-memory = "0.10.0"
@@ -29,3 +33,8 @@ libc = "0.2.39"
 [dev-dependencies]
 dbs-arch = { path = "../dbs_arch" }
 kvm-ioctls = "0.12.0"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("test-mock"))',
+] }

@@ -87,6 +87,7 @@ SELinux/B
 SemaphoreCI/B
 snapcraft/B
 snapd/B
+snphost/B
 SQLite/B
 StratoVirt/B
 SUSE/B

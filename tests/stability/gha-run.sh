@@ -29,7 +29,6 @@ function install_dependencies() {
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
-	install_docker
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
 }
 

@@ -43,6 +43,11 @@ function metrics_json_init() {
 	despaced_name="$(echo ${TEST_NAME} | sed 's/[ \/]/-/g')"
 	json_filename="${RESULT_DIR}/${despaced_name}.json"
 
+	# get_kata_memory_and_vcpus() function measures the memory and the number of vcpus
+	# from a kata container, and saves these values ​​in the variables:
+	# 'MEASURED_CONTAINER_NUM_VCPUS' and 'MEASURED_CONTAINER_TOTAL_MEM'
+	get_kata_memory_and_vcpus
+
 	local json="$(cat << EOF
 	"@timestamp" : $(timestamp_ms)
 EOF
@@ -60,7 +65,12 @@ EOF
 			"HypervisorVersion": "${HYPERVISOR_VERSION}",
 			"Shim": "${SHIM_PATH}",
 			"ShimVersion": "${SHIM_VERSION}",
-			"machinename": "$(uname -n)"
+			"machinename": "$(uname -n)",
+			"SharedFs": "${SHARED_FS}",
+			"ReqMemKB": "${REQ_MEMORY}",
+			"ReqNumVcpus": "${REQ_NUM_VCPUS}",
+			"MeasuredTotalMem": "${MEASURED_CONTAINER_TOTAL_MEM}",
+			"MeasuredNumVcpus": "${MEASURED_CONTAINER_NUM_VCPUS}"
 		}
 EOF
 )"

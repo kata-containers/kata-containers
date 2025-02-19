@@ -67,6 +67,7 @@ arch_to_golang()
 	case "$arch" in
 		aarch64) echo "arm64";;
 		ppc64le) echo "$arch";;
+		riscv64) echo "$arch";;
 		x86_64) echo "amd64";;
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
@@ -186,6 +187,11 @@ get_ovmf_image_name() {
 	echo "${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
 }
 
+get_busybox_image_name() {
+	busybox_script_dir="${repo_root_dir}/tools/packaging/static-build/busybox"
+	echo "${BUILDER_REGISTRY}:busybox-$(get_last_modification "${busybox_script_dir}")-$(uname -m)"
+}
+
 get_virtiofsd_image_name() {
 	ARCH=${ARCH:-$(uname -m)}
 	case ${ARCH} in
@@ -193,6 +199,9 @@ get_virtiofsd_image_name() {
 	                libc="musl"
 	                ;;
 	        "ppc64le")
+	                libc="gnu"
+	                ;;
+	        "riscv64")
 	                libc="gnu"
 	                ;;
 	        "s390x")
@@ -221,8 +230,9 @@ get_agent_image_name() {
 		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")")
 	agent_dir="${repo_root_dir}/tools/packaging/static-build/agent"
+	rust_toolchain="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 
-	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification ${agent_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification ${agent_dir})-${rust_toolchain}-$(uname -m)"
 }
 
 get_coco_guest_components_image_name() {

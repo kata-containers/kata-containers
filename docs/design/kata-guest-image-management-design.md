@@ -113,6 +113,13 @@ Next, the kata-agent's RPC module will handle the create container request which
 > **Notes:**
 > In this flow, `ImageService.pull_image()` parses the image metadata, looking for either the `io.kubernetes.cri.container-type: sandbox` or `io.kubernetes.cri-o.ContainerType: sandbox` (CRI-IO case) annotation, then it never calls the `image-rs.pull_image()` because the pause image is expected to already be inside the guest's filesystem, so instead `ImageService.unpack_pause_image()` is called.
 
+## Using guest image pull with `nerdctl`
+
+When running a workload, add the `--label io.kubernetes.cri.image-name=<image>` option e.g.:
+```sh
+nerdctl run --runtime io.containerd.kata.v2 --snapshotter nydus --label io.kubernetes.cri.image-name=docker.io/library/busybox:latest --rm docker.io/library/busybox:latest uname -r
+```
+
 References:
 [1] [[RFC] Image management proposal for hosting sharing and peer pods](https://github.com/confidential-containers/confidential-containers/issues/137)
 [2] https://github.com/containerd/containerd/blob/main/docs/content-flow.md

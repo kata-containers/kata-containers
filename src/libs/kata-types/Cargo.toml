@@ -18,7 +18,7 @@ byte-unit = "5.0.3"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"
-regex = "1.5.6"
+regex = "1.10.5"
 serde = { version = "1.0.100", features = ["derive"] }
 slog = "2.5.2"
 slog-scope = "4.4.0"
@@ -28,7 +28,7 @@ toml = "0.5.8"
 serde-enum-str = "0.4"
 sysinfo = "0.30.5"
 
-oci = { path = "../oci" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 safe-path = { path = "../safe-path" }
 
 [dev-dependencies]

@@ -53,6 +53,7 @@ use std::time::Instant;
 use lazy_static::lazy_static;
 use nix::mount::{mount, MntFlags, MsFlags};
 use nix::{unistd, NixPath};
+use oci_spec::runtime as oci;
 
 use crate::fs::is_symlink;
 use crate::sl;
@@ -134,9 +135,10 @@ pub struct LinuxMountInfo {
 /// Get the device and file system type of a mount point by parsing `/proc/mounts`.
 pub fn get_linux_mount_info(mount_point: &str) -> Result<LinuxMountInfo> {
     let mount_file = fs::File::open(PROC_MOUNTS_FILE)?;
-    let lines = io::BufReader::new(mount_file).lines();
+    let reader = io::BufReader::new(mount_file);
 
-    for mount in lines.flatten() {
+    for line in reader.lines() {
+        let mount = line?;
         let fields: Vec<&str> = mount.split(' ').collect();
 
         if fields.len() != PROC_FIELDS_PER_LINE {
@@ -615,7 +617,6 @@ fn compact_lowerdir_option(opts: &[String]) -> (Option<PathBuf>, Vec<String>) {
         }
     };
 
-    let idx = idx;
     let common_dir = match get_longest_common_prefix(&lower_opts) {
         None => return (None, n_opts),
         Some(v) => {
@@ -786,6 +787,33 @@ fn umount2<P: AsRef<Path>>(path: P, lazy_umount: bool) -> std::io::Result<()> {
         flags |= MntFlags::MNT_DETACH;
     }
     nix::mount::umount2(path.as_ref(), flags).map_err(io::Error::from)
+}
+
+pub fn get_mount_path(p: &Option<PathBuf>) -> String {
+    p.clone().unwrap_or_default().display().to_string()
+}
+
+pub fn get_mount_options(options: &Option<Vec<String>>) -> Vec<String> {
+    match options {
+        Some(o) => o.to_vec(),
+        None => vec![],
+    }
+}
+
+pub fn get_mount_type(m: &oci::Mount) -> String {
+    m.typ()
+        .clone()
+        .map(|typ| {
+            if typ.as_str() == "none" {
+                if let Some(opts) = m.options() {
+                    if opts.iter().any(|opt| opt == "bind" || opt == "rbind") {
+                        return "bind".to_string();
+                    }
+                }
+            }
+            typ
+        })
+        .unwrap_or("bind".to_string())
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{convert::TryFrom, sync::Arc, usize};
+use std::{convert::TryFrom, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use futures::stream::TryStreamExt;

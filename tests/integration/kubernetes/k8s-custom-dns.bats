@@ -21,8 +21,8 @@ setup() {
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	exec_command="cat ${file_name}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(cat "${file_name}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -36,8 +36,8 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
 
 	# Check dns config at /etc/resolv.conf
-	kubectl exec "$pod_name" -- cat "$file_name" | grep -q "nameserver 1.2.3.4"
-	kubectl exec "$pod_name" -- cat "$file_name" | grep -q "search dns.test.search"
+	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep -q "nameserver 1.2.3.4"
+	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep -q "search dns.test.search"
 }
 
 teardown() {

@@ -7,14 +7,19 @@
 use anyhow::anyhow;
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::fmt;
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+use std::fs;
 #[cfg(target_arch = "x86_64")]
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
-use serde::{Deserialize, Serialize};
 
-#[cfg(any(target_arch = "s390x", target_arch = "powerpc64le"))]
+#[cfg(any(
+    target_arch = "s390x",
+    all(target_arch = "powerpc64", target_endian = "little")
+))]
 use nix::unistd::Uid;
 
 #[cfg(target_arch = "x86_64")]
@@ -198,7 +203,6 @@ pub fn arch_guest_protection(
 
 #[cfg(target_arch = "s390x")]
 #[allow(dead_code)]
-// Guest protection is not supported on ARM64.
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     if !Uid::effective().is_root() {
         return Err(ProtectionError::NoPerms)?;
@@ -234,18 +238,21 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
     Ok(GuestProtection::Se)
 }
 
-#[cfg(target_arch = "powerpc64le")]
-pub fn available_guest_protection() -> Result<check::GuestProtection, check::ProtectionError> {
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+const PEF_SYS_FIRMWARE_DIR: &str = "/sys/firmware/ultravisor/";
+
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     if !Uid::effective().is_root() {
-        return Err(check::ProtectionError::NoPerms);
+        return Err(ProtectionError::NoPerms);
     }
 
     let metadata = fs::metadata(PEF_SYS_FIRMWARE_DIR);
     if metadata.is_ok() && metadata.unwrap().is_dir() {
-        Ok(check::GuestProtection::Pef)
+        return Ok(GuestProtection::Pef);
     }
 
-    Ok(check::GuestProtection::NoProtection)
+    Ok(GuestProtection::NoProtection)
 }
 
 #[cfg(target_arch = "aarch64")]
