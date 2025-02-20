@@ -3,18 +3,17 @@
 run_postbuild() {
     local rootfs_dir=$1
     local script_dir=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+    local PROVIDER_CONFIG_DST=${PROVIDER_CONFIG_DST:-"/sp"};
 
     mkdir -p "${rootfs_dir}/etc/netplan"
     cp "${script_dir}/01-netplan.yaml" "${rootfs_dir}/etc/netplan"
 
     cp "${script_dir}/fstab" "${rootfs_dir}/etc"
 
-    if [[ -n "${PROVIDER_CONFIG_DST}" ]]; then
-        mkdir -p "${rootfs_dir}/${PROVIDER_CONFIG_DST}"
-        echo "sharedfolder   ${PROVIDER_CONFIG_DST}  9p   ro,defaults,_netdev,x-systemd.automount,x-systemd.requires=/run/state   0   0" >> "${rootfs_dir}/etc/fstab"
-        sed -i "s|/super-protocol-mounted-directory|${PROVIDER_CONFIG_DST}|g" "${script_dir}/k8s.yaml"
-    	sed -i "1 s|^.*$|AuthorizedKeysFile ${PROVIDER_CONFIG_DST}/authorized_keys|" "${rootfs_dir}/etc/ssh/sshd_config"
-    fi
+    mkdir -p "${rootfs_dir}/${PROVIDER_CONFIG_DST}"
+    echo "sharedfolder   ${PROVIDER_CONFIG_DST}  9p   ro,defaults,_netdev,x-systemd.automount,x-systemd.requires=/run/state   0   0" >> "${rootfs_dir}/etc/fstab"
+
+    sed -i "1 s|^.*$|AuthorizedKeysFile ${PROVIDER_CONFIG_DST}/authorized_keys|" "${rootfs_dir}/etc/ssh/sshd_config"
 
     cp "${script_dir}/tdx-attest.conf" "${rootfs_dir}/etc"
 
@@ -53,7 +52,13 @@ run_postbuild() {
     chroot "${rootfs_dir}" /bin/bash "/rke.sh"
     rm -f "${rootfs_dir}/rke.sh"
     mkdir -p "${rootfs_dir}/etc/super/var/lib/rancher/rke2/server/manifests/"
-    cp "${script_dir}/k8s.yaml" "${rootfs_dir}/etc/super/var/lib/rancher/rke2/server/manifests/"
+
+    # templating variables
+    TMPL_SUPER_PROTOCOL_MOUNTED_DIRECTORY="${PROVIDER_CONFIG_DST}" \
+        envsubst \
+	'$TMPL_SUPER_PROTOCOL_MOUNTED_DIRECTORY' \
+	< "${script_dir}/templates/k8s.yaml.tmpl" \
+	> "${rootfs_dir}/etc/super/var/lib/rancher/rke2/server/manifests/k8s.yaml"
 
     cp "${script_dir}/check-config-files.service" "${rootfs_dir}/etc/systemd/system"
     cp "${script_dir}/check-config-files.timer" "${rootfs_dir}/etc/systemd/system"

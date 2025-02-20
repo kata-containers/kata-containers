@@ -521,7 +521,7 @@ spec:
             NAMESPACE="argocd"
             PKI_CONFIGMAP_NAME="pki-curl-config"
             CHALLENGE_FILE="secret.sp-pki-challenge.yaml"
-            cd /super-protocol-mounted-directory/manifests
+            cd "$TMPL_SUPER_PROTOCOL_MOUNTED_DIRECTORY/manifests"
 
             # Is PKI challenge overridden via custom / developer tokens? 
             if [ -f $CHALLENGE_FILE ]; then
@@ -551,7 +551,7 @@ spec:
             fi
           volumeMounts:
             - name: sp-config-volume
-              mountPath: /super-protocol-mounted-directory
+              mountPath: "$TMPL_SUPER_PROTOCOL_MOUNTED_DIRECTORY"
             - name: host-kernel-cmdline
               mountPath: /host-kernel-cmdline
               readOnly: true
@@ -654,7 +654,7 @@ spec:
     volumes:
     - name: sp-config-volume
       hostPath:
-        path: /super-protocol-mounted-directory
+        path: "$TMPL_SUPER_PROTOCOL_MOUNTED_DIRECTORY"
         type: Directory
     - name: sp-deploy
       hostPath:

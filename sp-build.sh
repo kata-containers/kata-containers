@@ -90,3 +90,5 @@ echo "${QEMU_COMMAND}" >> run_vm.sh
 
 chmod +x run_vm.sh
 popd
+
+./sp_calc_hashes.sh
