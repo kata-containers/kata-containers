@@ -46,6 +46,8 @@ impl DeviceHandler for VfioPciDeviceHandler {
         let mut pci_fixups = Vec::<(pci::Address, pci::Address)>::new();
         let mut group = None;
 
+        println!("### device_handler: device {:?}", device);
+
         for opt in device.options.iter() {
             let (host, pcipath) = split_vfio_pci_option(opt)
                 .ok_or_else(|| anyhow!("Malformed VFIO PCI option {:?}", opt))?;
@@ -190,8 +192,8 @@ pub struct PciMatcher {
 }
 
 impl PciMatcher {
-    pub fn new(relpath: &str) -> Result<PciMatcher> {
-        let root_bus = create_pci_root_bus_path();
+    pub fn new(relpath: &str, root_complex: u8) -> Result<PciMatcher> {
+        let root_bus = create_pci_root_bus_path(root_complex);
         Ok(PciMatcher {
             devpath: format!("{}{}", root_bus, relpath),
         })
@@ -247,9 +249,10 @@ pub async fn wait_for_pci_device(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<pci::Address> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_complex = pcipath[0].bus();
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = PciMatcher::new(&sysfs_rel_path)?;
+    let matcher = PciMatcher::new(&sysfs_rel_path, root_complex)?;
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
 

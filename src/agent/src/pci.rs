@@ -54,6 +54,10 @@ impl SlotFn {
         Ok(SlotFn(ss8 << FUNCTION_BITS | f8))
     }
 
+    pub fn bus(self) -> u8 {
+        self.0
+    }
+
     pub fn slot(self) -> u8 {
         self.0 >> FUNCTION_BITS
     }

@@ -109,9 +109,10 @@ pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<String> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_complex = pcipath[0].bus();
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
+    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path, root_complex);
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
@@ -162,8 +163,8 @@ pub struct VirtioBlkPciMatcher {
 }
 
 impl VirtioBlkPciMatcher {
-    pub fn new(relpath: &str) -> VirtioBlkPciMatcher {
-        let root_bus = create_pci_root_bus_path();
+    pub fn new(relpath: &str, root_complex: u8) -> VirtioBlkPciMatcher {
+        let root_bus = create_pci_root_bus_path(root_complex);
         let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
 
         VirtioBlkPciMatcher {
@@ -230,7 +231,8 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
     async fn test_virtio_blk_matcher() {
-        let root_bus = create_pci_root_bus_path();
+        let root_complex = 0;
+        let root_bus = create_pci_root_bus_path(root_complex);
         let devname = "vda";
 
         let mut uev_a = crate::uevent::Uevent::default();
@@ -239,12 +241,12 @@ mod tests {
         uev_a.subsystem = BLOCK.to_string();
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
-        let matcher_a = VirtioBlkPciMatcher::new(relpath_a);
+        let matcher_a = VirtioBlkPciMatcher::new(relpath_a, root_complex);
 
         let mut uev_b = uev_a.clone();
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
         uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
-        let matcher_b = VirtioBlkPciMatcher::new(relpath_b);
+        let matcher_b = VirtioBlkPciMatcher::new(relpath_b, root_complex);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));

@@ -4,7 +4,6 @@
 //
 
 use cfg_if::cfg_if;
-
 /// Linux ABI related constants.
 
 #[cfg(target_arch = "aarch64")]
@@ -17,8 +16,8 @@ pub const SYSFS_DIR: &str = "/sys";
     target_arch = "x86_64",
     target_arch = "x86"
 ))]
-pub fn create_pci_root_bus_path() -> String {
-    String::from("/devices/pci0000:00")
+pub fn create_pci_root_bus_path(root_complex: u8) -> String {
+    String::from(format!("/devices/pci0000:{:02x}", root_complex))
 }
 
 #[cfg(target_arch = "aarch64")]

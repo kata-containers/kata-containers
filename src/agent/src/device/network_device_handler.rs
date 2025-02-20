@@ -18,10 +18,11 @@ pub async fn wait_for_net_interface(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<()> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_complex = pcipath[0].bus();
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
 
-    let matcher = NetPciMatcher::new(&sysfs_rel_path);
+    let matcher = NetPciMatcher::new(&sysfs_rel_path, root_complex);
 
     // Check if the interface is already added in case network is cold-plugged
     // or the uevent loop is started before network is added.
@@ -55,8 +56,8 @@ pub struct NetPciMatcher {
 }
 
 impl NetPciMatcher {
-    pub fn new(relpath: &str) -> NetPciMatcher {
-        let root_bus = create_pci_root_bus_path();
+    pub fn new(relpath: &str, root_complex: u8) -> NetPciMatcher {
+        let root_bus = create_pci_root_bus_path(root_complex);
 
         NetPciMatcher {
             devpath: format!("{}{}", root_bus, relpath),
@@ -80,7 +81,8 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
     async fn test_net_pci_matcher() {
-        let root_bus = create_pci_root_bus_path();
+        let root_complex = 0;
+        let root_bus = create_pci_root_bus_path(root_complex);
         let relpath_a = "/0000:00:02.0/0000:01:01.0";
 
         let mut uev_a = crate::uevent::Uevent::default();
@@ -88,13 +90,13 @@ mod tests {
         uev_a.devpath = format!("{}{}", root_bus, relpath_a);
         uev_a.subsystem = String::from("net");
         uev_a.interface = String::from("eth0");
-        let matcher_a = NetPciMatcher::new(relpath_a);
+        let matcher_a = NetPciMatcher::new(relpath_a, root_complex);
         println!("Matcher a : {}", matcher_a.devpath);
 
         let relpath_b = "/0000:00:02.0/0000:01:02.0";
         let mut uev_b = uev_a.clone();
         uev_b.devpath = format!("{}{}", root_bus, relpath_b);
-        let matcher_b = NetPciMatcher::new(relpath_b);
+        let matcher_b = NetPciMatcher::new(relpath_b, root_complex);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
@@ -105,7 +107,7 @@ mod tests {
         let net_substr = "/net/eth0";
         let mut uev_c = uev_a.clone();
         uev_c.devpath = format!("{}{}{}", root_bus, relpath_c, net_substr);
-        let matcher_c = NetPciMatcher::new(relpath_c);
+        let matcher_c = NetPciMatcher::new(relpath_c, root_complex);
 
         assert!(matcher_c.is_match(&uev_c));
         assert!(!matcher_a.is_match(&uev_c));

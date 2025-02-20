@@ -550,13 +550,24 @@ fn update_spec_devices(
 // provided.
 #[instrument]
 pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+
     let mut bus = "0000:00".to_string();
     let mut relpath = String::new();
 
-    for i in 0..pcipath.len() {
+    println!(
+        "### pcipath_to_sysfs() root_bus_sysfs: {}, pcipath: {:?}",
+        root_bus_sysfs, pcipath
+    );
+
+    for i in 1..pcipath.len() {
         let bdf = format!("{}:{}", bus, pcipath[i]);
 
         relpath = format!("{}/{}", relpath, bdf);
+
+        println!(
+            "### pcipath_to_sysfs() i: {}, bdf: {}, relpath: {}",
+            i, bdf, relpath
+        );
 
         if i == pcipath.len() - 1 {
             // Final device need not be a bridge
@@ -565,7 +576,15 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
 
         // Find out the bus exposed by bridge
         let bridgebuspath = format!("{}{}/pci_bus", root_bus_sysfs, relpath);
+        println!(
+            "### pcipath_to_sysfs() bridgebuspath: {}", bridgebuspath
+        );
+
         let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
+
+        println!(
+            "### pcipath_to_sysfs() files: {:?}", files
+        );
 
         match files.pop() {
             Some(busfile) if files.is_empty() => {
@@ -1137,7 +1156,8 @@ mod tests {
         sandbox: &Arc<Mutex<Sandbox>>,
         relpath: &str,
     ) -> Result<String> {
-        let matcher = crate::device::block_device_handler::VirtioBlkPciMatcher::new(relpath);
+        let root_complex = 0;
+        let matcher = crate::device::block_device_handler::VirtioBlkPciMatcher::new(relpath, root_complex);
 
         let uev = wait_for_uevent(sandbox, matcher).await?;
 
@@ -1147,7 +1167,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_device_name() {
         let devname = "vda";
-        let root_bus = create_pci_root_bus_path();
+        let root_complex = 0;
+        let root_bus = create_pci_root_bus_path(root_complex);
         let relpath = "/0000:00:0a.0/0000:03:0b.0";
         let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
 
