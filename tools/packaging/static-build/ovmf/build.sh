@@ -41,6 +41,10 @@ elif [ "${ovmf_build}" == "tdx" ]; then
 	[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps ".externals.ovmf.tdx.version")
 	[ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps ".externals.ovmf.tdx.package")
 	[ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps ".externals.ovmf.tdx.package_output_dir")
+elif [ "${ovmf_build}" == "arm64" ]; then
+	[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps ".externals.ovmf.arm64.version")
+	[ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps ".externals.ovmf.arm64.package")
+	[ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps ".externals.ovmf.arm64.package_output_dir")
 fi
 
 [ -n "$ovmf_version" ] || die "failed to get ovmf version or commit"
