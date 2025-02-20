@@ -41,7 +41,7 @@ use tokio::process::{Child, Command};
 use tokio::sync::watch::Receiver;
 use tokio::task;
 use tokio::task::JoinHandle;
-use tokio::time::Duration;
+use tokio::time::{self, Duration};
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
 const CH_NAME: &str = "cloud-hypervisor";
@@ -405,18 +405,37 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn cloud_hypervisor_shutdown(&mut self) -> Result<()> {
-        let socket = self
-            .api_socket
-            .as_ref()
-            .ok_or("missing socket")
+    fn cloud_hypervisor_is_running(&self) -> Result<bool> {
+        let pid = self
+            .pid
+            .ok_or(format!("{} missing PID", CH_NAME))
             .map_err(|e| anyhow!(e))?;
+        let proc_path = format!("/proc/{}", pid);
+        let path = Path::new(&proc_path);
+        Ok(fs::metadata(path).is_ok())
+    }
 
-        let response =
-            cloud_hypervisor_vmm_shutdown(socket.try_clone().context("shutdown failed")?).await?;
+    async fn cloud_hypervisor_shutdown(&mut self) -> Result<()> {
+        if self.cloud_hypervisor_is_running()? {
+            let socket = self
+                .api_socket
+                .as_ref()
+                .ok_or("missing socket")
+                .map_err(|e| anyhow!(e))?;
 
-        if let Some(detail) = response {
-            debug!(sl!(), "shutdown response: {:?}", detail);
+            let response = time::timeout(
+                Duration::from_secs(5),
+                cloud_hypervisor_vmm_shutdown(socket.try_clone().context("shutdown failed")?),
+            )
+            .await
+            .context("cloud_hypervisor_vmm_shutdown timeout")?
+            .context("cloud_hypervisor_vmm_shutdown")?;
+
+            if let Some(detail) = response {
+                debug!(sl!(), "shutdown response: {:?}", detail);
+            }
+        } else {
+            info!(sl!(), "{} not running", CH_NAME);
         }
 
         // Trigger a controlled shutdown
