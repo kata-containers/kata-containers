@@ -3079,6 +3079,10 @@ func (config *Config) appendCPUs() error {
 		config.qemuParams = append(config.qemuParams, "-smp")
 		config.qemuParams = append(config.qemuParams, strings.Join(SMPParams, ","))
 
+		if config.SMP.NumNUMA == 0 {
+			return nil
+		}
+
 		base := config.SMP.CPUs / config.SMP.NumNUMA
 		rem := config.SMP.CPUs % config.SMP.NumNUMA
 
