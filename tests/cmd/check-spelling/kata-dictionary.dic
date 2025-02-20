@@ -1,10 +1,11 @@
-394
+401
 ACPI/AB
 ACS/AB
 API/AB
 APIC
 AUFS
 AWS/AB
+Acknowledgement
 Ansible/B
 AppArmor/B
 BDF/AB
@@ -148,6 +149,7 @@ SaaS/B
 SemaphoreCI/B
 StratoVirt/B
 Struct/A
+Submodule/A
 Sysbench/B
 TBD/AB
 TDX
@@ -190,6 +192,7 @@ Yamux/B
 Zun/B
 aarch64/B
 ack/A
+acpi
 amd64/B
 arg
 arm64/B
@@ -234,6 +237,7 @@ dracut/B
 emptydir/A
 enablement/AB
 entrypoint/AB
+enum/A
 ethernet
 fdt
 filename/AB
@@ -325,6 +329,7 @@ readonly
 rebase/ACD
 refactor/ACD
 regexp/AB
+regs
 remediate
 repo/A
 rkt/B/B
@@ -350,6 +355,7 @@ stdin/AB
 stdout/AB
 struct/A
 subdirectory/A
+submodule/A
 swappiness
 sysctl/AB
 syslog/AB
@@ -374,6 +380,7 @@ untrusting
 upcall
 userid/AB
 userspace/B
+util/A
 vCPU/AB
 vGPU
 vSphere/B

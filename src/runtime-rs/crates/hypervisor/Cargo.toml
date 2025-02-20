@@ -65,7 +65,7 @@ dragonball = { path = "../../../dragonball", features = [
     "vhost-user-net",
     "host-device",
 ], optional = true }
-dbs-utils = { path = "../../../dragonball/src/dbs_utils" }
+dbs-utils = { path = "../../../dragonball/dbs_utils" }
 hyperlocal = "0.8.0"
 hyper = { version = "0.14.18", features = ["client"] }
 

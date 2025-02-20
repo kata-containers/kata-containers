@@ -4,6 +4,7 @@
 #
 # Description: General word list.
 
+Acknowledgement
 ack/A
 arg		# Argument
 auditability
@@ -93,6 +94,7 @@ ramdisk/A
 readonly
 rebase/ACD
 refactor/ACD
+regs
 remediate
 repo/A
 runtime/AB
@@ -102,6 +104,8 @@ signoff/A
 snapshotter/AB
 stalebot/B
 startup
+Submodule/A
+submodule/A
 subdirectory/A
 swappiness
 sysctl/AB

@@ -9,34 +9,68 @@ repository = "https://github.com/kata-containers/kata-containers.git"
 license = "Apache-2.0"
 edition = "2018"
 
+[workspace]
+members = [
+  "dbs_acpi",
+  "dbs_address_space",
+  "dbs_allocator",
+  "dbs_arch",
+  "dbs_boot",
+  "dbs_device",
+  "dbs_interrupt",
+  "dbs_legacy_devices",
+  "dbs_pci",
+  "dbs_tdx",
+  "dbs_upcall",
+  "dbs_utils",
+  "dbs_virtio_devices",
+]
+resolver = "2"
+
+# Rust-VMM crates
+[workspace.dependencies]
+event-manager = "0.2.1"
+kvm-bindings = "0.6.0"
+kvm-ioctls = "0.12.0"
+linux-loader = "0.8.0"
+seccompiler = "0.2.0"
+vfio-bindings = "0.3.0"
+vfio-ioctls = "0.1.0"
+virtio-bindings = "0.1.0"
+virtio-queue = "0.7.0"
+vm-fdt = "0.2.0"
+vm-memory = "0.10.0"
+vm-superio = "0.5.0"
+vmm-sys-util = "0.11.0"
+
 [dependencies]
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
-dbs-address-space = { path = "./src/dbs_address_space" }
-dbs-allocator = { path = "./src/dbs_allocator" }
-dbs-arch = { path = "./src/dbs_arch" }
-dbs-boot = { path = "./src/dbs_boot" }
-dbs-device = { path = "./src/dbs_device" }
-dbs-interrupt = { path = "./src/dbs_interrupt", features = ["kvm-irq"] }
-dbs-legacy-devices = { path = "./src/dbs_legacy_devices" }
-dbs-upcall = { path = "./src/dbs_upcall", optional = true }
-dbs-utils = { path = "./src/dbs_utils" }
-dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = [
-    "virtio-mmio",
+dbs-address-space = { path = "dbs_address_space" }
+dbs-allocator = { path = "dbs_allocator" }
+dbs-arch = { path = "dbs_arch" }
+dbs-boot = { path = "dbs_boot" }
+dbs-device = { path = "dbs_device" }
+dbs-interrupt = { path = "dbs_interrupt", features = ["kvm-irq"] }
+dbs-legacy-devices = { path = "dbs_legacy_devices" }
+dbs-upcall = { path = "dbs_upcall", optional = true }
+dbs-utils = { path = "dbs_utils" }
+dbs-virtio-devices = { path = "dbs_virtio_devices", optional = true, features = [
+  "virtio-mmio",
 ] }
-dbs-pci = { path = "./src/dbs_pci", optional = true }
+dbs-pci = { path = "dbs_pci", optional = true }
 derivative = "2.2.0"
-kvm-bindings = "0.6.0"
-kvm-ioctls = "0.12.0"
+kvm-bindings = { workspace = true }
+kvm-ioctls = { workspace = true }
 lazy_static = "1.2"
 libc = "0.2.39"
-linux-loader = "0.8.0"
+linux-loader = {workspace = true}
 log = "0.4.14"
 nix = "0.24.2"
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
-seccompiler = "0.2.0"
+seccompiler = {workspace = true}
 serde = "1.0.27"
 serde_derive = "1.0.27"
 serde_json = "1.0.9"
@@ -44,13 +78,13 @@ slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
 tracing = "0.1.37"
-vmm-sys-util = "0.11.0"
-virtio-queue = { version = "0.7.0", optional = true }
-vm-memory = { version = "0.10.0", features = ["backend-mmap"] }
+vmm-sys-util = {workspace = true}
+virtio-queue = { workspace = true, optional = true }
+vm-memory = { workspace = true, features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
 fuse-backend-rs = "0.10.5"
-vfio-bindings = { version = "0.3.0", optional = true }
-vfio-ioctls = { version = "0.1.0", optional = true }
+vfio-bindings = { workspace = true, optional = true }
+vfio-ioctls = { workspace = true, optional = true }
 
 [dev-dependencies]
 slog-async = "2.7.0"
