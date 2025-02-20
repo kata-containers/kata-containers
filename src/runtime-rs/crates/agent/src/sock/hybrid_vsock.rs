@@ -34,6 +34,10 @@ impl HybridVsock {
 impl Sock for HybridVsock {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream> {
         let retry_times = config.reconnect_timeout_ms / config.dial_timeout_ms;
+        info!(
+            sl!(),
+            "connect uds {:?} port {} with {} maximum retries", self.uds, self.port, retry_times
+        );
         for i in 0..retry_times {
             match connect_helper(&self.uds, self.port).await {
                 Ok(stream) => {
@@ -58,7 +62,6 @@ impl Sock for HybridVsock {
 }
 
 async fn connect_helper(uds: &str, port: u32) -> Result<UnixStream> {
-    info!(sl!(), "connect uds {:?} port {}", &uds, port);
     let mut stream = UnixStream::connect(&uds).await.context("connect")?;
     stream
         .write_all(format!("connect {}\n", port).as_bytes())
