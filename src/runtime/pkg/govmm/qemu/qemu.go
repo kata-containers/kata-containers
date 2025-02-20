@@ -1897,6 +1897,9 @@ type VFIODevice struct {
 
 	// SysfsDev specifies the sysfs matrix entry for the AP device
 	SysfsDev string
+
+	// DevfsDev is used to identify a VFIO Group device or IOMMMUFD VFIO device
+	DevfsDev string
 }
 
 // VFIODeviceTransport is a map of the vfio device name that corresponds to
@@ -1951,7 +1954,7 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vfioDev.DevNo))
 	}
 
-	if strings.HasPrefix(vfioDev.SysfsDev, drivers.IommufdDevPath) {
+	if strings.HasPrefix(vfioDev.DevfsDev, drivers.IommufdDevPath) {
 		qemuParams = append(qemuParams, "-object")
 		qemuParams = append(qemuParams, fmt.Sprintf("iommufd,id=iommufd%s", vfioDev.ID))
 		deviceParams = append(deviceParams, fmt.Sprintf("iommufd=iommufd%s", vfioDev.ID))
