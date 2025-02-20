@@ -979,14 +979,22 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 			return types.PciPath{}, err
 		}
 
+		hvLogger.Infof("### parentPath %s parentBusQOM %v", parentPath, parenBusQOM)
+
 		busQOM, ok := parenBusQOM.(string)
 		if !ok {
 			return types.PciPath{}, fmt.Errorf("parent_bus QOM property of %s is %t not a string", qemuID, parenBusQOM)
 		}
 
+		hvLogger.Infof("### busQOM %s", busQOM)
 		// If we hit /machine/q35/pcie.0 we're done this is the root bus
 		// we climbed the complete hierarchy
 		if pcie0.Match([]byte(busQOM)) {
+			rootSlot, err := types.PciSlotFromInt(0x00)
+			if err != nil {
+				return types.PciPath{}, err
+			}
+			slots = append([]types.PciSlot{rootSlot}, slots...)
 			break
 		}
 
@@ -1011,8 +1019,13 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 			return types.PciPath{}, err
 		}
 
+		hvLogger.Infof("### parentSlot %v", parentSlot)
+
 		// Prepend the slots, since we're climbing the hierarchy
 		slots = append([]types.PciSlot{parentSlot}, slots...)
+
+		hvLogger.Infof("### slots %v", slots)
+
 		parentPath = parentBus
 	}
 	return types.PciPathFromSlots(slots...)

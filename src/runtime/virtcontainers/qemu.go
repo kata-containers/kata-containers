@@ -1954,7 +1954,11 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 		if err != nil {
 			return err
 		}
-		pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
+		rootComplex, err := types.PciSlotFromInt(0x00)
+		if err != nil {
+			return err
+		}
+		pciPath, err := types.PciPathFromSlots(rootComplex, bridgeSlot, devSlot)
 		endpoint.SetPciPath(pciPath)
 
 		var machine govmmQemu.Machine

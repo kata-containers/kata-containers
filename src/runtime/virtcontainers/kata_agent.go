@@ -1325,6 +1325,10 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 		return nil
 	}
 
+	for _, ep := range endpoints {
+		k.Logger().Infof("### endpoint %v", ep.PciPath())
+	}
+
 	interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, endpoints)
 	if err != nil {
 		return err
