@@ -185,7 +185,7 @@ assets:
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "focal"  # 20.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"  # 22.04 LTS
