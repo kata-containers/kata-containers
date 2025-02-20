@@ -31,14 +31,19 @@ pub struct TDXDetails {
     pub minor_version: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SevSnpDetails {
+    pub cbitpos: u32,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub enum GuestProtection {
     #[default]
     NoProtection,
     Tdx(TDXDetails),
-    Sev,
-    Snp,
+    Sev(SevSnpDetails),
+    Snp(SevSnpDetails),
     Pef,
     Se,
 }
@@ -51,8 +56,8 @@ impl fmt::Display for GuestProtection {
                 "tdx (major_version: {}, minor_version: {})",
                 details.major_version, details.minor_version
             ),
-            GuestProtection::Sev => write!(f, "sev"),
-            GuestProtection::Snp => write!(f, "snp"),
+            GuestProtection::Sev(details) => write!(f, "sev (cbitpos: {}", details.cbitpos),
+            GuestProtection::Snp(details) => write!(f, "snp (cbitpos: {}", details.cbitpos),
             GuestProtection::Pef => write!(f, "pef"),
             GuestProtection::Se => write!(f, "se"),
             GuestProtection::NoProtection => write!(f, "none"),
@@ -190,12 +195,22 @@ pub fn arch_guest_protection(
         Ok(false)
     };
 
-    if check_contents(snp_path)? {
-        return Ok(GuestProtection::Snp);
-    }
+    let retrieve_sev_cbitpos = || -> Result<u32, ProtectionError> {
+        Err(ProtectionError::CheckFailed(
+            "cbitpos retrieval NOT IMPLEMENTED YET".to_owned(),
+        ))
+    };
 
-    if check_contents(sev_path)? {
-        return Ok(GuestProtection::Sev);
+    let is_snp_available = check_contents(snp_path)?;
+    let is_sev_available = is_snp_available || check_contents(sev_path)?;
+    if is_snp_available || is_sev_available {
+        let cbitpos = retrieve_sev_cbitpos()?;
+        let sev_snp_details = SevSnpDetails { cbitpos };
+        return Ok(if is_snp_available {
+            GuestProtection::Snp(sev_snp_details)
+        } else {
+            GuestProtection::Sev(sev_snp_details)
+        });
     }
 
     Ok(GuestProtection::NoProtection)

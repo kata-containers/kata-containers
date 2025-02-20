@@ -956,7 +956,7 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::TDXDetails;
+    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
 
     #[cfg(target_arch = "x86_64")]
     use kata_sys_util::protection::TDX_SYS_FIRMWARE_DIR;
@@ -990,6 +990,8 @@ mod tests {
             minor_version: 0,
         };
 
+        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+
         #[derive(Debug)]
         struct TestData {
             value: Option<GuestProtection>,
@@ -1010,12 +1012,12 @@ mod tests {
                 result: Ok(GuestProtection::Se),
             },
             TestData {
-                value: Some(GuestProtection::Sev),
-                result: Ok(GuestProtection::Sev),
+                value: Some(GuestProtection::Sev(sev_snp_details.clone())),
+                result: Ok(GuestProtection::Sev(sev_snp_details.clone())),
             },
             TestData {
-                value: Some(GuestProtection::Snp),
-                result: Ok(GuestProtection::Snp),
+                value: Some(GuestProtection::Snp(sev_snp_details.clone())),
+                result: Ok(GuestProtection::Snp(sev_snp_details.clone())),
             },
             TestData {
                 value: Some(GuestProtection::Tdx(tdx_details.clone())),

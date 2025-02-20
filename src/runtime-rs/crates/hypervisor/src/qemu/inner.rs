@@ -6,8 +6,9 @@
 use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
 use crate::{
-    hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
-    VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState,
+    utils::enter_netns, HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice,
+    HYPERVISOR_QEMU,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -125,6 +126,22 @@ impl QemuInner {
                         network.config.guest_mac.clone().unwrap(),
                     )?;
                 }
+                DeviceType::Protection(prot_dev) => match &prot_dev.config {
+                    ProtectionDeviceConfig::SevSnp(sev_snp_cfg) => {
+                        if sev_snp_cfg.is_snp {
+                            cmdline.add_sev_snp_protection_device(
+                                sev_snp_cfg.cbitpos,
+                                &sev_snp_cfg.firmware,
+                                &sev_snp_cfg.certs_path,
+                            )
+                        } else {
+                            cmdline.add_sev_protection_device(
+                                sev_snp_cfg.cbitpos,
+                                &sev_snp_cfg.firmware,
+                            )
+                        }
+                    }
+                },
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
         }

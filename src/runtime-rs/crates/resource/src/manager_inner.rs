@@ -146,6 +146,11 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle vsock device failed.")?;
                 }
+                ResourceConfig::Protection(p) => {
+                    do_handle_device(&self.device_manager, &DeviceConfig::ProtectionDevCfg(p))
+                        .await
+                        .context("do handle protection device failed.")?;
+                }
             };
         }
 

@@ -549,7 +549,7 @@ fn get_platform_cfg(guest_protection_to_use: GuestProtection) -> Option<Platform
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::TDXDetails;
+    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
     use kata_types::config::hypervisor::{
         BlockDeviceInfo, Hypervisor as HypervisorConfig, SecurityInfo,
     };
@@ -2180,6 +2180,8 @@ mod tests {
             minor_version: 0,
         };
 
+        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+
         #[derive(Debug)]
         struct TestData<'a> {
             use_image: bool,
@@ -2202,14 +2204,14 @@ mod tests {
                 use_image: true,
                 container_rootfs_driver: "container",
                 vm_rootfs_driver: "vm",
-                guest_protection_to_use: GuestProtection::Sev,
+                guest_protection_to_use: GuestProtection::Sev(sev_snp_details.clone()),
                 result: Ok(()),
             },
             TestData {
                 use_image: true,
                 container_rootfs_driver: "container",
                 vm_rootfs_driver: "vm",
-                guest_protection_to_use: GuestProtection::Snp,
+                guest_protection_to_use: GuestProtection::Snp(sev_snp_details.clone()),
                 result: Ok(()),
             },
             TestData {
