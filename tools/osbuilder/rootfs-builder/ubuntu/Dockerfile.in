@@ -30,7 +30,9 @@ RUN apt-get update && \
     musl-tools \
     protobuf-compiler \
     xz-utils \
-    libclang-dev
+    libclang-dev \
+    gettext-base # for envsubst
+
 # aarch64 requires this name -- link for all
 RUN if [ ! -f "/usr/bin/$(uname -m)-linux-musl-gcc" ]; then ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"; fi
 
