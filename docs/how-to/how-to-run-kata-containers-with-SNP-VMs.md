@@ -92,7 +92,7 @@ initrd = "/usr/share/kata-containers/kata-containers-initrd.img"
 ```toml
 path = "/path/to/qemu/build/qemu-system-x86_64"
 ```
-- Use `virtio-9p` device since `virtio-fs` is unsupported due to bugs / shortcomings in QEMU version [`snp-v3`](https://github.com/AMDESE/qemu/tree/snp-v3) for SEV and SEV-SNP (change value)
+- Use `virtio-9p` device since `virtio-fs` is unsupported due to bugs / shortcomings in QEMU version [`snp-v3`](https://github.com/AMDESE/qemu/tree/snp-v3) for SEV-SNP (change value)
 ```toml
 shared_fs = "virtio-9p"
 ```
@@ -174,7 +174,7 @@ sudo sed -i 's/^\(GRUB_CMDLINE_LINUX=".*\)"/\1 systemd.unified_cgroup_hierarchy=
 sudo update-grub
 sudo reboot
 ```
-- If both SEV and SEV-SNP are supported by the host, Kata Containers uses SEV-SNP by default. You can verify what features are enabled by checking `/sys/module/kvm_amd/parameters/sev` and `sev_snp`. This means that Kata Containers can not run both SEV-SNP-VMs and SEV-VMs at the same time. If SEV is to be used by Kata Containers instead, reload the `kvm_amd` kernel module without SNP-support, this will disable SNP-support for the entire platform.
+- If both SEV and SEV-SNP are supported by the host, Kata Containers uses SEV-SNP by default. You can verify what features are enabled by checking `/sys/module/kvm_amd/parameters/sev` and `sev_snp`. This means that Kata Containers can not run both SEV-SNP-VMs and SEV-VMs at the same time.
 ```bash
 sudo rmmod kvm_amd && sudo modprobe kvm_amd sev_snp=0
 ```

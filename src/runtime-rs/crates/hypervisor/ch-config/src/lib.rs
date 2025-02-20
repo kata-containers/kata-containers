@@ -537,10 +537,6 @@ mod tests {
                 result: false,
             },
             TestData {
-                protection: GuestProtection::Sev,
-                result: false,
-            },
-            TestData {
                 protection: GuestProtection::Snp,
                 result: false,
             },

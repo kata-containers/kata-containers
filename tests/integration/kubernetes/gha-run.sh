@@ -444,7 +444,7 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -458,7 +458,7 @@ function deploy_snapshotter() {
 }
 
 function cleanup_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -583,7 +583,6 @@ function main() {
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
 		deploy-kata-kubeadm) deploy_kata "kubeadm" ;;
-		deploy-kata-sev) deploy_kata "sev" ;;
 		deploy-kata-snp) deploy_kata "snp" ;;
 		deploy-kata-tdx) deploy_kata "tdx" ;;
 		deploy-kata-garm) deploy_kata "garm" ;;
@@ -594,7 +593,6 @@ function main() {
 		collect-artifacts) collect_artifacts ;;
 		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
-		cleanup-sev) cleanup "sev" ;;
 		cleanup-snp) cleanup "snp" ;;
 		cleanup-tdx) cleanup "tdx" ;;
 		cleanup-garm) cleanup "garm" ;;

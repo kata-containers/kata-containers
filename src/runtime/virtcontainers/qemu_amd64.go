@@ -243,13 +243,6 @@ func (q *qemuAmd64) enableProtection() error {
 		q.qemuMachine.Options += "confidential-guest-support=tdx"
 		logger.Info("Enabling TDX guest protection")
 		return nil
-	case sevProtection:
-		if q.qemuMachine.Options != "" {
-			q.qemuMachine.Options += ","
-		}
-		q.qemuMachine.Options += "confidential-guest-support=sev"
-		logger.Info("Enabling SEV guest protection")
-		return nil
 	case snpProtection:
 		if q.qemuMachine.Options != "" {
 			q.qemuMachine.Options += ","
@@ -291,16 +284,6 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				Debug:          false,
 				File:           firmware,
 				FirmwareVolume: firmwareVolume,
-			}), "", nil
-	case sevProtection:
-		return append(devices,
-			govmmQemu.Object{
-				Type:            govmmQemu.SEVGuest,
-				ID:              "sev",
-				Debug:           false,
-				File:            firmware,
-				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
-				ReducedPhysBits: 1,
 			}), "", nil
 	case snpProtection:
 		return append(devices,

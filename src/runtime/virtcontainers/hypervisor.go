@@ -1038,11 +1038,6 @@ const (
 	// Exclude from lint checking for it won't be used on arm64 code
 	tdxProtection
 
-	// AMD Secure Encrypted Virtualization
-	// https://developer.amd.com/sev/
-	// Exclude from lint checking for it won't be used on arm64 code
-	sevProtection
-
 	// AMD Secure Encrypted Virtualization - Secure Nested Paging (SEV-SNP)
 	// https://developer.amd.com/sev/
 	// Exclude from lint checking for it won't be used on arm64 code
@@ -1063,7 +1058,6 @@ var guestProtectionStr = [...]string{
 	noneProtection: "none",
 	pefProtection:  "pef",
 	seProtection:   "se",
-	sevProtection:  "sev",
 	snpProtection:  "snp",
 	tdxProtection:  "tdx",
 }

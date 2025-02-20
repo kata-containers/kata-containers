@@ -1010,10 +1010,6 @@ mod tests {
                 result: Ok(GuestProtection::Se),
             },
             TestData {
-                value: Some(GuestProtection::Sev),
-                result: Ok(GuestProtection::Sev),
-            },
-            TestData {
                 value: Some(GuestProtection::Snp),
                 result: Ok(GuestProtection::Snp),
             },
