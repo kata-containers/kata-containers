@@ -30,9 +30,9 @@ jobs:
         run: |
           cp tools/packaging/kernel/kata-linux-*/vmlinux /tmp/vmlinux
           cp tools/osbuilder/kata-containers-image-ubuntu.img /tmp/kata-containers-image-ubuntu.img
-          cp sbom.json /tmp/sbom.json
+          cp sbom.cdx.gz /tmp/sbom.cdx.gz
           mkdir -p /tmp/artifacts
-          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.json
+          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.cdx.gz
           cd /tmp/artifacts
           sha256sum artifacts-${{ matrix.arch }}.zip > checksum-${{ matrix.arch }}.sha256
       - name: Upload Artifact
