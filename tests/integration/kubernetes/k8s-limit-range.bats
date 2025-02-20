@@ -9,6 +9,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${CONTAINER_RUNTIME:-}" = "crio" ] && \
+		skip "Failing due issue #10861"
 	get_pod_config_dir
 	namespace_name="default-cpu-example"
 	pod_name="default-cpu-test"
@@ -37,6 +39,8 @@ setup() {
 }
 
 teardown() {
+	[ "${CONTAINER_RUNTIME:-}" = "crio" ] && \
+		skip "Failing due issue #10861"
 	# Debugging information
 	kubectl describe "pod/$pod_name" -n "$namespace_name"
 

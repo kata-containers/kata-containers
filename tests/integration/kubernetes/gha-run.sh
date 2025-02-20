@@ -410,6 +410,8 @@ function collect_artifacts() {
 }
 
 function cleanup_kata_deploy() {
+	# skip cleanup on CI for CRI-O due https://github.com/kata-containers/kata-containers/issues/10861
+	[[ "${CI:-}" = "true" && "${CONTAINER_RUNTIME:-}" = crio ]] && return
 	ensure_helm
 
 	# Do not return after deleting only the parent object cascade=foreground
