@@ -390,11 +390,7 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS=no
-	else
-		export MEASURED_ROOTFS=yes
-	fi
+	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_image "confidential"
 }
@@ -472,11 +468,7 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS=no
-	else
-		export MEASURED_ROOTFS=yes
-	fi
+	export MEASURED_ROOTFS=no
 	export PULL_TYPE=default
 	install_initrd "confidential"
 }
