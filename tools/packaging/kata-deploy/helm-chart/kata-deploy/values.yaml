@@ -3,7 +3,7 @@ imagePullSecrets: []
 image:
   reference: quay.io/kata-containers/kata-deploy
   tag: ""
-# k8s-dist can be k8s, k3s, rke2, k0s
+# k8s-dist can be k8s, k3s, rke2, k0s, microk8s
 k8sDistribution: "k8s"
 env:
   debug: "false"
