@@ -827,9 +827,12 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		}
 		numaNodes := hypervisorConfig.NumNUMA()
 		if numaNodes > 0 {
-			baseAddr := uint32(0x20)
+			baseAddr := uint32(0x20) // This needs
 			for nodeID := range numaNodes {
-				parentBus := fmt.Sprintf("%s%d", config.PCIeExpanderBusPrefix, nodeID)
+				// pxb20, pxb40, pxb60, pxb80 depending on the number of NUMA nodes
+				// max 32 slots per root_complex
+				id := fmt.Sprintf("%x", baseAddr<<nodeID)
+				parentBus := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
 				numaDevices := numOfPluggablePorts / numaNodes
 				qemuConfig.Devices = q.arch.appendPCIeExpanderBus(qemuConfig.Devices, nodeID, "pcie.0", baseAddr)
 				qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, parentBus, numaDevices, memSize32bit, memSize64bit)
@@ -2594,9 +2597,12 @@ func genericAppendPCIeExpanderBus(devices []govmmQemu.Device, nodeId uint32, bus
 	if machineType != QemuQ35 && machineType != QemuVirt {
 		return devices
 	}
+	// We need to encode the busNr into the name there is no qom-get command
+	// to get the addr of a pxb-pcie device see qomGetPciPath
+	id := fmt.Sprintf("%x", busNr<<nodeId)
 	devices = append(devices,
 		govmmQemu.PCIeExpanderBusDevice{
-			ID:       fmt.Sprintf("%s%d", config.PCIeExpanderBusPrefix, nodeId),
+			ID:       fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id),
 			Bus:      bus,
 			BusNr:    fmt.Sprintf("%d", busNr),
 			NumaNode: fmt.Sprintf("%d", nodeId),

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -77,11 +78,14 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 
 		if vfio.IsPCIe {
+			numaID, _ := strconv.Atoi(vfio.NumaNode)
+			id := fmt.Sprintf("%x", 0x20<<numaID)
+			//parentBus := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
 			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
-			//numa := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, vfio.NumaNode)
-			//vfio.Bus = fmt.Sprintf("%s%s%d", numa, config.PCIePortPrefixMapping[vfio.Port], busIndex)
+			pxb := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
+			vfio.Bus = fmt.Sprintf("%s%s%d", pxb, config.PCIePortPrefixMapping[vfio.Port], busIndex)
 
-			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
+			//vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
 
 			// We need to keep track the number of devices per port to deduce
 			// the corectu bus number, additionally we can use the VFIO device

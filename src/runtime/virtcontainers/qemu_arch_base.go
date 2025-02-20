@@ -15,6 +15,7 @@ import (
 	"os"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
@@ -959,10 +960,15 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 	var slots []types.PciSlot
 
 	devSlot, err := q.qomGetSlot(qemuID, qmpCh)
+
+	hvLogger.Infof("### devSlot %v qemuId %v", devSlot, qemuID)
+
 	if err != nil {
 		return types.PciPath{}, err
 	}
 	slots = append(slots, devSlot)
+
+	hvLogger.Infof("### slots %+v", slots)
 
 	// This only works for Q35 and Virt
 	pcie0, _ := regexp.Compile(`^/machine/.*/pcie.0`)
@@ -990,17 +996,30 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 		// If we hit /machine/q35/pcie.0 we're done this is the root bus
 		// we climbed the complete hierarchy
 		if pcie0.Match([]byte(busQOM)) {
-			rootSlot, err := types.PciSlotFromInt(0x00)
+			rootComplex, err := types.PciSlotFromInt(0x00)
 			if err != nil {
 				return types.PciPath{}, err
 			}
-			slots = append([]types.PciSlot{rootSlot}, slots...)
+			slots = append([]types.PciSlot{rootComplex}, slots...)
 			break
 		}
 
 		// If we hit /machine/unattached/q35/pxb* we're done this is the root bus
 		// we climbed the complete hierarchy in case of NUMA
 		if pxb.Match([]byte(busQOM)) {
+			// /machine/unattached/q35/pxb20
+			// The name will encode the addr of the pxb-pcie device
+			// there is no qom-get command to get the addr
+			// see genericAppendPCIeExpanderBus
+			idx := strings.LastIndex(busQOM, "/")
+			pxbBridge := busQOM[idx+1:]
+			pxbBus := strings.TrimPrefix(pxbBridge, "pxb")
+			bus, err := strconv.ParseUint(pxbBus, 16, 8)
+			if err != nil {
+				return types.PciPath{}, err
+			}
+			rootComplex := types.PciSlot{Slot: uint8(bus)}
+			slots = append([]types.PciSlot{rootComplex}, slots...)
 			break
 		}
 

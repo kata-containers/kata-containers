@@ -25,7 +25,7 @@ const (
 //
 // XXX In order to support multifunction device's we'll need to extend
 // this to include the PCI 3-bit function number as well.
-type PciSlot struct{ slot uint8 }
+type PciSlot struct{ Slot uint8 }
 
 func PciSlotFromString(s string) (PciSlot, error) {
 	v, err := strconv.ParseUint(s, 16, pciSlotBits)
@@ -34,18 +34,18 @@ func PciSlotFromString(s string) (PciSlot, error) {
 	}
 	// The 5 bit width passed to ParseUint ensures the value is <=
 	// maxPciSlot
-	return PciSlot{slot: uint8(v)}, nil
+	return PciSlot{Slot: uint8(v)}, nil
 }
 
 func PciSlotFromInt(v int) (PciSlot, error) {
 	if v < 0 || v > maxPciSlot {
 		return PciSlot{}, fmt.Errorf("PCI slot 0x%x should be in range [0..0x%x]", v, maxPciSlot)
 	}
-	return PciSlot{slot: uint8(v)}, nil
+	return PciSlot{Slot: uint8(v)}, nil
 }
 
 func (slot PciSlot) String() string {
-	return fmt.Sprintf("%02x", slot.slot)
+	return fmt.Sprintf("%02x", slot.Slot)
 }
 
 // A PciPath describes where a PCI sits in a PCI hierarchy.
@@ -78,7 +78,7 @@ func (p PciPath) IsNil() bool {
 func (p PciPath) ToArray() []uint32 {
 	var slots []uint32
 	for _, slot := range p.slots {
-		slots = append(slots, uint32(slot.slot))
+		slots = append(slots, uint32(slot.Slot))
 	}
 	return slots
 }
