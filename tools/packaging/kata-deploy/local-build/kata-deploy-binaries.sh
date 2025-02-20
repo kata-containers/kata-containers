@@ -874,9 +874,6 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 	export MEASURED_ROOTFS
-	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS=no
-	fi
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
