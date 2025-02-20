@@ -6,6 +6,7 @@
 use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
+use super::qemu_s390x::{enable_s390x_protection, SEC_EXEC_ID};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::VIRTIO_SCSI;
@@ -48,6 +49,12 @@ trait ToQemuParams: Send + Sync {
     // nothing but UTF-8 (in fact probably just ASCII) switching to OsStrings
     // now seems pointless.
     async fn qemu_params(&self) -> Result<Vec<String>>;
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum TeeType {
+    Se, // IBM Secure Execution
+    None,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -167,19 +174,25 @@ struct Kernel {
 impl Kernel {
     fn new(config: &HypervisorConfig) -> Result<Kernel> {
         // get kernel params
-        let mut kernel_params = KernelParams::new(config.debug_info.enable_debug);
+        let is_secure_exec = config.boot_info.vm_rootfs_driver.ends_with("ccw")
+            && config.security_info.confidential_guest;
+        // We don't append the basic params if IBM SE is enabled
+        let mut kernel_params = KernelParams::new(config.debug_info.enable_debug, !is_secure_exec);
 
         if config.boot_info.initrd.is_empty() {
             // QemuConfig::validate() has already made sure that if initrd is
             // empty, image cannot be so we don't need to re-check that here
 
-            kernel_params.append(
-                &mut KernelParams::new_rootfs_kernel_params(
-                    &config.boot_info.vm_rootfs_driver,
-                    &config.boot_info.rootfs_type,
-                )
-                .context("adding rootfs params failed")?,
-            );
+            // We don't append the rootfs params if IBM SE is enabled
+            if !is_secure_exec {
+                kernel_params.append(
+                    &mut KernelParams::new_rootfs_kernel_params(
+                        &config.boot_info.vm_rootfs_driver,
+                        &config.boot_info.rootfs_type,
+                    )
+                    .context("adding rootfs params failed")?,
+                );
+            }
         }
 
         kernel_params.append(&mut KernelParams::from_string(
@@ -380,7 +393,7 @@ enum CcwError {
 
 /// Represents a CCW subchannel for managing devices
 #[derive(Debug)]
-struct CcwSubChannel {
+pub struct CcwSubChannel {
     devices: HashMap<String, u32>, // Maps device IDs to slot indices
     addr: u32,                     // Subchannel address
     next_slot: u32,                // Next available slot index
@@ -453,7 +466,7 @@ impl CcwSubChannel {
 }
 
 #[derive(Debug)]
-struct Machine {
+pub struct Machine {
     r#type: String,
     accel: String,
     options: String,
@@ -465,7 +478,7 @@ struct Machine {
 }
 
 impl Machine {
-    fn new(config: &HypervisorConfig) -> Machine {
+    pub fn new(config: &HypervisorConfig) -> Machine {
         #[cfg(any(
             target_arch = "aarch64",
             all(target_arch = "powerpc64", target_endian = "little"),
@@ -507,6 +520,15 @@ impl Machine {
 
     fn set_kernel_irqchip(&mut self, kernel_irqchip: &str) -> &mut Self {
         self.kernel_irqchip = Some(kernel_irqchip.to_owned());
+        self
+    }
+
+    pub fn get_options(&self) -> String {
+        self.options.clone()
+    }
+
+    pub fn set_options(&mut self, options: &str) -> &mut Self {
+        self.options = options.to_owned();
         self
     }
 }
@@ -1181,17 +1203,26 @@ pub struct DeviceVirtioNet {
 
     num_queues: u32,
     iommu_platform: bool,
+    bus_type: VirtioBusType,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioNet {
-    fn new(netdev_id: &str, mac_address: Address) -> DeviceVirtioNet {
+    fn new(
+        netdev_id: &str,
+        mac_address: Address,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> DeviceVirtioNet {
         DeviceVirtioNet {
-            device_driver: "virtio-net-pci".to_owned(),
+            device_driver: format!("virtio-net-{}", bus_type),
             netdev_id: netdev_id.to_owned(),
             mac_address,
             disable_modern: false,
             num_queues: 1,
             iommu_platform: false,
+            bus_type,
+            devno,
         }
     }
 
@@ -1249,8 +1280,14 @@ impl ToQemuParams for DeviceVirtioNet {
             params.push("iommu_platform=on".to_owned());
         }
 
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
+
         params.push("mq=on".to_owned());
-        params.push(format!("vectors={}", 2 * self.num_queues + 2));
+        if self.bus_type == VirtioBusType::Pci {
+            params.push(format!("vectors={}", 2 * self.num_queues + 2));
+        }
 
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1702,6 +1739,51 @@ impl ToQemuParams for ObjectIoThread {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ObjectType {
+    S390PvGuest,
+}
+
+impl ObjectType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            ObjectType::S390PvGuest => "s390-pv-guest",
+        }
+    }
+}
+
+impl Display for ObjectType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+#[derive(Debug)]
+struct Object {
+    id: String,
+    object_type: ObjectType,
+}
+
+impl Object {
+    fn new(id: &str, object_type: ObjectType) -> Self {
+        Object {
+            id: id.to_owned(),
+            object_type,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Object {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(self.object_type.to_string());
+        params.push(format!("id={}", self.id));
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1730,6 +1812,7 @@ fn should_disable_modern() -> bool {
 pub struct QemuCmdLine<'a> {
     id: String,
     config: &'a HypervisorConfig,
+    tee_type: TeeType,
 
     // In principle, all objects implementing ToQemuParams could be just stored
     // in the `devices` container.  However, there are several special cases
@@ -1755,13 +1838,19 @@ pub struct QemuCmdLine<'a> {
 
 impl<'a> QemuCmdLine<'a> {
     pub fn new(id: &str, config: &'a HypervisorConfig) -> Result<QemuCmdLine<'a>> {
-        let ccw_subchannel = match bus_type(config) {
-            VirtioBusType::Ccw => Some(CcwSubChannel::new()),
-            _ => None,
+        let tee_type = if config.security_info.confidential_guest {
+            match bus_type(config) {
+                VirtioBusType::Ccw => TeeType::Se,
+                _ => TeeType::None, // Add other TEE types as needed
+            }
+        } else {
+            TeeType::None
         };
+
         let mut qemu_cmd_line = QemuCmdLine {
             id: id.to_string(),
             config,
+            tee_type,
             kernel: Kernel::new(config)?,
             memory: Memory::new(config),
             smp: Smp::new(config),
@@ -1770,8 +1859,13 @@ impl<'a> QemuCmdLine<'a> {
             qmp_socket: QmpSocket::new(MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
             devices: Vec::new(),
-            ccw_subchannel,
+            ccw_subchannel: match bus_type(config) {
+                VirtioBusType::Ccw => Some(CcwSubChannel::new()),
+                _ => None,
+            },
         };
+
+        qemu_cmd_line.enable_protection()?;
 
         if config.device_info.enable_iommu {
             qemu_cmd_line.add_iommu();
@@ -1820,6 +1914,23 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(rng_object));
         self.devices.push(Box::new(rng_device));
+    }
+
+    fn enable_protection(&mut self) -> Result<()> {
+        match self.tee_type {
+            TeeType::Se => {
+                enable_s390x_protection(&mut self.machine)?;
+                self.devices
+                    .push(Box::new(Object::new(SEC_EXEC_ID, ObjectType::S390PvGuest)));
+            }
+            TeeType::None => {
+                info!(
+                    sl!(),
+                    "No TEE type configured, skipping hardware protection features"
+                );
+            }
+        }
+        Ok(())
     }
 
     fn add_iommu(&mut self) {
@@ -1982,8 +2093,12 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_network_device(&mut self, host_dev_name: &str, guest_mac: Address) -> Result<()> {
-        let (netdev, virtio_net_device) =
-            get_network_device(self.config, host_dev_name, guest_mac)?;
+        let (netdev, virtio_net_device) = get_network_device(
+            self.config,
+            host_dev_name,
+            guest_mac,
+            &mut self.ccw_subchannel,
+        )?;
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
@@ -2046,6 +2161,7 @@ pub fn get_network_device(
     config: &HypervisorConfig,
     host_dev_name: &str,
     guest_mac: Address,
+    ccw_subchannel: &mut Option<CcwSubChannel>,
 ) -> Result<(Netdev, DeviceVirtioNet)> {
     let mut netdev = Netdev::new(
         &format!("network-{}", host_dev_name),
@@ -2056,7 +2172,9 @@ pub fn get_network_device(
         netdev.set_disable_vhost_net(true);
     }
 
-    let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
+    let devno = get_devno_ccw(ccw_subchannel, &netdev.id);
+    let mut virtio_net_device =
+        DeviceVirtioNet::new(&netdev.id, guest_mac, bus_type(config), devno);
 
     if should_disable_modern() {
         virtio_net_device.set_disable_modern(true);

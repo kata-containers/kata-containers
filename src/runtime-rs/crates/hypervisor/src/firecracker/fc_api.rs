@@ -82,7 +82,7 @@ impl FcInner {
     }
 
     pub(crate) async fn prepare_vmm_resources(&mut self) -> Result<()> {
-        let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
+        let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug, true);
         kernel_params.push(Param::new("pci", "off"));
         kernel_params.push(Param::new("iommu", "off"));
         let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();

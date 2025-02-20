@@ -81,6 +81,7 @@ cloud-hypervisor = ["ch-config"]
 # Force the CH tests to run, even when the feature is not enabled for
 # a normal build.
 hypervisor = { path = ".", features = ["cloud-hypervisor"] }
+tempfile = "3.16.0"
 
 test-utils = { path = "../../../libs/test-utils" }
 
