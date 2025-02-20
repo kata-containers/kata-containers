@@ -279,7 +279,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
-          MEASURED_ROOTFS: yes
+          MEASURED_ROOTFS: no
 
       - name: store-artifact shim-v2
         uses: actions/upload-artifact@v4
