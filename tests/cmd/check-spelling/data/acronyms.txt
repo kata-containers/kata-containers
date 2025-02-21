@@ -5,6 +5,7 @@
 # Description: List of acronyms and abbreviations.
 
 ACPI/AB
+acpi
 ACS/AB
 API/AB
 AUFS # Another Union FS
@@ -23,6 +24,7 @@ DinD/B # Docker in Docker
 dind/B
 DMA/AB
 DPDK/AB
+enum/A
 FaaS/B  # Function as a Service
 FS/AB
 fs/B	# For terms like "virtio-fs"
@@ -85,6 +87,7 @@ TTY/AB
 UI/AB
 UTS/AB
 UUID/AB
+util/A
 vCPU/AB
 VETH/AB
 VF/AB
