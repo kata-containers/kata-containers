@@ -1033,20 +1033,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		grpcSpec.Linux.Resources.CPU.Mems = ""
 	}
 
-	// We need agent systemd cgroup now.
-	// There are three main reasons to do not apply systemd cgroups in the VM
-	// - Initrd image doesn't have systemd.
-	// - Nobody will be able to modify the resources of a specific container by using systemctl set-property.
-	// - docker is not running in the VM.
-	// if resCtrl.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
-	// 	// Convert systemd cgroup to cgroupfs
-	// 	slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
-	// 	// 0 - slice: system.slice
-	// 	// 1 - prefix: docker
-	// 	// 2 - name: abc123
-	// 	grpcSpec.Linux.CgroupsPath = filepath.Join("/", slice[1], slice[2])
-	// }
-
 	// Disable network namespace since it is already handled on the host by
 	// virtcontainers. The network is a complex part which cannot be simply
 	// passed to the agent.
