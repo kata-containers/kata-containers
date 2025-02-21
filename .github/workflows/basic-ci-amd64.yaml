@@ -369,6 +369,8 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        env:
+          GITHUB_API_TOKEN: ${{ github.token }}
         run: bash tests/integration/nerdctl/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
