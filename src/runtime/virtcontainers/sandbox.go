@@ -755,6 +755,7 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 						DevType:       dev.Type,
 						Major:         dev.Major,
 						Minor:         dev.Minor,
+						NumNUMA:       sandboxConfig.HypervisorConfig.NumNUMA(),
 					}
 					if dev.FileMode != nil {
 						vfioDev.FileMode = *dev.FileMode

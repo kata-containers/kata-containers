@@ -77,21 +77,31 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 			return fmt.Errorf("cold_plug_vfio= or hot_plug_vfio= port is not set for device %s (BridgePort | RootPort | SwitchPort)", vfio.BDF)
 		}
 
-		if vfio.IsPCIe {
-			numaID, _ := strconv.Atoi(vfio.NumaNode)
-			id := fmt.Sprintf("%x", 0x20<<numaID)
-			//parentBus := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
-			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
-			pxb := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
-			vfio.Bus = fmt.Sprintf("%s%s%d", pxb, config.PCIePortPrefixMapping[vfio.Port], busIndex)
+		if !vfio.IsPCIe {
+			continue
+		}
 
-			//vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
-
+		// We need NUMA information here from the device
+		if vfio.NumNUMA == 0 {
+			busIndex := len(config.PCIeDevicesPerPort[0][vfio.Port])
+			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
 			// We need to keep track the number of devices per port to deduce
 			// the corectu bus number, additionally we can use the VFIO device
 			// info to act upon different Vendor IDs and Device IDs.
-			config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port], *vfio)
+			config.PCIeDevicesPerPort[0][vfio.Port] = append(config.PCIeDevicesPerPort[0][vfio.Port], *vfio)
+			continue
 		}
+
+		numaID, _ := strconv.Atoi(vfio.NumaNode)
+		id := fmt.Sprintf("%x", config.PCIeExpanderBusBaseAddr<<numaID)
+		busIndex := len(config.PCIeDevicesPerPort[uint8(numaID)][vfio.Port])
+		pxb := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
+		vfio.Bus = fmt.Sprintf("%s%s%d", pxb, config.PCIePortPrefixMapping[vfio.Port], busIndex)
+
+		// We need to keep track the number of devices per port to deduce
+		// the corectu bus number, additionally we can use the VFIO device
+		// info to act upon different Vendor IDs and Device IDs.
+		config.PCIeDevicesPerPort[uint8(numaID)][vfio.Port] = append(config.PCIeDevicesPerPort[uint8(numaID)][vfio.Port], *vfio)
 	}
 
 	coldPlug := device.DeviceInfo.ColdPlug
@@ -149,14 +159,28 @@ func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceRece
 		return err
 	}
 	for _, vfio := range device.VfioDevs {
-		if vfio.IsPCIe {
-			for ix, dev := range config.PCIeDevicesPerPort[vfio.Port] {
+		if !vfio.IsPCIe {
+			continue
+		}
+		if vfio.NumNUMA == 0 {
+			deviceAt := config.PCIeDevicesPerPort[0]
+			for ix, dev := range deviceAt[vfio.Port] {
 				if dev.BDF == vfio.BDF {
-					config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port][:ix], config.PCIeDevicesPerPort[vfio.Port][ix+1:]...)
+					deviceAt[vfio.Port] = append(deviceAt[vfio.Port][:ix], deviceAt[vfio.Port][ix+1:]...)
 					break
 				}
 			}
+			continue
 		}
+		numaID, _ := strconv.Atoi(vfio.NumaNode)
+		deviceAt := config.PCIeDevicesPerPort[uint8(numaID)]
+		for ix, dev := range deviceAt[vfio.Port] {
+			if dev.BDF == vfio.BDF {
+				deviceAt[vfio.Port] = append(deviceAt[vfio.Port][:ix], deviceAt[vfio.Port][ix+1:]...)
+				break
+			}
+		}
+
 	}
 
 	deviceLogger().WithFields(logrus.Fields{

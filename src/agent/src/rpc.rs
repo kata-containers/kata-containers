@@ -994,10 +994,15 @@ impl agent_ttrpc::AgentService for AgentService {
         // For network devices passed on the pci bus, check for the network interface
         // to be available first.
         if !interface.pciPath.is_empty() {
-            let pcipath = pci::Path::from_str(&interface.pciPath)
+
+            let mut pcipath_parts = interface.pciPath.splitn(2, '/');
+            let root_complex = pcipath_parts.next().unwrap();
+            let pcipath = pcipath_parts.next().unwrap();
+
+            let pcipath = pci::Path::from_str(&pcipath)
                 .map_ttrpc_err(|e| format!("Unexpected pci-path for network interface: {:?}", e))?;
 
-            wait_for_net_interface(&self.sandbox, &pcipath)
+            wait_for_net_interface(&self.sandbox, root_complex, &pcipath)
                 .await
                 .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
         }
@@ -2047,7 +2052,7 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
         slots.push(pci::SlotFn::new(*slot, 0)?);
     }
     let pcipath = pci::Path::new(slots)?;
-    let dev_name = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
+    let dev_name = get_virtio_blk_pci_device_name(sandbox, "00", &pcipath).await?;
 
     let c_str = CString::new(dev_name)?;
     let ret = unsafe { libc::swapon(c_str.as_ptr() as *const c_char, 0) };

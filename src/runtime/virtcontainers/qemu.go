@@ -827,16 +827,15 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		}
 		numaNodes := hypervisorConfig.NumNUMA()
 		if numaNodes > 0 {
-			baseAddr := uint32(0x20) // This needs
+			baseAddr := config.PCIeExpanderBusBaseAddr
 			for nodeID := range numaNodes {
 				// pxb20, pxb40, pxb60, pxb80 depending on the number of NUMA nodes
 				// max 32 slots per root_complex
-				id := fmt.Sprintf("%x", baseAddr<<nodeID)
-				parentBus := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id)
+				busNr := fmt.Sprintf("%x", baseAddr<<nodeID)
+				busNameId := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, busNr)
 				numaDevices := numOfPluggablePorts / numaNodes
-				qemuConfig.Devices = q.arch.appendPCIeExpanderBus(qemuConfig.Devices, nodeID, "pcie.0", baseAddr)
-				qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, parentBus, numaDevices, memSize32bit, memSize64bit)
-				baseAddr = baseAddr + 0x20
+				qemuConfig.Devices = q.arch.appendPCIeExpanderBus(qemuConfig.Devices, busNameId, nodeID, "pcie.0", busNr)
+				qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, busNameId, numaDevices, memSize32bit, memSize64bit)
 			}
 		} else {
 			qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
@@ -958,9 +957,9 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	machineType := q.HypervisorConfig().HypervisorMachineType
 	if machineType == QemuVirt {
 		addr = "00"
-		bridgeID = fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[config.RootPort]))
+		bridgeID = fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[0][config.RootPort]))
 		dev := config.VFIODev{ID: "virtiomem"}
-		config.PCIeDevicesPerPort[config.RootPort] = append(config.PCIeDevicesPerPort[config.RootPort], dev)
+		config.PCIeDevicesPerPort[0][config.RootPort] = append(config.PCIeDevicesPerPort[0][config.RootPort], dev)
 	}
 
 	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0", addr, bridgeID)
@@ -1669,9 +1668,9 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 		//Since the dev is the first and only one on this bus(root port), it should be 0.
 		addr := "00"
 
-		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[config.RootPort]))
+		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[0][config.RootPort]))
 		dev := config.VFIODev{ID: devID}
-		config.PCIeDevicesPerPort[config.RootPort] = append(config.PCIeDevicesPerPort[config.RootPort], dev)
+		config.PCIeDevicesPerPort[0][config.RootPort] = append(config.PCIeDevicesPerPort[0][config.RootPort], dev)
 
 		bridgeQomPath := fmt.Sprintf("%s%s", qomPathPrefix, bridgeID)
 		bridgeSlot, err := q.arch.qomGetSlot(bridgeQomPath, &q.qmpMonitorCh)
@@ -1931,9 +1930,9 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 		// Hotplug net dev to pcie root port for QemuVirt
 		if machineType == QemuVirt {
 			addr := "00"
-			bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[config.RootPort]))
+			bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[0][config.RootPort]))
 			dev := config.VFIODev{ID: devID}
-			config.PCIeDevicesPerPort[config.RootPort] = append(config.PCIeDevicesPerPort[config.RootPort], dev)
+			config.PCIeDevicesPerPort[0][config.RootPort] = append(config.PCIeDevicesPerPort[0][config.RootPort], dev)
 
 			return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridgeID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)
 		}
@@ -2593,18 +2592,20 @@ func genericNUMAMemoryModles(memoryMb, memoryAlign uint64, numaNodes []types.NUM
 	return memoryModules
 }
 
-func genericAppendPCIeExpanderBus(devices []govmmQemu.Device, nodeId uint32, bus string, busNr uint32, machineType string) []govmmQemu.Device {
+func genericAppendPCIeExpanderBus(devices []govmmQemu.Device, id string, nodeId uint32, bus string, busNr string, machineType string) []govmmQemu.Device {
 	if machineType != QemuQ35 && machineType != QemuVirt {
 		return devices
 	}
+
+	busNrDec, _ := strconv.ParseUint(busNr, 16, 64)
+
 	// We need to encode the busNr into the name there is no qom-get command
 	// to get the addr of a pxb-pcie device see qomGetPciPath
-	id := fmt.Sprintf("%x", busNr<<nodeId)
 	devices = append(devices,
 		govmmQemu.PCIeExpanderBusDevice{
-			ID:       fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, id),
+			ID:       id,
 			Bus:      bus,
-			BusNr:    fmt.Sprintf("%d", busNr),
+			BusNr:    fmt.Sprintf("%d", busNrDec),
 			NumaNode: fmt.Sprintf("%d", nodeId),
 		},
 	)
@@ -2621,7 +2622,7 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, bus string, number ui
 	parentBus := ""
 	if bus != "pcie.0" {
 		parentBus = bus
-		chassis = strings.TrimPrefix(bus, "pxb")
+		chassis = strings.TrimPrefix(bus, config.PCIeExpanderBusPrefix)
 	}
 
 	for i := uint32(0); i < number; i++ {

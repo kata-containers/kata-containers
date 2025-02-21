@@ -71,10 +71,12 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 		dm.blockDriver = config.VirtioSCSI
 	}
 
-	config.PCIeDevicesPerPort = make(map[config.PCIePort][]config.VFIODev)
-	config.PCIeDevicesPerPort[config.RootPort] = make([]config.VFIODev, 0)
-	config.PCIeDevicesPerPort[config.SwitchPort] = make([]config.VFIODev, 0)
-	config.PCIeDevicesPerPort[config.BridgePort] = make([]config.VFIODev, 0)
+	config.PCIeDevicesPerPort = make(map[uint8]map[config.PCIePort][]config.VFIODev)
+	for numaID := range config.MaxNumNUMA {
+		ID := uint8(numaID)
+		config.PCIeDevicesPerPort[ID] = make(map[config.PCIePort][]config.VFIODev)
+		config.PCIeDevicesPerPort[ID][config.RootPort] = make([]config.VFIODev, 0)
+	}
 
 	for _, dev := range devices {
 		dm.devices[dev.DeviceID()] = dev

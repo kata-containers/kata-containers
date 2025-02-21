@@ -109,7 +109,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
     async fn test_scsi_block_matcher() {
-        let root_complex = 0;
+        let root_complex = "00";
         let root_bus = create_pci_root_bus_path(root_complex);
         let devname = "sda";
 

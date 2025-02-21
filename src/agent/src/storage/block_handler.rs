@@ -84,7 +84,7 @@ impl StorageHandler for VirtioBlkPciHandler {
             }
         } else {
             let pcipath = pci::Path::from_str(&storage.source)?;
-            let dev_path = get_virtio_blk_pci_device_name(ctx.sandbox, &pcipath).await?;
+            let dev_path = get_virtio_blk_pci_device_name(ctx.sandbox, "00", &pcipath).await?;
             storage.source = dev_path;
         }
 

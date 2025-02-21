@@ -135,6 +135,10 @@ var SysBusPciDevicesPath = "/sys/bus/pci/devices"
 
 var getSysDevPath = getSysDevPathImpl
 
+// QEMU can have 256 slots max and 32 slots per root copmlex ergo 8 root complexes
+const MaxNumNUMA = 256 / 32
+
+const PCIeExpanderBusBaseAddr = 0x20
 const PCIeExpanderBusPrefix = "pxb"
 
 // PCIePortBusPrefix gives us the correct bus nameing dependeing on the port
@@ -235,7 +239,7 @@ var (
 	// Each of this structures keeps track of the devices attached to the
 	// different types of PCI ports. We can deduces the Bus number from it
 	// and eliminate duplicates being assigned.
-	PCIeDevicesPerPort = map[PCIePort][]VFIODev{}
+	PCIeDevicesPerPort = map[uint8]map[PCIePort][]VFIODev{}
 )
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
@@ -286,6 +290,9 @@ type DeviceInfo struct {
 
 	// Specifies the PCIe port type to which the device is attached
 	Port PCIePort
+
+	// Specifies the number of NUMA nodes on the system
+	NumNUMA uint32
 }
 
 // BlockDrive represents a block storage drive which may be used in case the storage
@@ -432,6 +439,9 @@ type VFIODev struct {
 	// NumaNode is the NUMA node to which the device is attached on the host
 	// and guest, if we enable numa_node we replicate the host topology.
 	NumaNode string
+
+	// NumNUMA is the number of NUMA nodes on the system
+	NumNUMA uint32
 }
 
 // RNGDev represents a random number generator device

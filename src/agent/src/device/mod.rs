@@ -549,9 +549,10 @@ fn update_spec_devices(
 // the sysfs path for the PCI host bridge, based on the PCI path
 // provided.
 #[instrument]
-pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
+pub fn pcipath_to_sysfs(root_bus_sysfs: &str, root_complex: &str, pcipath: &pci::Path) -> Result<String> {
 
-    let mut bus = "0000:00".to_string();
+    //let mut bus = "0000:00".to_string();
+    let mut bus = format!("0000:{}", root_complex);
     let mut relpath = String::new();
 
     println!(
@@ -559,7 +560,7 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
         root_bus_sysfs, pcipath
     );
 
-    for i in 1..pcipath.len() {
+    for i in 0..pcipath.len() {
         let bdf = format!("{}:{}", bus, pcipath[i]);
 
         relpath = format!("{}/{}", relpath, bdf);
@@ -568,6 +569,9 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
             "### pcipath_to_sysfs() i: {}, bdf: {}, relpath: {}",
             i, bdf, relpath
         );
+
+
+        println!("### i {} pcipath.len(): {}",i,  pcipath.len());
 
         if i == pcipath.len() - 1 {
             // Final device need not be a bridge
@@ -1094,13 +1098,13 @@ mod tests {
         let path23 = pci::Path::from_str("02/03").unwrap();
         let path234 = pci::Path::from_str("02/03/04").unwrap();
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path2);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0");
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00",&path23);
         assert!(relpath.is_err());
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path234);
         assert!(relpath.is_err());
 
         // Create mock sysfs files for the device at 0000:00:02.0
@@ -1108,13 +1112,13 @@ mod tests {
 
         fs::create_dir_all(&bridge2path).unwrap();
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path2);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0");
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path23);
         assert!(relpath.is_err());
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path234);
         assert!(relpath.is_err());
 
         // Create mock sysfs files to indicate that 0000:00:02.0 is a bridge to bus 01
@@ -1123,13 +1127,13 @@ mod tests {
 
         fs::create_dir_all(bus2path).unwrap();
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path2);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0");
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path23);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path234);
         assert!(relpath.is_err());
 
         // Create mock sysfs files for a bridge at 0000:01:03.0 to bus 02
@@ -1139,13 +1143,13 @@ mod tests {
 
         fs::create_dir_all(bus3path).unwrap();
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path2);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path2);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0");
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path23);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path23);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0");
 
-        let relpath = pcipath_to_sysfs(rootbuspath, &path234);
+        let relpath = pcipath_to_sysfs(rootbuspath, "00", &path234);
         assert_eq!(relpath.unwrap(), "/0000:00:02.0/0000:01:03.0/0000:02:04.0");
     }
 
@@ -1156,7 +1160,7 @@ mod tests {
         sandbox: &Arc<Mutex<Sandbox>>,
         relpath: &str,
     ) -> Result<String> {
-        let root_complex = 0;
+        let root_complex = "00";
         let matcher = crate::device::block_device_handler::VirtioBlkPciMatcher::new(relpath, root_complex);
 
         let uev = wait_for_uevent(sandbox, matcher).await?;
@@ -1167,7 +1171,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_device_name() {
         let devname = "vda";
-        let root_complex = 0;
+        let root_complex = "00";
         let root_bus = create_pci_root_bus_path(root_complex);
         let relpath = "/0000:00:0a.0/0000:03:0b.0";
         let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);

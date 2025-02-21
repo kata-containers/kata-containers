@@ -16,11 +16,11 @@ use tokio::sync::Mutex;
 
 pub async fn wait_for_net_interface(
     sandbox: &Arc<Mutex<Sandbox>>,
+    root_complex: &str,
     pcipath: &pci::Path,
 ) -> Result<()> {
-    let root_complex = pcipath[0].bus();
     let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, root_complex, pcipath)?;
 
     let matcher = NetPciMatcher::new(&sysfs_rel_path, root_complex);
 
@@ -56,7 +56,7 @@ pub struct NetPciMatcher {
 }
 
 impl NetPciMatcher {
-    pub fn new(relpath: &str, root_complex: u8) -> NetPciMatcher {
+    pub fn new(relpath: &str, root_complex: &str) -> NetPciMatcher {
         let root_bus = create_pci_root_bus_path(root_complex);
 
         NetPciMatcher {
@@ -81,7 +81,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
     async fn test_net_pci_matcher() {
-        let root_complex = 0;
+        let root_complex = "00";
         let root_bus = create_pci_root_bus_path(root_complex);
         let relpath_a = "/0000:00:02.0/0000:01:01.0";
 

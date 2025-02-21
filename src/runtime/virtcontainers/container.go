@@ -848,6 +848,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 		if hotPlugVFIO && isVFIODevice {
 			deviceInfos[i].ColdPlug = false
 			deviceInfos[i].Port = c.sandbox.config.HypervisorConfig.HotPlugVFIO
+			deviceInfos[i].NumNUMA = c.sandbox.config.HypervisorConfig.NumNUMA()
 			hotPlugDevices = append(hotPlugDevices, deviceInfos[i])
 			continue
 		}
@@ -892,7 +893,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 
 	// If we're hot-plugging this will be a no-op because at this stage
 	// no devices are attached to the root-port or switch-port
-	c.annotateContainerWithVFIOMetadata(coldPlugDevices)
+	c.annotateContainerWithVFIOMetadata(coldPlugDevices, c.sandbox.config.HypervisorConfig.NumNUMA())
 
 	return nil
 }
@@ -961,7 +962,7 @@ type DeviceRelation struct {
 // In this case for the NV GPU we need to provide the correct mapping from
 // VFIO-<NUM> to GPU index inside of the VM when vfio_mode="guest-kernel",
 // otherwise we do not know which GPU is which.
-func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
+func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}, numNUMA uint32) {
 
 	modeIsGK := (c.sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 
@@ -973,18 +974,36 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 		// the switch-ports. The range over map is not deterministic
 		// so lets first iterate over all root-port devices and then
 		// switch-port devices no special handling for bridge-port (PCI)
-		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
-			// For the NV GPU we need special handling let's use only those
-			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+		if numNUMA == 0 {
+			for _, dev := range config.PCIeDevicesPerPort[0]["root-port"] {
+				// For the NV GPU we need special handling let's use only those
+				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
+					siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				}
+			}
+			for _, dev := range config.PCIeDevicesPerPort[0]["switch-port"] {
+				// For the NV GPU we need special handling let's use only those
+				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
+					siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				}
 			}
 		}
-		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
-			// For the NV GPU we need special handling let's use only those
-			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+
+		for numaID := range numNUMA {
+			for _, dev := range config.PCIeDevicesPerPort[uint8(numaID)]["root-port"] {
+				// For the NV GPU we need special handling let's use only those
+				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
+					siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				}
+			}
+			for _, dev := range config.PCIeDevicesPerPort[uint8(numaID)]["switch-port"] {
+				// For the NV GPU we need special handling let's use only those
+				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
+					siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				}
 			}
 		}
+
 		// We need to sort the VFIO devices by bus to get the correct
 		// ordering root-port < switch-port
 		sort.Slice(siblings, func(i, j int) bool {
@@ -1053,7 +1072,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		return
 	}
 
-	c.annotateContainerWithVFIOMetadata(c.devices)
+	c.annotateContainerWithVFIOMetadata(c.devices, c.sandbox.hypervisor.HypervisorConfig().NumNUMA())
 
 	// Deduce additional system mount info that should be handled by the agent
 	// inside the VM

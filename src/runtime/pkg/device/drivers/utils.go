@@ -215,6 +215,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				Port:     device.Port,
 				HostPath: device.HostPath,
 				NumaNode: numaID,
+				NumNUMA:  device.NumNUMA,
 			}
 
 		case config.VFIOAPDeviceMediatedType:
