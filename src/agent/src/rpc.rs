@@ -342,24 +342,25 @@ impl AgentService {
     async fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
         let mut s = self.sandbox.lock().await;
         let sid = s.id.clone();
-        let cid = req.container_id;
+        let cid = req.container_id.clone();
 
         let ctr = s
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
-        ctr.exec().await?;
 
-        if sid == cid {
-            return Ok(());
+        if sid != cid {
+            // start oom event loop
+            if let Ok(cg_path) = ctr.cgroup_manager.as_ref().get_cgroup_path("memory") {
+                let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
+                s.run_oom_event_monitor(rx, cid.clone()).await;
+            }
         }
 
-        // start oom event loop
-        if let Ok(cg_path) = ctr.cgroup_manager.as_ref().get_cgroup_path("memory") {
-            let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
-            s.run_oom_event_monitor(rx, cid).await;
-        }
+        let ctr = s
+            .get_container(&cid)
+            .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        Ok(())
+        ctr.exec().await
     }
 
     #[instrument]
