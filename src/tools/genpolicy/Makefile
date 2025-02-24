@@ -6,10 +6,6 @@
 
 include ../../../utils.mk
 
-ifeq ($(ARCH), ppc64le)
-     override ARCH = powerpc64le
- endif
-
 COMMIT_HASH := $(shell git rev-parse HEAD 2>/dev/null || true)
 # appends '-dirty' to the commit hash if there are uncommitted changes
 COMMIT_INFO := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),${COMMIT_HASH}-dirty,${COMMIT_HASH})
