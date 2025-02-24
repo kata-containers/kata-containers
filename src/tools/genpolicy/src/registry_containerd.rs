@@ -10,7 +10,7 @@ use crate::registry::{
     Container, DockerConfigLayer, ImageLayer,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use containerd_client::{services::v1::GetImageRequest, with_namespace};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use k8s_cri::v1::{image_service_client::ImageServiceClient, AuthConfig};
@@ -354,7 +354,7 @@ async fn get_verity_and_users(
         if let Some(path) = layers_cache_file_path.as_ref() {
             std::fs::remove_file(path)?;
         }
-        warn!("{error_message}");
+        bail!(error_message);
     }
     Ok((verity_hash, passwd))
 }

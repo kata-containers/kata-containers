@@ -11,7 +11,7 @@ use crate::policy;
 use crate::utils::Config;
 use crate::verity;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use fs2::FileExt;
 use log::{debug, info, warn, LevelFilter};
@@ -441,7 +441,7 @@ async fn get_verity_and_users(
         if let Some(path) = layers_cache_file_path.as_ref() {
             std::fs::remove_file(path)?;
         }
-        warn!("{error_message}");
+        bail!(error_message);
     }
     Ok((verity_hash, passwd))
 }
