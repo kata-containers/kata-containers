@@ -33,8 +33,6 @@ function main() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
 
-	init_env
-
 	# Check no processes are left behind
 	check_processes
 
