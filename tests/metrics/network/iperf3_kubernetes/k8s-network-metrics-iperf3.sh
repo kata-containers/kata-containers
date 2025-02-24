@@ -179,7 +179,7 @@ function iperf3_start_deployment() {
 	# Check no processes are left behind
 	check_processes
 
-	wait_time=20
+	wait_time=180
 	sleep_time=2
 
 	# Create deployment
