@@ -167,11 +167,19 @@ lazy_static! {
 #[instrument]
 pub async fn add_storages(
     logger: Logger,
-    storages: Vec<Storage>,
+    mut storages: Vec<Storage>,
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
+
+    if let Some(pos) = storages
+        .iter()
+        .position(|x| &(*x.mount_point) == crate::rpc::TRUSTED_IMAGE_STORAGE_DEVICE)
+    {
+        let item = storages.remove(pos);
+        storages.insert(0, item);
+    }
 
     for storage in storages {
         let path = storage.mount_point.clone();
