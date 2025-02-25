@@ -30,7 +30,7 @@ jobs:
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
+    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -38,6 +38,8 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-22.04
+      arch: amd64
     secrets: inherit
 
   build-kata-static-tarball-arm64:
@@ -49,7 +51,7 @@ jobs:
 
   publish-kata-deploy-payload-arm64:
     needs: build-kata-static-tarball-arm64
-    uses: ./.github/workflows/publish-kata-deploy-payload-arm64.yaml
+    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -57,6 +59,8 @@ jobs:
       tag: ${{ inputs.tag }}-arm64
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-22.04-arm
+      arch: arm64
     secrets: inherit
 
   build-kata-static-tarball-s390x:
@@ -76,7 +80,7 @@ jobs:
 
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/publish-kata-deploy-payload-s390x.yaml
+    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -84,11 +88,13 @@ jobs:
       tag: ${{ inputs.tag }}-s390x
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      runner: s390x
+      arch: s390x
     secrets: inherit
 
   publish-kata-deploy-payload-ppc64le:
     needs: build-kata-static-tarball-ppc64le
-    uses: ./.github/workflows/publish-kata-deploy-payload-ppc64le.yaml
+    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -96,6 +102,8 @@ jobs:
       tag: ${{ inputs.tag }}-ppc64le
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      runner: ppc64le
+      arch: ppc64le
     secrets: inherit
 
   build-and-publish-tee-confidential-unencrypted-image:

@@ -1,4 +1,4 @@
-name: CI | Publish kata-deploy payload for amd64
+name: CI | Publish kata-deploy payload
 on:
   workflow_call:
     inputs:
@@ -21,11 +21,33 @@ on:
         required: false
         type: string
         default: ""
+      runner:
+        default: 'ubuntu-22.04'
+        description: The runner to execute the workflow on. Defaults to 'ubuntu-22.04'.
+        required: false
+        type: string
+      arch:
+        description: The arch of the tarball.
+        required: true
+        type: string
 
 jobs:
   kata-payload:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ inputs.runner }}
     steps:
+      # TODO - switch ppc64le runner to use `ACTIONS_RUNNER_HOOK_JOB_STARTED`
+      - name: Prepare the self-hosted runner
+        if: ${{ inputs.runner == 'ppc64le' }}
+        timeout-minutes: 15
+        run: |
+          "${HOME}/scripts/prepare_runner.sh"
+          sudo rm -rf "$GITHUB_WORKSPACE"/*
+
+      - name: Adjust a permission for repo
+        if: ${{ inputs.runner == 'ppc64le' }}
+        run: |
+          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
@@ -37,10 +59,10 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: get-kata-tarball
+      - name: get-kata-tarball for ${{ inputs.arch }}
         uses: actions/download-artifact@v4
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: kata-static-tarball-${{ inputs.arch}}${{ inputs.tarball-suffix }}
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.registry == 'quay.io' }}
@@ -58,7 +80,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: build-and-push-kata-payload
+      - name: build-and-push-kata-payload for ${{ inputs.arch }}
         id: build-and-push-kata-payload
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
