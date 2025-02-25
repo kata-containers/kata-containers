@@ -257,6 +257,10 @@ function TestContainerMemoryUpdate() {
 		info "TestContainerMemoryUpdate skipped for qemu with runtime-rs"
 		info "Please check out https://github.com/kata-containers/kata-containers/issues/9375"
 		return
+	elif [[ "${ARCH}" == "aarch64" ]]; then
+		# Currently, arm64 does not support memory hot unplug, just test increasing memory.
+		DoContainerMemoryUpdate 0
+		return
 	elif [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]] || [[ "${ARCH}" == "s390x" ]]; then
 		return
 	fi
@@ -600,6 +604,17 @@ function TestDeviceCgroup() {
 }
 
 function main() {
+
+	info "Clean up containers and pods"
+	restart_containerd_service
+	containers=( $(sudo crictl ps --all -o json | jq -r '.containers[].id') )
+	for c in "${containers[@]}"; do
+		sudo crictl rm -f $c
+	done
+	pods=( $(sudo crictl pods -o json | jq -r '.items[].id') )
+	for p in "${pods[@]}"; do
+		sudo crictl rmp -f $p
+	done
 
 	info "Stop crio service"
 	systemctl is-active --quiet crio && sudo systemctl stop crio
