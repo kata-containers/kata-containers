@@ -36,6 +36,8 @@ function main() {
 	# Check no processes are left behind
 	check_processes
 
+	kubectl get pods -A
+
 	wait_time=180
 	sleep_time=2
 

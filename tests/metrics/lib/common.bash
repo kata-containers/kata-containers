@@ -181,6 +181,8 @@ function test_banner()
 # minimal steps for metrics/tests execution.
 function init_env()
 {
+	set -x
+	echo "Before init Pods: $(kubectl get pods -A)"
 	test_banner "${TEST_NAME}"
 
 	cmd=("docker" "ctr")
@@ -200,6 +202,8 @@ function init_env()
 	kill_processes_before_start
 	check_processes
 	info "init environment complete"
+	echo "Post init Pods: $(kubectl get pods -A)"
+	set +x
 }
 
 # This function checks if there are containers or
