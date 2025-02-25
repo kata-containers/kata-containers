@@ -510,6 +510,7 @@ func IsDockerContainer(spec *specs.Spec) bool {
 
 	return false
 }
+
 // GetNUMANodes constructs VM NUMA nodes mapping to host NUMA nodes and host CPUs.
 func GetNUMANodes(numaMapping []string) ([]types.NUMANode, error) {
 	// Add VM NUMA node for each specified subsets of host NUMA nodes.
@@ -555,4 +556,18 @@ func GetNUMANodes(numaMapping []string) ([]types.NUMANode, error) {
 	}
 
 	return numaNodes, nil
+}
+
+func IntMax(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func UIntMax(a, b uint32) uint32 {
+	if a > b {
+		return a
+	}
+	return b
 }

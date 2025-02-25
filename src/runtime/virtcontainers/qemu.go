@@ -837,10 +837,10 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 				qemuConfig.Devices = q.arch.appendPCIeExpanderBus(qemuConfig.Devices, busNameId, nodeID, "pcie.0", busNr)
 				qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, busNameId, numaDevices, memSize32bit, memSize64bit)
 			}
-		} else {
-			qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
+			return nil
 		}
 
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
 	}
 
@@ -851,6 +851,21 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeSwitchPort {
 			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
 		}
+		numaNodes := hypervisorConfig.NumNUMA()
+		if numaNodes > 0 {
+			baseAddr := config.PCIeExpanderBusBaseAddr
+			for nodeID := range numaNodes {
+				// pxb20, pxb40, pxb60, pxb80 depending on the number of NUMA nodes
+				// max 32 slots per root_complex
+				busNr := fmt.Sprintf("%x", baseAddr<<nodeID)
+				busNameId := fmt.Sprintf("%s%s", config.PCIeExpanderBusPrefix, busNr)
+				numaDevices := numOfPluggablePorts / numaNodes
+				qemuConfig.Devices = q.arch.appendPCIeExpanderBus(qemuConfig.Devices, busNameId, nodeID, "pcie.0", busNr)
+				qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, busNameId, numaDevices, memSize32bit, memSize64bit)
+			}
+			return nil
+		}
+
 		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, "pcie.0", numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
 	}
@@ -2672,12 +2687,19 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, bus string, number 
 		return devices
 	}
 
+	chassis := "0"
+	parentBus := ""
+	if bus != "pcie.0" {
+		parentBus = bus
+		chassis = strings.TrimPrefix(bus, config.PCIeExpanderBusPrefix)
+	}
+
 	// Using an own ID for the root port, so we do not clash with already
 	// existing root ports adding "s" for switch prefix
 	pcieRootPort := govmmQemu.PCIeRootPortDevice{
-		ID:            fmt.Sprintf("%s%s%d", config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
+		ID:            fmt.Sprintf("%s%s%s%d", parentBus, config.PCIeSwitchPortPrefix, config.PCIeRootPortPrefix, 0),
 		Bus:           bus,
-		Chassis:       "1",
+		Chassis:       chassis,
 		Slot:          strconv.FormatUint(uint64(0), 10),
 		Multifunction: false,
 		Addr:          "0",
@@ -2688,7 +2710,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, bus string, number 
 	devices = append(devices, pcieRootPort)
 
 	pcieSwitchUpstreamPort := govmmQemu.PCIeSwitchUpstreamPortDevice{
-		ID:  fmt.Sprintf("%s%d", config.PCIeSwitchUpstreamPortPrefix, 0),
+		ID:  fmt.Sprintf("%s%s%d", parentBus, config.PCIeSwitchUpstreamPortPrefix, 0),
 		Bus: pcieRootPort.ID,
 	}
 	devices = append(devices, pcieSwitchUpstreamPort)
@@ -2702,7 +2724,7 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, bus string, number 
 	for i := uint32(0); i < number; i++ {
 
 		pcieSwitchDownstreamPort := govmmQemu.PCIeSwitchDownstreamPortDevice{
-			ID:      fmt.Sprintf("%s%d", config.PCIeSwitchhDownstreamPortPrefix, i),
+			ID:      fmt.Sprintf("%s%s%d", parentBus, config.PCIeSwitchhDownstreamPortPrefix, i),
 			Bus:     pcieSwitchUpstreamPort.ID,
 			Chassis: fmt.Sprintf("%d", nextChassis),
 			Slot:    strconv.FormatUint(uint64(i), 10),

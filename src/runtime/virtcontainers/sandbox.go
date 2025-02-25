@@ -494,6 +494,8 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 		return err
 	}
 
+	s.Logger().Infof("### getGuestDetails response: %v", guestDetailRes)
+
 	if guestDetailRes != nil {
 		s.state.GuestMemoryBlockSizeMB = uint32(guestDetailRes.MemBlockSizeBytes >> 20)
 		if guestDetailRes.AgentDetails != nil {
@@ -2456,6 +2458,7 @@ func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, erro
 func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {
 	// online the memory:
 	s.Logger().WithField("memory-sandbox-size-mb", newMemoryMB).Debugf("Request to hypervisor to update memory")
+	s.Logger().Infof("### newMemoryMB: %d GuestMemoryBlockSizeMB %d GuestMemoryHotplugProbe  %v", newMemoryMB, s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	newMemory, updatedMemoryDevice, err := s.hypervisor.ResizeMemory(ctx, newMemoryMB, s.state.GuestMemoryBlockSizeMB, s.state.GuestMemoryHotplugProbe)
 	if err != nil {
 		if err == noGuestMemHotplugErr {
@@ -2464,14 +2467,15 @@ func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {
 			return err
 		}
 	}
-	s.Logger().Debugf("Sandbox memory size: %d MB", newMemory)
+	s.Logger().Debugf("### Sandbox memory size: %d MB", newMemory)
 	if s.state.GuestMemoryHotplugProbe && updatedMemoryDevice.Addr != 0 {
 		// notify the guest kernel about memory hot-add event, before onlining them
-		s.Logger().Debugf("notify guest kernel memory hot-add event via probe interface, memory device located at 0x%x", updatedMemoryDevice.Addr)
+		s.Logger().Debugf("### notify guest kernel memory hot-add event via probe interface, memory device located at 0x%x", updatedMemoryDevice.Addr)
 		if err := s.agent.memHotplugByProbe(ctx, updatedMemoryDevice.Addr, uint32(updatedMemoryDevice.SizeMB), s.state.GuestMemoryBlockSizeMB); err != nil {
 			return err
 		}
 	}
+	s.Logger().Debugf("### onlining memory")
 	if err := s.agent.onlineCPUMem(ctx, 0, false); err != nil {
 		return err
 	}

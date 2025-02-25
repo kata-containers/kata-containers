@@ -172,6 +172,7 @@ func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceRece
 			}
 			continue
 		}
+
 		numaID, _ := strconv.Atoi(vfio.NumaNode)
 		deviceAt := config.PCIeDevicesPerPort[uint8(numaID)]
 		for ix, dev := range deviceAt[vfio.Port] {

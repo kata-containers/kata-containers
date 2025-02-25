@@ -967,6 +967,7 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}, numNU
 	modeIsGK := (c.sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 
 	if modeIsGK {
+
 		// Hot plug is done let's update meta information about the
 		// hot plugged devices especially VFIO devices in modeIsGK
 		siblings := make([]DeviceRelation, 0)
@@ -974,22 +975,10 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}, numNU
 		// the switch-ports. The range over map is not deterministic
 		// so lets first iterate over all root-port devices and then
 		// switch-port devices no special handling for bridge-port (PCI)
-		if numNUMA == 0 {
-			for _, dev := range config.PCIeDevicesPerPort[0]["root-port"] {
-				// For the NV GPU we need special handling let's use only those
-				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-					siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
-				}
-			}
-			for _, dev := range config.PCIeDevicesPerPort[0]["switch-port"] {
-				// For the NV GPU we need special handling let's use only those
-				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-					siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
-				}
-			}
-		}
+		for numaID := range utils.UIntMax(numNUMA, 1) {
+			c.Logger().Infof("### root-port %+v", config.PCIeDevicesPerPort[uint8(numaID)]["root-port"])
+			c.Logger().Infof("### switch-port %+v", config.PCIeDevicesPerPort[uint8(numaID)]["switch-port"])
 
-		for numaID := range numNUMA {
 			for _, dev := range config.PCIeDevicesPerPort[uint8(numaID)]["root-port"] {
 				// For the NV GPU we need special handling let's use only those
 				if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
@@ -1003,6 +992,8 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}, numNU
 				}
 			}
 		}
+
+		c.Logger().Infof("### siblings %+v", siblings)
 
 		// We need to sort the VFIO devices by bus to get the correct
 		// ordering root-port < switch-port
