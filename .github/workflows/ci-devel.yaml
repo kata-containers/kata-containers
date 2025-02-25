@@ -11,3 +11,8 @@ jobs:
       tag: ${{ github.sha }}-dev
       target-branch: ${{ github.ref_name }}
     secrets: inherit
+
+  build-checks:
+    uses: ./.github/workflows/build-checks.yaml
+    with:
+      instance: ubuntu-22.04
