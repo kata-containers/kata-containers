@@ -17,10 +17,6 @@ CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
 include ../../utils.mk
 
-ifeq ($(ARCH), ppc64le)
-    override ARCH = powerpc64le
-endif
-
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
