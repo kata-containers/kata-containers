@@ -836,6 +836,7 @@ function arch_to_golang() {
 	case "${arch}" in
 		aarch64) echo "arm64";;
 		ppc64le) echo "${arch}";;
+		riscv64) echo "${arch}";;
 		x86_64) echo "amd64";;
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: ${arch}";;
@@ -849,6 +850,7 @@ function arch_to_rust() {
 	case "${arch}" in
 		aarch64) echo "${arch}";;
 		ppc64le) echo "powerpc64le";;
+		riscv64) echo "riscv64gc";;
 		x86_64) echo "${arch}";;
 		s390x) echo "${arch}";;
 		*) die "unsupported architecture: ${arch}";;

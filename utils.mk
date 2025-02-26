@@ -151,6 +151,12 @@ ifeq ($(ARCH), ppc64le)
     $(warning "WARNING: powerpc64le-unknown-linux-musl target is unavailable")
 endif
 
+ifeq ($(ARCH), riscv64)
+    override LIBC = gnu
+    override ARCH = riscv64gc
+    $(warning "WARNING: riscv64gc-unknown-linux-musl target is unavailable")
+endif
+
 ifeq ($(ARCH), s390x)
     override LIBC = gnu
     $(warning "WARNING: s390x-unknown-linux-musl target is unavailable")
