@@ -5,6 +5,7 @@
 //
 
 use std::{
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -759,14 +760,21 @@ pub fn get_vfio_iommu_group(bdf: String) -> Result<String> {
     let iommugrp_symlink = fs::read_link(&iommugrp_path)
         .map_err(|e| anyhow!("read iommu group symlink failed {:?}", e))?;
 
-    // get base name from iommu group symlink: X
-    let iommu_group = get_base_name(iommugrp_symlink)?
-        .into_string()
-        .map_err(|e| anyhow!("failed to get iommu group {:?}", e))?;
+    // Just get base name from iommu group symlink is enough as it will be checked
+    // within the full path /sys/kernel/iommu_groups/$iommu_group in the subsequent step.
+    let iommu_group = iommugrp_symlink
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| {
+            anyhow!(
+                "failed to get iommu group with symlink {:?}",
+                iommugrp_symlink
+            )
+        })?;
 
     // we'd better verify the path to ensure it dose exist.
     if !Path::new(SYS_KERN_IOMMU_GROUPS)
-        .join(&iommu_group)
+        .join(iommu_group)
         .join("devices")
         .join(dbdf.as_str())
         .exists()
