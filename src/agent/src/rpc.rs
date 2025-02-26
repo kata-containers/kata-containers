@@ -60,6 +60,7 @@ use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_net_interface;
 use crate::device::{add_devices, handle_cdi_devices, update_env_pci};
 use crate::features::get_build_features;
+#[cfg(feature = "guest-pull")]
 use crate::image::KATA_IMAGE_WORK_DIR;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
@@ -106,6 +107,7 @@ use kata_types::k8s;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
+#[cfg(feature = "guest-pull")]
 const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
 /// the iptables seriers binaries could appear either in /sbin
 /// or /usr/sbin, we need to check both of them
@@ -2241,11 +2243,13 @@ async fn cdh_handler(oci: &mut Spec) -> Result<()> {
         }
     }
 
+    #[cfg(feature = "guest-pull")]
     let linux = oci
         .linux()
         .as_ref()
         .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
 
+    #[cfg(feature = "guest-pull")]
     if let Some(devices) = linux.devices() {
         for specdev in devices.iter() {
             if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {

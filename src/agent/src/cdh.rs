@@ -184,6 +184,7 @@ pub async fn unseal_file(path: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "guest-pull")]
 pub async fn secure_mount(
     volume_type: &str,
     options: &std::collections::HashMap<String, String>,
