@@ -742,7 +742,7 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 			//
 			_, err := config.WithCDI(cdiSpec.Annotations, []string{}, cdiSpec)
 			if err != nil {
-				return coldPlugVFIO, fmt.Errorf("adding CDI devices failed")
+				return coldPlugVFIO, fmt.Errorf("adding CDI devices failed: %w", err)
 			}
 
 			for _, dev := range cdiSpec.Linux.Devices {
