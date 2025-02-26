@@ -6,7 +6,7 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::pod;
+use crate::{persistent_volume_claim, pod};
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,9 @@ pub struct Volume {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistentVolumeClaim: Option<PersistentVolumeClaimVolumeSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ephemeral: Option<EphemeralVolumeSource>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configMap: Option<ConfigMapVolumeSource>,
@@ -64,6 +67,13 @@ pub struct EmptyDirVolumeSource {
 pub struct PersistentVolumeClaimVolumeSource {
     pub claimName: String,
     // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Config and Storage Resources / Volume.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EphemeralVolumeSource {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub volumeClaimTemplate: Option<persistent_volume_claim::PersistentVolumeClaim>,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.

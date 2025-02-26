@@ -16,7 +16,21 @@ spec:
       volumeDevices:
         - name: dev
           devicePath: /dev/csi0
+      volumeMounts:
+        - name: ephemeral
+          mountPath: /state
   volumes:
     - name: dev
       persistentVolumeClaim:
         claimName: policy-dev
+    - name: ephemeral
+      ephemeral:
+        volumeClaimTemplate:
+          metadata:
+            labels:
+              type: some-type
+          spec:
+            accessModes: [ "ReadWriteOnce" ]
+            resources:
+              requests:
+                storage: 1Mi

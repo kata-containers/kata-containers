@@ -53,6 +53,15 @@ test_pod_policy_error() {
 	test_pod_policy_error
 }
 
+@test "Policy failure: unexpected volume mount" {
+	# Changing the location of a mounted device after policy generation should fail the policy check.
+	yq -i \
+		'.spec.containers[0].volumeMounts.[0].mountPath = "/usr/bin"' \
+		"${incorrect_pod_yaml}" \
+
+	test_pod_policy_error
+}
+
 teardown() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] ) && skip "https://github.com/kata-containers/kata-containers/issues/9846"

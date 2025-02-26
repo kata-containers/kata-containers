@@ -130,7 +130,7 @@ pub fn get_mount_and_storage(
         }
 
         get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
-    } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
+    } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() || yaml_volume.ephemeral.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
     } else if yaml_volume.hostPath.is_some() {
         get_host_path_mount(yaml_mount, yaml_volume, p_mounts);
