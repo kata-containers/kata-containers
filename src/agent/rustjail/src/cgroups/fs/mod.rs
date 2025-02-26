@@ -1167,21 +1167,37 @@ impl Manager {
         })
     }
 
-    pub fn subcgroup(&self) -> &str {
-        // Check if we're in a Docker-in-Docker setup by verifying:
-        // 1. We're using cgroups v2 (which restricts direct process control)
-        // 2. An "init" subdirectory exists (used by DinD for process delegation)
-        let is_dind = cgroups::hierarchies::is_cgroup2_unified_mode()
-            && cgroups::hierarchies::auto()
-                .root()
-                .join(&self.cpath)
-                .join("init")
-                .exists();
-        if is_dind {
-            "/init/"
-        } else {
-            "/"
+    pub fn subcgroup(&self, init_pid: pid_t, container_cgroup: &str) -> Result<String> {
+        if init_pid <= 0 || !cgroups::hierarchies::is_cgroup2_unified_mode() {
+            return Ok("/".into());
         }
+        // get sub-cgroup from container init pid
+        let cgroup_info = fs::read_to_string(format!("/proc/{}/cgroup", init_pid))?;
+        for line in cgroup_info.lines() {
+            // the entry for cgroup v2 is always in the format "0::$PATH"
+            // see https://docs.kernel.org/admin-guide/cgroup-v2.html
+            if let Some((_, init_cgroup_path)) = line.split_once("0::") {
+                let container_cgroup_path = format!("/{}", container_cgroup);
+                debug!(
+                    sl(),
+                    "subcgroup info: init_pid {}, init_cgroup_path {}, container_cgroup_path {}",
+                    init_pid,
+                    init_cgroup_path,
+                    container_cgroup_path
+                );
+                // get relative cgroup path of init_cgroup_path to container_cgroup_path
+                // container_cgroup_path: /a/b/c.slice
+                // init_cgroup_path: /a/b/c.slice/d.scope or /a/b/c.slice
+                if let Some((_, sub_path)) = init_cgroup_path.split_once(&container_cgroup_path) {
+                    match sub_path {
+                        "" => return Ok("/".into()),
+                        _ => return Ok(sub_path.into()),
+                    }
+                };
+                break;
+            }
+        }
+        Ok("/".into())
     }
 
     fn get_paths_and_mounts(
