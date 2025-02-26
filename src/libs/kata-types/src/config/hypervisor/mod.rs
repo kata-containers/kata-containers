@@ -829,10 +829,6 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub sev_snp_guest: bool,
 
-    /// Path to SNP certificates
-    #[serde(default)]
-    pub snp_certs_path: String,
-
     /// Path to OCI hook binaries in the *guest rootfs*.
     ///
     /// This does not affect host-side hooks which must instead be added to the OCI spec passed to
