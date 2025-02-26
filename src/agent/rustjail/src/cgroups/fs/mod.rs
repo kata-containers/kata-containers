@@ -1170,20 +1170,40 @@ impl Manager {
         })
     }
 
-    pub fn subcgroup(&self) -> &str {
-        // Check if we're in a Docker-in-Docker setup by verifying:
-        // 1. We're using cgroups v2 (which restricts direct process control)
-        // 2. An "init" subdirectory exists (used by DinD for process delegation)
-        let is_dind = cgroups::hierarchies::is_cgroup2_unified_mode()
-            && cgroups::hierarchies::auto()
-                .root()
-                .join(&self.cpath)
-                .join("init")
-                .exists();
-        if is_dind {
-            "/init/"
-        } else {
-            "/"
+    pub fn subcgroup(&self, init_pid: pid_t, container_cgroup: &str) -> String {
+        if init_pid <= 0 || !cgroups::hierarchies::is_cgroup2_unified_mode() {
+            return "/".to_string();
+        }
+        // get sub-cgroup from container init pid
+        match fs::read_to_string(format!("/proc/{}/cgroup", init_pid)) {
+            Ok(cgroup_info) => {
+                for line in cgroup_info.lines() {
+                    // the entry for cgroup v2 is always in the format "0::$PATH"
+                    // https://docs.kernel.org/admin-guide/cgroup-v2.html
+                    if let Some((_, init_cgroup)) = line.split_once("0::") {
+                        let abs_container_cgroup = format!("/{}", container_cgroup);
+                        debug!(
+                            sl(),
+                            "subcgroup info: init_pid {}, init_cgroup {}, container_cgroup {}",
+                            init_pid,
+                            init_cgroup,
+                            abs_container_cgroup
+                        );
+                        // get relative cgroup path of init_cgroup to abs_container_cgroup
+                        // abs_container_cgroup: /a/b/c.slice
+                        // init_cgroup: /a/b/c.slice/d.scope or /a/b/c.slice
+                        if let Some((_, sub_path)) = init_cgroup.split_once(&abs_container_cgroup) {
+                            match sub_path {
+                                "" => return "/".to_string(),
+                                _ => return sub_path.to_string(),
+                            }
+                        };
+                        break;
+                    }
+                }
+                "/".to_string()
+            }
+            Err(_) => "/".to_string(),
         }
     }
 
