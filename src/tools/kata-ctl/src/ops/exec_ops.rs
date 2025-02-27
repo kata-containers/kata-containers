@@ -46,6 +46,7 @@ macro_rules! sl {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Error {
     EpollWait(io::Error),
     EpollCreate(io::Error),
@@ -358,7 +359,6 @@ fn get_server_socket(sandbox_id: &str) -> anyhow::Result<String> {
 }
 
 fn do_run_exec(sandbox_id: &str, dbg_console_vport: u32) -> anyhow::Result<()> {
-    // sandbox_id MUST be a long ID.
     let server_url = get_server_socket(sandbox_id).context("get debug console socket URL")?;
     if server_url.is_empty() {
         return Err(anyhow!("server url is empty."));

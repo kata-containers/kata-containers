@@ -12,7 +12,7 @@ use std::fs;
 
 pub const SYSFS_DIR: &str = "/sys";
 #[cfg(any(
-    target_arch = "powerpc64",
+    all(target_arch = "powerpc64", target_endian = "little"),
     target_arch = "s390x",
     target_arch = "x86_64",
     target_arch = "x86"
@@ -71,6 +71,7 @@ cfg_if! {
         pub const CCW_ROOT_BUS_PATH: &str = "/devices/css0";
         pub const AP_ROOT_BUS_PATH: &str = "/devices/ap";
         pub const AP_SCANS_PATH: &str = "/sys/bus/ap/scans";
+        pub const Z9_CRYPT_DEV_PATH: &str = "/dev/z90crypt";
     }
 }
 
@@ -89,6 +90,7 @@ pub const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &str = "/sys/devices/system/memory/pr
 pub const SYSFS_MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
 
 pub const SYSFS_SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
+pub const SYSFS_NET_PATH: &str = "/sys/class/net";
 
 pub const SYSFS_BUS_PCI_PATH: &str = "/sys/bus/pci";
 

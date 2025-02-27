@@ -180,6 +180,15 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let platform = get_platform_cfg(guest_protection_to_use);
 
+        let balloon = if cfg.device_info.reclaim_guest_freed_memory {
+            Some(crate::BalloonConfig {
+                free_page_reporting: true,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
         let cfg = VmConfig {
             cpus,
             memory,
@@ -193,6 +202,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             vsock: Some(vsock),
             rng,
             platform,
+            balloon,
 
             ..Default::default()
         };
@@ -289,7 +299,7 @@ impl TryFrom<(MemoryInfo, GuestProtection)> for MemoryConfig {
 // method is available in the rust language.
 //
 // See: https://github.com/rust-lang/rust/issues/88581
-fn checked_next_multiple_of(value: u64, multiple: u64) -> Option<u64> {
+pub fn checked_next_multiple_of(value: u64, multiple: u64) -> Option<u64> {
     match value.checked_rem(multiple) {
         None => Some(value),
         Some(r) => value.checked_add(multiple - r),
@@ -1643,7 +1653,6 @@ mod tests {
             result: Result<VmConfig, VmConfigError>,
         }
 
-        let u8_max = std::u8::MAX;
         let sysinfo = nix::sys::sysinfo::sysinfo().unwrap();
 
         let actual_max_mem_bytes = sysinfo.ram_total();
@@ -1669,8 +1678,8 @@ mod tests {
         let valid_vsock =
             VsockConfig::try_from((vsock_socket_path.to_string(), DEFAULT_VSOCK_CID)).unwrap();
 
-        let (cpu_info, cpus_config) = make_cpu_objects(7, u8_max, false);
-        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, u8_max, true);
+        let (cpu_info, cpus_config) = make_cpu_objects(7, u8::MAX, false);
+        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, u8::MAX, true);
 
         let (memory_info_std, mem_config_std) =
             make_memory_objects(79, usable_max_mem_bytes, false);

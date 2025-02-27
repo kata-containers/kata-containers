@@ -29,7 +29,6 @@ readonly lib_file="${script_dir}/../scripts/lib.sh"
 
 readonly ext4_format="ext4"
 readonly xfs_format="xfs"
-readonly erofs_format="erofs"
 
 # ext4: percentage of the filesystem which may only be allocated by privileged processes.
 readonly reserved_blocks_percentage=3
@@ -49,30 +48,6 @@ readonly dax_header_sz=2
 # * DAX huge pages [2]: 2MB alignment
 # [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
 readonly dax_alignment=2
-
-# The list of systemd units and files that are not needed in Kata Containers
-readonly -a systemd_units=(
-	#"systemd-coredump@"
-	#"systemd-journald"
-	#"systemd-journald-dev-log"
-	#"systemd-journal-flush"
-	#"systemd-random-seed"
-	#"systemd-timesyncd"
-	#"systemd-tmpfiles-setup"
-	#"systemd-udevd"
-	#"systemd-udevd-control"
-	#"systemd-udevd-kernel"
-	#"systemd-udev-trigger"
-	#"systemd-update-utmp"
-)
-
-readonly -a systemd_files=(
-	#"systemd-bless-boot-generator"
-	#"systemd-fstab-generator"
-	#"systemd-getty-generator"
-	#"systemd-gpt-auto-generator"
-	#"systemd-tmpfiles-cleanup.timer"
-)
 
 # Set a default value
 AGENT_INIT=${AGENT_INIT:-no}
@@ -458,21 +433,6 @@ setup_selinux() {
 }
 
 setup_systemd() {
-		local mount_dir="$1"
-
-		info "Removing unneeded systemd services and sockets"
-		for u in "${systemd_units[@]}"; do
-			find "${mount_dir}" -type f \( \
-				 -name "${u}.service" -o \
-				 -name "${u}.socket" \) \
-				 -exec rm -f {} \;
-		done
-
-		info "Removing unneeded systemd files"
-		for u in "${systemd_files[@]}"; do
-			find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
-		done
-
 		info "Creating empty machine-id to allow systemd to bind-mount it"
 		touch "${mount_dir}/etc/machine-id"
 }

@@ -12,7 +12,6 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 sysbench_file=$(mktemp sysbenchresults.XXXXXXXXXX)
 TEST_NAME="${TEST_NAME:-sysbench}"
-CI_JOB="${CI_JOB:-}"
 IMAGE="docker.io/library/local-sysbench:latest"
 DOCKERFILE="${SCRIPT_PATH}/sysbench-dockerfile/Dockerfile"
 

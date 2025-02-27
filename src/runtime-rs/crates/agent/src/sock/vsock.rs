@@ -69,11 +69,15 @@ impl Sock for Vsock {
                     );
                     return Ok(Stream::Vsock(stream));
                 }
-                Err(_) => {
+                Err(e) => {
+                    debug!(sl!(), "retry after {} ms: failed to connect to agent via vsock at {} attempts: {:?}", config.dial_timeout_ms, i, e);
                     tokio::time::sleep(Duration::from_millis(config.dial_timeout_ms)).await;
                 }
             }
         }
-        Err(anyhow!("cannot connect to agent ttrpc server {:?}", config))
+        Err(anyhow!(
+            "cannot connect vsock to agent ttrpc server {:?}",
+            config
+        ))
     }
 }

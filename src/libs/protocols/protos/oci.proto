@@ -172,9 +172,16 @@ message Hooks {
 }
 
 message Hook {
+	// Path is the absolute path to the container's root filesystem.
 	string Path = 1;
+
+	// Arguments used for the binary, including the binary name itself.
 	repeated string Args = 2;
+
+	// Additional `key=value` environment variables.
 	repeated string Env = 3;
+
+	// Timeout is the number of seconds before aborting the hook. If set, timeout MUST be greater than zero.
 	int64 Timeout = 4;
 }
 

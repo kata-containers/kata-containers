@@ -25,6 +25,7 @@ Check and switch to the stable branch of your choice, if wanted, and then run:
 $ cd kata-containers/tools/packaging/kata-deploy
 $ kubectl apply -f kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -k kata-deploy/overlays/k3s
+$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
 #### RKE2 cluster
@@ -41,9 +42,25 @@ Check and switch to the stable branch of your choice, if wanted, and then run:
 $ cd kata-containers/tools/packaging/kata-deploy
 $ kubectl apply -f kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -k kata-deploy/overlays/rke2
+$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
-#### [k0s] cluster
+#### k0s cluster
+
+> [!IMPORTANT]  
+> As in this section, when following the rest of these instructions, you must use
+> `sudo k0s kubectl` instead of `kubectl` for k0s.
+
+> [!NOTE]  
+> The supported version of k0s is **v1.27.1+k0s** and above, since k0s support in Kata leverages
+[dynamic runtime configuration](https://docs.k0sproject.io/v1.29.1+k0s.1/runtime/#k0s-managed-dynamic-runtime-configuration),
+which was introduced in that version.
+>
+> Dynamic runtime configuration is enabled by default in k0s, and you can make sure it is enabled by verifying that `/etc/k0s/containerd.toml` contains the following line:
+>
+> ```toml
+> # k0s_managed=true
+> ```
 
 For your [k0s](https://k0sproject.io/) cluster, run:
 
@@ -55,48 +72,19 @@ Check and switch to "main", and then run:
 
 ```bash
 $ cd kata-containers/tools/packaging/kata-deploy
-$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
-$ kubectl apply -k kata-deploy/overlays/k0s
-```
-
-##### Note
-
-The supported version of k0s is **v1.27.1+k0s** and above, since the k0s support leverages a special dynamic containerd configuration mode:
-
-> From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
-> 
-> k0s will automatically pick up these files and adds these in containerd configuration imports list. If k0s sees the configuration drop-ins are CRI related configurations k0s will automatically collect all these into a single file and adds that as a single import file. This is to overcome some hard limitation on containerd 1.X versions. Read more at containerd#8056
-
-However, this would also require a magic string set in the beginning of the line for `/etc/k0s/containerd.toml`:
-
-```
-# k0s_managed=true
+$ sudo k0s kubectl apply -f kata-rbac/base/kata-rbac.yaml
+$ sudo k0s kubectl apply -k kata-deploy/overlays/k0s
+$ sudo k0s kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
 #### Vanilla Kubernetes cluster
 
-##### Installing the latest image
-
-The latest image refers to pre-release and release candidate content.  For stable releases, please, use the "stable" instructions.
-
-```sh
+```bash
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
 ```
 
-##### Installing the stable image
-
-The stable image refers to the last stable releases content.
-
-> **Note:** if you use a tagged version of the repo, the stable image does match that version.
-> For instance, if you use the 2.2.1 tagged version of the kata-deploy.yaml file, then the version 2.2.1 of the kata runtime will be deployed.
-
-```bash
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy-stable.yaml
-```
-
-#### Ensure kata-deploy is ready
+### Ensure Kata has been installed
 ```bash
 $ kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
 ```
@@ -109,7 +97,7 @@ which will ensure the workload is only scheduled on a node that has Kata Contain
 
 `runtimeClass` is a built-in type in Kubernetes. To apply each Kata Containers `runtimeClass`:
 ```bash
-  $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
 ```
 The following YAML snippet shows how to specify a workload should use Kata with `Dragonball`:
 

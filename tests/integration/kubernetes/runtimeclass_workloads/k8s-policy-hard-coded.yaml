@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2023 Microsoft
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hard-coded-policy-pod
+spec:
+  terminationGracePeriodSeconds: 0
+  shareProcessNamespace: true
+  runtimeClassName: kata
+  containers:
+    - name: first-test-container
+      image: quay.io/prometheus/busybox:latest
+      env:
+        - name: CONTAINER_NAME
+          value: "first-test-container"
+      command:
+        - sleep
+        - "120"

@@ -9,12 +9,12 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${KATA_HYPERVISOR}" = "qemu-se" ] && \
+		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	get_pod_config_dir
 }
 
 @test "Containers with shared volume" {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] && \
-		skip "See: https://github.com/kata-containers/kata-containers/issues/9668"
 	pod_name="test-shared-volume"
 	first_container_name="busybox-first-container"
 	second_container_name="busybox-second-container"
@@ -24,8 +24,8 @@ setup() {
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	exec_command="sh -c ${cmd}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -38,13 +38,10 @@ setup() {
 
 	# Communicate containers
 	msg="Hello from the $second_container_name"
-	kubectl exec "$pod_name" -c "$first_container_name" -- sh -c "$cmd" | grep "$msg"
+	kubectl exec "$pod_name" -c "$first_container_name" -- "${exec_command[@]}" | grep "$msg"
 }
 
 @test "initContainer with shared volume" {
-	[[ "${KATA_HYPERVISOR}" = "qemu-tdx" || "${KATA_HYPERVISOR}" = "qemu-coco-dev" || \
-		"${KATA_HYPERVISOR}" = "qemu-sev" || "${KATA_HYPERVISOR}" = "qemu-snp" ]] && \
-		skip "See: https://github.com/kata-containers/kata-containers/issues/9668"
 
 	pod_name="initcontainer-shared-volume"
 	last_container="last"
@@ -54,8 +51,8 @@ setup() {
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	exec_command="sh -c ${cmd}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -66,10 +63,12 @@ setup() {
 	# Check pods
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
 
-	kubectl exec "$pod_name" -c "$last_container" -- sh -c "$cmd"
+	kubectl exec "$pod_name" -c "$last_container" -- "${exec_command[@]}"
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR}" = "qemu-se" ] && \
+		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	# Debugging information
 	kubectl describe "pod/$pod_name" || true
 

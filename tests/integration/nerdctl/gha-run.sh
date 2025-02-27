@@ -31,10 +31,7 @@ function install_dependencies() {
 	sudo apt -y install "${system_deps[@]}"
 
 	# Install lastversion from pip
-	#
-	# --break-system-packages is, unfortunately, needed here as it'll also
-	# bring in some python3 dependencies on its own
-	pip install lastversion --break-system-packages
+	pip install lastversion
 
 	# As the command above will install lastversion on $HOME/.local/bin, we
 	# need to add it to the PATH
@@ -86,12 +83,18 @@ function run() {
 	# that an interface called eth0 exists on the host.
 	local ipvlan_net_name="ipvlan10"
 	info "Creating ipvlan network with eth0 interface on host as parent"
-	sudo nerdctl network create ${ipvlan_net_name=} --driver ipvlan --subnet=10.5.74.0/24 -o parent=${parent_interface}
+	sudo nerdctl network create ${ipvlan_net_name} --driver ipvlan --subnet=10.5.74.0/24 -o parent=${parent_interface}
 
 	# The following creates an ipvlan network with eth0 on host as parent.
 	local macvlan_net_name="macvlan20"
 	info "Creating macvlan network with eth0 interface on host as parent"
-	sudo nerdctl network create ${macvlan_net_name=} --driver ipvlan --subnet=10.8.0.0/24 -o parent=${parent_interface}
+	sudo nerdctl network create ${macvlan_net_name} --driver ipvlan --subnet=10.8.0.0/24 -o parent=${parent_interface}
+
+	# Create two bridge networks for testing multiple networks with Kata
+	local net1="foo"
+	local net2="bar"
+	sudo nerdctl network create ${net1}
+	sudo nerdctl network create ${net2}
 
 	enabling_hypervisor
 
@@ -106,11 +109,17 @@ function run() {
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
 	sudo nerdctl run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
 
+	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and multiple bridge nwtorks"
+	sudo nerdctl run --rm --net ${net1} --net ${net2} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a
+
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
 	sudo nerdctl run  --rm --net ${ipvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and macvlan network"
 	sudo nerdctl run  --rm --net ${macvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
+
+	info "Removing networks"
+	sudo nerdctl network rm ${macvlan_net_name} ${ipvlan_net_name}
 }
 
 function main() {

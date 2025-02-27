@@ -1,0 +1,65 @@
+[
+  {
+    "description": "copy initiated by k8s mount",
+    "allowed": true,
+    "request": {
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-resolv.conf"
+    }
+  },
+  {
+    "description": "a dirname can have trailing dots",
+    "allowed": true,
+    "request": {
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo../bar"
+    }
+  },
+  {
+    "description": "attempt to copy outside of container root",
+    "allowed": false,
+    "request": {
+      "path": "/etc/ssl/cert.pem"
+    }
+  },
+  {
+    "description": "attempt to write into container root",
+    "allowed": false,
+    "request": {
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
+    }
+  },
+  {
+    "description": "attempt to write into container root - guest pull",
+    "allowed": false,
+    "request": {
+      "path": "/run/kata-containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
+    }
+  },
+  {
+    "description": "attempted directory traversal",
+    "allowed": false,
+    "request": {
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/../../../../../etc/ssl/cert.pem"
+    }
+  },
+  {
+    "description": "attempted directory traversal - parent directory",
+    "allowed": false,
+    "request": {
+      "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/.."
+    }
+  },
+  {
+    "description": "relative path",
+    "allowed": false,
+    "request": {
+      "path": "etc/ssl/cert.pem"
+    }
+  },
+  {
+    "description": "relative path - parent directory",
+    "allowed": false,
+    "request": {
+      "path": ".."
+    }
+  }
+]

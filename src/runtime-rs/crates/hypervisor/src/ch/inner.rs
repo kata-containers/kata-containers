@@ -15,9 +15,9 @@ use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use std::os::unix::net::UnixStream;
-use tokio::process::Child;
 use tokio::sync::watch::{channel, Receiver, Sender};
 use tokio::task::JoinHandle;
+use tokio::{process::Child, sync::mpsc};
 
 #[derive(Debug)]
 pub struct CloudHypervisorInner {
@@ -27,7 +27,7 @@ pub struct CloudHypervisorInner {
     pub(crate) api_socket: Option<UnixStream>,
     pub(crate) extra_args: Option<Vec<String>>,
 
-    pub(crate) config: Option<HypervisorConfig>,
+    pub(crate) config: HypervisorConfig,
 
     pub(crate) process: Option<Child>,
     pub(crate) pid: Option<u32>,
@@ -76,12 +76,14 @@ pub struct CloudHypervisorInner {
 
     /// Size of memory block of guest OS in MB (currently unused)
     pub(crate) _guest_memory_block_size_mb: u32,
+
+    pub(crate) exit_notify: Option<mpsc::Sender<i32>>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
 
 impl CloudHypervisorInner {
-    pub fn new() -> Self {
+    pub fn new(exit_notify: Option<mpsc::Sender<i32>>) -> Self {
         let mut capabilities = Capabilities::new();
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
@@ -99,7 +101,7 @@ impl CloudHypervisorInner {
             process: None,
             pid: None,
 
-            config: None,
+            config: Default::default(),
             state: VmmState::NotReady,
             timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
             id: String::default(),
@@ -116,28 +118,30 @@ impl CloudHypervisorInner {
             guest_protection_to_use: GuestProtection::NoProtection,
             ch_features: None,
             _guest_memory_block_size_mb: 0,
+
+            exit_notify,
         }
     }
 
     pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
-        self.config = Some(config);
+        self.config = config;
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
-        self.config.clone().unwrap_or_default()
+        self.config.clone()
     }
 }
 
 impl Default for CloudHypervisorInner {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
 #[async_trait]
 impl Persist for CloudHypervisorInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<i32>;
 
     // Return a state object that will be saved by the caller.
     async fn save(&self) -> Result<Self::State> {
@@ -158,13 +162,13 @@ impl Persist for CloudHypervisorInner {
 
     // Set the hypervisor state to the specified state
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        exit_notify: mpsc::Sender<i32>,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
         let (tx, rx) = channel(true);
 
         let mut ch = Self {
-            config: Some(hypervisor_state.config),
+            config: hypervisor_state.config,
             state: VmmState::NotReady,
             id: hypervisor_state.id,
             vm_path: hypervisor_state.vm_path,
@@ -180,6 +184,7 @@ impl Persist for CloudHypervisorInner {
             timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
             jailer_root: String::default(),
             ch_features: None,
+            exit_notify: Some(exit_notify),
 
             ..Default::default()
         };
@@ -196,7 +201,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_save_clh() {
-        let mut clh = CloudHypervisorInner::new();
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+
+        let mut clh = CloudHypervisorInner::new(Some(exit_notify.clone()));
         clh.id = String::from("123456");
         clh.netns = Some(String::from("/var/run/netns/testnet"));
         clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
@@ -218,7 +225,7 @@ mod tests {
         assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
 
-        let clh = CloudHypervisorInner::restore((), state.clone())
+        let clh = CloudHypervisorInner::restore(exit_notify, state.clone())
             .await
             .unwrap();
         assert_eq!(clh.id, state.id);

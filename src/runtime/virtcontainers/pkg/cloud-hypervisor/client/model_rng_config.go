@@ -37,8 +37,6 @@ func NewRngConfig(src string) *RngConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewRngConfigWithDefaults() *RngConfig {
 	this := RngConfig{}
-	var src string = "/dev/urandom"
-	this.Src = src
 	var iommu bool = false
 	this.Iommu = &iommu
 	return &this

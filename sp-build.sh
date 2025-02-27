@@ -7,6 +7,7 @@ VM_MEMORY=128
 VM_CPU=8
 
 export DISTRO="ubuntu"
+export OS_VERSION="noble"
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 export ROOTFS_DIR="${SCRIPT_DIR}/build/rootfs"
 

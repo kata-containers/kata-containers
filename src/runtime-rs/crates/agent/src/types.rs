@@ -9,6 +9,8 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
+use oci_spec::runtime as oci;
+
 pub const DEFAULT_REMOVE_CONTAINER_REQUEST_TIMEOUT: u32 = 10;
 
 #[derive(PartialEq, Clone, Default)]
@@ -40,7 +42,7 @@ pub struct StringUser {
     pub additional_gids: Vec<String>,
 }
 
-#[derive(PartialEq, Clone, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
 pub struct Device {
     pub id: String,
     pub field_type: String,

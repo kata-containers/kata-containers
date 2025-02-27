@@ -13,17 +13,24 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
+
+	# Add policy to pod-secret.yaml.
 	pod_yaml_file="${pod_config_dir}/pod-secret.yaml"
-	cmd="ls /tmp/secret-volume"
+	pod_cmd="ls /tmp/secret-volume"
+	pod_exec_command=(sh -c "${pod_cmd}")
+	pod_policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_exec_to_policy_settings "${pod_policy_settings_dir}" "${pod_exec_command[@]}"
+	add_requests_to_policy_settings "${pod_policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${pod_policy_settings_dir}" "${pod_yaml_file}"
 
-	# Add policy to the pod yaml file
-	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
-
-	exec_command="sh -c ${cmd}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
-	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
-
-	auto_generate_policy "${policy_settings_dir}" "${pod_yaml_file}"
+	# Add policy to pod-secret-env.yaml.
+	#
+	# TODO: auto-generate policy for this pod YAML after solving
+	# https://github.com/kata-containers/kata-containers/issues/10033
+	pod_env_yaml_file="${pod_config_dir}/pod-secret-env.yaml"
+	pod_env_cmd="printenv"
+	pod_env_exec_command=(sh -c "${pod_env_cmd}")
+	add_allow_all_policy_to_yaml "${pod_env_yaml_file}"
 }
 
 @test "Credentials using secrets" {
@@ -44,19 +51,18 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# List the files
-	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "password"
-	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "username"
+	kubectl exec $pod_name -- "${pod_exec_command[@]}" | grep -w "password"
+	kubectl exec $pod_name -- "${pod_exec_command[@]}" | grep -w "username"
 
 	# Create a pod that has access to the secret data through environment variables
-	kubectl create -f "${pod_config_dir}/pod-secret-env.yaml"
+	kubectl create -f "${pod_env_yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$second_pod_name"
 
 	# Display environment variables
-	second_cmd="printenv"
-	kubectl exec $second_pod_name -- sh -c "$second_cmd" | grep -w "SECRET_USERNAME"
-	kubectl exec $second_pod_name -- sh -c "$second_cmd" | grep -w "SECRET_PASSWORD"
+	kubectl exec $second_pod_name -- "${pod_env_exec_command[@]}" | grep -w "SECRET_USERNAME"
+	kubectl exec $second_pod_name -- "${pod_env_exec_command[@]}" | grep -w "SECRET_PASSWORD"
 }
 
 teardown() {
@@ -70,5 +76,5 @@ teardown() {
 	kubectl delete pod "$pod_name" "$second_pod_name"
 	kubectl delete secret "$secret_name"
 
-	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	delete_tmp_policy_settings_dir "${pod_policy_settings_dir}"
 }

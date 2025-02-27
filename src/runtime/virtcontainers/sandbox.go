@@ -248,6 +248,11 @@ type Sandbox struct {
 	seccompSupported  bool
 	disableVMShutdown bool
 	isVCPUsPinningOn  bool
+
+	// hotplugNetworkConfigApplied prevents network config API being called
+	// multiple times for hot-plugged network device when Sandbox has multiple
+	// containers.
+	hotplugNetworkConfigApplied bool
 }
 
 // ID returns the sandbox identifier string.
@@ -448,13 +453,25 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 	defer span.End()
 
 	for _, name := range types.AssetTypes() {
-		a, err := types.NewAsset(sandboxConfig.Annotations, name)
+		annotation, _, err := name.Annotations()
 		if err != nil {
 			return err
 		}
+		// For remote hypervisor donot check for Absolute Path incase of ImagePath, as it denotes the name of the image.
+		if sandboxConfig.HypervisorType == RemoteHypervisor && annotation == annotations.ImagePath {
+			value := sandboxConfig.Annotations[annotation]
+			if value != "" {
+				sandboxConfig.HypervisorConfig.ImagePath = value
+			}
+		} else {
+			a, err := types.NewAsset(sandboxConfig.Annotations, name)
+			if err != nil {
+				return err
+			}
 
-		if err := sandboxConfig.HypervisorConfig.AddCustomAsset(a); err != nil {
-			return err
+			if err := sandboxConfig.HypervisorConfig.AddCustomAsset(a); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1258,12 +1275,15 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 
 	go func() {
 		for scanner.Scan() {
-			s.Logger().WithFields(logrus.Fields{
-				"console-protocol": cw.proto,
-				"console-url":      cw.consoleURL,
-				"sandbox":          s.id,
-				"vmconsole":        scanner.Text(),
-			}).Debug("reading guest console")
+			text := scanner.Text()
+			if text != "" {
+				s.Logger().WithFields(logrus.Fields{
+					"console-protocol": cw.proto,
+					"console-url":      cw.consoleURL,
+					"sandbox":          s.id,
+					"vmconsole":        text,
+				}).Debug("reading guest console")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -1441,6 +1461,8 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 
 	defer func() {
 		if err != nil {
+			// Log error, otherwise nobody might see it - StopVM could kill this process.
+			s.Logger().WithError(err).Error("Cannot start VM")
 			s.hypervisor.StopVM(ctx, false)
 		}
 	}()
@@ -2233,6 +2255,29 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}()
 
 	return add, nil
+}
+
+// GetVfioDeviceGuestPciPath return a device's guest PCI path by its host BDF
+func (s *Sandbox) GetVfioDeviceGuestPciPath(hostBDF string) types.PciPath {
+	devices := s.devManager.GetAllDevices()
+	for _, device := range devices {
+		switch device.DeviceType() {
+		case config.DeviceVFIO:
+			vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
+			if !ok {
+				continue
+			}
+			for _, vfioDev := range vfioDevices {
+				if vfioDev.BDF == hostBDF {
+					return vfioDev.GuestPciPath
+				}
+			}
+		default:
+			continue
+		}
+	}
+
+	return types.PciPath{}
 }
 
 // updateResources will:

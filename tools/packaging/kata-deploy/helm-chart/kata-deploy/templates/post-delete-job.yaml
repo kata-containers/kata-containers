@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+  name: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-3"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+  name: {{ .Chart.Name }}-role-cleanup
+{{- end }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-2"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "patch"]
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets"]
+  verbs: ["list"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-rb-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+  name: {{ .Chart.Name }}-rb-cleanup
+{{- end }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+  name: {{ .Chart.Name }}-role-cleanup
+{{- end }}
+subjects:
+- kind: ServiceAccount
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+  name: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+  name: {{ .Chart.Name }}-cleanup
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  template:
+    metadata:
+      labels:
+        role: cleanup
+    spec:
+{{- if .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
+      serviceAccountName: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
+      hostPID: true
+      containers:
+      - name: kube-kata-cleanup
+        image: {{ .Values.image.reference }}:{{ default .Chart.AppVersion .Values.image.tag }}
+        imagePullPolicy: IfNotPresent
+        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: DEBUG
+          value: {{ .Values.env.debug | quote }}
+        - name: SHIMS
+          value: {{ .Values.env.shims | quote }}
+        - name: DEFAULT_SHIM
+          value: {{ .Values.env.defaultShim | quote }}
+        - name: CREATE_RUNTIMECLASSES
+          value: {{ .Values.env.createRuntimeClasses | quote }}
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: {{ .Values.env.createDefaultRuntimeClass | quote }}
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS
+          value: {{ .Values.env.allowedHypervisorAnnotations | quote }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING
+          value: {{ .Values.env.snapshotterHandlerMapping | quote }}
+        - name: AGENT_HTTPS_PROXY
+          value: {{ .Values.env.agentHttpsProxy | quote }}
+        - name: AGENT_NO_PROXY
+          value: {{ .Values.env.agentNoProxy | quote }}
+        - name: PULL_TYPE_MAPPING
+          value: {{ .Values.env.pullTypeMapping | quote }}
+        - name: HELM_POST_DELETE_HOOK
+          value: "true"
+        - name: INSTALLATION_PREFIX
+          value: {{ .Values.env.installationPrefix | quote }}
+        - name: MULTI_INSTALL_SUFFIX
+          value: {{ .Values.env.multiInstallSuffix | quote }}
+{{- with .Values.env.hostOS }}
+        - name: HOST_OS
+          value: {{ . | quote }}
+{{- end }}
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: crio-conf
+          mountPath: /etc/crio/
+        - name: containerd-conf
+          mountPath: /etc/containerd/
+        - name: host
+          mountPath: /host/
+      volumes:
+      - name: crio-conf
+        hostPath:
+          path: /etc/crio/
+      - name: containerd-conf
+        hostPath:
+          path: '{{- template "containerdConfPath" .Values }}'
+      - name: host
+        hostPath:
+          path: /
+      restartPolicy: Never 

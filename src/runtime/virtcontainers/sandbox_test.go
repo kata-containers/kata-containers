@@ -62,6 +62,7 @@ func testCreateSandbox(t *testing.T, id string,
 		Volumes:          volumes,
 		Containers:       containers,
 		Annotations:      sandboxAnnotations,
+		VfioMode:         config.VFIOModeGuestKernel,
 	}
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
@@ -673,17 +674,15 @@ func TestSandboxCreateAssets(t *testing.T) {
 	originalInitrdPath := filepath.Join(testDir, testInitrd)
 	originalFirmwarePath := filepath.Join(testDir, testFirmware)
 	originalHypervisorPath := filepath.Join(testDir, testHypervisor)
-	originalHypervisorCtlPath := filepath.Join(testDir, testHypervisorCtl)
 	originalJailerPath := filepath.Join(testDir, testJailer)
 
 	hc := HypervisorConfig{
-		KernelPath:        originalKernelPath,
-		ImagePath:         originalImagePath,
-		InitrdPath:        originalInitrdPath,
-		FirmwarePath:      originalFirmwarePath,
-		HypervisorPath:    originalHypervisorPath,
-		HypervisorCtlPath: originalHypervisorCtlPath,
-		JailerPath:        originalJailerPath,
+		KernelPath:     originalKernelPath,
+		ImagePath:      originalImagePath,
+		InitrdPath:     originalInitrdPath,
+		FirmwarePath:   originalFirmwarePath,
+		HypervisorPath: originalHypervisorPath,
+		JailerPath:     originalJailerPath,
 	}
 
 	data := []testData{
@@ -699,13 +698,6 @@ func TestSandboxCreateAssets(t *testing.T) {
 			map[string]string{
 				annotations.HypervisorPath: filename,
 				annotations.HypervisorHash: assetContentHash,
-			},
-		},
-		{
-			types.HypervisorCtlAsset,
-			map[string]string{
-				annotations.HypervisorCtlPath: filename,
-				annotations.HypervisorCtlHash: assetContentHash,
 			},
 		},
 		{
@@ -771,6 +763,24 @@ func TestSandboxCreateAssets(t *testing.T) {
 		err = createAssets(context.Background(), config)
 		assert.Error(err, msg)
 	}
+
+	// Remote Hypervisor scenario for ImagePath
+	msg := "test[image]: imagePath"
+	imagePathData := &testData{
+		assetType: types.ImageAsset,
+		annotations: map[string]string{
+			annotations.ImagePath: "rhel9-os",
+		},
+	}
+
+	config := &SandboxConfig{
+		Annotations:      imagePathData.annotations,
+		HypervisorConfig: hc,
+		HypervisorType:   RemoteHypervisor,
+	}
+
+	err = createAssets(context.Background(), config)
+	assert.NoError(err, msg)
 }
 
 func testFindContainerFailure(t *testing.T, sandbox *Sandbox, cid string) {

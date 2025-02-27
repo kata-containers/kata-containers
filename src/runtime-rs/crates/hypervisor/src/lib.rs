@@ -13,10 +13,13 @@ pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
 use device::DeviceType;
-#[cfg(not(target_arch = "s390x"))]
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 pub mod dragonball;
+#[cfg(not(target_arch = "s390x"))]
+pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
+pub mod remote;
 pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
@@ -51,16 +54,20 @@ const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
 // /dev/hugepages will be the mount point
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
-#[cfg(not(target_arch = "s390x"))]
-const DEV_HUGEPAGES: &str = "/dev/hugepages";
 pub const HUGETLBFS: &str = "hugetlbfs";
-#[cfg(not(target_arch = "s390x"))]
+// Constants required for Dragonball VMM when enabled and not on s390x.
+// Not needed when the built-in VMM is not used.
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+const DEV_HUGEPAGES: &str = "/dev/hugepages";
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 const SHMEM: &str = "shmem";
-#[cfg(not(target_arch = "s390x"))]
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";
+pub const HYPERVISOR_FIRECRACKER: &str = "firecracker";
+pub const HYPERVISOR_REMOTE: &str = "remote";
 
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
@@ -90,9 +97,15 @@ pub struct MemoryConfig {
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        annotations: &HashMap<String, String>,
+    ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
+    async fn wait_vm(&self) -> Result<i32>;
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;

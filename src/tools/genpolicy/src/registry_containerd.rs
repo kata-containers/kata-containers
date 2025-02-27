@@ -6,8 +6,8 @@
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
 use crate::registry::{
-    add_verity_to_store, get_verity_hash_value, read_verity_from_store, Container,
-    DockerConfigLayer, ImageLayer,
+    add_verity_and_users_to_store, get_verity_hash_and_users, read_verity_and_users_from_store,
+    Container, DockerConfigLayer, ImageLayer,
 };
 
 use anyhow::{anyhow, Result};
@@ -28,7 +28,7 @@ use tower::service_fn;
 
 impl Container {
     pub async fn new_containerd_pull(
-        use_cached_files: bool,
+        layers_cache_file_path: Option<String>,
         image: &str,
         containerd_socket_path: &str,
     ) -> Result<Self> {
@@ -46,7 +46,8 @@ impl Container {
         let ctrd_client = containerd_client::Client::from(containerd_channel.clone());
         let k8_cri_image_client = ImageServiceClient::new(containerd_channel);
 
-        let image_ref: Reference = image.to_string().parse().unwrap();
+        let image_str = image.to_string();
+        let image_ref: Reference = image_str.parse().unwrap();
 
         info!("Pulling image: {:?}", image_ref);
 
@@ -58,10 +59,16 @@ impl Container {
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        let image_layers =
-            get_image_layers(use_cached_files, &manifest, &config_layer, &ctrd_client).await?;
+        let image_layers = get_image_layers(
+            layers_cache_file_path,
+            &manifest,
+            &config_layer,
+            &ctrd_client,
+        )
+        .await?;
 
         Ok(Container {
+            image: image_str,
             config_layer,
             image_layers,
         })
@@ -242,7 +249,7 @@ pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {
 }
 
 pub async fn get_image_layers(
-    use_cached_files: bool,
+    layers_cache_file_path: Option<String>,
     manifest: &serde_json::Value,
     config_layer: &DockerConfigLayer,
     client: &containerd_client::Client,
@@ -258,15 +265,17 @@ pub async fn get_image_layers(
             || layer_media_type.eq("application/vnd.oci.image.layer.v1.tar+gzip")
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
+                let (verity_hash, passwd) = get_verity_and_users(
+                    layers_cache_file_path.clone(),
+                    layer["digest"].as_str().unwrap(),
+                    client,
+                    &config_layer.rootfs.diff_ids[layer_index].clone(),
+                )
+                .await?;
                 let imageLayer = ImageLayer {
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash: get_verity_hash(
-                        use_cached_files,
-                        layer["digest"].as_str().unwrap(),
-                        client,
-                        &config_layer.rootfs.diff_ids[layer_index].clone(),
-                    )
-                    .await?,
+                    verity_hash,
+                    passwd,
                 };
                 layersVec.push(imageLayer);
             } else {
@@ -279,15 +288,14 @@ pub async fn get_image_layers(
     Ok(layersVec)
 }
 
-async fn get_verity_hash(
-    use_cached_files: bool,
+async fn get_verity_and_users(
+    layers_cache_file_path: Option<String>,
     layer_digest: &str,
     client: &containerd_client::Client,
     diff_id: &str,
-) -> Result<String> {
+) -> Result<(String, String)> {
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
-    let cache_file = "layers-cache.json";
     // Use file names supported by both Linux and Windows.
     let file_name = str::replace(layer_digest, ":", "-");
     let mut decompressed_path = base_dir.join(file_name);
@@ -297,11 +305,14 @@ async fn get_verity_hash(
     compressed_path.set_extension("gz");
 
     let mut verity_hash = "".to_string();
+    let mut passwd = "".to_string();
     let mut error_message = "".to_string();
     let mut error = false;
 
-    if use_cached_files {
-        verity_hash = read_verity_from_store(cache_file, diff_id)?;
+    if let Some(path) = layers_cache_file_path.as_ref() {
+        let res = read_verity_and_users_from_store(path, diff_id)?;
+        verity_hash = res.0;
+        passwd = res.1;
         info!("Using cache file");
         info!("dm-verity root hash: {verity_hash}");
     }
@@ -321,15 +332,16 @@ async fn get_verity_hash(
         }
 
         if !error {
-            match get_verity_hash_value(&decompressed_path) {
+            match get_verity_hash_and_users(&decompressed_path) {
                 Err(e) => {
                     error_message = format!("Failed to get verity hash {e}");
                     error = true;
                 }
-                Ok(v) => {
-                    verity_hash = v;
-                    if use_cached_files {
-                        add_verity_to_store(cache_file, diff_id, &verity_hash)?;
+                Ok(res) => {
+                    verity_hash = res.0;
+                    passwd = res.1;
+                    if let Some(path) = layers_cache_file_path.as_ref() {
+                        add_verity_and_users_to_store(path, diff_id, &verity_hash, &passwd)?;
                     }
                     info!("dm-verity root hash: {verity_hash}");
                 }
@@ -339,12 +351,12 @@ async fn get_verity_hash(
     temp_dir.close()?;
     if error {
         // remove the cache file if we're using it
-        if use_cached_files {
-            std::fs::remove_file(cache_file)?;
+        if let Some(path) = layers_cache_file_path.as_ref() {
+            std::fs::remove_file(path)?;
         }
         warn!("{error_message}");
     }
-    Ok(verity_hash)
+    Ok((verity_hash, passwd))
 }
 
 async fn create_decompressed_layer_file(

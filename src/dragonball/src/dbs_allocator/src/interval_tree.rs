@@ -166,21 +166,18 @@ impl Range {
     }
 }
 
-impl PartialOrd for Range {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match self.min.cmp(&other.min) {
-            Ordering::Equal => Some(self.max.cmp(&other.max)),
-            res => Some(res),
-        }
-    }
-}
-
 impl Ord for Range {
     fn cmp(&self, other: &Self) -> Ordering {
         match self.min.cmp(&other.min) {
             Ordering::Equal => self.max.cmp(&other.max),
             res => res,
         }
+    }
+}
+
+impl PartialOrd for Range {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -424,7 +421,7 @@ impl<T> Node<T> {
         let l = height(&self.0.left);
         let r = height(&self.0.right);
         match (l as i32) - (r as i32) {
-            1 | 0 | -1 => self,
+            -1..=1 => self,
             2 => self.rotate_left_successor(),
             -2 => self.rotate_right_successor(),
             _ => unreachable!(),

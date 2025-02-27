@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2024 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stability-test
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: stability-test
+    image: quay.io/bedrock/ubuntu:latest
+    command: ["/bin/sh", "-c", "tail -f /dev/null"]

@@ -28,7 +28,8 @@ EXTRA_OPTS="${EXTRA_OPTS:-""}"
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	info "Enable rootfs measurement config"
 
-	root_hash_file="${repo_root_dir}/tools/osbuilder/root_hash.txt"
+	root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/root_hash.txt"
+
 	[ -f "$root_hash_file" ] || \
 		die "Root hash file for measured rootfs not found at ${root_hash_file}"
 

@@ -6,7 +6,6 @@
 
 use std::sync::Arc;
 
-use agent::types::Device;
 use agent::{Agent, Storage};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -15,10 +14,12 @@ use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxResources};
+use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
+use crate::cdi_devices::ContainerDevice;
 use crate::cpu_mem::initial_size::InitialSizeManager;
 use crate::network::NetworkConfig;
 use crate::resource_persist::ResourceState;
@@ -115,7 +116,7 @@ impl ResourceManager {
         inner.handler_volumes(cid, spec).await
     }
 
-    pub async fn handler_devices(&self, cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+    pub async fn handler_devices(&self, cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
         let inner = self.inner.read().await;
         inner.handler_devices(cid, linux).await
     }

@@ -864,7 +864,15 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
 	// Sort the devices starting with device #1 being the VFIO control group
 	// device and the next the actuall device(s) /dev/vfio/<group>
-	deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+	if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
+		// DeviceInfo should still be added to the sandbox's device manager
+		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
+		// This ensures that ociSpec.Linux.Devices is updated with
+		// this information before the container is created on the guest.
+		deviceInfos = sortContainerVFIODevices(coldPlugDevices)
+	} else {
+		deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+	}
 
 	for _, info := range deviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
@@ -904,7 +912,7 @@ func (c *Container) rollbackFailingContainerCreation(ctx context.Context) {
 		c.Logger().WithError(err).Error("rollback failed unmountHostMounts()")
 	}
 
-	if c.rootFs.Type == NydusRootFSType {
+	if IsNydusRootFSType(c.rootFs.Type) {
 		if err := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err != nil {
 			c.Logger().WithError(err).Error("rollback failed nydusContainerCleanup()")
 		}
@@ -1010,6 +1018,9 @@ func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation)
 			vfioNum := filepath.Base(devPath)
 			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
 			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
+			if c.config.CustomSpec.Annotations == nil {
+				c.config.CustomSpec.Annotations = make(map[string]string)
+			}
 			c.config.CustomSpec.Annotations[annoKey] = annoValue
 			c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
 		}
@@ -1028,7 +1039,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) && c.rootFs.Type != NydusRootFSType {
+	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
@@ -1178,7 +1189,7 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		return err
 	}
 
-	if c.rootFs.Type == NydusRootFSType {
+	if IsNydusRootFSType(c.rootFs.Type) {
 		if err := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err != nil && !force {
 			return err
 		}

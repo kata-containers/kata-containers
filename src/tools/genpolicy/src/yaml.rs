@@ -7,6 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::config_map;
+use crate::cronjob;
 use crate::daemon_set;
 use crate::deployment;
 use crate::job;
@@ -94,6 +95,11 @@ pub trait K8sResource {
     fn get_runtime_class_name(&self) -> Option<String> {
         None
     }
+
+    fn get_process_fields(&self, _process: &mut policy::KataProcess) {
+        // No need to implement support for securityContext or similar fields
+        // for some of the K8s resource types.
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
@@ -158,6 +164,14 @@ pub fn new_k8s_resource(
             debug!("{:#?}", &job);
             Ok((boxed::Box::new(job), header.kind))
         }
+        "CronJob" => {
+            let cronJob: cronjob::CronJob = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &cronJob);
+            Ok((boxed::Box::new(cronJob), header.kind))
+        }
         "List" => {
             let list: list::List = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
@@ -213,8 +227,10 @@ pub fn new_k8s_resource(
         | "Namespace"
         | "PersistentVolume"
         | "PersistentVolumeClaim"
+        | "PodDisruptionBudget"
         | "PriorityClass"
         | "ResourceQuota"
+        | "Role"
         | "RoleBinding"
         | "Service"
         | "ServiceAccount" => {
@@ -263,21 +279,38 @@ pub fn get_container_mounts_and_storages(
     storages: &mut Vec<agent::Storage>,
     container: &pod::Container,
     settings: &settings::Settings,
-    volumes: &Vec<volume::Volume>,
+    volumes_option: &Option<Vec<volume::Volume>>,
 ) {
-    if let Some(volume_mounts) = &container.volumeMounts {
-        for volume in volumes {
-            for volume_mount in volume_mounts {
-                if volume_mount.name.eq(&volume.name) {
-                    mount_and_storage::get_mount_and_storage(
-                        settings,
-                        policy_mounts,
-                        storages,
-                        volume,
-                        volume_mount,
-                    );
+    if let Some(volumes) = volumes_option {
+        if let Some(volume_mounts) = &container.volumeMounts {
+            for volume in volumes {
+                for volume_mount in volume_mounts {
+                    if volume_mount.name.eq(&volume.name) {
+                        mount_and_storage::get_mount_and_storage(
+                            settings,
+                            policy_mounts,
+                            storages,
+                            volume,
+                            volume_mount,
+                        );
+                    }
                 }
             }
+        }
+    }
+
+    // Add storage and mount for each volume defined in the docker container image
+    // configuration layer.
+    if let Some(volumes) = &container.registry.config_layer.config.Volumes {
+        for volume in volumes {
+            debug!("get_container_mounts_and_storages: {:?}", &volume);
+
+            mount_and_storage::get_image_mount_and_storage(
+                settings,
+                policy_mounts,
+                storages,
+                volume.0,
+            );
         }
     }
 }
@@ -343,5 +376,16 @@ pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
 fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     if !silent_unsupported_fields {
         panic!("Unsupported field: {}", path);
+    }
+}
+
+pub fn get_process_fields(
+    process: &mut policy::KataProcess,
+    security_context: &Option<pod::PodSecurityContext>,
+) {
+    if let Some(context) = security_context {
+        if let Some(uid) = context.runAsUser {
+            process.User.UID = uid.try_into().unwrap();
+        }
     }
 }

@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**BootVcpus** | **int32** |  | [default to 1]
-**MaxVcpus** | **int32** |  | [default to 1]
+**BootVcpus** | **int32** |  | 
+**MaxVcpus** | **int32** |  | 
 **Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional] 
 **KvmHyperv** | Pointer to **bool** |  | [optional] [default to false]
 **MaxPhysBits** | Pointer to **int32** |  | [optional] 

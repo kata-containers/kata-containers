@@ -18,7 +18,6 @@ which hypervisors you may wish to investigate further.
 
 | Hypervisor | Written in | Architectures | Type |
 |-|-|-|-|
-|[ACRN] | C | `x86_64` | Type 1 (bare metal) |
 |[Cloud Hypervisor] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) |
 |[Firecracker] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) |
 |[QEMU] | C | all | Type 2 ([KVM]) | `configuration-qemu.toml` |
@@ -38,7 +37,6 @@ the hypervisors:
 
 | Hypervisor | Summary | Features | Limitations | Container Creation speed | Memory density | Use cases | Comment |
 |-|-|-|-|-|-|-|-|
-|[ACRN] | Safety critical and real-time workloads | | | excellent | excellent | Embedded and IOT systems | For advanced users |
 |[Cloud Hypervisor] | Low latency, small memory footprint, small attack surface | Minimal | | excellent | excellent | High performance modern cloud workloads | |
 |[Firecracker] | Very slimline | Extremely minimal | Doesn't support all device types | excellent | excellent | Serverless / FaaS | |
 |[QEMU] | Lots of features | Lots | | good | good | Good option for most users | |
@@ -57,7 +55,6 @@ are available, their default values and how each setting can be used.
 
 | Hypervisor | Golang runtime config file | golang runtime short name | golang runtime default | rust runtime config file | rust runtime short name | rust runtime default |
 |-|-|-|-|-|-|-|
-| [ACRN] | [`configuration-acrn.toml`](../src/runtime/config/configuration-acrn.toml.in) | `acrn` | | | | |
 | [Cloud Hypervisor] | [`configuration-clh.toml`](../src/runtime/config/configuration-clh.toml.in) | `clh` | | [`configuration-cloud-hypervisor.toml`](../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in) | `cloud-hypervisor` | |
 | [Firecracker] | [`configuration-fc.toml`](../src/runtime/config/configuration-fc.toml.in) | `fc` | | | | |
 | [QEMU] | [`configuration-qemu.toml`](../src/runtime/config/configuration-qemu.toml.in) | `qemu` | yes | [`configuration-qemu.toml`](../src/runtime-rs/config/configuration-qemu-runtime-rs.toml.in) | `qemu` | |
@@ -93,10 +90,9 @@ are available, their default values and how each setting can be used.
 To switch the configured hypervisor, you only need to run a single command.
 See [the `kata-manager` documentation](../utils/README.md#choose-a-hypervisor) for further details.
 
-[ACRN]: https://projectacrn.org
 [Cloud Hypervisor]: https://github.com/cloud-hypervisor/cloud-hypervisor
 [Firecracker]: https://github.com/firecracker-microvm/firecracker
 [KVM]: https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine
-[QEMU]: http://www.qemu-project.org
+[QEMU]: http://www.qemu.org
 [`Dragonball`]: https://github.com/kata-containers/kata-containers/blob/main/src/dragonball
 [StratoVirt]: https://gitee.com/openeuler/stratovirt

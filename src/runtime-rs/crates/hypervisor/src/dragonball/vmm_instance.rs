@@ -28,6 +28,7 @@ use dragonball::{
 };
 use nix::sched::{setns, CloneFlags};
 use seccompiler::BpfProgram;
+use tokio::sync::mpsc;
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::ShareFsMountOperation;
@@ -49,10 +50,11 @@ pub struct VmmInstance {
     to_vmm_fd: EventFd,
     seccomp: BpfProgram,
     vmm_thread: Option<thread::JoinHandle<Result<i32>>>,
+    exit_notify: Option<mpsc::Sender<i32>>,
 }
 
 impl VmmInstance {
-    pub fn new(id: &str) -> Self {
+    pub fn new(id: &str, exit_notify: mpsc::Sender<i32>) -> Self {
         let vmm_shared_info = Arc::new(RwLock::new(InstanceInfo::new(
             String::from(id),
             DRAGONBALL_VERSION.to_string(),
@@ -68,6 +70,7 @@ impl VmmInstance {
             to_vmm_fd,
             seccomp: vec![],
             vmm_thread: None,
+            exit_notify: Some(exit_notify),
         }
     }
 
@@ -122,6 +125,7 @@ impl VmmInstance {
         )
         .expect("Failed to start vmm");
         let vmm_shared_info = self.get_shared_info();
+        let exit_notify = self.exit_notify.take().unwrap();
 
         self.vmm_thread = Some(
             thread::Builder::new()
@@ -141,6 +145,12 @@ impl VmmInstance {
                         }
                         let exit_code =
                             Vmm::run_vmm_event_loop(Arc::new(Mutex::new(vmm)), vmm_service);
+                        exit_notify
+                            .try_send(exit_code)
+                            .map_err(|e| {
+                                error!(sl!(), "vmm-master thread fail to send. {:?}", e);
+                            })
+                            .ok();
                         debug!(sl!(), "run vmm thread exited: {}", exit_code);
                         Ok(exit_code)
                     }()
@@ -197,12 +207,17 @@ impl VmmInstance {
         Err(anyhow!("Failed to get machine info"))
     }
 
-    pub fn insert_host_device(&self, device_cfg: HostDeviceConfig) -> Result<()> {
-        self.handle_request_with_retry(Request::Sync(VmmAction::InsertHostDevice(
-            device_cfg.clone(),
-        )))
-        .with_context(|| format!("Failed to insert host device {:?}", device_cfg))?;
-        Ok(())
+    pub fn insert_host_device(&self, device_cfg: HostDeviceConfig) -> Result<Option<u8>> {
+        if let VmmData::VfioDeviceData(guest_dev_id) = self.handle_request_with_retry(
+            Request::Sync(VmmAction::InsertHostDevice(device_cfg.clone())),
+        )? {
+            Ok(guest_dev_id)
+        } else {
+            Err(anyhow!(format!(
+                "Failed to insert host device {:?}",
+                device_cfg
+            )))
+        }
     }
 
     pub fn prepare_remove_host_device(&self, id: &str) -> Result<()> {

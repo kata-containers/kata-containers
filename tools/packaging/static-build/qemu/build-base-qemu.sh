@@ -59,9 +59,7 @@ ${container_engine} pull ${container_image} || ("${container_engine}" build \
 	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	push_to_registry "${container_image}")
 
-"${container_engine}" run \
-	--rm \
-	-i \
+"${container_engine}" run --rm -i \
 	--env BUILD_SUFFIX="${build_suffix}" \
 	--env PKGVERSION="${PKGVERSION}" \
 	--env QEMU_DESTDIR="${qemu_destdir}" \
@@ -71,7 +69,9 @@ ${container_engine} pull ${container_image} || ("${container_engine}" build \
 	--env HYPERVISOR_NAME="${HYPERVISOR_NAME}" \
 	--env QEMU_VERSION_NUM="${qemu_version}" \
 	--env ARCH="${ARCH}" \
-	-v "${repo_root_dir}:/root/kata-containers" \
+	--user "$(id -u)":"$(id -g)" \
+	-w "${PWD}" \
+	-v "${repo_root_dir}:${repo_root_dir}" \
 	-v "${PWD}":/share "${container_image}" \
-	bash -c "/root/kata-containers/tools/packaging/static-build/qemu/build-qemu.sh"
+	bash -c "${qemu_builder}"
 

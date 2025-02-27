@@ -4,8 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
-
 use agent::kata::KataAgent;
 use agent::types::KernelModule;
 use agent::{
@@ -14,21 +12,37 @@ use agent::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::message::{Action, Message};
-use common::{Sandbox, SandboxNetworkEnv};
-use containerd_shim_protos::events::task::TaskOOM;
+use common::types::utils::option_system_time_into;
+use common::types::ContainerProcess;
+use common::{
+    types::{SandboxConfig, SandboxExitInfo, SandboxStatus},
+    ContainerManager, Sandbox, SandboxNetworkEnv,
+};
+
+use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
 #[cfg(not(target_arch = "s390x"))]
+use hypervisor::HYPERVISOR_FIRECRACKER;
+use hypervisor::HYPERVISOR_REMOTE;
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
 use kata_sys_util::hooks::HookStates;
 use kata_types::capabilities::CapabilityBits;
+#[cfg(not(target_arch = "s390x"))]
+use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
+use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
+use protobuf::SpecialFields;
 use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
+use runtime_spec as spec;
+use std::sync::Arc;
+use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
 
@@ -42,7 +56,7 @@ pub struct SandboxRestoreArgs {
     pub sender: Sender<Message>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Display)]
 pub enum SandboxState {
     Init,
     Running,
@@ -70,6 +84,7 @@ pub struct VirtSandbox {
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     monitor: Arc<HealthCheck>,
+    sandbox_config: Option<SandboxConfig>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -88,6 +103,7 @@ impl VirtSandbox {
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
+        sandbox_config: SandboxConfig,
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
@@ -99,6 +115,7 @@ impl VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            sandbox_config: Some(sandbox_config),
         })
     }
 
@@ -130,12 +147,14 @@ impl VirtSandbox {
         resource_configs.push(virtio_fs_config);
 
         // prepare VM rootfs device config
-        let vm_rootfs = ResourceConfig::VmRootfs(
-            self.prepare_rootfs_config()
-                .await
-                .context("failed to prepare rootfs device config")?,
-        );
-        resource_configs.push(vm_rootfs);
+        if let Some(block_config) = self
+            .prepare_rootfs_config()
+            .await
+            .context("failed to prepare rootfs device config")?
+        {
+            let vm_rootfs = ResourceConfig::VmRootfs(block_config);
+            resource_configs.push(vm_rootfs);
+        }
 
         Ok(resource_configs)
     }
@@ -177,7 +196,7 @@ impl VirtSandbox {
         &self,
         prestart_hooks: &[oci::Hook],
         create_runtime_hooks: &[oci::Hook],
-        state: &oci::State,
+        state: &spec::State,
     ) -> Result<()> {
         let mut st = state.clone();
         // for dragonball, we use vmm_master_tid
@@ -240,28 +259,23 @@ impl VirtSandbox {
         Ok(())
     }
 
-    async fn prepare_rootfs_config(&self) -> Result<BlockConfig> {
+    async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
 
-        let image = {
-            let initrd_path = boot_info.initrd.clone();
-            let image_path = boot_info.image;
-            if !initrd_path.is_empty() {
-                Ok(initrd_path)
-            } else if !image_path.is_empty() {
-                Ok(image_path)
-            } else {
-                Err(anyhow!("failed to get image"))
-            }
+        if !boot_info.initrd.is_empty() {
+            return Ok(None);
         }
-        .context("get image")?;
 
-        Ok(BlockConfig {
-            path_on_host: image,
+        if boot_info.image.is_empty() {
+            return Err(anyhow!("both of image and initrd isn't set"));
+        }
+
+        Ok(Some(BlockConfig {
+            path_on_host: boot_info.image.clone(),
             is_readonly: true,
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
-        })
+        }))
     }
 
     async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
@@ -290,8 +304,8 @@ impl VirtSandbox {
 
     fn has_prestart_hooks(
         &self,
-        prestart_hooks: Vec<oci::Hook>,
-        create_runtime_hooks: Vec<oci::Hook>,
+        prestart_hooks: &[oci::Hook],
+        create_runtime_hooks: &[oci::Hook],
     ) -> bool {
         !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
     }
@@ -300,32 +314,36 @@ impl VirtSandbox {
 #[async_trait]
 impl Sandbox for VirtSandbox {
     #[instrument(name = "sb: start")]
-    async fn start(
-        &self,
-        dns: Vec<String>,
-        spec: &oci::Spec,
-        state: &oci::State,
-        network_env: SandboxNetworkEnv,
-    ) -> Result<()> {
+    async fn start(&self) -> Result<()> {
         let id = &self.sid;
 
-        // if sandbox running, return
-        // if sandbox not running try to start sandbox
+        if self.sandbox_config.is_none() {
+            return Err(anyhow!("sandbox config is missing"));
+        }
+        let sandbox_config = self.sandbox_config.as_ref().unwrap();
+
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
+
         let mut inner = self.inner.write().await;
-        if inner.state == SandboxState::Running {
-            warn!(sl!(), "sandbox is running, no need to start");
+        if inner.state != SandboxState::Init {
+            warn!(sl!(), "sandbox is started");
             return Ok(());
         }
 
         self.hypervisor
-            .prepare_vm(id, network_env.netns.clone())
+            .prepare_vm(
+                id,
+                sandbox_config.network_env.netns.clone(),
+                &sandbox_config.annotations,
+            )
             .await
             .context("prepare vm")?;
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_for_start_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
             .await?;
 
         self.resource_manager
@@ -338,23 +356,33 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
-        let (prestart_hooks, create_runtime_hooks) = match spec.hooks.as_ref() {
-            Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone()),
-            None => (Vec::new(), Vec::new()),
-        };
-        self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
-            .await?;
+        let (prestart_hooks, create_runtime_hooks) =
+            if let Some(hooks) = sandbox_config.hooks.as_ref() {
+                (
+                    hooks.prestart().clone().unwrap_or_default(),
+                    hooks.create_runtime().clone().unwrap_or_default(),
+                )
+            } else {
+                (Vec::new(), Vec::new())
+            };
+
+        self.execute_oci_hook_functions(
+            &prestart_hooks,
+            &create_runtime_hooks,
+            &sandbox_config.state,
+        )
+        .await?;
 
         // 1. if there are pre-start hook functions, network config might have been changed.
         //    We need to rescan the netns to handle the change.
         // 2. Do not scan the netns if we want no network for the VM.
         // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
         let config = self.resource_manager.config().await;
-        if self.has_prestart_hooks(prestart_hooks, create_runtime_hooks)
+        if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
             && !config.runtime.disable_new_netns
             && !dan_config_path(&config, &self.sid).exists()
         {
-            if let Some(netns_path) = network_env.netns {
+            if let Some(netns_path) = &sandbox_config.network_env.netns {
                 let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
                     network_model: config.runtime.internetworking_model.clone(),
                     netns_path: netns_path.to_owned(),
@@ -364,7 +392,7 @@ impl Sandbox for VirtSandbox {
                         .await
                         .network_info
                         .network_queues as usize,
-                    network_created: network_env.network_created,
+                    network_created: sandbox_config.network_env.network_created,
                 });
                 self.resource_manager
                     .handle_network(network_resource)
@@ -380,7 +408,10 @@ impl Sandbox for VirtSandbox {
             .get_agent_socket()
             .await
             .context("get agent socket")?;
-        self.agent.start(&address).await.context("connect")?;
+        self.agent
+            .start(&address)
+            .await
+            .context(format!("connect to address {:?}", &address))?;
 
         self.resource_manager
             .setup_after_start_vm()
@@ -391,8 +422,8 @@ impl Sandbox for VirtSandbox {
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
-            hostname: spec.hostname.clone(),
-            dns,
+            hostname: sandbox_config.hostname.clone(),
+            dns: sandbox_config.dns.clone(),
             storages: self
                 .resource_manager
                 .get_storage_for_sandbox()
@@ -459,9 +490,38 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
+    async fn status(&self) -> Result<SandboxStatus> {
+        info!(sl!(), "get sandbox status");
+        let inner = self.inner.read().await;
+        let state = inner.state.to_string();
+
+        Ok(SandboxStatus {
+            sandbox_id: self.sid.clone(),
+            pid: std::process::id(),
+            state,
+            ..Default::default()
+        })
+    }
+
+    async fn wait(&self) -> Result<SandboxExitInfo> {
+        info!(sl!(), "wait sandbox");
+        let exit_code = self.hypervisor.wait_vm().await.context("wait vm")?;
+        Ok(SandboxExitInfo {
+            exit_status: exit_code as u32,
+            exited_at: Some(std::time::SystemTime::now()),
+        })
+    }
+
     async fn stop(&self) -> Result<()> {
-        info!(sl!(), "begin stop sandbox");
-        self.hypervisor.stop_vm().await.context("stop vm")?;
+        let mut sandbox_inner = self.inner.write().await;
+
+        if sandbox_inner.state != SandboxState::Stopped {
+            info!(sl!(), "begin stop sandbox");
+            self.hypervisor.stop_vm().await.context("stop vm")?;
+            sandbox_inner.state = SandboxState::Stopped;
+            info!(sl!(), "sandbox stopped");
+        }
+
         Ok(())
     }
 
@@ -501,6 +561,44 @@ impl Sandbox for VirtSandbox {
             .context("resource clean up")?;
 
         // TODO: cleanup other sandbox resource
+        Ok(())
+    }
+
+    async fn wait_process(
+        &self,
+        cm: Arc<dyn ContainerManager>,
+        process_id: ContainerProcess,
+        shim_pid: u32,
+    ) -> Result<()> {
+        let exit_status = cm.wait_process(&process_id).await?;
+        info!(sl!(), "container process exited with {:?}", exit_status);
+
+        if cm.is_sandbox_container(&process_id).await {
+            self.stop().await.context("stop sandbox")?;
+        }
+
+        let cid = process_id.container_id();
+        if cid.is_empty() {
+            return Err(anyhow!("container id is empty"));
+        }
+        let eid = process_id.exec_id();
+        let id = if eid.is_empty() {
+            cid.to_string()
+        } else {
+            eid.to_string()
+        };
+
+        let event = TaskExit {
+            container_id: cid.to_string(),
+            id,
+            pid: shim_pid,
+            exit_status: exit_status.exit_code as u32,
+            exited_at: option_system_time_into(exit_status.exit_time),
+            special_fields: SpecialFields::new(),
+        };
+        let msg = Message::new(Action::Event(Arc::new(event)));
+        let lock_sender = self.msg_sender.lock().await;
+        lock_sender.send(msg).await.context("send exit event")?;
         Ok(())
     }
 
@@ -570,12 +668,40 @@ impl Persist for VirtSandbox {
 
     /// Save a state of Sandbox
     async fn save(&self) -> Result<Self::State> {
+        let hypervisor_state = self.hypervisor.save_state().await?;
         let sandbox_state = crate::sandbox_persist::SandboxState {
             sandbox_type: VIRTCONTAINER.to_string(),
             resource: Some(self.resource_manager.save().await?),
-            hypervisor: Some(self.hypervisor.save_state().await?),
+            hypervisor: match hypervisor_state.hypervisor_type.as_str() {
+                // TODO support other hypervisors
+                #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+                HYPERVISOR_DRAGONBALL => Ok(Some(hypervisor_state)),
+                #[cfg(not(target_arch = "s390x"))]
+                HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
+                #[cfg(not(target_arch = "s390x"))]
+                HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
+                HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
+                HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
+                _ => Err(anyhow!(
+                    "Unsupported hypervisor {}",
+                    hypervisor_state.hypervisor_type
+                )),
+            }?,
         };
-        persist::to_disk(&sandbox_state, &self.sid)?;
+        // FIXME: properly handle jailed case
+        // eg: Determine if we are running jailed:
+        // let h = sandbox_state.hypervisor.clone().unwrap_or_default();
+        // Figure out the jailed path:
+        // jailed_path = h.<>
+        // and somehow store the sandbox state into the jail:
+        // persist::to_disk(&sandbox_state, &self.sid, jailed_path)?;
+        // Issue is, how to handle restore.
+        let h = sandbox_state.hypervisor.as_ref().unwrap();
+        let vmpath = match h.jailed {
+            true => h.vm_path.clone(),
+            false => "".to_string(),
+        };
+        persist::to_disk(&sandbox_state, &self.sid, vmpath.as_str())?;
         Ok(sandbox_state)
     }
     /// Restore Sandbox
@@ -588,7 +714,7 @@ impl Persist for VirtSandbox {
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
             // TODO support other hypervisors
-            #[cfg(not(target_arch = "s390x"))]
+            #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
             HYPERVISOR_DRAGONBALL => {
                 let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
@@ -617,6 +743,7 @@ impl Persist for VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            sandbox_config: None,
         })
     }
 }

@@ -2,13 +2,13 @@
 
 # Introduction
 
-Intel® QuickAssist Technology (QAT) provides hardware acceleration 
-for security (cryptography) and compression. These instructions cover the 
-steps for the latest [Ubuntu LTS release](https://ubuntu.com/download/desktop) 
-which already include the QAT host driver. These instructions can be adapted to 
-any Linux distribution. These instructions guide the user on how to download 
-the kernel sources, compile kernel driver modules against those sources, and 
-load them onto the host as well as preparing a specially built Kata Containers 
+Intel® QuickAssist Technology (QAT) provides hardware acceleration
+for security (cryptography) and compression. These instructions cover the
+steps for the latest [Ubuntu LTS release](https://ubuntu.com/download/desktop)
+which already include the QAT host driver. These instructions can be adapted to
+any Linux distribution. These instructions guide the user on how to download
+the kernel sources, compile kernel driver modules against those sources, and
+load them onto the host as well as preparing a specially built Kata Containers
 kernel and custom Kata Containers rootfs.
 
 * Download kernel sources
@@ -16,7 +16,7 @@ kernel and custom Kata Containers rootfs.
 * Compile kernel driver modules against those sources
 * Download rootfs
 * Add driver modules to rootfs
-* Build rootfs image 
+* Build rootfs image
 
 ## Helpful Links before starting
 
@@ -35,8 +35,8 @@ reboot, and some steps to complete when the host kernel changes.
 
 ## Script variables
 
-The following list of variables must be set before running through the 
-scripts. These variables refer to locations to store modules and configuration 
+The following list of variables must be set before running through the
+scripts. These variables refer to locations to store modules and configuration
 files on the host and links to the drivers to use. Modify these as
 needed to point to updated drivers or different install locations.
 
@@ -58,9 +58,9 @@ $ export KATA_ROOTFS_LOCATION=~/kata
 
 ## Prepare the Ubuntu Host
 
-The host could be a bare metal instance or a virtual machine. If using a 
-virtual machine, make sure that KVM nesting is enabled. The following 
-instructions reference an Intel® C62X chipset. Some of the instructions must be 
+The host could be a bare metal instance or a virtual machine. If using a
+virtual machine, make sure that KVM nesting is enabled. The following
+instructions reference an Intel® C62X chipset. Some of the instructions must be
 modified if using a different Intel® QAT device. The Intel® QAT chipset can be
 identified by executing the following.
 
@@ -74,7 +74,7 @@ $ for i in 0434 0435 37c8 1f18 1f19; do lspci -d 8086:$i; done
 
 These packages are necessary to compile the Kata kernel, Intel® QAT driver, and to
 prepare the rootfs for Kata. [Docker](https://docs.docker.com/engine/install/ubuntu/)
-also needs to be installed to be able to build the rootfs. To test that 
+also needs to be installed to be able to build the rootfs. To test that
 everything works a Kubernetes pod is started requesting Intel® QAT resources. For the
 pass through of the virtual functions the kernel boot parameter needs to have
 `INTEL_IOMMU=on`.
@@ -89,7 +89,7 @@ $ sudo reboot
 
 ### Download Intel® QAT drivers
 
-This will download the [Intel® QAT drivers](https://www.intel.com/content/www/us/en/developer/topic-technology/open/quick-assist-technology/overview.html). 
+This will download the [Intel® QAT drivers](https://www.intel.com/content/www/us/en/developer/topic-technology/open/quick-assist-technology/overview.html).
 Make sure to check the website for the latest version.
 
 ```bash
@@ -100,13 +100,13 @@ $ curl -L $QAT_DRIVER_URL | tar zx
 
 ### Copy Intel® QAT configuration files and enable virtual functions
 
-Modify the instructions below as necessary if using a different Intel® QAT hardware 
-platform. You can learn more about customizing configuration files at the 
+Modify the instructions below as necessary if using a different Intel® QAT hardware
+platform. You can learn more about customizing configuration files at the
 [Intel® QAT Engine repository](https://github.com/intel/QAT_Engine/#copy-the-correct-intel-quickassist-technology-driver-config-files)
-This section starts from a base config file and changes the `SSL` section to 
+This section starts from a base config file and changes the `SSL` section to
 `SHIM` to support the OpenSSL engine. There are more tweaks that you can make
 depending on the use case and how many Intel® QAT engines should be run. You
-can find more information about how to customize in the 
+can find more information about how to customize in the
 [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide.](https://www.intel.com/content/www/us/en/content-details/709196/intel-quickassist-technology-api-programmer-s-guide.html)
 
 > **Note: This section assumes that a Intel® QAT `c6xx` platform is used.**
@@ -119,16 +119,16 @@ $ sed -i 's/\[SSL\]/\[SHIM\]/g' $QAT_CONF_LOCATION/c6xxvf_dev0.conf
 
 ### Expose and Bind Intel® QAT virtual functions to VFIO-PCI (Every reboot)
 
-To enable virtual functions, the host OS should have IOMMU groups enabled. In 
-the UEFI Firmware Intel® Virtualization Technology for Directed I/O 
-(Intel® VT-d) must be enabled. Also, the kernel boot parameter should be 
+To enable virtual functions, the host OS should have IOMMU groups enabled. In
+the UEFI Firmware Intel® Virtualization Technology for Directed I/O
+(Intel® VT-d) must be enabled. Also, the kernel boot parameter should be
 `intel_iommu=on` or `intel_iommu=ifgx_off`. This should have been set from
-the instructions above. Check the output of `/proc/cmdline` to confirm. The 
+the instructions above. Check the output of `/proc/cmdline` to confirm. The
 following commands assume you installed an Intel® QAT card, IOMMU is on, and
 VT-d is enabled. The vendor and device ID add to the `VFIO-PCI` driver so that
 each exposed virtual function can be bound to the `VFIO-PCI` driver. Once
 complete, each virtual function passes into a Kata Containers container using
-the PCIe device passthrough feature. For Kubernetes, the 
+the PCIe device passthrough feature. For Kubernetes, the
 [Intel device plugin](https://github.com/intel/intel-device-plugins-for-kubernetes)
 for Kubernetes handles the binding of the driver, but the VF’s still must be
 enabled.
@@ -155,10 +155,10 @@ $ for f in /sys/bus/pci/devices/0000:$QAT_PCI_BUS_PF_1/virtfn*
 
 ### Check Intel® QAT virtual functions are enabled
 
-If the following command returns empty, then the virtual functions are not 
-properly enabled. This command checks the enumerated device IDs for just the 
-virtual functions. Using the Intel® QAT as an example, the physical device ID 
-is `37c8` and virtual function device ID is `37c9`. The following command checks 
+If the following command returns empty, then the virtual functions are not
+properly enabled. This command checks the enumerated device IDs for just the
+virtual functions. Using the Intel® QAT as an example, the physical device ID
+is `37c8` and virtual function device ID is `37c9`. The following command checks
 if VF's are enabled for any of the currently known Intel® QAT device ID's. The
 following `ls` command should show the 16 VF's bound to `VFIO-PCI`.
 
@@ -182,7 +182,7 @@ follows the instructions from the
 [packaging kernel repository](../../tools/packaging/kernel)
 and uses the latest Kata kernel
 [config](../../tools/packaging/kernel/configs).
-There are some patches that must be installed as well, which the 
+There are some patches that must be installed as well, which the
 `build-kernel.sh` script should automatically apply. If you are using a
 different kernel version, then you might need to manually apply them. Since
 the Kata Containers kernel has a minimal set of kernel flags set, you must
@@ -228,17 +228,17 @@ $ cp ${GOPATH}/${LINUX_VER}/vmlinux ${KATA_KERNEL_LOCATION}/${KATA_KERNEL_NAME}
 
 ### Prepare Kata root filesystem
 
-These instructions build upon the OS builder instructions located in the 
+These instructions build upon the OS builder instructions located in the
 [Developer Guide](../Developer-Guide.md). At this point it is recommended that
 [Docker](https://docs.docker.com/engine/install/ubuntu/) is installed first, and
 then [Kata-deploy](../../tools/packaging/kata-deploy)
-is use to install Kata. This will make sure that the correct `agent` version 
+is use to install Kata. This will make sure that the correct `agent` version
 is installed into the rootfs in the steps below.
 
-The following instructions use Ubuntu as the root filesystem with systemd as 
-the init and will add in the `kmod` binary, which is not a standard binary in 
-a Kata rootfs image. The `kmod` binary is necessary to load the Intel® QAT 
-kernel modules when the virtual machine rootfs boots. 
+The following instructions use Ubuntu as the root filesystem with systemd as
+the init and will add in the `kmod` binary, which is not a standard binary in
+a Kata rootfs image. The `kmod` binary is necessary to load the Intel® QAT
+kernel modules when the virtual machine rootfs boots.
 
 ```bash
 $ export OSBUILDER=$GOPATH/src/github.com/kata-containers/kata-containers/tools/osbuilder
@@ -247,7 +247,7 @@ $ export EXTRA_PKGS='kmod'
 ```
 
 Make sure that the `kata-agent` version matches the installed `kata-runtime`
-version. Also make sure the `kata-runtime` install location is in your `PATH` 
+version. Also make sure the `kata-runtime` install location is in your `PATH`
 variable. The following `AGENT_VERSION` can be set manually to match
 the `kata-runtime` version if the following commands don't work.
 
@@ -262,10 +262,10 @@ $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SECCOMP=no ./rootfs.sh ubu
 
 ### Compile Intel® QAT drivers for Kata Containers kernel and add to Kata Containers rootfs
 
-After the Kata Containers kernel builds with the proper configuration flags, 
+After the Kata Containers kernel builds with the proper configuration flags,
 you must build the Intel® QAT drivers against that Kata Containers kernel
-version in a similar way they were previously built for the host OS. You must 
-set the `KERNEL_SOURCE_ROOT` variable to the Kata Containers kernel source 
+version in a similar way they were previously built for the host OS. You must
+set the `KERNEL_SOURCE_ROOT` variable to the Kata Containers kernel source
 directory and build the Intel® QAT drivers again. The  `make` command will
 install the Intel® QAT modules into the Kata rootfs.
 
@@ -279,21 +279,21 @@ $ export KERNEL_EXTRAVERSION=$(awk '/^EXTRAVERSION =/{print $NF}' $GOPATH/$LINUX
 $ export KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
 $ cd $QAT_SRC
 $ KERNEL_SOURCE_ROOT=$GOPATH/$LINUX_VER ./configure --enable-icp-sriov=guest
-$ sudo -E make all -j $($(nproc ${CI:+--ignore 1}))
-$ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j $($(nproc ${CI:+--ignore 1}))
+$ sudo -E make all -j $(nproc)
+$ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j $(nproc)
 ```
 
 The `usdm_drv` module also needs to be copied into the rootfs modules path and
-`depmod` should be run. 
+`depmod` should be run.
 
 ```bash
-$ sudo cp $QAT_SRC/build/usdm_drv.ko $ROOTFS_DIR/lib/modules/${KERNEL_ROOTFS_DIR}/updates/drivers  
+$ sudo cp $QAT_SRC/build/usdm_drv.ko $ROOTFS_DIR/lib/modules/${KERNEL_ROOTFS_DIR}/updates/drivers
 $ sudo depmod -a -b ${ROOTFS_DIR} ${KERNEL_ROOTFS_DIR}
 $ cd ${OSBUILDER}/image-builder
 $ script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh ${ROOTFS_DIR}'
 ```
 
-> **Note: Ignore any errors on modules.builtin and modules.order when running 
+> **Note: Ignore any errors on modules.builtin and modules.order when running
 > `depmod`.**
 
 ### Copy Kata rootfs
@@ -305,17 +305,17 @@ $ cp ${OSBUILDER}/image-builder/kata-containers.img $KATA_ROOTFS_LOCATION
 
 ## Verify Intel® QAT works in a container
 
-The following instructions uses a OpenSSL Dockerfile that builds the 
-Intel® QAT engine to allow OpenSSL to offload crypto functions. It is a 
+The following instructions uses a OpenSSL Dockerfile that builds the
+Intel® QAT engine to allow OpenSSL to offload crypto functions. It is a
 convenient way to test that VFIO device passthrough for the Intel® QAT VF’s are
 working properly with the Kata Containers VM.
 
 ### Build OpenSSL Intel® QAT engine container
 
-Use the OpenSSL Intel® QAT [Dockerfile](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/demo/openssl-qat-engine) 
-to build a container image with an optimized OpenSSL engine for 
+Use the OpenSSL Intel® QAT [Dockerfile](https://github.com/intel/intel-device-plugins-for-kubernetes/tree/main/demo/openssl-qat-engine)
+to build a container image with an optimized OpenSSL engine for
 Intel® QAT. Using `docker build` with the Kata Containers runtime can sometimes
-have issues. Therefore, make sure that `runc` is the default Docker container 
+have issues. Therefore, make sure that `runc` is the default Docker container
 runtime.
 
 ```bash
@@ -324,12 +324,12 @@ $ curl -O $QAT_DOCKERFILE
 $ sudo docker build -t openssl-qat-engine .
 ```
 
-> **Note: The Intel® QAT driver version in this container might not match the 
+> **Note: The Intel® QAT driver version in this container might not match the
 > Intel® QAT driver compiled and loaded on the host when compiling.**
 
 ### Test Intel® QAT with the ctr tool
 
-The `ctr` tool can be used to interact with the containerd daemon. It may be 
+The `ctr` tool can be used to interact with the containerd daemon. It may be
 more convenient to use this tool to verify the kernel and image instead of
 setting up a Kubernetes cluster. The correct Kata runtimes need to be added
 to the containerd `config.toml`. Below is a sample snippet that can be added
@@ -350,7 +350,7 @@ to allow QEMU and Cloud Hypervisor (CLH) to work with `ctr`.
     ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
 ```
 
-In addition, containerd expects the binary to be in `/usr/local/bin` so add 
+In addition, containerd expects the binary to be in `/usr/local/bin` so add
 this small script so that it redirects to be able to use either QEMU or
 Cloud Hypervisor with Kata.
 
@@ -363,30 +363,30 @@ $ echo 'KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-cl
 $ sudo chmod +x /usr/local/bin/containerd-shim-kata-clh-v2
 ```
 
-After the OpenSSL image is built and imported into containerd, a Intel® QAT 
-virtual function exposed in the step above can be added to the `ctr` command. 
-Make sure to change the `/dev/vfio` number to one that actually exists on the 
-host system. When using the `ctr` tool, the`configuration.toml` for Kata needs 
-to point to the custom Kata kernel and rootfs built above and the Intel® QAT 
-modules in the Kata rootfs need to load at boot. The following steps assume that 
-`kata-deploy` was used to install Kata and QEMU is being tested. If using a 
-different hypervisor, different install method for Kata, or a different 
-Intel® QAT chipset then the command will need to be modified. 
+After the OpenSSL image is built and imported into containerd, a Intel® QAT
+virtual function exposed in the step above can be added to the `ctr` command.
+Make sure to change the `/dev/vfio` number to one that actually exists on the
+host system. When using the `ctr` tool, the`configuration.toml` for Kata needs
+to point to the custom Kata kernel and rootfs built above and the Intel® QAT
+modules in the Kata rootfs need to load at boot. The following steps assume that
+`kata-deploy` was used to install Kata and QEMU is being tested. If using a
+different hypervisor, different install method for Kata, or a different
+Intel® QAT chipset then the command will need to be modified.
 
-> **Note: The following was tested with 
+> **Note: The following was tested with
 [containerd v1.4.6](https://github.com/containerd/containerd/releases/tag/v1.4.6).**
 
 ```bash
 $ config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
 $ sudo sed -i "/kernel =/c kernel = "\"${KATA_ROOTFS_LOCATION}/${KATA_KERNEL_NAME}\""" $config_file
 $ sudo sed -i "/image =/c image = "\"${KATA_KERNEL_LOCATION}/kata-containers.img\""" $config_file
-$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 modules-load=usdm_drv,qat_c62xvf"/g' $config_file 
+$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 modules-load=usdm_drv,qat_c62xvf"/g' $config_file
 $ sudo docker save -o openssl-qat-engine.tar openssl-qat-engine:latest
 $ sudo ctr images import openssl-qat-engine.tar
 $ sudo ctr run --runtime io.containerd.run.kata-qemu.v2 --privileged -t --rm --device=/dev/vfio/180 --mount type=bind,src=/dev,dst=/dev,options=rbind:rw --mount type=bind,src=${QAT_CONF_LOCATION}/c6xxvf_dev0.conf,dst=/etc/c6xxvf_dev0.conf,options=rbind:rw  docker.io/library/openssl-qat-engine:latest bash
 ```
 
-Below are some commands to run in the container image to verify Intel® QAT is 
+Below are some commands to run in the container image to verify Intel® QAT is
 working
 
 ```sh
@@ -412,24 +412,24 @@ root@67561dc2757a/ # openssl engine -c -t qat-hw
 
 ### Test Intel® QAT in Kubernetes
 
-Start a Kubernetes cluster with containerd as the CRI. The host should 
-already be setup with 16 virtual functions of the Intel® QAT card bound to 
-`VFIO-PCI`. Verify this by looking in `/dev/vfio` for a listing of devices. 
-You might need to disable Docker before initializing Kubernetes. Be aware 
+Start a Kubernetes cluster with containerd as the CRI. The host should
+already be setup with 16 virtual functions of the Intel® QAT card bound to
+`VFIO-PCI`. Verify this by looking in `/dev/vfio` for a listing of devices.
+You might need to disable Docker before initializing Kubernetes. Be aware
 that the OpenSSL container image built above will need to be exported from
 Docker and imported into containerd.
 
 If Kata is installed through [`kata-deploy`](../../tools/packaging/kata-deploy/README.md)
-there will be multiple `configuration.toml` files associated with different 
-hypervisors. Rather than add in the custom Kata kernel, Kata rootfs, and 
+there will be multiple `configuration.toml` files associated with different
+hypervisors. Rather than add in the custom Kata kernel, Kata rootfs, and
 kernel modules to each `configuration.toml` as the default, instead use
 [annotations](../how-to/how-to-load-kernel-modules-with-kata.md)
-in the Kubernetes YAML file to tell Kata which kernel and rootfs to use. The 
+in the Kubernetes YAML file to tell Kata which kernel and rootfs to use. The
 easy way to do this is to use `kata-deploy` which will install the Kata binaries
-to `/opt` and properly configure the `/etc/containerd/config.toml` with annotation 
+to `/opt` and properly configure the `/etc/containerd/config.toml` with annotation
 support. However, the `configuration.toml` needs to enable support for
 annotations as well. The following configures both QEMU and Cloud Hypervisor
-`configuration.toml` files that are currently available with Kata Container 
+`configuration.toml` files that are currently available with Kata Container
 versions 2.0 and higher.
 
 ```bash
@@ -446,15 +446,15 @@ $ sudo ctr -n=k8s.io images import openssl-qat-engine.tar
 
 The [Intel® QAT Plugin](https://github.com/intel/intel-device-plugins-for-kubernetes/blob/main/cmd/qat_plugin/README.md)
 needs to be started so that the virtual functions can be discovered and
-used by Kubernetes. 
+used by Kubernetes.
 
 The following YAML file can be used to start a Kata container with Intel® QAT
-support. If Kata is installed with `kata-deploy`, then the containerd 
-`configuration.toml` should have all of the Kata runtime classes already 
-populated and annotations supported. To use a Intel® QAT virtual function, the 
-Intel® QAT plugin needs to be started after the VF's are bound to `VFIO-PCI` as 
-described [above](#expose-and-bind-intel-qat-virtual-functions-to-vfio-pci-every-reboot). 
-Edit the following to point to the correct Kata kernel and rootfs location 
+support. If Kata is installed with `kata-deploy`, then the containerd
+`configuration.toml` should have all of the Kata runtime classes already
+populated and annotations supported. To use a Intel® QAT virtual function, the
+Intel® QAT plugin needs to be started after the VF's are bound to `VFIO-PCI` as
+described [above](#expose-and-bind-intel-qat-virtual-functions-to-vfio-pci-every-reboot).
+Edit the following to point to the correct Kata kernel and rootfs location
 built with Intel® QAT support.
 
 ```bash
@@ -497,7 +497,7 @@ spec:
 EOF
 ```
 
-Use `kubectl` to start the pod. Verify that Intel® QAT card acceleration is 
+Use `kubectl` to start the pod. Verify that Intel® QAT card acceleration is
 working with the Intel® QAT engine.
 ```bash
 $ kubectl apply -f kata-openssl-qat.yaml
@@ -531,14 +531,14 @@ $ ls /dev/vfio
 * Check that the modules load when inside the Kata Container.
 
 ```sh
-bash-5.0# egrep "qat|usdm_drv" /proc/modules
+bash-5.0# grep -E "qat|usdm_drv" /proc/modules
 qat_c62xvf 16384 - - Live 0x0000000000000000 (O)
 usdm_drv 86016 - - Live 0x0000000000000000 (O)
 intel_qat 184320 - - Live 0x0000000000000000 (O)
 ```
 
-* Verify that at least the first `c6xxvf_dev0.conf` file mounts inside the 
-container image in `/etc`. You will need one configuration file for each VF 
+* Verify that at least the first `c6xxvf_dev0.conf` file mounts inside the
+container image in `/etc`. You will need one configuration file for each VF
 passed into the container.
 
 ```sh
@@ -548,10 +548,10 @@ c6xxvf_dev1.conf   c6xxvf_dev12.conf  c6xxvf_dev15.conf  c6xxvf_dev4.conf  c6xxv
 c6xxvf_dev10.conf  c6xxvf_dev13.conf  c6xxvf_dev2.conf   c6xxvf_dev5.conf c6xxvf_dev8.conf  hosts
 ```
 
-* Check `dmesg` inside the container to see if there are any issues with the 
+* Check `dmesg` inside the container to see if there are any issues with the
 Intel® QAT driver.
 
-* If there are issues building the OpenSSL Intel® QAT container image, then 
+* If there are issues building the OpenSSL Intel® QAT container image, then
 check to make sure that runc is the default runtime for building container.
 
 ```sh
@@ -564,11 +564,11 @@ Environment="DOCKER_DEFAULT_RUNTIME=--default-runtime runc"
 
 ### Verify Intel® QAT card counters are incremented
 
-To check the built in firmware counters, the Intel® QAT driver has to be compiled 
-and installed to the host and can't rely on the built in host driver. The 
-counters will increase when the accelerator is actively being used. To verify 
-Intel® QAT is actively accelerating the containerized application, use the 
-following instructions to check if any of the counters increment. Make 
+To check the built in firmware counters, the Intel® QAT driver has to be compiled
+and installed to the host and can't rely on the built in host driver. The
+counters will increase when the accelerator is actively being used. To verify
+Intel® QAT is actively accelerating the containerized application, use the
+following instructions to check if any of the counters increment. Make
 sure to change the PCI Device ID to match whats in the system.
 
 ```bash

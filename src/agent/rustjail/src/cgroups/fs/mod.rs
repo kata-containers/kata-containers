@@ -23,9 +23,10 @@ use crate::container::DEFAULT_DEVICES;
 use anyhow::{anyhow, Context, Result};
 use libc::{self, pid_t};
 use oci::{
-    LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
-    LinuxNetwork, LinuxPids, LinuxResources, Spec,
+    LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder,
+    LinuxHugepageLimit, LinuxMemory, LinuxNetwork, LinuxPids, LinuxResources, Spec,
 };
+use oci_spec::runtime as oci;
 
 use protobuf::MessageField;
 use protocols::agent::{
@@ -72,7 +73,7 @@ pub struct Manager {
 // set_resource is used to set reources by cgroup controller.
 macro_rules! set_resource {
     ($cont:ident, $func:ident, $res:ident, $field:ident) => {
-        let resource_value = $res.$field.unwrap_or(0);
+        let resource_value = $res.$field().unwrap_or(0);
         if resource_value != 0 {
             $cont.$func(resource_value)?;
         }
@@ -95,38 +96,40 @@ impl CgroupManager for Manager {
         let pod_res = &mut cgroups::Resources::default();
 
         // set cpuset and cpu reources
-        if let Some(cpu) = &r.cpu {
+        if let Some(cpu) = &r.cpu() {
             set_cpu_resources(&self.cgroup, cpu)?;
         }
 
         // set memory resources
-        if let Some(memory) = &r.memory {
+        if let Some(memory) = &r.memory() {
             set_memory_resources(&self.cgroup, memory, update)?;
         }
 
         // set pids resources
-        if let Some(pids_resources) = &r.pids {
+        if let Some(pids_resources) = &r.pids() {
             set_pids_resources(&self.cgroup, pids_resources)?;
         }
 
         // set block_io resources
-        if let Some(blkio) = &r.block_io {
+        if let Some(blkio) = &r.block_io() {
             set_block_io_resources(&self.cgroup, blkio, res);
         }
 
         // set hugepages resources
-        if !r.hugepage_limits.is_empty() {
-            set_hugepages_resources(&self.cgroup, &r.hugepage_limits, res);
+        if let Some(hugepage_limits) = r.hugepage_limits() {
+            set_hugepages_resources(&self.cgroup, hugepage_limits, res);
         }
 
         // set network resources
-        if let Some(network) = &r.network {
+        if let Some(network) = &r.network() {
             set_network_resources(&self.cgroup, network, res);
         }
 
         // set devices resources
         if !self.devcg_allowed_all {
-            set_devices_resources(&self.cgroup, &r.devices, res, pod_res);
+            if let Some(devices) = r.devices() {
+                set_devices_resources(&self.cgroup, devices, res, pod_res);
+            }
         }
         debug!(
             sl(),
@@ -301,7 +304,7 @@ fn set_network_resources(
 
     // set classid
     // description can be found at https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/net_cls.html
-    let class_id = network.class_id.unwrap_or(0) as u64;
+    let class_id = network.class_id().unwrap_or(0) as u64;
     if class_id != 0 {
         res.network.class_id = Some(class_id);
     }
@@ -309,10 +312,11 @@ fn set_network_resources(
     // set network priorities
     // description can be found at https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/net_prio.html
     let mut priorities = vec![];
-    for p in network.priorities.iter() {
+    let interface_priority = network.priorities().clone().unwrap_or_default();
+    for p in interface_priority.iter() {
         priorities.push(NetworkPriority {
-            name: p.name.clone(),
-            priority: p.priority as u64,
+            name: p.name().clone(),
+            priority: p.priority() as u64,
         });
     }
 
@@ -351,17 +355,18 @@ fn set_hugepages_resources(
     let hugetlb_controller = cg.controller_of::<HugeTlbController>();
 
     for l in hugepage_limits.iter() {
-        if hugetlb_controller.is_some() && hugetlb_controller.unwrap().size_supported(&l.page_size)
+        if hugetlb_controller.is_some() && hugetlb_controller.unwrap().size_supported(l.page_size())
         {
             let hr = HugePageResource {
-                size: l.page_size.clone(),
-                limit: l.limit,
+                size: l.page_size().clone(),
+                limit: l.limit() as u64,
             };
             limits.push(hr);
         } else {
             warn!(
                 sl(),
-                "{} page size support cannot be verified, dropping requested limit", l.page_size
+                "{} page size support cannot be verified, dropping requested limit",
+                l.page_size()
             );
         }
     }
@@ -375,29 +380,47 @@ fn set_block_io_resources(
 ) {
     info!(sl(), "cgroup manager set block io");
 
-    res.blkio.weight = blkio.weight;
-    res.blkio.leaf_weight = blkio.leaf_weight;
+    res.blkio.weight = blkio.weight();
+    res.blkio.leaf_weight = blkio.leaf_weight();
 
     let mut blk_device_resources = vec![];
-    for d in blkio.weight_device.iter() {
+    let default_weight_device = vec![];
+    let weight_device = blkio
+        .weight_device()
+        .as_ref()
+        .unwrap_or(&default_weight_device);
+    for d in weight_device.iter() {
         let dr = BlkIoDeviceResource {
-            major: d.blk.major as u64,
-            minor: d.blk.minor as u64,
-            weight: blkio.weight,
-            leaf_weight: blkio.leaf_weight,
+            major: d.major() as u64,
+            minor: d.minor() as u64,
+            weight: blkio.weight(),
+            leaf_weight: blkio.leaf_weight(),
         };
         blk_device_resources.push(dr);
     }
     res.blkio.weight_device = blk_device_resources;
 
-    res.blkio.throttle_read_bps_device =
-        build_blk_io_device_throttle_resource(&blkio.throttle_read_bps_device);
-    res.blkio.throttle_write_bps_device =
-        build_blk_io_device_throttle_resource(&blkio.throttle_write_bps_device);
-    res.blkio.throttle_read_iops_device =
-        build_blk_io_device_throttle_resource(&blkio.throttle_read_iops_device);
-    res.blkio.throttle_write_iops_device =
-        build_blk_io_device_throttle_resource(&blkio.throttle_write_iops_device);
+    res.blkio.throttle_read_bps_device = build_blk_io_device_throttle_resource(
+        blkio.throttle_read_bps_device().as_ref().unwrap_or(&vec![]),
+    );
+    res.blkio.throttle_write_bps_device = build_blk_io_device_throttle_resource(
+        blkio
+            .throttle_write_bps_device()
+            .as_ref()
+            .unwrap_or(&vec![]),
+    );
+    res.blkio.throttle_read_iops_device = build_blk_io_device_throttle_resource(
+        blkio
+            .throttle_read_iops_device()
+            .as_ref()
+            .unwrap_or(&vec![]),
+    );
+    res.blkio.throttle_write_iops_device = build_blk_io_device_throttle_resource(
+        blkio
+            .throttle_write_iops_device()
+            .as_ref()
+            .unwrap_or(&vec![]),
+    );
 }
 
 fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
@@ -405,19 +428,19 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
 
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
 
-    if !cpu.cpus.is_empty() {
-        if let Err(e) = cpuset_controller.set_cpus(&cpu.cpus) {
+    if let Some(cpus) = cpu.cpus() {
+        if let Err(e) = cpuset_controller.set_cpus(cpus) {
             warn!(sl(), "write cpuset failed: {:?}", e);
         }
     }
 
-    if !cpu.mems.is_empty() {
-        cpuset_controller.set_mems(&cpu.mems)?;
+    if let Some(mems) = cpu.mems() {
+        cpuset_controller.set_mems(mems)?;
     }
 
     let cpu_controller: &CpuController = cg.controller_of().unwrap();
 
-    if let Some(shares) = cpu.shares {
+    if let Some(shares) = cpu.shares() {
         let shares = if cg.v2() {
             convert_shares_to_v2_value(shares)
         } else {
@@ -449,12 +472,12 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
 
     // If the memory update is set to -1 we should also
     // set swap to -1, it means unlimited memory.
-    let mut swap = memory.swap.unwrap_or(0);
-    if memory.limit == Some(-1) {
+    let mut swap = memory.swap().unwrap_or(0);
+    if memory.limit() == Some(-1) {
         swap = -1;
     }
 
-    if memory.limit.is_some() && swap != 0 {
+    if memory.limit().is_some() && swap != 0 {
         let memstat = get_memory_stats(cg)
             .into_option()
             .ok_or_else(|| anyhow!("failed to get the cgroup memory stats"))?;
@@ -475,7 +498,7 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
     } else {
         set_resource!(mem_controller, set_limit, memory, limit);
         swap = if cg.v2() {
-            convert_memory_swap_to_v2_value(swap, memory.limit.unwrap_or(0))?
+            convert_memory_swap_to_v2_value(swap, memory.limit().unwrap_or(0))?
         } else {
             swap
         };
@@ -488,7 +511,7 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
     set_resource!(mem_controller, set_kmem_limit, memory, kernel);
     set_resource!(mem_controller, set_tcp_limit, memory, kernel_tcp);
 
-    if let Some(swappiness) = memory.swappiness {
+    if let Some(swappiness) = memory.swappiness() {
         if (0..=100).contains(&swappiness) {
             mem_controller.set_swappiness(swappiness)?;
         } else {
@@ -499,7 +522,7 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
         }
     }
 
-    if memory.disable_oom_killer.unwrap_or(false) {
+    if memory.disable_oom_killer().unwrap_or(false) {
         mem_controller.disable_oom_killer()?;
     }
 
@@ -509,8 +532,8 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
 fn set_pids_resources(cg: &cgroups::Cgroup, pids: &LinuxPids) -> Result<()> {
     info!(sl(), "cgroup manager set pids");
     let pid_controller: &PidController = cg.controller_of().unwrap();
-    let v = if pids.limit > 0 {
-        MaxValue::Value(pids.limit)
+    let v = if pids.limit() > 0 {
+        MaxValue::Value(pids.limit())
     } else {
         MaxValue::Max
     };
@@ -525,9 +548,9 @@ fn build_blk_io_device_throttle_resource(
     let mut blk_io_device_throttle_resources = vec![];
     for d in input.iter() {
         let tr = BlkIoDeviceThrottleResource {
-            major: d.blk.major as u64,
-            minor: d.blk.minor as u64,
-            rate: d.rate,
+            major: d.major() as u64,
+            minor: d.minor() as u64,
+            rate: d.rate(),
         };
         blk_io_device_throttle_resources.push(tr);
     }
@@ -536,13 +559,20 @@ fn build_blk_io_device_throttle_resource(
 }
 
 fn linux_device_cgroup_to_device_resource(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
+    let dev_type = match DeviceType::from_char(d.typ().unwrap_or_default().as_str().chars().next())
+    {
         Some(t) => t,
         None => return None,
     };
 
     let mut permissions: Vec<DevicePermissions> = vec![];
-    for p in d.access.chars().collect::<Vec<char>>() {
+    for p in d
+        .access()
+        .as_ref()
+        .unwrap_or(&"".to_owned())
+        .chars()
+        .collect::<Vec<char>>()
+    {
         match p {
             'r' => permissions.push(DevicePermissions::Read),
             'w' => permissions.push(DevicePermissions::Write),
@@ -552,10 +582,10 @@ fn linux_device_cgroup_to_device_resource(d: &LinuxDeviceCgroup) -> Option<Devic
     }
 
     Some(DeviceResource {
-        allow: d.allow,
+        allow: d.allow(),
         devtype: dev_type,
-        major: d.major.unwrap_or(0),
-        minor: d.minor.unwrap_or(0),
+        major: d.major().unwrap_or(0),
+        minor: d.minor().unwrap_or(0),
         access: permissions,
     })
 }
@@ -592,58 +622,64 @@ lazy_static! {
     pub static ref DEFAULT_ALLOWED_DEVICES: Vec<LinuxDeviceCgroup> = {
         vec![
             // all mknod to all char devices
-            LinuxDeviceCgroup {
-                allow: true,
-                r#type: "c".to_string(),
-                major: Some(WILDCARD),
-                minor: Some(WILDCARD),
-                access: "m".to_string(),
-            },
+            LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .typ(oci::LinuxDeviceType::C)
+                .major(WILDCARD)
+                .minor(WILDCARD)
+                .access("m")
+                .build()
+                .unwrap(),
 
             // all mknod to all block devices
-            LinuxDeviceCgroup {
-                allow: true,
-                r#type: "b".to_string(),
-                major: Some(WILDCARD),
-                minor: Some(WILDCARD),
-                access: "m".to_string(),
-            },
+            LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .typ(oci::LinuxDeviceType::B)
+                .major(WILDCARD)
+                .minor(WILDCARD)
+                .access("m")
+                .build()
+                .unwrap(),
 
             // all read/write/mknod to char device /dev/console
-            LinuxDeviceCgroup {
-                allow: true,
-                r#type: "c".to_string(),
-                major: Some(5),
-                minor: Some(1),
-                access: "rwm".to_string(),
-            },
+            LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .typ(oci::LinuxDeviceType::C)
+                .major(5)
+                .minor(1)
+                .access("rwm")
+                .build()
+                .unwrap(),
 
             // all read/write/mknod to char device /dev/pts/<N>
-            LinuxDeviceCgroup {
-                allow: true,
-                r#type: "c".to_string(),
-                major: Some(136),
-                minor: Some(WILDCARD),
-                access: "rwm".to_string(),
-            },
+            LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .typ(oci::LinuxDeviceType::C)
+                .major(136)
+                .minor(WILDCARD)
+                .access("rwm")
+                .build()
+                .unwrap(),
 
             // all read/write/mknod to char device /dev/ptmx
-            LinuxDeviceCgroup {
-                allow: true,
-                r#type: "c".to_string(),
-                major: Some(5),
-                minor: Some(2),
-                access: "rwm".to_string(),
-            },
+            LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .typ(oci::LinuxDeviceType::C)
+                .major(5)
+                .minor(2)
+                .access("rwm")
+                .build()
+                .unwrap(),
 
             // all read/write/mknod to char device /dev/net/tun
-            LinuxDeviceCgroup {
-                allow: true,
-                r#type: "c".to_string(),
-                major: Some(10),
-                minor: Some(200),
-                access: "rwm".to_string(),
-            },
+            LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .typ(oci::LinuxDeviceType::C)
+                .major(10)
+                .minor(200)
+                .access("rwm")
+                .build()
+                .unwrap(),
         ]
     };
 }
@@ -688,9 +724,20 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> MessageField<CpuUsage> {
     let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
     let h = lines_to_map(&stat);
-    let usage_in_usermode = *h.get("user_usec").unwrap_or(&0);
-    let usage_in_kernelmode = *h.get("system_usec").unwrap_or(&0);
-    let total_usage = *h.get("usage_usec").unwrap_or(&0);
+    // All fields in CpuUsage are expressed in nanoseconds (ns).
+    //
+    // For cgroup v1 (cpuacct controller):
+    // kata-agent reads the cpuacct.stat file, which reports the number of ticks
+    // consumed by the processes in the cgroup. It then converts these ticks to nanoseconds.
+    // Ref: https://www.kernel.org/doc/Documentation/cgroup-v1/cpuacct.txt
+    //
+    // For cgroup v2 (cpu controller):
+    // kata-agent reads the cpu.stat file, which reports the time consumed by the
+    // processes in the cgroup in microseconds (us). It then converts microseconds to nanoseconds.
+    // Ref: https://www.kernel.org/doc/Documentation/cgroup-v2.txt, section 5-1-1. CPU Interface Files
+    let usage_in_usermode = *h.get("user_usec").unwrap_or(&0) * 1000;
+    let usage_in_kernelmode = *h.get("system_usec").unwrap_or(&0) * 1000;
+    let total_usage = *h.get("usage_usec").unwrap_or(&0) * 1000;
     let percpu_usage = vec![];
 
     MessageField::some(CpuUsage {
@@ -1123,6 +1170,23 @@ impl Manager {
         })
     }
 
+    pub fn subcgroup(&self) -> &str {
+        // Check if we're in a Docker-in-Docker setup by verifying:
+        // 1. We're using cgroups v2 (which restricts direct process control)
+        // 2. An "init" subdirectory exists (used by DinD for process delegation)
+        let is_dind = cgroups::hierarchies::is_cgroup2_unified_mode()
+            && cgroups::hierarchies::auto()
+                .root()
+                .join(&self.cpath)
+                .join("init")
+                .exists();
+        if is_dind {
+            "/init/"
+        } else {
+            "/"
+        }
+    }
+
     fn get_paths_and_mounts(
         cpath: &str,
     ) -> Result<(HashMap<String, String>, HashMap<String, String>)> {
@@ -1218,19 +1282,24 @@ impl Manager {
 
     /// Check if OCI spec contains a rule of allowed all devices.
     fn has_allowed_all_devices_rule(spec: &Spec) -> bool {
-        let linux = match spec.linux.as_ref() {
+        let linux = match spec.linux().as_ref() {
             Some(linux) => linux,
             None => return false,
         };
-        let resources = match linux.resources.as_ref() {
+        let resources = match linux.resources().as_ref() {
             Some(resource) => resource,
             None => return false,
         };
+
         resources
-            .devices
-            .iter()
-            .find(|dev| rule_for_all_devices(dev))
-            .map(|dev| dev.allow)
+            .devices()
+            .as_ref()
+            .and_then(|devices| {
+                devices
+                    .iter()
+                    .find(|dev| rule_for_all_devices(dev))
+                    .map(|dev| dev.allow())
+            })
             .unwrap_or_default()
     }
 }
@@ -1254,7 +1323,7 @@ fn default_allowed_devices() -> Vec<DeviceResource> {
 
 /// Convert LinuxDevice to DeviceResource.
 fn linux_device_to_device_resource(d: &LinuxDevice) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
+    let dev_type = match DeviceType::from_char(d.typ().as_str().chars().next()) {
         Some(t) => t,
         None => return None,
     };
@@ -1268,8 +1337,8 @@ fn linux_device_to_device_resource(d: &LinuxDevice) -> Option<DeviceResource> {
     Some(DeviceResource {
         allow: true,
         devtype: dev_type,
-        major: d.major,
-        minor: d.minor,
+        major: d.major(),
+        minor: d.minor(),
         access: permissions,
     })
 }
@@ -1328,7 +1397,11 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use cgroups::devices::{DevicePermissions, DeviceType};
-    use oci::{Linux, LinuxDeviceCgroup, LinuxResources, Spec};
+    use oci::{
+        LinuxBuilder, LinuxDeviceCgroup, LinuxDeviceCgroupBuilder, LinuxDeviceType,
+        LinuxResourcesBuilder, SpecBuilder,
+    };
+    use oci_spec::runtime as oci;
     use test_utils::skip_if_not_root;
 
     use super::default_allowed_devices;
@@ -1423,21 +1496,22 @@ mod tests {
             container_devices_list: Vec<String>,
         }
 
-        let allow_all = LinuxDeviceCgroup {
-            allow: true,
-            r#type: String::new(),
-            major: Some(0),
-            minor: Some(0),
-            access: String::from("rwm"),
-        };
-
-        let deny_all = LinuxDeviceCgroup {
-            allow: false,
-            r#type: String::new(),
-            major: Some(0),
-            minor: Some(0),
-            access: String::from("rwm"),
-        };
+        let allow_all = LinuxDeviceCgroupBuilder::default()
+            .allow(true)
+            .typ(LinuxDeviceType::A)
+            .major(0)
+            .minor(0)
+            .access("rwm")
+            .build()
+            .unwrap();
+        let deny_all = LinuxDeviceCgroupBuilder::default()
+            .allow(false)
+            .typ(LinuxDeviceType::A)
+            .major(0)
+            .minor(0)
+            .access("rwm")
+            .build()
+            .unwrap();
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1490,16 +1564,20 @@ mod tests {
             let mut managers = Vec::with_capacity(tc.devices.len());
 
             for cid in 0..tc.devices.len() {
-                let spec = Spec {
-                    linux: Some(Linux {
-                        resources: Some(LinuxResources {
-                            devices: tc.devices[cid].clone(),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                };
+                let spec = SpecBuilder::default()
+                    .linux(
+                        LinuxBuilder::default()
+                            .resources(
+                                LinuxResourcesBuilder::default()
+                                    .devices(tc.devices[cid].clone())
+                                    .build()
+                                    .unwrap(),
+                            )
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap();
                 managers.push(
                     Manager::new(&tc.cpath[cid], &spec, Some(sandbox.devcg_info.clone())).unwrap(),
                 );

@@ -29,6 +29,7 @@ else
 	K8S_TEST_POLICY_FILES=( \
 		"allow-all.rego" \
 		"allow-all-except-exec-process.rego" \
+		"allow-set-policy.rego" \
     )
 fi
 
@@ -76,11 +77,18 @@ add_annotations_to_yaml() {
 		  "${K8S_TEST_YAML}"
 		;;
 
+	CronJob)
+		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
+		yq -i \
+		  ".spec.jobTemplate.spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
+		  "${K8S_TEST_YAML}"
+		;;
+
 	List)
 		info "Issue #7765: adding annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
 		;;
 
-	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
+	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|PriorityClass|RuntimeClass|Secret|Service)
 		info "Annotations are not required for ${resource_kind} from ${yaml_file}"
 		;;
 
@@ -91,18 +99,19 @@ add_annotations_to_yaml() {
 	esac
 }
 
-add_cbl_mariner_kernel_initrd_annotations() {
+add_cbl_mariner_specific_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and initrd path and annotations for cbl-mariner"
+		info "Add kernel and image path and annotations for cbl-mariner"
 		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
 		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
 
-		local mariner_annotation_initrd="io.katacontainers.config.hypervisor.initrd"
-		local mariner_initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
+		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
+		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
 
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_initrd}" "${mariner_initrd_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
 		done
 	fi
 }
@@ -130,7 +139,7 @@ add_runtime_handler_annotations() {
 main() {
 	ensure_yq
 	reset_workloads_work_dir
-	add_cbl_mariner_kernel_initrd_annotations
+	add_cbl_mariner_specific_annotations
 	add_runtime_handler_annotations
 }
 

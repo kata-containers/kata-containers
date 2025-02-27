@@ -8,18 +8,23 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
+use kata_types::device::{DRIVER_9P_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_VIRTIOFS_TYPE};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use tracing::instrument;
-
-use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 
 #[derive(Debug)]
 pub struct OverlayfsHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for OverlayfsHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_OVERLAYFS_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,
@@ -62,6 +67,11 @@ pub struct Virtio9pHandler {}
 #[async_trait::async_trait]
 impl StorageHandler for Virtio9pHandler {
     #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_9P_TYPE]
+    }
+
+    #[instrument]
     async fn create_device(
         &self,
         storage: Storage,
@@ -77,6 +87,11 @@ pub struct VirtioFsHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for VirtioFsHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_VIRTIOFS_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,

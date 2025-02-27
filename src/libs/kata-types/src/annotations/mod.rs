@@ -88,12 +88,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PREFIX: &str = "io.katacontainers.config.hype
 pub const KATA_ANNO_CFG_HYPERVISOR_PATH: &str = "io.katacontainers.config.hypervisor.path";
 /// A sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
 pub const KATA_ANNO_CFG_HYPERVISOR_HASH: &str = "io.katacontainers.config.hypervisor.path_hash";
-/// A sandbox annotation for passing a per container path pointing at the hypervisor control binary
-/// that will run the container VM.
-pub const KATA_ANNO_CFG_HYPERVISOR_CTLPATH: &str = "io.katacontainers.config.hypervisor.ctlpath";
-/// A sandbox annotation for passing a container hypervisor control binary SHA-512 hash value.
-pub const KATA_ANNO_CFG_HYPERVISOR_CTLHASH: &str =
-    "io.katacontainers.config.hypervisor.hypervisorctl_hash";
 /// A sandbox annotation for passing a per container path pointing at the jailer that will constrain
 /// the container VM.
 pub const KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH: &str =
@@ -233,9 +227,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
 /// A sandbox annotation that is used to enable/disable virtio-mem.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM: &str =
     "io.katacontainers.config.hypervisor.enable_virtio_mem";
-/// A sandbox annotation to enable swap of vm memory.
-pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP: &str =
-    "io.katacontainers.config.hypervisor.enable_swap";
 /// A sandbox annotation to enable swap in the guest.
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP: &str =
     "io.katacontainers.config.hypervisor.enable_guest_swap";
@@ -505,10 +496,6 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_PATH => {
                         hv.validate_hypervisor_path(value)?;
                         hv.path = value.to_string();
-                    }
-                    KATA_ANNO_CFG_HYPERVISOR_CTLPATH => {
-                        hv.validate_hypervisor_ctlpath(value)?;
-                        hv.ctlpath = value.to_string();
                     }
 
                     KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH => {
@@ -791,14 +778,6 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             hv.memory_info.enable_virtio_mem = r.unwrap_or_default();
-                        }
-                        Err(_e) => {
-                            return Err(bool_err);
-                        }
-                    },
-                    KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP => match self.get_value::<bool>(key) {
-                        Ok(r) => {
-                            hv.memory_info.enable_swap = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);

@@ -21,9 +21,6 @@ GOPATH="${GOPATH%%:*}"
 kernel_version=""
 # Flag know if need to download the kernel source
 download_kernel=false
-# The repository where kernel configuration lives
-readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/packaging"
-readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
 # Default path to search patches to apply to kernel
 readonly default_patches_dir="${script_dir}/patches"
 # Default path to search config for kata
@@ -32,9 +29,9 @@ readonly default_kernel_config_dir="${script_dir}/configs"
 readonly default_config_frags_dir="${script_dir}/configs/fragments"
 readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
 readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
-# GPU vendor
-readonly GV_INTEL="intel"
-readonly GV_NVIDIA="nvidia"
+# xPU vendor
+readonly VENDOR_INTEL="intel"
+readonly VENDOR_NVIDIA="nvidia"
 
 #Path to kernel directory
 kernel_path=""
@@ -44,6 +41,8 @@ build_type=""
 force_setup_generate_config="false"
 #GPU kernel support
 gpu_vendor=""
+#DPU kernel support
+dpu_vendor=""
 #Confidential guest type
 conf_guest=""
 #
@@ -96,6 +95,7 @@ Options:
 	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
 	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
+	-D <vendor> 	: DPU/SmartNIC vendor, only nvidia.
 	-d          	: Enable bash debug.
 	-e          	: Enable experimental kernel.
 	-E          	: Enable arch-specific experimental kernel, arch info offered by "-a".
@@ -134,28 +134,6 @@ check_initramfs_or_die() {
 		die "Initramfs for measured rootfs not found at ${default_initramfs}"
 }
 
-get_tee_kernel() {
-	local version="${1}"
-	local kernel_path="${2}"
-	local tee="${3}"
-
-	mkdir -p ${kernel_path}
-
-	if [ -z "${kernel_url}" ]; then
-		kernel_url=$(get_from_kata_deps ".assets.kernel.${tee}.url")
-	fi
-
-	local kernel_tarball="${version}.tar.gz"
-
-	# Depending on where we're getting the tarball from it may have a
-	# different name, such as linux-${version}.tar.gz or simply
-	# ${version}.tar.gz.  Let's try both before failing.
-	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
-
-	mkdir -p ${kernel_path}
-	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
-}
-
 get_kernel() {
 	local version="${1:-}"
 
@@ -163,44 +141,57 @@ get_kernel() {
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	if [ "${conf_guest}" != "" ]; then
-		get_tee_kernel ${version} ${kernel_path} ${conf_guest}
-		return
-	fi
-
 	#Remove extra 'v'
 	version=${version#v}
 
-	major_version=$(echo "${version}" | cut -d. -f1)
-	kernel_tarball="linux-${version}.tar.xz"
+	local major_version=$(echo "${version}" | cut -d. -f1)
+	local rc=$(echo "${version}" | grep -oE "\-rc[0-9]+$")
 
-	if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
-		info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
-		cp -f "${kernel_tarball}.sha256" sha256sums.asc
-	else
-		shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-		info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
-		curl --fail -OL "${shasum_url}"
-		if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
-			info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+	local tar_suffix="tar.xz"
+	if [ -n "${rc}" ]; then
+		tar_suffix="tar.gz"
+	fi
+	kernel_tarball="linux-${version}.${tar_suffix}"
+
+	if [ -z "${rc}" ]; then
+		if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
+			info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
+			cp -f "${kernel_tarball}.sha256" sha256sums.asc
 		else
-			die "sha256sums.asc is invalid"
+			shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+			info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
+			curl --fail -OL "${shasum_url}"
+			if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
+				info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+			else
+				die "sha256sums.asc is invalid"
+			fi
+		fi
+	else
+		info "Release candidate kernels are not part of the official sha256sums.asc -- skipping sha256sum validation"
+	fi
+
+	if [ -f "${kernel_tarball}" ]; then
+	       	if [ -n "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+			info "invalid kernel tarball ${kernel_tarball} removing "
+			rm -f "${kernel_tarball}"
 		fi
 	fi
-
-	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-		info "invalid kernel tarball ${kernel_tarball} removing "
-		rm -f "${kernel_tarball}"
-	fi
 	if [ ! -f "${kernel_tarball}" ]; then
+		kernel_tarball_url="https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		if [ -n "${kernel_url}" ]; then
+			kernel_tarball_url="${kernel_url}${kernel_tarball}"
+		fi
 		info "Download kernel version ${version}"
-		info "Download kernel"
-		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		info "Download kernel from: ${kernel_tarball_url}"
+		curl --fail -OL "${kernel_tarball_url}"
 	else
 		info "kernel tarball already downloaded"
 	fi
 
-	sha256sum -c "${kernel_tarball}.sha256"
+	if [ -z "${rc}" ]; then
+		sha256sum -c "${kernel_tarball}.sha256"
+	fi
 
 	tar xf "${kernel_tarball}"
 
@@ -224,6 +215,7 @@ get_kernel_frag_path() {
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
 	local gpu_path="${arch_path}/../gpu"
+	local dpu_path="${arch_path}/../dpu"
 
 	local kernel_path="$2"
 	local arch="$3"
@@ -280,6 +272,12 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
+	if [[ "${dpu_vendor}" != "" ]]; then
+		info "Add kernel config for DPU/SmartNIC due to '-n ${dpu_vendor}'"
+		local dpu_configs="${dpu_path}/${dpu_vendor}.conf"
+		all_configs="${all_configs} ${dpu_configs}"
+	fi
+
 	if [ "${measured_rootfs}" == "true" ]; then
 		info "Enabling config for confidential guest trust storage protection"
 		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
@@ -295,6 +293,9 @@ get_kernel_frag_path() {
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
+
+		local tmpfs_configs="$(ls ${common_path}/confidential_containers/tmpfs.conf)"
+		all_configs="${all_configs} ${tmpfs_configs}"
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
@@ -366,9 +367,6 @@ get_default_kernel_config() {
 	[ -n "${version}" ] || die "kernel version not provided"
 	[ -n "${hypervisor}" ] || die "hypervisor not provided"
 	[ -n "${kernel_arch}" ] || die "kernel arch not provided"
-
-	local kernel_ver
-	kernel_ver=$(get_major_kernel_version "${version}")
 
 	archfragdir="${default_config_frags_dir}/${kernel_arch}"
 	if [ -d "${archfragdir}" ]; then
@@ -471,9 +469,9 @@ build_kernel() {
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
+	make -j $(nproc) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
 	if [ "${conf_guest}" == "confidential" ]; then
-		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
+		make -j $(nproc) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
 	fi
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
@@ -491,10 +489,10 @@ build_kernel_headers() {
 
 	if [ "$linux_headers" == "deb" ]; then
 		export KBUILD_BUILD_USER="${USER}"
-		make -j $(nproc ${CI:+--ignore 1}) bindeb-pkg ARCH="${arch_target}"
+		make -j $(nproc) bindeb-pkg ARCH="${arch_target}"
 	fi
 	if [ "$linux_headers" == "rpm" ]; then
-		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
+		make -j $(nproc) rpm-pkg ARCH="${arch_target}"
 	fi
 
 	popd >>/dev/null
@@ -561,7 +559,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:mp:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -576,6 +574,10 @@ main() {
 				PS4=' Line ${LINENO}: '
 				set -x
 				;;
+			D)
+				dpu_vendor="${OPTARG}"
+				[[ "${dpu_vendor}" == "${VENDOR_NVIDIA}" ]] || die "DPU vendor only support nvidia"
+				;;
 			e)
 				build_type="experimental"
 				;;
@@ -587,7 +589,7 @@ main() {
 				;;
 			g)
 				gpu_vendor="${OPTARG}"
-				[[ "${gpu_vendor}" == "${GV_INTEL}" || "${gpu_vendor}" == "${GV_NVIDIA}" ]] || die "GPU vendor only support intel and nvidia"
+				[[ "${gpu_vendor}" == "${VENDOR_INTEL}" || "${gpu_vendor}" == "${VENDOR_NVIDIA}" ]] || die "GPU vendor only support intel and nvidia"
 				;;
 			h)
 				usage 0
@@ -637,7 +639,7 @@ main() {
 		if [ -n "$kernel_version" ];  then
 			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
 			if [[ ${kernel_major_version} != "5.10" ]]; then
-				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"
 			fi
 		fi
 	fi

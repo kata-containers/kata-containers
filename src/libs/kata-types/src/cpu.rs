@@ -3,10 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use oci_spec::runtime as oci;
 use std::convert::TryFrom;
 use std::str::FromStr;
-
-use oci::LinuxCpu;
 
 /// A set of CPU ids.
 pub type CpuSet = crate::utils::u32_set::U32Set;
@@ -69,15 +68,17 @@ impl LinuxContainerCpuResources {
     }
 }
 
-impl TryFrom<&LinuxCpu> for LinuxContainerCpuResources {
+impl TryFrom<&oci::LinuxCpu> for LinuxContainerCpuResources {
     type Error = Error;
 
     // Unhandled fields: realtime_runtime, realtime_period, mems
-    fn try_from(value: &LinuxCpu) -> Result<Self, Self::Error> {
-        let period = value.period.unwrap_or(0);
-        let quota = value.quota.unwrap_or(-1);
-        let cpuset = CpuSet::from_str(&value.cpus).map_err(Error::InvalidCpuSet)?;
-        let nodeset = NumaNodeSet::from_str(&value.mems).map_err(Error::InvalidNodeSet)?;
+    fn try_from(value: &oci::LinuxCpu) -> Result<Self, Self::Error> {
+        let period = value.period().unwrap_or(0);
+        let quota = value.quota().unwrap_or(-1);
+        let value_cpus = value.cpus().as_ref().map_or("", |cpus| cpus);
+        let cpuset = CpuSet::from_str(value_cpus).map_err(Error::InvalidCpuSet)?;
+        let value_mems = value.mems().as_ref().map_or("", |mems| mems);
+        let nodeset = NumaNodeSet::from_str(value_mems).map_err(Error::InvalidNodeSet)?;
 
         // If quota is -1, it means the CPU resource request is unconstrained. In that case,
         // we don't currently assign additional CPUs.
@@ -88,7 +89,7 @@ impl TryFrom<&LinuxCpu> for LinuxContainerCpuResources {
         };
 
         Ok(LinuxContainerCpuResources {
-            shares: value.shares.unwrap_or(0),
+            shares: value.shares().unwrap_or(0),
             period,
             quota,
             cpuset,
@@ -170,16 +171,14 @@ mod tests {
         assert!(resources.nodeset.is_empty());
         assert!(resources.calculated_vcpu_time_ms.is_none());
 
-        let oci = oci::LinuxCpu {
-            shares: Some(2048),
-            quota: Some(1001),
-            period: Some(100),
-            realtime_runtime: None,
-            realtime_period: None,
-            cpus: "1,2,3".to_string(),
-            mems: "1".to_string(),
-        };
-        let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
+        let mut linux_cpu = oci::LinuxCpu::default();
+        linux_cpu.set_shares(Some(2048));
+        linux_cpu.set_quota(Some(1001));
+        linux_cpu.set_period(Some(100));
+        linux_cpu.set_cpus(Some("1,2,3".to_string()));
+        linux_cpu.set_mems(Some("1".to_string()));
+
+        let resources = LinuxContainerCpuResources::try_from(&linux_cpu).unwrap();
         assert_eq!(resources.shares(), 2048);
         assert_eq!(resources.period(), 100);
         assert_eq!(resources.quota(), 1001);
@@ -188,16 +187,12 @@ mod tests {
         assert_eq!(resources.cpuset().len(), 3);
         assert_eq!(resources.nodeset().len(), 1);
 
-        let oci = oci::LinuxCpu {
-            shares: Some(2048),
-            quota: None,
-            period: None,
-            realtime_runtime: None,
-            realtime_period: None,
-            cpus: "1".to_string(),
-            mems: "1-2".to_string(),
-        };
-        let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
+        let mut linux_cpu = oci::LinuxCpu::default();
+        linux_cpu.set_shares(Some(2048));
+        linux_cpu.set_cpus(Some("1".to_string()));
+        linux_cpu.set_mems(Some("1-2".to_string()));
+
+        let resources = LinuxContainerCpuResources::try_from(&linux_cpu).unwrap();
         assert_eq!(resources.shares(), 2048);
         assert_eq!(resources.period(), 0);
         assert_eq!(resources.quota(), -1);
@@ -217,16 +212,14 @@ mod tests {
         assert!(sandbox.cpuset().is_empty());
         assert!(sandbox.nodeset().is_empty());
 
-        let oci = oci::LinuxCpu {
-            shares: Some(2048),
-            quota: Some(1001),
-            period: Some(100),
-            realtime_runtime: None,
-            realtime_period: None,
-            cpus: "1,2,3".to_string(),
-            mems: "1".to_string(),
-        };
-        let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
+        let mut linux_cpu = oci::LinuxCpu::default();
+        linux_cpu.set_shares(Some(2048));
+        linux_cpu.set_quota(Some(1001));
+        linux_cpu.set_period(Some(100));
+        linux_cpu.set_cpus(Some("1,2,3".to_string()));
+        linux_cpu.set_mems(Some("1".to_string()));
+
+        let resources = LinuxContainerCpuResources::try_from(&linux_cpu).unwrap();
         sandbox.merge(&resources);
         assert_eq!(sandbox.shares(), 1024);
         assert_eq!(sandbox.get_vcpus(), 11);
@@ -234,16 +227,12 @@ mod tests {
         assert_eq!(sandbox.cpuset().len(), 3);
         assert_eq!(sandbox.nodeset().len(), 1);
 
-        let oci = oci::LinuxCpu {
-            shares: Some(2048),
-            quota: None,
-            period: None,
-            realtime_runtime: None,
-            realtime_period: None,
-            cpus: "1,4".to_string(),
-            mems: "1-2".to_string(),
-        };
-        let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
+        let mut linux_cpu = oci::LinuxCpu::default();
+        linux_cpu.set_shares(Some(2048));
+        linux_cpu.set_cpus(Some("1,4".to_string()));
+        linux_cpu.set_mems(Some("1-2".to_string()));
+
+        let resources = LinuxContainerCpuResources::try_from(&linux_cpu).unwrap();
         sandbox.merge(&resources);
 
         assert_eq!(sandbox.shares(), 1024);

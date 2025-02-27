@@ -372,14 +372,13 @@ func (object Object) QemuParams(config *Config) []string {
 		}
 
 	case TDXGuest:
-		objectParams = append(objectParams, prepareObjectWithTdxQgs(object))
+		objectParams = append(objectParams, prepareTDXObject(object))
 		config.Bios = object.File
 	case SEVGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
-
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SNPGuest:
@@ -388,9 +387,7 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
 		objectParams = append(objectParams, "kernel-hashes=on")
-
-		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
-		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
+		config.Bios = object.File
 	case SecExecGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
@@ -430,7 +427,10 @@ type SocketAddress struct {
 type TdxQomObject struct {
 	QomType               string        `json:"qom-type"`
 	Id                    string        `json:"id"`
-	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket"`
+	MrConfigId            string        `json:"mrconfigid,omitempty"`
+	MrOwner               string        `json:"mrowner,omitempty"`
+	MrOwnerConfig         string        `json:"mrownerconfig,omitempty"`
+	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket,omitempty"`
 	Debug                 *bool         `json:"debug,omitempty"`
 }
 
@@ -456,9 +456,16 @@ func (this *TdxQomObject) String() string {
 	return string(b)
 }
 
-func prepareObjectWithTdxQgs(object Object) string {
+func prepareTDXObject(object Object) string {
 	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
-	tdxObject := TdxQomObject{string(object.Type), object.ID, qgsSocket, nil}
+	tdxObject := TdxQomObject{
+		string(object.Type), // qom-type
+		object.ID,           // id
+		"",                  // mrconfigid
+		"",                  // mrowner
+		"",                  // mrownerconfig
+		qgsSocket,           // quote-generation-socket
+		nil}
 
 	if object.Debug {
 		*tdxObject.Debug = true
@@ -1291,10 +1298,6 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, s)
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf("drive=%s", blkdev.ID))
-	if !blkdev.SCSI {
-		deviceParams = append(deviceParams, "scsi=off")
-	}
-
 	if !blkdev.WCE {
 		deviceParams = append(deviceParams, "config-wce=off")
 	}

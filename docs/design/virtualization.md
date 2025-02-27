@@ -98,8 +98,7 @@ of Kata Containers, the Cloud Hypervisor configuration supports both CPU
 and memory resize, device hotplug (disk and VFIO), file-system sharing through virtio-fs,
 block-based volumes, booting from VM images backed by pmem device, and
 fine-grained seccomp filters for each VMM threads (e.g. all virtio
-device worker threads). Please check [this GitHub Project](https://github.com/orgs/kata-containers/projects/21)
-for details of ongoing integration efforts.
+device worker threads).
 
 Devices and features used:
 - virtio VSOCK or virtio serial

@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v39.0"
+      version: "v41.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -83,13 +83,13 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v1.6.0"
+      version: "v1.8.0"
 
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v7.2.0"
-      tag: "v7.2.0"
+      version: "v9.1.2"
+      tag: "v9.1.2"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -116,38 +116,41 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-image-name "ubuntu"
-        version: &default-image-version "latest"
+        name: "ubuntu"
+        version: "jammy"  # 22.04 LTS
         nvidia-gpu:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
         nvidia-gpu-confidential:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
       ppc64le:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "jammy"  # 22.04 LTS
       s390x:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "jammy"  # 22.04 LTS
         confidential:
-          name: *default-image-name
-          version: *default-image-version
+          name: "ubuntu"
+          version: "jammy"  # 22.04 LTS
       x86_64:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "jammy"  # 22.04 lTS
         confidential:
-          name: *default-image-name
-          version: *default-image-version
+          name: "ubuntu"
+          version: "oracular"  # 24.10
+        mariner:
+          name: "cbl-mariner"
+          version: "3.0"
         nvidia-gpu:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
         nvidia-gpu-confidential:
-          name: *default-image-name
+          name: "ubuntu"
           version: "noble"
 
     meta:
-      image-type: *default-image-name
+      image-type: "ubuntu"
 
   initrd:
     description: |
@@ -156,8 +159,8 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.18"
+        name: "alpine"
+        version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
           version: "noble"
@@ -167,38 +170,35 @@ assets:
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
-        name: &glibc-initrd-name "ubuntu"
-        version: &glibc-initrd-version "20.04"
+        name: "ubuntu"
+        version: "jammy"  # 22.04 LTS
       s390x:
-        name: *glibc-initrd-name
-        version: *glibc-initrd-version
+        name: "ubuntu"
+        version: "jammy"  # 22.04 LTS
         confidential:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
+          name: "ubuntu"
+          version: "jammy"  # 22.04 LTS
       x86_64:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: "alpine"
+        version: "3.18"
         confidential:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
-        mariner:
-          name: "cbl-mariner"
-          version: "2.0"
+          name: "ubuntu"
+          version: "noble"
         nvidia-gpu:
-          name: *glibc-initrd-name
+          name: "ubuntu"
           version: "noble"
         nvidia-gpu-confidential:
-          name: *glibc-initrd-name
+          name: "ubuntu"
           version: "noble"
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.1.62"
+    version: "v6.12.13"
     confidential:
       description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.11"
+      version: "v6.12.13"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -207,11 +207,21 @@ assets:
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.10.25"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+    version: "v6.1.62"
 
 externals:
   description: "Third-party projects used by the system"
+
+  busybox:
+    desc: "The Swiss Army Knife of Embedded Linux"
+    version: "1.36.1"
+    url: "https://busybox.net/downloads"
+
+  helm:
+    description: "Kubernetes package manager"
+    url: "https://get.helm.sh/"
+    version: "v3.15.2"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -221,16 +231,19 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "adca2f94091d73c0b0c96a7789322a801c15811b"
-    toolchain: "1.76.0"
+    version: "514c561d933cb11a0f1628621a0b930157af76cd"
+    toolchain: "1.80.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
+    version: "68e2a8d25dbfa012b422ff464f31d18f3afa6677"
+    # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
-    toolchain: "1.74.0"
+    image_tag: "68e2a8d25dbfa012b422ff464f31d18f3afa6677"
+    ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
+    ita_image_tag: "68e2a8d25dbfa012b422ff464f31d18f3afa6677-x86_64"
+    toolchain: "1.76.0"
 
   crio:
     description: |
@@ -249,6 +262,8 @@ externals:
     version: "v1.6.8"
     lts: "v1.6"
     active: "v1.7"
+    # add containerd 2.0.0 for sandbox api test
+    latest: "v2.0"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
@@ -257,6 +272,11 @@ externals:
     # As we don't want to disrupt what we have on the `tests` repo, let's
     # create a "latest" entry and use that for the GitHub actions tests.
     latest: "v1.29"
+
+  runc:
+    description: "CLI tool for spawning and running containers"
+    url: "https://github.com/opencontainers/runc"
+    latest: "v1.2"
 
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
@@ -317,33 +337,28 @@ externals:
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.13.13"
+    version: "v0.13.14"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
     url: "https://github.com/tianocore/edk2"
     x86_64:
       description: "Vanilla firmware build"
-      version: "edk2-stable202402"
+      version: "edk2-stable202411"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
     sev:
       description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202402"
+      version: "edk2-stable202411"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.8.0"
-    toolchain: "1.72.0"
-    meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.8.0,
-      # this is the link labelled virtiofsd-v1.8.0.zip
-      #
-      # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9ec473efd0203219d016e66aac4190aa/virtiofsd-v1.8.0.zip"
+    # v1.13.0 + seccomp patch allowing the tkill syscall
+    version: "cecc61bca981ab42aae6ec490dfd59965e79025e"
+    toolchain: "1.83.0"
 
   xurls:
     description: |
@@ -359,22 +374,22 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.22.2"
+    version: "1.22.11"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.22.2"
+      newest-version: "1.22.11"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.75.0"
+    version: "1.80.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.75.0"
+      newest-version: "1.80.0"
 
   golangci-lint:
     description: "golangci-lint"

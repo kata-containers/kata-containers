@@ -27,7 +27,6 @@ readonly rootfs_builder=${project_dir}/rootfs-builder/rootfs.sh
 readonly DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
-readonly CI=${CI:-}
 readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
@@ -112,6 +111,7 @@ show_stats()
 	local sizes
 
 	local tmpfile=$(mktemp)
+	trap 'rm -f $tmpfile' EXIT
 
 	# images
 	for name in "${!built_images[@]}"
@@ -141,8 +141,6 @@ show_stats()
 		"Name"
 
 	sort -k1,1n -k3,3n "$tmpfile"
-
-	rm -f "${tmpfile}"
 }
 
 
@@ -211,7 +209,7 @@ exit_handler()
 	sudo -E kata-collect-data.sh >&2
 
 	info "processes:"
-	sudo -E ps -efwww | egrep "docker|kata" >&2
+	sudo -E ps -efwww | grep -E "docker|kata" >&2
 
 	# Restore the default image in config file
 	run_mgr configure-image
@@ -280,11 +278,6 @@ setup()
 {
 	mkdir -p "${images_dir}"
 
-	if [ -n "$CI" ]; then
-		sudo -E rm -rf ${ci_results_dir}
-		sudo -E mkdir -p ${ci_results_dir}
-	fi
-
 	[ -n "${KVM_MISSING:-}" ] && return
 
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
@@ -332,13 +325,13 @@ get_distros_config()
 		fi
 
 		tmpfile=$(mktemp /tmp/osbuilder-$d-config.XXX)
+		trap 'rm -f $tmpfile' EXIT
 		${rootfs_builder} -t $d  > $tmpfile
 		# Get value of all keys in distroCfg
 		for k in ${!distroCfg[@]}; do
 			distroCfg[$k]="$(awk -v cfgKey=$k 'BEGIN{FS=":\t+"}{if ($1 == cfgKey) print $2}' $tmpfile)"
 			debug "distroCfg[$k]=${distroCfg[$k]}"
 		done
-		rm -f $tmpfile
 
 		machinePattern="\<${MACHINE_TYPE}\>"
 		if [[ "${distroCfg[ARCH_EXCLUDE_LIST]}" =~ $machinePattern ]]; then
@@ -439,9 +432,7 @@ call_make() {
 	[ "${#makeTargets[@]}" = "0" ] && makeTargets+=($targetType)
 
 	makeJobs=
-	if [ -z "$CI" ]; then
-	  ((makeJobs=$(nproc) / 2))
-	fi
+	((makeJobs=$(nproc) / 2))
 
 	# When calling make, do not use the silent_run wrapper, pass the
 	# OSBUILDER_USE_CHRONIC instead.
@@ -585,7 +576,6 @@ test_distros()
 		# Skip failed distros
 		if [ -e "${tmp_rootfs}/${d}_fail" ]; then
 			info "Building rootfs for ${d} failed, not creating an image"
-			[ -n "$CI" ] && sudo -E touch "${ci_results_dir}/${d}_fail"
 			continue
 		fi
 
@@ -607,7 +597,6 @@ test_distros()
 		# Skip failed distros
 		if [ -e "${tmp_rootfs}/${d}_fail" ]; then
 			info "Building rootfs for ${d} failed, not creating an initrd"
-			[ -n "$CI" ] && touch "${ci_results_dir}/${d}_fail"
 			continue
 		fi
 

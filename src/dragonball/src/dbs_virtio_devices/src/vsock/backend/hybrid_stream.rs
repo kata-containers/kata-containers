@@ -55,9 +55,9 @@ impl VsockStream for HybridStream {
         let mut flag = unsafe { libc::fcntl(fd, libc::F_GETFL) };
 
         if nonblocking {
-            flag = flag | libc::O_NONBLOCK;
+            flag |= libc::O_NONBLOCK;
         } else {
-            flag = flag & !libc::O_NONBLOCK;
+            flag |= !libc::O_NONBLOCK;
         }
 
         let ret = unsafe { libc::fcntl(fd, libc::F_SETFL, flag) };

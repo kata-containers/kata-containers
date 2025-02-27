@@ -184,7 +184,7 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors
-			if c.rootFs.Type == NydusRootFSType {
+			if IsNydusRootFSType(c.state.Fstype) {
 				errors = merr.Append(errors, nydusContainerCleanup(ctx, sharedDir, c))
 			} else {
 				errors = merr.Append(errors, bindUnmountContainerRootfs(ctx, sharedDir, c.id))

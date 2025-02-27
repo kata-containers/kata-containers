@@ -16,7 +16,7 @@ ENV GITHUB_ACTION_NAME="Test kata-deploy in an AKS cluster"
 # PKG_SHA environment variable
 ENV PKG_SHA=HEAD
 
-RUN curl -LO "https://storage.googleapis.com/kubernetes-release/release/$(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/${ARCH}/kubectl" \
+RUN curl -LO "https://dl.k8s.io/release/$(curl -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl" \
   && chmod +x ./kubectl \
   && mv ./kubectl /usr/local/bin/kubectl
 

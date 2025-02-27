@@ -20,3 +20,23 @@ pub struct Config {
     pub ignore_errors: bool,
     pub no_auto_values: bool,
 }
+
+// CopyFile input struct
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CopyFileInput {
+    pub src: String,
+    pub dest: String,
+}
+
+// SetPolicy input request
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct SetPolicyInput {
+    pub policy_file: String,
+}
+
+// CreateContainer input
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CreateContainerInput {
+    pub image: String,
+    pub id: String,
+}

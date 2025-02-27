@@ -60,7 +60,7 @@ EOF
 
 	## Case for return value
 	### Command return non-zero code
-	run bash -c "kubectl exec -i $pod_name -- sh <<-EOF
+	run bash -c "kubectl exec -i $pod_name -- "$sh_command" <<-EOF
 exit 123
 EOF"
 	echo "run status: $status" 1>&2

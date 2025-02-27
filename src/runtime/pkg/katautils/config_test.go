@@ -570,6 +570,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		Msize9p:               defaultMsize9p,
 		GuestHookPath:         defaultGuestHookPath,
 		VhostUserStorePath:    defaultVhostUserStorePath,
+		HypervisorLoglevel:    defaultHypervisorLoglevel,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
@@ -1770,9 +1771,6 @@ func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 
 	configFile := "/some/where/configuration.toml"
 
-	// Note: We cannot test acrnHypervisorTableType since
-	// newAcrnHypervisorConfig() expects ACRN binaries to be
-	// installed.
 	var entries = []tableTypeEntry{
 		{clhHypervisorTableType, true},
 		{dragonballHypervisorTableType, true},

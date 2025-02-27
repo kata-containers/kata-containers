@@ -44,6 +44,9 @@ pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 mod ch;
 pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
 
+mod remote;
+pub use self::remote::{RemoteConfig, HYPERVISOR_NAME_REMOTE};
+
 /// Virtual PCI block device driver.
 pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 
@@ -58,6 +61,9 @@ pub const VIRTIO_SCSI: &str = "virtio-scsi";
 
 /// Virtual PMEM device driver.
 pub const VIRTIO_PMEM: &str = "virtio-pmem";
+
+mod firecracker;
+pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
 
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
@@ -488,6 +494,12 @@ pub struct DeviceInfo {
     /// Enabling this will result in the VM device having iommu_platform=on set
     #[serde(default)]
     pub enable_iommu_platform: bool,
+
+    /// Enable balloon f_reporting, default false
+    ///
+    /// Enabling this will result in the VM balloon device having f_reporting=on set
+    #[serde(default)]
+    pub reclaim_guest_freed_memory: bool,
 }
 
 impl DeviceInfo {
@@ -530,6 +542,8 @@ impl TopologyConfigInfo {
             HYPERVISOR_NAME_QEMU,
             HYPERVISOR_NAME_CH,
             HYPERVISOR_NAME_DRAGONBALL,
+            HYPERVISOR_NAME_FIRECRACKER,
+            HYPERVISOR_NAME_REMOTE,
         ];
         let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
         if !hypervisor_names.contains(&hypervisor_name) {
@@ -693,12 +707,6 @@ pub struct MemoryInfo {
     /// "echo 1 > /proc/sys/vm/overcommit_memory".
     #[serde(default)]
     pub enable_virtio_mem: bool,
-
-    /// Enable swap of vm memory. Default false.
-    ///
-    /// The behaviour is undefined if mem_prealloc is also set to true
-    #[serde(default)]
-    pub enable_swap: bool,
 
     /// Enable swap in the guest. Default false.
     ///
@@ -1030,6 +1038,18 @@ impl SharedFsInfo {
     }
 }
 
+/// Configuration information for remote hypervisor type.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RemoteInfo {
+    /// Remote hypervisor socket path
+    #[serde(default)]
+    pub hypervisor_socket: String,
+
+    /// Remote hyperisor timeout of creating (in seconds)
+    #[serde(default)]
+    pub hypervisor_timeout: i32,
+}
+
 /// Common configuration information for hypervisors.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Hypervisor {
@@ -1113,6 +1133,10 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub shared_fs: SharedFsInfo,
 
+    /// Remote hypervisor configuration information.
+    #[serde(default, flatten)]
+    pub remote_info: RemoteInfo,
+
     /// A sandbox annotation used to specify prefetch_files.list host path container image
     /// being used, and runtime will pass it to Hypervisor to  search for corresponding
     /// prefetch list file:
@@ -1123,6 +1147,14 @@ pub struct Hypervisor {
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
+
+    /// Disable applying SELinux on the container process.
+    #[serde(default = "yes")]
+    pub disable_guest_selinux: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Hypervisor {
@@ -1146,6 +1178,10 @@ impl ConfigOps for Hypervisor {
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
+        info!(
+            sl!(),
+            "Adjusting hypervisor configuration {:?}", hypervisors
+        );
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_config(conf)?;

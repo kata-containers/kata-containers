@@ -222,9 +222,6 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	# Disable block migration in the main migration stream
-	qemu_options+=(size:--disable-live-block-migration)
-
 	# braille support not required
 	qemu_options+=(size:--disable-brlapi)
 
@@ -356,11 +353,6 @@ generate_qemu_options() {
 	# Disable XEN driver
 	qemu_options+=(size:--disable-xen)
 
-	# FIXME: why is this disabled?
-	# (for reference, it's explicitly enabled in Ubuntu 17.10 and
-	# implicitly enabled in Fedora 27).
-	qemu_options+=(size:--disable-linux-aio)
-
 	# Disable Capstone
 	qemu_options+=(size:--disable-capstone)
 
@@ -387,6 +379,45 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-dmg)
 	qemu_options+=(size:--disable-parallels)
 
+	# Disable new available features from 8.2.4
+	qemu_options+=(size:--disable-colo-proxy)
+	qemu_options+=(size:--disable-debug-graph-lock)
+	qemu_options+=(size:--disable-hexagon-idef-parser)
+	qemu_options+=(size:--disable-libdw)
+	qemu_options+=(size:--disable-pipewire)
+	qemu_options+=(size:--disable-pixman)
+	qemu_options+=(size:--disable-relocatable)
+	qemu_options+=(size:--disable-rutabaga-gfx)
+	qemu_options+=(size:--disable-vmdk)
+	qemu_options+=(size:--disable-avx512bw)
+	qemu_options+=(size:--disable-vpc)
+	qemu_options+=(size:--disable-vhdx)
+	qemu_options+=(size:--disable-hv-balloon)
+
+	# Disable various features based on the qemu_version
+	if gt_eq "${qemu_version}" "9.1.0" ; then
+		# Disable Query Processing Library support
+		qemu_options+=(size:--disable-qpl)
+		# Disable UADK Library support
+		qemu_options+=(size:--disable-uadk)
+		# Disable syscall buffer debugging support
+		qemu_options+=(size:--disable-debug-remap)
+
+	fi
+
+	# Disable gio support
+	qemu_options+=(size:--disable-gio)
+	# Disable libdaxctl part of ndctl support
+	qemu_options+=(size:--disable-libdaxctl)
+	qemu_options+=(size:--disable-oss)
+
+	# Building static binaries for aarch64 requires disabling PIE
+	# We get an GOT overflow and the OS libraries are only build with fpic
+	# and not with fPIC which enables unlimited sized GOT tables.
+	if [ "${static}" == "true" ] && [ "${arch}" == "aarch64" ]; then
+		qemu_options+=(arch:"--disable-pie")
+	fi
+
 	#---------------------------------------------------------------------
 	# Enabled options
 
@@ -396,6 +427,10 @@ generate_qemu_options() {
 
 	# Required for fast network access
 	qemu_options+=(speed:--enable-vhost-net)
+
+	# Support Linux AIO (native)
+	qemu_options+=(size:--enable-linux-aio)
+	qemu_options+=(size:--enable-linux-io-uring)
 
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
@@ -414,15 +449,14 @@ generate_qemu_options() {
 	# for that architecture
 	if [ "$arch" == x86_64 ]; then
 		qemu_options+=(speed:--enable-avx2)
-		qemu_options+=(speed:--enable-avx512f)
-		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
-		# built with libpmem support, QEMU will take necessary operations to guarantee
-		# the persistence of its own writes to the vNVDIMM backend.
-		qemu_options+=(functionality:--enable-libpmem)
+		qemu_options+=(speed:--enable-avx512bw)
 	else
 		qemu_options+=(speed:--disable-avx2)
-		qemu_options+=(functionality:--disable-libpmem)
 	fi
+	# We're disabling pmem support, it is heavilly broken with
+	# Ubuntu's static build of QEMU
+	qemu_options+=(functionality:--disable-libpmem)
+
 	# Enable libc malloc_trim() for memory optimization.
 	qemu_options+=(speed:--enable-malloc-trim)
 

@@ -803,20 +803,23 @@ install_kata()
 	local from_dir
 	from_dir=$(printf "%s/bin" "$kata_install_dir")
 
-	info "Checking file '$file'"
-
-	# Since we're unpacking to the root directory, perform a sanity check
-	# on the archive first.
-	local unexpected
-	unexpected=$(tar -tf "${file}" |\
-		grep -Ev "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
-
-	[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
-
 	if [ -n "$kata_tarball" ]
 	then
 		info "Installing $project release from $file"
 	else
+		# Only do the checking in case the tarball was not explicitly passed
+		# by the user.  We have no control of what's passed and we cannot
+		# expect that all the files are going to be under /opt.
+		info "Checking file '$file'"
+
+		# Since we're unpacking to the root directory, perform a sanity check
+		# on the archive first.
+		local unexpected
+		unexpected=$(tar -tf "${file}" |\
+			grep -Ev "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
+
+		[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
+
 		info "Installing $project release $version from $file"
 	fi
 
@@ -832,6 +835,34 @@ install_kata()
 
 		sudo ln -sf "$from_path" "$link_dir"
 	done
+
+	local tdx_qemu_config="/opt/kata/share/defaults/kata-containers/configuration-qemu-tdx.toml"
+	local tdx_qemu_path_from_distro="NOT_SUPPORTED"
+	local tdx_ovmf_path_from_distro="NOT_SUPPORTED"
+	if [ -e $tdx_qemu_config ]; then
+		source /etc/os-release || source /usr/lib/os-release
+		case $ID in
+			ubuntu)
+				case $VERSION_ID in
+					24.04)
+						tdx_qemu_path_from_distro="/usr/bin/qemu-system-x86_64"
+						tdx_ovmf_path_from_distro="/usr/share/ovmf/OVMF.fd"
+						;;
+				esac
+				;;
+			centos)
+				case $VERSION_ID in
+					9)
+						tdx_qemu_path_from_distro="/usr/libexec/qemu-kvm"
+						tdx_ovmf_path_from_distro="/usr/share/edk2/ovmf/OVMF.inteltdx.fd"
+						;;
+				esac
+				;;
+		esac
+
+		sudo sed -i -e "s|PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT|$tdx_qemu_path_from_distro|g" $tdx_qemu_config
+		sudo sed -i -e "s|PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT|$tdx_ovmf_path_from_distro|g" $tdx_qemu_config
+	fi
 
 	info "$project installed\n"
 }
@@ -1004,7 +1035,7 @@ test_installation()
 
 	sudo kata-runtime check -v
 
-	local image="docker.io/library/busybox:latest"
+	local image="quay.io/prometheus/busybox:latest"
 	sudo $tool image pull "$image"
 
 	local container_name="${script_name/./-}-test-kata"

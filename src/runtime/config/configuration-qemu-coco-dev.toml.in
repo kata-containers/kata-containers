@@ -55,7 +55,7 @@ rootfs_type=@DEFROOTFSTYPE@
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-enable_annotations = @DEFENABLEANNOTATIONS@
+enable_annotations = @DEFENABLEANNOTATIONSTEE@
 
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
@@ -73,7 +73,7 @@ valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS@"
+kernel_params = "@KERNELQEMUCOCODEVPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
@@ -176,10 +176,10 @@ default_maxmemory = @DEFMAXMEMSZ@
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:
-#   - virtio-fs (default)
+#   - virtio-fs
 #   - virtio-9p
 #   - virtio-fs-nydus
-#   - none
+#   - none (default)
 shared_fs = "@DEFSHAREDFS_QEMU_COCO_DEV_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
@@ -567,6 +567,10 @@ kernel_modules=[]
 # (default: 45)
 dial_timeout = 45
 
+# Confidential Data Hub API timeout value in seconds
+# (default: 50)
+#cdh_api_timeout = 50
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
@@ -649,7 +653,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
@@ -700,3 +704,12 @@ experimental=@DEFAULTEXPFEATURES@
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+
+# Base directory of directly attachable network config.
+# Network devices for VM-based containers are allowed to be placed in the
+# host netns to eliminate as many hops as possible, which is what we
+# called a "Directly Attachable Network". The config, set by special CNI
+# plugins, is used to tell the Kata containers what devices are attached
+# to the hypervisor.
+# (default: /run/kata-containers/dans)
+dan_conf = "@DEFDANCONF@"

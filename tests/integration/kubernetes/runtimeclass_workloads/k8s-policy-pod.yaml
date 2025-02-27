@@ -7,12 +7,15 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: policy-pod
+  uid: policy-pod-uid
 spec:
   terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
-    - name: busybox
-      image: quay.io/prometheus/busybox:latest
+    - name: prometheus
+      image: quay.io/prometheus/prometheus:latest
+      command:
+        - /bin/sh
       env:
         - name: KUBE_CONFIG_1
           valueFrom:
@@ -24,3 +27,35 @@ spec:
             configMapKeyRef:
               name: policy-configmap
               key: data-2
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      livenessProbe:
+        exec:
+          command:
+            - echo
+            - livenessProbe
+            - test
+        failureThreshold: 1
+        periodSeconds: 5
+        timeoutSeconds: 10
+      readinessProbe:
+        exec:
+          command:
+            - "echo"
+            - "-n"
+            - "readinessProbe with space characters"
+      startupProbe:
+        exec:
+          command:
+            - echo
+            - startupProbe
+            - test
+      envFrom:
+      - configMapRef:
+          name: policy-configmap
+  topologySpreadConstraints:
+    - maxSkew: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+  priorityClassName: test-high-priority

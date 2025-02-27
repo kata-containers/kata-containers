@@ -17,7 +17,9 @@ use tokio::sync::mpsc::{channel, Receiver};
 use ttrpc::asynchronous::Server;
 
 use crate::event::{new_event_publisher, Forwarder};
+use crate::sandbox_service::SandboxService;
 use crate::task_service::TaskService;
+use containerd_shim_protos::sandbox_async;
 
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
@@ -25,7 +27,7 @@ const MESSAGE_BUFFER_SIZE: usize = 8;
 pub struct ServiceManager {
     receiver: Option<Receiver<Message>>,
     handler: Arc<RuntimeHandlerManager>,
-    task_server: Option<Server>,
+    server: Option<Server>,
     binary: String,
     address: String,
     namespace: String,
@@ -37,7 +39,7 @@ impl std::fmt::Debug for ServiceManager {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ServiceManager")
             .field("receiver", &self.receiver)
-            .field("task_server.is_some()", &self.task_server.is_some())
+            .field("server.is_some()", &self.server.is_some())
             .field("binary", &self.binary)
             .field("address", &self.address)
             .field("namespace", &self.namespace)
@@ -60,8 +62,8 @@ impl ServiceManager {
         let (sender, receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let rt_mgr = RuntimeHandlerManager::new(id, sender).context("new runtime handler")?;
         let handler = Arc::new(rt_mgr);
-        let mut task_server = unsafe { Server::from_raw_fd(task_server_fd) };
-        task_server = task_server.set_domain_unix();
+        let mut server = unsafe { Server::from_raw_fd(task_server_fd) };
+        server = server.set_domain_unix();
         let event_publisher = new_event_publisher(namespace)
             .await
             .context("new event publisher")?;
@@ -69,7 +71,7 @@ impl ServiceManager {
         Ok(Self {
             receiver: Some(receiver),
             handler,
-            task_server: Some(task_server),
+            server: Some(server),
             binary: containerd_binary.to_string(),
             address: address.to_string(),
             namespace: namespace.to_string(),
@@ -136,25 +138,29 @@ impl ServiceManager {
     }
 
     fn registry_service(&mut self) -> Result<()> {
-        if let Some(t) = self.task_server.take() {
+        if let Some(s) = self.server.take() {
+            let sandbox_service = Arc::new(Box::new(SandboxService::new(self.handler.clone()))
+                as Box<dyn sandbox_async::Sandbox + Send + Sync>);
+            let s = s.register_service(sandbox_async::create_sandbox(sandbox_service));
+
             let task_service = Arc::new(Box::new(TaskService::new(self.handler.clone()))
                 as Box<dyn shim_async::Task + Send + Sync>);
-            let t = t.register_service(shim_async::create_task(task_service));
-            self.task_server = Some(t);
+            let s = s.register_service(shim_async::create_task(task_service));
+            self.server = Some(s);
         }
         Ok(())
     }
 
     async fn start_service(&mut self) -> Result<()> {
-        if let Some(t) = self.task_server.as_mut() {
-            t.start().await.context("task server start")?;
+        if let Some(s) = self.server.as_mut() {
+            s.start().await.context("task server start")?;
         }
         Ok(())
     }
 
     async fn stop_service(&mut self) -> Result<()> {
-        if let Some(t) = self.task_server.as_mut() {
-            t.stop_listen().await;
+        if let Some(s) = self.server.as_mut() {
+            s.stop_listen().await;
         }
         Ok(())
     }

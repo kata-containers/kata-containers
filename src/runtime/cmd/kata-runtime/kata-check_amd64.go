@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
-	"unsafe"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
@@ -44,41 +42,6 @@ const (
 	cpuTypeAMD     = 1
 	cpuTypeUnknown = -1
 )
-
-const acrnDevice = "/dev/acrn_hsm"
-
-// ioctl_ACRN_CREATE_VM is the IOCTL to create VM in ACRN.
-// Current Linux mainstream kernel doesn't have support for ACRN.
-// Due to this several macros are not defined in Linux headers.
-// Until the support is available, directly use the value instead
-// of macros.
-// https://github.com/kata-containers/runtime/issues/1784
-const ioctl_ACRN_CREATE_VM = 0xC030A210 //nolint
-const ioctl_ACRN_PAUSE_VM = 0xA213      //nolint
-const ioctl_ACRN_DESTROY_VM = 0xA211    //nolint
-
-type acrn_vm_creation struct { //nolint
-	vmid         uint16 //nolint
-	reserved0    uint16 //nolint
-	vcpu_num     uint16 //nolint
-	reserved1    uint16 //nolint
-	name         [16]uint8
-	vm_flag      uint64 //nolint
-	ioreq_buf    uint64 //nolint
-	cpu_affinity uint64 //nolint
-}
-
-var io_request_page [4096]byte
-
-type acrn_io_request struct { // nolint
-	io_type            uint32     // nolint
-	completion_polling uint32     // nolint
-	reserved0          [14]uint32 // nolint
-	data               [8]uint64  // nolint
-	reserved1          uint32     // nolint
-	kernel_handled     uint32     // nolint
-	processed          uint32     // nolint
-}
 
 // cpuType save the CPU type
 var cpuType int
@@ -149,28 +112,6 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 				kernelModvhostnet: {
 					desc:     msgKernelVirtioNet,
 					required: true,
-				},
-				kernelModvhostvsock: {
-					desc:     msgKernelVirtioVhostVsock,
-					required: false,
-				},
-			}
-		case vc.AcrnHypervisor:
-			archRequiredCPUFlags = map[string]string{
-				cpuFlagLM:     "64Bit CPU",
-				cpuFlagSSE4_1: "SSE4.1",
-			}
-			archRequiredCPUAttribs = map[string]string{
-				archGenuineIntel: "Intel Architecture CPU",
-			}
-			archRequiredKernelModules = map[string]kernelModule{
-				kernelModvhost: {
-					desc:     msgKernelVirtio,
-					required: false,
-				},
-				kernelModvhostnet: {
-					desc:     msgKernelVirtioNet,
-					required: false,
 				},
 				kernelModvhostvsock: {
 					desc:     msgKernelVirtioVhostVsock,
@@ -249,68 +190,6 @@ func kvmIsUsable() error {
 	return genericKvmIsUsable()
 }
 
-// acrnIsUsable determines if it will be possible to create a full virtual machine
-// by creating a minimal VM and then deleting it.
-func acrnIsUsable() error {
-	flags := syscall.O_RDWR | syscall.O_CLOEXEC
-
-	f, err := syscall.Open(acrnDevice, flags, 0)
-	if err != nil {
-		return err
-	}
-	defer syscall.Close(f)
-	kataLog.WithField("device", acrnDevice).Info("device available")
-
-	var createVM acrn_vm_creation
-	copy(createVM.name[:], "KataACRNVM")
-	ioreq_buf := (*acrn_io_request)(unsafe.Pointer(&io_request_page))
-	createVM.ioreq_buf = uint64(uintptr(unsafe.Pointer(ioreq_buf)))
-
-	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(f),
-		uintptr(ioctl_ACRN_CREATE_VM),
-		uintptr(unsafe.Pointer(&createVM)))
-	if ret != 0 || errno != 0 {
-		if errno == syscall.EBUSY {
-			kataLog.WithField("reason", "another hypervisor running").Error("cannot create VM")
-		}
-		kataLog.WithFields(logrus.Fields{
-			"ret":     ret,
-			"errno":   errno,
-			"VM_name": createVM.name,
-		}).Info("Create VM Error")
-		return errno
-	}
-
-	ret, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(f),
-		uintptr(ioctl_ACRN_PAUSE_VM),
-		0)
-	if ret != 0 || errno != 0 {
-		kataLog.WithFields(logrus.Fields{
-			"ret":   ret,
-			"errno": errno,
-		}).Info("PAUSE VM Error")
-		return errno
-	}
-
-	ret, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(f),
-		uintptr(ioctl_ACRN_DESTROY_VM),
-		0)
-	if ret != 0 || errno != 0 {
-		kataLog.WithFields(logrus.Fields{
-			"ret":   ret,
-			"errno": errno,
-		}).Info("Destroy VM Error")
-		return errno
-	}
-
-	kataLog.WithField("feature", "create-vm").Info("feature available")
-
-	return nil
-}
-
 func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 	switch hypervisorType {
 	case vc.QemuHypervisor:
@@ -321,8 +200,6 @@ func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 		fallthrough
 	case vc.FirecrackerHypervisor:
 		return kvmIsUsable()
-	case vc.AcrnHypervisor:
-		return acrnIsUsable()
 	case vc.RemoteHypervisor:
 		return nil
 	case vc.MockHypervisor:

@@ -5,6 +5,7 @@
 
 mod cmdline_generator;
 mod inner;
+mod qmp;
 
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
@@ -17,12 +18,15 @@ use persist::sandbox_persist::Persist;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex};
 
 #[derive(Debug)]
 pub struct Qemu {
     inner: Arc<RwLock<QemuInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 impl Default for Qemu {
@@ -33,12 +37,15 @@ impl Default for Qemu {
 
 impl Qemu {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(QemuInner::new())),
+            inner: Arc::new(RwLock::new(QemuInner::new(exit_notify))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
@@ -46,7 +53,12 @@ impl Qemu {
 
 #[async_trait]
 impl Hypervisor for Qemu {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
@@ -59,6 +71,22 @@ impl Hypervisor for Qemu {
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.stop_vm().await
+    }
+
+    async fn wait_vm(&self) -> Result<i32> {
+        info!(sl!(), "Wait QEMU VM");
+
+        let mut waiter = self.exit_waiter.lock().await;
+
+        //wait until the qemu process exited.
+        waiter.0.recv().await;
+
+        let inner = self.inner.read().await;
+        if let Ok(exit_code) = inner.wait_vm().await {
+            waiter.1 = exit_code;
+        }
+
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -127,7 +155,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.resize_vcpu(old_vcpus, new_vcpus).await
     }
 
@@ -172,11 +200,11 @@ impl Hypervisor for Qemu {
 
     async fn guest_memory_block_size(&self) -> u32 {
         let inner = self.inner.read().await;
-        inner.guest_memory_block_size_mb()
+        inner.guest_memory_block_size()
     }
 
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.resize_memory(new_mem_mb)
     }
 
@@ -198,12 +226,15 @@ impl Persist for Qemu {
 
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = QemuInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
+        let inner = QemuInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

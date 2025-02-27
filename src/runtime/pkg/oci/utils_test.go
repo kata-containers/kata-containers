@@ -483,9 +483,6 @@ func TestAddAssetAnnotations(t *testing.T) {
 		vcAnnotations.HypervisorPath: fakeAssetFile,
 		vcAnnotations.HypervisorHash: "bbbbb",
 
-		vcAnnotations.HypervisorCtlPath: fakeAssetFile,
-		vcAnnotations.HypervisorCtlHash: "cc",
-
 		vcAnnotations.ImagePath: fakeAssetFile,
 		vcAnnotations.ImageHash: "52ss2550983",
 
@@ -533,7 +530,6 @@ func TestAddAssetAnnotations(t *testing.T) {
 	// Check that it works if all path lists are enabled
 	runtimeConfig.HypervisorConfig.HypervisorPathList = []string{tmpdirGlob}
 	runtimeConfig.HypervisorConfig.JailerPathList = []string{tmpdirGlob}
-	runtimeConfig.HypervisorConfig.HypervisorCtlPathList = []string{tmpdirGlob}
 
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.NoError(err)
@@ -773,6 +769,29 @@ func TestAddRemoteHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DefaultMemory] = "1"
 	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.NoError(err)
+
+	// When initdata specified, remote hypervisor annotations do have the annotation added.
+	ocispec.Annotations[vcAnnotations.Initdata] = "initdata"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.Initdata, "initdata")
+
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUs] = "-1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultGPUs] = "1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUs, uint32(1))
+
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUModel] = "tesla"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUModel, "tesla")
+
 }
 
 func TestAddProtectedHypervisorAnnotations(t *testing.T) {
@@ -860,6 +879,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
 	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
 	ocispec.Annotations[vcAnnotations.CreateContainerTimeout] = "100"
+	ocispec.Annotations[vcAnnotations.Initdata] = "initdata"
 
 	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
@@ -867,6 +887,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	assert.Equal(config.NetworkConfig.DisableNewNetwork, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
 	assert.Equal(config.CreateContainerTimeout, uint64(100))
+	assert.Equal(config.HypervisorConfig.Initdata, "initdata")
 }
 
 func TestRegexpContains(t *testing.T) {

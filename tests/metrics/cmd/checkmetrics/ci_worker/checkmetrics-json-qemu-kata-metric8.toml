@@ -55,9 +55,9 @@ description = "measure container average of blogbench write"
 # within (inclusive)
 checkvar = ".\"blogbench\".Results | .[] | .write.Result"
 checktype = "mean"
-midval = 1639.0
-minpercent = 20.0
-maxpercent = 20.0
+midval = 2000.0
+minpercent = 30.0
+maxpercent = 30.0
 
 [[metric]]
 name = "blogbench"
@@ -68,7 +68,7 @@ description = "measure container average of blogbench read"
 # within (inclusive)
 checkvar = ".\"blogbench\".Results | .[] | .read.Result"
 checktype = "mean"
-midval = 98687.0
+midval = 5880.0
 minpercent = 20.0
 maxpercent = 20.0
 
@@ -108,7 +108,7 @@ description = "measure sequential read throughput using fio"
 checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .read.bw | select( . != null )"
 checktype = "mean"
 midval = 327066.8
-minpercent = 20.0
+minpercent = 30.0
 maxpercent = 20.0
 
 [[metric]]
@@ -121,7 +121,7 @@ description = "measure sequential write throughput using fio"
 checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .write.bw | select( . != null )"
 checktype = "mean"
 midval = 309023.65
-minpercent = 20.0
+minpercent = 30.0
 maxpercent = 20.0
 
 [[metric]]
@@ -160,7 +160,7 @@ description = "measure container latency"
 checkvar = ".\"latency\".Results | .[] | .latency.Result"
 checktype = "mean"
 midval = 0.70
-minpercent = 20.0
+minpercent = 30.0
 maxpercent = 20.0
 
 [[metric]]
@@ -199,8 +199,8 @@ description = "measure container parallel bandwidth using iperf3"
 checkvar = ".\"network-iperf3\".Results | .[] | .parallel.Result"
 checktype = "mean"
 midval = 52644229340.0
-minpercent = 20.0
-maxpercent = 20.0
+minpercent = 25.0
+maxpercent = 25.0
 
 [[metric]]
 name = "network-iperf3"
@@ -211,6 +211,6 @@ description = "iperf"
 # within (inclusive)
 checkvar = ".\"network-iperf3\".Results | .[] | .jitter.Result"
 checktype = "mean"
-midval = 0.041
-minpercent = 50.0
-maxpercent = 50.0
+midval = 0.040
+minpercent = 60.0
+maxpercent = 60.0

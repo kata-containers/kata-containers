@@ -34,7 +34,7 @@ pub struct Job {
 /// See Reference / Kubernetes API / Workload Resources / Job.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JobSpec {
-    template: pod_template::PodTemplateSpec,
+    pub template: pod_template::PodTemplateSpec,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     backoffLimit: Option<i32>,
@@ -68,15 +68,13 @@ impl yaml::K8sResource for Job {
         container: &pod::Container,
         settings: &settings::Settings,
     ) {
-        if let Some(volumes) = &self.spec.template.spec.volumes {
-            yaml::get_container_mounts_and_storages(
-                policy_mounts,
-                storages,
-                container,
-                settings,
-                volumes,
-            );
-        }
+        yaml::get_container_mounts_and_storages(
+            policy_mounts,
+            storages,
+            container,
+            settings,
+            &self.spec.template.spec.volumes,
+        );
     }
 
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
@@ -111,5 +109,9 @@ impl yaml::K8sResource for Job {
             return shared;
         }
         false
+    }
+
+    fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        yaml::get_process_fields(process, &self.spec.template.spec.securityContext);
     }
 }

@@ -93,7 +93,7 @@ mod test {
         }
     }
 
-    #[cfg(all(feature = "legacy_irq", target_arch = "x86_64"))]
+    #[cfg(all(feature = "legacy-irq", target_arch = "x86_64"))]
     #[test]
     fn test_new_msi_routing_multi() {
         let mut msi_fds = Vec::with_capacity(16);

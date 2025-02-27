@@ -44,7 +44,6 @@ var DEFAULTRUNTIMECONFIGURATION = "@CONFIG_PATH@"
 // defaultRuntimeConfiguration.
 var DEFAULTSYSCONFRUNTIMECONFIGURATION = "@SYSCONFIG@"
 var defaultHypervisorPath = "/usr/bin/qemu-system-x86_64"
-var defaultHypervisorCtlPath = "/usr/bin/acrnctl"
 var defaultJailerPath = "/usr/bin/jailer"
 var defaultImagePath = "/usr/share/kata-containers/kata-containers.img"
 var defaultKernelPath = "/usr/share/kata-containers/vmlinuz.container"
@@ -64,6 +63,7 @@ const defaultVCPUCount uint32 = 1
 const defaultMaxVCPUCount uint32 = 0
 const defaultMemSize uint32 = 2048 // MiB
 const defaultMemSlots uint32 = 10
+const defaultHypervisorLoglevel uint32 = 1
 const defaultMemOffset uint64 = 0 // MiB
 const defaultVirtioMem bool = false
 const defaultBridgesCount uint32 = 1

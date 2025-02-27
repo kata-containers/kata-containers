@@ -21,12 +21,26 @@ spec:
       runtimeClassName: kata
       containers:
       - name: nginxtest
-        image: quay.io/sjenning/${nginx_version}
+        image: quay.io/fidencio/${nginx_version}
         ports:
         - containerPort: 80
         volumeMounts:
           - name: host-empty-vol
             mountPath: "/host/cache"
+          - name: host-empty-vol
+            mountPath: "/host/cache-read-only"
+            readOnly: true
+          - mountPath: /tmp/results
+            name: hostpath-vol
+          - mountPath: /tmp/results-read-only
+            name: hostpath-vol-read-only
+            readOnly: true
       volumes:
       - name: host-empty-vol
         emptyDir: {}
+      - name: hostpath-vol
+        hostPath:
+          path: /tmp/results
+      - name: hostpath-vol-read-only
+        hostPath:
+          path: /tmp/results-read-only

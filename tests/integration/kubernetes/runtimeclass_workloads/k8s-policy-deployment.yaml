@@ -1,0 +1,38 @@
+#
+# Copyright (c) 2024 Microsoft
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-redis-deployment
+  labels:
+    app: policyredis
+spec:
+  selector:
+    matchLabels:
+      app: policyredis
+      role: master
+      tier: backend
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: policyredis
+        role: master
+        tier: backend
+    spec:
+      terminationGracePeriodSeconds: 0
+      runtimeClassName: kata
+      securityContext:
+        runAsUser: 1000
+      containers:
+      - name: master
+        image: quay.io/opstree/redis
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+        ports:
+        - containerPort: 6379

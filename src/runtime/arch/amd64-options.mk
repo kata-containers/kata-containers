@@ -6,7 +6,8 @@
 # Intel x86-64 settings
 
 MACHINETYPE := q35
-KERNELPARAMS :=
+KERNELPARAMS := cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
+KERNELTDXPARAMS := cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
 MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
@@ -19,10 +20,6 @@ TDXCPUFEATURES := -vmx-rdseed-exit,pmu=off
 FCCMD := firecracker
 # Firecracker's jailer binary name
 FCJAILERCMD := jailer
-
-#ACRN binary name
-ACRNCMD := acrn-dm
-ACRNCTLCMD := acrnctl
 
 # cloud-hypervisor binary name
 CLHCMD := cloud-hypervisor

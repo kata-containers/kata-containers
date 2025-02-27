@@ -96,15 +96,13 @@ impl yaml::K8sResource for DaemonSet {
         container: &pod::Container,
         settings: &settings::Settings,
     ) {
-        if let Some(volumes) = &self.spec.template.spec.volumes {
-            yaml::get_container_mounts_and_storages(
-                policy_mounts,
-                storages,
-                container,
-                settings,
-                volumes,
-            )
-        }
+        yaml::get_container_mounts_and_storages(
+            policy_mounts,
+            storages,
+            container,
+            settings,
+            &self.spec.template.spec.volumes,
+        );
     }
 
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
@@ -148,5 +146,9 @@ impl yaml::K8sResource for DaemonSet {
             .runtimeClassName
             .clone()
             .or_else(|| Some(String::new()))
+    }
+
+    fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        yaml::get_process_fields(process, &self.spec.template.spec.securityContext);
     }
 }

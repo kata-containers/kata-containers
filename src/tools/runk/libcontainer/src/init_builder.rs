@@ -8,7 +8,7 @@ use crate::status::Status;
 use crate::utils::{canonicalize_spec_root, validate_spec};
 use anyhow::{anyhow, Result};
 use derive_builder::Builder;
-use oci::Spec;
+use oci_spec::runtime::Spec;
 use rustjail::specconv::CreateOpts;
 use slog::{debug, Logger};
 use std::path::PathBuf;
@@ -91,11 +91,11 @@ mod tests {
     use super::*;
     use crate::container::CONFIG_FILE_NAME;
     use crate::utils::test_utils::*;
+    use oci_spec::runtime::Process;
     use slog::o;
     use std::fs::{create_dir, File};
     use std::path::Path;
     use tempfile::tempdir;
-    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_init_container_validate() {
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_init_container_create_launcher() {
-        #[cfg(target_arch = "powerpc64")]
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
         skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let root_dir = tempdir().unwrap();
@@ -126,11 +126,10 @@ mod tests {
         let file = File::create(config_file).unwrap();
         serde_json::to_writer(&file, &spec).unwrap();
 
-        spec.root.as_mut().unwrap().path = bundle_dir
-            .path()
-            .join(TEST_ROOTFS_PATH)
-            .to_string_lossy()
-            .to_string();
+        spec.root_mut()
+            .as_mut()
+            .unwrap()
+            .set_path(bundle_dir.path().join(TEST_ROOTFS_PATH));
         let test_data = TestContainerData {
             // Since tests are executed concurrently, container_id must be unique in tests with cgroup.
             // Or the cgroup directory may be removed by other tests in advance.
@@ -179,11 +178,12 @@ mod tests {
         let bundle_dir = tempdir().unwrap();
         let config_file = bundle_dir.path().join(CONFIG_FILE_NAME);
 
-        let mut spec = oci::Spec {
-            process: Some(oci::Process::default()),
-            ..Default::default()
-        };
-        spec.process.as_mut().unwrap().terminal = true;
+        let mut spec = Spec::default();
+        spec.set_process(Some(Process::default()));
+        spec.process_mut()
+            .as_mut()
+            .unwrap()
+            .set_terminal(Some(true));
 
         let file = File::create(config_file).unwrap();
         serde_json::to_writer(&file, &spec).unwrap();

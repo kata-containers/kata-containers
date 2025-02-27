@@ -4,16 +4,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashMap, path::PathBuf, str::from_utf8, sync::Arc};
-
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
-    types::{Request, Response},
+    types::{
+        ContainerProcess, PlatformInfo, SandboxConfig, SandboxRequest, SandboxResponse,
+        SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
+    },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
+
 use hypervisor::Param;
-use kata_sys_util::spec::load_oci_spec;
+use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
@@ -21,12 +23,22 @@ use kata_types::{
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
 use netns_rs::NetNs;
+use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use resource::{
     cpu_mem::initial_size::InitialSizeManager,
     network::{dan_config_path, generate_netns_name},
 };
+use runtime_spec as spec;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
+use std::{
+    collections::HashMap,
+    ops::Deref,
+    path::{Path, PathBuf},
+    str::from_utf8,
+    sync::Arc,
+    time::SystemTime,
+};
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
@@ -86,10 +98,7 @@ impl RuntimeHandlerManagerInner {
     #[instrument]
     async fn init_runtime_handler(
         &mut self,
-        spec: &oci::Spec,
-        state: &oci::State,
-        network_env: SandboxNetworkEnv,
-        dns: Vec<String>,
+        sandbox_config: SandboxConfig,
         config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
     ) -> Result<()> {
@@ -111,6 +120,7 @@ impl RuntimeHandlerManagerInner {
                 self.msg_sender.clone(),
                 config.clone(),
                 init_size_manager,
+                sandbox_config,
             )
             .await
             .context("new runtime instance")?;
@@ -131,30 +141,16 @@ impl RuntimeHandlerManagerInner {
         let instance = Arc::new(runtime_instance);
         self.runtime_instance = Some(instance.clone());
 
-        // start sandbox
-        instance
-            .sandbox
-            .start(dns, spec, state, network_env)
-            .await
-            .context("start sandbox")?;
-
         Ok(())
     }
 
     #[instrument]
     async fn try_init(
         &mut self,
-        spec: &oci::Spec,
-        state: &oci::State,
+        mut sandbox_config: SandboxConfig,
+        spec: Option<&oci::Spec>,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
-        // return if runtime instance has init
-        if self.runtime_instance.is_some() {
-            return Ok(());
-        }
-
-        let mut dns: Vec<String> = vec![];
-
         #[cfg(feature = "linux")]
         LinuxContainer::init().context("init linux container")?;
         #[cfg(feature = "wasm")]
@@ -162,14 +158,8 @@ impl RuntimeHandlerManagerInner {
         #[cfg(feature = "virt")]
         VirtContainer::init().context("init virt container")?;
 
-        for m in &spec.mounts {
-            if m.destination == DEFAULT_GUEST_DNS_FILE {
-                let contents = fs::read_to_string(&m.source).await?;
-                dns = contents.split('\n').map(|e| e.to_string()).collect();
-            }
-        }
-
-        let mut config = load_config(spec, options).context("load config")?;
+        let mut config =
+            load_config(&sandbox_config.annotations, options).context("load config")?;
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -179,8 +169,14 @@ impl RuntimeHandlerManagerInner {
         //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
         //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
         //	a single container.
-        let mut initial_size_manager =
-            InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
+
+        let mut initial_size_manager = if let Some(spec) = spec {
+            InitialSizeManager::new(spec).context("failed to construct static resource manager")?
+        } else {
+            InitialSizeManager::new_from(&sandbox_config.annotations)
+                .context("failed to construct static resource manager")?
+        };
+
         initial_size_manager
             .setup_config(&mut config)
             .context("failed to setup static resource mgmt config")?;
@@ -188,53 +184,14 @@ impl RuntimeHandlerManagerInner {
         update_component_log_level(&config);
 
         let dan_path = dan_config_path(&config, &self.id);
-        let mut network_created = false;
         // set netns to None if we want no network for the VM
-        let netns = if config.runtime.disable_new_netns {
-            None
-        } else if dan_path.exists() {
-            info!(sl!(), "Do not create a netns due to DAN");
-            None
-        } else {
-            let mut netns_path = None;
-            if let Some(linux) = &spec.linux {
-                for ns in &linux.namespaces {
-                    if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
-                        continue;
-                    }
-                    // get netns path from oci spec
-                    if !ns.path.is_empty() {
-                        netns_path = Some(ns.path.clone());
-                    }
-                    // if we get empty netns from oci spec, we need to create netns for the VM
-                    else {
-                        let ns_name = generate_netns_name();
-                        let netns = NetNs::new(ns_name)?;
-                        let path = PathBuf::from(netns.path()).to_str().map(|s| s.to_string());
-                        info!(sl!(), "the netns path is {:?}", path);
-                        netns_path = path;
-                        network_created = true;
-                    }
-                    break;
-                }
-            }
-            netns_path
-        };
+        if config.runtime.disable_new_netns || dan_path.exists() {
+            sandbox_config.network_env.netns = None;
+        }
 
-        let network_env = SandboxNetworkEnv {
-            netns,
-            network_created,
-        };
-        self.init_runtime_handler(
-            spec,
-            state,
-            network_env,
-            dns,
-            Arc::new(config),
-            initial_size_manager,
-        )
-        .await
-        .context("init runtime handler")?;
+        self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
+            .await
+            .context("init runtime handler")?;
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
@@ -287,7 +244,8 @@ impl RuntimeHandlerManager {
             .context("failed to load the sandbox state")?;
 
         let config = if let Ok(spec) = load_oci_spec() {
-            load_config(&spec, &None).context("load config")?
+            let annotations = spec.annotations().clone().unwrap_or_default();
+            load_config(&annotations, &None).context("load config")?
         } else {
             TomlConfig::default()
         };
@@ -342,37 +300,122 @@ impl RuntimeHandlerManager {
         Ok(inner.get_kata_tracer())
     }
 
+    //init the sandbox for the normal task api
     #[instrument]
-    async fn try_init_runtime_instance(
+    async fn task_init_runtime_instance(
         &self,
         spec: &oci::Spec,
-        state: &oci::State,
+        state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
+        let mut inner: tokio::sync::RwLockWriteGuard<'_, RuntimeHandlerManagerInner> =
+            self.inner.write().await;
+
+        // return if runtime instance has init
+        if inner.runtime_instance.is_some() {
+            return Ok(());
+        }
+
+        let mut dns: Vec<String> = vec![];
+
+        let spec_mounts = spec.mounts().clone().unwrap_or_default();
+        for m in &spec_mounts {
+            if get_mount_path(&Some(m.destination().clone())) == DEFAULT_GUEST_DNS_FILE {
+                let contents = fs::read_to_string(&Path::new(&get_mount_path(m.source()))).await?;
+                dns = contents.split('\n').map(|e| e.to_string()).collect();
+            }
+        }
+
+        let mut network_created = false;
+        let mut netns = None;
+        if let Some(linux) = &spec.linux() {
+            let linux_namespaces = linux.namespaces().clone().unwrap_or_default();
+            for ns in &linux_namespaces {
+                if ns.typ() != oci::LinuxNamespaceType::Network {
+                    continue;
+                }
+                // get netns path from oci spec
+                if ns.path().is_some() {
+                    netns = ns.path().clone().map(|p| p.display().to_string());
+                }
+                // if we get empty netns from oci spec, we need to create netns for the VM
+                else {
+                    let ns_name = generate_netns_name();
+                    let raw_netns = NetNs::new(ns_name)?;
+                    let path = Some(PathBuf::from(raw_netns.path()).display().to_string());
+                    netns = path;
+                    network_created = true;
+                }
+                break;
+            }
+        }
+
+        let network_env = SandboxNetworkEnv {
+            netns,
+            network_created,
+        };
+
+        let sandbox_config = SandboxConfig {
+            sandbox_id: inner.id.clone(),
+            dns,
+            hostname: spec.hostname().clone().unwrap_or_default(),
+            network_env,
+            annotations: spec.annotations().clone().unwrap_or_default(),
+            hooks: spec.hooks().clone(),
+            state: state.clone(),
+        };
+
+        inner.try_init(sandbox_config, Some(spec), options).await
+    }
+
+    //init the sandbox for the sandbox api
+    #[instrument]
+    async fn sandbox_init_runtime_instance(&self, sandbox_config: SandboxConfig) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(spec, state, options).await
+        // return if runtime instance has init
+        if inner.runtime_instance.is_some() {
+            return Ok(());
+        }
+        inner.try_init(sandbox_config, None, &None).await
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
-    pub async fn handler_message(&self, req: Request) -> Result<Response> {
-        if let Request::CreateContainer(container_config) = req {
+    pub async fn handler_sandbox_message(&self, req: SandboxRequest) -> Result<SandboxResponse> {
+        if let SandboxRequest::CreateSandbox(sandbox_config) = req {
+            let config = sandbox_config.deref().clone();
+
+            self.sandbox_init_runtime_instance(config)
+                .await
+                .context("init sandboxed runtime")?;
+
+            Ok(SandboxResponse::CreateSandbox)
+        } else {
+            self.handler_sandbox_request(req)
+                .await
+                .context("handler request")
+        }
+    }
+
+    #[instrument(parent = &*(ROOTSPAN))]
+    pub async fn handler_task_message(&self, req: TaskRequest) -> Result<TaskResponse> {
+        if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
             let bundler_path = format!(
                 "{}/{}",
                 container_config.bundle,
-                oci::OCI_SPEC_CONFIG_FILE_NAME
+                spec::OCI_SPEC_CONFIG_FILE_NAME
             );
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
-            let state = oci::State {
-                version: spec.version.clone(),
+            let state = spec::State {
+                version: spec.version().clone(),
                 id: container_config.container_id.to_string(),
-                status: oci::ContainerState::Creating,
+                status: spec::ContainerState::Creating,
                 pid: 0,
                 bundle: container_config.bundle.clone(),
-                annotations: spec.annotations.clone(),
+                annotations: spec.annotations().clone().unwrap_or_default(),
             };
 
-            self.try_init_runtime_instance(&spec, &state, &container_config.options)
+            self.task_init_runtime_instance(&spec, &state, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self
@@ -380,20 +423,96 @@ impl RuntimeHandlerManager {
                 .await
                 .context("get runtime instance")?;
 
+            instance
+                .sandbox
+                .start()
+                .await
+                .context("start sandbox in task handler")?;
+
+            let container_id = container_config.container_id.clone();
             let shim_pid = instance
                 .container_manager
                 .create_container(container_config, spec)
                 .await
                 .context("create container")?;
 
-            Ok(Response::CreateContainer(shim_pid))
+            let container_manager = instance.container_manager.clone();
+            let process_id =
+                ContainerProcess::new(&container_id, "").context("create container process")?;
+            let pid = shim_pid.pid;
+            tokio::spawn(async move {
+                let result = instance
+                    .sandbox
+                    .wait_process(container_manager, process_id, pid)
+                    .await;
+                if let Err(e) = result {
+                    error!(sl!(), "sandbox wait process error: {:?}", e);
+                }
+            });
+
+            Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
-            self.handler_request(req).await.context("handler request")
+            self.handler_task_request(req)
+                .await
+                .context("handler TaskRequest")
+        }
+    }
+
+    pub async fn handler_sandbox_request(&self, req: SandboxRequest) -> Result<SandboxResponse> {
+        let instance = self
+            .get_runtime_instance()
+            .await
+            .context("get runtime instance")?;
+        let sandbox = instance.sandbox.clone();
+
+        match req {
+            SandboxRequest::CreateSandbox(req) => Err(anyhow!("Unreachable request {:?}", req)),
+            SandboxRequest::StartSandbox(_) => {
+                sandbox
+                    .start()
+                    .await
+                    .context("start sandbox in sandbox handler")?;
+                Ok(SandboxResponse::StartSandbox(StartSandboxInfo {
+                    pid: std::process::id(),
+                    create_time: Some(SystemTime::now()),
+                }))
+            }
+            SandboxRequest::Platform(_) => Ok(SandboxResponse::Platform(PlatformInfo {
+                os: std::env::consts::OS.to_string(),
+                architecture: std::env::consts::ARCH.to_string(),
+            })),
+            SandboxRequest::StopSandbox(_) => {
+                sandbox.stop().await.context("stop sandbox")?;
+
+                Ok(SandboxResponse::StopSandbox)
+            }
+            SandboxRequest::WaitSandbox(_) => {
+                let exit_info = sandbox.wait().await.context("wait sandbox")?;
+
+                Ok(SandboxResponse::WaitSandbox(exit_info))
+            }
+            SandboxRequest::SandboxStatus(_) => {
+                let status = sandbox.status().await?;
+
+                Ok(SandboxResponse::SandboxStatus(SandboxStatusInfo {
+                    sandbox_id: status.sandbox_id,
+                    pid: status.pid,
+                    state: status.state,
+                    created_at: None,
+                    exited_at: None,
+                }))
+            }
+            SandboxRequest::Ping(_) => Ok(SandboxResponse::Ping),
+            SandboxRequest::ShutdownSandbox(_) => {
+                sandbox.shutdown().await.context("shutdown sandbox")?;
+
+                Ok(SandboxResponse::ShutdownSandbox)
+            }
         }
     }
 
     #[instrument(parent = &(*ROOTSPAN))]
-    pub async fn handler_request(&self, req: Request) -> Result<Response> {
+    pub async fn handler_task_request(&self, req: TaskRequest) -> Result<TaskResponse> {
         let instance = self
             .get_runtime_instance()
             .await
@@ -402,24 +521,24 @@ impl RuntimeHandlerManager {
         let cm = instance.container_manager.clone();
 
         match req {
-            Request::CreateContainer(req) => Err(anyhow!("Unreachable request {:?}", req)),
-            Request::CloseProcessIO(process_id) => {
+            TaskRequest::CreateContainer(req) => Err(anyhow!("Unreachable TaskRequest {:?}", req)),
+            TaskRequest::CloseProcessIO(process_id) => {
                 cm.close_process_io(&process_id).await.context("close io")?;
-                Ok(Response::CloseProcessIO)
+                Ok(TaskResponse::CloseProcessIO)
             }
-            Request::DeleteProcess(process_id) => {
+            TaskRequest::DeleteProcess(process_id) => {
                 let resp = cm.delete_process(&process_id).await.context("do delete")?;
-                Ok(Response::DeleteProcess(resp))
+                Ok(TaskResponse::DeleteProcess(resp))
             }
-            Request::ExecProcess(req) => {
+            TaskRequest::ExecProcess(req) => {
                 cm.exec_process(req).await.context("exec")?;
-                Ok(Response::ExecProcess)
+                Ok(TaskResponse::ExecProcess)
             }
-            Request::KillProcess(req) => {
+            TaskRequest::KillProcess(req) => {
                 cm.kill_process(&req).await.context("kill process")?;
-                Ok(Response::KillProcess)
+                Ok(TaskResponse::KillProcess)
             }
-            Request::ShutdownContainer(req) => {
+            TaskRequest::ShutdownContainer(req) => {
                 if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
 
@@ -428,59 +547,67 @@ impl RuntimeHandlerManager {
                     let tracer = kata_tracer.lock().await;
                     tracer.trace_end();
                 }
-                Ok(Response::ShutdownContainer)
+                Ok(TaskResponse::ShutdownContainer)
             }
-            Request::WaitProcess(process_id) => {
+            TaskRequest::WaitProcess(process_id) => {
                 let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
                 if cm.is_sandbox_container(&process_id).await {
                     sandbox.stop().await.context("stop sandbox")?;
                 }
-                Ok(Response::WaitProcess(exit_status))
+                Ok(TaskResponse::WaitProcess(exit_status))
             }
-            Request::StartProcess(process_id) => {
+            TaskRequest::StartProcess(process_id) => {
                 let shim_pid = cm
                     .start_process(&process_id)
                     .await
                     .context("start process")?;
-                Ok(Response::StartProcess(shim_pid))
+
+                let pid = shim_pid.pid;
+                tokio::spawn(async move {
+                    let result = sandbox.wait_process(cm, process_id, pid).await;
+                    if let Err(e) = result {
+                        error!(sl!(), "sandbox wait process error: {:?}", e);
+                    }
+                });
+                Ok(TaskResponse::StartProcess(shim_pid))
             }
 
-            Request::StateProcess(process_id) => {
+            TaskRequest::StateProcess(process_id) => {
                 let state = cm
                     .state_process(&process_id)
                     .await
                     .context("state process")?;
-                Ok(Response::StateProcess(state))
+                Ok(TaskResponse::StateProcess(state))
             }
-            Request::PauseContainer(container_id) => {
+            TaskRequest::PauseContainer(container_id) => {
                 cm.pause_container(&container_id)
                     .await
                     .context("pause container")?;
-                Ok(Response::PauseContainer)
+                Ok(TaskResponse::PauseContainer)
             }
-            Request::ResumeContainer(container_id) => {
+            TaskRequest::ResumeContainer(container_id) => {
                 cm.resume_container(&container_id)
                     .await
                     .context("resume container")?;
-                Ok(Response::ResumeContainer)
+                Ok(TaskResponse::ResumeContainer)
             }
-            Request::ResizeProcessPTY(req) => {
+            TaskRequest::ResizeProcessPTY(req) => {
                 cm.resize_process_pty(&req).await.context("resize pty")?;
-                Ok(Response::ResizeProcessPTY)
+                Ok(TaskResponse::ResizeProcessPTY)
             }
-            Request::StatsContainer(container_id) => {
+            TaskRequest::StatsContainer(container_id) => {
                 let stats = cm
                     .stats_container(&container_id)
                     .await
                     .context("stats container")?;
-                Ok(Response::StatsContainer(stats))
+                Ok(TaskResponse::StatsContainer(stats))
             }
-            Request::UpdateContainer(req) => {
+            TaskRequest::UpdateContainer(req) => {
                 cm.update_container(req).await.context("update container")?;
-                Ok(Response::UpdateContainer)
+                Ok(TaskResponse::UpdateContainer)
             }
-            Request::Pid => Ok(Response::Pid(cm.pid().await.context("pid")?)),
-            Request::ConnectContainer(container_id) => Ok(Response::ConnectContainer(
+            TaskRequest::Pid => Ok(TaskResponse::Pid(cm.pid().await.context("pid")?)),
+            TaskRequest::ConnectContainer(container_id) => Ok(TaskResponse::ConnectContainer(
                 cm.connect_container(&container_id)
                     .await
                     .context("connect")?,
@@ -496,9 +623,10 @@ impl RuntimeHandlerManager {
 /// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
 #[instrument]
-fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
+fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
-    let annotation = Annotation::new(spec.annotations.clone());
+    let annotation = Annotation::new(an.clone());
+
     let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
         path
     } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {

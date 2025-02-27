@@ -4,14 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
-use async_trait::async_trait;
-
 use crate::types::{
     ContainerConfig, ContainerID, ContainerProcess, ExecProcessRequest, KillRequest,
     ProcessExitStatus, ProcessStateInfo, ResizePTYRequest, ShutdownRequest, StatsInfo,
     UpdateRequest, PID,
 };
+use anyhow::Result;
+use async_trait::async_trait;
+use oci_spec::runtime as oci;
 
 #[async_trait]
 pub trait ContainerManager: Send + Sync {

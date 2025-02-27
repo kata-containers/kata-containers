@@ -6,11 +6,13 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
-oci = { path = "../libs/oci" }
+runtime-spec = { path = "../libs/runtime-spec" }
+mem-agent = { path = "../mem-agent" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 rustjail = { path = "rustjail" }
 protocols = { path = "../libs/protocols", features = ["async", "with-serde"] }
 lazy_static = "1.3.0"
-ttrpc = { version = "0.8", features = ["async"], default-features = false }
+ttrpc = { version = "0.8.4", features = ["async"], default-features = false }
 protobuf = "3.2.0"
 libc = "0.2.58"
 nix = "0.24.2"
@@ -19,10 +21,10 @@ serde_json = "1.0.39"
 scan_fmt = "0.2.3"
 scopeguard = "1.0.0"
 thiserror = "1.0.26"
-regex = "1.10.4"
+regex = "1.10.5"
 serial_test = "0.5.1"
-oci-distribution = "0.10.0"
 url = "2.5.0"
+derivative = "2.2.0"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 safe-path = { path = "../libs/safe-path" }
@@ -34,8 +36,8 @@ async-recursion = "0.3.2"
 futures = "0.3.30"
 
 # Async runtime
-tokio = { version = "1.28.1", features = ["full"] }
-tokio-vsock = "0.3.1"
+tokio = { version = "1.39.0", features = ["full"] }
+tokio-vsock = "0.3.4"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 rtnetlink = "0.8.0"
@@ -57,12 +59,7 @@ cfg-if = "1.0.0"
 prometheus = { version = "0.13.0", features = ["process"] }
 procfs = "0.12.0"
 
-# anyhow is currently locked at 1.0.58 because:
-# - Versions between 1.0.59 - 1.0.76 have not been tested yet using Kata CI.
-#   However, those versions are passing "make test" for the Kata Agent.
-# - Versions 1.0.77 or newer fail during "make test" - see
-#   https://github.com/kata-containers/kata-containers/issues/9538
-anyhow = "=1.0.58"
+anyhow = "1"
 
 cgroups = { package = "cgroups-rs", version = "0.3.3" }
 
@@ -81,11 +78,17 @@ strum = "0.26.2"
 strum_macros = "0.26.2"
 
 # Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "ca6b438", default-features = true, optional = true }
-openssl = { version = "0.10.54", features = ["vendored"], optional = true }
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "514c561d933cb11a0f1628621a0b930157af76cd", default-features = false, optional = true }
 
 # Agent Policy
-regorus = { version = "0.1.4", default-features = false, features = ["arc", "regex"], optional = true }
+regorus = { version = "0.2.6", default-features = false, features = [
+    "arc",
+    "regex",
+    "std",
+], optional = true }
+cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
+json-patch = "2.0.0"
+kata-agent-policy = { path = "policy" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
@@ -95,7 +98,7 @@ rstest = "0.18.0"
 async-std = { version = "1.12.0", features = ["attributes"] }
 
 [workspace]
-members = ["rustjail"]
+members = ["rustjail", "policy"]
 
 [profile.release]
 lto = true
@@ -106,7 +109,7 @@ default-pull = ["guest-pull"]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["regorus"]
-guest-pull = ["image-rs", "openssl"]
+guest-pull = ["image-rs/kata-cc-rustls-tls"]
 
 [[bin]]
 name = "kata-agent"

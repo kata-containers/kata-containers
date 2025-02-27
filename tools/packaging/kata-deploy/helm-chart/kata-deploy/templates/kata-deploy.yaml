@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  selector:
+    matchLabels:
+{{- if .Values.env.multiInstallSuffix }}
+      name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+      name: {{ .Chart.Name }}
+{{- end }}
+  template:
+    metadata:
+      labels:
+{{- if .Values.env.multiInstallSuffix }}
+        name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+        name: {{ .Chart.Name }}
+{{- end }}
+    spec:
+{{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 6 }}
+{{- end }}
+{{- if .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+      serviceAccountName: {{ .Chart.Name }}-sa
+{{- end }}
+      hostPID: true
+      containers:
+      - name: kube-kata
+        image: {{ .Values.image.reference }}:{{ default .Chart.AppVersion .Values.image.tag }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: DEBUG
+          value: {{ .Values.env.debug | quote }}
+        - name: SHIMS
+          value: {{ .Values.env.shims | quote }}
+        - name: DEFAULT_SHIM
+          value: {{ .Values.env.defaultShim | quote }}
+        - name: CREATE_RUNTIMECLASSES
+          value: {{ .Values.env.createRuntimeClasses | quote }}
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: {{ .Values.env.createDefaultRuntimeClass | quote }}
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS
+          value: {{ .Values.env.allowedHypervisorAnnotations | quote }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING
+          value: {{ .Values.env.snapshotterHandlerMapping | quote }}
+        - name: AGENT_HTTPS_PROXY
+          value: {{ .Values.env.agentHttpsProxy | quote }}
+        - name: AGENT_NO_PROXY
+          value: {{ .Values.env.agentNoProxy | quote }}
+        - name: PULL_TYPE_MAPPING
+          value: {{ .Values.env.pullTypeMapping | quote }}
+        - name: INSTALLATION_PREFIX
+          value: {{ .Values.env.installationPrefix | quote }}
+        - name: MULTI_INSTALL_SUFFIX
+          value: {{ .Values.env.multiInstallSuffix | quote }}
+{{- with .Values.env.hostOS }}
+        - name: HOST_OS
+          value: {{ . | quote }}
+{{- end }}
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: crio-conf
+          mountPath: /etc/crio/
+        - name: containerd-conf
+          mountPath: /etc/containerd/
+        - name: host
+          mountPath: /host/
+      volumes:
+      - name: crio-conf
+        hostPath:
+          path: /etc/crio/
+      - name: containerd-conf
+        hostPath:
+          path: '{{- template "containerdConfPath" .Values }}'
+      - name: host
+        hostPath:
+          path: /
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate

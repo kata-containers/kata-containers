@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ARG RUST_TOOLCHAIN
 
 COPY install_libseccomp.sh /usr/bin/install_libseccomp.sh
@@ -26,16 +26,17 @@ RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX /opt
 RUN apt-get update && \
 	apt-get --no-install-recommends -y install \
 		ca-certificates \
+		clang \
 		curl \
 		g++ \
 		gcc \
+		libprotobuf-dev \
 		libssl-dev \
 		make \
 		musl-tools \
 		openssl \
 		perl \
-		protobuf-compiler \
-		clang && \
+		protobuf-compiler && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 
@@ -50,6 +51,3 @@ RUN ARCH=$(uname -m); \
 	        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
     	esac; \
 	rustup target add "${rust_arch}-unknown-linux-${libc}"
-
-# aarch64 requires this name -- link for all
-RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"

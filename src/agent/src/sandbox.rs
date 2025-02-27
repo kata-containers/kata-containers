@@ -9,7 +9,7 @@ use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::os::fd::FromRawFd;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
@@ -24,6 +24,7 @@ use nix::fcntl::{self, OFlag};
 use nix::sched::{setns, unshare, CloneFlags};
 use nix::sys::stat::Mode;
 use oci::{Hook, Hooks};
+use oci_spec::runtime as oci;
 use protocols::agent::{OnlineCPUMemRequest, SharedMount};
 use regex::Regex;
 use rustjail::cgroups::{self as rustjail_cgroups, DevicesCgroupInfo};
@@ -319,16 +320,21 @@ impl Sandbox {
         let guest_cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
 
         for (_, ctr) in self.containers.iter() {
-            if let Some(spec) = ctr.config.spec.as_ref() {
-                if let Some(linux) = spec.linux.as_ref() {
-                    if let Some(resources) = linux.resources.as_ref() {
-                        if let Some(cpus) = resources.cpu.as_ref() {
-                            info!(self.logger, "updating {}", ctr.id.as_str());
-                            ctr.cgroup_manager
-                                .update_cpuset_path(guest_cpuset.as_str(), &cpus.cpus)?;
-                        }
-                    }
+            match ctr
+                .config
+                .spec
+                .as_ref()
+                .and_then(|spec| spec.linux().as_ref())
+                .and_then(|linux| linux.resources().as_ref())
+                .and_then(|resources| resources.cpu().as_ref())
+                .and_then(|cpus| cpus.cpus().as_ref())
+            {
+                Some(cpu_set) => {
+                    info!(self.logger, "updating {}", ctr.id.as_str());
+                    ctr.cgroup_manager
+                        .update_cpuset_path(guest_cpuset.as_str(), cpu_set)?;
                 }
+                None => continue,
             }
         }
 
@@ -339,15 +345,16 @@ impl Sandbox {
     pub fn add_hooks(&mut self, dir: &str) -> Result<()> {
         let mut hooks = Hooks::default();
         if let Ok(hook) = self.find_hooks(dir, "prestart") {
-            hooks.prestart = hook;
+            hooks.set_prestart(Some(hook));
         }
         if let Ok(hook) = self.find_hooks(dir, "poststart") {
-            hooks.poststart = hook;
+            hooks.set_poststart(Some(hook));
         }
         if let Ok(hook) = self.find_hooks(dir, "poststop") {
-            hooks.poststop = hook;
+            hooks.set_poststop(Some(hook));
         }
         self.hooks = Some(hooks);
+
         Ok(())
     }
 
@@ -365,16 +372,13 @@ impl Sandbox {
             }
 
             let name = entry.file_name();
-            let hook = Hook {
-                path: Path::new(hook_path)
-                    .join(hook_type)
-                    .join(&name)
-                    .to_str()
-                    .unwrap()
-                    .to_owned(),
-                args: vec![name.to_str().unwrap().to_owned(), hook_type.to_owned()],
-                ..Default::default()
-            };
+            let mut hook = oci::Hook::default();
+            hook.set_path(PathBuf::from(hook_path).join(hook_type).join(&name));
+            hook.set_args(Some(vec![
+                name.to_str().unwrap().to_owned(),
+                hook_type.to_owned(),
+            ]));
+
             info!(
                 self.logger,
                 "found {} hook {:?} mode {:o}",
@@ -382,6 +386,7 @@ impl Sandbox {
                 hook,
                 entry.metadata()?.permissions().mode()
             );
+
             hooks.push(hook);
         }
 
@@ -662,7 +667,8 @@ mod tests {
     use crate::mount::baremount;
     use anyhow::{anyhow, Error};
     use nix::mount::MsFlags;
-    use oci::{Linux, LinuxDeviceCgroup, LinuxResources, Root, Spec};
+    use oci::{Linux, LinuxBuilder, LinuxDeviceCgroup, LinuxResources, Root, Spec, SpecBuilder};
+    use oci_spec::runtime as oci;
     use rustjail::container::LinuxContainer;
     use rustjail::process::Process;
     use rustjail::specconv::CreateOpts;
@@ -836,21 +842,15 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        let root = Root {
-            path: String::from("/"),
-            ..Default::default()
-        };
+        let mut root = Root::default();
+        root.set_path(PathBuf::from("/"));
 
-        let linux_resources = LinuxResources {
-            devices: vec![LinuxDeviceCgroup {
-                allow: true,
-                r#type: String::new(),
-                major: None,
-                minor: None,
-                access: String::from("rwm"),
-            }],
-            ..Default::default()
-        };
+        let mut cgroup = LinuxDeviceCgroup::default();
+        cgroup.set_allow(true);
+        cgroup.set_access(Some(String::from("rwm")));
+
+        let mut linux_resources = LinuxResources::default();
+        linux_resources.set_devices(Some(vec![cgroup]));
 
         let cgroups_path = format!(
             "/{}/dummycontainer{}",
@@ -858,15 +858,17 @@ mod tests {
             since_the_epoch.as_millis()
         );
 
-        let spec = Spec {
-            linux: Some(Linux {
-                cgroups_path,
-                resources: Some(linux_resources),
-                ..Default::default()
-            }),
-            root: Some(root),
-            ..Default::default()
-        };
+        let spec = SpecBuilder::default()
+            .linux(
+                LinuxBuilder::default()
+                    .cgroups_path(cgroups_path)
+                    .resources(linux_resources)
+                    .build()
+                    .unwrap(),
+            )
+            .root(root)
+            .build()
+            .unwrap();
 
         CreateOpts {
             cgroup_name: "".to_string(),
@@ -977,9 +979,18 @@ mod tests {
 
         assert!(s.add_hooks(tmpdir_path).is_ok());
         assert!(s.hooks.is_some());
-        assert!(s.hooks.as_ref().unwrap().prestart.len() == 1);
-        assert!(s.hooks.as_ref().unwrap().poststart.is_empty());
-        assert!(s.hooks.as_ref().unwrap().poststop.is_empty());
+        assert!(s.hooks.as_ref().unwrap().prestart().clone().unwrap().len() == 1);
+        // As we don't create poststart/xxx, the poststart will be none
+        assert!(s.hooks.as_ref().unwrap().poststart().clone().is_none());
+        // poststop path is created but as the problem of file perm is rejected.
+        assert!(s
+            .hooks
+            .as_ref()
+            .unwrap()
+            .poststop()
+            .clone()
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]
@@ -1054,7 +1065,7 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
 
-        let test_pids = [std::i32::MIN, -1, 0, 1, std::i32::MAX];
+        let test_pids = [i32::MIN, -1, 0, 1, i32::MAX];
 
         for test_pid in test_pids {
             let mut s = Sandbox::new(&logger).unwrap();

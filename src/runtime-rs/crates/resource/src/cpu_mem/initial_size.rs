@@ -4,14 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 
 use anyhow::{Context, Result};
-
 use kata_types::{
     annotations::Annotation, config::TomlConfig, container::ContainerType,
     cpu::LinuxContainerCpuResources, k8s::container_type,
 };
+use oci_spec::runtime as oci;
 
 // initial resource that InitialSizeManager needs, this is the spec for the
 // sandbox/container's workload
@@ -20,6 +20,34 @@ struct InitialSize {
     vcpu: u32,
     mem_mb: u32,
     orig_toml_default_mem: u32,
+}
+
+// generate initial resource(vcpu and memory in MiB) from annotations
+impl TryFrom<&HashMap<String, String>> for InitialSize {
+    type Error = anyhow::Error;
+    fn try_from(an: &HashMap<String, String>) -> Result<Self> {
+        let mut vcpu: u32 = 0;
+
+        let annotation = Annotation::new(an.clone());
+        let (period, quota, memory) =
+            get_sizing_info(annotation).context("failed to get sizing info")?;
+        let mut cpu = oci::LinuxCpu::default();
+        cpu.set_period(Some(period));
+        cpu.set_quota(Some(quota));
+
+        // although it may not be actually a linux container, we are only using the calculation inside
+        // LinuxContainerCpuResources::try_from to generate our vcpu number
+        if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
+            vcpu = get_nr_vcpu(&cpu_resource);
+        }
+        let mem_mb = convert_memory_to_mb(memory);
+
+        Ok(Self {
+            vcpu,
+            mem_mb,
+            orig_toml_default_mem: 0,
+        })
+    }
 }
 
 // generate initial resource(vcpu and memory in MiB) from spec's information
@@ -31,35 +59,32 @@ impl TryFrom<&oci::Spec> for InitialSize {
         match container_type(spec) {
             // podsandbox, from annotation
             ContainerType::PodSandbox => {
-                let annotation = Annotation::new(spec.annotations.clone());
-                let (period, quota, memory) =
-                    get_sizing_info(annotation).context("failed to get sizing info")?;
-                let cpu = oci::LinuxCpu {
-                    period: Some(period),
-                    quota: Some(quota),
-                    ..Default::default()
-                };
-                // although it may not be actually a linux container, we are only using the calculation inside
-                // LinuxContainerCpuResources::try_from to generate our vcpu number
-                if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
-                    vcpu = get_nr_vcpu(&cpu_resource);
-                }
-                mem_mb = convert_memory_to_mb(memory);
+                let spec_annos = spec.annotations().clone().unwrap_or_default();
+                return InitialSize::try_from(&spec_annos);
             }
             // single container, from container spec
             _ => {
-                if let Some(linux) = &spec.linux {
-                    if let Some(resource) = &linux.resources {
-                        if let Some(cpu) = &resource.cpu {
-                            if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(cpu) {
-                                vcpu = get_nr_vcpu(&cpu_resource);
-                            }
-                        }
-                        if let Some(mem) = &resource.memory {
-                            let memory = mem.limit.unwrap_or(0);
-                            mem_mb = convert_memory_to_mb(memory);
-                        }
+                if let Some(resource) = spec
+                    .linux()
+                    .as_ref()
+                    .and_then(|linux| linux.resources().as_ref())
+                {
+                    // cpu resource
+                    if let Some(Ok(cpu_resource)) = resource
+                        .cpu()
+                        .as_ref()
+                        .map(LinuxContainerCpuResources::try_from)
+                    {
+                        vcpu = get_nr_vcpu(&cpu_resource);
                     }
+
+                    // memory resource
+                    mem_mb = resource
+                        .memory()
+                        .as_ref()
+                        .and_then(|mem| mem.limit())
+                        .map(convert_memory_to_mb)
+                        .unwrap_or(0);
                 }
             }
         }
@@ -95,6 +120,13 @@ impl InitialSizeManager {
     pub fn new(spec: &oci::Spec) -> Result<Self> {
         Ok(Self {
             resource: InitialSize::try_from(spec).context("failed to construct static resource")?,
+        })
+    }
+
+    pub fn new_from(annotation: &HashMap<String, String>) -> Result<Self> {
+        Ok(Self {
+            resource: InitialSize::try_from(annotation)
+                .context("failed to construct static resource")?,
         })
     }
 
@@ -158,8 +190,8 @@ fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
 mod tests {
     use super::*;
     use kata_types::annotations::cri_containerd;
+    use oci_spec::runtime::{LinuxBuilder, LinuxMemory, LinuxMemoryBuilder, LinuxResourcesBuilder};
     use std::collections::HashMap;
-
     #[derive(Clone)]
     struct InputData {
         period: Option<u64>,
@@ -213,27 +245,25 @@ mod tests {
 
         // run tests
         for (i, d) in tests.iter().enumerate() {
-            let spec = oci::Spec {
-                annotations: HashMap::from([
-                    (
-                        cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
-                        cri_containerd::SANDBOX.to_string(),
-                    ),
-                    (
-                        cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
-                        d.input.period.map_or(String::new(), |v| format!("{}", v)),
-                    ), // CPU period
-                    (
-                        cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
-                        d.input.quota.map_or(String::new(), |v| format!("{}", v)),
-                    ), // CPU quota
-                    (
-                        cri_containerd::SANDBOX_MEM_KEY.to_string(),
-                        d.input.memory.map_or(String::new(), |v| format!("{}", v)),
-                    ), // memory in bytes
-                ]),
-                ..Default::default()
-            };
+            let mut spec = oci::Spec::default();
+            spec.set_annotations(Some(HashMap::from([
+                (
+                    cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    cri_containerd::SANDBOX.to_string(),
+                ),
+                (
+                    cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                    d.input.period.map_or(String::new(), |v| format!("{}", v)),
+                ), // CPU period
+                (
+                    cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                    d.input.quota.map_or(String::new(), |v| format!("{}", v)),
+                ), // CPU quota
+                (
+                    cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                    d.input.memory.map_or(String::new(), |v| format!("{}", v)),
+                ), // memory in bytes
+            ])));
 
             let initial_size = InitialSize::try_from(&spec);
             assert!(
@@ -263,28 +293,31 @@ mod tests {
 
         // run tests
         for (i, d) in tests.iter().enumerate() {
-            let spec = oci::Spec {
-                annotations: HashMap::from([(
-                    cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
-                    cri_containerd::CONTAINER.to_string(),
-                )]),
-                linux: Some(oci::Linux {
-                    resources: Some(oci::LinuxResources {
-                        cpu: Some(oci::LinuxCpu {
-                            period: d.input.period,
-                            quota: d.input.quota,
-                            ..Default::default()
-                        }),
-                        memory: Some(oci::LinuxMemory {
-                            limit: d.input.memory,
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
+            let mut spec = oci::Spec::default();
+            spec.set_annotations(Some(HashMap::from([(
+                cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                cri_containerd::CONTAINER.to_string(),
+            )])));
+
+            let mut linux_cpu = oci::LinuxCpu::default();
+            linux_cpu.set_period(d.input.period);
+            linux_cpu.set_quota(d.input.quota);
+            let mut linux_mem: LinuxMemory = LinuxMemory::default();
+            if let Some(limit) = d.input.memory {
+                linux_mem = LinuxMemoryBuilder::default().limit(limit).build().unwrap();
             };
+
+            let linux = LinuxBuilder::default()
+                .resources(
+                    LinuxResourcesBuilder::default()
+                        .cpu(linux_cpu)
+                        .memory(linux_mem)
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .unwrap();
+            spec.set_linux(Some(linux));
 
             let initial_size = InitialSize::try_from(&spec);
             assert!(

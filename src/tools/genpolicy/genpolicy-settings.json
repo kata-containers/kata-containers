@@ -189,6 +189,18 @@
                 "rprivate",
                 "ro"
             ]
+        },
+        "image_volume": {
+            "mount_type": "bind",
+            "mount_source": "$(sfprefix)",
+            "driver": "local",
+            "source": "local",
+            "fstype": "bind",
+            "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+            ]
         }
     },
     "mount_destinations": [
@@ -201,8 +213,28 @@
         "/var/run/secrets/kubernetes.io/serviceaccount",
         "/var/run/secrets/azure/tokens"
     ],
+    "sandbox": {
+        "storages": [
+            {
+                "driver": "ephemeral",
+                "driver_options": [],
+                "source": "shm",
+                "fstype": "tmpfs",
+                "options": [
+                    "noexec",
+                    "nosuid",
+                    "nodev",
+                    "mode=1777",
+                    "size=67108864"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/shm",
+                "fs_group": null
+            }
+        ]
+    },
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
+        "mount_source_cpath": "/run/kata-containers/shared/containers",
         "sfprefix": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
         "ip_p": "[0-9]{1,5}",
         "ipv4_a": "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])",
@@ -273,7 +305,6 @@
         "oci_version": "1.1.0"
     },
     "cluster_config": {
-        "default_namespace": "default",
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6"
     },
     "request_defaults": {
@@ -288,21 +319,22 @@
                 "^$(svc_name)_SERVICE_PORT=$(ip_p)$",
                 "^$(svc_name)_SERVICE_PORT_$(dns_label)=$(ip_p)$",
                 "^$(svc_name)_PORT=tcp://$(ipv4_a):$(ip_p)$",
-                "^AZURE_CLIENT_ID=[A-Fa-f0-9-]+$",
-                "^AZURE_TENANT_ID=[A-Fa-f0-9-]+$",
+                "^AZURE_CLIENT_ID=[A-Fa-f0-9-]*$",
+                "^AZURE_TENANT_ID=[A-Fa-f0-9-]*$",
                 "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",
                 "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$"
             ]
         },
         "CopyFileRequest": [
-            "^$(cpath)/"
+            "$(sfprefix)"
         ],
         "ExecProcessRequest": {
-            "commands": [],
+            "allowed_commands": [],
             "regex": []
         },
         "CloseStdinRequest": false,
         "ReadStreamRequest": false,
+        "UpdateEphemeralMountsRequest": false,
         "WriteStreamRequest": false
     }
 }

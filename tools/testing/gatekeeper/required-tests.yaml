@@ -1,0 +1,198 @@
+required_tests:
+  # Always required tests
+  - Commit Message Check / Commit Message Check
+  - Pull request WIP checks / WIP Check
+  - Darwin tests / test
+  # TODO: cargo-deny-runner.yaml not yet treated as conditional
+  - Cargo Crates Check Runner / cargo-deny-runner
+
+
+required_regexps:
+  # Always required regexps
+
+paths:
+  # Mapping of path (python) regexps to set-of-tests (sort by order of importance)
+  # CI
+  - "^ci/openshift-ci/": []
+  - "^\\.github/workflows/static-checks": ["static"]
+  - "^\\.github/workflows/": []
+  # TODO: Expand filters
+  # Documentation
+  #- "\\.rst$": ["build"]
+  #- "\\.md$": ["build"]
+  # Sources
+  #- "^src/": ["static", "build", "test"]
+
+mapping:
+  # Mapping of set-of-tests to required test names and/or test name regexps
+  #
+  # Format is (test name includes workflow!):
+  # {set-of-tests-label}:
+  #   names:
+  #     - {required-test-name1}
+  #     - {required-test-name2}
+  #   regexps: "{python-regular-expression-matching-required-tests}|{another-regexp}|{yet-another-regexp}"
+  #   required-labels:
+  #     - {label-required-to-run-those-tests}
+  #
+  # TODO: Add support for "depends" to automatically add dependant set-of-tests
+  #       (eg. "build" is required for "test")
+  # TODO: Add support for "ignore:" to remove individual tests from regexps
+  test:
+    # Checks the basic functional tests work
+    names:
+      # ci-on-push.yaml (ci.yaml)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, qemu-runtime-rs)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, qemu-runtime-rs)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-s390x / run-cri-containerd (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, normal, yes)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, containerd, yes)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, oci-distribution, yes)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, clh, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, clh, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, cloud-hypervisor, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, cloud-hypervisor, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, dragonball, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, dragonball, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (devmapper, qemu, kubeadm)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
+      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / Kata Setup
+      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (qemu)
+    required-labels:
+      - ok-to-test
+  build:
+    # Checks that the kata-containers static tarball is created
+    names:
+      # ci-on-push.yaml (ci.yaml)
+      - Kata Containers CI / kata-containers-ci-on-push / build-and-publish-tee-confidential-unencrypted-image
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (agent-ctl, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (cloud-hypervisor-glibc, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (cloud-hypervisor, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (firecracker, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kata-ctl, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-dragonball-experimental, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-nvidia-gpu, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (nydus, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf-sev, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu-snp-experimental, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (trace-forwarder, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (virtiofsd, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / create-kata-tarball
+      - Kata Containers CI / kata-containers-ci-on-push / publish-kata-deploy-payload-amd64 / kata-payload
+    required-labels:
+      - ok-to-test
+  static:
+    # Checks that static checks are passing
+    names:
+      # static-checks.yaml (build-checks.yaml)
+      - Static checks / build-checks / check (agent-ctl, make check)
+      - Static checks / build-checks / check (agent-ctl, make test)
+      - Static checks / build-checks / check (agent-ctl, make vendor)
+      - Static checks / build-checks / check (agent-ctl, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (agent, make check)
+      - Static checks / build-checks / check (agent, make test)
+      - Static checks / build-checks / check (agent, make vendor)
+      - Static checks / build-checks / check (agent, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (dragonball, make check)
+      - Static checks / build-checks / check (dragonball, make test)
+      - Static checks / build-checks / check (dragonball, make vendor)
+      - Static checks / build-checks / check (dragonball, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (genpolicy, make check)
+      - Static checks / build-checks / check (genpolicy, make test)
+      - Static checks / build-checks / check (genpolicy, make vendor)
+      - Static checks / build-checks / check (genpolicy, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (kata-ctl, make check)
+      - Static checks / build-checks / check (kata-ctl, make test)
+      - Static checks / build-checks / check (kata-ctl, make vendor)
+      - Static checks / build-checks / check (kata-ctl, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (runtime-rs, make check)
+      - Static checks / build-checks / check (runtime-rs, make test)
+      - Static checks / build-checks / check (runtime-rs, make vendor)
+      - Static checks / build-checks / check (runtime-rs, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (runtime, make check)
+      - Static checks / build-checks / check (runtime, make test)
+      - Static checks / build-checks / check (runtime, make vendor)
+      - Static checks / build-checks / check (runtime, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (trace-forwarder, make check)
+      - Static checks / build-checks / check (trace-forwarder, make test)
+      - Static checks / build-checks / check (trace-forwarder, make vendor)
+      - Static checks / build-checks / check (trace-forwarder, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks-depending-on-kvm (runtime-rs)
+      - Static checks / check-kernel-config-version
+      - Static checks / static-checks (make static-checks)
+      # static-checks-self-hosted.yaml
+      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (agent, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (agent, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (agent, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (agent, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (dragonball, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (dragonball, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (dragonball, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (dragonball, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (runtime, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, make check)
+      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, make test)
+      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, make vendor)
+      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, sudo -E PATH="$PATH" make test)
+    required-labels:
+      - ok-to-test
