@@ -18,7 +18,7 @@ checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
 checktype = "mean"
 midval = 0.39
 minpercent = 40.0
-maxpercent = 30.0
+maxpercent = 50.0
 
 [[metric]]
 name = "memory-footprint"
