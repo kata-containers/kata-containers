@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"regexp"
+	"strconv"
 
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -436,4 +438,18 @@ func HasOptionPrefix(options []string, prefix string) bool {
 		}
 	}
 	return false
+}
+
+
+func (mount *Mount) getMountSize() (string, error) {
+	for _, opt := range mount.Options {
+		if strings.HasPrefix(opt, "size") {
+			// Get the size mount option
+			sizeOptionSlice := strings.Split(opt, "=")
+			sizeValueIdx := 1
+			size := sizeOptionSlice[sizeValueIdx]
+			return size, nil
+		}
+	}
+	return "", nil
 }
