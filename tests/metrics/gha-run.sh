@@ -114,8 +114,6 @@ function run_test_latency() {
 	info "Running Latency test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/network/latency_kubernetes/latency-network.sh
-
-	check_metrics
 }
 
 function main() {
@@ -132,6 +130,7 @@ function main() {
 		run-test-fio) run_test_fio ;;
 		run-test-iperf) run_test_iperf ;;
 		run-test-latency) run_test_latency ;;
+		check-metrics) check_metrics;;
 		*) >&2 die "Invalid argument: ${action}" ;;
 	esac
 }

@@ -66,28 +66,47 @@ jobs:
         run: bash tests/metrics/gha-run.sh enabling-hypervisor
 
       - name: run launch times test
+        timeout-minutes: 15
+        continue-on-error: true
         run: bash tests/metrics/gha-run.sh run-test-launchtimes
 
       - name: run memory foot print test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-memory-usage
 
       - name: run memory usage inside container test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-memory-usage-inside-container
 
       - name: run blogbench test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-blogbench
 
       - name: run tensorflow test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-tensorflow
 
       - name: run fio test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-fio
 
       - name: run iperf test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-iperf
 
       - name: run latency test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-latency
+
+      - name: check metrics
+        run:  bash tests/metrics/gha-run.sh check-metrics
 
       - name: make metrics tarball ${{ matrix.vmm }}
         run: bash tests/metrics/gha-run.sh make-tarball-results
@@ -101,5 +120,6 @@ jobs:
           if-no-files-found: error
 
       - name: Delete kata-deploy
+        timeout-minutes: 10
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-kubeadm
