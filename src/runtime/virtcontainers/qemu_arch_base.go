@@ -183,6 +183,7 @@ type qemuArchBase struct {
 	kernelParamsDebug    []Param
 	kernelParams         []Param
 	Bridges              []types.Bridge
+	numaNodes            []types.NUMANode
 	memoryOffset         uint64
 	networkIndex         int
 	// Exclude from lint checking for it is ultimately only used in architecture-specific code
@@ -321,12 +322,20 @@ func (q *qemuArchBase) bridges(number uint32) {
 }
 
 func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP {
+	numNUMA := uint32(len(q.numaNodes))
+
+	numSockets := numNUMA
+	if numSockets == 0 {
+		numSockets = maxvcpus
+	}
+
 	smp := govmmQemu.SMP{
 		CPUs:    vcpus,
-		Sockets: maxvcpus,
-		Cores:   defaultCores,
+		Sockets: numSockets,
+		Cores:   maxvcpus / numSockets / defaultThreads,
 		Threads: defaultThreads,
 		MaxCPUs: maxvcpus,
+		NumNUMA: numNUMA,
 	}
 
 	return smp
