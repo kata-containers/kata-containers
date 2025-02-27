@@ -433,8 +433,8 @@ function cleanup() {
 		return
 	fi
 
-	# In case of canceling workflow manually, 'run_kubernetes_tests.sh' continues running and triggers new tests, 
-	# resulting in the CI being in an unexpected state. So we need kill all running test scripts before cleaning up the node. 
+	# In case of canceling workflow manually, 'run_kubernetes_tests.sh' continues running and triggers new tests,
+	# resulting in the CI being in an unexpected state. So we need kill all running test scripts before cleaning up the node.
 	# See issue https://github.com/kata-containers/kata-containers/issues/9980
 	delete_test_runners	|| true
 	# Switch back to the default namespace and delete the tests one
@@ -594,6 +594,7 @@ function main() {
 		collect-artifacts) collect_artifacts ;;
 		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
+		cleanup-kubeadm) cleanup "kubeadm" ;;
 		cleanup-sev) cleanup "sev" ;;
 		cleanup-snp) cleanup "snp" ;;
 		cleanup-tdx) cleanup "tdx" ;;
