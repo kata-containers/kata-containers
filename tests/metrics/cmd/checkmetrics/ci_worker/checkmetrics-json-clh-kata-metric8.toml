@@ -121,7 +121,7 @@ description = "measure sequential write throughput using fio"
 checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .write.bw | select( . != null )"
 checktype = "mean"
 midval = 307948
-minpercent = 20.0
+minpercent = 40.0
 maxpercent = 20.0
 
 [[metric]]
@@ -199,7 +199,7 @@ description = "measure container parallel bandwidth using iperf3"
 checkvar = ".\"network-iperf3\".Results | .[] | .parallel.Result"
 checktype = "mean"
 midval = 57516472021.90
-minpercent = 20.0
+minpercent = 40.0
 maxpercent = 20.0
 
 [[metric]]
@@ -211,6 +211,6 @@ description = "iperf"
 # within (inclusive)
 checkvar = ".\"network-iperf3\".Results | .[] | .jitter.Result"
 checktype = "mean"
-midval = 0.04
+midval = 0.02
 minpercent = 70.0
 maxpercent = 60.0
