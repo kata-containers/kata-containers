@@ -2410,20 +2410,18 @@ func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, erro
 	tmpfsMounts := []*grpc.Storage{}
 	for _, c := range s.containers {
 		for _, mount := range c.mounts {
-			// if a tmpfs ephemeral mount is present
-			// update its size to occupy the entire sandbox's memory
 			if mount.Type == KataEphemeralDevType {
-				sizeLimited := false
-				for _, opt := range mount.Options {
-					if strings.HasPrefix(opt, "size") {
-						sizeLimited = true
-					}
-				}
-				if sizeLimited { // do not resize sizeLimited emptyDirs
-					continue
+				mountSize, err := mount.getMountSize()
+				if err != nil {
+					return nil, err
 				}
 
-				mountOptions := []string{"remount", fmt.Sprintf("size=%dM", memoryMB)}
+				// if tmpfs size isn't limited, it's size should be the total available memory
+				if mountSize == "" {
+					mountSize = fmt.Sprintf("%dM", memoryMB)
+				}
+
+				mountOptions := []string{"remount", fmt.Sprintf("size=%s", mountSize)}
 
 				origin_src := mount.Source
 				stat := syscall.Stat_t{}
