@@ -10,10 +10,14 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
+	diskfs "github.com/diskfs/go-diskfs"
+	"github.com/diskfs/go-diskfs/filesystem/squashfs"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
@@ -769,4 +773,50 @@ func TestQemuStartSandbox(t *testing.T) {
 
 	err = q.StartVM(context.Background(), 10)
 	assert.Error(err)
+}
+
+func TestPrepareInitdataSquashFsImage(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{
+			"create an initdata image",
+			"some content",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			imageDir := t.TempDir()
+			imagePath := path.Join(imageDir, "initdata.img")
+			err := prepareInitdataSquashFsImage(tt.content, imagePath)
+			if err != nil {
+				t.Errorf("prepareInitdataSquashFsImage() error = %v", err)
+			}
+			defer os.Remove(imagePath)
+
+			disk, err := diskfs.Open(imagePath, diskfs.WithSectorSize(diskfs.SectorSize4k))
+			if err != nil {
+				t.Errorf("failed to open initdata image, error = %v", err)
+			}
+			fsr, err := squashfs.Read(disk.Backend, disk.Size, 0, disk.PhysicalBlocksize)
+			if err != nil {
+				t.Errorf("failed to open initdata image with squashfs, error = %v", err)
+			}
+
+			f, err := fsr.OpenFile("/.kata.initdata.toml", os.O_RDONLY)
+			if err != nil {
+				t.Errorf("failed to read initdata toml from initdata image, error = %v", err)
+			}
+
+			content, err := io.ReadAll(f)
+			if err != nil {
+				t.Errorf("failed to read initdata content, error = %v", err)
+			}
+
+			if string(content) != tt.content {
+				t.Errorf("initdata content is not correct, got %s, want %s", string(content), tt.content)
+			}
+		})
+	}
 }
