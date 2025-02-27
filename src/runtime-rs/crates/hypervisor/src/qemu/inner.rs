@@ -132,7 +132,6 @@ impl QemuInner {
                             cmdline.add_sev_snp_protection_device(
                                 sev_snp_cfg.cbitpos,
                                 &sev_snp_cfg.firmware,
-                                &sev_snp_cfg.certs_path,
                             )
                         } else {
                             cmdline.add_sev_protection_device(
