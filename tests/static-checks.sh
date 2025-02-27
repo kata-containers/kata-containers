@@ -1149,6 +1149,7 @@ static_check_shell()
 	pushd $repo_path
 
 	need_chronic
+	need_shellcheck
 
 	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
@@ -1179,6 +1180,10 @@ static_check_shell()
 		{ $chronic bash -n "$script"; ret=$?; } || true
 
 		[ "$ret" -eq 0 ] || die "check for script '$script' failed"
+
+		info "Running shellcheck on file '$script'"
+
+		shellcheck "$script" || die "shellcheck for script '$script' failed"
 
 		static_check_eof "$script"
 	done
