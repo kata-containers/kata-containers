@@ -1171,17 +1171,26 @@ impl Manager {
     }
 
     pub fn subcgroup(&self) -> &str {
-        // Check if we're in a Docker-in-Docker setup by verifying:
+        // Check if we're in a Docker-in-Docker or Systemd-in-Container setup by verifying:
         // 1. We're using cgroups v2 (which restricts direct process control)
         // 2. An "init" subdirectory exists (used by DinD for process delegation)
+        // 3. An "init.scope" subdirectory exists (used by systemd for process delegation)
         let is_dind = cgroups::hierarchies::is_cgroup2_unified_mode()
             && cgroups::hierarchies::auto()
                 .root()
                 .join(&self.cpath)
                 .join("init")
                 .exists();
+        let is_systemd = cgroups::hierarchies::is_cgroup2_unified_mode()
+            && cgroups::hierarchies::auto()
+                .root()
+                .join(&self.cpath)
+                .join("init.scope")
+                .exists();
         if is_dind {
             "/init/"
+        } else if is_systemd {
+            "/init.scope/"
         } else {
             "/"
         }
