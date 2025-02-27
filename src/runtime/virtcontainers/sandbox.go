@@ -50,6 +50,11 @@ import (
 
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
+
+	diskfs "github.com/diskfs/go-diskfs"
+	"github.com/diskfs/go-diskfs/disk"
+	"github.com/diskfs/go-diskfs/filesystem"
+	"github.com/diskfs/go-diskfs/filesystem/squashfs"
 )
 
 // sandboxTracingTags defines tags for the trace span
@@ -665,6 +670,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	if err = s.prepareInitdataMount(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
@@ -823,6 +832,78 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	return coldPlugVFIO, nil
+}
+
+func prepareInitdataSquashFsImage(initdata string, imagePath string) error {
+	// Create squashfs image file
+	// The minimal size of the squashfs image := fragment blocks + data blocks + super block + tables...
+	// We leave more room here (superblock, inode table, ...  occupies 3 separate block size)
+	var diskSize int64 = (int64(len(initdata))+int64(diskfs.SectorSize4k)-1)/int64(diskfs.SectorSize4k)*int64(diskfs.SectorSize4k) + 3*int64(diskfs.SectorSize4k)
+
+	initdataDiskImage, err := diskfs.Create(imagePath, diskSize, diskfs.SectorSize4k)
+	if err != nil {
+		return err
+	}
+
+	fspec := disk.FilesystemSpec{Partition: 0, FSType: filesystem.TypeSquashfs, VolumeLabel: "label"}
+	fs, err := initdataDiskImage.CreateFilesystem(fspec)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// well, we ignore the clean up job here. The side effect is that
+		// we might leave /tmp/diskfs_squashfs* if this function does not
+		// run successfully.
+		_ = fs.Close()
+	}()
+
+	rw, err := fs.OpenFile("/.kata.initdata.toml", os.O_CREATE|os.O_RDWR)
+	if err != nil {
+		return err
+	}
+
+	_, err = rw.Write([]byte(initdata))
+	if err != nil {
+		return err
+	}
+
+	sqs, ok := fs.(*squashfs.FileSystem)
+	if !ok {
+		return fmt.Errorf("not a squashfs filesystem")
+	}
+	err = sqs.Finalize(squashfs.FinalizeOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Sandbox) prepareInitdataMount(config *HypervisorConfig) error {
+	if len(config.Initdata) == 0 {
+		s.Logger().Info("No initdata provided. Skip prepare loop device")
+		return nil
+	}
+
+	s.Logger().Info("Start to prepare initdata")
+	initdataWorkdir := filepath.Join("/run/initdata", s.id)
+	initdataImagePath := filepath.Join(initdataWorkdir, "data.img")
+
+	err := os.MkdirAll(initdataWorkdir, 0755)
+	if err != nil {
+		s.Logger().WithField("initdata", "create squashfs image path").WithError(err)
+		return err
+	}
+
+	err = prepareInitdataSquashFsImage(config.Initdata, initdataImagePath)
+	if err != nil {
+		s.Logger().WithField("initdata", "prepare squashfs image").WithError(err)
+		return err
+	}
+
+	config.InitdataImage = initdataImagePath
+
+	return nil
 }
 
 func (s *Sandbox) createResourceController() error {
