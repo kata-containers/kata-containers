@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #!/bin/bash
-set -xeuo pipefail
+set -euo pipefail
 
 shopt -s nullglob
 shopt -s extglob
@@ -20,6 +20,8 @@ supported_gpu_devids="/supported-gpu.devids"
 base_os="jammy"
 
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
+
+export KBUILD_SIGN_PIN=$6
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -104,9 +106,13 @@ build_nvidia_drivers() {
 	echo "chroot: Build NVIDIA drivers"
 	pushd "${driver_source_files}" >> /dev/null
 
+	local certs_dir
 	local kernel_version
 	for version in /lib/modules/*; do
 		kernel_version=$(basename "${version}")
+		certs_dir=/lib/modules/"${kernel_version}"/build/certs
+		signing_key=${certs_dir}/signing_key.pem
+
 	        echo "chroot: Building GPU modules for: ${kernel_version}"
 		cp /boot/System.map-"${kernel_version}" /lib/modules/"${kernel_version}"/build/System.map
 
@@ -119,9 +125,16 @@ build_nvidia_drivers() {
 		fi
 
 		make -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build > /dev/null
+
+		if [ -n "${KBUILD_SIGN_PIN}" ]; then
+			mkdir -p "${certs_dir}" && mv /signing_key.* "${certs_dir}"/.
+		fi
+
 		make INSTALL_MOD_STRIP=1 -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build modules_install
 		make -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build clean > /dev/null
-
+		# The make clean above should clear also the certs directory but just in case something
+		# went wroing make sure the signing_key.pem is removed
+		[ -e "${signing_key}" ] && rm -f "${signing_key}"
 	done
 	# Save the modules for later so that a linux-image purge does not remove it
 	tar cvfa /lib/modules.save_from_purge.tar.zst /lib/modules
