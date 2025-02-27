@@ -136,7 +136,7 @@ func PreStartHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string)
 		return nil
 	}
 
-	return runHooks(ctx, spec, spec.Hooks.Prestart, cid, bundlePath, "pre-start")
+	return runHooks(ctx, spec, spec.Hooks.Prestart, cid, bundlePath, "pre-start") //nolint:all
 }
 
 // PostStartHooks run the hooks just after start container
