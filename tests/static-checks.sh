@@ -115,6 +115,7 @@ yamllint_cmd="yamllint"
 have_yamllint_cmd=$(command -v "$yamllint_cmd" || true)
 
 chronic=chronic
+shellcheck=shellcheck
 
 # Disable chronic on OSX to avoid having to update the Travis config files
 # for additional packages on that platform.
@@ -240,6 +241,16 @@ need_chronic() {
 	command -v chronic &>/dev/null || \
 		die "chronic command not found. You must have it installed to run this check." \
 		"Usually it is distributed with the 'moreutils' package of your Linux distribution."
+}
+
+# Check that shellcheck is installed, otherwise die.
+need_shellcheck() {
+	local first_word
+	[ -z "$shellcheck" ] && return
+	first_word="${shellcheck%% *}"
+	command -v shellcheck &>/dev/null || \
+		die "shellcheck command not found. You must have it installed to run this check." \
+		"Usually it is distributed with the 'shellcheck' package of your Linux distribution."
 }
 
 
