@@ -12,37 +12,60 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        component:
-          - agent
-          - dragonball
-          - runtime
-          - runtime-rs
-          - agent-ctl
-          - kata-ctl
-          - trace-forwarder
-          - genpolicy
         command:
           - "make vendor"
           - "make check"
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
-        include:
-          - component: agent
-            component-path: src/agent
-          - component: dragonball
-            component-path: src/dragonball
-          - component: runtime
-            component-path: src/runtime
-          - component: runtime-rs
-            component-path: src/runtime-rs
-          - component: agent-ctl
-            component-path: src/tools/agent-ctl
-          - component: kata-ctl
-            component-path: src/tools/kata-ctl
-          - component: trace-forwarder
-            component-path: src/tools/trace-forwarder
-          - component: genpolicy
-            component-path: src/tools/genpolicy
+        component:
+          - name: agent
+            path: src/agent
+            needs:
+              - rust
+              - musl-tools
+              - libdevmapper
+              - libseccomp
+              - protobuf-compiler
+              - clang
+          - name: dragonball
+            path: src/dragonball
+            needs:
+              - rust
+              - musl-tools
+          - name: runtime
+            path: src/runtime
+            needs:
+              - golang
+              - XDG_RUNTIME_DIR
+          - name: runtime-rs
+            path: src/runtime-rs
+            needs:
+              - rust
+              - musl-tools
+          - name: agent-ctl
+            path: src/tools/agent-ctl
+            needs:
+              - rust
+              - musl-tools
+              - protobuf-compiler
+              - clang
+          - name: kata-ctl
+            path: src/tools/kata-ctl
+            needs:
+              - rust
+              - musl-tools
+          - name: trace-forwarder
+            path: src/tools/trace-forwarder
+            needs:
+              - rust
+              - musl-tools
+          - name: genpolicy
+            path: src/tools/genpolicy
+            needs:
+              - rust
+              - musl-tools
+              - protobuf-compiler
+
     steps:
       - name: Adjust a permission for repo
         run: |
@@ -61,23 +84,23 @@ jobs:
         env:
           INSTALL_IN_GOPATH: false
       - name: Install golang
-        if: ${{ matrix.component == 'runtime' }}
+        if: contains(matrix.component.needs, 'golang')
         run: |
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
       - name: Install rust
-        if: ${{ matrix.component != 'runtime' }}
+        if: contains(matrix.component.needs, 'rust')
         run: |
           ./tests/install_rust.sh
           echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install musl-tools
-        if: ${{ matrix.component != 'runtime' }}
+        if: contains(matrix.component.needs, 'musl-tools')
         run: sudo apt-get -y install musl-tools
       - name: Install devicemapper
-        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}
+        if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
         run: sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
-        if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'agent' }}
+        if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make vendor' && matrix.command != 'make check'
         run: |
           libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
           gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -86,13 +109,13 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> "$GITHUB_ENV"
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> "$GITHUB_ENV"
       - name: Install protobuf-compiler
-        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'genpolicy' || matrix.component == 'agent-ctl') }}
+        if: contains(matrix.component.needs, 'protobuf-compiler') && matrix.command != 'make vendor'
         run: sudo apt-get -y install protobuf-compiler
       - name: Install clang
-        if: ${{ matrix.command == 'make check' && (matrix.component == 'agent' || matrix.component == 'agent-ctl') }}
+        if: contains(matrix.component.needs, 'clang') && matrix.command == 'make check'
         run: sudo apt-get -y install clang
-      - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
-        if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
+      - name: Setup XDG_RUNTIME_DIR
+        if: contains(matrix.component.needs, 'XDG_RUNTIME_DIR') && matrix.command != 'make check'
         run: |
           XDG_RUNTIME_DIR=$(mktemp -d "/tmp/kata-tests-$USER.XXX" | tee >(xargs chmod 0700))
           echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> "$GITHUB_ENV"
@@ -100,9 +123,9 @@ jobs:
         if: ${{ endsWith(inputs.instance, '-arm') }}
         run: |
           echo "GITHUB_RUNNER_CI_ARM64=true" >> "$GITHUB_ENV"
-      - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
+      - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
-          cd ${{ matrix.component-path }}
+          cd ${{ matrix.component.path }}
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
