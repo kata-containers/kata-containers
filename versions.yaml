@@ -168,7 +168,7 @@ assets:
           version: "jammy"  # 22.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "jammy"  # 22.04 LTS
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
@@ -185,7 +185,7 @@ assets:
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "focal"  # 20.04 LTS
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"  # 22.04 LTS

@@ -90,6 +90,7 @@ setup() {
 
 @test "Test we can pull an image inside the guest using trusted storage" {
 	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
     # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
 
@@ -138,6 +139,7 @@ setup() {
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
 	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
 
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
     local_device=$(create_loop_device)
@@ -181,6 +183,7 @@ setup() {
 
 @test "Test we can pull a large image inside the guest with large createcontainer timeout" {
 	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
 
     if [ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] && [ "${KBS_INGRESS}" = "aks" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10299"

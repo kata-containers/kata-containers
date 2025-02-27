@@ -74,7 +74,16 @@ OK "Agent is installed"
 
 # initramfs expects /init, create symlink only if ${ROOTFS}/init does not exist
 # Init may be provided by other packages, e.g. systemd or GPU initrd/rootfs
-[ -x "${ROOTFS}/init" ] || [ -L "${ROOTFS}/init" ] || sudo ln -sf /sbin/init "${ROOTFS}/init"
+if [ ! -x "${ROOTFS}/init" ] && [ ! -L "${ROOTFS}/init" ]; then
+  # ATTN: In some instances, /init is not following two or more levels of symlinks
+  # i.e. (/init to /sbin/init to /lib/systemd/systemd)
+  # Setting /init directly to /lib/systemd/systemd when AGENT_INIT is disabled
+  if [ "${AGENT_INIT}" = "yes" ]; then
+    sudo ln -sf /sbin/init "${ROOTFS}/init"
+  else
+    sudo ln -sf /lib/systemd/systemd "${ROOTFS}/init"
+  fi
+fi
 
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
 ( cd "${ROOTFS}" && sudo find . | sudo cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"
