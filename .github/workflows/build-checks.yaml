@@ -22,7 +22,6 @@ jobs:
             path: src/agent
             needs:
               - rust
-              - musl-tools
               - libdevmapper
               - libseccomp
               - protobuf-compiler
@@ -31,7 +30,6 @@ jobs:
             path: src/dragonball
             needs:
               - rust
-              - musl-tools
           - name: runtime
             path: src/runtime
             needs:
@@ -41,29 +39,24 @@ jobs:
             path: src/runtime-rs
             needs:
               - rust
-              - musl-tools
           - name: agent-ctl
             path: src/tools/agent-ctl
             needs:
               - rust
-              - musl-tools
               - protobuf-compiler
               - clang
           - name: kata-ctl
             path: src/tools/kata-ctl
             needs:
               - rust
-              - musl-tools
           - name: trace-forwarder
             path: src/tools/trace-forwarder
             needs:
               - rust
-              - musl-tools
           - name: genpolicy
             path: src/tools/genpolicy
             needs:
               - rust
-              - musl-tools
               - protobuf-compiler
 
     steps:
@@ -88,14 +81,14 @@ jobs:
         run: |
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
-      - name: Install rust
+      - name: Setup rust
         if: contains(matrix.component.needs, 'rust')
         run: |
           ./tests/install_rust.sh
           echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
-      - name: Install musl-tools
-        if: contains(matrix.component.needs, 'musl-tools')
-        run: sudo apt-get -y install musl-tools
+          if [ "$(uname -m)" == "x86_64" ] || [ "$(uname -m)" == "aarch64" ]; then
+            sudo apt-get -y install musl-tools
+          fi
       - name: Install devicemapper
         if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
         run: sudo apt-get -y install libdevmapper-dev
