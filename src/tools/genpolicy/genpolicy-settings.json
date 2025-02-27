@@ -39,6 +39,10 @@
             ]
         },
         "Linux": {
+            "Sysctl": {
+                "net.ipv4.ip_unprivileged_port_start": "0",
+                "net.ipv4.ping_group_range": "0 2147483647"
+            },
             "MaskedPaths": [
                 "/proc/acpi",
                 "/proc/asound",
@@ -132,6 +136,12 @@
             "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
             "io.katacontainers.pkg.oci.container_type": "pod_container",
             "io.kubernetes.cri.container-type": "container"
+        },
+        "Linux": {
+            "Sysctl": {
+                "net.ipv4.ip_unprivileged_port_start": "0",
+                "net.ipv4.ping_group_range": "0 2147483647"
+            }
         }
     },
     "volumes": {
