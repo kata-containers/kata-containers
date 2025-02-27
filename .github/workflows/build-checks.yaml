@@ -99,6 +99,10 @@ jobs:
         run: |
           XDG_RUNTIME_DIR=$(mktemp -d "/tmp/kata-tests-$USER.XXX" | tee >(xargs chmod 0700))
           echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> "$GITHUB_ENV"
+      - name: Skip tests that depend on virtualization capable runners when needed
+        if: ${{ endsWith(inputs.instance, '-arm') }}
+        run: |
+          echo "GITHUB_RUNNER_CI_ARM64=true" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
         run: |
           cd ${{ matrix.component-path }}
