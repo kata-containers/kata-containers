@@ -188,7 +188,7 @@ impl From<Interface> for types::Interface {
             IPAddresses: trans_vec(from.ip_addresses),
             mtu: from.mtu,
             hwAddr: from.hw_addr,
-            pciPath: from.pci_addr,
+            devicePath: from.device_path,
             type_: from.field_type,
             raw_flags: from.raw_flags,
             ..Default::default()
@@ -204,7 +204,7 @@ impl From<types::Interface> for Interface {
             ip_addresses: trans_vec(src.IPAddresses),
             mtu: src.mtu,
             hw_addr: src.hwAddr,
-            pci_addr: src.pciPath,
+            device_path: src.devicePath,
             field_type: src.type_,
             raw_flags: src.raw_flags,
         }

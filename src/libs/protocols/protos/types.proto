@@ -38,8 +38,10 @@ message Interface {
 	uint64 mtu = 4;
 	string hwAddr = 5;
 
-	// PCI path for the device (see the pci::Path (Rust) or types.PciPath (Go) type for format details)
-	string pciPath = 6;
+	// Path for the device (see the pci::Path (Rust) and types.PciPath
+	// (Go) or ccw::Device (Rust) and types.CcwDevice (Go) types for
+	// format details, depending on architecture)
+	string devicePath = 6;
 
 	// Type defines the type of interface described by this structure.
 	// The expected values are the one that are defined by the netlink

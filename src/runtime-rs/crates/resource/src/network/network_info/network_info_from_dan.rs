@@ -53,7 +53,7 @@ impl NetworkInfoFromDan {
             ip_addresses,
             mtu: dan_device.network_info.interface.mtu,
             hw_addr: dan_device.guest_mac.clone(),
-            pci_addr: String::default(),
+            device_path: String::default(),
             field_type: dan_device.network_info.interface.ntype.clone(),
             raw_flags: dan_device.network_info.interface.flags & IFF_NOARP,
         };
@@ -181,7 +181,7 @@ mod tests {
             }],
             mtu: 1500,
             hw_addr: "xx:xx:xx:xx:xx".to_owned(),
-            pci_addr: String::default(),
+            device_path: String::default(),
             field_type: "tuntap".to_owned(),
             raw_flags: 0,
         };
