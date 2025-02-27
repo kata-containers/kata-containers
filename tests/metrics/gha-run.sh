@@ -121,7 +121,7 @@ function run_test_latency() {
 function main() {
 	action="${1:-}"
 	case "${action}" in
-		install-kata) install_kata && install_checkmetrics ;;
+		install-checkmetrics) install_checkmetrics ;;
 		enabling-hypervisor) enabling_hypervisor ;;
 		make-tarball-results) make_tarball_results ;;
 		run-test-launchtimes) run_test_launchtimes ;;
@@ -132,7 +132,7 @@ function main() {
 		run-test-fio) run_test_fio ;;
 		run-test-iperf) run_test_iperf ;;
 		run-test-latency) run_test_latency ;;
-		*) >&2 die "Invalid argument" ;;
+		*) >&2 die "Invalid argument: ${action}" ;;
 	esac
 }
 
