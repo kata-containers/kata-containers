@@ -70,6 +70,7 @@ measured_rootfs="false"
 CROSS_BUILD_ARG=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
+# shellcheck source=tools/packaging/scripts/lib.sh
 source "${packaging_scripts_dir}/lib.sh"
 
 usage() {
