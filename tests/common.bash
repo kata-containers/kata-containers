@@ -96,12 +96,12 @@ function kubectl_retry() {
 	local interval=15
 	local i=0
 	while true; do
-		kubectl $@ && return 0 || true
+		kubectl "$@" && return 0 || true
 		i=$((i + 1))
-		[ $i -lt $max_tries ] && echo "'kubectl $@' failed, retrying in $interval seconds" 1>&2 || break
+		[ $i -lt $max_tries ] && echo "'kubectl $*' failed, retrying in $interval seconds" 1>&2 || break
 		sleep $interval
 	done
-	echo "'kubectl $@' failed after $max_tries tries" 1>&2 && return 1
+	echo "'kubectl $*' failed after $max_tries tries" 1>&2 && return 1
 }
 
 function waitForProcess() {
@@ -601,7 +601,7 @@ function clone_cri_containerd() {
 # version: the version of the tarball that will be downloaded
 # tarball-name: the name of the tarball that will be downloaded
 function download_github_project_tarball() {
-	project="${1}" 
+	project="${1}"
 	version="${2}"
 	tarball_name="${3}"
 
@@ -731,7 +731,7 @@ OOMScoreAdjust=-999
 [Install]
 WantedBy=multi-user.target
 EOF
-	fi 
+	fi
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format
