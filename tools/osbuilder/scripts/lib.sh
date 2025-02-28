@@ -306,7 +306,7 @@ detect_libseccomp_info()
 	export GPERF_VERSION="$(get_package_version_from_kata_yaml "$gperf_ver_yq_path")"
 	export GPERF_URL="$(get_package_version_from_kata_yaml "$gperf_url_yq_path")"
 
-	[ -n "$LIBSECCOMP_VERSION" ] && [ -n $GPERF_VERSION ] && [ -n "$LIBSECCOMP_URL" ] && [ -n $GPERF_URL ]
+	[ -n "$LIBSECCOMP_VERSION" ] && [ -n "$GPERF_VERSION" ] && [ -n "$LIBSECCOMP_URL" ] && [ -n "$GPERF_URL" ]
 }
 
 before_starting_container() {
