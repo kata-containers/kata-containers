@@ -116,6 +116,9 @@ type qemuArch interface {
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
 
+	// setEndpointDevicePath sets the appropriate PCI or CCW device path for an endpoint
+	setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error
+
 	// addDeviceToBridge adds devices to the bus
 	addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error)
 
@@ -730,6 +733,23 @@ func (q *qemuArchBase) appendRNGDevice(_ context.Context, devices []govmmQemu.De
 	)
 
 	return devices, nil
+}
+
+func (q *qemuArchBase) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error {
+	bridgeSlot, err := types.PciSlotFromInt(bridgeAddr)
+	if err != nil {
+		return err
+	}
+	devSlot, err := types.PciSlotFromString(devAddr)
+	if err != nil {
+		return err
+	}
+	pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
+	if err != nil {
+		return err
+	}
+	endpoint.SetPciPath(pciPath)
+	return nil
 }
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {

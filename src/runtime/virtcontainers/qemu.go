@@ -1942,16 +1942,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			}
 		}()
 
-		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
-		if err != nil {
-			return err
-		}
-		devSlot, err := types.PciSlotFromString(addr)
-		if err != nil {
-			return err
-		}
-		pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
-		endpoint.SetPciPath(pciPath)
+		q.arch.setEndpointDevicePath(endpoint, bridge.Addr, addr)
 
 		var machine govmmQemu.Machine
 		machine, err = q.getQemuMachine()
@@ -1959,7 +1950,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			return err
 		}
 		if machine.Type == QemuCCWVirtio {
-			devNoHotplug := fmt.Sprintf("fe.%x.%x", bridge.Addr, addr)
+			devNoHotplug := fmt.Sprintf("fe.%x.%v", bridge.Addr, addr)
 			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs()))
 		}
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)
