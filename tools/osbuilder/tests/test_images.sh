@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck disable=all
+# Disable shellcheck until we decide if we are keeping this. Issue #10957
 #
 # Copyright (c) 2018 Intel Corporation
 #
