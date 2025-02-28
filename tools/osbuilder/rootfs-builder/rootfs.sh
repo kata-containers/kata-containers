@@ -55,8 +55,9 @@ EXTRA_PKGS=${EXTRA_PKGS:-""}
 
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
-nvidia_rootfs="${script_dir}/nvidia/nvidia_rootfs.sh"
-[ "${ARCH}" == "x86_64" ] || [ "${ARCH}" == "aarch64" ] && source "$nvidia_rootfs"
+VARIANT=${VARIANT:-""}
+
+[[ "${VARIANT}" == "nvidia-gpu"* ]] && source "${script_dir}/nvidia/nvidia_rootfs.sh"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
