@@ -137,7 +137,7 @@ main()
 	if [ -z "${check_in_container}" ]; then
 		echo "Error: 'OUTPUT_DIR' not set" >&2
 		echo "$0 should be run using the Dockerfile supplied." >&2
-		exit -1
+		exit 1
 	fi
 
 	local OPTIND
@@ -154,7 +154,7 @@ main()
 		    # parse failure
 		    help
 		    echo "ERROR: Failed to parse arguments"
-		    exit -1
+		    exit 1
 		    ;;
 		esac
 	done

@@ -178,7 +178,7 @@ wait_for_app_pods_message() {
 		[ "${#pods}" -ge "$pod_count" ] && break
 		if [ "$SECONDS" -gt "$timeout" ]; then
 			printf "Unable to find ${pod_count} pods for '-l app=\"$app\"' in ${SECONDS}s (%s)" "${pods[@]}"
-			return -1
+			return 1
 		fi
 	done
 	for pod in "${pods[@]}"; do
@@ -190,7 +190,7 @@ wait_for_app_pods_message() {
 				printf "pods after ${SECONDS}s :(%s)\n" "${pods[@]}"
 				echo "Pod $pod's output so far:"
 				echo "$log"
-				return -1
+				return 1
 			fi
 			sleep 1;
 		done
