@@ -52,8 +52,7 @@ echo "Wait for all related pods to be gone"
   oc get pods -l name="kubelet-kata-cleanup" --no-headers=true -n kube-system 2>&1 | grep "No resources found" -q && ((repeats++)) || repeats=1
   [ "$repeats" -gt 5 ] && echo kata-cleanup finished && break
   sleep 1
-done) || { echo "There are still some kata-cleanup related pods after 600 iterations"; oc get all -n kube-system; exit -1; }
+done) || { echo "There are still some kata-cleanup related pods after 600 iterations"; oc get all -n kube-system; exit 1; }
 oc delete -f kata-cleanup/base/kata-cleanup.yaml
 oc delete -f kata-rbac/base/kata-rbac.yaml
 oc delete -f runtimeclasses/kata-runtimeClasses.yaml
-
