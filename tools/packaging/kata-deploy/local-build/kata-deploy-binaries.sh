@@ -192,7 +192,7 @@ cleanup_and_fail() {
 	if [ -n "${extra_tarballs}" ]; then
 		local mapping
 		IFS=' ' read -a mapping <<< "${extra_tarballs}"
-		for m in ${mapping[@]}; do
+		for m in "${mapping[@]}"; do
 			local extra_tarball_name=${m%:*}
 			rm -f "${extra_tarball_name}"
 		done
@@ -272,7 +272,7 @@ install_cached_tarball_component() {
 
 	local mapping
 	IFS=' ' read -a mapping <<< "${extra_tarballs}"
-	for m in ${mapping[@]}; do
+	for m in "${mapping[@]}"; do
 		local extra_tarball_name=${m%:*}
 		local extra_tarball_path=${m#*:}
 
@@ -1461,5 +1461,5 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-	main $@
+	main "$@"
 fi

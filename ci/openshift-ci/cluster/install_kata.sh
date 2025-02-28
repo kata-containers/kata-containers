@@ -67,7 +67,7 @@ wait_for_reboot() {
 	local workers=($(oc get nodes | \
 		awk '{if ($3 == "worker") { print $1 } }'))
 	# Get the boot ID to compared it changed over time.
-	for node in ${workers[@]}; do
+	for node in "${workers[@]}"; do
 		BOOTIDS[$node]=$(oc get -o jsonpath='{.status.nodeInfo.bootID}'\
 			node/$node)
 		echo "Wait $node reboot"
@@ -83,7 +83,7 @@ wait_for_reboot() {
 			return 1
 		fi
 		echo "Checking after $(($now - $timer_start)) seconds"
-		for i in ${!workers[@]}; do
+		for i in "${!workers[@]}"; do
 			current_id=$(oc get \
 				-o jsonpath='{.status.nodeInfo.bootID}' \
 				node/${workers[i]})

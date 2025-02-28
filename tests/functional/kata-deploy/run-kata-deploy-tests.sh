@@ -19,7 +19,7 @@ else
 fi
 
 info "Run tests"
-for KATA_DEPLOY_TEST_ENTRY in ${KATA_DEPLOY_TEST_UNION[@]}
+for KATA_DEPLOY_TEST_ENTRY in "${KATA_DEPLOY_TEST_UNION[@]}"
 do
 	bats --show-output-of-passing-tests "${KATA_DEPLOY_TEST_ENTRY}"
 done

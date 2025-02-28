@@ -238,7 +238,7 @@ add_requests_to_policy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
-	for request in ${requests[@]}
+	for request in "${requests[@]}"
 	do
 		info "${settings_dir}/genpolicy-settings.json: allowing ${request}"
 		jq ".request_defaults.${request} |= true" \

@@ -185,4 +185,4 @@ main() {
 	gen_version_file "${branch}" "${kata_version}"
 }
 
-main $@
+main "$@"

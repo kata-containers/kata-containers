@@ -707,4 +707,4 @@ main() {
 	esac
 }
 
-main $@
+main "$@"
