@@ -591,6 +591,7 @@ impl QemuInner {
                     &self.config,
                     &network_device.config.host_dev_name,
                     network_device.config.guest_mac.clone().unwrap(),
+                    &mut None,
                 )?;
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?
             }
