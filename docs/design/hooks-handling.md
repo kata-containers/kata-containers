@@ -32,7 +32,7 @@ The path and arguments of these hooks will be passed to Kata for execution via `
 
 ### Kata Hooks
 
-In Kata, we support another three kinds of hooks executed in guest VM, including `Guest Prestart Hook`, `Guest Poststart Hook`, `Guest Poststop Hook`.
+In Kata, we support another three kinds of hooks executed in guest VM, including `Guest Prestart Hook`, `Guest CreateContainer Hook`, `Guest Poststart Hook`, `Guest Poststop Hook`.
 
 The executable files for Kata Hooks must be packaged in the *guest rootfs*. The file path to those guest hooks should be specified in the configuration file, and guest hooks must be stored in a subdirectory of `guest_hook_path` according to their hook type. For example:
 
@@ -54,6 +54,7 @@ The table below summarized when and where those different hooks will be executed
 | `Poststart` | OCI hook | host runtime namespace | host runtime namespace | After container is started, before start operation returns. |
 | `Poststop` | OCI hook | host runtime namespace | host runtime namespace | After container is deleted, before delete operation returns. |
 | `Guest Prestart` | Kata hook | guest agent namespace | guest agent namespace | During start operation, before container command is executed. |
+| `Guest CreateContainer` | Kata hook | guest agent namespace | guest agent namespace | During start operation, before pivot_root after prestart. |
 | `Guest Poststart` | Kata hook | guest agent namespace | guest agent namespace | During start operation, after container command is executed, before start operation returns. |
 | `Guest Poststop` | Kata hook | guest agent namespace | guest agent namespace | During delete operation, after container is deleted, before delete operation returns. |
 
