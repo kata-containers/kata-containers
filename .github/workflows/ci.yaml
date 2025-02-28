@@ -283,6 +283,18 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
 
+  run-kata-deploy-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: [publish-kata-deploy-payload-amd64]
+    uses: ./.github/workflows/run-kata-deploy-tests.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+
   run-metrics-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
