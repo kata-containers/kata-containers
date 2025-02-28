@@ -2142,6 +2142,21 @@ impl<'a> QemuCmdLine<'a> {
         self.machine
             .set_confidential_guest_support("pv0")
             .set_nvdimm(false);
+
+        self.kernel.params.remove_all_by_key("reboot".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("systemd.unit".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("systemd.mask".to_string());
+        self.kernel.params.remove_all_by_key("root".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("rootflags".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("rootfstype".to_string());
     }
 
     pub fn add_sev_protection_device(&mut self, cbitpos: u32, firmware: &str) {

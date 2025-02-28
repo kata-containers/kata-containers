@@ -123,6 +123,11 @@ impl KernelParams {
         self.params.push(new_param);
     }
 
+    pub(crate) fn remove_all_by_key(&mut self, key: String) {
+        // Remove all params with the given key from the vector
+        self.params.retain(|param| param.key != key);
+    }
+
     pub(crate) fn from_string(params_string: &str) -> Self {
         let mut params = vec![];
 
