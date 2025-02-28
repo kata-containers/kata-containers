@@ -54,7 +54,7 @@ else
     oc apply -f "${script_dir}/smoke/service_kubernetes.yaml"
     # For some reason kcli's cluster lists external IP as internal IP, try both
     host=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}')
-    [ -z "$host"] && host=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+    [[ -z "${host}" ]] && host=$(oc get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
     port=$(oc get service/http-server-service -o jsonpath='{.spec.ports[0].nodePort}')
 fi
 
