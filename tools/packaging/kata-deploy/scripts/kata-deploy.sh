@@ -237,7 +237,7 @@ function get_kata_containers_config_path() {
 	# Map the runtime shim name to the appropriate configuration
 	# file directory.
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs) config_path="$rust_config_path" ;;
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
 		*) config_path="$golang_config_path" ;;
 	esac
 
@@ -249,7 +249,7 @@ function get_kata_containers_runtime_path() {
 
 	local runtime_path
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs)
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs)
 			runtime_path="${dest_dir}/runtime-rs/bin/containerd-shim-kata-v2"
 			;;
 		*)
