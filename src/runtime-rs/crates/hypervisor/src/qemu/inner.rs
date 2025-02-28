@@ -141,6 +141,7 @@ impl QemuInner {
                             )
                         }
                     }
+                    ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),
                 },
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }

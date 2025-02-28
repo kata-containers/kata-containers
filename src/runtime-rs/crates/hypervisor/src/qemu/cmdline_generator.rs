@@ -1741,6 +1741,28 @@ impl ToQemuParams for ObjectIoThread {
 }
 
 #[derive(Debug)]
+struct ObjectSeGuest {
+    id: String,
+}
+
+impl ObjectSeGuest {
+    fn new(id: &str) -> Self {
+        ObjectSeGuest { id: id.to_owned() }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectSeGuest {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("s390-pv-guest".to_owned());
+        params.push(format!("id={}", self.id));
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
 struct ObjectSevSnpGuest {
     id: String,
     cbitpos: u32,
@@ -2111,6 +2133,15 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_virtio_balloon(&mut self) {
         let balloon_device = DeviceVirtioBalloon::new();
         self.devices.push(Box::new(balloon_device));
+    }
+
+    pub fn add_se_protection_device(&mut self) {
+        let se_object = ObjectSeGuest::new("pv0");
+        self.devices.push(Box::new(se_object));
+
+        self.machine
+            .set_confidential_guest_support("pv0")
+            .set_nvdimm(false);
     }
 
     pub fn add_sev_protection_device(&mut self, cbitpos: u32, firmware: &str) {

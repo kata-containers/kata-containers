@@ -13,6 +13,7 @@ use async_trait::async_trait;
 #[derive(Debug, Clone)]
 pub enum ProtectionDeviceConfig {
     SevSnp(SevSnpConfig),
+    Se,
 }
 
 #[derive(Debug, Clone)]
