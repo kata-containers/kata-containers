@@ -27,6 +27,8 @@ jobs:
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
+      #the latest containerd from 2.0 need to set the CGROUP_DRIVER for e2e testing
+      CGROUP_DRIVER: ""
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
