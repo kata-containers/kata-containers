@@ -72,6 +72,8 @@ setup() {
 		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/k3s"
 	elif [ "${KUBERNETES}" = "rke2" ]; then
 		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/rke2"
+	elif [ "${KUBERNETES}" = "microk8s" ]; then
+		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/microk8s"
 	else
 		kubectl apply -f "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
@@ -142,6 +144,9 @@ teardown() {
 	elif [ "${KUBERNETES}" = "rke2" ]; then
 		deploy_spec="-k \"tools/packaging/kata-deploy/kata-deploy/overlays/rke2\""
 		cleanup_spec="-k \"tools/packaging/kata-deploy/kata-cleanup/overlays/rke2\""
+	elif [ "${KUBERNETES}" = "microk8s" ]; then
+		deploy_spec="-k \"tools/packaging/kata-deploy/kata-deploy/overlays/microk8s\""
+		cleanup_spec="-k \"tools/packaging/kata-deploy/kata-cleanup/overlays/microk8s\""
 	else
 		deploy_spec="-f \"tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml\""
 		cleanup_spec="-f \"tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml\""

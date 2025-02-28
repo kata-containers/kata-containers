@@ -34,6 +34,7 @@ jobs:
           - k0s
           - k3s
           - rke2
+          - microk8s
     # TODO: There are a couple of vmm/k8s combination failing (https://github.com/kata-containers/kata-containers/issues/9854)
     # and we will put the entire kata-deploy-tests on GARM on maintenance.
     # TODO: Transition to free runner (see #9940).

@@ -323,6 +323,26 @@ function deploy_rke2() {
 	sudo chown ${USER}:${USER} ~/.kube/config
 }
 
+function deploy_microk8s() {
+	sudo snap install microk8s --classic
+
+	# These are arbitrary values
+	sleep 30
+	sudo /snap/bin/microk8s.status --wait-ready --timeout 300
+
+	# install kubectl
+	ARCH=$(arch_to_golang)
+	kubectl_version=$(/snap/bin/microk8s.version | grep -oe 'v[0-9]\+\(\.[0-9]\+\)*')
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo chmod +x /usr/bin/kubectl
+	sudo rm -rf /usr/local/bin/kubectl
+
+	mkdir -p ~/.kube
+	sudo /snap/bin/microk8s.config > ~/.kube/config
+	sudo chown ${USER}:${USER} ~/.kube/config
+	newgrp microk8s
+}
+
 function _get_k0s_kubernetes_version_for_crio() {
 	# k0s version will look like:
 	# v1.27.5+k0s.0
@@ -358,6 +378,7 @@ function deploy_k8s() {
 		k0s) deploy_k0s ;;
 		k3s) deploy_k3s ;;
 		rke2) deploy_rke2 ;;
+		microk8s) deploy_microk8s ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
