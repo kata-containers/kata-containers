@@ -316,7 +316,7 @@ main() {
 	vfio_major="$(printf '%d' $(stat -c '0x%t' ${vfio_device}))"
 	vfio_minor="$(printf '%d' $(stat -c '0x%T' ${vfio_device}))"
 
-	[ -n "/dev/vfio/vfio" ] || die "vfio control device not found"
+	[[ -f "/dev/vfio/vfio" ]] || die "vfio control device not found"
 	vfio_ctl_major="$(printf '%d' $(stat -c '0x%t' /dev/vfio/vfio))"
 	vfio_ctl_minor="$(printf '%d' $(stat -c '0x%T' /dev/vfio/vfio))"
 
