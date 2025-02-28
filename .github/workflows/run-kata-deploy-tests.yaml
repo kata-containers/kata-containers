@@ -1,4 +1,4 @@
-name: CI | Run kata-deploy tests on GARM
+name: CI | Run kata-deploy tests
 on:
   workflow_call:
     inputs:
@@ -35,11 +35,7 @@ jobs:
           - k3s
           - rke2
           - microk8s
-    # TODO: There are a couple of vmm/k8s combination failing (https://github.com/kata-containers/kata-containers/issues/9854)
-    # and we will put the entire kata-deploy-tests on GARM on maintenance.
-    # TODO: Transition to free runner (see #9940).
-    if: false
-    runs-on: garm-ubuntu-2004-smaller
+    runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
