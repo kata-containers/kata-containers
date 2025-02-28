@@ -167,7 +167,7 @@ function get_pss_memory_virtiofsd() {
 
 	data="$(sudo smem --no-header -P "^${virtiofsd_path}" -c "pid pss")"
 
-	for p in "${virtiofsd_pids}"; do
+	for p in ${virtiofsd_pids}; do
 		echo "get_pss_memory_virtiofsd: p=${p}"
 		parent_pid=$(ppid "${p}")
 		cmd="$(cat /proc/${p}/cmdline | tr -d '\0')"
