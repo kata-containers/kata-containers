@@ -38,7 +38,7 @@ echo "INFO: Apply patches from $patches_dir"
 if [ -d "$patches_dir" ]; then
 	patches=($(find "$patches_dir" -maxdepth 1 -name '*.patch'|sort -t- -k1,1n))
 	echo "INFO: Found ${#patches[@]} patches"
-	for patch in ${patches[@]}; do
+	for patch in "${patches[@]}"; do
 		echo "INFO: Apply $patch"
 		patch -p1 < "$patch" || \
 			{ echo >&2 "ERROR: Not applied. Exiting..."; exit 1; }

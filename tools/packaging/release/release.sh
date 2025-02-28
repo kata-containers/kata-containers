@@ -143,8 +143,8 @@ function _publish_multiarch_manifest()
 	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
 	_check_required_env_var "KATA_DEPLOY_REGISTRIES"
 
-	for registry in ${REGISTRIES[@]}; do
-		for tag in ${IMAGE_TAGS[@]}; do
+	for registry in "${REGISTRIES[@]}"; do
+		for tag in "${IMAGE_TAGS[@]}"; do
 			docker manifest create ${registry}:${tag} \
 				--amend ${registry}:${tag}-amd64 \
 				--amend ${registry}:${tag}-arm64 \

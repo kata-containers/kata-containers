@@ -23,13 +23,13 @@ function install_dependencies() {
 			deps=(xorriso curl qemu-utils openssh-client)
 
 			sudo apt-get update
-			sudo apt-get install -y ${deps[@]} qemu-system-x86
+			sudo apt-get install -y "${deps[@]}" qemu-system-x86
 			;;
 		fedora)
 			# cloud image dependencies
 			deps=(xorriso curl qemu-img openssh)
 
-			sudo dnf install -y ${deps[@]} qemu-system-x86-core
+			sudo dnf install -y "${deps[@]}" qemu-system-x86-core
 			;;
 
 		"*")

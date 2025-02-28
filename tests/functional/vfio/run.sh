@@ -347,4 +347,4 @@ main() {
 	check_vfio "${vfio_cid}"
 }
 
-main $@
+main "$@"
