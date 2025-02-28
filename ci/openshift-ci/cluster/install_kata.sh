@@ -177,7 +177,7 @@ wait_for_app_pods_message() {
 		pods=($(oc get pods -l app="$app" --no-headers=true $namespace | awk '{print $1}'))
 		[ "${#pods}" -ge "$pod_count" ] && break
 		if [ "$SECONDS" -gt "$timeout" ]; then
-			echo "Unable to find ${pod_count} pods for '-l app=\"$app\"' in ${SECONDS}s (${pods[@]})"
+			printf "Unable to find ${pod_count} pods for '-l app=\"$app\"' in ${SECONDS}s (%s)" "${pods[@]}"
 			return -1
 		fi
 	done
@@ -187,7 +187,7 @@ wait_for_app_pods_message() {
 			echo "$log" | grep "$message" -q && echo "Found $(echo "$log" | grep "$message") in $pod's log ($SECONDS)" && break;
 			if [ "$SECONDS" -gt "$timeout" ]; then
 				echo -n "Message '$message' not present in '${pod}' pod of the '-l app=\"$app\"' "
-				echo "pods after ${SECONDS}s (${pods[@]})"
+				printf "pods after ${SECONDS}s :(%s)\n" "${pods[@]}"
 				echo "Pod $pod's output so far:"
 				echo "$log"
 				return -1

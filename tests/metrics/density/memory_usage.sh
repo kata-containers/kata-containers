@@ -377,7 +377,7 @@ function main(){
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
 		help
-		die "Not enough arguments [$@]"
+		die "Not enough arguments [$*]"
 	fi
 
 	if [ "${CTR_RUNTIME}" != "io.containerd.runc.v2" ] && [ "${CTR_RUNTIME}" != "io.containerd.kata.v2" ]; then
