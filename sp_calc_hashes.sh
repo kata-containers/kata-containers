@@ -3,7 +3,7 @@
 set -euo pipefail;
 
 BUILD_DIR="${BUILD_DIR:-"build"}";
-UPLOAD_FILES="${UPLOAD_FILES:-"rootfs.img OVMF.fd root_hash.txt vmlinuz"}";
+UPLOAD_FILES="${UPLOAD_FILES:-"rootfs.img OVMF.fd OVMF_AMD.fd root_hash.txt vmlinuz"}";
 S3_BUCKET="${S3_BUCKET:-"builds-vm"}";
 TAG="${TAG:-"build-0"}";
 
@@ -16,6 +16,7 @@ for FILE in "${FILES[@]}"; do
     case $FILE in
       rootfs.img) key="rootfs" ;;
       OVMF.fd) key="bios" ;;
+      OVMF_AMD.fd) key="bios_amd" ;;
       root_hash.txt) key="root_hash" ;;
       vmlinuz) key="kernel" ;;
     esac
