@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+#
 # Copyright (c) 2018 Yash Jain, 2022 IBM Corp.
 #
 # SPDX-License-Identifier: Apache-2.0
