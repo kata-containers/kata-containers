@@ -37,7 +37,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
@@ -1682,7 +1682,7 @@ func getContainerTypeforCRI(c *Container) (string, string) {
 
 	// CRIContainerTypeKeyList lists all the CRI keys that could define
 	// the container type from annotations in the config.json.
-	CRIContainerTypeKeyList := []string{ctrAnnotations.ContainerType, podmanAnnotations.ContainerType}
+	CRIContainerTypeKeyList := []string{ctrAnnotations.ContainerType, crioAnnotations.ContainerType}
 	containerType := c.config.Annotations[vcAnnotations.ContainerTypeKey]
 	for _, key := range CRIContainerTypeKeyList {
 		_, ok := c.config.CustomSpec.Annotations[key]
@@ -1707,7 +1707,7 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 		switch criContainerType {
 		case ctrAnnotations.ContainerType:
 			image_ref = container_annotations[kubernetesCRIImageName]
-		case podmanAnnotations.ContainerType:
+		case crioAnnotations.ContainerType:
 			image_ref = container_annotations[kubernetesCRIOImageName]
 		default:
 			// There are cases, like when using nerdctl, where the criContainerType
