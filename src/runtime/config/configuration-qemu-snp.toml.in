@@ -149,7 +149,7 @@ default_memory = @DEFMEMSZ@
 # unspecified or == 0           --> will be set to the actual amount of physical RAM
 # > 0 <= amount of physical RAM --> will be set to the specified number
 # > amount of physical RAM      --> will be set to the actual amount of physical RAM
-default_maxmemory = @DEFMAXMEMSZ@
+default_maxmemory = 524288
 
 # The size in MiB will be plused to max memory of hypervisor.
 # It is the memory address space for the NVDIMM devie.
