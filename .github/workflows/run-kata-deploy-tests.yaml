@@ -28,7 +28,6 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - clh
           - qemu
         k8s:
           - k0s
