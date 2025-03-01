@@ -665,7 +665,7 @@ function main() {
 		if [[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ]]; then
 			info "TestKilledVmmCleanup and TestDeviceCgroup skipped for qemu with runtime-rs"
 			info "Please check out https://github.com/kata-containers/kata-containers/issues/9375"
-			break
+			return
 		else
 			TestKilledVmmCleanup
 

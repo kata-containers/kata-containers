@@ -273,8 +273,8 @@ get_test_config() {
 	local config="${script_dir}/${distro}/config.sh"
 	source ${config}
 
-	echo -e "INIT_PROCESS:\t\t$INIT_PROCESS"
-	echo -e "ARCH_EXCLUDE_LIST:\t\t${ARCH_EXCLUDE_LIST[@]}"
+	printf "INIT_PROCESS:\t\t%s\n" "${INIT_PROCESS:-}"
+	printf "ARCH_EXCLUDE_LIST:\t\t%s\n" "${ARCH_EXCLUDE_LIST[@]:-}"
 }
 
 check_function_exist()

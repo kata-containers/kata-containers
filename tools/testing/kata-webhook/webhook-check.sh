@@ -83,4 +83,4 @@ main() {
 	info "kata-webhook is up and working"
 }
 
-main $@
+main "$@"

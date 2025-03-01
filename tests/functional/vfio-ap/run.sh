@@ -80,7 +80,7 @@ cleanup() {
 
     # Destroy mediated devices
     IFS=$'\n' read -r -d '' -a arr_dev < <( ls -1 /sys/bus/mdev/devices && printf '\0' )
-    for item in ${arr_dev[@]}; do
+    for item in "${arr_dev[@]}"; do
         if [[ ${item//-/} =~ ^[[:xdigit:]]{32}$ ]]; then
             echo 1 | sudo tee /sys/bus/mdev/devices/${item}/remove > /dev/null
         fi
@@ -100,7 +100,7 @@ validate_env() {
         exit 1
     fi
     necessary_commands=( "${container_engine}" "ctr" "crictl" "lszcrypt" )
-    for cmd in ${necessary_commands[@]}; do
+    for cmd in "${necessary_commands[@]}"; do
         if ! which ${cmd} > /dev/null 2>&1; then
             echo "${cmd} not found" >&2
             exit 1
@@ -244,4 +244,4 @@ main() {
     run_tests
 }
 
-main $@
+main "$@"

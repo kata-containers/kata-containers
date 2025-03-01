@@ -326,4 +326,4 @@ main() {
 	ssh_vm "/home/${USER}/run.sh"
 }
 
-main $@
+main "$@"

@@ -52,7 +52,7 @@ main()
 		done
 		[ "$flag" == "false" ] && result+=("$TEST_ENTRY")
 	done
-	echo ${result[@]}
+	echo "${result[@]}"
 }
 
 main "$@"

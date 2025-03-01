@@ -132,7 +132,7 @@ ensure_yq
 info "Running tests with bats version: $(bats --version)"
 
 tests_fail=()
-for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
+for K8S_TEST_ENTRY in "${K8S_TEST_UNION[@]}"
 do
 	info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"

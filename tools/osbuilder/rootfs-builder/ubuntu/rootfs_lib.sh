@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+#
 # Copyright (c) 2018 Yash Jain, 2022 IBM Corp.
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -49,7 +51,7 @@ EOF
 	apt update
 
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
-		if [ "$OS_VERSION" = "focal" ]; then	
+		if [ "$OS_VERSION" = "focal" ]; then
 			echo "WARN: multistrap failed, proceed with hack for Ubuntu 20.04"
 			build_dbus $rootfs_dir
 		else

@@ -145,7 +145,7 @@ docker run \
 	--env ARCH="${ARCH}" \
 	--rm \
 	-w ${script_dir} \
-	build-kata-deploy "${kata_deploy_create}" $@
+	build-kata-deploy "${kata_deploy_create}" "$@"
 
 if [ $remove_dot_docker_dir == true ]; then
 	rm -rf "$HOME/.docker"

@@ -38,4 +38,4 @@ build_coco_guest_components_from_source() {
 	popd
 }
 
-build_coco_guest_components_from_source $@
+build_coco_guest_components_from_source "$@"

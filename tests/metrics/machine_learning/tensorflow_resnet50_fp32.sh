@@ -111,7 +111,7 @@ EOF
 function main() {
 	# Verify enough arguments
 	if [ $# != 2 ]; then
-		echo >&2 "error: Not enough arguments [$@]"
+		echo >&2 "error: Not enough arguments [$*]"
 		help
 		exit 1
 	fi
