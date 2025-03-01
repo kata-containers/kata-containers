@@ -325,22 +325,20 @@ function deploy_rke2() {
 
 function deploy_microk8s() {
 	sudo snap install microk8s --classic
+	sudo usermod -a -G microk8s ${USER}
+	mkdir -p ~/.kube
+	sudo microk8s kubectl config view --raw > ~/.kube/config
+	sudo chown ${USER}:${USER} ~/.kube/config
 
 	# These are arbitrary values
-	sleep 30
-	sudo /snap/bin/microk8s.status --wait-ready --timeout 300
+	sudo microk8s status --wait-ready --timeout 300
 
 	# install kubectl
 	ARCH=$(arch_to_golang)
-	kubectl_version=$(/snap/bin/microk8s.version | grep -oe 'v[0-9]\+\(\.[0-9]\+\)*')
+	kubectl_version=$(sudo microk8s version | grep -oe 'v[0-9]\+\(\.[0-9]\+\)*')
 	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
 	sudo rm -rf /usr/local/bin/kubectl
-
-	mkdir -p ~/.kube
-	sudo /snap/bin/microk8s.config > ~/.kube/config
-	sudo chown ${USER}:${USER} ~/.kube/config
-	newgrp microk8s
 }
 
 function _get_k0s_kubernetes_version_for_crio() {
