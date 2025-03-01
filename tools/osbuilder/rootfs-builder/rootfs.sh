@@ -53,9 +53,11 @@ USE_DOCKER=${USE_DOCKER:-""}
 USE_PODMAN=${USE_PODMAN:-""}
 EXTRA_PKGS=${EXTRA_PKGS:-""}
 
+KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
-nvidia_rootfs="${script_dir}/nvidia/nvidia_rootfs.sh"
-[ "${ARCH}" == "x86_64" ] || [ "${ARCH}" == "aarch64" ] && source "$nvidia_rootfs"
+VARIANT=${VARIANT:-""}
+
+[[ "${VARIANT}" == "nvidia-gpu"* ]] && source "${script_dir}/nvidia/nvidia_rootfs.sh"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -564,6 +566,7 @@ build_rootfs_distro()
 			--env AGENT_POLICY="${AGENT_POLICY}" \
 			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \
 			--env NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK}" \
+			--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \

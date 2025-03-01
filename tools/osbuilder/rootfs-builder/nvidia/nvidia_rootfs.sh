@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
-[ -n "$DEBUG" ] && set -x
+[[ -n "${DEBUG}" ]] && set -x
 
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 # catch errors and then assign
@@ -14,12 +14,17 @@ readonly SCRIPT_DIR="${script_dir}/nvidia"
 
 # This will control how much output the inird/image will produce
 DEBUG=""
+KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 
-machine_arch=${ARCH}
+NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:?NVIDIA_GPU_STACK must be set}
+VARIANT=${VARIANT:?VARIANT must be set}
+ARCH=${ARCH:?ARCH must be set}
 
-if [[ "$machine_arch" == "aarch64" ]]; then
+machine_arch="${ARCH}"
+
+if [[ "${machine_arch}" == "aarch64" ]]; then
     distro_arch="arm64"
-elif [[ "$machine_arch" == "x86_64" ]]; then
+elif [[ "${machine_arch}" == "x86_64" ]]; then
     distro_arch="amd64"
 else
     die "Unsupported architecture: ${machine_arch}"
@@ -39,7 +44,7 @@ setup_nvidia-nvrc() {
 	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
 
 	rm -rf "${PROJECT}"
-	git clone https://github.com/NVIDIA/${PROJECT}.git
+	git clone https://github.com/NVIDIA/"${PROJECT}".git
 
 	pushd "${PROJECT}" > /dev/null || exit 1
 
@@ -67,8 +72,8 @@ setup_nvidia-gpu-admin-tools() {
 
 	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
 
-	rm -rf "$(basename ${TARGET_GIT})"
-	git clone ${TARGET_GIT}
+	rm -rf "$(basename "${TARGET_GIT}")"
+	git clone "${TARGET_GIT}"
 
 	rm -rf dist
 	# Installed via pipx local python environment
@@ -98,14 +103,14 @@ setup_nvidia-dcgm-exporter() {
 	local dex="dcgm-exporter"
 
 	rm -rf "${dex}"
-	git clone --branch "${TARGET_VERSION}" https://github.com/NVIDIA/${dex}
-	make -C ${dex} binary
+	git clone --branch "${TARGET_VERSION}" https://github.com/NVIDIA/"${dex}"
+	make -C "${dex}" binary
 
 	mkdir -p ../destdir/bin
-	mkdir -p ../destdir/etc/${dex}
+	mkdir -p ../destdir/etc/"${dex}"
 
-	cp ${dex}/cmd/${dex}/${dex} ../destdir/bin/.
-	cp ${dex}/etc/*.csv ../destdir/etc/${dex}/.
+	cp "${dex}"/cmd/"${dex}"/"${dex}" ../destdir/bin/.
+	cp "${dex}"/etc/*.csv ../destdir/etc/"${dex}"/.
 
 	tar cvfa "${TARBALL}" -C ../destdir .
 	tar tvf  "${TARBALL}"
@@ -114,7 +119,7 @@ setup_nvidia-dcgm-exporter() {
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
-	if [ -e "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" ]; then
+	if [[ -e "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" ]]; then
 		info "nvidia: GPU rootfs stage one already exists"
 		return
 	fi
@@ -123,11 +128,11 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	local rootfs_type=${1:-""}
 
-	info "nvidia: Setup GPU rootfs type=$rootfs_type"
+	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
 
 	for component in "nvidia-gpu-admin-tools" "nvidia-dcgm-exporter" "nvidia-nvrc"; do
-		if [ ! -e "${BUILD_DIR}/kata-static-${component}.tar.zst" ]; then
-			setup_${component}
+		if [[ ! -e "${BUILD_DIR}/kata-static-${component}.tar.zst" ]]; then
+			setup_"${component}"
 		fi
 	done
 
@@ -136,28 +141,28 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	chmod +x ./nvidia_chroot.sh
 
 	local appendix=""
-	if [ "$rootfs_type" == "confidential" ]; then
+	if [[ "${rootfs_type}" == "confidential" ]]; then
 		appendix="-${rootfs_type}"
 	fi
-	if echo "$NVIDIA_GPU_STACK" | grep -q '\<dragonball\>'; then
+	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
     		appendix="-dragonball-experimental"
 	fi
 
 	# We need the kernel packages for building the drivers cleanly will be
 	# deinstalled and removed from the roofs once the build finishes.
-	tar -xvf ${BUILD_DIR}/kata-static-kernel-nvidia-gpu"${appendix}"-headers.tar.xz -C .
+	tar -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-headers.tar.xz -C .
 
 	# If we find a local downloaded run file build the kernel modules
 	# with it, otherwise use the distribution packages. Run files may have
 	# more recent drivers available then the distribution packages.
 	local run_file_name="nvidia-driver.run"
-	if [ -f ${BUILD_DIR}/${run_file_name} ]; then
-		cp -L ${BUILD_DIR}/${run_file_name} ./${run_file_name}
+	if [[ -f ${BUILD_DIR}/${run_file_name} ]]; then
+		cp -L "${BUILD_DIR}"/"${run_file_name}" ./"${run_file_name}"
 	fi
 
 	local run_fm_file_name="nvidia-fabricmanager.run"
-	if [ -f ${BUILD_DIR}/${run_fm_file_name} ]; then
-		cp -L ${BUILD_DIR}/${run_fm_file_name} ./${run_fm_file_name}
+	if [[ -f ${BUILD_DIR}/${run_fm_file_name} ]]; then
+		cp -L "${BUILD_DIR}"/"${run_fm_file_name}" ./"${run_fm_file_name}"
 	fi
 
 	mount --rbind /dev ./dev
@@ -165,7 +170,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount -t proc /proc ./proc
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} \
-		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK}"
+		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK} ${KBUILD_SIGN_PIN}"
 
 	umount -R ./dev
 	umount ./proc
@@ -309,7 +314,7 @@ compress_rootfs() {
 }
 
 toggle_debug() {
-	if echo "$NVIDIA_GPU_STACK" | grep -q '\<debug\>'; then
+	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<debug\>'; then
 		export DEBUG="true"
 	fi
 }
@@ -319,13 +324,13 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
 
-	echo "nvidia: chisseling the following stack components: $stack"
+	echo "nvidia: chisseling the following stack components: ${stack}"
 
 
-	[ -e "${stage_one}" ] && rm -rf "${stage_one}"
-	[ ! -e "${stage_one}" ] && mkdir -p "${stage_one}"
+	[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
+	[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
 
-	tar -C "${stage_one}" -xf ${BUILD_DIR}/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst
+	tar -C "${stage_one}" -xf "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst
 
 
 	pushd "${stage_two}" >> /dev/null
@@ -334,19 +339,19 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	chisseled_init
 	chisseled_iptables
 
-	IFS=',' read -r -a stack_components <<< "$NVIDIA_GPU_STACK"
+	IFS=',' read -r -a stack_components <<< "${NVIDIA_GPU_STACK}"
 
 	for component in "${stack_components[@]}"; do
-		if [ "$component" = "compute" ]; then
+		if [[ "${component}" = "compute" ]]; then
 			echo "nvidia: processing \"compute\" component"
 			chisseled_compute
-		elif [ "$component" = "dcgm" ]; then
+		elif [[ "${component}" = "dcgm" ]]; then
 			echo "nvidia: processing DCGM component"
 			chisseled_dcgm
-		elif [ "$component" = "nvswitch" ]; then
+		elif [[ "${component}" = "nvswitch" ]]; then
 			echo "nvidia: processing NVSwitch component"
 			chisseled_nvswitch
-		elif [ "$component" = "gpudirect" ]; then
+		elif [[ "${component}" = "gpudirect" ]]; then
 			echo "nvidia: processing GPUDirect component"
 			chisseled_gpudirect
 		fi
