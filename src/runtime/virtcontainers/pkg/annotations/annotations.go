@@ -241,6 +241,14 @@ const (
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
 
+	// Provide a hint to a remote hypervisor implementation which osdisk size in GB should be
+	// allocated for the VM. It depends on the implementation whether this field is honored.
+	RootVolumeSize = kataAnnotHypervisorPrefix + "root_volume_size"
+
+	//
+	// Confidential Container related annotations
+	//
+
 	// Initdata is the initdata passed in when CreateVM
 	Initdata = kataConfAnnotationsPrefix + "runtime.cc_init_data"
 )
