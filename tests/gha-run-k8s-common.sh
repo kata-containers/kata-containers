@@ -324,6 +324,7 @@ function deploy_rke2() {
 }
 
 function deploy_microk8s() {
+	set -x
 	sudo snap install microk8s --classic
 	sudo usermod -a -G microk8s ${USER}
 	mkdir -p ~/.kube
