@@ -54,9 +54,14 @@ function make_tarball_results() {
 }
 
 function run_test_launchtimes() {
-	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
+	repetitions=20
+	if [[ ${KATA_HYPERVISOR} == "qemu" ]]; then
+		# The qemu workload seems to fail before it can run ~5-7 repetitions of the workload
+		repetitions=3
+	fi
 
-	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
+	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
+	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n "${repetitions}"
 }
 
 function run_test_memory_usage() {
