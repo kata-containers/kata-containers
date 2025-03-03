@@ -10,7 +10,7 @@
 
 set -e
 
-[ -n "${DEBUG}" ] && set -x
+[[ -n "${DEBUG}" ]] && set -x
 
 cidir=$(realpath $(dirname "$0"))
 source "${cidir}/common.bash"
@@ -73,7 +73,7 @@ paths_to_skip=(
 # list=(${list})
 skip_paths(){
 	local list_param="${1}"
-	[ -z "${list_param}" ] && return
+	[[ -z "${list_param}" ]] && return
 	local list=(${list_param})
 
 	for p in "${paths_to_skip[@]}"; do
@@ -118,7 +118,7 @@ chronic=chronic
 
 # Disable chronic on OSX to avoid having to update the Travis config files
 # for additional packages on that platform.
-[ "$(uname -s)" == "Darwin" ] && chronic=
+[[ "$(uname -s)" == "Darwin" ]] && chronic=
 
 usage()
 {
@@ -201,7 +201,7 @@ ensure_func_is_check_func() {
 
 	{ echo "${name}" | grep -q "${check_func_regex}"; ret=$?; }
 
-	[ "${ret}" = 0 ] || die "function '${name}' is not a check function"
+	[[ "${ret}" = 0 ]] || die "function '${name}' is not a check function"
 }
 
 # Returns "yes" if the specified function needs to run on all architectures,
@@ -213,7 +213,7 @@ func_is_arch_specific() {
 
 	{ echo "${name}" | grep -q "${arch_func_regex}"; ret=$?; }
 
-	if [ "${ret}" = 0 ]; then
+	if [[ "${ret}" = 0 ]]; then
 		echo "yes"
 	else
 		echo "no"
@@ -235,7 +235,7 @@ pkg_to_path()
 # Check that chronic is installed, otherwise die.
 need_chronic() {
 	local first_word
-	[ -z "${chronic}" ] && return
+	[[ -z "${chronic}" ]] && return
 	first_word="${chronic%% *}"
 	command -v chronic &>/dev/null || \
 		die "chronic command not found. You must have it installed to run this check." \
@@ -274,12 +274,12 @@ static_check_go_arch_specific()
 	go_packages=$(skip_paths "${go_packages[@]}")
 
 	# No packages to test
-	[ -z "${go_packages}" ] && popd && return
+	[[ -z "${go_packages}" ]] && popd && return
 
 	local linter="golangci-lint"
 
 	# Run golang checks
-	if [ ! "$(command -v ${linter})" ]
+	if [[ ! "$(command -v ${linter})" ]]
 	then
 		info "Installing ${linter}"
 
@@ -309,7 +309,7 @@ static_check_go_arch_specific()
 		# perform a basic build since some repos generate code which
 		# is required for the package to be buildable (and thus
 		# checkable).
-		[ -f "${makefile}" ] && (cd "${path}" && make)
+		[[ -f "${makefile}" ]] && (cd "${path}" && make)
 
 		dirs+=" ${path}"
 	done
@@ -341,7 +341,7 @@ install_yamllint()
 
 	have_yamllint_cmd=$(command -v "${yamllint_cmd}" || true)
 
-	if [ -z "${have_yamllint_cmd}" ]; then
+	if [[ -z "${have_yamllint_cmd}" ]]; then
 		info "Cannot install ${package}" && return
 	fi
 }
@@ -354,16 +354,16 @@ static_check_versions()
 {
 	local db="versions.yaml"
 
-	if [ -z "${have_yamllint_cmd}" ]; then
+	if [[ -z "${have_yamllint_cmd}" ]]; then
 		info "Installing yamllint"
 		install_yamllint
 	fi
 
 	pushd ${repo_path}
 
-	[ ! -e "${db}" ] && popd && return
+	[[ ! -e "${db}" ]] && popd && return
 
-	if [ -n "${have_yamllint_cmd}" ]; then
+	if [[ -n "${have_yamllint_cmd}" ]]; then
 		eval "${yamllint_cmd}" "${db}"
 	else
 		info "Cannot check versions as ${yamllint_cmd} not available"
@@ -374,10 +374,10 @@ static_check_versions()
 
 static_check_labels()
 {
-	[ $(uname -s) != Linux ] && info "Can only check labels under Linux" && return
+	[[ $(uname -s) != Linux ]] && info "Can only check labels under Linux" && return
 
 	# Handle SLES which doesn't provide the required command.
-	[ -z "${have_yamllint_cmd}" ] && info "Cannot check labels as ${yamllint_cmd} not available" && return
+	[[ -z "${have_yamllint_cmd}" ]] && info "Cannot check labels as ${yamllint_cmd} not available" && return
 
 	# Since this script is called from another repositories directory,
 	# ensure the utility is built before the script below (which uses it) is run.
@@ -396,7 +396,7 @@ static_check_labels()
 static_check_license_headers()
 {
 	# The branch is the baseline - ignore it.
-	[ "${specific_branch}" = "true" ] && return
+	[[ "${specific_branch}" = "true" ]] && return
 
 	# See: https://spdx.org/licenses/Apache-2.0.html
 	local -r spdx_tag="SPDX-License-Identifier"
@@ -428,7 +428,7 @@ static_check_license_headers()
 	files="${text_files[*]}"
 
 	# no text files were changed
-	[ -z "${files}" ] && info "No files found" && popd && return
+	[[ -z "${files}" ]] && info "No files found" && popd && return
 
 	local header_check
 
@@ -490,7 +490,7 @@ static_check_license_headers()
 			-EL ${extra_args} -E "\<${pattern}\>" \
 			${files} || true)
 
-		if [ -n "${missing}" ]; then
+		if [[ -n "${missing}" ]]; then
 			cat >&2 <<-EOF
 		ERROR: Required ${desc} check ('${pattern}') failed for the following files:
 
@@ -506,10 +506,10 @@ EOF
 run_url_check_cmd()
 {
 	local url="${1:-}"
-	[ -n "${url}" ] || die "need URL"
+	[[ -n "${url}" ]] || die "need URL"
 
 	local out_file="${2:-}"
-	[ -n "${out_file}" ] || die "need output file"
+	[[ -n "${out_file}" ]] || die "need output file"
 
 	# Can be blank
 	local extra_args="${3:-}"
@@ -540,10 +540,10 @@ run_url_check_cmd()
 check_url()
 {
 	local url="${1:-}"
-	[ -n "${url}" ] || die "need URL to check"
+	[[ -n "${url}" ]] || die "need URL to check"
 
 	local invalid_urls_dir="${2:-}"
-	[ -n "${invalid_urls_dir}" ] || die "need invalid URLs directory"
+	[[ -n "${invalid_urls_dir}" ]] || die "need invalid URLs directory"
 
 	local curl_out
 	curl_out=$(mktemp)
@@ -595,13 +595,13 @@ check_url()
 		info "Checking URL ${url} with User Agent '${user_agent}'"
 
 		local curl_ua_args
-		[ -n "${user_agent}" ] && curl_ua_args="-A '${user_agent}'"
+		[[ -n "${user_agent}" ]] && curl_ua_args="-A '${user_agent}'"
 
 		{ run_url_check_cmd "${url}" "${curl_out}" "${curl_ua_args}"; ret=$?; } || true
 
 		# A transitory error, or the URL is incorrect,
 		# but capture either way.
-		if [ "${ret}" -ne 0 ]; then
+		if [[ "${ret}" -ne 0 ]]; then
 			errors+=("Failed to check URL '${url}' (user agent: '${user_agent}', return code ${ret})")
 
 			# Try again with another UA since it appears that some return codes
@@ -615,7 +615,7 @@ check_url()
 		http_statuses=$(grep -E "^HTTP" "${curl_out}" |\
 			awk '{print $2}' || true)
 
-		if [ -z "${http_statuses}" ]; then
+		if [[ -z "${http_statuses}" ]]; then
 			errors+=("no HTTP status codes for URL '${url}' (user agent: '${user_agent}')")
 
 			continue
@@ -643,7 +643,7 @@ check_url()
 
 			{ grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)" <<< "${status}"; ret=$?; } || true
 
-			[ "${ret}" -eq 0 ] && continue
+			[[ "${ret}" -eq 0 ]] && continue
 
 			fail_count+=1
 		done
@@ -652,13 +652,13 @@ check_url()
 		# this UA, the URL is valid so we don't need to check with any
 		# further UAs, so clear any (transitory) errors we've
 		# recorded.
-		[ "${fail_count}" -eq 0 ] && errors=() && break
+		[[ "${fail_count}" -eq 0 ]] && errors=() && break
 
 		echo "${url}" >> "${invalid_file}"
 		errors+=("found HTTP error status codes for URL ${url} (status: '${status}', user agent: '${user_agent}')")
 	done
 
-	[ "${#errors}" = 0 ] && return 0
+	[[ "${#errors}" = 0 ]] && return 0
 
 	die "failed to check URL '${url}': errors: '${errors[*]}'"
 }
@@ -670,7 +670,7 @@ static_check_docs()
 
 	pushd ${repo_path}
 
-	if [ ! "$(command -v ${cmd})" ]
+	if [[ ! "$(command -v ${cmd})" ]]
 	then
 		info "Installing ${cmd} utility"
 
@@ -702,7 +702,7 @@ static_check_docs()
 	all_docs=$(git ls-files "*.md" | grep -Ev "(grpc-rs|target)/" | sort || true)
 	all_docs=$(skip_paths "${all_docs[@]}")
 
-	if [ "${specific_branch}" = "true" ]
+	if [[ "${specific_branch}" = "true" ]]
 	then
 		info "Checking all documents in ${branch} branch"
 		docs="${all_docs}"
@@ -736,7 +736,7 @@ static_check_docs()
 		done
 	fi
 
-	[ -z "${docs}" ] && info "No documentation to check" && return
+	[[ -z "${docs}" ]] && info "No documentation to check" && return
 
 	local urls
 	local url_map=$(mktemp)
@@ -836,7 +836,7 @@ static_check_docs()
 
 	for url in ${urls}
 	do
-		if [ "${specific_branch}" != "true" ]
+		if [[ "${specific_branch}" != "true" ]]
 		then
 			# If the URL is new on this PR, it cannot be checked.
 			echo "${new_urls}" | grep -q -E "\<${url}\>" && \
@@ -879,13 +879,13 @@ static_check_docs()
 	# Combine all the separate invalid URL files into one
 	local invalid_files=$(ls "${invalid_urls_dir}")
 
-	if [ -n "${invalid_files}" ]; then
+	if [[ -n "${invalid_files}" ]]; then
 		pushd "${invalid_urls_dir}" &>/dev/null
 		cat $(echo "${invalid_files}"|tr '\n' ' ') > "${invalid_urls}"
 		popd &>/dev/null
 	fi
 
-	if [ -s "${invalid_urls}" ]
+	if [[ -s "${invalid_urls}" ]]
 	then
 		local files
 
@@ -916,7 +916,7 @@ static_check_docs()
 
 	popd
 
-	[ ${docs_failed} -eq 0 ] || {
+	[[ ${docs_failed} -eq 0 ]] || {
         url='https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling'
         die "spell check failed, See ${url} for more information."
     }
@@ -928,13 +928,13 @@ static_check_eof()
 	local anchor="EOF"
 
 
-	[ -z "${file}" ] && info "No files to check" && return
+	[[ -z "${file}" ]] && info "No files to check" && return
 
 	# Skip the itself
-	[ "${file}" == "${script_name}" ] && return
+	[[ "${file}" == "${script_name}" ]] && return
 
 	# Skip the Vagrantfile
-	[ "${file}" == "Vagrantfile" ] && return
+	[[ "${file}" == "Vagrantfile" ]] && return
 
 	local invalid=$(cat "${file}" |\
 		grep -o -E '<<-* *\w*' |\
@@ -943,7 +943,7 @@ static_check_eof()
 		sort -u |\
 		grep -v -E '^$' |\
 		grep -v -E "${anchor}" || true)
-	[ -z "${invalid}" ] || die "Expected '${anchor}' here anchor, in ${file} found: ${invalid}"
+	[[ -z "${invalid}" ]] || die "Expected '${anchor}' here anchor, in ${file} found: ${invalid}"
 }
 
 # Tests to apply to all files.
@@ -955,7 +955,7 @@ static_check_files()
 	local file
 	local files
 
-	if [ "${force}" = "false" ]
+	if [[ "${force}" = "false" ]]
 	then
 		info "Skipping check_files: see https://github.com/kata-containers/tests/issues/469"
 		return
@@ -965,7 +965,7 @@ static_check_files()
 
 	info "Checking files"
 
-	if [ "${specific_branch}" = "true" ]
+	if [[ "${specific_branch}" = "true" ]]
 	then
 		info "Checking all files in ${branch} branch"
 
@@ -979,7 +979,7 @@ static_check_files()
 		files=$(echo "${files}"|awk '{print $NF}')
 	fi
 
-	[ -z "${files}" ] && info "No files changed" && return
+	[[ -z "${files}" ]] && info "No files changed" && return
 
 	local matches=""
 
@@ -996,7 +996,7 @@ static_check_files()
 			cut -d: -f1 |\
 			sort -u || true)
 
-		[ -z "${match}" ] && continue
+		[[ -z "${match}" ]] && continue
 
 		# Don't fail if this script contains the patterns
 		# (as it is guaranteed to ;)
@@ -1013,7 +1013,7 @@ static_check_files()
 
 	popd
 
-	[ -z "${matches}" ] && return
+	[[ -z "${matches}" ]] && return
 
 	echo >&2 -n \
 		"ERROR: The following files contain TODO/FIXME's that need "
@@ -1058,7 +1058,7 @@ static_check_vendor()
 	        pushd ${dir}
 
 		# Check if directory has been changed to use go modules
-		if [ -f "go.mod" ]; then
+		if [[ -f "go.mod" ]]; then
 			info "go.mod file found in ${dir}, running go mod verify instead"
 			# This verifies the integrity of modules in the local cache.
 			# This does not really verify the integrity of vendored code:
@@ -1083,7 +1083,7 @@ static_check_xml()
 
 	all_xml=$(git ls-files "*.xml" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
-	if [ "${specific_branch}" = "true" ]
+	if [[ "${specific_branch}" = "true" ]]
 	then
 		info "Checking all XML files in ${branch} branch"
 		files="${all_xml}"
@@ -1098,7 +1098,7 @@ static_check_xml()
 		files=$(echo "${xml_status}" | awk '{print $NF}')
 	fi
 
-	[ -z "${files}" ] && info "No XML files to check" && popd && return
+	[[ -z "${files}" ]] && info "No XML files to check" && popd && return
 
 	local file
 
@@ -1124,7 +1124,7 @@ static_check_xml()
 
 		{ ${chronic} xmllint -format - <<< "${contents}"; ret=$?; } || true
 
-		[ "${ret}" -eq 0 ] || die "failed to check XML file '${file}'"
+		[[ "${ret}" -eq 0 ]] || die "failed to check XML file '${file}'"
 	done
 
 	popd
@@ -1141,7 +1141,7 @@ static_check_shell()
 
 	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
-	if [ "${specific_branch}" = "true" ]
+	if [[ "${specific_branch}" = "true" ]]
 	then
 		info "Checking all scripts in ${branch} branch"
 		scripts="${all_scripts}"
@@ -1155,7 +1155,7 @@ static_check_shell()
 		scripts=$(echo "${scripts_status}" | awk '{print $NF}')
 	fi
 
-	[ -z "${scripts}" ] && info "No scripts to check" && popd && return 0
+	[[ -z "${scripts}" ]] && info "No scripts to check" && popd && return 0
 
 	local script
 
@@ -1167,7 +1167,7 @@ static_check_shell()
 
 		{ ${chronic} bash -n "${script}"; ret=$?; } || true
 
-		[ "${ret}" -eq 0 ] || die "check for script '${script}' failed"
+		[[ "${ret}" -eq 0 ]] || die "check for script '${script}' failed"
 
 		static_check_eof "${script}"
 	done
@@ -1186,7 +1186,7 @@ static_check_json()
 
 	all_json=$(git ls-files "*.json" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
-	if [ "${specific_branch}" = "true" ]
+	if [[ "${specific_branch}" = "true" ]]
 	then
 		info "Checking all JSON in ${branch} branch"
 		json_files="${all_json}"
@@ -1200,7 +1200,7 @@ static_check_json()
 		json_files=$(echo "${json_status}" | awk '{print $NF}')
 	fi
 
-	[ -z "${json_files}" ] && info "No JSON files to check" && popd && return 0
+	[[ -z "${json_files}" ]] && info "No JSON files to check" && popd && return 0
 
 	local json
 
@@ -1212,7 +1212,7 @@ static_check_json()
 
 		{ ${chronic} jq -S . "${json}"; ret=$?; } || true
 
-		[ "${ret}" -eq 0 ] || die "failed to check JSON file '${json}'"
+		[[ "${ret}" -eq 0 ]] || die "failed to check JSON file '${json}'"
 	done
 
 	popd
@@ -1234,7 +1234,7 @@ has_hadolint_or_install()
 	if [[ -z "${has_linter}" && "${KATA_DEV_MODE}" == "yes" ]]; then
 		# Do not install if it is in development mode.
 		die "${linter_cmd} command not found. You must have the version ${linter_version} installed to run this check."
-	elif [ -n "${has_linter}" ]; then
+	elif [[ -n "${has_linter}" ]]; then
 		# Check if the expected linter version
 		if ${linter_cmd} --version | grep -v "${linter_version}" &>/dev/null; then
 			warn "${linter_cmd} command found but not the required version ${linter_version}"
@@ -1242,7 +1242,7 @@ has_hadolint_or_install()
 		fi
 	fi
 
-	if [ -z "${has_linter}" ]; then
+	if [[ -z "${has_linter}" ]]; then
 		local download_url="${linter_url}/releases/download/v${linter_version}/hadolint-Linux-x86_64"
 		info "Installing ${linter_cmd} ${linter_version} at ${linter_dest}"
 
@@ -1270,7 +1270,7 @@ static_check_dockerfiles()
 
         all_files=$(git ls-files "*/Dockerfile*" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
-        if [ "${specific_branch}" = "true" ]; then
+        if [[ "${specific_branch}" = "true" ]]; then
                 info "Checking all Dockerfiles in ${branch} branch"
 		files="${all_files}"
         else
@@ -1283,10 +1283,10 @@ static_check_dockerfiles()
 		files=$(echo "${files_status}" | awk '{print $NF}')
         fi
 
-        [ -z "${files}" ] && info "No Dockerfiles to check" && popd && return 0
+        [[ -z "${files}" ]] && info "No Dockerfiles to check" && popd && return 0
 
 	# As of this writing hadolint is only distributed for x86_64
-	if [ "$(uname -m)" != "x86_64" ]; then
+	if [[ "$(uname -m)" != "x86_64" ]]; then
 		info "Skip checking as ${linter_cmd} is not available for $(uname -m)"
 		popd
 		return 0
@@ -1357,7 +1357,7 @@ static_check_dockerfiles()
 			{ ${linter_cmd} "${file}"; ret=$?; } || true
 		fi
 
-		[ "${ret}" -eq 0 ] || die "failed to check Dockerfile '${file}'"
+		[[ "${ret}" -eq 0 ]] || die "failed to check Dockerfile '${file}'"
 	done
 	popd
 }
@@ -1383,25 +1383,25 @@ run_or_list_check_function()
 	#
 	# Whereas if this script is running all functions, just display an
 	# info message if a function cannot be run.
-	[ "${single_func_only}" = "true" ] && handler="die"
+	[[ "${single_func_only}" = "true" ]] && handler="die"
 
-	if [ "${handle_funcs}" = "arch-agnostic" ] && [ "${arch_func}" = "yes" ]; then
-		if [ "${list_only}" != "true" ]; then
+	if [[ "${handle_funcs}" = "arch-agnostic" ]] && [[ "${arch_func}" = "yes" ]]; then
+		if [[ "${list_only}" != "true" ]]; then
 			"${handler}" "Not running '${func}' as requested no architecture-specific functions"
 		fi
 
 		return 0
 	fi
 
-	if [ "${handle_funcs}" = "arch-specific" ] && [ "${arch_func}" = "no" ]; then
-		if [ "${list_only}" != "true" ]; then
+	if [[ "${handle_funcs}" = "arch-specific" ]] && [[ "${arch_func}" = "no" ]]; then
+		if [[ "${list_only}" != "true" ]]; then
 			"${handler}" "Not running architecture-agnostic function '${func}' as requested only architecture specific functions"
 		fi
 
 		return 0
 	fi
 
-	if [ "${list_only}" = "true" ]; then
+	if [[ "${list_only}" = "true" ]]; then
 		echo "${func}"
 		return 0
 	fi
@@ -1433,7 +1433,7 @@ announce()
 
 	local arch="${arch}"
 
-	[ -n "${detail}" ] && arch+=" ('${detail}')"
+	[[ -n "${detail}" ]] && arch+=" ('${detail}')"
 
 	local kernel
 	kernel=$(uname -r)
@@ -1481,13 +1481,13 @@ main()
 		--options="h" \
 		--longoptions="${long_option_names}" \
 		-- "$@")
-	[ $? -eq 0 ] || { usage >&2; exit 1; }
+	[[ $? -eq 0 ]] || { usage >&2; exit 1; }
 
 	eval set -- "${args}"
 
 	local func=
 
-	while [ $# -gt 1 ]
+	while [[ $# -gt 1 ]]
 	do
 		case "$1" in
 			--all) specific_branch="true" ;;
@@ -1517,17 +1517,17 @@ main()
 	done
 
 	# Consume getopt cruft
-	[ "$1" = "--" ] && shift
+	[[ "$1" = "--" ]] && shift
 
-	[ "$1" = "help" ] && usage && exit 0
+	[[ "$1" = "help" ]] && usage && exit 0
 
 	# Set if not already set by options
-	[ -z "${repo}" ] && repo="$1"
-	[ "${specific_branch}" = "false" ] && specific_branch="$2"
+	[[ -z "${repo}" ]] && repo="$1"
+	[[ "${specific_branch}" = "false" ]] && specific_branch="$2"
 
-	if [ -z "${repo}" ]
+	if [[ -z "${repo}" ]]
 	then
-		if [ -n "${KATA_DEV_MODE}" ]
+		if [[ -n "${KATA_DEV_MODE}" ]]
 		then
 			# No repo param provided so assume it's the current
 			# one to avoid developers having to specify one now
@@ -1537,7 +1537,7 @@ main()
 
 			info "Auto-detected repo as ${repo}"
 		else
-			if [ "${list_only}" != "true" ]; then
+			if [[ "${list_only}" != "true" ]]; then
 				echo >&2 "ERROR: need repo" && usage && exit 1
 			fi
 		fi
@@ -1550,7 +1550,7 @@ main()
 	local all_check_funcs=$(typeset -F|awk '{print $3}'|grep "${check_func_regex}"|sort)
 
 	# Run user-specified check and quit
-	if [ -n "${func}" ]; then
+	if [[ -n "${func}" ]]; then
 		single_func_only="true"
 		run_or_list_check_function "${func}"
 		exit 0
