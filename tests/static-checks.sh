@@ -249,7 +249,7 @@ static_check_go_arch_specific()
 	local submodule_packages
 	local all_packages
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	# List of all golang packages found in all submodules
 	#
@@ -321,7 +321,7 @@ static_check_go_arch_specific()
 	echo "${dirs}" | sed 's/^ *//g' | tr ' ' '\n'
 	for d in ${dirs};do
 		info "Running ${linter} on ${d}"
-		(cd ${d} && GO111MODULE=auto eval "${linter}" "${linter_args}" ".")
+		(cd "${d}" && GO111MODULE=auto eval "${linter}" "${linter_args}" ".")
 	done
 	popd
 
@@ -359,7 +359,7 @@ static_check_versions()
 		install_yamllint
 	fi
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	[[ ! -e "${db}" ]] && popd && return
 
@@ -409,7 +409,7 @@ static_check_license_headers()
 	header_checks+=("SPDX license header::${license_pattern}")
 	header_checks+=("Copyright header:-i:${copyright_pattern}")
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	files=$(get_pr_changed_file_details || true)
 
@@ -487,8 +487,8 @@ static_check_license_headers()
 			--exclude="src/mem-agent/example/protocols/protos/google/protobuf/*.proto" \
 			--exclude="src/libs/*/test/texture/*" \
 			--exclude="*.dic" \
-			-EL ${extra_args} -E "\<${pattern}\>" \
-			${files} || true)
+			-EL "${extra_args}" -E "\<${pattern}\>" \
+			"${files}" || true)
 
 		if [[ -n "${missing}" ]]; then
 			cat >&2 <<-EOF
@@ -526,7 +526,7 @@ run_url_check_cmd()
 	# Some endpoints return 403 to HEAD but 200 for GET,
 	# so perform a GET but only read headers.
 	curl \
-		${curl_extra_args[*]} \
+		"${curl_extra_args[*]}" \
 		-sIL \
 		-X GET \
 		-c - \
@@ -668,7 +668,7 @@ static_check_docs()
 {
 	local cmd="xurls"
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	if [[ ! "$(command -v ${cmd})" ]]
 	then
@@ -697,7 +697,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	all_docs=$(git ls-files "*.md" | grep -Ev "(grpc-rs|target)/" | sort || true)
 	all_docs=$(skip_paths "${all_docs[@]}")
@@ -983,7 +983,7 @@ static_check_files()
 
 	local matches=""
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	for file in ${files}
 	do
@@ -1041,7 +1041,7 @@ static_check_files()
 # - Ensure vendor metadata is valid.
 static_check_vendor()
 {
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	local files
 	local files_arr=()
@@ -1053,9 +1053,9 @@ static_check_vendor()
 	done <<< "${files}"
 
 	for file in "${files_arr[@]}"; do
-	        local dir=$(echo ${file} | sed 's/go\.mod//')
+	        local dir=$(echo "${file}" | sed 's/go\.mod//')
 
-	        pushd ${dir}
+	        pushd "${dir}"
 
 		# Check if directory has been changed to use go modules
 		if [[ -f "go.mod" ]]; then
@@ -1077,7 +1077,7 @@ static_check_xml()
 	local all_xml
 	local files
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	need_chronic
 
@@ -1135,7 +1135,7 @@ static_check_shell()
 	local all_scripts
 	local scripts
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	need_chronic
 
@@ -1180,7 +1180,7 @@ static_check_json()
 	local all_json
 	local json_files
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	need_chronic
 
@@ -1264,7 +1264,7 @@ static_check_dockerfiles()
         local ignore_files=(
         )
 
-	pushd ${repo_path}
+	pushd "${repo_path}"
 
 	local linter_cmd="hadolint"
 
@@ -1322,7 +1322,7 @@ static_check_dockerfiles()
 
 	local file
 	for file in ${files}; do
-		if echo "${ignore_files[@]}" | grep -q ${file} ; then
+		if echo "${ignore_files[@]}" | grep -q "${file}" ; then
 			info "Ignoring Dockerfile '${file}'"
 			continue
 		fi
