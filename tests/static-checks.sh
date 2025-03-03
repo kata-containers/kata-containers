@@ -283,8 +283,10 @@ static_check_go_arch_specific()
 	then
 		info "Installing ${linter}"
 
-		local linter_url=$(get_test_version "languages.golangci-lint.url")
-		local linter_version=$(get_test_version "languages.golangci-lint.version")
+		local linter_url
+		linter_url=$(get_test_version "languages.golangci-lint.url")
+		local linter_version
+		linter_version=$(get_test_version "languages.golangci-lint.version")
 
 		info "Forcing ${linter} version ${linter_version}"
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin "v${linter_version}"
@@ -434,13 +436,17 @@ static_check_license_headers()
 
 	for header_check in "${header_checks[@]}"
 	do
-		local desc=$(echo "${header_check}"|cut -d: -f1)
-		local extra_args=$(echo "${header_check}"|cut -d: -f2)
-		local pattern=$(echo "${header_check}"|cut -d: -f3-)
+		local desc
+		desc=$(echo "${header_check}"|cut -d: -f1)
+		local extra_args
+		extra_args=$(echo "${header_check}"|cut -d: -f2)
+		local pattern
+		pattern=$(echo "${header_check}"|cut -d: -f3-)
 
 		info "Checking ${desc}"
 
-		local missing=$(grep \
+		local missing
+		missing=$(grep \
 			--exclude=".git/*" \
 			--exclude=".gitignore" \
 			--exclude=".dockerignore" \
@@ -739,9 +745,12 @@ static_check_docs()
 	[[ -z "${docs}" ]] && info "No documentation to check" && return
 
 	local urls
-	local url_map=$(mktemp)
-	local invalid_urls=$(mktemp)
-	local md_links=$(mktemp)
+	local url_map
+	url_map=$(mktemp)
+	local invalid_urls
+	invalid_urls=$(mktemp)
+	local md_links
+	md_links=$(mktemp)
 	files_to_remove+=("${url_map}" "${invalid_urls}" "${md_links}")
 
 	info "Checking document markdown references"
@@ -831,7 +840,8 @@ static_check_docs()
 	urls=$(awk '{print $1}' "${url_map}" | sort -u)
 
 	info "Checking all document URLs"
-	local invalid_urls_dir=$(mktemp -d)
+	local invalid_urls_dir
+	invalid_urls_dir=$(mktemp -d)
 	files_to_remove+=("${invalid_urls_dir}")
 
 	for url in ${urls}
@@ -877,7 +887,8 @@ static_check_docs()
 	wait
 
 	# Combine all the separate invalid URL files into one
-	local invalid_files=$(ls "${invalid_urls_dir}")
+	local invalid_files
+	invalid_files=$(ls "${invalid_urls_dir}")
 
 	if [[ -n "${invalid_files}" ]]; then
 		pushd "${invalid_urls_dir}" &>/dev/null
@@ -936,7 +947,8 @@ static_check_eof()
 	# Skip the Vagrantfile
 	[[ "${file}" == "Vagrantfile" ]] && return
 
-	local invalid=$(cat "${file}" |\
+	local invalid
+	invalid=$(cat "${file}" |\
 		grep -o -E '<<-* *\w*' |\
 		sed -e 's/^<<-*//g' |\
 		tr -d ' ' |\
@@ -1053,7 +1065,8 @@ static_check_vendor()
 	done <<< "${files}"
 
 	for file in "${files_arr[@]}"; do
-	        local dir=$(echo "${file}" | sed 's/go\.mod//')
+	        local dir
+			dir=$(echo "${file}" | sed 's/go\.mod//')
 
 	        pushd "${dir}"
 
@@ -1226,11 +1239,15 @@ has_hadolint_or_install()
 {
 	# Global variable set by the caller. It might be overwritten here.
 	linter_cmd=${linter_cmd:-"hadolint"}
-	local linter_version=$(get_test_version "externals.hadolint.version")
-	local linter_url=$(get_test_version "externals.hadolint.url")
-	local linter_dest="${GOPATH}/bin/hadolint"
+	local linter_version
+	linter_version=$(get_test_version "externals.hadolint.version")
+	local linter_url
+	linter_url=$(get_test_version "externals.hadolint.url")
+	local linter_dest
+	linter_dest="${GOPATH}/bin/hadolint"
 
-	local has_linter=$(command -v "${linter_cmd}")
+	local has_linter
+	has_linter=$(command -v "${linter_cmd}")
 	if [[ -z "${has_linter}" && "${KATA_DEV_MODE}" == "yes" ]]; then
 		# Do not install if it is in development mode.
 		die "${linter_cmd} command not found. You must have the version ${linter_version} installed to run this check."
@@ -1547,7 +1564,8 @@ main()
 
 	announce
 
-	local all_check_funcs=$(typeset -F|awk '{print $3}'|grep "${check_func_regex}"|sort)
+	local all_check_funcs
+	all_check_funcs=$(typeset -F|awk '{print $3}'|grep "${check_func_regex}"|sort)
 
 	# Run user-specified check and quit
 	if [[ -n "${func}" ]]; then
