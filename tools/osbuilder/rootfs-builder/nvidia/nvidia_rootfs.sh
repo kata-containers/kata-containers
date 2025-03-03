@@ -275,7 +275,8 @@ chisseled_init() {
 	ln -sf ../run var/run
 
 	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
-
+	# make sure NVRC is the init process for the initrd and image case
+	ln -sf  /bin/NVRC init
 	ln -sf  /bin/NVRC sbin/init
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
