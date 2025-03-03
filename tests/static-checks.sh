@@ -684,7 +684,7 @@ static_check_docs()
 		go install "${url}@${version}"
 
 		command -v xurls &>/dev/null ||
-			die 'xurls not found. Ensure that "$GOPATH/bin" is in your $PATH'
+			die "xurls not found. Ensure that \"$GOPATH/bin\" is in your $PATH"
 	fi
 
 	info "Checking documentation"
@@ -756,7 +756,7 @@ static_check_docs()
 		(cd "${test_dir}/cmd/check-markdown" && make)
 
 	command -v kata-check-markdown &>/dev/null || \
-		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
+		die "kata-check-markdown command not found. Ensure that \"$GOPATH/bin\" is in your $PATH."
 
 	for doc in $md_docs_to_check
 	do
