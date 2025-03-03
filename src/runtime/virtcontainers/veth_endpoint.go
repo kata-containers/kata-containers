@@ -22,6 +22,7 @@ var vethTrace = getNetworkTrace(VethEndpointType)
 type VethEndpoint struct {
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	CCWDevice          *vcTypes.CcwDevice
 	EndpointProperties NetworkInfo
 	NetPair            NetworkInterfacePair
 	RxRateLimiter      bool
@@ -81,6 +82,16 @@ func (endpoint *VethEndpoint) PciPath() vcTypes.PciPath {
 // SetPciPath sets the PCI path of the endpoint.
 func (endpoint *VethEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
 	endpoint.PCIPath = pciPath
+}
+
+// CcwDevice returns the CCW device of the endpoint.
+func (endpoint *VethEndpoint) CcwDevice() *vcTypes.CcwDevice {
+	return endpoint.CCWDevice
+}
+
+// SetCcwDevice sets the CCW device of the endpoint.
+func (endpoint *VethEndpoint) SetCcwDevice(ccwDev vcTypes.CcwDevice) {
+	endpoint.CCWDevice = &ccwDev
 }
 
 // NetworkPair returns the network pair of the endpoint.

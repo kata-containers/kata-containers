@@ -196,8 +196,10 @@ type Interface struct {
 	IPAddresses []*IPAddress `protobuf:"bytes,3,rep,name=IPAddresses,proto3" json:"IPAddresses,omitempty"`
 	Mtu         uint64       `protobuf:"varint,4,opt,name=mtu,proto3" json:"mtu,omitempty"`
 	HwAddr      string       `protobuf:"bytes,5,opt,name=hwAddr,proto3" json:"hwAddr,omitempty"`
-	// PCI path for the device (see the pci::Path (Rust) or types.PciPath (Go) type for format details)
-	PciPath string `protobuf:"bytes,6,opt,name=pciPath,proto3" json:"pciPath,omitempty"`
+	// Path for the device (see the pci::Path (Rust) and types.PciPath
+	// (Go) or ccw::Device (Rust) and types.CcwDevice (Go) types for
+	// format details, depending on architecture)
+	DevicePath string `protobuf:"bytes,6,opt,name=devicePath,proto3" json:"devicePath,omitempty"`
 	// Type defines the type of interface described by this structure.
 	// The expected values are the one that are defined by the netlink
 	// library, regarding each type of link. Here is a non exhaustive
@@ -273,9 +275,9 @@ func (x *Interface) GetHwAddr() string {
 	return ""
 }
 
-func (x *Interface) GetPciPath() string {
+func (x *Interface) GetDevicePath() string {
 	if x != nil {
-		return x.PciPath
+		return x.DevicePath
 	}
 	return ""
 }

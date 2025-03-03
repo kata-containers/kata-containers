@@ -27,6 +27,7 @@ type TapEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	CCWDevice          *vcTypes.CcwDevice
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -64,6 +65,16 @@ func (endpoint *TapEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *TapEndpoint) NetworkPair() *NetworkInterfacePair {
 	return nil
+}
+
+// CcwDevice returns the CCW device of the endpoint.
+func (endpoint *TapEndpoint) CcwDevice() *vcTypes.CcwDevice {
+	return endpoint.CCWDevice
+}
+
+// SetCcwDevice sets the CCW device of the endpoint.
+func (endpoint *TapEndpoint) SetCcwDevice(ccwDev vcTypes.CcwDevice) {
+	endpoint.CCWDevice = &ccwDev
 }
 
 // SetProperties sets the properties for the endpoint.

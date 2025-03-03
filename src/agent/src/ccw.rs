@@ -15,7 +15,7 @@ use anyhow::anyhow;
 //   - <xxxx> is the device number (0000-ffff; leading zeroes can be omitted,
 //      e.g. 3 instead of 0003).
 // [1] https://www.ibm.com/docs/en/linuxonibm/pdf/lku4dd04.pdf
-// [2] https://qemu.readthedocs.io/en/latest/system/s390x/css.html
+// [2] https://qemu.readthedocs.io/en/master/system/s390x/css.html
 
 // Maximum subchannel set ID
 const SUBCHANNEL_SET_MAX: u8 = 3;

@@ -44,7 +44,7 @@ impl NetworkInfoFromLink {
                 ip_addresses: addrs.clone(),
                 mtu: attrs.mtu as u64,
                 hw_addr: hw_addr.to_string(),
-                pci_addr: Default::default(),
+                device_path: Default::default(),
                 field_type: link.r#type().to_string(),
                 raw_flags: attrs.flags & libc::IFF_NOARP as u32,
             },

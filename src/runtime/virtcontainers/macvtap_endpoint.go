@@ -25,6 +25,7 @@ type MacvtapEndpoint struct {
 	VMFds              []*os.File
 	VhostFds           []*os.File
 	PCIPath            vcTypes.PciPath
+	CCWDevice          *vcTypes.CcwDevice
 	RxRateLimiter      bool
 	TxRateLimiter      bool
 }
@@ -110,6 +111,16 @@ func (endpoint *MacvtapEndpoint) PciPath() vcTypes.PciPath {
 // SetPciPath sets the PCI path of the endpoint.
 func (endpoint *MacvtapEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
 	endpoint.PCIPath = pciPath
+}
+
+// CcwDevice returns the CCW device of the endpoint.
+func (endpoint *MacvtapEndpoint) CcwDevice() *vcTypes.CcwDevice {
+	return endpoint.CCWDevice
+}
+
+// SetCcwDevice sets the CCW device of the endpoint.
+func (endpoint *MacvtapEndpoint) SetCcwDevice(ccwDev vcTypes.CcwDevice) {
+	endpoint.CCWDevice = &ccwDev
 }
 
 // NetworkPair returns the network pair of the endpoint.
