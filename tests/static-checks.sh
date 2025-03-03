@@ -279,7 +279,7 @@ static_check_go_arch_specific()
 	local linter="golangci-lint"
 
 	# Run golang checks
-	if [[ ! "$(command -v ${linter})" ]]
+	if [[ ! "$(command -v "${linter}")" ]]
 	then
 		info "Installing ${linter}"
 
@@ -288,7 +288,7 @@ static_check_go_arch_specific()
 
 		info "Forcing ${linter} version ${linter_version}"
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin "v${linter_version}"
-		command -v ${linter} &>/dev/null || \
+		command -v "${linter}" &>/dev/null || \
 			die "${linter} command not found. Ensure that \"\$GOPATH/bin\" is in your \$PATH."
 	fi
 
@@ -333,9 +333,9 @@ install_yamllint()
 	package="yamllint"
 
 	case "${ID}" in
-		centos|rhel) sudo yum -y install ${package} ;;
-		ubuntu) sudo apt-get -y install ${package} ;;
-		fedora) sudo dnf -y install ${package} ;;
+		centos|rhel) sudo yum -y install "${package}" ;;
+		ubuntu) sudo apt-get -y install "${package}" ;;
+		fedora) sudo dnf -y install "${package}" ;;
 		*) die "Please install yamllint on ${ID}" ;;
 	esac
 
@@ -670,7 +670,7 @@ static_check_docs()
 
 	pushd "${repo_path}"
 
-	if [[ ! "$(command -v ${cmd})" ]]
+	if [[ ! "$(command -v "${cmd}")" ]]
 	then
 		info "Installing ${cmd} utility"
 
