@@ -701,12 +701,20 @@ function cleanup_crio() {
 }
 
 function cleanup_containerd() {
+	local runtime = $(get_container_runtime)
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
 		# There's no need to remove the drop-in file, as it'll be removed as
 		# part of the artefacts removal.  Thus, simply remove the file from
 		# the imports line of the containerd configuration and return.
 		tomlq -i -t $(printf '.imports|=.-["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
 		return
+	fi
+
+	if [[ "$runtime" == "containerd" ]]; then
+		kata_break=$(kubectl get node "$NODE_NAME" --show-labels | grep -ce 'kata-runtime=true')
+		if [[ "$kata_break" -eq 0 ]]; then
+			die "wait until installation is complete"
+		fi
 	fi
 
 	rm -f $containerd_conf_file
