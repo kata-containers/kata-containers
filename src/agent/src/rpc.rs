@@ -230,7 +230,7 @@ impl AgentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(&sl(), &req.devices, &mut oci, &self.sandbox).await?;
+        add_devices(&cid, &sl(), &req.devices, &mut oci, &self.sandbox).await?;
 
         // In guest-kernel mode some devices need extra handling. Taking the
         // GPU as an example the shim will inject CDI annotations that will
@@ -377,6 +377,9 @@ impl AgentService {
     ) -> Result<()> {
         let cid = req.container_id;
 
+        // Drop the host guest mapping for this container so we can reuse the
+        // PCI slots for the next containers
+
         if req.timeout == 0 {
             let mut sandbox = self.sandbox.lock().await;
             sandbox.bind_watcher.remove_container(&cid).await;
@@ -432,7 +435,7 @@ impl AgentService {
             .ok_or_else(|| anyhow!("Unable to parse process from ExecProcessRequest"))?;
 
         // Apply any necessary corrections for PCI addresses
-        update_env_pci(&mut process.Env, &sandbox.pcimap)?;
+        update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = process.into();
@@ -1878,6 +1881,8 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
 
     sandbox.container_mounts.remove(cid);
     sandbox.containers.remove(cid);
+    // Remove any host -> guest mappings for this container
+    sandbox.pcimap.remove(cid);
     Ok(())
 }
 

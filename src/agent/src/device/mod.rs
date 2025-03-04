@@ -9,6 +9,7 @@ use self::nvdimm_device_handler::VirtioNvdimmDeviceHandler;
 use self::scsi_device_handler::ScsiDeviceHandler;
 use self::vfio_device_handler::{VfioApDeviceHandler, VfioPciDeviceHandler};
 use crate::pci;
+use crate::sandbox::PciHostGuestMapping;
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Context, Result};
 use cdi::annotations::parse_annotations;
@@ -180,6 +181,7 @@ lazy_static! {
 
 #[instrument]
 pub async fn add_devices(
+    cid: &String,
     logger: &Logger,
     devices: &[Device],
     spec: &mut Spec,
@@ -211,8 +213,9 @@ pub async fn add_devices(
                     }
 
                     let mut sb = sandbox.lock().await;
+                    let mut host_guest: PciHostGuestMapping = HashMap::new();
                     for (host, guest) in update.pci {
-                        if let Some(other_guest) = sb.pcimap.insert(host, guest) {
+                        if let Some(other_guest) = host_guest.insert(host, guest) {
                             return Err(anyhow!(
                                 "Conflicting guest address for host device {} ({} versus {})",
                                 host,
@@ -221,6 +224,9 @@ pub async fn add_devices(
                             ));
                         }
                     }
+                    // Save all the host -> guest mappings per container upon
+                    // removal of the container, the mappings will be removed
+                    sb.pcimap.insert(cid.clone(), host_guest);
                 }
                 Err(e) => {
                     error!(logger, "failed to add devices, error: {e:?}");
@@ -238,7 +244,7 @@ pub async fn add_devices(
     if let Some(process) = spec.process_mut() {
         let env_vec: &mut Vec<String> =
             &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
-        update_env_pci(env_vec, &sandbox.lock().await.pcimap)?
+        update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
     update_spec_devices(logger, spec, dev_updates)
 }
@@ -391,8 +397,9 @@ pub fn insert_devices_cgroup_rule(
 // given a map of (host address => guest address)
 #[instrument]
 pub fn update_env_pci(
+    cid: &String,
     env: &mut [String],
-    pcimap: &HashMap<pci::Address, pci::Address>,
+    pcimap: &HashMap<String, PciHostGuestMapping>,
 ) -> Result<()> {
     // SR-IOV device plugin may add two environment variables for one resource:
     // - PCIDEVICE_<prefix>_<resource-name>: a list of PCI device ids separated by comma
@@ -418,7 +425,10 @@ pub fn update_env_pci(
         for host_addr_str in val.split(',') {
             let host_addr = pci::Address::from_str(host_addr_str)
                 .with_context(|| format!("Can't parse {} environment variable", name))?;
-            let guest_addr = pcimap
+            let host_guest = pcimap
+                .get(cid)
+                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
+            let guest_addr = host_guest
                 .get(&host_addr)
                 .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
 
@@ -1052,7 +1062,7 @@ mod tests {
             "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
         ];
 
-        let pci_fixups = example_map
+        let _pci_fixups = example_map
             .iter()
             .map(|(h, g)| {
                 (
@@ -1062,7 +1072,11 @@ mod tests {
             })
             .collect();
 
-        let res = update_env_pci(&mut env, &pci_fixups);
+        let cid = "0".to_string();
+        let mut pci_fixups: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pci_fixups.insert(cid.clone(), _pci_fixups);
+
+        let res = update_env_pci(&cid, &mut env, &pci_fixups);
         assert!(res.is_ok(), "error: {}", res.err().unwrap());
 
         assert_eq!(env[0], "PCIDEVICE_x=0000:01:01.0,0000:01:02.0");
