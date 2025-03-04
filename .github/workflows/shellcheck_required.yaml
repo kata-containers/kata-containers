@@ -1,5 +1,6 @@
+
 # https://github.com/marketplace/actions/shellcheck
-name: Check shell scripts
+name: Shellcheck required
 
 on:
   workflow_dispatch:
@@ -27,4 +28,5 @@ jobs:
       - name: Run ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
+          severity: error
           ignore_paths: ./src/runtime/vendor/**

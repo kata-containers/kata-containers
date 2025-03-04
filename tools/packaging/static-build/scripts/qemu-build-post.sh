@@ -19,7 +19,7 @@ fi
 pushd "${QEMU_DESTDIR}"
 # Remove files to reduce the surface.
 echo "INFO: remove uneeded files"
-for pattern in ${qemu_black_list[@]}; do
+for pattern in "${qemu_black_list[@]}"; do
 	find . -path "$pattern" | xargs rm -rfv
 done
 

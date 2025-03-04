@@ -96,7 +96,7 @@ function generate_build_dockerfile()
 	local text_to_replace="$4"
 	local regs=(${registries["${map_key}"]})
 
-	for r in ${regs[@]}; do
+	for r in "${regs[@]}"; do
 		sed 's|'${text_to_replace}'|'${r}'|g' \
 			"${dockerfile}.in" > "${dockerfile}"
 		if sudo -E "${DOCKER_EXE}" build \
@@ -513,7 +513,7 @@ function get_current_kata_config_file() {
 	current_config_file="${KATA_CONFIG_FNAME}"
 }
 
-# This function checks if the current session is runnin as root, 
+# This function checks if the current session is runnin as root,
 # if that is not the case, the function exits with an error message.
 function check_if_root() {
 	[ "$EUID" -ne 0 ] && die "Please run as root or use sudo."

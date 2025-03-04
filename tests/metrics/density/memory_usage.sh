@@ -167,7 +167,7 @@ function get_pss_memory_virtiofsd() {
 
 	data="$(sudo smem --no-header -P "^${virtiofsd_path}" -c "pid pss")"
 
-	for p in "${virtiofsd_pids}"; do
+	for p in ${virtiofsd_pids}; do
 		echo "get_pss_memory_virtiofsd: p=${p}"
 		parent_pid=$(ppid "${p}")
 		cmd="$(cat /proc/${p}/cmdline | tr -d '\0')"
@@ -377,7 +377,7 @@ function main(){
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
 		help
-		die "Not enough arguments [$@]"
+		die "Not enough arguments [$*]"
 	fi
 
 	if [ "${CTR_RUNTIME}" != "io.containerd.runc.v2" ] && [ "${CTR_RUNTIME}" != "io.containerd.kata.v2" ]; then
