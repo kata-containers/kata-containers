@@ -900,7 +900,7 @@ static_check_docs()
 	then
 		local files
 
-		cat "${invalid_urls}" | while read url
+		while read -r url
 		do
 			files=$(grep "^${url}" "${url_map}" | awk '{print $2}' | sort -u)
 			echo >&2 -e "ERROR: Invalid URL '${url}' found in the following files:\n"
@@ -909,7 +909,7 @@ static_check_docs()
 			do
 				echo >&2 "${file}"
 			done
-		done
+		done < "${invalid_urls}"
 
 		exit 1
 	fi
@@ -948,8 +948,7 @@ static_check_eof()
 	[[ "${file}" == "Vagrantfile" ]] && return
 
 	local invalid
-	invalid=$(cat "${file}" |\
-		grep -o -E '<<-* *\w*' |\
+	invalid=$(< "${file}" grep -o -E '<<-* *\w*' |\
 		sed -e 's/^<<-*//g' |\
 		tr -d ' ' |\
 		sort -u |\
