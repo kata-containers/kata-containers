@@ -1196,7 +1196,10 @@ mod tests {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
 
-        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+        let sev_snp_details = SevSnpDetails {
+            cbitpos: 42,
+            phys_addr_reduction: 42,
+        };
 
         #[derive(Debug)]
         struct TestData {

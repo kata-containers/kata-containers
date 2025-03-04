@@ -6,6 +6,8 @@
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+#[cfg(target_arch = "x86_64")]
+use std::arch::x86_64;
 use std::fmt;
 #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
 use std::fs;
@@ -26,6 +28,7 @@ use std::fs;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SevSnpDetails {
     pub cbitpos: u32,
+    pub phys_addr_reduction: u32,
 }
 
 #[allow(dead_code)]
@@ -117,17 +120,44 @@ pub fn arch_guest_protection(
         Ok(false)
     };
 
-    let retrieve_sev_cbitpos = || -> Result<u32, ProtectionError> {
-        Err(ProtectionError::CheckFailed(
-            "cbitpos retrieval NOT IMPLEMENTED YET".to_owned(),
-        ))
+    let retrieve_sev_params = || -> Result<(u32, u32), ProtectionError> {
+        // The initial checks for AMD and SEV shouldn't be necessary due to
+        // the context this function is currently called from, however it
+        // shouldn't hurt to double-check and have better logging if anything
+        // goes wrong.
+
+        let fn0 = unsafe { x86_64::__cpuid(0) };
+        // The values in [ ebx, edx, ecx ] spell out "AuthenticAMD" when
+        // interpreted byte-wise as ASCII.  No need to bother here with an
+        // actual conversion to string though.
+        // See also AMD64 Architecture Programmer's Manual pg. 600
+        // https://www.amd.com/content/dam/amd/en/documents/processor-tech-docs/programmer-references/24594.pdf
+        if fn0.ebx != 0x68747541 || fn0.edx != 0x69746e65 || fn0.ecx != 0x444d4163 {
+            return Err(ProtectionError::CheckFailed(
+                "Not an AMD processor".to_owned(),
+            ));
+        }
+
+        // AMD64 Architecture Prgrammer's Manual Fn8000_001f docs on pg. 640
+        let fn8000_001f = unsafe { x86_64::__cpuid(0x8000_001f) };
+        if fn8000_001f.eax & 0x10 == 0 {
+            return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));
+        }
+
+        let cbitpos = fn8000_001f.ebx & 0b11_1111;
+        let phys_addr_reduction = (fn8000_001f.ebx & 0b1111_1100_0000) >> 6;
+
+        Ok((cbitpos, phys_addr_reduction))
     };
 
     let is_snp_available = check_contents(snp_path)?;
     let is_sev_available = is_snp_available || check_contents(sev_path)?;
     if is_snp_available || is_sev_available {
-        let cbitpos = retrieve_sev_cbitpos()?;
-        let sev_snp_details = SevSnpDetails { cbitpos };
+        let (cbitpos, phys_addr_reduction) = retrieve_sev_params()?;
+        let sev_snp_details = SevSnpDetails {
+            cbitpos,
+            phys_addr_reduction,
+        };
         return Ok(if is_snp_available {
             GuestProtection::Snp(sev_snp_details)
         } else {
