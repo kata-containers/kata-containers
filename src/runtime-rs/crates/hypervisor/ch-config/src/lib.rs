@@ -517,7 +517,10 @@ mod tests {
             minor_version: 0,
         };
 
-        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+        let sev_snp_details = SevSnpDetails {
+            cbitpos: 42,
+            phys_addr_reduction: 42,
+        };
 
         #[derive(Debug)]
         struct TestData {
