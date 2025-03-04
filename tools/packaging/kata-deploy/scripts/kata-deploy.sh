@@ -870,6 +870,10 @@ function main() {
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
+			kata_break=$(kubectl get node "$NODE_NAME" --show-labels | grep -ce 'kata-runtime=true')
+			if [[ "$kata_break" -eq 0 ]]; then
+				die "wait until installation is complete"
+			fi
 			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 			       containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 			       containerd_conf_file="${containerd_conf_tmpl_file}"
