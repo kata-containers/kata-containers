@@ -417,7 +417,7 @@ static_check_license_headers()
 	files=$(get_pr_changed_file_details || true)
 
 	# Strip off status and convert to array
-	files=($(echo "${files}"|awk '{print $NF}'))
+	IFS=$'\n' read -ra files < <(echo "${files}" | awk '{print $NF}')
 
 	text_files=()
 	# Filter out non-text files
@@ -1462,27 +1462,18 @@ announce()
 	distro_name="${NAME:-}"
 	distro_version="${VERSION:-}"
 
-	local -a lines
-
-	local IFS=$'\n'
-
-    lines=( $(cat <<-EOF
-	Running static checks:
-	  script: ${script_name}
-	  architecture: ${arch}
-	  kernel: ${kernel}
-	  distro:
-	    name: ${distro_name}
-	    version: ${distro_version}
-	EOF
-	))
-
-	local line
-
-	for line in "${lines[@]}"
+	while IFS= read -r line
 	do
 		info "${line}"
-	done
+	done <<-EOF
+	Running static checks:
+	script: ${script_name}
+	architecture: ${arch}
+	kernel: ${kernel}
+	distro:
+		name: ${distro_name}
+		version: ${distro_version}
+	EOF
 }
 
 main()
