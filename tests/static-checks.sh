@@ -12,7 +12,7 @@ set -e
 
 [[ -n "${DEBUG}" ]] && set -x
 
-cidir=$(realpath $(dirname "$0"))
+cidir=$(realpath "$(dirname "$0")")
 source "${cidir}/common.bash"
 
 # By default in Golang >= 1.16 GO111MODULE is set to "on",
@@ -289,7 +289,7 @@ static_check_go_arch_specific()
 		linter_version=$(get_test_version "languages.golangci-lint.version")
 
 		info "Forcing ${linter} version ${linter_version}"
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin "v${linter_version}"
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)"/bin "v${linter_version}"
 		command -v "${linter}" &>/dev/null || \
 			die "${linter} command not found. Ensure that \"\$GOPATH/bin\" is in your \$PATH."
 	fi
@@ -892,7 +892,8 @@ static_check_docs()
 
 	if [[ -n "${invalid_files}" ]]; then
 		pushd "${invalid_urls_dir}" &>/dev/null
-		cat $(echo "${invalid_files}"|tr '\n' ' ') > "${invalid_urls}"
+		readarray -t files <<< "${invalid_files}"
+		cat "${files[@]}" > "${invalid_urls}"
 		popd &>/dev/null
 	fi
 
