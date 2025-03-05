@@ -335,6 +335,15 @@
                 "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$"
             ]
         },
+        "UpdateInterfaceRequest": {
+            "allow_raw_flags": 128,
+            "forbidden_names": [
+                "lo"
+            ],
+            "forbidden_hw_addrs": [
+                "00:00:00:00:00:00"
+            ]
+        },
         "CopyFileRequest": [
             "$(sfprefix)"
         ],
