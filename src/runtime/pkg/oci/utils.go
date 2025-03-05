@@ -7,6 +7,8 @@
 package oci
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"crypto/sha512"
@@ -15,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -927,14 +930,24 @@ func addHypervisorNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfi
 
 func addHypervisorInitdataOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
-		initdataToml, err := base64.StdEncoding.DecodeString(value)
+		initdataTomlGzip, err := base64.StdEncoding.DecodeString(value)
 		if err != nil {
+			ociLog.Errorf("initdata uncompress failed! %v", err)
 			return err
 		}
 
-		initdataStr := string(initdataToml)
+		gzipReader, err := gzip.NewReader(bytes.NewReader(initdataTomlGzip))
+		if err != nil {
+			return fmt.Errorf("create gzip reader failed: %v", err)
+		}
+		defer gzipReader.Close()
 
-		sbConfig.HypervisorConfig.Initdata = initdataStr
+		initdataToml, err := io.ReadAll(gzipReader)
+		if err != nil {
+			return fmt.Errorf("uncompressing initdata with gzip error: %v", err)
+		}
+
+		initdataStr := string(initdataToml)
 		var initdata kataTypes.Initdata
 		if _, err := toml.Decode(initdataStr, &initdata); err != nil {
 			return err
