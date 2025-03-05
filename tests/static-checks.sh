@@ -412,14 +412,14 @@ static_check_license_headers()
 
 	pushd "${repo_path}"
 
-	files=$(get_pr_changed_file_details || true)
+	files_changed=$(get_pr_changed_file_details || true)
 
 	# Strip off status and convert to array
-	IFS=$'\n' read -ra files < <(echo "${files}" | awk '{print $NF}')
+	IFS=$'\n' read -ra files_changed < <(echo "${files_changed}" | awk '{print $NF}')
 
 	text_files=()
 	# Filter out non-text files
-	for file in "${files[@]}"; do
+	for file in "${files_changed[@]}"; do
 		if [[ -f "${file}" ]] && file --mime-type "${file}" | grep -q "text/"; then
 			text_files+=("${file}")
 		else
