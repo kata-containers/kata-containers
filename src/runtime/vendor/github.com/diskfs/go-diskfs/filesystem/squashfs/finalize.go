@@ -1471,7 +1471,7 @@ func updateInodesFromDirectories(files []*finalizeFileInfo) error {
 		case *basicDirectory:
 			dir.startBlock = d.directoryLocation.block
 			dir.offset = d.directoryLocation.offset
-			dir.fileSize = uint16(d.directoryLocation.size)
+			dir.fileSize = uint16(d.directoryLocation.size + 3)
 		case *extendedDirectory:
 			dir.startBlock = d.directoryLocation.block
 			dir.offset = d.directoryLocation.offset
