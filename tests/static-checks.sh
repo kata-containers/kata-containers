@@ -146,7 +146,7 @@ EOF
 		description=${long_options[${option}]}
 
 		# Remove any trailing colon which is for getopt(1) alone.
-		option=$(echo "${option}"|sed 's/:$//g')
+		option=${option/%:/}
 
 		printf "    --%-10.10s # %s\n" "${option}" "${description}"
 	done
@@ -805,7 +805,7 @@ static_check_docs()
 	local exclude_pattern
 
 	# Convert the list of files into an grep(1) alternation pattern.
-	exclude_pattern=$(echo "${exclude_doc_regexs[@]}"|sed 's, ,|,g')
+	exclude_pattern=$(IFS="|"; echo "${exclude_doc_regexs[*]}")
 
 	# Every document in the repo (except a small handful of exceptions)
 	# should be referenced by another document.
@@ -1066,7 +1066,7 @@ static_check_vendor()
 
 	for file in "${files_arr[@]}"; do
 	        local dir
-			dir=$(echo "${file}" | sed 's/go\.mod//')
+			dir=${file/go.mod/}
 
 	        pushd "${dir}"
 
