@@ -6,13 +6,21 @@
 
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
+kubernetes_dir="${tests_dir}/integration/kubernetes"
 
-K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
-GH_PR_NUMBER="${GH_PR_NUMBER:-}"
+AZ_APPID="${AZ_APPID:-}"
+AZ_PASSWORD="${AZ_PASSWORD:-}"
+AZ_SUBSCRIPTION_ID="${AZ_SUBSCRIPTION_ID:-}"
+AZ_TENANT_ID="${AZ_TENANT_ID:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
+GH_PR_NUMBER="${GH_PR_NUMBER:-}"
+KATA_HOST_OS="${KATA_HOST_OS:-}"
+KUBERNETES="${KUBERNETES:-}"
+K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
+TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 
 function _print_instance_type() {
-	case ${K8S_TEST_HOST_TYPE} in
+	case "${K8S_TEST_HOST_TYPE}" in
 		small)
 			echo "Standard_D2s_v5"
 			;;
@@ -33,21 +41,21 @@ function _print_cluster_name() {
 	local short_sha
 	local metadata
 
-	if [ -n "${AKS_NAME:-}" ]; then
-		echo "$AKS_NAME"
+	if [[ -n "${AKS_NAME:-}" ]]; then
+		echo "${AKS_NAME}"
 	else
 		short_sha="$(git rev-parse --short=12 HEAD)"
 		metadata="${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
 		# Compute the SHA1 digest of the metadata part to keep the name less
 		# than the limit of 63 chars of AKS
-		echo "${test_type}-$(sha1sum <<< "$metadata" | cut -d' ' -f1)"
+		echo "${test_type}-$(sha1sum <<< "${metadata}" | cut -d' ' -f1)"
 	fi
 }
 
 function _print_rg_name() {
 	test_type="${1:-k8s}"
 
-	echo "${AZ_RG:-"kataCI-$(_print_cluster_name ${test_type})"}"
+	echo "${AZ_RG:-"kataCI-$(_print_cluster_name "${test_type}")"}"
 }
 
 # Enable the HTTP application routing add-on to AKS.
@@ -61,7 +69,7 @@ function enable_cluster_http_application_routing() {
 	rg="$(_print_rg_name "${test_type}")"
 	cluster_name="$(_print_cluster_name "${test_type}")"
 
-	az aks enable-addons -g "$rg" -n "$cluster_name" \
+	az aks enable-addons -g "${rg}" -n "${cluster_name}" \
 		--addons http_application_routing
 }
 
@@ -86,11 +94,12 @@ function create_cluster() {
 	test_type="${1:-k8s}"
 	local short_sha
 	local tags
+	local rg
 
 	# First ensure it didn't fail to get cleaned up from a previous run.
 	delete_cluster "${test_type}" || true
 
-	local rg="$(_print_rg_name ${test_type})"
+	rg="$(_print_rg_name "${test_type}")"
 
 	short_sha="$(git rev-parse --short=12 HEAD)"
 	tags=("GH_PR_NUMBER=${GH_PR_NUMBER:-}" \
@@ -104,15 +113,19 @@ function create_cluster() {
 		-l eastus \
 		-n "${rg}"
 
+	# Adding a double quote on the last line ends up causing issues
+	# ine the cbl-mariner installation.  Because of that, let's just
+	# disable the warning for this specific case.
+	# shellcheck disable=SC2046
 	az aks create \
 		-g "${rg}" \
 		--node-resource-group "node-${rg}" \
-		-n "$(_print_cluster_name ${test_type})" \
+		-n "$(_print_cluster_name "${test_type}")" \
 		-s "$(_print_instance_type)" \
 		--node-count 1 \
 		--generate-ssh-keys \
 		--tags "${tags[@]}" \
-		$([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
+		$([[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
 }
 
 function install_bats() {
@@ -145,13 +158,13 @@ function install_kustomize() {
 	checksum=$(get_from_kata_deps ".externals.kustomize.checksum.${arch}")
 
 	local tarball="kustomize_${version}_linux_${arch}.tar.gz"
-	curl -Lf -o "$tarball" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"
+	curl -Lf -o "${tarball}" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"
 
 	local rc=0
-	echo "${checksum} $tarball" | sha256sum -c || rc=$?
-	[ $rc -eq 0 ] && sudo tar -xvzf "${tarball}" -C /usr/local/bin || rc=$?
-	rm -f "$tarball"
-	[ $rc -eq 0 ]
+	echo "${checksum} ${tarball}" | sha256sum -c || rc=$?
+	[[ ${rc} -eq 0 ]] && sudo tar -xvzf "${tarball}" -C /usr/local/bin || rc=$?
+	rm -f "${tarball}"
+	[[ ${rc} -eq 0 ]]
 }
 
 function get_cluster_credentials() {
@@ -159,8 +172,8 @@ function get_cluster_credentials() {
 
 	az aks get-credentials \
 		--overwrite-existing \
-		-g "$(_print_rg_name ${test_type})" \
-		-n "$(_print_cluster_name ${test_type})"
+		-g "$(_print_rg_name "${test_type}")" \
+		-n "$(_print_cluster_name "${test_type}")"
 }
 
 
@@ -178,26 +191,26 @@ function get_cluster_specific_dns_zone() {
 	rg="$(_print_rg_name "${test_type}")"
 	cluster_name="$(_print_cluster_name "${test_type}")"
 
-	az aks show -g "$rg" -n "$cluster_name" --query "$q" | tr -d \"
+	az aks show -g "${rg}" -n "${cluster_name}" --query "${q}" | tr -d \"
 }
 
 function delete_cluster() {
 	test_type="${1:-k8s}"
 	local rg
-	rg="$(_print_rg_name ${test_type})"
+	rg="$(_print_rg_name "${test_type}")"
 
-	if [ "$(az group exists -g "${rg}")" == "true" ]; then
+	if [[ "$(az group exists -g "${rg}")" == "true" ]]; then
 		az group delete -g "${rg}" --yes
 	fi
 }
 
 function delete_cluster_kcli() {
 	CLUSTER_NAME="${CLUSTER_NAME:-kata-k8s}"
-	kcli delete -y kube "$CLUSTER_NAME"
+	kcli delete -y kube "${CLUSTER_NAME}"
 }
 
 function get_nodes_and_pods_info() {
-	kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest || true
+	kubectl debug "$(kubectl get nodes -o name)" -it --image=quay.io/kata-containers/kata-debug:latest || true
 	kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
@@ -206,12 +219,15 @@ function deploy_k0s() {
 
 	k0s_version_param=""
 	version=$(get_from_kata_deps ".externals.k0s.version")
-	if [ -n "${version}" ]; then
+	if [[ -n "${version}" ]]; then
 		k0s_version_param="K0S_VERSION=${version}"
 	fi
 
-	curl -sSLf ${url} | sudo ${k0s_version_param} sh
+	curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
 
+	# In this case we explicitly want word splitting when calling k0s
+	# with extra parameters.
+	# shellcheck disable=SC2086
 	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
 
 	# kube-router decided to use :8080 for its metrics, and this seems
@@ -235,12 +251,12 @@ function deploy_k0s() {
 	ARCH=$(arch_to_golang)
 
 	kubectl_version=$(sudo k0s kubectl version 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/"${kubectl_version}"/bin/linux/"${ARCH}"/kubectl
 	sudo chmod +x /usr/bin/kubectl
 
 	mkdir -p ~/.kube
 	sudo cp /var/lib/k0s/pki/admin.conf ~/.kube/config
-	sudo chown ${USER}:${USER} ~/.kube/config
+	sudo chown "${USER}":"${USER}" ~/.kube/config
 }
 
 function deploy_k3s() {
@@ -261,7 +277,7 @@ function deploy_k3s() {
 	ARCH=$(arch_to_golang)
 
 	kubectl_version=$(/usr/local/bin/k3s kubectl version --client=true 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/+k3s[0-9]\+//')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/"${kubectl_version}"/bin/linux/"${ARCH}"/kubectl
 	sudo chmod +x /usr/bin/kubectl
 	sudo rm -rf /usr/local/bin/kubectl
 
@@ -286,11 +302,11 @@ function create_cluster_kcli() {
 		-P disk_size="${CLUSTER_DISK_SIZE:-20}" \
 		"${CLUSTER_NAME}"
 
-	export KUBECONFIG="$HOME/.kcli/clusters/$CLUSTER_NAME/auth/kubeconfig"
+	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME}/auth/kubeconfig"
 
 	local cmd="kubectl get nodes | grep '.*worker.*\<Ready\>'"
 	echo "Wait at least one worker be Ready"
-	if ! waitForProcess "330" "30" "$cmd"; then
+	if ! waitForProcess "330" "30" "${cmd}"; then
 		echo "ERROR: worker nodes not ready."
 		kubectl get nodes
 		return 1
@@ -299,9 +315,8 @@ function create_cluster_kcli() {
 	# Ensure that system pods are running or completed.
 	cmd="[ \$(kubectl get pods -A --no-headers | grep -v 'Running\|Completed' | wc -l) -eq 0 ]"
 	echo "Wait system pods be running or completed"
-	if ! waitForProcess "90" "30" "$cmd"; then
+	if ! waitForProcess "90" "30" "${cmd}"; then
 		echo "ERROR: not all pods are Running or Completed."
-		kubectl get pods -A
 		kubectl get pods -A
 		return 1
 	fi
@@ -320,27 +335,27 @@ function deploy_rke2() {
 
 	mkdir -p ~/.kube
 	sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config
-	sudo chown ${USER}:${USER} ~/.kube/config
+	sudo chown "${USER}":"${USER}" ~/.kube/config
 }
 
 function deploy_microk8s() {
 	sudo snap install microk8s --classic
+	sudo usermod -a -G microk8s "${USER}"
+	mkdir -p ~/.kube
+	# As we want to call microk8s with sudo, we're safe to ignore SC2024 here
+	# shellcheck disable=SC2024
+	sudo microk8s kubectl config view --raw > ~/.kube/config
+	sudo chown "${USER}":"${USER}" ~/.kube/config
 
 	# These are arbitrary values
-	sleep 30
-	sudo /snap/bin/microk8s.status --wait-ready --timeout 300
+	sudo microk8s status --wait-ready --timeout 300
 
 	# install kubectl
 	ARCH=$(arch_to_golang)
-	kubectl_version=$(/snap/bin/microk8s.version | grep -oe 'v[0-9]\+\(\.[0-9]\+\)*')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	kubectl_version=$(sudo microk8s version | grep -oe 'v[0-9]\+\(\.[0-9]\+\)*')
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/"${kubectl_version}"/bin/linux/"${ARCH}"/kubectl
 	sudo chmod +x /usr/bin/kubectl
 	sudo rm -rf /usr/local/bin/kubectl
-
-	mkdir -p ~/.kube
-	sudo /snap/bin/microk8s.config > ~/.kube/config
-	sudo chown ${USER}:${USER} ~/.kube/config
-	newgrp microk8s
 }
 
 function _get_k0s_kubernetes_version_for_crio() {
@@ -356,25 +371,25 @@ function _get_k0s_kubernetes_version_for_crio() {
 	# Remove the 'v'
 	crio_version=${crio_version#v}
 
-	echo ${crio_version}
+	echo "${crio_version}"
 }
 
 function setup_crio() {
 	# Get the CRI-O version to be installed depending on the version of the
 	# "k8s distro" that we are using
-	case ${KUBERNETES} in
+	case "${KUBERNETES}" in
 		k0s) crio_version=$(_get_k0s_kubernetes_version_for_crio) ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported with CRI-O"; exit 2 ;;
 
 	esac
 
-	install_crio ${crio_version}
+	install_crio "${crio_version}"
 }
 
 function deploy_k8s() {
 	echo "::group::Deploying ${KUBERNETES}"
 
-	case ${KUBERNETES} in
+	case "${KUBERNETES}" in
 		k0s) deploy_k0s ;;
 		k3s) deploy_k3s ;;
 		rke2) deploy_rke2 ;;
@@ -407,9 +422,9 @@ function delete_test_runners(){
 	echo "Delete test scripts"
 	local scripts_names=( "run_kubernetes_tests.sh" "bats" )
 	for script_name in "${scripts_names[@]}"; do
-		pids=$(pgrep -f ${script_name})
-		if [ -n "$pids" ]; then
-			echo "$pids" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
+		pids=$(pgrep -f "${script_name}")
+		if [[ -n "${pids}" ]]; then
+			echo "${pids}" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
 		fi
 	done
 }
