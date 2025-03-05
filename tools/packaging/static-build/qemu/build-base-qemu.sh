@@ -11,13 +11,8 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly qemu_builder="${script_dir}/build-qemu.sh"
 
-# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
-# shellcheck source=/dev/null
 source "${script_dir}/../qemu.blacklist"
-
-# Ensure repo_root_dir is available
-repo_root_dir="${repo_root_dir:-$(git rev-parse --show-toplevel 2>/dev/null || echo "${script_dir}/../../../..")}"
 
 ARCH=${ARCH:-$(uname -m)}
 
@@ -26,8 +21,8 @@ qemu_destdir="/tmp/qemu-static/"
 container_engine="${USE_PODMAN:+podman}"
 container_engine="${container_engine:-docker}"
 
-qemu_repo="${qemu_repo:-${1:-}}"
-qemu_version="${qemu_version:-${2:-}}"
+qemu_repo="${qemu_repo:-$1}"
+qemu_version="${qemu_version:-$2}"
 build_suffix="${3:-}"
 qemu_tar="${4:-}"
 
@@ -47,7 +42,7 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
 
-"${container_engine}" pull "${container_image}" || ("${container_engine}" build \
+${container_engine} pull "${container_image}" || ("${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
