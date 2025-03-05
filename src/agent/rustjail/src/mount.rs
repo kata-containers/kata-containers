@@ -1016,10 +1016,17 @@ fn mknod_dev(dev: &LinuxDevice, relpath: &Path) -> Result<()> {
         None => return Err(anyhow!("invalid spec".to_string())),
     };
 
+    let file_mode = dev
+        .file_mode()
+        // drop the mode if it is 0
+        .filter(|&m| m != 0)
+        // fall back to 0o666
+        .unwrap_or(0o666);
+
     stat::mknod(
         relpath,
         *f,
-        Mode::from_bits_truncate(dev.file_mode().unwrap_or(0)),
+        Mode::from_bits_truncate(file_mode),
         nix::sys::stat::makedev(dev.major() as u64, dev.minor() as u64),
     )?;
 
