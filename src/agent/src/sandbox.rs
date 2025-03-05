@@ -95,6 +95,8 @@ impl StorageState {
     }
 }
 
+pub type PciHostGuestMapping = HashMap<pci::Address, pci::Address>;
+
 #[derive(Debug)]
 pub struct Sandbox {
     pub logger: Logger,
@@ -118,7 +120,7 @@ pub struct Sandbox {
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
-    pub pcimap: HashMap<pci::Address, pci::Address>,
+    pub pcimap: HashMap<String, PciHostGuestMapping>,
     pub devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
 }
 
