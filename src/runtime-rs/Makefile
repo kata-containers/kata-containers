@@ -84,8 +84,15 @@ HYPERVISOR_QEMU = qemu
 HYPERVISOR_CLH = cloud-hypervisor
 HYPERVISOR_REMOTE = remote
 
-# When set to true, builds the built-in Dragonball hypervisor
-USE_BUILDIN_DB := true
+ARCH_SUPPORT_DB := x86_64 aarch64
+ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_DB)),)
+    # When set to true, builds the built-in Dragonball hypervisor
+    USE_BUILDIN_DB := true
+else
+    USE_BUILDIN_DB := false
+    $(info Dragonball does not support ARCH $(ARCH), disabled. \
+        Specify "USE_BUILDIN_DB=true" to force enable.)
+endif
 
 HYPERVISOR ?= $(HYPERVISOR_DB)
 
