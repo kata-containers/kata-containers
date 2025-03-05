@@ -521,7 +521,9 @@ func (h hypervisor) defaultBridges() uint32 {
 }
 
 func (h hypervisor) defaultHypervisorLoglevel() uint32 {
-	if h.HypervisorLoglevel > maxHypervisorLoglevel {
+	if h.HypervisorLoglevel == 0 {
+		return defaultHypervisorLoglevel
+	} else if h.HypervisorLoglevel > maxHypervisorLoglevel {
 		return maxHypervisorLoglevel
 	}
 
