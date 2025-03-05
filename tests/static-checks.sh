@@ -1496,8 +1496,7 @@ main()
 		-a \
 		--options="h" \
 		--longoptions="${long_option_names}" \
-		-- "$@")
-	[[ $? -eq 0 ]] || { usage >&2; exit 1; }
+		-- "$@") || { usage >&2; exit 1; }
 
 	eval set -- "${args}"
 
