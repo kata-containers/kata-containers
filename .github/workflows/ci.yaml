@@ -249,6 +249,19 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
 
+  run-k8s-tests-on-nvidia-gpu:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-arm64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs:
