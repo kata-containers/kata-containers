@@ -41,3 +41,16 @@ jobs:
       runner: ubuntu-22.04-arm
       arch: arm64
     secrets: inherit
+
+  run-nvidia-gpu-tests-on-arm64:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: publish-kata-deploy-payload-arm64
+    uses: ./.github/workflows/run-nvidia-gpu-tests-on-arm64.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-arm64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+
