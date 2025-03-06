@@ -289,7 +289,7 @@ function run_tests() {
 	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		echo "Skipping tests for ${KATA_HYPERVISOR} using devmapper"
 	else
-		bash run_kubernetes_tests.sh
+		bash "${K8STESTS}"
 	fi
 	popd
 }
@@ -547,7 +547,14 @@ function main() {
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
 		deploy-snapshotter) deploy_snapshotter ;;
-		run-tests) run_tests ;;
+		run-tests)
+			K8STESTS=run_kubernetes_tests.sh
+			run_tests
+			;;
+		run-nv-tests)
+			K8STESTS=run_kubernetes_nv_tests.sh
+			run_tests
+			;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
 		cleanup) cleanup ;;
