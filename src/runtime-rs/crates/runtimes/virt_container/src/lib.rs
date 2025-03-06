@@ -32,9 +32,15 @@ use kata_types::config::FirecrackerConfig;
 use kata_types::config::RemoteConfig;
 use kata_types::config::{hypervisor::register_hypervisor_plugin, QemuConfig, TomlConfig};
 
-#[cfg(feature = "cloud-hypervisor")]
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use hypervisor::ch::CloudHypervisor;
-#[cfg(feature = "cloud-hypervisor")]
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 
 use resource::cpu_mem::initial_size::InitialSizeManager;
@@ -66,7 +72,10 @@ impl RuntimeHandler for VirtContainer {
         let qemu_config = Arc::new(QemuConfig::new());
         register_hypervisor_plugin("qemu", qemu_config);
 
-        #[cfg(feature = "cloud-hypervisor")]
+        #[cfg(all(
+            feature = "cloud-hypervisor",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         {
             let ch_config = Arc::new(CloudHypervisorConfig::new());
             register_hypervisor_plugin(HYPERVISOR_NAME_CH, ch_config);
@@ -178,7 +187,10 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
                 .await;
             Ok(Arc::new(hypervisor))
         }
-        #[cfg(feature = "cloud-hypervisor")]
+        #[cfg(all(
+            feature = "cloud-hypervisor",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         HYPERVISOR_NAME_CH => {
             let hypervisor = CloudHypervisor::new();
             hypervisor

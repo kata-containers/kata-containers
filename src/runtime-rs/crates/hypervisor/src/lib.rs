@@ -23,7 +23,10 @@ pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
 
-#[cfg(feature = "cloud-hypervisor")]
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 pub mod ch;
 
 use anyhow::Result;
