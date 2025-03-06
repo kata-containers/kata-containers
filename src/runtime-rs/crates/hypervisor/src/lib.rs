@@ -13,9 +13,8 @@ pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
 use device::DeviceType;
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 pub mod dragonball;
-#[cfg(not(target_arch = "s390x"))]
 pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
@@ -24,7 +23,7 @@ pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
 
-#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
+#[cfg(feature = "cloud-hypervisor")]
 pub mod ch;
 
 use anyhow::Result;
@@ -55,13 +54,13 @@ const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
 pub const HUGETLBFS: &str = "hugetlbfs";
-// Constants required for Dragonball VMM when enabled and not on s390x.
+// Constants required for Dragonball VMM when enabled
 // Not needed when the built-in VMM is not used.
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 const DEV_HUGEPAGES: &str = "/dev/hugepages";
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 const SHMEM: &str = "shmem";
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
@@ -72,7 +71,6 @@ pub const HYPERVISOR_REMOTE: &str = "remote";
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
 
-#[cfg(not(target_arch = "s390x"))]
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {
     NotReady,
