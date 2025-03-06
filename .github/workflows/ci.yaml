@@ -256,7 +256,7 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-arm64
+      tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
