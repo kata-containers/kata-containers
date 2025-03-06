@@ -21,22 +21,26 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, types::SandboxConfig, RuntimeHandler, RuntimeInstance};
 use hypervisor::Hypervisor;
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
-#[cfg(not(target_arch = "s390x"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{remote::Remote, HYPERVISOR_REMOTE};
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 use kata_types::config::DragonballConfig;
-#[cfg(not(target_arch = "s390x"))]
 use kata_types::config::FirecrackerConfig;
 use kata_types::config::RemoteConfig;
 use kata_types::config::{hypervisor::register_hypervisor_plugin, QemuConfig, TomlConfig};
 
-#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use hypervisor::ch::CloudHypervisor;
-#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 
 use resource::cpu_mem::initial_size::InitialSizeManager;
@@ -57,21 +61,21 @@ impl RuntimeHandler for VirtContainer {
         logging::register_subsystem_logger("runtimes", "virt-container");
 
         // register
-        #[cfg(not(target_arch = "s390x"))]
-        {
-            #[cfg(feature = "dragonball")]
-            let dragonball_config = Arc::new(DragonballConfig::new());
-            #[cfg(feature = "dragonball")]
-            register_hypervisor_plugin("dragonball", dragonball_config);
+        #[cfg(feature = "dragonball")]
+        let dragonball_config = Arc::new(DragonballConfig::new());
+        #[cfg(feature = "dragonball")]
+        register_hypervisor_plugin("dragonball", dragonball_config);
 
-            let firecracker_config = Arc::new(FirecrackerConfig::new());
-            register_hypervisor_plugin("firecracker", firecracker_config);
-        }
+        let firecracker_config = Arc::new(FirecrackerConfig::new());
+        register_hypervisor_plugin("firecracker", firecracker_config);
 
         let qemu_config = Arc::new(QemuConfig::new());
         register_hypervisor_plugin("qemu", qemu_config);
 
-        #[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
+        #[cfg(all(
+            feature = "cloud-hypervisor",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         {
             let ch_config = Arc::new(CloudHypervisorConfig::new());
             register_hypervisor_plugin(HYPERVISOR_NAME_CH, ch_config);
@@ -156,7 +160,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     // TODO: support other hypervisor
     // issue: https://github.com/kata-containers/kata-containers/issues/4634
     match hypervisor_name.as_str() {
-        #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+        #[cfg(feature = "dragonball")]
         HYPERVISOR_DRAGONBALL => {
             let hypervisor = Dragonball::new();
             hypervisor
@@ -176,7 +180,6 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
                 .await;
             Ok(Arc::new(hypervisor))
         }
-        #[cfg(not(target_arch = "s390x"))]
         HYPERVISOR_FIRECRACKER => {
             let hypervisor = Firecracker::new();
             hypervisor
@@ -184,7 +187,10 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
                 .await;
             Ok(Arc::new(hypervisor))
         }
-        #[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
+        #[cfg(all(
+            feature = "cloud-hypervisor",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         HYPERVISOR_NAME_CH => {
             let hypervisor = CloudHypervisor::new();
             hypervisor

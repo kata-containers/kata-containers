@@ -50,7 +50,6 @@ qapi = { version = "0.14", features = ["qmp", "async-tokio-all"] }
 qapi-spec = "0.3.1"
 qapi-qmp = "0.14.0"
 
-[target.'cfg(not(target_arch = "s390x"))'.dependencies]
 dragonball = { path = "../../../dragonball", features = [
     "atomic-guest-memory",
     "virtio-vsock",

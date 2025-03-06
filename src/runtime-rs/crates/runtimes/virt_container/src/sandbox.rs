@@ -21,10 +21,9 @@ use common::{
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
-#[cfg(not(target_arch = "s390x"))]
 use hypervisor::HYPERVISOR_FIRECRACKER;
 use hypervisor::HYPERVISOR_REMOTE;
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
@@ -34,7 +33,6 @@ use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-#[cfg(not(target_arch = "s390x"))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use oci_spec::runtime as oci;
@@ -743,11 +741,9 @@ impl Persist for VirtSandbox {
             resource: Some(self.resource_manager.save().await?),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 // TODO support other hypervisors
-                #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+                #[cfg(feature = "dragonball")]
                 HYPERVISOR_DRAGONBALL => Ok(Some(hypervisor_state)),
-                #[cfg(not(target_arch = "s390x"))]
                 HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
-                #[cfg(not(target_arch = "s390x"))]
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
@@ -783,7 +779,7 @@ impl Persist for VirtSandbox {
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
             // TODO support other hypervisors
-            #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+            #[cfg(feature = "dragonball")]
             HYPERVISOR_DRAGONBALL => {
                 let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)
