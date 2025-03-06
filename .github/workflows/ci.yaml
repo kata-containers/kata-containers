@@ -36,6 +36,9 @@ on:
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
+      NGC_API_KEY:
+        required: true
+
 permissions:
   contents: read
   id-token: write
@@ -322,6 +325,21 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+
+  run-k8s-tests-on-nvidia-gpu:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets:
+      NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+
 
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
