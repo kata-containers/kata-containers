@@ -273,13 +273,18 @@ impl VirtSandbox {
 
     async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
+        let security_info = self.hypervisor.hypervisor_config().await.security_info;
 
         if !boot_info.initrd.is_empty() {
             return Ok(None);
         }
 
         if boot_info.image.is_empty() {
-            return Err(anyhow!("both of image and initrd isn't set"));
+            if boot_info.vm_rootfs_driver.ends_with("ccw") && security_info.confidential_guest {
+                return Ok(None);
+            } else {
+                return Err(anyhow!("both of image and initrd isn't set"));
+            }
         }
 
         Ok(Some(BlockConfig {
@@ -366,6 +371,9 @@ impl VirtSandbox {
                     firmware: hypervisor_config.boot_info.firmware.clone(),
                     certs_path,
                 })))
+            }
+            GuestProtection::Se => {
+                Ok(Some(ProtectionDeviceConfig::Se))
             }
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
         }
