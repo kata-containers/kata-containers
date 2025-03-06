@@ -37,6 +37,12 @@ if [[ "$(uname -m)" != "${ARCH}" ]] && [[ "${ARCH}" == "s390x" ]]; then
 else
        PREFIX="${PREFIX}" "${kata_packaging_scripts}"/configure-hypervisor.sh -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
 fi
+
+[[ ${ARCH} == "x86_64"   ]] && echo 'CONFIG_Q35=y'             >> configs/devices/i386-softmmu/default.mak
+[[ ${ARCH} == "s390x"    ]] && echo 'CONFIG_S390_CCW_VIRTIO=y' >> configs/devices/s390x-softmmu/default.mak
+[[ ${ARCH} == "aarch64"  ]] && echo 'CONFIG_ARM_VIRT=y'        >> configs/devices/arm-softmmu/default.mak
+[[ ${ARCH} == "ppc64le"  ]] && echo 'CONFIG_PSERIES=y'         >> configs/devices/ppc64-softmmu/default.mak
+
 make -j"$(nproc +--ignore 1)"
 make install DESTDIR="${QEMU_DESTDIR}"
 popd
