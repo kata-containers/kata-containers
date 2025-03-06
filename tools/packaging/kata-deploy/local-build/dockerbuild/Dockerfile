@@ -18,6 +18,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        docker.io \
         curl \
         make \
         git \
@@ -25,11 +26,7 @@ RUN apt-get update && \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
-    install_oras.sh && \
-    curl -fsSL https://get.docker.com -o get-docker.sh && \
-    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10" && \
-    sed -i 's/\<docker-compose-plugin\>//g' get-docker.sh; fi && \
-    sh get-docker.sh
+    install_oras.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000
