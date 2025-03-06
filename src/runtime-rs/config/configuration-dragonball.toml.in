@@ -138,7 +138,7 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # - error
 # - critical
 # Default: info
-#log_level = info
+#log_level = "info"
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
@@ -232,7 +232,7 @@ container_pipe_size=@PIPESIZE@
 # - error
 # - critical
 # (default: info)
-#log_level = info
+#log_level = "info"
 
 # Enable agent tracing.
 #
@@ -379,7 +379,7 @@ container_pipe_size=@PIPESIZE@
 # - error
 # - critical
 # (default: info)
-#log_level = info
+#log_level = "info"
 
 # If enabled, enabled, it means that 1) if the runtime exits abnormally,
 # the cleanup process will be skipped, and 2) the runtime will not exit
