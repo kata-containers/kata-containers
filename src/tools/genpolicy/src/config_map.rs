@@ -13,10 +13,8 @@ use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
-use log::debug;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fs::File;
 
 /// See Reference / Kubernetes API / Config and Storage Resources / ConfigMap.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -41,14 +39,6 @@ pub struct ConfigMap {
 }
 
 impl ConfigMap {
-    pub fn new(file: &str) -> anyhow::Result<Self> {
-        debug!("Reading ConfigMap...");
-        let config_map: ConfigMap = serde_yaml::from_reader(File::open(file)?)?;
-        debug!("\nRead ConfigMap => {:#?}", config_map);
-
-        Ok(config_map)
-    }
-
     pub fn get_value(&self, value_from: &pod::EnvVarSource) -> Option<String> {
         if let Some(key_ref) = &value_from.configMapKeyRef {
             if let Some(name) = &key_ref.name {
