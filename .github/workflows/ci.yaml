@@ -241,6 +241,10 @@ jobs:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-arm64
     uses: ./.github/workflows/run-k8s-tests-on-arm64.yaml
+  run-nvidia-gpu-tests-on-arm64:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: publish-kata-deploy-payload-arm64
+    uses: ./.github/workflows/run-nvidia-gpu-tests-on-arm64.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
