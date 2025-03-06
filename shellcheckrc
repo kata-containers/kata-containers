@@ -15,3 +15,7 @@ enable=require-variable-braces
 # NO:  if [ "$var" = "value" ]
 # YES: if [[ $var == "value" ]]
 enable=require-double-brackets
+
+
+
+
