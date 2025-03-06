@@ -196,34 +196,36 @@ impl SwapTask {
         }
 
         if let DeviceType::Block(device) = device_info {
-            if let Some(pci_path) = device.config.pci_path.clone() {
-                if let Err(e) = self
-                    .agent
-                    .add_swap(agent::types::AddSwapRequest {
-                        pci_path: pci_path.slots.iter().map(|slot| slot.0 as u32).collect(),
-                    })
-                    .await
-                {
-                    if let Err(e1) = self
-                        .device_manager
-                        .write()
-                        .await
-                        .try_remove_device(&device_id)
-                        .await
-                    {
-                        error!(
-                            sl!(),
-                            "swap_task: try_remove_device {} fail: {:?}", swap_path, e1
-                        );
-                    }
-
-                    return Err(anyhow!("swap_task: agent.swap_add failed: {:?}", e));
-                }
+            let ret = if let Some(pci_path) = device.config.pci_path.clone() {
+                self.agent.add_swap(agent::types::AddSwapRequest {
+                    pci_path: pci_path.slots.iter().map(|slot| slot.0 as u32).collect(),
+                })
+            } else if !device.config.virt_path.is_empty() {
+                self.agent.add_swap_path(agent::types::AddSwapPathRequest {
+                    path: device.config.virt_path.clone(),
+                })
             } else {
                 return Err(anyhow!(
                     "swap_task: device_info {} pci_path is None",
                     swap_path
                 ));
+            };
+
+            if let Err(e) = ret.await {
+                if let Err(e1) = self
+                    .device_manager
+                    .write()
+                    .await
+                    .try_remove_device(&device_id)
+                    .await
+                {
+                    error!(
+                        sl!(),
+                        "swap_task: try_remove_device {} fail: {:?}", swap_path, e1
+                    );
+                }
+
+                return Err(anyhow!("swap_task: agent.swap_add failed: {:?}", e));
             }
         } else {
             return Err(anyhow!("swap_task: device_info {} is not Block", swap_path));
