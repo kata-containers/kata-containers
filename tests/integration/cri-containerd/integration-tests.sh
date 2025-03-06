@@ -20,6 +20,9 @@ export PATH="$PATH:/usr/local/sbin"
 # golang is installed in /usr/local/go/bin/ add that path
 export PATH="$PATH:/usr/local/go/bin"
 
+#the latest containerd from 2.0 need to set the CGROUP_DRIVER for e2e testing
+export CGROUP_DRIVER=""
+
 # Runtime to be used for testing
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
