@@ -403,6 +403,12 @@ function install_artifacts() {
 			sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, $allowed_hypervisor_annotations]/" "${kata_config_file}"
 		fi
 
+		# Install firmware for Qemu on aarch64 as this is needed for memory hotplug
+		if [[ "${shim}" == "qemu" || $(uname -m) == "aarch64" ]]; then
+		  firmware="${dest_dir}/share/kata-qemu/qemu/edk2-aarch64-code.fd"
+		  sed -i -e 's|^firmware = "\(.*\)"|firmware = "'${firmware}'"|g' "${kata_config_file}"
+		fi
+
 		if grep -q "tdx" <<< "$shim"; then
   			VERSION_ID=version_unset # VERSION_ID may be unset, see https://www.freedesktop.org/software/systemd/man/latest/os-release.html#Notes
 			source /host/etc/os-release || source /host/usr/lib/os-release
