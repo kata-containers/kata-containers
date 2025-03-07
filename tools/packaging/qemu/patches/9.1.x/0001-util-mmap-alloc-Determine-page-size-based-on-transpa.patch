@@ -1,0 +1,167 @@
+From 654d10d570a60076e84f14ee6a01a1f2439753ac Mon Sep 17 00:00:00 2001
+From: wangyaqi54 <wangyaqi54@jd.com>
+Date: Wed, 5 Mar 2025 19:00:45 +0800
+Subject: [PATCH] util/mmap-alloc: Determine page size based on transparent
+ huge page usage
+
+In the Kata scenario, QEMU's hugepage usage requires pre-allocation of hugepages, which permanently reserves memory even when unused by guest workloads. Transparent Huge Pages (THP) solve this memory efficiency problem by dynamically allocating 2MB pages through normal memory management.
+
+However, when using shared memory files with huge=always mount option as the memory backend, a new challenge emerges: While the Linux kernel successfully allocates 2MB THP for memory regions, QEMU remains unaware of this configuration and continues using 4KB page sizes. This mismatch causes:
+
+Performance overhead: A page size mismatch between QEMU (4KB) and the kernel (2MB THP) led to redundant page table management and suboptimal huge page utilization.
+
+Inefficient memory usage: The discrepancy prevented full exploitation of the 2MB huge pages allocated by the kernel through the huge=always mechanism.
+
+To resolve this, we now configure the backend to use 2MB page sizes (THP_SIZE) when the huge=always mount option is detected. This ensures alignment with the kernel's 2MB transparent huge page allocation behavior (the current standard THP size supported by Linux kernels).
+---
+ include/qemu/mmap-alloc.h |  8 +++-
+ util/mmap-alloc.c         | 86 +++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 89 insertions(+), 5 deletions(-)
+
+diff --git a/include/qemu/mmap-alloc.h b/include/qemu/mmap-alloc.h
+index 8344daaa03..f41df94a29 100644
+--- a/include/qemu/mmap-alloc.h
++++ b/include/qemu/mmap-alloc.h
+@@ -1,6 +1,7 @@
+ #ifndef QEMU_MMAP_ALLOC_H
+ #define QEMU_MMAP_ALLOC_H
+-
++#define _STR(x) #x
++#define STR(x) _STR(x)
+ typedef enum {
+     QEMU_FS_TYPE_UNKNOWN = 0,
+     QEMU_FS_TYPE_TMPFS,
+@@ -10,7 +11,10 @@ typedef enum {
+ 
+ size_t qemu_fd_getpagesize(int fd);
+ QemuFsType qemu_fd_getfs(int fd);
+-
++void remove_last_dir(char *path);
++char *find_mountpoint(const char *target_path);
++int find_mount_option(const char *mount_point, const char *fstype, const char *mount_option);
++char *get_filepath(int fd);
+ /**
+  * qemu_ram_mmap: mmap anonymous memory, the specified file or device.
+  *
+diff --git a/util/mmap-alloc.c b/util/mmap-alloc.c
+index ed14f9c64d..1c1d602849 100644
+--- a/util/mmap-alloc.c
++++ b/util/mmap-alloc.c
+@@ -22,9 +22,8 @@
+ #include "qemu/host-utils.h"
+ #include "qemu/cutils.h"
+ #include "qemu/error-report.h"
+-
+ #define HUGETLBFS_MAGIC       0x958458f6
+-
++#define THP_SIZE 2097152
+ #ifdef CONFIG_LINUX
+ #include <sys/vfs.h>
+ #include <linux/magic.h>
+@@ -57,6 +56,76 @@ QemuFsType qemu_fd_getfs(int fd)
+ #endif
+ }
+ 
++void remove_last_dir(char *path) {
++    char *last_slash = strrchr(path, '/');
++    if (!last_slash) return;
++    if (last_slash == path) {
++        path[1] = '\0';
++        return;
++    }
++    *last_slash = '\0';
++    if (path[0] == '\0') {
++        strcpy(path, "/");
++    }
++}
++char *find_mountpoint(const char *target_path) {
++    char current_path[PATH_MAX];
++    char parent_path[PATH_MAX];
++    struct stat st, parent_st;
++    pstrcpy(current_path, PATH_MAX,target_path);
++    
++    while (1) {
++        if (strcmp(current_path, "/") == 0) {
++            return strdup(current_path);
++        }
++        pstrcpy(parent_path,PATH_MAX, current_path);
++        remove_last_dir(parent_path);
++        if (lstat(current_path, &st) != 0 || lstat(parent_path, &parent_st) != 0) {
++            return NULL;
++        }
++        if (st.st_dev != parent_st.st_dev) {
++            return strdup(current_path);
++        }
++        pstrcpy(current_path,PATH_MAX, parent_path);
++    }
++    return NULL;  
++}
++
++int find_mount_option(const char *mount_point,const char *fstype,const char *mount_option)
++{   
++    char type[100];
++    char mount_options[PATH_MAX];
++    char mount_points[PATH_MAX];
++    FILE *fp;
++    int ret = 0;
++
++    fp = fopen("/proc/mounts", "r");
++    if (fp == NULL) {
++        return 0;
++    }
++    while (fscanf(fp, "%*s %" STR(PATH_MAX) "s %99s %" STR(PATH_MAX) "s %*d %*d\n",
++                  mount_points, type,mount_options) == 3) {
++            if (strcmp(mount_points, mount_point) == 0) {
++            if (strcmp(type, fstype) == 0&&strstr(mount_options, mount_option)!= NULL) {
++                ret = 1;
++            }
++            break;
++        }
++    }
++    fclose(fp);
++    return ret;
++}
++char *get_filepath(int fd){
++    char fd_path[PATH_MAX],file_path[PATH_MAX];
++    snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", fd);
++    int len = readlink(fd_path, file_path, sizeof(file_path) - 1);
++    if (len == -1) {
++        return NULL;
++    }
++    file_path[len] = '\0';
++    remove_last_dir(file_path);
++    return strdup(file_path);
++}
+ size_t qemu_fd_getpagesize(int fd)
+ {
+ #ifdef CONFIG_LINUX
+@@ -64,6 +133,18 @@ size_t qemu_fd_getpagesize(int fd)
+     int ret;
+ 
+     if (fd != -1) {
++        char *real_path=get_filepath(fd);
++        if(real_path){
++            char *mountpoint = find_mountpoint(real_path);
++            free(real_path);
++            if (mountpoint) {
++                int htp_enable=find_mount_option(mountpoint,"tmpfs","huge=always");
++                free(mountpoint);
++                if(htp_enable==1){
++                    return THP_SIZE;
++                }
++            } 
++        }
+         do {
+             ret = fstatfs(fd, &fs);
+         } while (ret != 0 && errno == EINTR);
+@@ -77,7 +158,6 @@ size_t qemu_fd_getpagesize(int fd)
+     return QEMU_VMALLOC_ALIGN;
+ #endif
+ #endif
+-
+     return qemu_real_host_page_size();
+ }
+ 
+-- 
+2.34.1
+
