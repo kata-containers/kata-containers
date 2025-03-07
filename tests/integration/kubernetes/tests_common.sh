@@ -378,3 +378,21 @@ teardown_common() {
 		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
 	fi
 }
+
+# Invoke "kubectl exec", log its output, and check that a grep pattern is present in the output.
+#
+# Parameters:
+#	$1	- pod name
+#	$2	- the grep pattern
+#	$3+	- the command to execute using "kubectl exec"
+#
+grep_pod_exec_output() {
+	local -r pod_name="$1"
+	shift
+	local -r grep_arg="$1"
+	shift
+
+	local -r pod_env=$(kubectl exec "${pod_name}" -- "$@")
+	info "pod_env: ${pod_env}"
+	echo "${pod_env}" | grep "${grep_arg}"
+}
