@@ -5,6 +5,7 @@
 //
 
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
@@ -21,6 +22,7 @@ use tracing::instrument;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
+use crate::cdh;
 #[cfg(target_arch = "s390x")]
 use crate::device::block_device_handler::get_virtio_blk_ccw_device_name;
 use crate::device::block_device_handler::{
@@ -29,6 +31,7 @@ use crate::device::block_device_handler::{
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::pci;
+use crate::rpc;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 
 #[derive(Debug)]
@@ -55,6 +58,16 @@ impl StorageHandler for VirtioBlkMmioHandler {
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
+}
+
+fn get_device_major_minor(dev_path: &str) -> Result<String> {
+    let path = Path::new(dev_path);
+    let metadata = path.metadata()?;
+    let device_id = metadata.rdev();
+    let major = nix::sys::stat::major(device_id);
+    let minor = nix::sys::stat::minor(device_id);
+
+    Ok(format!("{}:{}", major, minor))
 }
 
 #[derive(Debug)]
@@ -88,8 +101,19 @@ impl StorageHandler for VirtioBlkPciHandler {
             storage.source = dev_path;
         }
 
-        let path = common_storage_handler(ctx.logger, &storage)?;
-        new_device(path)
+        if storage.mount_point == rpc::TRUSTED_IMAGE_STORAGE_DEVICE {
+            if !cdh::is_cdh_client_initialized().await {
+                return Err(anyhow!("cdh client is not initialized"));
+            }
+
+            let path =
+                rpc::cdh_secure_storage_handler(get_device_major_minor(&storage.source)?).await?;
+
+            new_device(path.to_string())
+        } else {
+            let path = common_storage_handler(ctx.logger, &storage)?;
+            new_device(path)
+        }
     }
 }
 
