@@ -590,6 +590,102 @@ kernel_modules=[]
 # (default: 3000)
 #reconnect_timeout_ms = 3000
 
+[agent.@PROJECT_TYPE@.mem_agent]
+# Control the mem-agent function enable or disable.
+# Default to false
+#mem_agent_enable = true
+
+# Control the mem-agent memcg function disable or enable
+# Default to false
+#memcg_disable = false
+
+# Control the mem-agent function swap enable or disable.
+# Default to false
+#memcg_swap = false
+
+# Control the mem-agent function swappiness max number.
+# Default to 50
+#memcg_swappiness_max = 50
+
+# Control the mem-agent memcg function wait period seconds
+# Default to 600
+#memcg_period_secs = 600
+
+# Control the mem-agent memcg wait period PSI percent limit.
+# If the percentage of memory and IO PSI stall time within
+# the memcg waiting period for a cgroup exceeds this value,
+# then the aging and eviction for this cgroup will not be
+# executed after this waiting period.
+# Default to 1
+#memcg_period_psi_percent_limit = 1
+
+# Control the mem-agent memcg eviction PSI percent limit.
+# If the percentage of memory and IO PSI stall time for a cgroup
+# exceeds this value during an eviction cycle, the eviction for
+# this cgroup will immediately stop and will not resume until
+# the next memcg waiting period.
+# Default to 1
+#memcg_eviction_psi_percent_limit = 1
+
+# Control the mem-agent memcg eviction run aging count min.
+# A cgroup will only perform eviction when the number of aging cycles
+# in memcg is greater than or equal to memcg_eviction_run_aging_count_min.
+# Default to 3
+#memcg_eviction_run_aging_count_min = 3
+
+# Control the mem-agent compact function disable or enable
+# Default to false
+#compact_disable = false
+
+# Control the mem-agent compaction function wait period seconds
+# Default to 600
+#compact_period_secs = 600
+
+# Control the mem-agent compaction function wait period PSI percent limit.
+# If the percentage of memory and IO PSI stall time within
+# the compaction waiting period exceeds this value,
+# then the compaction will not be executed after this waiting period.
+# Default to 1
+#compact_period_psi_percent_limit = 1
+
+# Control the mem-agent compaction function compact PSI percent limit.
+# During compaction, the percentage of memory and IO PSI stall time
+# is checked every second. If this percentage exceeds
+# compact_psi_percent_limit, the compaction process will stop.
+# Default to 5
+#compact_psi_percent_limit = 5
+
+# Control the maximum number of seconds for each compaction of mem-agent compact function.
+# Default to 180
+#compact_sec_max = 180
+
+# Control the mem-agent compaction function compact order.
+# compact_order is use with compact_threshold.
+# Default to 9
+#compact_order = 9
+
+# Control the mem-agent compaction function compact threshold.
+# compact_threshold is the pages number.
+# When examining the /proc/pagetypeinfo, if there's an increase in the
+# number of movable pages of orders smaller than the compact_order
+# compared to the amount following the previous compaction,
+# and this increase surpasses a certain threshold—specifically,
+# more than 'compact_threshold' number of pages.
+# Or the number of free pages has decreased by 'compact_threshold'
+# since the previous compaction.
+# then the system should initiate another round of memory compaction.
+# Default to 1024
+#compact_threshold = 1024
+
+# Control the mem-agent compaction function force compact times.
+# After one compaction, if there has not been a compaction within
+# the next compact_force_times times, a compaction will be forced
+# regardless of the system's memory situation.
+# If compact_force_times is set to 0, will do force compaction each time.
+# If compact_force_times is set to 18446744073709551615, will never do force compaction.
+# Default to 18446744073709551615
+#compact_force_times = 18446744073709551615
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
