@@ -10,7 +10,6 @@ mod tests {
 
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
-    use netlink_packet_route::MACVLAN_MODE_PRIVATE;
     use scopeguard::defer;
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
@@ -200,6 +199,9 @@ mod tests {
                     .await
                     .expect("failed to get the index of dummy link");
 
+                // Available MACVLAN MODES
+                let macvlan_mode_private: u32 = 1;
+
                 // the mode here does not matter, could be any of available modes
                 if let Ok(()) = handle
                     .link()
@@ -207,7 +209,7 @@ mod tests {
                     .macvlan(
                         manual_macvlan_iface_name.clone(),
                         dummy_index,
-                        MACVLAN_MODE_PRIVATE,
+                        macvlan_mode_private,
                     )
                     .execute()
                     .await

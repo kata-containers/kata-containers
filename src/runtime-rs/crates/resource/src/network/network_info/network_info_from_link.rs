@@ -4,19 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::convert::TryFrom;
+use std::{convert::TryFrom, net::IpAddr};
 
 use agent::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
 use netlink_packet_route::{
-    self, neighbour::NeighbourMessage, nlas::neighbour::Nla, route::RouteMessage,
+    self,
+    neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
+    route::{RouteAddress, RouteAttribute, RouteMessage},
 };
 
 use super::NetworkInfo;
 use crate::network::utils::{
-    address::{parse_ip, Address},
+    address::Address,
     link::{self, LinkAttrs},
 };
 
@@ -74,7 +76,7 @@ pub async fn handle_addresses(
         .await
         .context("try next address msg")?
     {
-        let family = addr_msg.header.family as i32;
+        let family = u8::from(addr_msg.header.family) as i32;
         if family != libc::AF_INET && family != libc::AF_INET6 {
             warn!(sl!(), "unsupported ip family {}", family);
             continue;
@@ -100,13 +102,17 @@ pub async fn handle_addresses(
 fn generate_neigh(name: &str, n: &NeighbourMessage) -> Result<ARPNeighbor> {
     let mut neigh = ARPNeighbor {
         device: name.to_string(),
-        state: n.header.state as i32,
+        state: u16::from(n.header.state) as i32,
         ..Default::default()
     };
-    for nla in &n.nlas {
+    for nla in &n.attributes {
         match nla {
-            Nla::Destination(addr) => {
-                let dest = parse_ip(addr, n.header.family).context("parse ip")?;
+            NeighbourAttribute::Destination(addr) => {
+                let dest = match addr {
+                    NeighbourAddress::Inet6(ipv6_addr) => ipv6_addr.to_canonical(),
+                    NeighbourAddress::Inet(ipv4_addr) => IpAddr::from(*ipv4_addr),
+                    _ => return Err(anyhow!("invalid address")),
+                };
                 let addr = Some(IPAddress {
                     family: if dest.is_ipv4() {
                         IPFamily::V4
@@ -118,7 +124,7 @@ fn generate_neigh(name: &str, n: &NeighbourMessage) -> Result<ARPNeighbor> {
                 });
                 neigh.to_ip_address = addr;
             }
-            Nla::LinkLocalAddress(addr) => {
+            NeighbourAttribute::LinkLocalAddress(addr) => {
                 if addr.len() < 6 {
                     continue;
                 }
@@ -157,29 +163,49 @@ async fn handle_neighbors(
     Ok(neighs)
 }
 
-fn generate_route(name: &str, route: &RouteMessage) -> Result<Option<Route>> {
-    if route.header.protocol == libc::RTPROT_KERNEL {
+fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>> {
+    if u8::from(route_msg.header.protocol) == libc::RTPROT_KERNEL {
         return Ok(None);
     }
 
-    Ok(Some(Route {
-        dest: route
-            .destination_prefix()
-            .map(|(addr, prefix)| format!("{}/{}", addr, prefix))
-            .unwrap_or_default(),
-        gateway: route.gateway().map(|v| v.to_string()).unwrap_or_default(),
+    let mut flags: u32 = 0;
+    for flag in &route_msg.header.flags {
+        flags += u32::from(*flag);
+    }
+
+    let mut route = Route {
+        scope: u8::from(route_msg.header.scope) as u32,
         device: name.to_string(),
-        source: route
-            .source_prefix()
-            .map(|(addr, _)| addr.to_string())
-            .unwrap_or_default(),
-        scope: route.header.scope as u32,
-        family: if route.header.address_family == libc::AF_INET as u8 {
+        family: if u8::from(route_msg.header.address_family) == libc::AF_INET as u8 {
             IPFamily::V4
         } else {
             IPFamily::V6
         },
-    }))
+        flags,
+        ..Default::default()
+    };
+
+    for nla in &route_msg.attributes {
+        match nla {
+            RouteAttribute::Destination(d) => {
+                let dest = parse_route_addr(d)?;
+                route.dest = dest.to_string();
+            }
+            RouteAttribute::Gateway(g) => {
+                let dest = parse_route_addr(g)?;
+
+                route.gateway = dest.to_string();
+            }
+            RouteAttribute::Source(s) => {
+                let dest = parse_route_addr(s)?;
+
+                route.source = dest.to_string();
+            }
+            _ => {}
+        }
+    }
+
+    Ok(Some(route))
 }
 
 async fn get_route_from_msg(
@@ -190,12 +216,16 @@ async fn get_route_from_msg(
 ) -> Result<()> {
     let name = &attrs.name;
     let mut route_msg_list = handle.route().get(ip_version).execute();
-    while let Some(route) = route_msg_list.try_next().await? {
+    while let Some(route_msg) = route_msg_list.try_next().await? {
         // get route filter with index
-        if let Some(index) = route.output_interface() {
-            if index == attrs.index {
-                if let Some(route) = generate_route(name, &route).context("generate route")? {
-                    routes.push(route);
+        for attr in &route_msg.attributes {
+            if let RouteAttribute::Oif(index) = attr {
+                if *index == attrs.index {
+                    if let Some(route) =
+                        generate_route(name, &route_msg).context("generate route")?
+                    {
+                        routes.push(route);
+                    }
                 }
             }
         }
@@ -227,4 +257,14 @@ impl NetworkInfo for NetworkInfoFromLink {
     async fn neighs(&self) -> Result<Vec<ARPNeighbor>> {
         Ok(self.neighs.clone())
     }
+}
+
+fn parse_route_addr(ra: &RouteAddress) -> Result<IpAddr> {
+    let ipaddr = match ra {
+        RouteAddress::Inet6(ipv6_addr) => ipv6_addr.to_canonical(),
+        RouteAddress::Inet(ipv4_addr) => IpAddr::from(*ipv4_addr),
+        _ => return Err(anyhow!("got invalid route address")),
+    };
+
+    Ok(ipaddr)
 }
