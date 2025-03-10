@@ -785,6 +785,7 @@ dependencies = [
  "openssl",
  "protobuf 3.3.0",
  "protocols",
+ "regex",
  "serde",
  "serde-transcode",
  "serde_ignored",
