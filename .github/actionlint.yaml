@@ -18,6 +18,7 @@ self-hosted-runner:
     - k8s-ppc64le
     - metrics
     - ppc64le
+    - riscv-builder
     - sev
     - sev-snp
     - s390x
