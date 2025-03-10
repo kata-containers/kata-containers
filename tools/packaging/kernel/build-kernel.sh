@@ -94,7 +94,7 @@ Commands:
 
 Options:
 
-	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
+	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/riscv64/s390x/x86_64.
 	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
 	-D <vendor> 	: DPU/SmartNIC vendor, only nvidia.
@@ -124,6 +124,7 @@ arch_to_kernel() {
 	case "$arch" in
 		aarch64) echo "arm64" ;;
 		ppc64le) echo "powerpc" ;;
+		riscv64) echo "riscv" ;;
 		s390x) echo "s390" ;;
 		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
@@ -551,7 +552,7 @@ install_kata() {
 	fi
 
 	# Install uncompressed kernel
-	if [ "${arch_target}" = "arm64" ]; then
+	if [ "${arch_target}" = "arm64" ] || [ "${arch_target}" = "riscv" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
 	elif [ "${arch_target}" = "s390" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/vmlinux" "${install_path}/${vmlinux}"
