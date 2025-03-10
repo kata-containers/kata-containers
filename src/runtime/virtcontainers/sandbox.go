@@ -50,6 +50,11 @@ import (
 
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
+
+	diskfs "github.com/diskfs/go-diskfs"
+	"github.com/diskfs/go-diskfs/disk"
+	"github.com/diskfs/go-diskfs/filesystem"
+	"github.com/diskfs/go-diskfs/filesystem/squashfs"
 )
 
 // sandboxTracingTags defines tags for the trace span
@@ -665,6 +670,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	if err = s.prepareInitdataMount(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
@@ -823,6 +832,103 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	return coldPlugVFIO, nil
+}
+
+func (s *Sandbox) prepareInitdataMount(config *HypervisorConfig) error {
+	if len(config.Initdata) == 0 {
+		s.Logger().Info("No initdata provided. Skip prepare loop device")
+		return nil
+	}
+
+	s.Logger().Info("Start to prepare initdata")
+	initdataWorkdir := filepath.Join(string(filepath.Separator), "/run/initdata", s.id)
+	initdataImagePath := filepath.Join(string(filepath.Separator), initdataWorkdir, "data.img")
+
+	err := os.MkdirAll(initdataWorkdir, 0755)
+	if err != nil {
+		s.Logger().WithField("initdata", "create squashfs image path").WithError(err)
+		return err
+	}
+
+	CreateFilesystem := func(d *disk.Disk, spec disk.FilesystemSpec) (filesystem.FileSystem, error) {
+		// find out where the partition starts and ends, or if it is the entire disk
+		var (
+			size, start int64
+		)
+
+		switch {
+		case spec.Partition == 0:
+			size = d.Size
+			start = 0
+		case d.Table == nil:
+			return nil, fmt.Errorf("cannot create filesystem on a partition without a partition table")
+		default:
+			partitions := d.Table.GetPartitions()
+			// API indexes from 1, but slice from 0
+			part := spec.Partition - 1
+			if spec.Partition > len(partitions) {
+				return nil, fmt.Errorf("cannot create filesystem on partition %d greater than maximum partition %d", spec.Partition, len(partitions))
+			}
+			size = partitions[part].GetSize()
+			start = partitions[part].GetStart()
+		}
+
+		switch spec.FSType {
+		case filesystem.TypeSquashfs:
+			return squashfs.Create(d.Backend, size, start, d.LogicalBlocksize)
+		default:
+			return nil, errors.New("unknown filesystem type requested")
+		}
+	}
+
+	// Create squashfs image file
+	var diskSize int64 = 10 * 1024 * 1024 // 10 MB
+
+	// TODO: Allow bigger initdata size
+	// Here we use a block size of 1MB, because there is a bug in the underlying
+	// library.
+	// This limits the size of initdata that can be processed normally to 1MB.
+	// See https://github.com/diskfs/go-diskfs/issues/282
+	initdataDiskImage, err := diskfs.Create(initdataImagePath, diskSize, 1024*1024)
+	if err != nil {
+		s.Logger().WithError(err)
+		return err
+	}
+
+	fspec := disk.FilesystemSpec{Partition: 0, FSType: filesystem.TypeSquashfs, VolumeLabel: "label"}
+	fs, err := CreateFilesystem(initdataDiskImage, fspec)
+	if err != nil {
+		s.Logger().WithError(err)
+		return err
+	}
+
+	rw, err := fs.OpenFile("/.kata.initdata.toml", os.O_CREATE|os.O_RDWR)
+	if err != nil {
+		s.Logger().WithError(err)
+		return err
+	}
+
+	s.Logger().Debugf("initdata from runtime side: %s", config.Initdata)
+	n, err := rw.Write([]byte(config.Initdata))
+	if err != nil {
+		s.Logger().WithError(err)
+		return err
+	}
+	s.Logger().Debugf("initdata: write initdata file to done, %d bytes", n)
+
+	sqs, ok := fs.(*squashfs.FileSystem)
+	if !ok {
+		s.Logger().WithError(fmt.Errorf("not a squashfs filesystem"))
+		return fmt.Errorf("not a squashfs filesystem")
+	}
+	err = sqs.Finalize(squashfs.FinalizeOptions{})
+	if err != nil {
+		return err
+	}
+
+	config.InitdataImage = initdataImagePath
+
+	return nil
 }
 
 func (s *Sandbox) createResourceController() error {
