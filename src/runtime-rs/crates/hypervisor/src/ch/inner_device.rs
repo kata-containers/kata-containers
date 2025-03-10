@@ -316,7 +316,10 @@ impl CloudHypervisorInner {
             .map_err(|e| anyhow!(e))?;
 
         let mut disk_config = DiskConfig::try_from(device.config.clone())?;
-        disk_config.direct = self.config.blockdev_info.block_device_cache_direct;
+        disk_config.direct = device
+            .config
+            .is_direct
+            .unwrap_or(self.config.blockdev_info.block_device_cache_direct);
 
         let response = cloud_hypervisor_vm_blockdev_add(
             socket.try_clone().context("failed to clone socket")?,

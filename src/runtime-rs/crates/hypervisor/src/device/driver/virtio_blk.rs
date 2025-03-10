@@ -36,6 +36,11 @@ pub struct BlockConfig {
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
 
+    /// Specifies cache-related options for block devices.
+    /// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
+    /// If not set, use configurarion block_device_cache_direct.
+    pub is_direct: Option<bool>,
+
     /// device index
     pub index: u64,
 

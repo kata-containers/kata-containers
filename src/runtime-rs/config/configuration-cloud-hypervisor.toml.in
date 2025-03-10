@@ -214,6 +214,29 @@ block_device_driver = "virtio-blk-pci"
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
 
+# Enable swap in the guest. Default false.
+# When enable_guest_swap is enabled, insert a raw file to the guest as the swap device
+# if the swappiness of a container (set by annotation "io.katacontainers.container.resource.swappiness")
+# is bigger than 0.
+# The size of the swap device should be
+# swap_in_bytes (set by annotation "io.katacontainers.container.resource.swap_in_bytes") - memory_limit_in_bytes.
+# If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
+# If swap_in_bytes and memory_limit_in_bytes is not set, the size should
+# be default_memory.
+#enable_guest_swap = true
+
+# Enable swap in the guest. Default false.
+# When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
+#enable_guest_swap = true
+
+# If enable_guest_swap is enabled, the swap device will be created in the guest
+# at this path. Default "/run/kata-containers/swap".
+#guest_swap_path = "/run/kata-containers/swap"
+
+# The percentage of the total memory to be used as swap device.
+# Default 100.
+#guest_swap_size_percent = 100
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size=@PIPESIZE@
 # If enabled, make the agent display debug-level messages.

@@ -28,9 +28,9 @@ use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
 use protobuf::MessageField;
 use protocols::agent::{
-    AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
-    GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes,
-    SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
+    AddSwapPathRequest, AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest,
+    GetIPTablesResponse, GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse,
+    Routes, SetIPTablesRequest, SetIPTablesResponse, StatsContainerResponse, VolumeStatsRequest,
     WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::csi::{
@@ -1565,6 +1565,19 @@ impl agent_ttrpc::AgentService for AgentService {
         Ok(Empty::new())
     }
 
+    async fn add_swap_path(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::AddSwapPathRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "add_swap_path", req);
+        is_allowed(&req).await?;
+
+        do_add_swap_path(&req).await.map_ttrpc_err(same)?;
+
+        Ok(Empty::new())
+    }
+
     #[cfg(feature = "agent-policy")]
     async fn set_policy(
         &self,
@@ -2081,6 +2094,19 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
     let dev_name = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
     let c_str = CString::new(dev_name)?;
+    let ret = unsafe { libc::swapon(c_str.as_ptr() as *const c_char, 0) };
+    if ret != 0 {
+        return Err(anyhow!(
+            "libc::swapon get error {}",
+            io::Error::last_os_error()
+        ));
+    }
+
+    Ok(())
+}
+
+async fn do_add_swap_path(req: &AddSwapPathRequest) -> Result<()> {
+    let c_str = CString::new(req.path.clone())?;
     let ret = unsafe { libc::swapon(c_str.as_ptr() as *const c_char, 0) };
     if ret != 0 {
         return Err(anyhow!(
