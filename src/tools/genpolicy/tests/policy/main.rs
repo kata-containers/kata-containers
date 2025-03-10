@@ -40,7 +40,7 @@ mod tests {
             .expect("should be able to create directories under CARGO_TARGET_TMPDIR");
 
         let testdata_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/testdata")
+            .join("tests/policy/testdata")
             .join(test_case_dir);
         fs::copy(testdata_dir.join("pod.yaml"), workdir.join("pod.yaml"))
             .expect("copying files around should not fail");
@@ -57,7 +57,7 @@ mod tests {
 
         let config = genpolicy::utils::Config {
             base64_out: false,
-            config_map_files: None,
+            data_source_files: None,
             containerd_socket_path: None, // Some(String::from("/var/run/containerd/containerd.sock")),
             insecure_registries: Vec::new(),
             layers_cache_file_path: None,
