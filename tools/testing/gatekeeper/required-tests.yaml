@@ -80,6 +80,8 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, stratovirt)
       - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-s390x / run-cri-containerd (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev, nydus, guest-pull)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-arm64 / run-k8s-tests-on-arm64 (qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, normal, yes)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, containerd, yes)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, oci-distribution, yes)
@@ -92,6 +94,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (devmapper, qemu, kubeadm)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (nydus, qemu-coco-dev, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
       - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / Kata Setup
       - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (clh)
