@@ -218,6 +218,7 @@ jobs:
       # Set the KBS ingress handler (empty string disables handling)
       KBS_INGRESS: "aks"
       KUBERNETES: "vanilla"
+      K8S_TEST_RETRY: "30"
       PULL_TYPE: ${{ matrix.pull-type }}
       AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
@@ -297,6 +298,10 @@ jobs:
       - name: Run tests
         timeout-minutes: 80
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
       - name: Delete AKS cluster
         if: always()
