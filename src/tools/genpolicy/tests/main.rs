@@ -11,7 +11,9 @@ mod tests {
     use std::path;
     use std::str;
 
-    use protocols::agent::{CopyFileRequest, CreateContainerRequest, CreateSandboxRequest};
+    use protocols::agent::{
+        CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, UpdateInterfaceRequest,
+    };
     use serde::de::DeserializeOwned;
     use serde::{Deserialize, Serialize};
 
@@ -133,6 +135,11 @@ mod tests {
     #[tokio::test]
     async fn test_create_sandbox() {
         runtests::<CreateSandboxRequest>("createsandbox").await;
+    }
+
+    #[tokio::test]
+    async fn test_update_interface() {
+        runtests::<UpdateInterfaceRequest>("updateinterface").await;
     }
 
     #[tokio::test]

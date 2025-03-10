@@ -334,6 +334,19 @@ pub struct ExecProcessRequestDefaults {
     regex: Vec<String>,
 }
 
+/// UpdateInterfaceRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateInterfaceRequestDefaults {
+    /// Raw flag bitmask explicitly allowed to configure
+    allow_raw_flags: u32,
+
+    /// Explicitly blocked interface names. Intent is to block changes to loopback interface.
+    forbidden_names: Vec<String>,
+
+    /// Explicitly blocked mac addresses. Intent is to block changes to loopback interface.
+    forbidden_hw_addrs: Vec<String>,
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -346,6 +359,9 @@ pub struct RequestDefaults {
 
     /// Commands allowed to be executed by the Host in all Guest containers.
     pub ExecProcessRequest: ExecProcessRequestDefaults,
+
+    /// Interfaces allowed to be updated to in all Guest sandboxes.
+    pub UpdateInterfaceRequest: UpdateInterfaceRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,

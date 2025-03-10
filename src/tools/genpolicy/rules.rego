@@ -38,7 +38,7 @@ default StopTracingRequest := false
 default TtyWinResizeRequest := true
 default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := false
-default UpdateInterfaceRequest := true
+default UpdateInterfaceRequest := false
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
 default WriteStreamRequest := false
@@ -1317,6 +1317,36 @@ ExecProcessRequest {
     regex.match(p_regex, i_command)
 
     print("ExecProcessRequest 3: true")
+}
+
+UpdateInterfaceRequest {
+    print("UpdateInterfaceRequest 1: input =", input)
+
+    i_interface := input.interface
+    p_allowed_raw_flags := policy_data.request_defaults.UpdateInterfaceRequest.allow_raw_flags
+
+    print("UpdateInterfaceRequest 1: i_interface.raw_flags =", i_interface.raw_flags)
+    print("UpdateInterfaceRequest 1: p_allowed_raw_flags =", p_allowed_raw_flags)
+
+    # The agent only uses raw_flags to configure ARP; reject anything else.
+    bits.and(i_interface.raw_flags, bits.negate(p_allowed_raw_flags)) == 0
+
+    p_forbidden_names := policy_data.request_defaults.UpdateInterfaceRequest.forbidden_names
+
+    print("UpdateInterfaceRequest 1: i_interface.name =", i_interface.name)
+    print("UpdateInterfaceRequest 1: p_forbidden_names =", p_forbidden_names)
+
+    not i_interface.name in p_forbidden_names
+
+    p_forbidden_hwaddrs := policy_data.request_defaults.UpdateInterfaceRequest.forbidden_hw_addrs
+
+    print("UpdateInterfaceRequest 1: i_interface.hwAddr =", i_interface.hwAddr)
+    print("UpdateInterfaceRequest 1: p_forbidden_hwaddrs =", p_forbidden_hwaddrs)
+
+
+    not i_interface.hwAddr in p_forbidden_hwaddrs
+
+    print("UpdateInterfaceRequest 1: true")
 }
 
 CloseStdinRequest {
