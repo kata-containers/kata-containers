@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  shellcheck:
+  shellcheck-required:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout the code
@@ -29,4 +29,4 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           severity: error
-          ignore_paths: ./src/runtime/vendor/**
+          ignore_paths: "**/vendor/**"
