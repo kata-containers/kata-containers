@@ -334,6 +334,16 @@ pub struct ExecProcessRequestDefaults {
     regex: Vec<String>,
 }
 
+/// UpdateRoutesRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateRoutesRequestDefaults {
+    /// Forbid adding routes to devices of these names.
+    forbidden_device_names: Vec<String>,
+
+    /// Forbid adding routes originating from these addresses.
+    forbidden_source_regex: Vec<String>,
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -346,6 +356,9 @@ pub struct RequestDefaults {
 
     /// Commands allowed to be executed by the Host in all Guest containers.
     pub ExecProcessRequest: ExecProcessRequestDefaults,
+
+    /// Allow the host to update routes for devices other than the loopback.
+    pub UpdateRoutesRequest: UpdateRoutesRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,

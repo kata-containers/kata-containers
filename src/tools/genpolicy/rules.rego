@@ -39,7 +39,7 @@ default TtyWinResizeRequest := true
 default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := false
 default UpdateInterfaceRequest := true
-default UpdateRoutesRequest := true
+default UpdateRoutesRequest := false
 default WaitProcessRequest := true
 default WriteStreamRequest := false
 
@@ -1317,6 +1317,28 @@ ExecProcessRequest {
     regex.match(p_regex, i_command)
 
     print("ExecProcessRequest 3: true")
+}
+
+UpdateRoutesRequest {
+    print("UpdateRoutesRequest: input =", input)
+    print("UpdateRoutesRequest: policy =", policy_data.request_defaults.UpdateRoutesRequest)
+
+    i_routes := input.routes.Routes
+    p_source_regex = policy_data.request_defaults.UpdateRoutesRequest.forbidden_source_regex
+    p_names = policy_data.request_defaults.UpdateRoutesRequest.forbidden_device_names
+
+    every i_route in i_routes {
+        print("i_route.source =", i_route.source)
+        every p_regex in p_source_regex {
+            print("p_regex =", p_regex)
+            not regex.match(p_regex, i_route.source)
+        }
+
+        print("i_route.device =", i_route.device)
+        not i_route.device in p_names
+    }
+
+    print("UpdateRoutesRequest: true")
 }
 
 CloseStdinRequest {
