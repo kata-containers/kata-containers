@@ -108,10 +108,7 @@ adapt_common_policy_settings_for_virtio_fs() {
 
 # adapt common policy settings for CBL-Mariner Hosts
 adapt_common_policy_settings_for_cbl_mariner() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for KATA_HOST_OS=cbl-mariner"
-	jq '.kata_config.oci_version = "1.1.0-rc.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	true
 }
 
 # adapt common policy settings for various platforms
