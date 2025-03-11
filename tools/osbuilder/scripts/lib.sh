@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash
 #
 # Copyright (c) 2018-2020 Intel Corporation
 #
@@ -180,9 +180,7 @@ create_summary_file()
 	local agent="${AGENT_DEST}"
 	[ "$AGENT_INIT" = yes ] && agent="${init}"
 
-	local -r agentdir="${script_dir}/../../../"
-	local agent_version=$(cat ${agentdir}/VERSION 2> /dev/null)
-	[ -z "$agent_version" ] && agent_version="unknown"
+	agent_version=$(cat "${script_dir}/../../VERSION")
 
 	cat >"$file"<<-EOF
 	---
@@ -306,7 +304,7 @@ detect_libseccomp_info()
 	export GPERF_VERSION="$(get_package_version_from_kata_yaml "$gperf_ver_yq_path")"
 	export GPERF_URL="$(get_package_version_from_kata_yaml "$gperf_url_yq_path")"
 
-	[ -n "$LIBSECCOMP_VERSION" ] && [ -n "$GPERF_VERSION" ] && [ -n "$LIBSECCOMP_URL" ] && [ -n "$GPERF_URL" ]
+	[ -n "$LIBSECCOMP_VERSION" ] && [ -n $GPERF_VERSION ] && [ -n "$LIBSECCOMP_URL" ] && [ -n $GPERF_URL ]
 }
 
 before_starting_container() {

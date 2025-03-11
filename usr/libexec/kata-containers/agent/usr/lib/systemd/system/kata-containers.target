@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2018-2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+[Unit]
+Description=Kata Containers Agent Target
+Requires=basic.target
+Requires=tmp.mount
+Wants=chronyd.service
+Requires=kata-agent.service
+Conflicts=rescue.service rescue.target
+After=basic.target rescue.service rescue.target
+AllowIsolate=yes

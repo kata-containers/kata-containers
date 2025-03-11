@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2018-2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+[Unit]
+Description=Kata Containers Agent
+Documentation=https://github.com/kata-containers/kata-containers
+Wants=kata-containers.target
+
+[Service]
+# Send agent output to tty to allow capture debug logs
+# from a VM vsock port
+StandardOutput=tty
+Type=simple
+ExecStart=/usr/bin/kata-agent
+LimitNOFILE=1048576
+# ExecStop is required for static agent tracing; in all other scenarios
+# the runtime handles shutting down the VM.
+ExecStop=/bin/sync ; /usr/bin/systemctl --force poweroff
+FailureAction=poweroff
+# Discourage OOM-killer from touching the agent
+OOMScoreAdjust=-997

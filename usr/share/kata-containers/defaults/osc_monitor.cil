@@ -1,0 +1,35 @@
+(block container
+(type process)
+(type socket)
+(roletype system_r process)
+(typeattributeset domain (process ))
+(typeattributeset container_domain (process ))
+(typeattributeset svirt_sandbox_domain (process ))
+(typeattributeset mcs_constrained_type (process ))
+(typeattributeset file_type (socket ))
+(allow process socket (sock_file (create open getattr setattr read write rename link unlink ioctl lock append)))
+(allow process proc_type (file (getattr open read)))
+(allow process cpu_online_t (file (getattr open read)))
+(allow container_runtime_t process (key (create link read search setattr view write)))
+)
+
+(block net_container
+        (optional net_container_optional
+                (typeattributeset sandbox_net_domain (process))
+        )
+)
+
+
+(block osc_monitor
+    (blockinherit container)
+    (blockinherit net_container)
+    (allow process process ( capability ( chown dac_override setfcap setgid setpcap setuid )))
+
+    (allow process container_runtime_t (unix_stream_socket (connectto)))
+
+    (allow process container_var_run_t ( dir ( add_name create getattr ioctl lock open read remove_name rmdir search setattr watch write )))
+    (allow process container_var_run_t ( file ( append create getattr ioctl lock map open read rename setattr unlink write )))
+    (allow process container_var_run_t ( fifo_file ( getattr read write append ioctl lock open )))
+    (allow process container_var_run_t ( sock_file ( ioctl append getattr open read write )))
+    (allow process container_var_run_t ( lnk_file (  ioctl lock append getattr open read write )))
+)

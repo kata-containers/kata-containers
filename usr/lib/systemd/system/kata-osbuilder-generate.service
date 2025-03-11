@@ -1,0 +1,10 @@
+[Unit]
+Description=Generate Kata appliance image for host kernel
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/kata-containers/osbuilder/kata-osbuilder.sh -c
+ExecReload=/usr/libexec/kata-containers/osbuilder/kata-osbuilder.sh
+
+[Install]
+WantedBy=kubelet.service

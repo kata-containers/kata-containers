@@ -1,0 +1,96 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+#---------------------------------------------------------------------
+# Description: Bash tab completion script.
+#---------------------------------------------------------------------
+
+_kataruntime='kata-runtime'
+
+# Return a list of sub-commands
+_kata_get_subcmds()
+{
+    "$_kataruntime" --generate-bash-completion
+}
+
+# Return a list of options for the specified sub-command
+#
+# Limitation: Note that this only supports long-options.
+_kata_get_subcmd_options()
+{
+    local subcmd="$1"
+
+    "$_kataruntime" "$subcmd" --help |\
+        egrep -- "^ *--[^ ]*[ ][^ ]*" |\
+        awk '{print $1}' |\
+        tr -d \, |\
+        sort
+}
+
+# Return a list of global options
+_kata_get_global_options()
+{
+    _kata_get_subcmd_options ""
+}
+
+# Return name of subcmd already seen, or ""
+_kata_subcmd_seen()
+{
+    local subcmds=$(_kata_get_subcmds)
+    local cmd
+
+    for cmd in $subcmds; do
+        local word
+        for word in ${COMP_WORDS[@]}; do
+            [ "$cmd" = "$word" ] && echo "$cmd"
+        done
+    done
+
+    echo ""
+}
+
+_kata_bash_autocomplete() {
+    COMPREPLY=()
+
+    local opts opt
+
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+
+    for opt in \
+        '-h' '--help' 'help' \
+        '-v' '--version' 'version';
+    do
+        # No further completions possible for these commands
+        [ "$cur" = "$opt" ] && return 0
+    done
+
+    local subcmd_seen=$(_kata_subcmd_seen)
+
+    if [ -n "$subcmd_seen" ]; then
+        if [ -n "$cur" ]; then
+                # Complete with local options
+                opts=$(_kata_get_subcmd_options "$subcmd_seen")
+        fi
+    else
+        if [ -n "$cur" ]; then
+                # Complete with global options and subcmds
+                opts="$opts $(_kata_get_global_options)"
+                opts="$opts $(_kata_get_subcmds)"
+        elif [[ "${cur}" == -* ]]; then
+                # Complete with global options
+                opts=$(_kata_get_global_options)
+        else
+                # Complete with subcmds
+                opts=$(_kata_get_subcmds)
+        fi
+    fi
+
+    [ -n "$opts" ] && COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+
+    return 0
+}
+
+complete -F _kata_bash_autocomplete "$_kataruntime"
