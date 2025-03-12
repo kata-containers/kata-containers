@@ -32,6 +32,7 @@ jobs:
         k8s:
           - kubeadm
     runs-on: arm64-nvidia-gh200
+    environment: nvidia
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -64,6 +65,8 @@ jobs:
       - name: Run tests
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-nv-tests
+        env:
+          NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
 
       - name: Collect artifacts ${{ matrix.vmm }}
         if: always()
