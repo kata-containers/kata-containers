@@ -630,8 +630,8 @@ google.golang.org/genproto/protobuf/field_mask
 ## explicit; go 1.19
 google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.58.3 => google.golang.org/grpc v1.47.0
-## explicit; go 1.14
+# google.golang.org/grpc v1.58.3
+## explicit; go 1.19
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
@@ -662,6 +662,7 @@ google.golang.org/grpc/internal/grpclog
 google.golang.org/grpc/internal/grpcrand
 google.golang.org/grpc/internal/grpcsync
 google.golang.org/grpc/internal/grpcutil
+google.golang.org/grpc/internal/idle
 google.golang.org/grpc/internal/metadata
 google.golang.org/grpc/internal/pretty
 google.golang.org/grpc/internal/resolver
@@ -752,5 +753,4 @@ tags.cncf.io/container-device-interface/specs-go
 # github.com/stretchr/testify => github.com/stretchr/testify v1.8.0
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # golang.org/x/text => golang.org/x/text v0.7.0
-# google.golang.org/grpc => google.golang.org/grpc v1.47.0
 # gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.1
