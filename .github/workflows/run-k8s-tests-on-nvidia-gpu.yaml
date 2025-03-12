@@ -64,6 +64,8 @@ jobs:
       - name: Run tests
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-nv-tests
+        env:
+          NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
 
       - name: Collect artifacts ${{ matrix.vmm }}
         if: always()
