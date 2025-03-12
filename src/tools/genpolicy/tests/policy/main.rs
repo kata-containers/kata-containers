@@ -5,6 +5,7 @@
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Context;
     use base64::prelude::*;
     use std::fmt::{self, Display};
     use std::fs::{self, File};
@@ -63,23 +64,7 @@ mod tests {
     /// with the tag `type` listing the exact type of request.
     async fn runtests(test_case_dir: &str) {
         // Prepare temp dir for running genpolicy.
-        let workdir = path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(test_case_dir);
-        fs::create_dir_all(&workdir)
-            .expect("should be able to create directories under CARGO_TARGET_TMPDIR");
-
-        let testdata_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/policy/testdata")
-            .join(test_case_dir);
-        fs::copy(testdata_dir.join("pod.yaml"), workdir.join("pod.yaml"))
-            .expect("copying files around should not fail");
-
-        let genpolicy_dir =
-            path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/genpolicy");
-
-        for base in ["rules.rego", "genpolicy-settings.json"] {
-            fs::copy(genpolicy_dir.join(base), workdir.join(base))
-                .expect("copying files around should not fail");
-        }
+        let (workdir, testdata_dir) = prepare_workdir(test_case_dir, &["pod.yaml"]);
 
         // Run the command and return the generated policy.
 
@@ -151,6 +136,50 @@ mod tests {
                 logs, results.1
             );
         }
+    }
+
+    fn prepare_workdir(
+        test_case_dir: &str,
+        files_to_copy: &[&str],
+    ) -> (path::PathBuf, path::PathBuf) {
+        // Prepare temp dir for running genpolicy.
+        let workdir = path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(test_case_dir);
+        fs::create_dir_all(&workdir)
+            .expect("should be able to create directories under CARGO_TARGET_TMPDIR");
+
+        let testdata_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/policy/testdata")
+            .join(test_case_dir);
+
+        // Make sure that workdir is empty.
+        for entry in fs::read_dir(&workdir).expect("should be able to read directories") {
+            let entry = entry.expect("should be able to read directory entries");
+            fs::remove_file(entry.path()).expect("should be able to remove files");
+        }
+
+        for file in files_to_copy {
+            fs::copy(testdata_dir.join(file), workdir.join(file))
+                .context(format!(
+                    "{:?} --> {:?}",
+                    testdata_dir.join(file),
+                    workdir.join(file)
+                ))
+                .expect("copying files around should not fail");
+        }
+
+        let genpolicy_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        for base in ["rules.rego", "genpolicy-settings.json"] {
+            fs::copy(genpolicy_dir.join(base), workdir.join(base))
+                .context(format!(
+                    "{:?} --> {:?}",
+                    genpolicy_dir.join(base),
+                    workdir.join(base)
+                ))
+                .expect("copying files around should not fail");
+        }
+
+        (workdir, testdata_dir)
     }
 
     #[tokio::test]
