@@ -47,3 +47,4 @@
 - [How to run Kata Containers with kinds of Block Volumes](how-to-run-kata-containers-with-kinds-of-Block-Volumes.md)
 - [How to use the Kata Agent Policy](how-to-use-the-kata-agent-policy.md)
 - [How to pull images in the guest](how-to-pull-images-in-guest-with-kata.md)
+- [How to use mem-agent to decrease the memory usage of Kata container](how-to-use-memory-agent.md)
