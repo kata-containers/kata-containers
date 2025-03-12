@@ -74,6 +74,7 @@ service AgentService {
 	rpc CopyFile(CopyFileRequest) returns (google.protobuf.Empty);
 	rpc GetOOMEvent(GetOOMEventRequest) returns (OOMEvent);
 	rpc AddSwap(AddSwapRequest) returns (google.protobuf.Empty);
+	rpc AddSwapPath(AddSwapPathRequest) returns (google.protobuf.Empty);
 	rpc GetVolumeStats(VolumeStatsRequest) returns (VolumeStatsResponse);
 	rpc ResizeVolume(ResizeVolumeRequest) returns (google.protobuf.Empty);
 	rpc SetPolicy(SetPolicyRequest) returns (google.protobuf.Empty);
@@ -593,6 +594,10 @@ message OOMEvent {
 
 message AddSwapRequest {
 	repeated uint32 PCIPath = 1;
+}
+
+message AddSwapPathRequest {
+	string path = 1;
 }
 
 message GetMetricsRequest {}

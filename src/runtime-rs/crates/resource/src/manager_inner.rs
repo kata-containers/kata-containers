@@ -22,12 +22,15 @@ use kata_types::mount::Mount;
 use oci::{Linux, LinuxCpu, LinuxResources};
 use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
+use std::path::PathBuf;
 use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cdi_devices::{sort_options_by_pcipath, ContainerDevice, DeviceInfo},
     cgroups::{CgroupArgs, CgroupsResource},
-    cpu_mem::{cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource},
+    cpu_mem::{
+        cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource, swap::SwapResource,
+    },
     manager::ManagerArgs,
     network::{self, Network, NetworkConfig},
     resource_persist::ResourceState,
@@ -51,6 +54,7 @@ pub(crate) struct ResourceManagerInner {
     pub cgroups_resource: CgroupsResource,
     pub cpu_resource: CpuResource,
     pub mem_resource: MemResource,
+    pub swap_resource: Option<SwapResource>,
 }
 
 impl ResourceManagerInner {
@@ -66,16 +70,53 @@ impl ResourceManagerInner {
         let dev_manager = DeviceManager::new(hypervisor.clone(), topo_config.as_ref())
             .await
             .context("failed to create device manager")?;
+        let device_manager = Arc::new(RwLock::new(dev_manager));
 
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
         let mem_resource = MemResource::new(init_size_manager)?;
+        let swap_resource = if hypervisor
+            .hypervisor_config()
+            .await
+            .memory_info
+            .enable_guest_swap
+        {
+            let mut path = PathBuf::from(
+                hypervisor
+                    .hypervisor_config()
+                    .await
+                    .memory_info
+                    .guest_swap_path,
+            );
+            path.push(sid);
+            Some(
+                SwapResource::new(
+                    path,
+                    hypervisor
+                        .hypervisor_config()
+                        .await
+                        .memory_info
+                        .guest_swap_size_percent,
+                    hypervisor
+                        .hypervisor_config()
+                        .await
+                        .memory_info
+                        .guest_swap_create_threshold_secs,
+                    mem_resource.clone(),
+                    agent.clone(),
+                    device_manager.clone(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
             agent,
             hypervisor,
-            device_manager: Arc::new(RwLock::new(dev_manager)),
+            device_manager,
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -83,6 +124,7 @@ impl ResourceManagerInner {
             cgroups_resource,
             cpu_resource,
             mem_resource,
+            swap_resource,
         })
     }
 
@@ -246,6 +288,10 @@ impl ResourceManagerInner {
                 .await
                 .context("handle neighbors")?;
             self.handle_routes(network).await.context("handle routes")?;
+        }
+
+        if let Some(swap) = self.swap_resource.as_ref() {
+            swap.update().await;
         }
 
         Ok(())
@@ -444,6 +490,11 @@ impl ResourceManagerInner {
                 .await
                 .context("failed to cleanup host path")?;
         }
+
+        if let Some(swap) = self.swap_resource.as_ref() {
+            swap.clean().await;
+        }
+
         // TODO cleanup other resources
         Ok(())
     }
@@ -486,6 +537,10 @@ impl ResourceManagerInner {
         self.cgroups_resource
             .update_cgroups(cid, linux_resources, op, self.hypervisor.as_ref())
             .await?;
+
+        if let Some(swap) = self.swap_resource.as_ref() {
+            swap.update().await;
+        }
 
         // update the linux resources for agent
         self.agent_linux_resources(linux_resources)
@@ -544,13 +599,37 @@ impl Persist for ResourceManagerInner {
         };
         let topo_config = TopologyConfigInfo::new(&args.config);
 
+        let mem_resource = MemResource::default();
+        let device_manager = Arc::new(RwLock::new(
+            DeviceManager::new(resource_args.hypervisor.clone(), topo_config.as_ref()).await?,
+        ));
+
+        let swap_resource = if resource_args
+            .hypervisor
+            .hypervisor_config()
+            .await
+            .memory_info
+            .enable_guest_swap
+        {
+            let mut path = PathBuf::from(
+                resource_args
+                    .hypervisor
+                    .hypervisor_config()
+                    .await
+                    .memory_info
+                    .guest_swap_path,
+            );
+            path.push(resource_args.sid.clone());
+            Some(SwapResource::restore(path).await)
+        } else {
+            None
+        };
+
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
-            hypervisor: resource_args.hypervisor.clone(),
-            device_manager: Arc::new(RwLock::new(
-                DeviceManager::new(resource_args.hypervisor, topo_config.as_ref()).await?,
-            )),
+            hypervisor: resource_args.hypervisor,
+            device_manager,
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -562,7 +641,8 @@ impl Persist for ResourceManagerInner {
             .await?,
             toml_config: Arc::new(TomlConfig::default()),
             cpu_resource: CpuResource::default(),
-            mem_resource: MemResource::default(),
+            mem_resource,
+            swap_resource,
         })
     }
 }

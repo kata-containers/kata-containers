@@ -68,6 +68,7 @@ impl DragonballInner {
                     block.device_id.as_str(),
                     block.config.is_readonly,
                     block.config.no_drop,
+                    block.config.is_direct,
                 )
                 .context("add block device")?;
                 Ok(DeviceType::Block(block))
@@ -78,6 +79,7 @@ impl DragonballInner {
                     block.device_id.as_str(),
                     block.is_readonly,
                     block.no_drop,
+                    None,
                 )
                 .context("add vhost user based block device")?;
                 Ok(DeviceType::VhostUserBlk(block))
@@ -205,6 +207,7 @@ impl DragonballInner {
         id: &str,
         read_only: bool,
         no_drop: bool,
+        is_direct: Option<bool>,
     ) -> Result<()> {
         let jailed_drive = self.get_resource(path, id).context("get resource")?;
         self.cached_block_devices.insert(id.to_string());
@@ -213,7 +216,7 @@ impl DragonballInner {
             drive_id: id.to_string(),
             device_type: BlockDeviceType::get_type(path),
             path_on_host: PathBuf::from(jailed_drive),
-            is_direct: self.config.blockdev_info.block_device_cache_direct,
+            is_direct: is_direct.unwrap_or(self.config.blockdev_info.block_device_cache_direct),
             no_drop,
             is_read_only: read_only,
             ..Default::default()

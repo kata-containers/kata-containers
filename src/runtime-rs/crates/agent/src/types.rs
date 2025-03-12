@@ -604,6 +604,16 @@ pub struct VolumeStatsResponse {
     pub data: String,
 }
 
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct AddSwapRequest {
+    pub pci_path: Vec<u32>,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct AddSwapPathRequest {
+    pub path: String,
+}
+
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;

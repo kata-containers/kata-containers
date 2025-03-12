@@ -470,17 +470,6 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # See: https://www.qemu.org/docs/master/qemu-qmp-ref.html#Dump-guest-memory for details
 #guest_memory_dump_paging=false
 
-# Enable swap in the guest. Default false.
-# When enable_guest_swap is enabled, insert a raw file to the guest as the swap device
-# if the swappiness of a container (set by annotation "io.katacontainers.container.resource.swappiness")
-# is bigger than 0.
-# The size of the swap device should be
-# swap_in_bytes (set by annotation "io.katacontainers.container.resource.swap_in_bytes") - memory_limit_in_bytes.
-# If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
-# If swap_in_bytes and memory_limit_in_bytes is not set, the size should
-# be default_memory.
-#enable_guest_swap = true
-
 # use legacy serial for guest console if available and implemented for architecture. Default false
 #use_legacy_serial = true
 

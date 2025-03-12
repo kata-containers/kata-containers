@@ -214,6 +214,23 @@ block_device_driver = "virtio-blk-pci"
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
 
+# Enable swap in the guest. Default false.
+# When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
+#enable_guest_swap = true
+
+# If enable_guest_swap is enabled, the swap device will be created in the guest
+# at this path. Default "/run/kata-containers/swap".
+#guest_swap_path = "/run/kata-containers/swap"
+
+# The percentage of the total memory to be used as swap device.
+# Default 100.
+#guest_swap_size_percent = 100
+
+# The threshold in seconds to create swap device in the guest.
+# Kata will wait guest_swap_create_threshold_secs seconds before creating swap device.
+# Default 60.
+#guest_swap_create_threshold_secs = 60
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size=@PIPESIZE@
 # If enabled, make the agent display debug-level messages.
