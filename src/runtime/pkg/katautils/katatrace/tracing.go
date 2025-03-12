@@ -17,8 +17,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"go.opentelemetry.io/otel/trace"
 	otelTrace "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // kataSpanExporter is used to ensure that Jaeger logs each span.
@@ -65,7 +65,7 @@ type JaegerConfig struct {
 // CreateTracer create a tracer
 func CreateTracer(name string, config *JaegerConfig) (*sdktrace.TracerProvider, error) {
 	if !tracing {
-		otel.SetTracerProvider(trace.NewNoopTracerProvider())
+		otel.SetTracerProvider(noop.NewTracerProvider())
 		return nil, nil
 	}
 

@@ -29,6 +29,7 @@ func envCleanup() {
 	os.Unsetenv("CNI_NETNS")
 	os.Unsetenv("CNI_IFNAME")
 	os.Unsetenv("CNI_CONTAINERID")
+	os.Unsetenv("CNI_NETNS_OVERRIDE")
 }
 
 func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() error) (types.Result, []byte, error) {
@@ -37,6 +38,7 @@ func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() er
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
 	os.Setenv("CNI_CONTAINERID", cniContainerID)
+	os.Setenv("CNI_NETNS_OVERRIDE", "1")
 	defer envCleanup()
 
 	// Redirect stdout to capture plugin result
@@ -87,6 +89,7 @@ func CmdCheck(cniNetns, cniContainerID, cniIfname string, f func() error) error 
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
 	os.Setenv("CNI_CONTAINERID", cniContainerID)
+	os.Setenv("CNI_NETNS_OVERRIDE", "1")
 	defer envCleanup()
 
 	return f()
@@ -102,6 +105,7 @@ func CmdDel(cniNetns, cniContainerID, cniIfname string, f func() error) error {
 	os.Setenv("CNI_NETNS", cniNetns)
 	os.Setenv("CNI_IFNAME", cniIfname)
 	os.Setenv("CNI_CONTAINERID", cniContainerID)
+	os.Setenv("CNI_NETNS_OVERRIDE", "1")
 	defer envCleanup()
 
 	return f()

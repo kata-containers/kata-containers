@@ -113,7 +113,7 @@ func TestPreStartHooks(t *testing.T) {
 	hook := createHook(0)
 	spec = specs.Spec{
 		Hooks: &specs.Hooks{
-			Prestart: []specs.Hook{hook},
+			Prestart: []specs.Hook{hook}, //nolint:all
 		},
 	}
 	err = PreStartHooks(ctx, spec, testSandboxID, testBundlePath)
@@ -123,7 +123,7 @@ func TestPreStartHooks(t *testing.T) {
 	hook = createWrongHook()
 	spec = specs.Spec{
 		Hooks: &specs.Hooks{
-			Prestart: []specs.Hook{hook},
+			Prestart: []specs.Hook{hook}, //nolint:all
 		},
 	}
 	err = PreStartHooks(ctx, spec, testSandboxID, testBundlePath)
