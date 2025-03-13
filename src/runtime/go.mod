@@ -2,6 +2,9 @@ module github.com/kata-containers/kata-containers/src/runtime
 
 go 1.21
 
+// WARNING: Do NOT use `replace` directives as those break dependabot:
+// https://github.com/kata-containers/kata-containers/issues/11020
+
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	github.com/BurntSushi/toml v1.3.2
@@ -132,11 +135,5 @@ require (
 	tags.cncf.io/container-device-interface/specs-go v0.7.0 // indirect
 )
 
-replace (
-	github.com/go-openapi/swag => github.com/go-openapi/swag v0.21.1
-	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.9
-	github.com/stretchr/testify => github.com/stretchr/testify v1.8.0
-	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
-	golang.org/x/text => golang.org/x/text v0.7.0
-	gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.1
-)
+// WARNING: Do NOT use `replace` directives as those break dependabot:
+// https://github.com/kata-containers/kata-containers/issues/11020
