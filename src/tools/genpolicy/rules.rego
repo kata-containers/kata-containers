@@ -275,19 +275,10 @@ allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
 }
 
 allow_sandbox_name(p_s_name, i_s_name) {
-    print("allow_sandbox_name 1: start")
+    print("allow_sandbox_name: start")
+    regex.match(p_s_name, i_s_name)
 
-    p_s_name == i_s_name
-
-    print("allow_sandbox_name 1: true")
-}
-allow_sandbox_name(p_s_name, i_s_name) {
-    print("allow_sandbox_name 2: start")
-
-    # TODO: should generated names be handled differently?
-    contains(p_s_name, "$(generated-name)")
-
-    print("allow_sandbox_name 2: true")
+    print("allow_sandbox_name: true")
 }
 
 # Check that the "io.kubernetes.cri.container-type" and

@@ -151,4 +151,9 @@ mod tests {
     async fn test_create_container_sysctls() {
         runtests::<CreateContainerRequest>("createcontainer/sysctls").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_generate_name() {
+        runtests::<CreateContainerRequest>("createcontainer/generate_name").await;
+    }
 }
