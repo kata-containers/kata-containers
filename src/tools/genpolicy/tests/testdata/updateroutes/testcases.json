@@ -1,0 +1,118 @@
+[
+  {
+    "description": "compliant routes",
+    "allowed": true,
+    "request": {
+      "routes": {
+        "Routes": [
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "eth0",
+            "source": "",
+            "scope": 0,
+            "family": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "forbidden device",
+    "allowed": false,
+    "request": {
+      "routes": {
+        "Routes": [
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "lo",
+            "source": "",
+            "scope": 0,
+            "family": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "one compliant route, one noncompliant",
+    "allowed": false,
+    "request": {
+      "routes": {
+        "Routes": [
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "eth0",
+            "source": "",
+            "scope": 0,
+            "family": 0
+          },
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "eth0",
+            "source": "::1",
+            "scope": 0,
+            "family": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "noncompliant routes",
+    "allowed": false,
+    "request": {
+      "routes": {
+        "Routes": [
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "eth0",
+            "source": "127.0.0.1",
+            "scope": 0,
+            "family": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "noncompliant routes ipv6 1",
+    "allowed": false,
+    "request": {
+      "routes": {
+        "Routes": [
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "eth0",
+            "source": "::1",
+            "scope": 0,
+            "family": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "noncompliant routes ipv6 2",
+    "allowed": false,
+    "request": {
+      "routes": {
+        "Routes": [
+          {
+            "dest": "",
+            "gateway": "10.244.0.1",
+            "device": "eth0",
+            "source": "00::001",
+            "scope": 0,
+            "family": 0
+          }
+        ]
+      }
+    }
+  }
+]
