@@ -38,7 +38,7 @@ default StopTracingRequest := false
 default TtyWinResizeRequest := true
 default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := false
-default UpdateInterfaceRequest := true
+default UpdateInterfaceRequest := false
 default UpdateRoutesRequest := false
 default WaitProcessRequest := true
 default WriteStreamRequest := false
@@ -1330,6 +1330,27 @@ UpdateRoutesRequest {
     }
 
     print("UpdateRoutesRequest: true")
+}
+
+UpdateInterfaceRequest {
+    print("UpdateInterfaceRequest: input =", input)
+    print("UpdateInterfaceRequest: policy =", policy_data.request_defaults.UpdateInterfaceRequest)
+
+    i_interface := input.interface
+    p_flags := policy_data.request_defaults.UpdateInterfaceRequest.allow_raw_flags
+
+    # Typically, just IFF_NOARP is used.
+    bits.and(i_interface.raw_flags, bits.negate(p_flags)) == 0
+
+    p_names := policy_data.request_defaults.UpdateInterfaceRequest.forbidden_names
+
+    not i_interface.name in p_names
+
+    p_hwaddrs := policy_data.request_defaults.UpdateInterfaceRequest.forbidden_hw_addrs
+
+    not i_interface.hwAddr in p_hwaddrs
+
+    print("UpdateInterfaceRequest: true")
 }
 
 CloseStdinRequest {

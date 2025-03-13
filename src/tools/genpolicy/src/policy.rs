@@ -344,6 +344,19 @@ pub struct UpdateRoutesRequestDefaults {
     forbidden_source_regex: Vec<String>,
 }
 
+/// UpdateInterfaceRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateInterfaceRequestDefaults {
+    /// Raw flag bitmask explicitly allowed to configure
+    allow_raw_flags: u32,
+
+    /// Explicitly blocked interface names. Intent is to block changes to loopback interface.
+    forbidden_names: Vec<String>,
+
+    /// Explicitly blocked mac addresses. Intent is to block changes to loopback interface.
+    forbidden_hw_addrs: Vec<String>,
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -359,6 +372,9 @@ pub struct RequestDefaults {
 
     /// Allow the host to update routes for devices other than the loopback.
     pub UpdateRoutesRequest: UpdateRoutesRequestDefaults,
+
+    /// Allow the host to configure only used raw_flags and reject names/mac addresses of the loopback.
+    pub UpdateInterfaceRequest: UpdateInterfaceRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,
