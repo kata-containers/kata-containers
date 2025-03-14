@@ -34,12 +34,6 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Prepare the self-hosted runner
-        timeout-minutes: 15
-        run: |
-            "${HOME}/scripts/prepare_runner.sh"
-            sudo rm -rf "$GITHUB_WORKSPACE"/*
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@v3
@@ -93,12 +87,6 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Prepare the self-hosted runner
-        timeout-minutes: 15
-        run: |
-            "${HOME}/scripts/prepare_runner.sh"
-            sudo rm -rf "$GITHUB_WORKSPACE"/*
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@v3
@@ -168,12 +156,6 @@ jobs:
     runs-on: ppc64le
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
-      - name: Prepare the self-hosted runner
-        timeout-minutes: 15
-        run: |
-            "${HOME}/scripts/prepare_runner.sh"
-            sudo rm -rf "$GITHUB_WORKSPACE"/*
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@v3
