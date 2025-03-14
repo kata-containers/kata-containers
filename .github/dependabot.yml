@@ -1,0 +1,28 @@
+---
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directories:
+      - "/src/agent"
+      - "/src/dragonball"
+      # Note: these currently fail to be scanned with error: failed to parse manifest at
+      # `dependabot_tmp_dir/src/dragonball/dbs_pci/Cargo.toml`\n\nCaused by:\...Caused by:\n  failed to find a workspace root"
+      # - "/src/dragonball/dbs_utils/"
+      # - "/src/dragonball/dbs_virtio_devices"
+      # - "/src/dragonball/dbs_pci"
+      - "/src/libs"
+      - "/src/mem-agent"
+      - "/src/runtime-rs"
+      - "/src/runtime-rs/crates/hypervisor"
+      - "/src/tools/agent-ctl"
+      - "/src/tools/genpolicy"
+      - "/src/tools/kata-ctl"
+      - "/src/tools/runk"
+      - "/src/tools/trace-forwarder"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "gomod"
+    directories:
+      - "/src/runtime"
+    schedule:
+      interval: "weekly"
