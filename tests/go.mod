@@ -1,6 +1,7 @@
 module github.com/kata-containers/tests
 
-go 1.19
+// Keep in sync with version in versions.yaml
+go 1.22
 
 require (
 	github.com/olekukonko/tablewriter v0.0.6-0.20210304033056-74c60be0ef68
