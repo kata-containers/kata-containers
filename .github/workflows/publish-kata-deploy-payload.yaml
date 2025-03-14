@@ -35,19 +35,6 @@ jobs:
   kata-payload:
     runs-on: ${{ inputs.runner }}
     steps:
-      # TODO - switch ppc64le runner to use `ACTIONS_RUNNER_HOOK_JOB_STARTED`
-      - name: Prepare the self-hosted runner
-        if: ${{ inputs.runner == 'ppc64le' }}
-        timeout-minutes: 15
-        run: |
-          "${HOME}/scripts/prepare_runner.sh"
-          sudo rm -rf "$GITHUB_WORKSPACE"/*
-
-      - name: Adjust a permission for repo
-        if: ${{ inputs.runner == 'ppc64le' }}
-        run: |
-          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
