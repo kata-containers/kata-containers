@@ -22,16 +22,14 @@ The packaged installation method uses your distribution's native package format 
 |------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|
 | [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users.                                                                   |
 | [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 |
-| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. |
+| [Using kata-deploy Helm chart](#kata-deploy-helm-chart)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. |
 
-### Kata Deploy Installation
+### Kata Deploy Helm Chart
 
-Kata Deploy provides a Dockerfile, which contains all of the binaries and
-artifacts required to run Kata Containers, as well as reference DaemonSets,
-which can be utilized to install Kata Containers on a running Kubernetes
-cluster.
+The Kata Deploy Helm chart is a conveient way to install all of the binaries and
+artifacts required to run Kata Containers on Kubernetes.
 
-[Use Kata Deploy](/tools/packaging/kata-deploy/README.md) to install Kata Containers on a Kubernetes Cluster.
+[Use Kata Deploy Helm Chart](/tools/packaging/kata-deploy/helm-chart/README.md) to install Kata Containers on a Kubernetes Cluster.
 
 ### Official packages
 
