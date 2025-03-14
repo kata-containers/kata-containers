@@ -257,6 +257,10 @@ function TestContainerMemoryUpdate() {
 		info "TestContainerMemoryUpdate skipped for qemu with runtime-rs"
 		info "Please check out https://github.com/kata-containers/kata-containers/issues/9375"
 		return
+	elif [[ "${ARCH}" == "aarch64" ]]; then
+		# Currently, arm64 does not support memory hot unplug, just test increasing memory.
+		DoContainerMemoryUpdate 0
+		return
 	elif [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]] || [[ "${ARCH}" == "s390x" ]]; then
 		return
 	fi

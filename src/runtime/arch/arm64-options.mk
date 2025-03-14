@@ -11,6 +11,8 @@ MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-aarch64
+QEMUFW := AAVMF_CODE.fd
+QEMUFWVOL := AAVMF_VARS.fd
 
 # Firecracker binary name
 FCCMD := firecracker
