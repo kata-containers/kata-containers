@@ -378,6 +378,9 @@ teardown_common() {
 
 # Invoke "kubectl exec", log its output, and check that a grep pattern is present in the output.
 #
+# Retry "kubectl exec" several times in case it unexpectedly returns an empty output string,
+# in an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
+#
 # Parameters:
 #	$1	- pod name
 #	$2	- the grep pattern
@@ -388,8 +391,20 @@ grep_pod_exec_output() {
 	shift
 	local -r grep_arg="$1"
 	shift
+	local grep_out=""
+	local cmd_out=""
 
-	local -r pod_env=$(kubectl exec "${pod_name}" -- "$@")
-	info "pod_env: ${pod_env}"
-	echo "${pod_env}" | grep "${grep_arg}"
+	for _ in {1..10}; do
+		info "Executing in pod ${pod_name}: $*"
+		cmd_out=$(kubectl exec "${pod_name}" -- "$@")
+		if [[ -n "${cmd_out}" ]]; then
+			info "command output: ${cmd_out}"
+			grep_out=$(echo "${cmd_out}" | grep "${grep_arg}")
+			info "grep output: ${grep_out}"
+			break
+		fi
+		warn "Empty output from kubectl exec"
+		sleep 1
+	done
+	[[ -n "${grep_out}" ]]
 }
