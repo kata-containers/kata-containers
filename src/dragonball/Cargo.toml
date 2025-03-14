@@ -8,6 +8,9 @@ homepage = "https://katacontainers.io/"
 repository = "https://github.com/kata-containers/kata-containers.git"
 license = "Apache-2.0"
 edition = "2018"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [workspace]
 members = [
@@ -65,12 +68,12 @@ kvm-bindings = { workspace = true }
 kvm-ioctls = { workspace = true }
 lazy_static = "1.2"
 libc = "0.2.39"
-linux-loader = {workspace = true}
+linux-loader = { workspace = true }
 log = "0.4.14"
 nix = "0.24.2"
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
-seccompiler = {workspace = true}
+seccompiler = { workspace = true }
 serde = "1.0.27"
 serde_derive = "1.0.27"
 serde_json = "1.0.9"
@@ -78,7 +81,7 @@ slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
 tracing = "0.1.37"
-vmm-sys-util = {workspace = true}
+vmm-sys-util = { workspace = true }
 virtio-queue = { workspace = true, optional = true }
 vm-memory = { workspace = true, features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
@@ -100,14 +103,14 @@ virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
 virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory
 virtio-fs = [
-    "dbs-virtio-devices/virtio-fs-pro",
-    "virtio-queue",
-    "atomic-guest-memory",
+  "dbs-virtio-devices/virtio-fs-pro",
+  "virtio-queue",
+  "atomic-guest-memory",
 ]
 virtio-mem = [
-    "dbs-virtio-devices/virtio-mem",
-    "virtio-queue",
-    "atomic-guest-memory",
+  "dbs-virtio-devices/virtio-mem",
+  "virtio-queue",
+  "atomic-guest-memory",
 ]
 virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
 vhost-net = ["dbs-virtio-devices/vhost-net"]
@@ -118,5 +121,5 @@ host-device = ["dep:vfio-bindings", "dep:vfio-ioctls", "dep:dbs-pci"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(feature, values("test-mock"))',
+  'cfg(feature, values("test-mock"))',
 ] }

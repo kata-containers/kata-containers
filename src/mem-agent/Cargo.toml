@@ -2,6 +2,9 @@
 name = "mem-agent"
 version = "0.1.0"
 edition = "2018"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [dependencies]
 slog = "2.5.2"
@@ -19,4 +22,3 @@ maplit = "1.0"
 slog-term = "2.9.0"
 slog-async = "2.7"
 once_cell = "1.9.0"
-

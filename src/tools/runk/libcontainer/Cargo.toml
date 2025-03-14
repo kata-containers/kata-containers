@@ -5,9 +5,12 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 description = "Library for runk container"
 license = "Apache-2.0"
 edition = "2018"
+rust-version.workspace = true
 
 [dependencies]
-rustjail = { path = "../../../agent/rustjail", features = ["standard-oci-runtime"] }
+rustjail = { path = "../../../agent/rustjail", features = [
+    "standard-oci-runtime",
+] }
 runtime-spec = { path = "../../../libs/runtime-spec" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
@@ -27,4 +30,4 @@ procfs = "0.14.0"
 [dev-dependencies]
 tempfile = "3.3.0"
 test-utils = { path = "../../../libs/test-utils" }
-protocols = { path ="../../../libs/protocols" }
+protocols = { path = "../../../libs/protocols" }

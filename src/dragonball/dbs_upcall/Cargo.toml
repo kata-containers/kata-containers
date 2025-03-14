@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-virtio-devices"
 keywords = ["dragonball", "secure-sandbox", "devices", "upcall", "virtio"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 anyhow = "1"
@@ -17,4 +18,6 @@ thiserror = "1"
 timerfd = "1.2.0"
 
 dbs-utils = { path = "../dbs_utils" }
-dbs-virtio-devices = { path = "../dbs_virtio_devices", features = ["virtio-vsock"] }
+dbs-virtio-devices = { path = "../dbs_virtio_devices", features = [
+    "virtio-vsock",
+] }

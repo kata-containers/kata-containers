@@ -11,6 +11,9 @@ name = "kata-ctl"
 version = "0.0.1"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [dependencies]
 anyhow = "1.0.31"
@@ -28,11 +31,11 @@ base64 = "0.13.0"
 toml = "0.5.8"
 sys-info = "0.9.1"
 
-shim-interface = { path = "../../libs/shim-interface"}
+shim-interface = { path = "../../libs/shim-interface" }
 kata-types = { path = "../../libs/kata-types" }
 kata-sys-util = { path = "../../../src/libs/kata-sys-util/" }
 safe-path = { path = "../../libs/safe-path" }
-agent = { path = "../../runtime-rs/crates/agent"}
+agent = { path = "../../runtime-rs/crates/agent" }
 serial_test = "0.5.1"
 vmm-sys-util = "0.11.0"
 epoll = "4.0.1"
@@ -54,16 +57,24 @@ lazy_static = "1.2"
 # for log-parser
 serde_yaml = "0.9"
 ron = "0.8"
-quick-xml = { version = "0.28", features = ["serialize"]}
+quick-xml = { version = "0.28", features = ["serialize"] }
 csv = "1.2"
 serde_with = "2.3"
-chrono = { version = "0.4", features = ["serde"]}
+chrono = { version = "0.4", features = ["serde"] }
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
-reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "blocking",
+    "native-tls",
+] }
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
-reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "rustls-tls"] }
+reqwest = { version = "0.11", default-features = false, features = [
+    "json",
+    "blocking",
+    "rustls-tls",
+] }
 
 [dev-dependencies]
 semver = "1.0.12"

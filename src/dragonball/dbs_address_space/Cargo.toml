@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball", "address", "vmm", "secure-sandbox"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 arc-swap = ">=0.4.8"
@@ -16,5 +17,5 @@ libc = "0.2.39"
 nix = "0.23.1"
 lazy_static = "1"
 thiserror = "1"
-vmm-sys-util = {workspace = true}
+vmm-sys-util = { workspace = true }
 vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }

@@ -3,6 +3,9 @@ name = "linux_container"
 version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [dependencies]
 anyhow = "^1.0"

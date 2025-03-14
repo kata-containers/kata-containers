@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
+
 
 [dependencies]
 runtime-spec = { path = "../libs/runtime-spec" }
@@ -103,7 +107,7 @@ lto = true
 default-pull = ["guest-pull"]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
-agent-policy = [ "kata-agent-policy" ]
+agent-policy = ["kata-agent-policy"]
 guest-pull = ["image-rs/kata-cc-rustls-tls"]
 
 [[bin]]

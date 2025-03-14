@@ -2,6 +2,9 @@
 name = "mem-agent-bin"
 version = "0.1.0"
 edition = "2018"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [dependencies]
 slog = "2.5.2"

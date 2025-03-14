@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [dev-dependencies]
 test-utils = { path = "../../../libs/test-utils" }
@@ -40,7 +43,7 @@ kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
-persist = { path = "../persist"}
+persist = { path = "../persist" }
 tests_utils = { path = "../../tests/utils" }
 
 [features]

@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball", "secure-sandbox", "devices", "legacy"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 dbs-device = { path = "../dbs_device" }
@@ -16,8 +17,8 @@ dbs-utils = { path = "../dbs_utils" }
 libc = "0.2.39"
 log = "0.4.14"
 serde = { version = "1.0.27", features = ["derive", "rc"] }
-vm-superio = {workspace = true}
-vmm-sys-util = {workspace = true}
+vm-superio = { workspace = true }
+vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
 libc = "0.2.39"

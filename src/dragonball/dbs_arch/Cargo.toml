@@ -9,14 +9,15 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball", "secure-sandbox", "arch", "ARM64", "x86"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 memoffset = "0.6"
 kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
-kvm-ioctls = {workspace = true}
+kvm-ioctls = { workspace = true }
 thiserror = "1"
 vm-memory = { workspace = true }
-vmm-sys-util = {workspace = true}
+vmm-sys-util = { workspace = true }
 libc = ">=0.2.39"
 
 [dev-dependencies]

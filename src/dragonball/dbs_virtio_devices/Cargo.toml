@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-virtio-devices"
 keywords = ["dragonball", "secure-sandbox", "devices", "virtio"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 byteorder = "1.4.3"
@@ -24,8 +25,8 @@ dbs-boot = { path = "../dbs_boot" }
 epoll = ">=4.3.1, <4.3.2"
 io-uring = "0.5.2"
 fuse-backend-rs = { version = "0.10.5", optional = true }
-kvm-bindings = { workspace = true}
-kvm-ioctls = {workspace = true}
+kvm-bindings = { workspace = true }
+kvm-ioctls = { workspace = true }
 libc = "0.2.119"
 log = "0.4.14"
 nix = "0.24.3"
@@ -37,19 +38,16 @@ serde = "1.0.27"
 serde_json = "1.0.9"
 thiserror = "1"
 threadpool = "1"
-virtio-bindings = {workspace = true}
-virtio-queue = {workspace = true}
-vmm-sys-util = {workspace = true}
+virtio-bindings = { workspace = true }
+virtio-queue = { workspace = true }
+vmm-sys-util = { workspace = true }
 vm-memory = { workspace = true, features = ["backend-mmap"] }
 sendfd = "0.4.3"
 vhost-rs = { version = "0.6.1", package = "vhost", optional = true }
 timerfd = "1.0"
 
 [dev-dependencies]
-vm-memory = { workspace = true, features = [
-    "backend-mmap",
-    "backend-atomic",
-] }
+vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }
 
 [features]
 virtio-mmio = []

@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+rust-version.workspace = true
 
 [dependencies]
 # Async runtime

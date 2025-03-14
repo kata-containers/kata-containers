@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 thiserror = "1.0"

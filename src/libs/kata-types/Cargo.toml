@@ -9,6 +9,7 @@ homepage = "https://katacontainers.io/"
 readme = "README.md"
 license = "Apache-2.0"
 edition = "2018"
+rust-version.workspace = true
 
 [dependencies]
 bitmask-enum = "2.1.0"

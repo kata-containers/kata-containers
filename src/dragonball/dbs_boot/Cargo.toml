@@ -9,16 +9,17 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball", "boot", "VMM"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 dbs-arch = { path = "../dbs_arch" }
 kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
-kvm-ioctls = {workspace = true}
+kvm-ioctls = { workspace = true }
 lazy_static = "1"
 libc = "0.2.39"
 thiserror = "1"
-vm-memory = {workspace = true}
-vm-fdt = {workspace= true}
+vm-memory = { workspace = true }
+vm-fdt = { workspace = true }
 
 [dev-dependencies]
 vm-memory = { workspace = true, features = ["backend-mmap"] }

@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball", "acpi", "vmm", "secure-sandbox"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
-vm-memory = {workspace = true}
+vm-memory = { workspace = true }
