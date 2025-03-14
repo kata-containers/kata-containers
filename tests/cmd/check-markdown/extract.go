@@ -9,7 +9,7 @@ package main
 import (
 	"fmt"
 
-	bf "gopkg.in/russross/blackfriday.v2"
+	bf "github.com/russross/blackfriday/v2"
 )
 
 // linkDescription extracts the description from the specified link node.

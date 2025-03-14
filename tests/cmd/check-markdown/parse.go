@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	bf "gopkg.in/russross/blackfriday.v2"
+	bf "github.com/russross/blackfriday/v2"
 )
 
 // List of errors found by visitor. Used as the visitor cannot return an error
