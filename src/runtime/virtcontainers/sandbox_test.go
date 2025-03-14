@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/diskfs/go-diskfs"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
@@ -1653,4 +1654,51 @@ func TestSandboxHugepageLimit(t *testing.T) {
 	}
 	err = s.updateResources(context.Background())
 	assert.NoError(t, err)
+}
+
+func TestPrepareInitdataSquashFsImage(t *testing.T) {
+
+	tests := []struct {
+		name      string
+		imagePath string
+		content   string
+	}{
+		{
+			"create an initdata image",
+			"/tmp/initdata-image-test1",
+			"some content",
+		},
+	}
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+			err := prepareInitdataSquashFsImage(tt.content, tt.imagePath)
+			if err != nil {
+				t.Errorf("prepareInitdataSquashFsImage() error = %v", err)
+			}
+			defer os.Remove(tt.imagePath)
+
+			disk, err := diskfs.Open(tt.imagePath)
+			if err != nil {
+				t.Errorf("failed to open initdata image, error = %v", err)
+			}
+			fs, err := disk.GetFilesystem(0) // assuming it is the whole disk, so partition = 0
+			if err != nil {
+				t.Errorf("failed to detect initdata image filesystem, error = %v", err)
+			}
+			f, err := fs.OpenFile("/.kata.initdata.toml", os.O_RDONLY)
+			if err != nil {
+				t.Errorf("failed to read initdata toml from initdata image, error = %v", err)
+			}
+			var content []byte
+			_, err = f.Read(content)
+			if err != nil {
+				t.Errorf("failed to read initdata content, error = %v", err)
+			}
+
+			if string(content) != tt.content {
+				t.Errorf("initdata content is not correct, got %s, want %s", string(content), tt.content)
+			}
+		})
+	}
 }
