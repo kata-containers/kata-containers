@@ -9,7 +9,7 @@ package main
 import (
 	"strings"
 
-	bf "gopkg.in/russross/blackfriday.v2"
+	bf "github.com/russross/blackfriday/v2"
 )
 
 // forceCreateHeadings extracts "missed" headings from the specified node,

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"unicode"
 
-	bf "gopkg.in/russross/blackfriday.v2"
+	bf "github.com/russross/blackfriday/v2"
 )
 
 // fileExists returns true if the specified file exists, else false.
