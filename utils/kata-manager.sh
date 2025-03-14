@@ -687,6 +687,9 @@ configure_containerd()
 	sudo test -e "$containerd_config" || {
 		sudo touch "$containerd_config"
 		info "Created $containerd_config"
+		cat <<-EOF | sudo tee -a "$containerd_config"
+		version = 2
+		EOF
 	}
 
 	local original
