@@ -318,6 +318,14 @@ type Object struct {
 
 	// QgsPort defines Intel Quote Generation Service port exposed from the host
 	QgsPort uint32
+
+	// SnpIdBlock is the 96-byte, base64-encoded blob to provide the ‘ID Block’ structure
+	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
+	SnpIdBlock string
+
+	// SnpIdAuth is the 4096-byte, base64-encoded blob to provide the ‘ID Authentication Information Structure’
+	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
+	SnpIdAuth string
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -389,6 +397,12 @@ func (object Object) QemuParams(config *Config) []string {
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
 		objectParams = append(objectParams, "kernel-hashes=on")
+		if object.SnpIdBlock != "" {
+			objectParams = append(objectParams, fmt.Sprintf("id-block=%s", object.SnpIdBlock))
+		}
+		if object.SnpIdAuth != "" {
+			objectParams = append(objectParams, fmt.Sprintf("id-auth=%s", object.SnpIdAuth))
+		}
 		config.Bios = object.File
 	case SecExecGuest:
 		objectParams = append(objectParams, string(object.Type))

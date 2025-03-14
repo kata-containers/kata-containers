@@ -60,6 +60,18 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
 valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 
+# SNP 'ID Block' and 'ID Authentication Information Structure'.
+# If one of snp_id_block or snp_id_auth is specified, the other must be specified, too.
+# Notice that the default SNP policy of QEMU (0x30000) is used by Kata, and the IDBlock
+# must be generated with exactly this policy.
+#
+# 96-byte, base64-encoded blob to provide the ‘ID Block’ structure for the
+# SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
+#snp_id_block = ""
+# 4096-byte, base64-encoded blob to provide the ‘ID Authentication Information Structure’
+# for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
+#snp_id_auth = ""
+
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
 # trouble running pre-2.15 glibc.
