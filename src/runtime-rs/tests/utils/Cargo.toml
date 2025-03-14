@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2018"
 description = "This crate is used to share code among tests"
 license = "Apache-2.0"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

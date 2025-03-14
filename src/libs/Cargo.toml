@@ -10,3 +10,7 @@ members = [
     "test-utils",
 ]
 resolver = "2"
+
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"

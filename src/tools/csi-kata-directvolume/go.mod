@@ -1,6 +1,7 @@
 module kata-containers/csi-kata-directvolume
 
-go 1.20
+// Keep in sync with version in versions.yaml
+go 1.22
 
 require (
 	github.com/container-storage-interface/spec v1.9.0
