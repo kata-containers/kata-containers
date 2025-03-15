@@ -1214,6 +1214,9 @@ list_versions()
 	[ -z "$latest_containerd" ] && \
 		die "cannot determine latest version of $containerd_project"
 
+	local lts_containerd="$(containerd_version_number "lts")"
+	local active_containerd="$(containerd_version_number "active")"
+
 	local latest_docker
 	latest_docker=$(github_get_latest_release "$docker_releases_url" || true)
 	[ -z "$latest_docker" ] && \
@@ -1226,6 +1229,9 @@ list_versions()
 
 	info "$containerd_project: installed version: $installed_containerd"
 	info "$containerd_project: latest version: $latest_containerd"
+	info "$containerd_project: latest version(lts): $lts_containerd"
+	info "$containerd_project: latest version(active): $active_containerd"
+
 
 	echo
 
