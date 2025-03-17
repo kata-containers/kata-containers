@@ -277,6 +277,13 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
     Ok(GuestProtection::NoProtection)
 }
 
+#[cfg(target_arch = "riscv64")]
+#[allow(dead_code)]
+// Guest protection is not supported on RISC-V.
+pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
+    Ok(GuestProtection::NoProtection)
+}
+
 #[cfg(target_arch = "x86_64")]
 #[cfg(test)]
 mod tests {

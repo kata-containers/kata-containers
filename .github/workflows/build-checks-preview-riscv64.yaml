@@ -43,6 +43,10 @@ jobs:
               - rust
               - musl-tools
               - protobuf-compiler
+          - name: runtime-rs
+            path: src/runtime-rs
+            needs:
+              - rust
 
     steps:
       - name: Adjust a permission for repo
