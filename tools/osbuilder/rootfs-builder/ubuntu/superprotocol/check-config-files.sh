@@ -23,15 +23,19 @@ for src in "${!files[@]}"; do
     fi
 done
 
-
 K8S="/var/lib/rancher/rke2/server/manifests/k8s.yaml"
-ARGO_BRANCH=$(cat /proc/cmdline | grep -o 'argo_branch=[^ ]*' | cut -d= -f2)
-if [[ -z "$ARGO_BRANCH" ]]; then
-    ARGO_BRANCH="main"
-fi
-CMDLINE=$(cat /proc/cmdline)
+CMDLINE="$(cat /proc/cmdline)"
+ARGO_BRANCH="main"
+
 if [[ "$CMDLINE" == *"sp-debug=true"* ]]; then
-    sed -i "s|targetRevision: main # argo-vm-selected-branch|targetRevision: $ARGO_BRANCH|" $K8S
-else
-    echo "k8s.yaml not patched, sp-debug=false"
+    ARGO_BRANCH_CMDLINE="$(cat /proc/cmdline | grep -o 'argo_branch=[^ ]*' | cut -d= -f2)"
+    if [[ -n "$ARGO_BRANCH_CMDLINE" ]]; then
+        ARGO_BRANCH="$ARGO_BRANCH_CMDLINE"
+    fi
+fi
+
+CURRENT_ARGO_BRANCH="$(grep -E 'targetRevision\W+(\w+)' "$K8S" | awk '{print $2}')"
+if [[ "$CURRENT_ARGO_BRANCH" != "$ARGO_BRANCH" ]]; then
+    echo "Setting $ARGO_BRANCH in $K8S, current: $CURRENT_ARGO_BRANCH"
+    sed -ri "s|targetRevision:\W+\w+|targetRevision: $ARGO_BRANCH|" "$K8S";
 fi
