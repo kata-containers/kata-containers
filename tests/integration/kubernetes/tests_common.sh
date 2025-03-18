@@ -284,7 +284,7 @@ add_allow_all_policy_to_yaml() {
 	# Previous version of yq was not ready to handle multiple objects in a single yaml.
 	# By default was changing only the first object.
 	# With yq>4 we need to make it explicit during the read and write.
-	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
+	local resource_kind=$(yq .kind "${yaml_file}" | head -1)
 
 	case "${resource_kind}" in
 
@@ -372,7 +372,7 @@ teardown_common() {
 	# Print the node journal since the test start time if a bats test is not completed
 	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
 		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'${node_start_time}'"' || true
+		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
 	fi
 }
 
