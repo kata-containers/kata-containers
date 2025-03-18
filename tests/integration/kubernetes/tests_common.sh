@@ -47,17 +47,17 @@ ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../sr
 #
 setup_common() {
 	node=$(get_one_kata_node)
-	[ -n "$node" ]
+	[[ -n "$node" ]]
 	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
 	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
 	count=0
-	while [ -z "$node_start_time" ] && [ $count -lt 3 ]; do
+	while [[ -z "$node_start_time" ]] && [[ $count -lt 3 ]]; do
 		echo "node_start_time is empty, trying again..."
 		sleep 5
 		node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
 		count=$((count + 1))
 	done
-	[ -n "$node_start_time" ]
+	[[ -n "$node_start_time" ]]
 	export node node_start_time
 
 	k8s_delete_all_pods_if_any_exists || true
@@ -77,7 +77,7 @@ get_one_kata_node() {
 }
 
 auto_generate_policy_enabled() {
-	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
+	[[ "${AUTO_GENERATE_POLICY}" == "yes" ]]
 }
 
 # adapt common policy settings for tdx or snp
@@ -174,7 +174,7 @@ delete_tmp_policy_settings_dir() {
 
 	auto_generate_policy_enabled || return 0
 
-	if [ -d "${settings_dir}" ]; then
+	if [[ -d "${settings_dir}" ]]; then
 		info "Deleting ${settings_dir}"
 		rm -rf "${settings_dir}"
 	fi
@@ -192,11 +192,11 @@ auto_generate_policy() {
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
-	if [ ! -z "${config_map_yaml_file}" ]; then
+	if [[ ! -z "${config_map_yaml_file}" ]]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
 	fi
 
-	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
+	if [[ "${GENPOLICY_PULL_METHOD}" == "containerd" ]]; then
 		genpolicy_command+=" -d"
 	fi
 
@@ -273,7 +273,7 @@ hard_coded_policy_tests_enabled() {
 	# specifying AUTO_GENERATE_POLICY=yes.
 	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
 	[[ " $enabled_hypervisors " =~ " ${KATA_HYPERVISOR} " ]] || \
-		[ "${KATA_HOST_OS}" == "cbl-mariner" ] || \
+		[[ "${KATA_HOST_OS}" == "cbl-mariner" ]] || \
 		auto_generate_policy_enabled
 }
 
