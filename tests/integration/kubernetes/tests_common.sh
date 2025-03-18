@@ -32,7 +32,7 @@ export dragonball_limitations="https://github.com/kata-containers/kata-container
 # Note: the init script sets that variable but if you want to run the tests in
 # your own provisioned cluster and you know what you are doing then you should
 # overwrite it.
-export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
 # ALLOW_ALL_POLICY is a Rego policy that allows all the Agent ttrpc requests.
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
@@ -47,17 +47,17 @@ ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../sr
 #
 setup_common() {
 	node=$(get_one_kata_node)
-	[[ -n "$node" ]]
-	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+	[[ -n "${node}" ]]
+	node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
 	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
 	count=0
-	while [[ -z "$node_start_time" ]] && [[ $count -lt 3 ]]; do
+	while [[ -z "${node_start_time}" ]] && [[ ${count} -lt 3 ]]; do
 		echo "node_start_time is empty, trying again..."
 		sleep 5
-		node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+		node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
 		count=$((count + 1))
 	done
-	[[ -n "$node_start_time" ]]
+	[[ -n "${node_start_time}" ]]
 	export node node_start_time
 
 	k8s_delete_all_pods_if_any_exists || true
@@ -272,7 +272,7 @@ hard_coded_policy_tests_enabled() {
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
 	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
-	[[ " $enabled_hypervisors " =~ " ${KATA_HYPERVISOR} " ]] || \
+	[[ " ${enabled_hypervisors} " =~ " ${KATA_HYPERVISOR} " ]] || \
 		[[ "${KATA_HOST_OS}" == "cbl-mariner" ]] || \
 		auto_generate_policy_enabled
 }
@@ -324,7 +324,7 @@ wait_for_blocked_request() {
 
 	local -r command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
 	info "Waiting ${wait_time} seconds for: ${command}"
-	waitForProcess "${wait_time}" "$sleep_time" "${command}" >/dev/null 2>/dev/null
+	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
 
 # Execute in a pod a command that is allowed by policy.
@@ -370,9 +370,9 @@ teardown_common() {
 	k8s_delete_all_pods_if_any_exists || true
 
 	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "$BATS_TEST_COMPLETED" ]]; then
-		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
+	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
+		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
+		exec_host "${node}" journalctl -x -t "kata" --since '"'${node_start_time}'"' || true
 	fi
 }
 
