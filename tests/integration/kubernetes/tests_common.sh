@@ -290,14 +290,14 @@ add_allow_all_policy_to_yaml() {
 
 	Pod)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+		yq -i \
 			".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+		yq -i \
 			".spec.template.metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
