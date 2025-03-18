@@ -192,7 +192,7 @@ auto_generate_policy() {
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
-	if [[ ! -z "${config_map_yaml_file}" ]]; then
+	if [[ -n "${config_map_yaml_file}" ]]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
 	fi
 
