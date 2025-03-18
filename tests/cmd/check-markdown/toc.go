@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	bf "gopkg.in/russross/blackfriday.v2"
+	bf "github.com/russross/blackfriday/v2"
 )
 
 // displayTOC displays a table of contents entry for the specified node.
