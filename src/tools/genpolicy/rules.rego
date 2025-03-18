@@ -754,10 +754,18 @@ allow_var(p_process, i_process, i_var, s_name) {
 # Match input with one of the policy variables, after substituting $(sandbox-name).
 allow_var(p_process, i_process, i_var, s_name) {
     some p_var in p_process.Env
-    p_var2 := replace(p_var, "$(sandbox-name)", s_name)
+    print("allow_var 2: p_var =", p_var)
 
-    print("allow_var 2: p_var2 =", p_var2)
-    p_var2 == i_var
+    p_var_split := split(p_var, "=")
+    count(p_var_split) == 2
+
+    p_var_split[1] == "$(sandbox-name)"
+
+    i_var_split := split(i_var, "=")
+    count(i_var_split) == 2
+
+    i_var_split[0] == p_var_split[0]
+    regex.match(s_name, i_var_split[1])
 
     print("allow_var 2: true")
 }
