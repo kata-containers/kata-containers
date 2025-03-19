@@ -274,13 +274,28 @@ add_copy_from_guest_to_policy_settings() {
 }
 
 hard_coded_policy_tests_enabled() {
+	local enabled="no"
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
-	[[ " ${enabled_hypervisors} " =~ " ${KATA_HYPERVISOR} " ]] || \
-		[[ "${KATA_HOST_OS}" == "cbl-mariner" ]] || \
-		auto_generate_policy_enabled
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-sev" "qemu-snp" "qemu-tdx")
+	for enabled_hypervisor in "${enabled_hypervisors[@]}"
+	do
+		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
+			enabled="yes"
+			break
+		fi
+	done
+
+	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" ]]; then
+		enabled="yes"
+	fi
+
+	if [[ "${enabled}" == "no" ]] && auto_generate_policy_enabled; then
+		enabled="yes"
+	fi
+
+	[[ "${enabled}" == "yes" ]]
 }
 
 add_allow_all_policy_to_yaml() {
