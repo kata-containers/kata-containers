@@ -37,8 +37,8 @@ echo "${E2E_TEST}" > /tmp/tsts
 # Remove previously-existing temporarily files as well as previous results
 OUT=RESULTS/tmp
 rm -Rf /tmp/*test* /tmp/e2e-*
-rm -R ${OUT}
-mkdir -p ${OUT}
+rm -R "${OUT}"
+mkdir -p "${OUT}"
 # Run the tests ignoring the monitor health checks
 ./openshift-tests run --provider azure -o "${OUT}/job.log" --junit-dir "${OUT}" --file /tmp/tsts --max-parallel-tests 5 --cluster-stability Disruptive
 RET=$?

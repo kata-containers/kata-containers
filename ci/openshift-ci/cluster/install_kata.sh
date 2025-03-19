@@ -76,7 +76,7 @@ wait_for_reboot() {
 	echo "Set timeout to ${delta} seconds"
 	timer_start=$(date +%s)
 	while [[ ${#workers[@]} -gt 0 ]]; do
-		sleep ${sleep_time}
+		sleep "${sleep_time}"
 		now=$(date +%s)
 		if [[ $((${timer_start} + ${delta})) -lt ${now} ]]; then
 			echo "Timeout: not all workers rebooted"
@@ -120,7 +120,7 @@ wait_mcp_update() {
 			echo "Timeout: not all workers updated" >&2
 			return 1
 		fi
-		sleep ${sleep_time}
+		sleep "${sleep_time}"
 		ready_count=$(oc get mcp worker \
 			-o jsonpath='{.status.readyMachineCount}')
 		degraded_count=$(oc get mcp worker \

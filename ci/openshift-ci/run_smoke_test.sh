@@ -27,10 +27,10 @@ sleep_time=5
 cmd="oc get pod/${pod} -o jsonpath='{.status.containerStatuses[0].state}' | \
 	grep running > /dev/null"
 info "Wait until the pod gets running"
-waitForProcess ${wait_time} ${sleep_time} "${cmd}" || timed_out=$?
+waitForProcess "${wait_time}" "${sleep_time}" "${cmd}" || timed_out=$?
 if [[ -n "${timed_out}" ]]; then
-	oc describe pod/${pod}
-	oc delete pod/${pod}
+	oc describe "pod/${pod}"
+	oc delete "pod/${pod}"
 	die "${pod} not running"
 fi
 info "${pod} is running"
@@ -39,7 +39,7 @@ info "${pod} is running"
 #
 hello_file=/tmp/hello
 hello_msg='Hello World'
-oc exec ${pod} -- sh -c "echo ${hello_msg} > ${hello_file}"
+oc exec "${pod}" -- sh -c "echo ${hello_msg} > ${hello_file}"
 
 info "Creating the service and route"
 if oc apply -f "${script_dir}/smoke/service.yaml"; then
@@ -89,6 +89,6 @@ else
     oc delete -f "${script_dir}/smoke/service.yaml"
 fi
 info "Deleting the ${pod} pod"
-oc delete pod/${pod} || test_status=$?
+oc delete "pod/${pod}" || test_status=$?
 
-exit ${test_status}
+exit "${test_status}"
