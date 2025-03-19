@@ -8,7 +8,6 @@
 set -o errexit
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-script_name="$(basename "${BASH_SOURCE[0]}")"
 
 source "${script_dir}/../tests/common.bash"
 
@@ -47,7 +46,7 @@ gperf_tarball_url="${gperf_url}/${gperf_tarball}"
 
 # We need to build the libseccomp library from sources to create a static library for the musl libc.
 # However, ppc64le and s390x have no musl targets in Rust. Hence, we do not set cflags for the musl libc.
-if ([[ "${arch}" != "ppc64le" ]] && [[ "${arch}" != "s390x" ]]); then
+if [[ "${arch}" != "ppc64le" ]] && [[ "${arch}" != "s390x" ]]; then
 	# Set FORTIFY_SOURCE=1 because the musl-libc does not have some functions about FORTIFY_SOURCE=2
 	cflags="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1 -O2"
 fi
@@ -71,7 +70,7 @@ build_and_install_gperf() {
 	tar -xf "${gperf_tarball}"
 	pushd "gperf-${gperf_version}"
 	# Unset $CC for configure, we will always use native for gperf
-	CC= ./configure --prefix="${gperf_install_dir}"
+	CC="" ./configure --prefix="${gperf_install_dir}"
 	make
 	make install
 	export PATH=${PATH}:"${gperf_install_dir}"/bin

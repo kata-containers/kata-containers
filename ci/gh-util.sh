@@ -95,7 +95,7 @@ list_issues_for_pr()
     echo "# Fields: issue_number"
 
     local issue
-    echo "${issues}"|while read issue
+    echo "${issues}" | while read -r issue
     do
         printf "%s\n" "${issue}"
     done
@@ -112,7 +112,7 @@ list_labels_for_issue()
 
     [[ -z "${labels}" ]] && die "cannot determine labels for issue ${issue}"
 
-    printf "${labels}"
+    echo "${labels}"
 }
 
 setup()
@@ -134,10 +134,11 @@ handle_args()
         case "${opt}" in
             h) usage && exit 0 ;;
             r) repo="${OPTARG}" ;;
+			*) echo "use '-h' to get list of supprted aruments" && exit 1 ;;
         esac
     done
 
-    shift $((${OPTIND} - 1))
+    shift $((OPTIND - 1))
 
     local repo="${repo:-kata-containers/kata-containers}"
     local cmd="${1:-}"

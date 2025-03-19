@@ -107,8 +107,7 @@ function install_yq() {
 
 	## NOTE: ${var,,} => gives lowercase value of var
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-	${precmd} curl -o "${yq_path}" -LSsf "${yq_url}"
-	[[ $? -ne 0 ]] && die "Download ${yq_url} failed"
+	${precmd} curl -o "${yq_path}" -LSsf "${yq_url}" || die "Download ${yq_url} failed"
 	${precmd} chmod +x "${yq_path}"
 
 	if ! command -v "${yq_path}" >/dev/null; then
