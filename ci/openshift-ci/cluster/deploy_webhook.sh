@@ -13,8 +13,9 @@ set -e
 set -o nounset
 set -o pipefail
 
-script_dir="$(realpath $(dirname "$0"))"
+script_dir="$(realpath "$(dirname "$0")")"
 webhook_dir="${script_dir}/../../../tools/testing/kata-webhook"
+# shellcheck disable=SC1091 # import based on variable
 source "${script_dir}/../lib.sh"
 KATA_RUNTIME=${KATA_RUNTIME:-kata-ci}
 

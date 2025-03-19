@@ -8,6 +8,7 @@
 #
 
 script_dir=$(dirname "$0")
+# shellcheck disable=SC1091 # import based on variable
 source "${script_dir}/lib.sh"
 
 pod='http-server'
@@ -45,7 +46,7 @@ info "Creating the service and route"
 if oc apply -f "${script_dir}/smoke/service.yaml"; then
     # Likely on OCP, use service
     is_ocp=1
-    host=$(oc get route/http-server-route -o jsonpath={.spec.host})
+    host=$(oc get route/http-server-route -o jsonpath="{.spec.host}")
     port=80
 else
     # Likely on plain kubernetes, test using another container

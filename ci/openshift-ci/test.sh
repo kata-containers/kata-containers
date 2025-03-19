@@ -9,6 +9,7 @@
 export KATA_RUNTIME=${KATA_RUNTIME:-kata-qemu}
 
 script_dir=$(dirname "$0")
+# shellcheck disable=SC1091 # import based on variable
 source "${script_dir}/lib.sh"
 
 suite=$1

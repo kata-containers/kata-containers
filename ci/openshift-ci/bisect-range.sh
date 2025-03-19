@@ -14,13 +14,16 @@ ARCH=amd64
 REPO="quay.io/kata-containers/kata-deploy-ci"
 
 TAGS=$(skopeo list-tags "docker://${REPO}")
+# For testing
+#echo "$TAGS" > tags
+#TAGS=$(cat tags)
 # Only amd64
 TAGS=$(echo "${TAGS}" | jq '.Tags' | jq "map(select(endswith(\"${ARCH}\")))" | jq -r '.[]')
 # Sort by git
 SORTED=""
 [[ -n "${BAD}" ]] && LOG_ARGS="${GOOD}~1..${BAD}" || LOG_ARGS="${GOOD}~1.."
 for TAG in $(git log --merges --pretty=format:%H --reverse "${LOG_ARGS}"); do
-	[[ "${TAGS}" =~ "${TAG}" ]] && SORTED+="
+	[[ "${TAGS}" =~ ${TAG} ]] && SORTED+="
 kata-containers-${TAG}-${ARCH}"
 done
 # Comma separated tags with repo

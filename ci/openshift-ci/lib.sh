@@ -14,6 +14,7 @@ else
 fi
 
 lib_dir=$(dirname "${BASH_SOURCE[0]}")
+# shellcheck disable=SC1091 # import based on variable
 source "${lib_dir}/../../tests/common.bash"
 
 export katacontainers_repo=${katacontainers_repo:="github.com/kata-containers/kata-containers"}

@@ -11,7 +11,11 @@ scripts_dir=$(dirname "$0")
 deployments_dir=${scripts_dir}/deployments
 configs_dir=${scripts_dir}/configs
 
+# shellcheck disable=SC1091 # import based on variable
 source "${scripts_dir}/../lib.sh"
+
+# Set your katacontainers repo dir location
+[[ -z "${katacontainers_repo_dir}" ]] && echo "Please set katacontainers_repo_dir variable to your kata repo"
 
 # Set to 'yes' if you want to configure SELinux to permissive on the cluster
 # workers.
@@ -40,7 +44,7 @@ WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
 #
 apply_kata_deploy() {
 	local deploy_file="tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	pushd "${katacontainers_repo_dir}"
+	pushd "${katacontainers_repo_dir}" || die
 	sed -ri "s#(\s+image:) .*#\1 ${KATA_DEPLOY_IMAGE}#" "${deploy_file}"
 
 	info "Applying kata-deploy"
@@ -51,7 +55,7 @@ apply_kata_deploy() {
 
 	info "Adding the kata runtime classes"
 	oc apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-	popd
+	popd || die
 }
 
 
@@ -64,8 +68,8 @@ wait_for_reboot() {
 	local delta="${1:-900}"
 	local sleep_time=60
 	declare -A BOOTIDS
-	local workers=($(oc get nodes | \
-		awk '{if ($3 == "worker") { print $1 } }'))
+	local workers
+	mapfile -t workers < <(oc get nodes | awk '{if ($3 == "worker") { print $1 } }')
 	# Get the boot ID to compared it changed over time.
 	for node in "${workers[@]}"; do
 		BOOTIDS[${node}]=$(oc get -o jsonpath='{.status.nodeInfo.bootID}'\
@@ -78,18 +82,18 @@ wait_for_reboot() {
 	while [[ ${#workers[@]} -gt 0 ]]; do
 		sleep "${sleep_time}"
 		now=$(date +%s)
-		if [[ $((${timer_start} + ${delta})) -lt ${now} ]]; then
+		if [[ $((timer_start + delta)) -lt ${now} ]]; then
 			echo "Timeout: not all workers rebooted"
 			return 1
 		fi
-		echo "Checking after $((${now} - ${timer_start})) seconds"
+		echo "Checking after $((now - timer_start)) seconds"
 		for i in "${!workers[@]}"; do
 			current_id=$(oc get \
 				-o jsonpath='{.status.nodeInfo.bootID}' \
 				"node/${workers[i]}")
-			if [[ "${current_id}" != ${BOOTIDS[${workers[i]}]} ]]; then
+			if [[ "${current_id}" != "${BOOTIDS[${workers[i]}]}" ]]; then
 				echo "${workers[i]} rebooted"
-				unset workers[i]
+				unset "workers[i]"
 			fi
 		done
 	done
@@ -102,7 +106,8 @@ wait_mcp_update() {
 	# and none are degraded.
 	local ready_count=0
 	local degraded_count=0
-	local machine_count=$(oc get mcp worker -o jsonpath='{.status.machineCount}')
+	local machine_count
+	machine_count=$(oc get mcp worker -o jsonpath='{.status.machineCount}')
 
 	if [[ -z "${machine_count}" && "${machine_count}" -lt 1 ]]; then
 		warn "Unabled to obtain the machine count"
@@ -110,12 +115,13 @@ wait_mcp_update() {
 	fi
 
 	echo "Set timeout to ${delta} seconds"
-	local deadline=$(($(date +%s) + ${delta}))
+	local deadline=$(($(date +%s) + delta))
+	local now
 	# The ready count might not have changed yet, so wait a little.
 	while [[ "${ready_count}" != "${machine_count}" && \
 		"${degraded_count}" == 0 ]]; do
 		# Let's check it hit the timeout (or not).
-		local now=$(date +%s)
+		now=$(date +%s)
 		if [[ ${deadline} -lt ${now} ]]; then
 			echo "Timeout: not all workers updated" >&2
 			return 1
@@ -138,7 +144,7 @@ enable_sandboxedcontainers_extension() {
 	oc apply -f "${deployment_file}"
 	oc get -f "${deployment_file}" || \
 		die "Sandboxed Containers extension machineconfig not found"
-	wait_mcp_update || die "Failed to update the machineconfigpool"
+	wait_mcp_update 3600 || die "Failed to update the machineconfigpool"
 }
 
 # Print useful information for debugging.
@@ -174,16 +180,17 @@ wait_for_app_pods_message() {
 	local i
 	SECONDS=0
 	while :; do
-		pods=($(oc get pods -l app="${app}" --no-headers=true "${namespace}" | awk '{print $1}'))
+		mapfile -t pods < <(oc get pods -l app="${app}" --no-headers=true "${namespace}" | awk '{print $1}')
 		[[ "${#pods}" -ge "${pod_count}" ]] && break
 		if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 			printf "Unable to find ${pod_count} pods for '-l app=\"${app}\"' in ${SECONDS}s (%s)" "${pods[@]}"
 			return 1
 		fi
 	done
+	local log
 	for pod in "${pods[@]}"; do
 		while :; do
-			local log=$(oc logs "${namespace}" "${pod}")
+			log=$(oc logs "${namespace}" "${pod}")
 			echo "${log}" | grep "${message}" -q && echo "Found $(echo "${log}" | grep "${message}") in ${pod}'s log (${SECONDS})" && break;
 			if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 				echo -n "Message '${message}' not present in '${pod}' pod of the '-l app=\"${app}\"' "
@@ -220,16 +227,15 @@ apply_kata_deploy
 if [[ ${SELINUX_PERMISSIVE} == "yes" ]]; then
 	info "Configuring SELinux"
 	if [[ -z "${SELINUX_CONF_BASE64}" ]]; then
-		export SELINUX_CONF_BASE64=$(echo \
-			$(cat "${configs_dir}/selinux.conf"|base64) | \
-			sed -e 's/\s//g')
+		SELINUX_CONF_BASE64=$(base64 -w0 < "${configs_dir}/selinux.conf")
+		export SELINUX_CONF_BASE64
 	fi
 	envsubst < "${deployments_dir}"/machineconfig_selinux.yaml.in | \
 		oc apply -f -
 	oc get machineconfig/51-kata-selinux || \
 		die "SELinux machineconfig not found"
 	# The new SELinux configuration will trigger another reboot.
-	wait_for_reboot
+	wait_for_reboot 900
 fi
 
 if [[ "${WORKAROUND_9206_CRIO}" == "yes" ]]; then
