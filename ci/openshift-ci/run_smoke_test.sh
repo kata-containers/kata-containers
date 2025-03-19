@@ -7,8 +7,8 @@
 # Run a smoke test.
 #
 
-script_dir=$(dirname $0)
-source ${script_dir}/lib.sh
+script_dir=$(dirname "$0")
+source "${script_dir}/lib.sh"
 
 pod='http-server'
 
@@ -42,7 +42,7 @@ hello_msg='Hello World'
 oc exec ${pod} -- sh -c "echo ${hello_msg} > ${hello_file}"
 
 info "Creating the service and route"
-if oc apply -f ${script_dir}/smoke/service.yaml; then
+if oc apply -f "${script_dir}/smoke/service.yaml"; then
     # Likely on OCP, use service
     is_ocp=1
     host=$(oc get route/http-server-route -o jsonpath={.spec.host})
@@ -84,9 +84,9 @@ rm -f "${tempfile}"
 #
 info "Deleting the service/route"
 if [[ "${is_ocp}" -eq 0 ]]; then
-    oc delete -f ${script_dir}/smoke/service_kubernetes.yaml
+    oc delete -f "${script_dir}/smoke/service_kubernetes.yaml"
 else
-    oc delete -f ${script_dir}/smoke/service.yaml
+    oc delete -f "${script_dir}/smoke/service.yaml"
 fi
 info "Deleting the ${pod} pod"
 oc delete pod/${pod} || test_status=$?

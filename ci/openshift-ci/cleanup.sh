@@ -7,11 +7,11 @@
 # This script tries to removes most of the resources added by `test.sh` script
 # from the cluster.
 
-scripts_dir=$(dirname $0)
+scripts_dir=$(dirname "$0")
 deployments_dir=${scripts_dir}/cluster/deployments
 configs_dir=${scripts_dir}/configs
 
-source ${scripts_dir}/lib.sh
+source "${scripts_dir}/lib.sh"
 
 # Set to 'yes' if you want to configure SELinux to permissive on the cluster
 # workers.

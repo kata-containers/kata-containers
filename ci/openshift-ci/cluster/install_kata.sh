@@ -7,11 +7,11 @@
 # This script installs the built kata-containers in the test cluster,
 # and configure a runtime.
 
-scripts_dir=$(dirname $0)
+scripts_dir=$(dirname "$0")
 deployments_dir=${scripts_dir}/deployments
 configs_dir=${scripts_dir}/configs
 
-source ${scripts_dir}/../lib.sh
+source "${scripts_dir}/../lib.sh"
 
 # Set to 'yes' if you want to configure SELinux to permissive on the cluster
 # workers.
@@ -69,7 +69,7 @@ wait_for_reboot() {
 	# Get the boot ID to compared it changed over time.
 	for node in "${workers[@]}"; do
 		BOOTIDS[${node}]=$(oc get -o jsonpath='{.status.nodeInfo.bootID}'\
-			node/${node})
+			"node/${node}")
 		echo "Wait ${node} reboot"
 	done
 
@@ -86,7 +86,7 @@ wait_for_reboot() {
 		for i in "${!workers[@]}"; do
 			current_id=$(oc get \
 				-o jsonpath='{.status.nodeInfo.bootID}' \
-				node/${workers[i]})
+				"node/${workers[i]}")
 			if [[ "${current_id}" != ${BOOTIDS[${workers[i]}]} ]]; then
 				echo "${workers[i]} rebooted"
 				unset workers[i]
@@ -135,8 +135,8 @@ wait_mcp_update() {
 enable_sandboxedcontainers_extension() {
 	info "Enabling the RHCOS extension for Sandboxed Containers"
 	local deployment_file="${deployments_dir}/machineconfig_sandboxedcontainers_extension.yaml"
-	oc apply -f ${deployment_file}
-	oc get -f ${deployment_file} || \
+	oc apply -f "${deployment_file}"
+	oc get -f "${deployment_file}" || \
 		die "Sandboxed Containers extension machineconfig not found"
 	wait_mcp_update || die "Failed to update the machineconfigpool"
 }
@@ -174,7 +174,7 @@ wait_for_app_pods_message() {
 	local i
 	SECONDS=0
 	while :; do
-		pods=($(oc get pods -l app="${app}" --no-headers=true ${namespace} | awk '{print $1}'))
+		pods=($(oc get pods -l app="${app}" --no-headers=true "${namespace}" | awk '{print $1}'))
 		[[ "${#pods}" -ge "${pod_count}" ]] && break
 		if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 			printf "Unable to find ${pod_count} pods for '-l app=\"${app}\"' in ${SECONDS}s (%s)" "${pods[@]}"
@@ -183,7 +183,7 @@ wait_for_app_pods_message() {
 	done
 	for pod in "${pods[@]}"; do
 		while :; do
-			local log=$(oc logs ${namespace} "${pod}")
+			local log=$(oc logs "${namespace}" "${pod}")
 			echo "${log}" | grep "${message}" -q && echo "Found $(echo "${log}" | grep "${message}") in ${pod}'s log (${SECONDS})" && break;
 			if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 				echo -n "Message '${message}' not present in '${pod}' pod of the '-l app=\"${app}\"' "
@@ -200,18 +200,18 @@ wait_for_app_pods_message() {
 oc config set-context --current --namespace=default
 
 worker_nodes=$(oc get nodes |  awk '{if ($3 == "worker") { print $1 } }')
-num_nodes=$(echo ${worker_nodes} | wc -w)
+num_nodes=$(echo "${worker_nodes}" | wc -w)
 [[ ${num_nodes} -ne 0 ]] || \
 	die "No worker nodes detected. Something is wrong with the cluster"
 
 if [[ "${KATA_WITH_SYSTEM_QEMU}" == "yes" ]]; then
 	# QEMU is deployed on the workers via RCHOS extension.
 	enable_sandboxedcontainers_extension
-	oc apply -f ${deployments_dir}/configmap_installer_qemu.yaml
+	oc apply -f "${deployments_dir}/configmap_installer_qemu.yaml"
 fi
 
 if [[ "${KATA_WITH_HOST_KERNEL}" == "yes" ]]; then
-	oc apply -f ${deployments_dir}/configmap_installer_kernel.yaml
+	oc apply -f "${deployments_dir}/configmap_installer_kernel.yaml"
 fi
 
 apply_kata_deploy
@@ -221,10 +221,10 @@ if [[ ${SELINUX_PERMISSIVE} == "yes" ]]; then
 	info "Configuring SELinux"
 	if [[ -z "${SELINUX_CONF_BASE64}" ]]; then
 		export SELINUX_CONF_BASE64=$(echo \
-			$(cat ${configs_dir}/selinux.conf|base64) | \
+			$(cat "${configs_dir}/selinux.conf"|base64) | \
 			sed -e 's/\s//g')
 	fi
-	envsubst < ${deployments_dir}/machineconfig_selinux.yaml.in | \
+	envsubst < "${deployments_dir}"/machineconfig_selinux.yaml.in | \
 		oc apply -f -
 	oc get machineconfig/51-kata-selinux || \
 		die "SELinux machineconfig not found"
@@ -241,5 +241,5 @@ fi
 
 # FIXME: Remove when https://github.com/kata-containers/kata-containers/pull/8417 is resolved
 # Selinux context is currently not handled by kata-deploy
-oc apply -f ${deployments_dir}/relabel_selinux.yaml
+oc apply -f "${deployments_dir}/relabel_selinux.yaml"
 wait_for_app_pods_message restorecon "${num_nodes}" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to treat selinux, proceeding anyway..."

@@ -59,7 +59,7 @@ list_issues_for_pr()
 
     [[ -z "${pr}" ]] && die "need PR"
 
-    local commits=$(gh pr view ${pr} --repo ${repo} --json commits --jq .commits[].messageBody)
+    local commits=$(gh pr view "${pr}" --repo "${repo}" --json commits --jq .commits[].messageBody)
 
     [[ -z "${commits}" ]] && die "cannot determine commits for PR ${pr}"
 
@@ -105,7 +105,7 @@ list_labels_for_issue()
 
     [[ -z "${issue}" ]] && die "need issue number"
 
-    local labels=$(gh issue view ${issue} --repo kata-containers/kata-containers --json labels)
+    local labels=$(gh issue view "${issue}" --repo kata-containers/kata-containers --json labels)
 
     [[ -z "${labels}" ]] && die "cannot determine labels for issue ${issue}"
 

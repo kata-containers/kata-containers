@@ -19,7 +19,7 @@ TAGS=$(echo "${TAGS}" | jq '.Tags' | jq "map(select(endswith(\"${ARCH}\")))" | j
 # Sort by git
 SORTED=""
 [[ -n "${BAD}" ]] && LOG_ARGS="${GOOD}~1..${BAD}" || LOG_ARGS="${GOOD}~1.."
-for TAG in $(git log --merges --pretty=format:%H --reverse ${LOG_ARGS}); do
+for TAG in $(git log --merges --pretty=format:%H --reverse "${LOG_ARGS}"); do
 	[[ "${TAGS}" =~ "${TAG}" ]] && SORTED+="
 kata-containers-${TAG}-${ARCH}"
 done
