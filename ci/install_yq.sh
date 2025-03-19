@@ -5,20 +5,20 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -n "$DEBUG" ] && set -o xtrace
+[ -n "${DEBUG}" ] && set -o xtrace
 
 # If we fail for any reason a message will be displayed
 die() {
 	msg="$*"
-	echo "ERROR: $msg" >&2
+	echo "ERROR: ${msg}" >&2
 	exit 1
 }
 
 function verify_yq_exists() {
 	local yq_path=$1
 	local yq_version=$2
-	local expected="yq (https://github.com/mikefarah/yq/) version $yq_version"
-	if [ -x  "${yq_path}" ] && [ "$($yq_path --version)"X == "$expected"X ]; then
+	local expected="yq (https://github.com/mikefarah/yq/) version ${yq_version}"
+	if [ -x  "${yq_path}" ] && [ "$(${yq_path} --version)"X == "${expected}"X ]; then
 		return 0
 	else
 		return 1
@@ -41,7 +41,7 @@ function install_yq() {
 	else
 		yq_path="/usr/local/bin/yq"
 	fi
-	if verify_yq_exists "$yq_path" "$yq_version"; then
+	if verify_yq_exists "${yq_path}" "${yq_version}"; then
 		echo "yq is already installed in correct version"
 		return
 	fi
@@ -76,7 +76,7 @@ function install_yq() {
 		# If we're on an apple silicon machine, just assign amd64. 
 		# The version of yq we use doesn't have a darwin arm build, 
 		# but Rosetta can come to the rescue here.
-		if [ $goos == "Darwin" ]; then 
+		if [ ${goos} == "Darwin" ]; then
 			goarch=amd64
 		else 
 			goarch=arm64

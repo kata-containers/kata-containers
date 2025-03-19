@@ -24,7 +24,7 @@ pushd "${webhook_dir}" >/dev/null
 info "Builds the kata-webhook"
 ./create-certs.sh
 info "Override our KATA_RUNTIME ConfigMap"
-sed -i deploy/webhook.yaml -e "s/runtime_class: .*$/runtime_class: $KATA_RUNTIME/g"
+sed -i deploy/webhook.yaml -e "s/runtime_class: .*$/runtime_class: ${KATA_RUNTIME}/g"
 info "Deploys the kata-webhook"
 oc apply -f deploy/
 
