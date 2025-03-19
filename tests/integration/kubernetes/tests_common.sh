@@ -220,7 +220,8 @@ add_exec_to_policy_settings() {
 	shift
 
 	# Create a JSON array of strings containing all the args of the command to be allowed.
-	local exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
+	local exec_args
+	exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
 
 	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
 	local jq_command=".request_defaults.ExecProcessRequest.allowed_commands |= . + [${exec_args}]"
@@ -289,7 +290,8 @@ add_allow_all_policy_to_yaml() {
 	# Previous version of yq was not ready to handle multiple objects in a single yaml.
 	# By default was changing only the first object.
 	# With yq>4 we need to make it explicit during the read and write.
-	local resource_kind=$(yq .kind "${yaml_file}" | head -1)
+	local resource_kind
+	resource_kind=$(yq .kind "${yaml_file}" | head -1)
 
 	case "${resource_kind}" in
 
