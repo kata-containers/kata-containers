@@ -127,13 +127,11 @@ handle_args()
 {
     setup
 
-    local show_all="false"
     local opt
 
-    while getopts "ahr:" opt "$@"
+    while getopts "hr:" opt "$@"
     do
         case "${opt}" in
-            a) show_all="true" ;;
             h) usage && exit 0 ;;
             r) repo="${OPTARG}" ;;
         esac
