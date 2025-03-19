@@ -15,7 +15,7 @@ pod='http-server'
 # Create a pod.
 #
 info "Creating the ${pod} pod"
-[ -z "${KATA_RUNTIME}" ] && die "Please set the KATA_RUNTIME first"
+[[ -z "${KATA_RUNTIME}" ]] && die "Please set the KATA_RUNTIME first"
 envsubst < "${script_dir}/smoke/${pod}.yaml.in" | \
 	oc apply -f - || \
 	die "failed to create ${pod} pod"
@@ -28,7 +28,7 @@ cmd="oc get pod/${pod} -o jsonpath='{.status.containerStatuses[0].state}' | \
 	grep running > /dev/null"
 info "Wait until the pod gets running"
 waitForProcess ${wait_time} ${sleep_time} "${cmd}" || timed_out=$?
-if [ -n "${timed_out}" ]; then
+if [[ -n "${timed_out}" ]]; then
 	oc describe pod/${pod}
 	oc delete pod/${pod}
 	die "${pod} not running"
@@ -83,7 +83,7 @@ rm -f "${tempfile}"
 # Delete the resources.
 #
 info "Deleting the service/route"
-if [ "${is_ocp}" -eq 0 ]; then
+if [[ "${is_ocp}" -eq 0 ]]; then
     oc delete -f ${script_dir}/smoke/service_kubernetes.yaml
 else
     oc delete -f ${script_dir}/smoke/service.yaml

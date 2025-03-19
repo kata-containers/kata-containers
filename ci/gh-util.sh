@@ -10,7 +10,7 @@ set -o errtrace
 set -o nounset
 set -o pipefail
 
-[ -n "${DEBUG:-}" ] && set -o xtrace
+[[ -n "${DEBUG:-}" ]] && set -o xtrace
 
 script_name=${0##*/}
 
@@ -57,11 +57,11 @@ list_issues_for_pr()
     local pr="${1:-}"
     local repo="${2:-kata-containers/kata-containers}"
 
-    [ -z "${pr}" ] && die "need PR"
+    [[ -z "${pr}" ]] && die "need PR"
 
     local commits=$(gh pr view ${pr} --repo ${repo} --json commits --jq .commits[].messageBody)
 
-    [ -z "${commits}" ] && die "cannot determine commits for PR ${pr}"
+    [[ -z "${commits}" ]] && die "cannot determine commits for PR ${pr}"
 
     # Extract the issue number(s) from the commits.
     #
@@ -86,7 +86,7 @@ list_issues_for_pr()
         sed 's/[.,\#]//g' |\
         sort -nu || true)
 
-    [ -z "${issues}" ] && die "cannot determine issues for PR ${pr}"
+    [[ -z "${issues}" ]] && die "cannot determine issues for PR ${pr}"
 
     echo "# Issues linked to PR"
     echo "#"
@@ -103,11 +103,11 @@ list_labels_for_issue()
 {
     local issue="${1:-}"
 
-    [ -z "${issue}" ] && die "need issue number"
+    [[ -z "${issue}" ]] && die "need issue number"
 
     local labels=$(gh issue view ${issue} --repo kata-containers/kata-containers --json labels)
 
-    [ -z "${labels}" ] && die "cannot determine labels for issue ${issue}"
+    [[ -z "${labels}" ]] && die "cannot determine labels for issue ${issue}"
 
     printf "${labels}"
 }

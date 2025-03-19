@@ -7,7 +7,7 @@
 # afterwards OCP cluster using kata-containers primarily created for use
 # with https://github.com/ldoktor/bisecter
 
-[ "$#" -ne 1 ] && echo "Provide image as the first and only argument" && exit 255
+[[ "$#" -ne 1 ]] && echo "Provide image as the first and only argument" && exit 255
 export KATA_DEPLOY_IMAGE="$1"
 OCP_DIR="${OCP_DIR:-/path/to/your/openshift/release/}"
 E2E_TEST="${E2E_TEST:-'"[sig-node] Container Runtime blackbox test on terminated container should report termination message as empty when pod succeeds and TerminationMessagePolicy FallbackToLogsOnError is set [NodeConformance] [Conformance] [Suite:openshift/conformance/parallel/minimal] [Suite:k8s]"'}"
@@ -20,7 +20,7 @@ SETUP=0
 pushd "${KATA_CI_DIR}" || { echo "Failed to cd to '${KATA_CI_DIR}'"; exit 255; }
 ./test.sh || SETUP=125
 cluster/deploy_webhook.sh || SETUP=125
-if [ ${SETUP} != 0 ]; then
+if [[ ${SETUP} != 0 ]]; then
     ./cleanup.sh
     exit "${SETUP}"
 fi

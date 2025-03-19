@@ -75,10 +75,10 @@ wait_for_reboot() {
 
 	echo "Set timeout to ${delta} seconds"
 	timer_start=$(date +%s)
-	while [ ${#workers[@]} -gt 0 ]; do
+	while [[ ${#workers[@]} -gt 0 ]]; do
 		sleep ${sleep_time}
 		now=$(date +%s)
-		if [ $((${timer_start} + ${delta})) -lt ${now} ]; then
+		if [[ $((${timer_start} + ${delta})) -lt ${now} ]]; then
 			echo "Timeout: not all workers rebooted"
 			return 1
 		fi
@@ -87,7 +87,7 @@ wait_for_reboot() {
 			current_id=$(oc get \
 				-o jsonpath='{.status.nodeInfo.bootID}' \
 				node/${workers[i]})
-			if [ "${current_id}" != ${BOOTIDS[${workers[i]}]} ]; then
+			if [[ "${current_id}" != ${BOOTIDS[${workers[i]}]} ]]; then
 				echo "${workers[i]} rebooted"
 				unset workers[i]
 			fi
@@ -116,7 +116,7 @@ wait_mcp_update() {
 		"${degraded_count}" == 0 ]]; do
 		# Let's check it hit the timeout (or not).
 		local now=$(date +%s)
-		if [ ${deadline} -lt ${now} ]; then
+		if [[ ${deadline} -lt ${now} ]]; then
 			echo "Timeout: not all workers updated" >&2
 			return 1
 		fi
@@ -127,7 +127,7 @@ wait_mcp_update() {
 			-o jsonpath='{.status.degradedMachineCount}')
 		echo "check machineconfigpool - ready_count: ${ready_count} degraded_count: ${degraded_count}"
 	done
-	[ ${degraded_count} -eq 0 ]
+	[[ ${degraded_count} -eq 0 ]]
 }
 
 # Enable the RHCOS extension for the Sandboxed Containers.
@@ -166,17 +166,17 @@ wait_for_app_pods_message() {
 	local message="$3"
 	local timeout="$4"
 	local namespace="$5"
-	[ -z "${pod_count}" ] && pod_count=1
-	[ -z "${timeout}" ] && timeout=60
-	[ -n "${namespace}" ] && namespace=" -n ${namespace} "
+	[[ -z "${pod_count}" ]] && pod_count=1
+	[[ -z "${timeout}" ]] && timeout=60
+	[[ -n "${namespace}" ]] && namespace=" -n ${namespace} "
 	local pod
 	local pods
 	local i
 	SECONDS=0
 	while :; do
 		pods=($(oc get pods -l app="${app}" --no-headers=true ${namespace} | awk '{print $1}'))
-		[ "${#pods}" -ge "${pod_count}" ] && break
-		if [ "${SECONDS}" -gt "${timeout}" ]; then
+		[[ "${#pods}" -ge "${pod_count}" ]] && break
+		if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 			printf "Unable to find ${pod_count} pods for '-l app=\"${app}\"' in ${SECONDS}s (%s)" "${pods[@]}"
 			return 1
 		fi
@@ -185,7 +185,7 @@ wait_for_app_pods_message() {
 		while :; do
 			local log=$(oc logs ${namespace} "${pod}")
 			echo "${log}" | grep "${message}" -q && echo "Found $(echo "${log}" | grep "${message}") in ${pod}'s log (${SECONDS})" && break;
-			if [ "${SECONDS}" -gt "${timeout}" ]; then
+			if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 				echo -n "Message '${message}' not present in '${pod}' pod of the '-l app=\"${app}\"' "
 				printf "pods after ${SECONDS}s :(%s)\n" "${pods[@]}"
 				echo "Pod ${pod}'s output so far:"
@@ -201,25 +201,25 @@ oc config set-context --current --namespace=default
 
 worker_nodes=$(oc get nodes |  awk '{if ($3 == "worker") { print $1 } }')
 num_nodes=$(echo ${worker_nodes} | wc -w)
-[ ${num_nodes} -ne 0 ] || \
+[[ ${num_nodes} -ne 0 ]] || \
 	die "No worker nodes detected. Something is wrong with the cluster"
 
-if [ "${KATA_WITH_SYSTEM_QEMU}" == "yes" ]; then
+if [[ "${KATA_WITH_SYSTEM_QEMU}" == "yes" ]]; then
 	# QEMU is deployed on the workers via RCHOS extension.
 	enable_sandboxedcontainers_extension
 	oc apply -f ${deployments_dir}/configmap_installer_qemu.yaml
 fi
 
-if [ "${KATA_WITH_HOST_KERNEL}" == "yes" ]; then
+if [[ "${KATA_WITH_HOST_KERNEL}" == "yes" ]]; then
 	oc apply -f ${deployments_dir}/configmap_installer_kernel.yaml
 fi
 
 apply_kata_deploy
 
 # Set SELinux to permissive mode
-if [ ${SELINUX_PERMISSIVE} == "yes" ]; then
+if [[ ${SELINUX_PERMISSIVE} == "yes" ]]; then
 	info "Configuring SELinux"
-	if [ -z "${SELINUX_CONF_BASE64}" ]; then
+	if [[ -z "${SELINUX_CONF_BASE64}" ]]; then
 		export SELINUX_CONF_BASE64=$(echo \
 			$(cat ${configs_dir}/selinux.conf|base64) | \
 			sed -e 's/\s//g')

@@ -12,7 +12,7 @@ script_dir=$(dirname $0)
 source ${script_dir}/lib.sh
 
 suite=$1
-if [ -z "$1" ]; then
+if [[ -z "$1" ]]; then
 	suite='smoke'
 fi
 
@@ -29,4 +29,4 @@ info "Run test suite: ${suite}"
 test_status='PASS'
 ${script_dir}/run_${suite}_test.sh || test_status='FAIL'
 info "Test suite: ${suite}: ${test_status}"
-[ "${test_status}" == "PASS" ]
+[[ "${test_status}" == "PASS" ]]
