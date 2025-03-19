@@ -258,9 +258,9 @@ add_copy_from_host_to_policy_settings() {
 	local -r genpolicy_settings_dir="$1"
 
 	local exec_command=(test -d /tmp)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 	exec_command=(tar -xmf - -C /tmp)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 }
 
 # Change genpolicy settings to allow executing on the Guest VM the commands
@@ -270,7 +270,7 @@ add_copy_from_guest_to_policy_settings() {
 	local -r copied_file="$2"
 
 	exec_command=(tar cf - "${copied_file}")
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 }
 
 hard_coded_policy_tests_enabled() {
