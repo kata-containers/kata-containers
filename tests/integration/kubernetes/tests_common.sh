@@ -38,6 +38,11 @@ export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../src/kata-opa/allow-all.rego")}"
 
+AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
+GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+KATA_HOST_OS="${KATA_HOST_OS:-}"
+
 # Common setup for tests.
 #
 # Global variables exported:
