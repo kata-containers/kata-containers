@@ -7,6 +7,7 @@
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
+helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
 AZ_APPID="${AZ_APPID:-}"
 AZ_PASSWORD="${AZ_PASSWORD:-}"
@@ -14,6 +15,22 @@ AZ_SUBSCRIPTION_ID="${AZ_SUBSCRIPTION_ID:-}"
 AZ_TENANT_ID="${AZ_TENANT_ID:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
+HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
+HELM_AGENT_HTTPS_PROXY="${HELM_AGENT_HTTPS_PROXY:-}"
+HELM_AGENT_NO_PROXY="${HELM_AGENT_NO_PROXY:-}"
+HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
+HELM_CREATE_RUNTIME_CLASSES="${HELM_CREATE_RUNTIME_CLASSES:-}"
+HELM_CREATE_DEFAULT_RUNTIME_CLASS="${HELM_CREATE_DEFAULT_RUNTIME_CLASS:-}"
+HELM_DEBUG="${HELM_DEBUG:-}"
+HELM_DEFAULT_SHIM="${HELM_DEFAULT_SHIM:-}"
+HELM_HOST_OS="${HELM_HOST_OS:-}"
+HELM_IMAGE_REFERENCE="${HELM_IMAGE_REFERENCE:-}"
+HELM_IMAGE_TAG="${HELM_IMAGE_TAG:-}"
+HELM_K8S_DISTRIBUTION="${HELM_K8S_DISTRIBUTION:-}"
+HELM_PULL_TYPE_MAPPING="${HELM_PULL_TYPE_MAPPING:-}"
+HELM_SHIMS="${HELM_SHIMS:-}"
+HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
+KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-600}
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
@@ -426,4 +443,84 @@ function delete_test_runners(){
 			echo "${pids}" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
 		fi
 	done
+}
+
+function helm_helper() {
+	local helm_extra_cmdline
+	local max_tries
+	local interval
+	local i
+
+	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
+		die "HELM_IMAGE_REFERENCE environment variable cannot be empty."
+	fi
+	helm_extra_cmdline+=" --set image.reference=\"${HELM_IMAGE_REFERENCE}\""
+
+	if [[ -z "${HELM_IMAGE_TAG}" ]]; then
+		die "HELM_IMAGE_TAG environment variable cannot be empty."
+	fi
+	helm_extra_cmdline+=" --set image.tag=\"${HELM_IMAGE_TAG}\""
+
+	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
+		[[ -n "${HELM_DEBUG}" ]] && helm_extra_cmdline+=" --set env.debug=\"${HELM_DEBUG}\""
+		[[ -n "${HELM_SHIMS}" ]] && helm_extra_cmdline+=" --set env.shims=\"${HELM_SHIMS}\""
+		[[ -n "${HELM_DEFAULT_SHIM}" ]] && helm_extra_cmdline+=" --set env.defaultShim=\"${HELM_DEFAULT_SHIM}\""
+		[[ -n "${HELM_CREATE_RUNTIME_CLASSES}" ]] && helm_extra_cmdline+=" --set env.createRuntimeClasses=\"${HELM_CREATE_RUNTIME_CLASSES}\""
+		[[ -n "${HELM_CREATE_DEFAULT_RUNTIME_CLASS}" ]] && helm_extra_cmdline+=" --set env.createDefaultRuntimeClass=\"${HELM_CREATE_DEFAULT_RUNTIME_CLASS}\""
+		[[ -n "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" ]] && helm_extra_cmdline+=" --set env.allowedHypervisorAnnotations=\"${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}\""
+		[[ -n "${HELM_SNAPSHOTTER_HANDLER_MAPPING}" ]] && helm_extra_cmdline+=" --set env.snapshotterHandlerMapping=\"${HELM_SNAPSHOTTER_HANDLER_MAPPING}\""
+		[[ -n "${HELM_AGENT_HTTPS_PROXY}" ]] && helm_extra_cmdline+=" --set env.agentHttpsProxy=\"${HELM_AGENT_HTTPS_PROXY}\""
+		[[ -n "${HELM_AGENT_NO_PROXY}" ]] && helm_extra_cmdline+=" --set env.agentNoProxy=\"${HELM_AGENT_NO_PROXY}\""
+		[[ -n "${HELM_PULL_TYPE_MAPPING}" ]] && helm_extra_cmdline+=" --set env.pullTypeMapping=\"${HELM_PULL_TYPE_MAPPING}\""
+		[[ -n "${HELM_HOST_OS}" ]] && helm_extra_cmdline+=" --set env.hostOS=\"${HELM_HOST_OS}\""
+	fi
+	info "helm_extra_cmdline: ${helm_extra_cmdline}"
+
+	max_tries=3
+	interval=10
+	i=10
+
+	ensure_helm
+
+	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
+	set +e # Disable immediate exit on failure
+	while true; do
+		cmd="helm upgrade --debug --namespace=kube-system --install kata-deploy ${helm_chart_dir} ${helm_extra_cmdline}"
+		eval "${cmd}"
+		ret=${?}
+		if [[ ${ret} -eq 0 ]]; then
+			echo "Helm install succeeded!"
+			break
+		fi
+		i=$((i+1))
+		if [[ ${i} -lt ${max_tries} ]]; then
+			echo "Retrying after ${interval} seconds (Attempt ${i} of $((max_tries - 1)))"
+		else
+			break
+		fi
+		sleep "${interval}"
+	done
+	set -e # Re-enable immediate exit on failure
+	if [[ ${i} -eq ${max_tries} ]]; then
+		die "Failed to deploy kata-deploy after ${max_tries} tries"
+	fi
+
+	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
+	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
+	local cmd
+	cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
+	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "${cmd}"
+
+	# This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
+	# which may cause issues like not having the node properly labeled or the artefacts
+	# properly deployed when the tests actually start running.
+	sleep 60s
+
+	echo "::group::kata-deploy logs"
+	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
+	echo "::endgroup::"
+
+	echo "::group::Runtime classes"
+	kubectl_retry get runtimeclass
+	echo "::endgroup::"
 }
