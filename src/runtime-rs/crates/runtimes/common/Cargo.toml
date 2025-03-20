@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +23,7 @@ slog-scope = "4.4.0"
 strum = { version = "0.24.0", features = ["derive"] }
 thiserror = "^1.0"
 tokio = { version = "1.38.0", features = ["rt-multi-thread", "process", "fs"] }
-ttrpc = "0.8.4" 
+ttrpc = "0.8.4"
 persist = { path = "../../persist" }
 agent = { path = "../../agent" }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
@@ -28,4 +31,4 @@ kata-types = { path = "../../../../libs/kata-types" }
 runtime-spec = { path = "../../../../libs/runtime-spec" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 resource = { path = "../../resource" }
-protocols = { path = "../../../../libs/protocols"}
+protocols = { path = "../../../../libs/protocols" }

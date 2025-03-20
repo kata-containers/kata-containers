@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+rust-version.workspace = true
 
 [dependencies]
 awaitgroup = "0.6.0"
@@ -12,7 +13,7 @@ serde_json = "1.0.39"
 serde_derive = "1.0.91"
 runtime-spec = { path = "../../libs/runtime-spec" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
-protocols = { path ="../../libs/protocols" }
+protocols = { path = "../../libs/protocols" }
 kata-sys-util = { path = "../../libs/kata-sys-util" }
 caps = "0.5.0"
 nix = "0.24.2"
@@ -31,21 +32,29 @@ cgroups = { package = "cgroups-rs", version = "0.3.3" }
 rlimit = "0.5.3"
 cfg-if = "0.1.0"
 
-tokio = { version = "1.38.0", features = ["sync", "io-util", "process", "time", "macros", "rt", "fs"] }
+tokio = { version = "1.38.0", features = [
+    "sync",
+    "io-util",
+    "process",
+    "time",
+    "macros",
+    "rt",
+    "fs",
+] }
 tokio-vsock = "0.3.4"
 futures = "0.3.17"
 async-trait = "0.1.31"
 inotify = "0.9.2"
 libseccomp = { version = "0.3.0", optional = true }
 zbus = "3.12.0"
-bit-vec= "0.6.3"
+bit-vec = "0.6.3"
 xattr = "0.2.3"
 
 [dev-dependencies]
 serial_test = "0.5.0"
 tempfile = "3.1.0"
 test-utils = { path = "../../libs/test-utils" }
-protocols = { path ="../../libs/protocols" }
+protocols = { path = "../../libs/protocols" }
 
 [features]
 seccomp = ["libseccomp"]

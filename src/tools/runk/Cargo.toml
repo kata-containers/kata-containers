@@ -5,10 +5,15 @@ authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 description = "runk: Kata OCI container runtime based on Kata agent"
 license = "Apache-2.0"
 edition = "2018"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 [dependencies]
 libcontainer = { path = "./libcontainer" }
-rustjail = { path = "../../agent/rustjail", features = ["standard-oci-runtime"] }
+rustjail = { path = "../../agent/rustjail", features = [
+    "standard-oci-runtime",
+] }
 runtime-spec = { path = "../../libs/runtime-spec" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 logging = { path = "../../libs/logging" }
@@ -33,6 +38,4 @@ seccomp = ["rustjail/seccomp"]
 tempfile = "3.3.0"
 
 [workspace]
-members = [
-    "libcontainer"
-]
+members = ["libcontainer"]

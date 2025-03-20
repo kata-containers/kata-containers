@@ -9,6 +9,7 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-interrupt"
 keywords = ["dragonball", "secure-sandbox", "device", "interrupt"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 dbs-device = { path = "../dbs_device" }
@@ -16,7 +17,7 @@ dbs-arch = { path = "../dbs_arch" }
 kvm-bindings = { workspace = true, optional = true }
 kvm-ioctls = { workspace = true, optional = true }
 libc = "0.2"
-vmm-sys-util = {workspace = true}
+vmm-sys-util = { workspace = true }
 
 [features]
 default = ["legacy-irq", "msi-irq"]
