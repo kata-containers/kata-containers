@@ -25,6 +25,6 @@ jobs:
 
       - uses: actions/checkout@v4
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca # master (2024-06-20)
         with:
           ignore_paths: "**/vendor/**"
