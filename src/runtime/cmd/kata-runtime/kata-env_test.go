@@ -375,7 +375,7 @@ func TestEnvGetMetaInfo(t *testing.T) {
 }
 
 func TestEnvGetHostInfo(t *testing.T) {
-	if os.Getenv("GITHUB_RUNNER_CI_ARM64") == "true" {
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
 		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
 	}
 
@@ -439,7 +439,7 @@ func TestEnvGetHostInfoNoProcVersion(t *testing.T) {
 }
 
 func TestEnvGetEnvInfo(t *testing.T) {
-	if os.Getenv("GITHUB_RUNNER_CI_ARM64") == "true" {
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
 		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
 	}
 
@@ -471,7 +471,7 @@ func TestEnvGetEnvInfo(t *testing.T) {
 }
 
 func TestEnvGetEnvInfoNoHypervisorVersion(t *testing.T) {
-	if os.Getenv("GITHUB_RUNNER_CI_ARM64") == "true" {
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
 		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
 	}
 

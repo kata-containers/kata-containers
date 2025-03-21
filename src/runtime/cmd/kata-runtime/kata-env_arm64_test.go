@@ -18,7 +18,7 @@ func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
 }
 
 func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
-	if os.Getenv("GITHUB_RUNNER_CI_ARM64") == "true" {
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
 		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
 	}
 	testEnvGetEnvInfoSetsCPUTypeGeneric(t)

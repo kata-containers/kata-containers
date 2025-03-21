@@ -115,7 +115,7 @@ jobs:
       - name: Skip tests that depend on virtualization capable runners when needed
         if: ${{ endsWith(inputs.instance, '-arm') }}
         run: |
-          echo "GITHUB_RUNNER_CI_ARM64=true" >> "$GITHUB_ENV"
+          echo "GITHUB_RUNNER_CI_NON_VIRT=true" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
           cd ${{ matrix.component.path }}
