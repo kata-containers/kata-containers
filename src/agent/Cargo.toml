@@ -13,7 +13,7 @@ rustjail = { path = "rustjail" }
 protocols = { path = "../libs/protocols", features = ["async", "with-serde"] }
 lazy_static = "1.3.0"
 ttrpc = { version = "0.8.4", features = ["async"], default-features = false }
-protobuf = "3.2.0"
+protobuf = "=3.7.1"
 libc = "0.2.58"
 nix = "0.24.2"
 capctl = "0.2.0"
