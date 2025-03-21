@@ -17,44 +17,18 @@ The Linux kernel scripts further require a few packages (flex, bison, and libelf
 
 ## Usage
 
-```
+Check the available options by running the help flag with:
+
+```bash
 $ ./build-kernel.sh -h
-Overview:
-
-	Build a kernel for Kata Containers
-
-Usage:
-
-	build-kernel.sh [options] <command> <argument>
-
-Commands:
-
-- setup
-
-- build
-
-- install
-
-Options:
-
-	-a <arch>       : Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
-	-c <path>       : Path to config file to build the kernel.
-	-d              : Enable bash debug.
-	-e              : Enable experimental kernel.
-	-f              : Enable force generate config when setup.
-	-g <vendor>     : GPU vendor, intel or nvidia.
-	-h              : Display this help.
-  -H <deb|rpm>  : Linux headers for guest fs module building.
-	-k <path>       : Path to kernel to build.
-	-p <path>       : Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
-	-t <hypervisor>	: Hypervisor_target.
-	-v <version>	: Kernel version to use if kernel path not provided.
 ```
 
 Example:
+
 ```bash
 $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ```
+
 > **Note**
 > - `-v 5.10.25`: Specify the guest kernel version. 
 > - `-g nvidia`: To build a guest kernel supporting Nvidia GPU.
