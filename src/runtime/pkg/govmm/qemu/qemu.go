@@ -45,6 +45,8 @@ type Machine struct {
 const (
 	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
 	MachineTypeMicrovm string = "microvm"
+	// (fixed) Unix Domain Socket Path served by Intel TDX Quote Generation Service
+	qgsSocketPath string = "/var/run/tdx-qgs/qgs.socket"
 )
 
 const (
@@ -316,7 +318,7 @@ type Object struct {
 	// Prealloc enables memory preallocation
 	Prealloc bool
 
-	// QgsPort defines Intel Quote Generation Service port exposed from the host
+	// QgsPort defines Intel TDX Quote Generation Service port configuration
 	QgsPort uint32
 
 	// SnpIdBlock is the 96-byte, base64-encoded blob to provide the ‘ID Block’ structure
@@ -336,7 +338,7 @@ func (object Object) Valid() bool {
 	case MemoryBackendEPC:
 		return object.ID != "" && object.Size != 0
 	case TDXGuest:
-		return object.ID != "" && object.File != "" && object.DeviceID != "" && object.QgsPort != 0
+		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
 		fallthrough
 	case SNPGuest:
@@ -436,8 +438,9 @@ func (object Object) QemuParams(config *Config) []string {
 
 type SocketAddress struct {
 	Type string `json:"type"`
-	Cid  string `json:"cid"`
-	Port string `json:"port"`
+	Cid  string `json:"cid,omitempty"`
+	Port string `json:"port,omitempty"`
+	Path string `json:"path,omitempty"`
 }
 
 type TdxQomObject struct {
@@ -472,8 +475,16 @@ func (this *TdxQomObject) String() string {
 	return string(b)
 }
 
+func getQgsSocketAddress(portNum uint32) SocketAddress {
+	if portNum == 0 {
+		return SocketAddress{Type: "unix", Path: qgsSocketPath}
+	}
+
+	return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: fmt.Sprint(portNum)}
+}
+
 func prepareTDXObject(object Object) string {
-	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
+	qgsSocket := getQgsSocketAddress(object.QgsPort)
 	tdxObject := TdxQomObject{
 		string(object.Type), // qom-type
 		object.ID,           // id
