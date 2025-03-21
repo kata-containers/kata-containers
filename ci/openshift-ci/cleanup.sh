@@ -7,11 +7,14 @@
 # This script tries to removes most of the resources added by `test.sh` script
 # from the cluster.
 
-scripts_dir=$(dirname $0)
+scripts_dir=$(dirname "$0")
 deployments_dir=${scripts_dir}/cluster/deployments
-configs_dir=${scripts_dir}/configs
 
-source ${scripts_dir}/lib.sh
+# shellcheck disable=SC1091 # import based on variable
+source "${scripts_dir}/lib.sh"
+
+# Set your katacontainers repo dir location
+[[ -z "${katacontainers_repo_dir}" ]] && echo "Please set katacontainers_repo_dir variable to your kata repo"
 
 # Set to 'yes' if you want to configure SELinux to permissive on the cluster
 # workers.
@@ -36,21 +39,21 @@ oc delete -f "${scripts_dir}/smoke/http-server.yaml"
 
 # Delete test.sh resources
 oc delete -f "${deployments_dir}/relabel_selinux.yaml"
-if [[ "$WORKAROUND_9206_CRIO" == "yes" ]]; then
+if [[ "${WORKAROUND_9206_CRIO}" == "yes" ]]; then
 	oc delete -f "${deployments_dir}/workaround-9206-crio-ds.yaml"
 	oc delete -f "${deployments_dir}/workaround-9206-crio.yaml"
 fi
-[ ${SELINUX_PERMISSIVE} == "yes" ] && oc delete -f "${deployments_dir}/machineconfig_selinux.yaml.in"
+[[ ${SELINUX_PERMISSIVE} == "yes" ]] && oc delete -f "${deployments_dir}/machineconfig_selinux.yaml.in"
 
 # Delete kata-containers
-pushd "$katacontainers_repo_dir/tools/packaging/kata-deploy"
+pushd "${katacontainers_repo_dir}/tools/packaging/kata-deploy" || { echo "Failed to push to ${katacontainers_repo_dir}/tools/packaging/kata-deploy"; exit 125; }
 oc delete -f kata-deploy/base/kata-deploy.yaml
 oc -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 oc apply -f kata-cleanup/base/kata-cleanup.yaml
 echo "Wait for all related pods to be gone"
-( repeats=1; for i in $(seq 1 600); do
+( repeats=1; for _ in $(seq 1 600); do
   oc get pods -l name="kubelet-kata-cleanup" --no-headers=true -n kube-system 2>&1 | grep "No resources found" -q && ((repeats++)) || repeats=1
-  [ "$repeats" -gt 5 ] && echo kata-cleanup finished && break
+  [[ "${repeats}" -gt 5 ]] && echo kata-cleanup finished && break
   sleep 1
 done) || { echo "There are still some kata-cleanup related pods after 600 iterations"; oc get all -n kube-system; exit 1; }
 oc delete -f kata-cleanup/base/kata-cleanup.yaml
