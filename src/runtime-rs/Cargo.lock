@@ -50,7 +50,7 @@ dependencies = [
  "logging",
  "nix 0.24.3",
  "oci-spec",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "protocols",
  "serde",
  "serde_json",
@@ -512,7 +512,7 @@ dependencies = [
  "nix 0.24.3",
  "oci-spec",
  "persist",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "protocols",
  "resource",
  "runtime-spec",
@@ -584,7 +584,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "967dbd2804aceb398bd7d867410342d68b9d74c1fead823ad8353b3ab5f23eb7"
 dependencies = [
  "async-trait",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "ttrpc",
  "ttrpc-codegen",
 ]
@@ -1136,6 +1136,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "equivalent"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
 name = "errno"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1482,7 +1488,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http",
- "indexmap",
+ "indexmap 1.9.3",
  "slab",
  "tokio",
  "tokio-util",
@@ -1503,6 +1509,12 @@ name = "hashbrown"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+
+[[package]]
+name = "hashbrown"
+version = "0.15.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 
 [[package]]
 name = "headers"
@@ -1698,7 +1710,7 @@ dependencies = [
  "oci-spec",
  "path-clean",
  "persist",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "protocols",
  "qapi",
  "qapi-qmp",
@@ -1771,6 +1783,16 @@ checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
  "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "indexmap"
+version = "2.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3954d50fe15b02142bf25d3b8bdadb634ec3948f103d04ffe3031bc8fe9d7058"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.15.2",
 ]
 
 [[package]]
@@ -2566,7 +2588,7 @@ dependencies = [
  "fnv",
  "futures-channel",
  "futures-util",
- "indexmap",
+ "indexmap 1.9.3",
  "js-sys",
  "once_cell",
  "pin-project-lite",
@@ -2734,7 +2756,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "467d164a6de56270bd7c4d070df81d07beace25012d5103ced4e9ff08d6afdb7"
 dependencies = [
  "fixedbitset",
- "indexmap",
+ "indexmap 1.9.3",
 ]
 
 [[package]]
@@ -2950,9 +2972,9 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "protobuf"
-version = "3.2.0"
+version = "3.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b55bad9126f378a853655831eb7363b7b01b81d19f8cb1218861086ca4a1a61e"
+checksum = "a3a7c64d9bf75b1b8d981124c14c179074e8caa7dfe7b6a12e6222ddcd0c8f72"
 dependencies = [
  "once_cell",
  "protobuf-support",
@@ -2970,13 +2992,13 @@ dependencies = [
 
 [[package]]
 name = "protobuf-codegen"
-version = "3.2.0"
+version = "3.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0dd418ac3c91caa4032d37cb80ff0d44e2ebe637b2fb243b6234bf89cdac4901"
+checksum = "e26b833f144769a30e04b1db0146b2aaa53fd2fd83acf10a6b5f996606c18144"
 dependencies = [
  "anyhow",
  "once_cell",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "protobuf-parse",
  "regex",
  "tempfile",
@@ -2985,14 +3007,14 @@ dependencies = [
 
 [[package]]
 name = "protobuf-parse"
-version = "3.2.0"
+version = "3.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d39b14605eaa1f6a340aec7f320b34064feb26c93aec35d6a9a2272a8ddfa49"
+checksum = "322330e133eab455718444b4e033ebfac7c6528972c784fcde28d2cc783c6257"
 dependencies = [
  "anyhow",
- "indexmap",
+ "indexmap 2.8.0",
  "log",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "protobuf-support",
  "tempfile",
  "thiserror 1.0.44",
@@ -3001,9 +3023,9 @@ dependencies = [
 
 [[package]]
 name = "protobuf-support"
-version = "3.2.0"
+version = "3.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5d4d7b8601c814cfb36bcebb79f0e61e45e1e93640cf778837833bbed05c372"
+checksum = "b088fd20b938a875ea00843b6faf48579462630015c3788d397ad6a786663252"
 dependencies = [
  "thiserror 1.0.44",
 ]
@@ -3014,7 +3036,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "oci-spec",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "serde",
  "serde_json",
  "ttrpc",
@@ -3796,7 +3818,7 @@ dependencies = [
  "logging",
  "nix 0.24.3",
  "oci-spec",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "rand 0.8.5",
  "runtime-spec",
  "runtimes",
@@ -4478,8 +4500,8 @@ dependencies = [
  "libc",
  "log",
  "nix 0.26.2",
- "protobuf 3.2.0",
- "protobuf-codegen 3.2.0",
+ "protobuf 3.7.1",
+ "protobuf-codegen 3.7.1",
  "thiserror 1.0.44",
  "tokio",
  "tokio-vsock",
@@ -4493,7 +4515,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94d7f7631d7a9ebed715a47cd4cb6072cbc7ae1d4ec01598971bbec0024340c2"
 dependencies = [
  "protobuf 2.28.0",
- "protobuf-codegen 3.2.0",
+ "protobuf-codegen 3.7.1",
  "protobuf-support",
  "ttrpc-compiler",
 ]
@@ -4661,7 +4683,7 @@ dependencies = [
  "nix 0.24.3",
  "oci-spec",
  "persist",
- "protobuf 3.2.0",
+ "protobuf 3.7.1",
  "resource",
  "runtime-spec",
  "sendfd",

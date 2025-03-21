@@ -29,7 +29,7 @@ path-clean = "1.0.1"
 lazy_static = "1.4"
 tracing = "0.1.36"
 ttrpc = { version = "0.8.4", features = ["async"] }
-protobuf = "3.1.0"
+protobuf = "=3.7.1"
 
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }
