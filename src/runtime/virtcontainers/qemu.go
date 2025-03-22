@@ -45,6 +45,11 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
+	diskfs "github.com/diskfs/go-diskfs"
+	"github.com/diskfs/go-diskfs/disk"
+	"github.com/diskfs/go-diskfs/filesystem"
+	"github.com/diskfs/go-diskfs/filesystem/squashfs"
 )
 
 // qemuTracingTags defines tags for the trace span
@@ -394,6 +399,23 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	return sockets, nil
 }
 
+func (q *qemu) buildInitdataDevice(devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
+	device := govmmQemu.BlockDevice{
+		Driver:    govmmQemu.VirtioBlock,
+		Transport: govmmQemu.TransportPCI,
+		ID:        "initdata",
+		File:      InitdataImage,
+		SCSI:      false,
+		WCE:       false,
+		AIO:       govmmQemu.Threads,
+		Interface: "none",
+		Format:    "raw",
+	}
+
+	devices = append(devices, device)
+	return devices
+}
+
 func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, *govmmQemu.Kernel, error) {
 	var devices []govmmQemu.Device
 
@@ -540,6 +562,78 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 	}, nil
 }
 
+func prepareInitdataSquashFsImage(initdata string, imagePath string) error {
+	// Create squashfs image file
+	// The minimal size of the squashfs image := fragment blocks + data blocks + super block + tables...
+	// We leave more room here (superblock, inode table, ...  occupies 3 separate block size)
+	var diskSize int64 = (int64(len(initdata))+int64(diskfs.SectorSize4k)-1)/int64(diskfs.SectorSize4k)*int64(diskfs.SectorSize4k) + 3*int64(diskfs.SectorSize4k)
+
+	initdataDiskImage, err := diskfs.Create(imagePath, diskSize, diskfs.SectorSize4k)
+	if err != nil {
+		return err
+	}
+
+	fspec := disk.FilesystemSpec{Partition: 0, FSType: filesystem.TypeSquashfs, VolumeLabel: "label"}
+	fs, err := initdataDiskImage.CreateFilesystem(fspec)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		// well, we ignore the clean up job here. The side effect is that
+		// we might leave /tmp/diskfs_squashfs* if this function does not
+		// run successfully.
+		_ = fs.Close()
+	}()
+
+	rw, err := fs.OpenFile("/.kata.initdata.toml", os.O_CREATE|os.O_RDWR)
+	if err != nil {
+		return err
+	}
+
+	_, err = rw.Write([]byte(initdata))
+	if err != nil {
+		return err
+	}
+
+	sqs, ok := fs.(*squashfs.FileSystem)
+	if !ok {
+		return fmt.Errorf("not a squashfs filesystem")
+	}
+	err = sqs.Finalize(squashfs.FinalizeOptions{})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (q *qemu) prepareInitdataMount(config *HypervisorConfig) error {
+	if len(config.Initdata) == 0 {
+		q.Logger().Info("No initdata provided. Skip prepare loop device")
+		return nil
+	}
+
+	q.Logger().Info("Start to prepare initdata")
+	initdataWorkdir := filepath.Join("/run/initdata", q.id)
+	initdataImagePath := filepath.Join(initdataWorkdir, "data.img")
+
+	err := os.MkdirAll(initdataWorkdir, 0755)
+	if err != nil {
+		q.Logger().WithField("initdata", "create squashfs image path").WithError(err)
+		return err
+	}
+
+	err = prepareInitdataSquashFsImage(config.Initdata, initdataImagePath)
+	if err != nil {
+		q.Logger().WithField("initdata", "prepare squashfs image").WithError(err)
+		return err
+	}
+
+	config.InitdataImage = initdataImagePath
+
+	return nil
+}
+
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
 func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
@@ -547,6 +641,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 
 	span, ctx := katatrace.Trace(ctx, q.Logger(), "CreateVM", qemuTracingTags, map[string]string{"VM_ID": q.id})
 	defer span.End()
+
+	if err := q.prepareInitdataMount(hypervisorConfig); err != nil {
+		return err
+	}
 
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
 		return err
@@ -650,6 +748,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	if len(hypervisorConfig.Initdata) > 0 {
+		devices = q.buildInitdataDevice(devices, hypervisorConfig.InitdataImage)
+	}
+
 	// some devices configuration may also change kernel params, make sure this is called afterwards
 	kernel.Params = q.kernelParameters()
 	q.checkBpfEnabled()
@@ -681,7 +783,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Debug:          hypervisorConfig.Debug,
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath, hypervisorConfig.InitdataDigest)
 	if err != nil {
 		return err
 	}
@@ -1254,6 +1356,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 			}
 		}
 	}
+
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		if err := q.stopVirtiofsDaemon(ctx); err != nil {
 			return err
@@ -1316,6 +1419,15 @@ func (q *qemu) cleanupVM() error {
 				"user": q.config.User,
 				"uid":  q.config.Uid,
 			}).Debug("successfully removed the non root user")
+	}
+
+	// If we have initdata, we should drop initdata squashfs image path
+	hypervisorConfig := q.HypervisorConfig()
+	if len(hypervisorConfig.Initdata) > 0 {
+		initdataWorkdir := filepath.Join(string(filepath.Separator), "/run/initdata", q.id)
+		if err := os.RemoveAll(initdataWorkdir); err != nil {
+			q.Logger().WithError(err).Warnf("failed to remove initdata work dir %s", initdataWorkdir)
+		}
 	}
 
 	return nil
