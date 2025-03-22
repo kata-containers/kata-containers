@@ -556,11 +556,16 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 		config.HypervisorConfig.SGXEPCSize = size
 	}
+
 	if initdata, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
 		config.HypervisorConfig.Initdata = initdata
 	}
 
 	if err := addHypervisorGPUOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if err := addRootVolumeSizeOverrides(ocispec, config); err != nil {
 		return err
 	}
 
@@ -756,6 +761,21 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
 		return nil
 	})
+}
+
+func addRootVolumeSizeOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	// this can be only processed by remote hypevisor as of now
+	if sbConfig.HypervisorType != vc.RemoteHypervisor {
+		return nil
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.RootVolumeSize).setUint(func(size uint64) {
+		sbConfig.HypervisorConfig.RootVolumeSize = uint32(size)
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func addHypervisorGPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
