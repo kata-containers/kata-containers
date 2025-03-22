@@ -909,8 +909,8 @@ function main() {
 			reset_runtime $runtime
 			;;
 		*)
-			echo invalid arguments
 			print_usage
+			die "invalid arguments"
 			;;
 		esac
 	fi
