@@ -3,6 +3,7 @@
     "description": "one network namespace",
     "allowed": true,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -134,6 +135,7 @@
     "description": "same network namespace",
     "allowed": true,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -265,6 +267,7 @@
     "description": "no network namespace",
     "allowed": false,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -392,6 +395,7 @@
     "description": "different network namespace",
     "allowed": false,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
