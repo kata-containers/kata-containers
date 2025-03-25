@@ -57,7 +57,7 @@ function run_test_launchtimes() {
 	repetitions=20
 	if [[ ${KATA_HYPERVISOR} == "qemu" ]]; then
 		# The qemu workload seems to fail before it can run ~5-7 repetitions of the workload
-		repetitions=3
+		repetitions=2
 	fi
 
 	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"

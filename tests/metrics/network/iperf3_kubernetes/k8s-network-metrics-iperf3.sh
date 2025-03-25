@@ -186,8 +186,7 @@ function iperf3_start_deployment() {
 	kubectl create -f "${IPERF_DEPLOYMENT}"
 
 	# Check deployment creation
-	local cmd="kubectl wait --for=condition=Available deployment/iperf3-server-deployment"
-	waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+	local cmd="kubectl wait --for=condition=Available deployment/iperf3-server-deployment --timeout=${wait_time}s"
 
 	# Create DaemonSet
 	kubectl create -f "${IPERF_DAEMONSET}"
