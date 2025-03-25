@@ -105,6 +105,7 @@ USE_CACHE="${USE_CACHE:-}"
 BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE:-}
 NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK:-}"
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
+KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 docker run \
 	-v $HOME/.docker:/root/.docker \
@@ -137,6 +138,7 @@ docker run \
 	--env BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE}" \
 	--env NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK}" \
 	--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
+	--env KERNEL_DEBUG_ENABLED="${KERNEL_DEBUG_ENABLED}" \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
