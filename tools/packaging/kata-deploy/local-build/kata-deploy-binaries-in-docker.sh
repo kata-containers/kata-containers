@@ -40,8 +40,10 @@ rm -f "${HOME}"/.docker/buildx/activity/default
 [[ "${CROSS_BUILD}" == "true" ]] && BUILDX="buildx" && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
 if [[ "${CROSS_BUILD}" == "true" ]]; then
        # check if the current docker support docker buildx
-       docker buildx ls > /dev/null 2>&1 || true
-       [[ $? != 0 ]] && echo "no docker buildx support, please upgrad your docker" && exit 1
+       if ! docker buildx ls > /dev/null 2>&1; then
+           echo "No Docker Buildx support detected. Please upgrade your Docker installation."
+	   exit 1
+       fi
        # check if docker buildx support target_arch, if not install it
        r=$(docker buildx ls | grep "${TARGET_ARCH}" || true)
        [[ -z "${r}" ]] && sudo docker run --privileged --rm tonistiigi/binfmt --install "${TARGET_ARCH}"
