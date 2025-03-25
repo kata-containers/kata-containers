@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -z "${DEBUG}" ] || set -x
+[[ -z "${DEBUG}" ]] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -14,8 +14,8 @@ set -o errtrace
 script_dir=$(dirname "$(readlink -f "$0")")
 kata_dir=$(realpath "${script_dir}/../../../../")
 kata_deploy_create="${script_dir}/kata-deploy-binaries.sh"
-uid=$(id -u ${USER})
-gid=$(id -g ${USER})
+uid=$(id -u "${USER}")
+gid=$(id -g "${USER}")
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 
@@ -24,30 +24,30 @@ CROSS_BUILD=
 BUILDX=""
 PLATFORM=""
 TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
-[ "$(uname -m)" != "${TARGET_ARCH}" ] && CROSS_BUILD=true
+[[ "$(uname -m)" != "${TARGET_ARCH}" ]] && CROSS_BUILD=true
 
-[ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
+[[ "${TARGET_ARCH}" == "aarch64" ]] && TARGET_ARCH=arm64
 
 # used for cross build
 TARGET_OS=${TARGET_OS:-linux}
-TARGET_ARCH=${TARGET_ARCH:-$ARCH}
+TARGET_ARCH=${TARGET_ARCH:-${ARCH}}
 
 # We've seen issues related to the /home/runner/.docker/buildx/activity/default file
 # constantly being with the wrong permissions.
 # Let's just remove the file before we build.
-rm -f $HOME/.docker/buildx/activity/default
+rm -f "${HOME}"/.docker/buildx/activity/default
 
-[ "${CROSS_BUILD}" == "true" ] && BUILDX="buildx" && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
-if [ "${CROSS_BUILD}" == "true" ]; then
+[[ "${CROSS_BUILD}" == "true" ]] && BUILDX="buildx" && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+if [[ "${CROSS_BUILD}" == "true" ]]; then
        # check if the current docker support docker buildx
        docker buildx ls > /dev/null 2>&1 || true
-       [ $? != 0 ] && echo "no docker buildx support, please upgrad your docker" && exit 1
+       [[ $? != 0 ]] && echo "no docker buildx support, please upgrad your docker" && exit 1
        # check if docker buildx support target_arch, if not install it
        r=$(docker buildx ls | grep "${TARGET_ARCH}" || true)
-       [ -z "$r" ] && sudo docker run --privileged --rm tonistiigi/binfmt --install ${TARGET_ARCH}
+       [[ -z "${r}" ]] && sudo docker run --privileged --rm tonistiigi/binfmt --install "${TARGET_ARCH}"
 fi
 
-if [ "${script_dir}" != "${PWD}" ]; then
+if [[ "${script_dir}" != "${PWD}" ]]; then
 	ln -sf "${script_dir}/build" "${PWD}/build"
 fi
 
@@ -58,24 +58,24 @@ docker_gid=$(getent group docker | cut -d: -f3 || { echo >&2 "Missing docker gro
 
 # If docker gid is the effective group id of the user, do not pass it as
 # an additional group.
-if [ ${docker_gid} == ${gid} ]; then
+if [[ "${docker_gid}" == "${gid}" ]]; then
 	docker_gid=""
 fi
 
 remove_dot_docker_dir=false
-if [ ! -d "$HOME/.docker" ]; then
-	mkdir $HOME/.docker
+if [[ ! -d "${HOME}/.docker" ]]; then
+	mkdir "${HOME}"/.docker
 	remove_dot_docker_dir=true
 fi
 
 "${script_dir}"/kata-deploy-copy-yq-installer.sh
 docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
-	--build-arg UID=${uid} \
-	--build-arg GID=${gid} \
+	--build-arg UID="${uid}" \
+	--build-arg GID="${gid}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
-	--build-arg HOST_DOCKER_GID=${docker_gid} \
+	--build-arg HOST_DOCKER_GID="${docker_gid}" \
 	--build-arg ARCH="${ARCH}" \
 	"${script_dir}/dockerbuild/"
 
@@ -108,10 +108,10 @@ KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 docker run \
-	-v $HOME/.docker:/root/.docker \
+	-v "${HOME}"/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v "${kata_dir}:${kata_dir}" \
-	--env USER=${USER} \
+	--env USER="${USER}" \
 	--env ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY}" \
 	--env ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY}" \
 	--env ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME}" \
@@ -146,9 +146,9 @@ docker run \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
 	--rm \
-	-w ${script_dir} \
+	-w "${script_dir}" \
 	build-kata-deploy "${kata_deploy_create}" "$@"
 
-if [ $remove_dot_docker_dir == true ]; then
-	rm -rf "$HOME/.docker"
+if [[ "${remove_dot_docker_dir}" == true ]]; then
+	rm -rf "${HOME}/.docker"
 fi
