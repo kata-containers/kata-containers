@@ -24,6 +24,7 @@ container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 kernel_builder_args="-a ${ARCH} $*"
+KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	info "build initramfs for cc kernel"
@@ -51,6 +52,7 @@ docker pull ${container_image} || \
 
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env KERNEL_DEBUG_ENABLED="${KERNEL_DEBUG_ENABLED}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} setup"
