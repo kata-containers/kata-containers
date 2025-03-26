@@ -368,7 +368,8 @@ function restart_crio_service() {
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
-	sudo rm -f "${containerd_config}"
+	base_config_dir=$(dirname "${containerd_config}")
+	sudo mkdir -p "${base_config_dir}"
 	sudo tee "${containerd_config}" << EOF
 version = 2
 
