@@ -32,6 +32,7 @@ use std::{
 };
 
 use kata_sys_util::hooks::HookStates;
+use oci_spec::runtime::LinuxResources;
 
 pub const CONFIG_FILE_NAME: &str = "config.json";
 
@@ -207,6 +208,11 @@ impl Container {
     pub fn destroy(&self) -> Result<()> {
         remove_cgroup_dir(&self.cgroup)?;
         self.status.remove_dir()
+    }
+
+    pub fn update(&self, resources: LinuxResources, logger: &Logger) -> Result<()> {
+        let mut container_resources = load_linux_container(&self.status, None, logger)?;
+        container_resources.set(resources)
     }
 }
 
