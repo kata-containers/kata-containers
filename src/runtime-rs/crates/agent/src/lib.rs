@@ -11,7 +11,7 @@ logging::logger_with_subsystem!(sl, "agent");
 
 pub mod kata;
 mod log_forwarder;
-mod sock;
+pub mod sock;
 pub mod types;
 pub use types::{
     ARPNeighbor, ARPNeighbors, AddArpNeighborRequest, AddSwapPathRequest, AddSwapRequest,
