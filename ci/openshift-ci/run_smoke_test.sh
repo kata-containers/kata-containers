@@ -7,15 +7,16 @@
 # Run a smoke test.
 #
 
-script_dir=$(dirname $0)
-source ${script_dir}/lib.sh
+script_dir=$(dirname "$0")
+# shellcheck disable=SC1091 # import based on variable
+source "${script_dir}/lib.sh"
 
 pod='http-server'
 
 # Create a pod.
 #
 info "Creating the ${pod} pod"
-[ -z "$KATA_RUNTIME" ] && die "Please set the KATA_RUNTIME first"
+[[ -z "${KATA_RUNTIME}" ]] && die "Please set the KATA_RUNTIME first"
 envsubst < "${script_dir}/smoke/${pod}.yaml.in" | \
 	oc apply -f - || \
 	die "failed to create ${pod} pod"
@@ -27,10 +28,10 @@ sleep_time=5
 cmd="oc get pod/${pod} -o jsonpath='{.status.containerStatuses[0].state}' | \
 	grep running > /dev/null"
 info "Wait until the pod gets running"
-waitForProcess $wait_time $sleep_time "$cmd" || timed_out=$?
-if [ -n "$timed_out" ]; then
-	oc describe pod/${pod}
-	oc delete pod/${pod}
+waitForProcess "${wait_time}" "${sleep_time}" "${cmd}" || timed_out=$?
+if [[ -n "${timed_out}" ]]; then
+	oc describe "pod/${pod}"
+	oc delete "pod/${pod}"
 	die "${pod} not running"
 fi
 info "${pod} is running"
@@ -39,13 +40,13 @@ info "${pod} is running"
 #
 hello_file=/tmp/hello
 hello_msg='Hello World'
-oc exec ${pod} -- sh -c "echo $hello_msg > $hello_file"
+oc exec "${pod}" -- sh -c "echo ${hello_msg} > ${hello_file}"
 
 info "Creating the service and route"
-if oc apply -f ${script_dir}/smoke/service.yaml; then
+if oc apply -f "${script_dir}/smoke/service.yaml"; then
     # Likely on OCP, use service
     is_ocp=1
-    host=$(oc get route/http-server-route -o jsonpath={.spec.host})
+    host=$(oc get route/http-server-route -o jsonpath="{.spec.host}")
     port=80
 else
     # Likely on plain kubernetes, test using another container
@@ -60,7 +61,7 @@ fi
 
 info "Wait for the HTTP server to respond"
 tempfile=$(mktemp)
-check_cmd="curl -vvv '${host}:${port}${hello_file}' 2>&1 | tee -a '$tempfile' | grep -q '$hello_msg'"
+check_cmd="curl -vvv '${host}:${port}${hello_file}' 2>&1 | tee -a '${tempfile}' | grep -q '${hello_msg}'"
 if waitForProcess 60 1 "${check_cmd}"; then
     test_status=0
     info "HTTP server is working"
@@ -78,17 +79,17 @@ else
     echo "::endgroup::"
     info "HTTP server is unreachable"
 fi
-rm -f "$tempfile"
+rm -f "${tempfile}"
 
 # Delete the resources.
 #
 info "Deleting the service/route"
-if [ "$is_ocp" -eq 0 ]; then
-    oc delete -f ${script_dir}/smoke/service_kubernetes.yaml
+if [[ "${is_ocp}" -eq 0 ]]; then
+    oc delete -f "${script_dir}/smoke/service_kubernetes.yaml"
 else
-    oc delete -f ${script_dir}/smoke/service.yaml
+    oc delete -f "${script_dir}/smoke/service.yaml"
 fi
 info "Deleting the ${pod} pod"
-oc delete pod/${pod} || test_status=$?
+oc delete "pod/${pod}" || test_status=$?
 
-exit $test_status
+exit "${test_status}"

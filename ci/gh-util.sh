@@ -10,7 +10,7 @@ set -o errtrace
 set -o nounset
 set -o pipefail
 
-[ -n "${DEBUG:-}" ] && set -o xtrace
+[[ -n "${DEBUG:-}" ]] && set -o xtrace
 
 script_name=${0##*/}
 
@@ -25,7 +25,7 @@ die()
 usage()
 {
     cat <<EOF
-Usage: $script_name [OPTIONS] [command] [arguments]
+Usage: ${script_name} [OPTIONS] [command] [arguments]
 
 Description: Utility to expand the abilities of the GitHub CLI tool, gh.
 
@@ -48,7 +48,7 @@ Examples:
 
 - List issues for a Pull Request 123 in kata-containers/kata-containers repo
 
-  $ $script_name list-issues-for-pr 123
+  $ ${script_name} list-issues-for-pr 123
 EOF
 }
 
@@ -57,11 +57,12 @@ list_issues_for_pr()
     local pr="${1:-}"
     local repo="${2:-kata-containers/kata-containers}"
 
-    [ -z "$pr" ] && die "need PR"
+    [[ -z "${pr}" ]] && die "need PR"
 
-    local commits=$(gh pr view ${pr} --repo ${repo} --json commits --jq .commits[].messageBody)
+    local commits
+	commits=$(gh pr view "${pr}" --repo "${repo}" --json commits --jq .commits[].messageBody)
 
-    [ -z "$commits" ] && die "cannot determine commits for PR $pr"
+    [[ -z "${commits}" ]] && die "cannot determine commits for PR ${pr}"
 
     # Extract the issue number(s) from the commits.
     #
@@ -78,7 +79,8 @@ list_issues_for_pr()
     #
     #     "<git-commit> <git-commit-msg>"
     #
-    local issues=$(echo "$commits" |\
+    local issues
+	issues=$(echo "${commits}" |\
         grep -v -E "^( |	)" |\
         grep -i -E "fixes:* *(#*[0-9][0-9]*)" |\
         tr ' ' '\n' |\
@@ -86,16 +88,16 @@ list_issues_for_pr()
         sed 's/[.,\#]//g' |\
         sort -nu || true)
 
-    [ -z "$issues" ] && die "cannot determine issues for PR $pr"
+    [[ -z "${issues}" ]] && die "cannot determine issues for PR ${pr}"
 
     echo "# Issues linked to PR"
     echo "#"
     echo "# Fields: issue_number"
 
     local issue
-    echo "$issues"|while read issue
+    echo "${issues}" | while read -r issue
     do
-        printf "%s\n" "$issue"
+        printf "%s\n" "${issue}"
     done
 }
 
@@ -103,20 +105,21 @@ list_labels_for_issue()
 {
     local issue="${1:-}"
 
-    [ -z "$issue" ] && die "need issue number"
+    [[ -z "${issue}" ]] && die "need issue number"
 
-    local labels=$(gh issue view ${issue} --repo kata-containers/kata-containers --json labels)
+    local labels
+	labels=$(gh issue view "${issue}" --repo kata-containers/kata-containers --json labels)
 
-    [ -z "$labels" ] && die "cannot determine labels for issue $issue"
+    [[ -z "${labels}" ]] && die "cannot determine labels for issue ${issue}"
 
-    printf "$labels"
+    echo "${labels}"
 }
 
 setup()
 {
     for cmd in gh jq
     do
-        command -v "$cmd" &>/dev/null || die "need command: $cmd"
+        command -v "${cmd}" &>/dev/null || die "need command: ${cmd}"
     done
 }
 
@@ -124,29 +127,28 @@ handle_args()
 {
     setup
 
-    local show_all="false"
     local opt
 
-    while getopts "ahr:" opt "$@"
+    while getopts "hr:" opt "$@"
     do
-        case "$opt" in
-            a) show_all="true" ;;
+        case "${opt}" in
             h) usage && exit 0 ;;
             r) repo="${OPTARG}" ;;
+			*) echo "use '-h' to get list of supprted aruments" && exit 1 ;;
         esac
     done
 
-    shift $(($OPTIND - 1))
+    shift $((OPTIND - 1))
 
     local repo="${repo:-kata-containers/kata-containers}"
     local cmd="${1:-}"
 
-    case "$cmd" in
+    case "${cmd}" in
         list-issues-for-pr) ;;
         list-labels-for-issue) ;;
 
         "") usage && exit 0 ;;
-        *) die "invalid command: '$cmd'" ;;
+        *) die "invalid command: '${cmd}'" ;;
     esac
 
     # Consume the command name
@@ -155,20 +157,20 @@ handle_args()
     local issue=""
     local pr=""
 
-    case "$cmd" in
+    case "${cmd}" in
         list-issues-for-pr)
             pr="${1:-}"
 
-            list_issues_for_pr "$pr" "${repo}"
+            list_issues_for_pr "${pr}" "${repo}"
             ;;
 
         list-labels-for-issue)
             issue="${1:-}"
 
-            list_labels_for_issue "$issue"
+            list_labels_for_issue "${issue}"
             ;;
 
-        *) die "impossible situation: cmd: '$cmd'" ;;
+        *) die "impossible situation: cmd: '${cmd}'" ;;
     esac
 
     exit 0
