@@ -47,6 +47,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.block_device_driver` | string | the driver to be used for block device, valid values are `virtio-blk`, `virtio-scsi`, `nvdimm`|
 | `io.katacontainers.config.hypervisor.cpu_features` | `string` | Comma-separated list of CPU features to pass to the CPU (QEMU) |
 | `io.katacontainers.config.hypervisor.default_max_vcpus` | uint32| the maximum number of vCPUs allocated for the VM by the hypervisor |
+| `io.katacontainers.config.hypervisor.default_maxmemory` | uint32| the maximum memory assigned for a VM by the hypervisor in `MiB` |
 | `io.katacontainers.config.hypervisor.default_memory` | uint32| the memory assigned for a VM by the hypervisor in `MiB` |
 | `io.katacontainers.config.hypervisor.default_vcpus` | float32| the default vCPUs assigned for a VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.disable_block_device_use` | `boolean` | disallow a block device from being used |
