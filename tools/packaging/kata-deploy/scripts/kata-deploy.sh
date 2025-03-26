@@ -1213,6 +1213,34 @@ function main() {
 				fi
 			fi
 
+			# Let's delete the previously installed artifacts before proceeding with the installation.
+			# This is safe to do, as `rm` will unlink the files there but NOT close the fds opened,
+			# ensuring that whatever that has been running and being used will not crash.
+			#
+			# However, we should be careful when doing this, mainly thinking about the situations where
+			# a new workload would try to start but the files were not fully copied yet ... so actually
+			# take a step to prevent that to happen by trying to unlabel the node before deleting the
+			# previously installed files.
+			if [[ -n "${host_install_dir}" ]] && [[ -d "${host_install_dir}" ]] && [[ -n "$(ls -A "${host_install_dir}")" ]]; then
+				local kata_deploy_installations="$(kubectl -n kube-system get ds -o name | grep '^daemonset.apps/kata-deploy$' | wc -l)"
+
+				# Remove the label as the first thing, so we ensure no more kata-containers
+				# pods would be scheduled here.
+				#
+				# If we still have any other installation here, it means we'll break them
+				# removing the label, so we just don't do it.
+				if [[ "${kata_deploy_installations}" -eq 0 ]]; then
+					info "Remove currently set katacontainers.io/kata-runtime label, so kata workloads won't start on the node ${NODE_NAME}"
+					kubectl label node "${NODE_NAME}" katacontainers.io/kata-runtime-
+				else
+					info "As there are multiple installations of kata-containers, the katacontainers.io/kata-runtime label is not going to be removed"
+				fi
+
+				info "Delete previously installed kata artifacts"
+				rm -rf "${host_install_dir}"/* || true
+				
+			fi
+
 			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 			       if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
 				       cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
