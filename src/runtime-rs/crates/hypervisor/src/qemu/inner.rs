@@ -597,6 +597,10 @@ impl QemuInner {
                 )?;
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?
             }
+            DeviceType::Vfio(mut vfiodev) => {
+                qmp.hotplug_vfio_device(&mut vfiodev)?;
+                return Ok(DeviceType::Vfio(vfiodev));
+            }
             _ => info!(sl!(), "hotplugging of {:#?} is unsupported", device),
         }
         Ok(device)
