@@ -60,6 +60,9 @@ func kvmIsUsable() error {
 }
 
 func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
+	if hypervisorType == "remote" {
+		return nil
+	}
 	return kvmIsUsable()
 }
 
