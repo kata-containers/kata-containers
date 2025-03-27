@@ -20,6 +20,9 @@ endif
 ifeq ($(ARCH),aarch64)
     override ARCH = arm64
 endif
+ifeq ($(ARCH),riscv64gc)
+    override ARCH = riscv64
+endif
 
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
