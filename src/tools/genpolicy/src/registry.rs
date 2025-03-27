@@ -356,6 +356,12 @@ impl Container {
 
                         debug!("Parsing gid from user[1] = {:?}", user[1]);
                         process.User.GID = self.parse_group_string(user[1]);
+
+                        debug!(
+                            "Overriding OCI container GID with UID:GID mapping from /etc/passwd"
+                        );
+                        process.User.GID =
+                            self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
                     }
                 } else {
                     debug!("Parsing uid from image_user = {}", image_user);

@@ -34,6 +34,13 @@
             "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)"
         },
         "Process": {
+            "NoNewPrivileges": true,
+            "User": {
+                "UID": 65535,
+                "GID": 65535,
+                "AdditionalGids": [],
+                "Username": ""
+            },
             "Args": [
                 "/pause"
             ]

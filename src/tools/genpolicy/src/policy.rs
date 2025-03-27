@@ -713,7 +713,17 @@ impl AgentPolicy {
         substitute_args_env_variables(&mut process.Args, &process.Env);
 
         c_settings.get_process_fields(&mut process);
-        resource.get_process_fields(&mut process);
+        let mut must_check_passwd = false;
+        resource.get_process_fields(&mut process, &mut must_check_passwd);
+
+        // The actual GID of the process run by the CRI
+        // Depends on the contents of /etc/passwd in the container
+        if must_check_passwd {
+            process.User.GID = yaml_container
+                .registry
+                .get_gid_from_passwd_uid(process.User.UID)
+                .unwrap_or(0);
+        }
         yaml_container.get_process_fields(&mut process);
 
         process
