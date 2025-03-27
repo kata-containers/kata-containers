@@ -43,6 +43,11 @@ jobs:
               - rust
               - musl-tools
               - protobuf-compiler
+          - name: runtime
+            path: src/runtime
+            needs:
+              - golang
+              - XDG_RUNTIME_DIR
           - name: runtime-rs
             path: src/runtime-rs
             needs:
