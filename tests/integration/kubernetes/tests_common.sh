@@ -17,26 +17,31 @@ export container_images_agnhost_version="2.21"
 
 # Timeout options, mainly for use with waitForProcess(). Use them unless the
 # operation needs to wait longer.
-wait_time=90
-sleep_time=3
+export wait_time=90
+export sleep_time=3
 
 # Timeout for use with `kubectl wait`, unless it needs to wait longer.
 # Note: try to keep timeout and wait_time equal.
-timeout=90s
+export timeout=90s
 
 # issues that can't test yet.
-fc_limitations="https://github.com/kata-containers/documentation/issues/351"
-dragonball_limitations="https://github.com/kata-containers/kata-containers/issues/6621"
+export fc_limitations="https://github.com/kata-containers/documentation/issues/351"
+export dragonball_limitations="https://github.com/kata-containers/kata-containers/issues/6621"
 
 # Path to the kubeconfig file which is used by kubectl and other tools.
 # Note: the init script sets that variable but if you want to run the tests in
 # your own provisioned cluster and you know what you are doing then you should
 # overwrite it.
-export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
 # ALLOW_ALL_POLICY is a Rego policy that allows all the Agent ttrpc requests.
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../src/kata-opa/allow-all.rego")}"
+
+AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
+GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+KATA_HOST_OS="${KATA_HOST_OS:-}"
 
 # Common setup for tests.
 #
@@ -47,24 +52,24 @@ ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../sr
 #
 setup_common() {
 	node=$(get_one_kata_node)
-	[ -n "$node" ]
-	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+	[[ -n "${node}" ]]
+	node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
 	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
 	count=0
-	while [ -z "$node_start_time" ] && [ $count -lt 3 ]; do
+	while [[ -z "${node_start_time}" ]] && [[ "${count}" -lt 3 ]]; do
 		echo "node_start_time is empty, trying again..."
 		sleep 5
-		node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+		node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
 		count=$((count + 1))
 	done
-	[ -n "$node_start_time" ]
+	[[ -n "${node_start_time}" ]]
 	export node node_start_time
 
 	k8s_delete_all_pods_if_any_exists || true
 }
 
 get_pod_config_dir() {
-	pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
+	export pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
 	info "k8s configured to use runtimeclass"
 }
 
@@ -77,7 +82,7 @@ get_one_kata_node() {
 }
 
 auto_generate_policy_enabled() {
-	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
+	[[ "${AUTO_GENERATE_POLICY}" == "yes" ]]
 }
 
 # adapt common policy settings for tdx or snp
@@ -174,7 +179,7 @@ delete_tmp_policy_settings_dir() {
 
 	auto_generate_policy_enabled || return 0
 
-	if [ -d "${settings_dir}" ]; then
+	if [[ -d "${settings_dir}" ]]; then
 		info "Deleting ${settings_dir}"
 		rm -rf "${settings_dir}"
 	fi
@@ -192,11 +197,11 @@ auto_generate_policy() {
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
-	if [ ! -z "${config_map_yaml_file}" ]; then
+	if [[ -n "${config_map_yaml_file}" ]]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
 	fi
 
-	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
+	if [[ "${GENPOLICY_PULL_METHOD}" == "containerd" ]]; then
 		genpolicy_command+=" -d"
 	fi
 
@@ -215,7 +220,8 @@ add_exec_to_policy_settings() {
 	shift
 
 	# Create a JSON array of strings containing all the args of the command to be allowed.
-	local exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
+	local exec_args
+	exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
 
 	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
 	local jq_command=".request_defaults.ExecProcessRequest.allowed_commands |= . + [${exec_args}]"
@@ -252,9 +258,9 @@ add_copy_from_host_to_policy_settings() {
 	local -r genpolicy_settings_dir="$1"
 
 	local exec_command=(test -d /tmp)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 	exec_command=(tar -xmf - -C /tmp)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 }
 
 # Change genpolicy settings to allow executing on the Guest VM the commands
@@ -264,17 +270,32 @@ add_copy_from_guest_to_policy_settings() {
 	local -r copied_file="$2"
 
 	exec_command=(tar cf - "${copied_file}")
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 }
 
 hard_coded_policy_tests_enabled() {
+	local enabled="no"
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
-	[[ " $enabled_hypervisors " =~ " ${KATA_HYPERVISOR} " ]] || \
-		[ "${KATA_HOST_OS}" == "cbl-mariner" ] || \
-		auto_generate_policy_enabled
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-sev" "qemu-snp" "qemu-tdx")
+	for enabled_hypervisor in "${enabled_hypervisors[@]}"
+	do
+		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
+			enabled="yes"
+			break
+		fi
+	done
+
+	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" ]]; then
+		enabled="yes"
+	fi
+
+	if [[ "${enabled}" == "no" ]] && auto_generate_policy_enabled; then
+		enabled="yes"
+	fi
+
+	[[ "${enabled}" == "yes" ]]
 }
 
 add_allow_all_policy_to_yaml() {
@@ -284,20 +305,21 @@ add_allow_all_policy_to_yaml() {
 	# Previous version of yq was not ready to handle multiple objects in a single yaml.
 	# By default was changing only the first object.
 	# With yq>4 we need to make it explicit during the read and write.
-	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
+	local resource_kind
+	resource_kind=$(yq .kind "${yaml_file}" | head -1)
 
 	case "${resource_kind}" in
 
 	Pod)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+		yq -i \
 			".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+		yq -i \
 			".spec.template.metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
@@ -324,7 +346,7 @@ wait_for_blocked_request() {
 
 	local -r command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
 	info "Waiting ${wait_time} seconds for: ${command}"
-	waitForProcess "${wait_time}" "$sleep_time" "${command}" >/dev/null 2>/dev/null
+	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
 
 # Execute in a pod a command that is allowed by policy.
@@ -370,9 +392,9 @@ teardown_common() {
 	k8s_delete_all_pods_if_any_exists || true
 
 	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "$BATS_TEST_COMPLETED" ]]; then
-		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
+	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
+		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
+		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
 	fi
 }
 
