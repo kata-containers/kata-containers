@@ -911,8 +911,8 @@ impl yaml::K8sResource for Pod {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess) {
-        yaml::get_process_fields(process, &self.spec.securityContext);
+    fn get_process_fields(&self, process: &mut policy::KataProcess) -> bool {
+        return yaml::get_process_fields(process, &self.spec.securityContext);
     }
 
     fn get_sysctls(&self) -> Vec<Sysctl> {
@@ -970,6 +970,16 @@ impl Container {
         if let Some(context) = &self.securityContext {
             if let Some(uid) = context.runAsUser {
                 process.User.UID = uid.try_into().unwrap();
+                // Changing the UID can break the GID mapping
+                // if a /etc/passwd file is present.
+                // The proper GID is determined, in order of preference:
+                // 1. the securityContext runAsGroup field
+                // 2. lacking an explicit runAsGroup, /etc/passwd
+                // 3. fall back to pod-level GID if there is one
+                process.User.GID = self
+                    .registry
+                    .get_gid_from_passwd_uid(process.User.UID)
+                    .unwrap_or(process.User.GID);
             }
 
             if let Some(gid) = context.runAsGroup {

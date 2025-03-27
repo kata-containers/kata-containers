@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 use crate::registry::{
     add_verity_and_users_to_store, get_verity_hash_and_users, read_verity_and_users_from_store,
-    Container, DockerConfigLayer, ImageLayer,
+    Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -67,10 +67,22 @@ impl Container {
         )
         .await?;
 
+        // Find the last layer with an /etc/passwd file,
+        // respecting whiteouts.
+        let mut passwd = "".to_string();
+        for layer in image_layers.clone() {
+            if !layer.passwd.is_empty() {
+                passwd = layer.passwd
+            } else if layer.passwd == WHITEOUT_MARKER {
+                passwd = "".to_string();
+            }
+        }
+
         Ok(Container {
             image: image_str,
             config_layer,
             image_layers,
+            passwd,
         })
     }
 }

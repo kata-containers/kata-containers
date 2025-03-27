@@ -96,9 +96,10 @@ pub trait K8sResource {
         None
     }
 
-    fn get_process_fields(&self, _process: &mut policy::KataProcess) {
+    fn get_process_fields(&self, _process: &mut policy::KataProcess) -> bool {
         // No need to implement support for securityContext or similar fields
         // for some of the K8s resource types.
+        false
     }
 
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
@@ -386,20 +387,34 @@ fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
 pub fn get_process_fields(
     process: &mut policy::KataProcess,
     security_context: &Option<pod::PodSecurityContext>,
-) {
+) -> bool {
+    let mut must_check_passwd = false;
     if let Some(context) = security_context {
         if let Some(uid) = context.runAsUser {
             process.User.UID = uid.try_into().unwrap();
+            // Changing the UID can break the GID mapping
+            // if a /etc/passwd file is present.
+            // The proper GID is determined, in order of preference:
+            // 1. the securityContext runAsGroup field
+            // 2. lacking an explicit runAsGroup, /etc/passwd
+            //      (parsed in policy::get_container_process())
+            // 3. lacking an /etc/passwd, 0
+            // We can't parse the /etc/passwd file here because
+            // we are in the resource context.
+            must_check_passwd = true;
         }
 
         if let Some(gid) = context.runAsGroup {
             process.User.GID = gid.try_into().unwrap();
+            must_check_passwd = false;
         }
 
         if let Some(allow) = context.allowPrivilegeEscalation {
             process.NoNewPrivileges = !allow
         }
     }
+
+    must_check_passwd
 }
 
 pub fn get_sysctls(security_context: &Option<pod::PodSecurityContext>) -> Vec<pod::Sysctl> {
