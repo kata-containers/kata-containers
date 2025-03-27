@@ -111,8 +111,12 @@ impl yaml::K8sResource for Job {
         false
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess) {
-        yaml::get_process_fields(process, &self.spec.template.spec.securityContext);
+    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
+        yaml::get_process_fields(
+            process,
+            &self.spec.template.spec.securityContext,
+            must_check_passwd,
+        );
     }
 
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
