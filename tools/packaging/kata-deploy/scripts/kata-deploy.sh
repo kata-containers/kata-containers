@@ -16,8 +16,16 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 containerd_conf_tmpl_file=""
 use_containerd_drop_in_conf_file="false"
 
+DEBUG="${DEBUG:-"false"}"
+
+SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
 IFS=' ' read -a shims <<< "$SHIMS"
+DEFAULT_SHIM="${DEFAULT_SHIM:-"qemu"}"
 default_shim="$DEFAULT_SHIM"
+
+CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
+CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
+
 ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
 
 IFS=' ' read -a non_formatted_allowed_hypervisor_annotations <<< "$ALLOWED_HYPERVISOR_ANNOTATIONS"
