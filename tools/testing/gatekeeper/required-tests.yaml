@@ -3,6 +3,7 @@ required_tests:
   - Commit Message Check / Commit Message Check
   - Pull request WIP checks / WIP Check
   - Darwin tests / test
+  - Shellcheck required / shellcheck-required
   # TODO: cargo-deny-runner.yaml not yet treated as conditional
   - Cargo Crates Check Runner / cargo-deny-runner
 
@@ -100,7 +101,6 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
-      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / Kata Setup
     required-labels:
       - ok-to-test
   build:
@@ -126,7 +126,6 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / create-kata-tarball
       - Kata Containers CI / kata-containers-ci-on-push / publish-kata-deploy-payload-amd64 / kata-payload
     required-labels:
-      - ok-to-test
   static:
     # Checks that static checks are passing
     names:
@@ -155,8 +154,8 @@ mapping:
       - Static checks / build-checks / check (make vendor, runtime-rs, src/runtime-rs, rust)
       - Static checks / build-checks / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
       - Static checks / build-checks / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
-      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
-      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf...
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
