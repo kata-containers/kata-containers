@@ -390,6 +390,15 @@ pub fn get_process_fields(
     if let Some(context) = security_context {
         if let Some(uid) = context.runAsUser {
             process.User.UID = uid.try_into().unwrap();
+            process.User.GID = 0;
+        }
+
+        if let Some(gid) = context.runAsGroup {
+            process.User.GID = gid.try_into().unwrap();
+        }
+
+        if let Some(allow) = context.allowPrivilegeEscalation {
+            process.NoNewPrivileges = !allow
         }
     }
 }
