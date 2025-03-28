@@ -876,7 +876,7 @@ function main() {
 			       mkdir -p $(dirname "$containerd_conf_file")
 			       touch "$containerd_conf_file"
 			elif [[ "$runtime" == "containerd" ]]; then
-			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
+			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x "$(command -v containerd)" ]; then
 					containerd config default > "$containerd_conf_file"
 			       fi
 			fi
