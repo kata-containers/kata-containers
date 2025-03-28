@@ -18,14 +18,17 @@ The Linux kernel scripts further require a few packages (flex, bison, and libelf
 ## Usage
 
 Check available options:
+
 ```bash
 $ ./build-kernel.sh -h
 ```
 
 Example:
+
 ```bash
 $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ```
+
 > **Note**
 > - `-v 5.10.25`: Specify the guest kernel version. 
 > - `-g nvidia`: To build a guest kernel supporting Nvidia GPU.
