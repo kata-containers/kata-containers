@@ -43,6 +43,7 @@ func TestQemuArm64CPUModel(t *testing.T) {
 func TestQemuArm64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
 	arm64 := newTestQemu(assert, QemuVirt)
+	memoryOffset := uint64(1024)
 
 	hostMem := uint64(4096)
 	mem := uint64(1024)
@@ -50,7 +51,7 @@ func TestQemuArm64MemoryTopology(t *testing.T) {
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
 		Slots:  slots,
-		MaxMem: fmt.Sprintf("%dM", hostMem),
+		MaxMem: fmt.Sprintf("%dM", hostMem+memoryOffset),
 	}
 
 	m := arm64.memoryTopology(mem, hostMem, slots)
