@@ -66,6 +66,9 @@ INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
 dest_dir="${default_dest_dir}"
 if [ -n "${INSTALLATION_PREFIX}" ]; then
+	if [[ "${INSTALLATION_PREFIX:0:1}" != "/" ]]; then
+		die 'INSTALLATION_PREFIX must begin with a "/"(ex. /hoge/fuga)'
+	fi
 	# There's no `/` in between ${INSTALLATION_PREFIX} and ${default_dest_dir}
 	# as, otherwise, we'd have it doubled there, as: `/foo/bar//opt/kata`
 	dest_dir="${INSTALLATION_PREFIX}${default_dest_dir}"
