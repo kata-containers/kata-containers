@@ -11,6 +11,7 @@
 
 use kata_types::mount;
 use oci_spec::runtime::Spec;
+use std::path::{Path, PathBuf};
 
 use crate::mount::get_linux_mount_info;
 
@@ -67,6 +68,8 @@ pub fn update_ephemeral_storage_type(oci_spec: &mut Spec) {
                 let mnt_src = &source.display().to_string();
                 if is_ephemeral_volume(mnt_src) {
                     m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
+                    let file_name = Path::new(mnt_src).file_name().map(|src| PathBuf::from(src));
+                    m.set_source(file_name);
                 } else if is_host_empty_dir(mnt_src) {
                     // FIXME support disable_guest_empty_dir
                     // https://github.com/kata-containers/kata-containers/blob/02a51e75a7e0c6fce5e8abe3b991eeac87e09645/src/runtime/pkg/katautils/create.go#L105
