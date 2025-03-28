@@ -809,6 +809,10 @@ function main() {
 	   die  "This script must be run as root"
 	fi
 
+	if [ -n "${INSTALLATION_PREFIX}" ] && [[ "${INSTALLATION_PREFIX}" != /* ]]; then
+		die 'INSTALLATION_PREFIX must begin with a "/"(ex. /hoge/fuga)'
+	fi
+
 	runtime=$(get_container_runtime)
 
 	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
