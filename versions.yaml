@@ -132,6 +132,9 @@ assets:
       ppc64le:
         name: "ubuntu"
         version: "jammy"  # 22.04 LTS
+      riscv64:
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
       s390x:
         name: "ubuntu"
         version: "jammy"  # 22.04 LTS
@@ -174,6 +177,9 @@ assets:
       ppc64le:
         name: "ubuntu"
         version: "jammy"  # 22.04 LTS
+      riscv64:
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
       s390x:
         name: "ubuntu"
         version: "jammy"  # 22.04 LTS
