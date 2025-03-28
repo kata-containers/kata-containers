@@ -11,8 +11,12 @@ use crate::AGENT_CONFIG;
 use anyhow::{bail, Context, Result};
 use derivative::Derivative;
 use protocols::{
-    confidential_data_hub, confidential_data_hub_ttrpc_async,
-    confidential_data_hub_ttrpc_async::{SealedSecretServiceClient, SecureMountServiceClient},
+    confidential_data_hub,
+    confidential_data_hub::GetResourceRequest,
+    confidential_data_hub_ttrpc_async,
+    confidential_data_hub_ttrpc_async::{
+        GetResourceServiceClient, SealedSecretServiceClient, SecureMountServiceClient,
+    },
 };
 use std::fs;
 use std::os::unix::fs::symlink;
@@ -39,6 +43,8 @@ pub struct CDHClient {
     sealed_secret_client: SealedSecretServiceClient,
     #[derivative(Debug = "ignore")]
     secure_mount_client: SecureMountServiceClient,
+    #[derivative(Debug = "ignore")]
+    get_resource_client: GetResourceServiceClient,
 }
 
 impl CDHClient {
@@ -47,10 +53,13 @@ impl CDHClient {
         let sealed_secret_client =
             confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client.clone());
         let secure_mount_client =
-            confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client);
+            confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client.clone());
+        let get_resource_client =
+            confidential_data_hub_ttrpc_async::GetResourceServiceClient::new(client);
         Ok(CDHClient {
             sealed_secret_client,
             secure_mount_client,
+            get_resource_client,
         })
     }
 
@@ -83,6 +92,18 @@ impl CDHClient {
             .secure_mount(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
             .await?;
         Ok(())
+    }
+
+    pub async fn get_resource(&self, resource_path: &str) -> Result<Vec<u8>> {
+        let req = GetResourceRequest {
+            ResourcePath: format!("kbs://{}", resource_path),
+            ..Default::default()
+        };
+        let res = self
+            .get_resource_client
+            .get_resource(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
+            .await?;
+        Ok(res.Resource)
     }
 }
 
@@ -199,6 +220,15 @@ pub async fn secure_mount(
         .secure_mount(volume_type, options, flags, mount_point)
         .await?;
     Ok(())
+}
+
+#[allow(dead_code)]
+pub async fn get_cdh_resource(resource_path: &str) -> Result<Vec<u8>> {
+    let cdh_client = CDH_CLIENT
+        .get()
+        .expect("Confidential Data Hub not initialized");
+
+    cdh_client.get_resource(resource_path).await
 }
 
 #[cfg(test)]
