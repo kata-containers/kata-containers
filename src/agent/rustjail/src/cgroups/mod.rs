@@ -30,6 +30,10 @@ pub trait Manager {
         Err(anyhow!("not supported!".to_string()))
     }
 
+    fn set_init_pid(&mut self, _pid: i32) -> Result<()> {
+        Err(anyhow!("not supported!"))
+    }
+
     fn get_pids(&self) -> Result<Vec<i32>> {
         Err(anyhow!("not supported!"))
     }
