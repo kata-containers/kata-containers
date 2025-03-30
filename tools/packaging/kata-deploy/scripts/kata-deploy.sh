@@ -16,6 +16,23 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 containerd_conf_tmpl_file=""
 use_containerd_drop_in_conf_file="false"
 
+# If we fail for any reason a message will be displayed
+die() {
+        msg="$*"
+        echo "ERROR: $msg" >&2
+        exit 1
+}
+
+warn() {
+        msg="$*"
+        echo "WARN: $msg" >&2
+}
+
+info() {
+	msg="$*"
+	echo "INFO: $msg" >&2
+}
+
 DEBUG="${DEBUG:-"false"}"
 
 SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
@@ -66,23 +83,6 @@ containerd_drop_in_conf_file="${dest_dir}/containerd/config.d/kata-deploy.toml"
 host_install_dir="/host${dest_dir}"
 
 HELM_POST_DELETE_HOOK="${HELM_POST_DELETE_HOOK:-"false"}"
-
-# If we fail for any reason a message will be displayed
-die() {
-        msg="$*"
-        echo "ERROR: $msg" >&2
-        exit 1
-}
-
-warn() {
-        msg="$*"
-        echo "WARN: $msg" >&2
-}
-
-info() {
-	msg="$*"
-	echo "INFO: $msg" >&2
-}
 
 function host_systemctl() {
 	nsenter --target 1 --mount systemctl "${@}"
