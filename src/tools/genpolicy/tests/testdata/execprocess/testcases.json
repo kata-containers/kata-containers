@@ -1,0 +1,139 @@
+[
+  {
+    "description": "test exec process with correct args",
+    "allowed": true,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "Args": [
+          "echo",
+          "test"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": "",
+        "ApparmorProfile": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process with incorrect args",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "Args": [],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": "",
+        "ApparmorProfile": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process with non-null selinuxLabel",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "Args": [],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": "system_u:system_r:container_t",
+        "ApparmorProfile": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process with random ApparmorProfile",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "Args": [],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": "",
+        "ApparmorProfile": "localhost/root-user"
+      }
+    }
+  },
+  {
+    "description": "test exec process with random string_user",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "string_user": {
+        "uid": "0",
+        "gid": "12",
+        "additional_gids": []
+      },
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "Args": [],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": "",
+        "ApparmorProfile": ""
+      }
+    }
+  }
+]
