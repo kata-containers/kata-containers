@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use serde::{Deserialize, Serialize};
+
 pub const DEFAULT_SLICE: &str = "system.slice";
 pub const SLICE_SUFFIX: &str = ".slice";
 pub const SCOPE_SUFFIX: &str = ".scope";

@@ -8,6 +8,7 @@ use libc::pid_t;
 use oci::{Linux, LinuxDevice, LinuxIdMapping, LinuxNamespace, LinuxResources, Spec};
 use oci_spec::runtime as oci;
 use runtime_spec as spec;
+use serde::{Deserialize, Serialize};
 use spec::{ContainerState, State as OCIState};
 use std::clone::Clone;
 use std::ffi::CString;

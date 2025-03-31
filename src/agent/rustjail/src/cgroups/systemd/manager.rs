@@ -10,6 +10,7 @@ use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::LinuxResources;
 use oci_spec::runtime as oci;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryInto;
