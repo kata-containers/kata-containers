@@ -229,7 +229,7 @@ function get_kata_containers_config_path() {
 	local shim="$1"
 
 	# Directory holding pristine configuration files for the current default golang runtime.
-	local golang_config_path="${dest_dir}/share/defaults/kata-containers/"
+	local golang_config_path="${dest_dir}/share/defaults/kata-containers"
 
 	# Directory holding pristine configuration files for the new rust runtime.
 	#
