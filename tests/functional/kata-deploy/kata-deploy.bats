@@ -40,9 +40,6 @@ setup() {
 	# Set the tested hypervisor as the default `kata` shim
 	export HELM_DEFAULT_SHIM="${KATA_HYPERVISOR}"
 
-	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	export HELM_CREATE_RUNTIME_CLASSES="true"
-
 	# Let the `kata-deploy` create the default `kata` runtime class
 	export HELM_CREATE_DEFAULT_RUNTIME_CLASS="true"
 
