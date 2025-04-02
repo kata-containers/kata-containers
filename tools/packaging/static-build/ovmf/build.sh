@@ -33,7 +33,7 @@ if [ "${ovmf_build}" == "x86_64" ]; then
 	[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps ".externals.ovmf.x86_64.version")
 	[ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps ".externals.ovmf.x86_64.package")
 	[ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps ".externals.ovmf.x86_64.package_output_dir")
-elif [ "${ovmf_build}" == "sev" ]; then
+elif [ "${ovmf_build}" == "snp" ]; then
 	[ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps ".externals.ovmf.sev.version")
 	[ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps ".externals.ovmf.sev.package")
 	[ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps ".externals.ovmf.sev.package_output_dir")
