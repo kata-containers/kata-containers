@@ -16,5 +16,16 @@ spec:
       livenessProbe:
         exec:
           command:
-            - echo
-            - test
+            - test1
+    - name: second-test-container
+      image: "quay.io/prometheus/busybox:latest"
+      env:
+        - name: CONTAINER_NAME
+          value: second-test-container
+      command:
+        - sleep
+        - "3600"
+      livenessProbe:
+        exec:
+          command:
+            - test2
