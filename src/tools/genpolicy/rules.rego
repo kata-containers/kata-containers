@@ -633,9 +633,11 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
 
     allow_root_path(p_oci, i_oci, bundle_id)
 
-    every i_mount in input.OCI.Mounts {
-        allow_mount(p_oci, i_mount, bundle_id, sandbox_id)
-    }
+    # Match each input mount with a Policy mount.
+    # Reject possible attempts to match multiple input mounts with a single Policy mount.
+    p_matches := { p_index | some i_index; p_index = allow_mount(p_oci, input.OCI.Mounts[i_index], bundle_id, sandbox_id) }
+
+    count(p_matches) == count(input.OCI.Mounts)
 
     # TODO: enable allow_storages() after fixing https://github.com/kata-containers/kata-containers/issues/8833
     # allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
@@ -900,17 +902,15 @@ allow_root_path(p_oci, i_oci, bundle_id) {
 }
 
 # device mounts
-allow_mount(p_oci, i_mount, bundle_id, sandbox_id) {
+# allow_mount returns the policy index (p_index) if a given input mount matches a policy mount.
+allow_mount(p_oci, i_mount, bundle_id, sandbox_id):= p_index {
     print("allow_mount: i_mount =", i_mount)
 
-    some p_mount in p_oci.Mounts
+    p_mount := p_oci.Mounts[p_index]
     print("allow_mount: p_mount =", p_mount)
     check_mount(p_mount, i_mount, bundle_id, sandbox_id)
 
-    # TODO: are there any other required policy checks for mounts - e.g.,
-    #       multiple mounts with same source or destination?
-
-    print("allow_mount: true")
+    print("allow_mount: true, p_index =", p_index)
 }
 
 check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
