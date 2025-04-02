@@ -6,6 +6,9 @@
 name = "ch-config"
 version = "0.1.0"
 edition = "2021"
+# Minimum buildable version:
+# Keep in sync with version in versions.yaml
+rust-version = "1.80.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -21,7 +24,7 @@ tokio = { version = "1.38.0", features = ["sync", "rt"] }
 # which is relatively static.
 api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", crate = "api_client", tag = "v27.0" }
 
-kata-types = { path = "../../../../libs/kata-types"}
-kata-sys-util = { path = "../../../../libs/kata-sys-util"}
+kata-types = { path = "../../../../libs/kata-types" }
+kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 nix = "0.26.2"
 thiserror = "1.0.38"

@@ -9,11 +9,12 @@ homepage = "https://github.com/openanolis/dragonball-sandbox"
 repository = "https://github.com/openanolis/dragonball-sandbox"
 keywords = ["dragonball", "secure-sandbox", "TDX", "confidential container"]
 readme = "README.md"
+rust-version.workspace = true
 
 [dependencies]
 thiserror = "1.0"
 kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
-vmm-sys-util = {workspace = true}
+vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1.0.9"
