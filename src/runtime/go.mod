@@ -1,6 +1,7 @@
 module github.com/kata-containers/kata-containers/src/runtime
 
-go 1.21
+// Keep in sync with version in versions.yaml
+go 1.23
 
 // WARNING: Do NOT use `replace` directives as those break dependabot:
 // https://github.com/kata-containers/kata-containers/issues/11020
