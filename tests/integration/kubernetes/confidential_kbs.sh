@@ -328,7 +328,7 @@ function kbs_k8s_deploy() {
 			# ITA/ITTS specific configuration
 			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
 		popd
-		
+
 		if [ -n "${HTTPS_PROXY}" ]; then
 			# Ideally this should be something kustomizable on trustee side.
 			#
@@ -337,7 +337,7 @@ function kbs_k8s_deploy() {
 			# solved.
 			pushd "${COCO_KBS_DIR}/config/kubernetes/base/"
 				ensure_yq
-				
+
 				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"$HTTPS_PROXY\"}]" -i deployment.yaml
 			popd
 		fi
@@ -461,6 +461,18 @@ kbs_k8s_svc_http_addr() {
 	port=$(kbs_k8s_svc_port)
 
 	echo "http://${host}:${port}"
+}
+
+kbs_k8s_print_logs() {
+	local start_time="$1"
+
+	# Convert to iso time for kubectl
+	local iso_start_time
+	iso_start_time=$(date -d "${start_time}" --iso-8601=seconds)
+
+	echo "::group::DEBUG - kbs logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=kbs --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
 }
 
 # Ensure rust is installed in the host.
