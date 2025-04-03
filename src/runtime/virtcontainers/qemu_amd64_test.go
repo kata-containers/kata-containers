@@ -257,7 +257,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	firmware := "tdvf.fd"
 	var bios string
 	var err error
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.NoError(err)
 
 	// non-protection
@@ -265,20 +265,20 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 
 	// pef protection
 	amd64.(*qemuAmd64).protection = pefProtection
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.Error(err)
 	assert.Empty(bios)
 
 	// Secure Execution protection
 	amd64.(*qemuAmd64).protection = seProtection
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.Error(err)
 	assert.Empty(bios)
 
 	// sev protection
 	amd64.(*qemuAmd64).protection = sevProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.NoError(err)
 	assert.Empty(bios)
 
@@ -298,7 +298,7 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	// snp protection
 	amd64.(*qemuAmd64).protection = snpProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", []uint8(nil))
 	assert.NoError(err)
 	assert.Empty(bios)
 
@@ -318,18 +318,19 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	// tdxProtection
 	amd64.(*qemuAmd64).protection = tdxProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.NoError(err)
 	assert.Empty(bios)
 
 	expectedOut = append(expectedOut,
 		govmmQemu.Object{
-			Driver:   govmmQemu.Loader,
-			Type:     govmmQemu.TDXGuest,
-			ID:       "tdx",
-			DeviceID: fmt.Sprintf("fd%d", id),
-			Debug:    false,
-			File:     firmware,
+			Driver:         govmmQemu.Loader,
+			Type:           govmmQemu.TDXGuest,
+			ID:             "tdx",
+			DeviceID:       fmt.Sprintf("fd%d", id),
+			Debug:          false,
+			File:           firmware,
+			InitdataDigest: []byte(""),
 		},
 	)
 

@@ -183,42 +183,42 @@ func TestQemuArm64AppendProtectionDevice(t *testing.T) {
 	var err error
 
 	// no protection
-	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)
 
 	// PEF protection
 	arm64.(*qemuArm64).protection = pefProtection
-	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)
 
 	// Secure Execution protection
 	arm64.(*qemuArm64).protection = seProtection
-	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)
 
 	// SEV protection
 	arm64.(*qemuArm64).protection = sevProtection
-	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)
 
 	// SNP protection
 	arm64.(*qemuArm64).protection = snpProtection
-	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)
 
 	// TDX protection
 	arm64.(*qemuArm64).protection = tdxProtection
-	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)

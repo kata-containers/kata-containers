@@ -7,11 +7,16 @@
 package oci
 
 import (
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -21,6 +26,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/BurntSushi/toml"
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -31,6 +37,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	kataTypes "github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
@@ -485,6 +492,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorInitdataOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -555,9 +566,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		size, _ := quantity.AsInt64()
 
 		config.HypervisorConfig.SGXEPCSize = size
-	}
-	if initdata, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
-		config.HypervisorConfig.Initdata = initdata
 	}
 
 	if err := addHypervisorGPUOverrides(ocispec, config); err != nil {
@@ -917,6 +925,53 @@ func addHypervisorNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfi
 	return newAnnotationConfiguration(ocispec, vcAnnotations.TxRateLimiterMaxRate).setUint(func(txRateLimiterMaxRate uint64) {
 		sbConfig.HypervisorConfig.TxRateLimiterMaxRate = txRateLimiterMaxRate
 	})
+}
+
+func addHypervisorInitdataOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
+		if len(value) == 0 {
+			ociLog.Debug("Initdata annotation set without any value")
+			return nil
+		}
+		b64Reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(value))
+		gzipReader, err := gzip.NewReader(b64Reader)
+		if err != nil {
+			return fmt.Errorf("initdata create gzip reader error: %v", err)
+		}
+
+		initdataToml, err := io.ReadAll(gzipReader)
+		if err != nil {
+			return fmt.Errorf("uncompressing initdata with gzip error: %v", err)
+		}
+
+		initdataStr := string(initdataToml)
+		var initdata kataTypes.Initdata
+		if _, err := toml.Decode(initdataStr, &initdata); err != nil {
+			return fmt.Errorf("parsing initdata annotation failed: %v", err)
+		}
+
+		var initdataDigest []byte
+		var h hash.Hash
+		switch initdata.Algorithm {
+		case "sha256":
+			h = sha256.New()
+		case "sha384":
+			h = sha512.New384()
+		case "sha512":
+			h = sha512.New()
+		}
+
+		h.Write([]byte(initdataToml))
+		initdataDigest = h.Sum(nil)
+
+		ociLog.Debugf("Initdata digest set to: %v", initdataDigest)
+
+		sbConfig.HypervisorConfig.Initdata = initdataStr
+
+		sbConfig.HypervisorConfig.InitdataDigest = initdataDigest
+	}
+
+	return nil
 }
 
 func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
