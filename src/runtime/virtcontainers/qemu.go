@@ -9,6 +9,8 @@ package virtcontainers
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -394,6 +396,23 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	return sockets, nil
 }
 
+func (q *qemu) buildInitdataDevice(devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
+	device := govmmQemu.BlockDevice{
+		Driver:    govmmQemu.VirtioBlock,
+		Transport: govmmQemu.TransportPCI,
+		ID:        "initdata",
+		File:      InitdataImage,
+		SCSI:      false,
+		WCE:       false,
+		AIO:       govmmQemu.Threads,
+		Interface: "none",
+		Format:    "raw",
+	}
+
+	devices = append(devices, device)
+	return devices
+}
+
 func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, *govmmQemu.Kernel, error) {
 	var devices []govmmQemu.Device
 
@@ -540,6 +559,70 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 	}, nil
 }
 
+// prepareInitdataImage will create an image with a very simple layout
+// 0..7 bytes are magic number `initdata`
+// The following bytes are gzip(initdata).
+// Note that the EOF is ensured by the end of the image file. There
+// is only one file (initdata toml) thus we do not need to explicitly
+// specify the file length.
+func prepareInitdataImage(initdata string, imagePath string) error {
+	var buf bytes.Buffer
+	gzipper := gzip.NewWriter(&buf)
+	defer gzipper.Close()
+
+	gzipper.Write([]byte(initdata))
+	err := gzipper.Close()
+	if err != nil {
+		return fmt.Errorf("failed to compress initdata: %v", err)
+	}
+
+	compressedInitdata := buf.Bytes()
+
+	// compressedInitdataSize := len(compressedInitdata)
+
+	file, err := os.OpenFile(imagePath, os.O_CREATE|os.O_RDWR, 0640)
+	if err != nil {
+		return fmt.Errorf("failed to create initdata image: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.Write([]byte("initdata"))
+	if err != nil {
+		return fmt.Errorf("failed to write magic number to initdata image: %v", err)
+	}
+
+	file.Write([]byte(compressedInitdata))
+
+	return nil
+}
+
+func (q *qemu) prepareInitdataMount(config *HypervisorConfig) error {
+	if len(config.Initdata) == 0 {
+		q.Logger().Info("No initdata provided. Skip prepare loop device")
+		return nil
+	}
+
+	q.Logger().Info("Start to prepare initdata")
+	initdataWorkdir := filepath.Join("/run/initdata", q.id)
+	initdataImagePath := filepath.Join(initdataWorkdir, "data.img")
+
+	err := os.MkdirAll(initdataWorkdir, 0755)
+	if err != nil {
+		q.Logger().WithField("initdata", "create squashfs image path").WithError(err)
+		return err
+	}
+
+	err = prepareInitdataImage(config.Initdata, initdataImagePath)
+	if err != nil {
+		q.Logger().WithField("initdata", "prepare squashfs image").WithError(err)
+		return err
+	}
+
+	config.InitdataImage = initdataImagePath
+
+	return nil
+}
+
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
 func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
@@ -549,6 +632,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	defer span.End()
 
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
+		return err
+	}
+
+	if err := q.prepareInitdataMount(hypervisorConfig); err != nil {
 		return err
 	}
 
@@ -650,6 +737,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	if len(hypervisorConfig.Initdata) > 0 {
+		devices = q.buildInitdataDevice(devices, hypervisorConfig.InitdataImage)
+	}
+
 	// some devices configuration may also change kernel params, make sure this is called afterwards
 	kernel.Params = q.kernelParameters()
 	q.checkBpfEnabled()
@@ -681,7 +772,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Debug:          hypervisorConfig.Debug,
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath, hypervisorConfig.InitdataDigest)
 	if err != nil {
 		return err
 	}
@@ -1254,6 +1345,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 			}
 		}
 	}
+
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		if err := q.stopVirtiofsDaemon(ctx); err != nil {
 			return err
@@ -1316,6 +1408,15 @@ func (q *qemu) cleanupVM() error {
 				"user": q.config.User,
 				"uid":  q.config.Uid,
 			}).Debug("successfully removed the non root user")
+	}
+
+	// If we have initdata, we should drop initdata squashfs image path
+	hypervisorConfig := q.HypervisorConfig()
+	if len(hypervisorConfig.Initdata) > 0 {
+		initdataWorkdir := filepath.Join(string(filepath.Separator), "/run/initdata", q.id)
+		if err := os.RemoveAll(initdataWorkdir); err != nil {
+			q.Logger().WithError(err).Warnf("failed to remove initdata work dir %s", initdataWorkdir)
+		}
 	}
 
 	return nil

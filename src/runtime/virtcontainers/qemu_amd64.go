@@ -274,7 +274,7 @@ func (q *qemuAmd64) enableProtection() error {
 }
 
 // append protection device
-func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
+func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, initdataDigest []byte) ([]govmmQemu.Device, string, error) {
 	if q.sgxEPCSize != 0 {
 		devices = append(devices,
 			govmmQemu.Object{
@@ -299,6 +299,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				Debug:          false,
 				File:           firmware,
 				FirmwareVolume: firmwareVolume,
+				InitdataDigest: initdataDigest,
 			}), "", nil
 	case sevProtection:
 		return append(devices,
@@ -318,6 +319,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 			File:            firmware,
 			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
 			ReducedPhysBits: 1,
+			InitdataDigest:  initdataDigest,
 		}
 		if q.snpIdBlock != "" && q.snpIdAuth != "" {
 			obj.SnpIdBlock = q.snpIdBlock
