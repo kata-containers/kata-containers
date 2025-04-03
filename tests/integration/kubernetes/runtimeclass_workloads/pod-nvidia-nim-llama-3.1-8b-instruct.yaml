@@ -1,0 +1,84 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret
+  namespace: default
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: eyJhdXRocyI6eyJudmNyLmlvIjp7InVzZXJuYW1lIjoiJG9hdXRodG9rZW4iLCJwYXNzd29yZCI6Im52YXBpLUw2MVlNZ1YxM1pkZVR3bHdTbEFSWjFLRlBrdzQzb1h0eWpHdkhsOWRmS2tOMS0zRlhVY2FzZ1JDS0owU0FvRVQiLCJhdXRoIjoiSkc5aGRYUm9kRzlyWlc0NmJuWmhjR2t0VERZeFdVMW5WakV6V21SbFZIZHNkMU5zUVZKYU1VdEdVR3QzTkROdldIUjVha2QyU0d3NVpHWkxhMDR4TFROR1dGVmpZWE5uVWtOTFNqQlRRVzlGVkE9PSJ9fX0=
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nvidia-nim-llama-3-1-8b-instruct
+  namespace: default
+  labels:
+    app: nvidia-nim-llama-3-1-8b-instruct
+spec:
+  runtimeClassName: kata-qemu-nvidia-gpu
+  imagePullSecrets:
+    - name: ngc-secret
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  containers:
+  - name: nvidia-nim-llama-3-1-8b-instruct
+    image: nvcr.io/nim/meta/llama3-8b-instruct:1.0.0
+    # Ports exposed by the container:
+    ports:
+      - containerPort: 8000
+        name: http-openai
+    livenessProbe:
+      httpGet:
+        path: /v1/health/live
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    startupProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 40
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 180
+    # Environment variable for NGC_API_KEY. In production, use a Secret.
+    env:
+      - name: NGC_API_KEY
+        value: "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"
+    # GPU resource request/limit (for NVIDIA GPU)
+    resources:
+      requests:
+        cpu: "16"
+        memory: "64Gi"
+      limits:
+        nvidia.com/GH100_H800: "1"
+        cpu: "16"
+        memory: "64Gi"
+    # Mount the local .cache directory into the container
+    volumeMounts:
+      - name: nim-cache
+        mountPath: /opt/nim/.cache
+
+  # Host path volume for the local .cache directory.
+  # Adjust 'path' to match your  location.
+  volumes:
+  - name: nim-cache
+    hostPath:
+      path: "/opr/nim/.cache"
+      type: DirectoryOrCreate
