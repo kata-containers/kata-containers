@@ -18,10 +18,12 @@ extern crate scopeguard;
 #[macro_use]
 extern crate slog;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use base64::Engine;
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
 use const_format::{concatcp, formatcp};
+use initdata::{InitdataReturnValue, AA_CONFIG_PATH, CDH_CONFIG_PATH};
 use nix::fcntl::OFlag;
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -33,7 +35,6 @@ use std::os::unix::fs::{self as unixfs, FileTypeExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
-use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
@@ -42,6 +43,7 @@ mod config;
 mod console;
 mod device;
 mod features;
+mod initdata;
 mod linux_abi;
 mod metrics;
 mod mount;
@@ -419,6 +421,8 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
+    let initdata_return_value = initdata::initialize_initdata(logger).await?;
+
     let gc_procs = config.guest_components_procs;
     if !attestation_binaries_available(logger, &gc_procs) {
         warn!(
@@ -426,7 +430,21 @@ async fn start_sandbox(
             "attestation binaries requested for launch not available"
         );
     } else {
-        init_attestation_components(logger, config).await?;
+        init_attestation_components(logger, config, &initdata_return_value).await?;
+    }
+
+    // if policy is given via initdata, use it
+    #[cfg(feature = "agent-policy")]
+    if let Some(initdata_return_value) = initdata_return_value {
+        if let Some(policy) = &initdata_return_value._policy {
+            info!(logger, "using policy from initdata");
+            AGENT_POLICY
+                .lock()
+                .await
+                .set_policy(policy)
+                .await
+                .context("Failed to set policy from initdata")?;
+        }
     }
 
     let mut oma = None;
@@ -472,19 +490,34 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
     true
 }
 
-async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> Result<()> {
+async fn launch_guest_component_procs(
+    logger: &Logger,
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+) -> Result<()> {
     if config.guest_components_procs == GuestComponentsProcs::None {
         return Ok(());
     }
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
+    let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
+    let initdata_parameter;
+    if let Some(initdata_return_value) = initdata_return_value {
+        initdata_parameter =
+            base64::engine::general_purpose::STANDARD.encode(&initdata_return_value.digest);
+        aa_args.push("--initdata");
+        aa_args.push(&initdata_parameter);
+    }
+
     launch_process(
         logger,
         AA_PATH,
-        &vec!["--attestation_sock", AA_ATTESTATION_URI],
+        aa_args,
+        Some(AA_CONFIG_PATH),
         AA_ATTESTATION_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
     )
+    .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
 
     // skip launch of confidential-data-hub and api-server-rest
@@ -500,10 +533,12 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
     launch_process(
         logger,
         CDH_PATH,
-        &vec![],
+        vec![],
+        Some(CDH_CONFIG_PATH),
         CDH_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
     )
+    .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
 
     // skip launch of api-server-rest
@@ -519,10 +554,12 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
     launch_process(
         logger,
         API_SERVER_PATH,
-        &vec!["--features", &features.to_string()],
+        vec!["--features", &features.to_string()],
+        None,
         "",
         0,
     )
+    .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
 
     Ok(())
@@ -532,8 +569,12 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
 // and the corresponding procs are enabled in the agent configuration. the process will be
 // launched in the background and the function will return immediately.
 // If the CDH is started, a CDH client will be instantiated and returned.
-async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
-    launch_guest_component_procs(logger, config).await?;
+async fn init_attestation_components(
+    logger: &Logger,
+    config: &AgentConfig,
+    initdata_return_value: &Option<InitdataReturnValue>,
+) -> Result<()> {
+    launch_guest_component_procs(logger, config, initdata_return_value).await?;
 
     // If a CDH socket exists, initialize the CDH client and enable ocicrypt
     match tokio::fs::metadata(CDH_SOCKET).await {
@@ -555,11 +596,11 @@ async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> R
     Ok(())
 }
 
-fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
+async fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
     let p = Path::new(path);
     let mut attempts = 0;
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         if p.exists() {
             return Ok(());
         }
@@ -576,22 +617,32 @@ fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Res
     Err(anyhow!("wait for {} to exist timeout.", path))
 }
 
-fn launch_process(
+async fn launch_process(
     logger: &Logger,
     path: &str,
-    args: &Vec<&str>,
+    mut args: Vec<&str>,
+    config: Option<&str>,
     unix_socket_path: &str,
     timeout_secs: i32,
 ) -> Result<()> {
     if !Path::new(path).exists() {
-        return Err(anyhow!("path {} does not exist.", path));
+        bail!("path {} does not exist.", path);
     }
+
+    if let Some(config_path) = config {
+        if Path::new(config_path).exists() {
+            args.push("-c");
+            args.push(config_path);
+        }
+    }
+
     if !unix_socket_path.is_empty() && Path::new(unix_socket_path).exists() {
-        fs::remove_file(unix_socket_path)?;
+        tokio::fs::remove_file(unix_socket_path).await?;
     }
-    Command::new(path).args(args).spawn()?;
+
+    tokio::process::Command::new(path).args(args).spawn()?;
     if !unix_socket_path.is_empty() && timeout_secs > 0 {
-        wait_for_path_to_exist(logger, unix_socket_path, timeout_secs)?;
+        wait_for_path_to_exist(logger, unix_socket_path, timeout_secs).await?;
     }
 
     Ok(())

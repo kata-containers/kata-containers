@@ -85,6 +85,11 @@ image-rs = { git = "https://github.com/confidential-containers/guest-components"
 cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
 kata-agent-policy = { path = "policy", optional = true }
 
+# Initdata
+base64 = "0.22"
+sha2 = "0.10.8"
+async-compression = { version = "0.4.22", features = ["tokio", "gzip"] }
+
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }
@@ -103,7 +108,7 @@ lto = true
 default-pull = []
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
-agent-policy = [ "kata-agent-policy" ]
+agent-policy = ["kata-agent-policy"]
 guest-pull = ["image-rs/kata-cc-rustls-tls"]
 
 [[bin]]
