@@ -12,8 +12,8 @@ mod tests {
     use std::str;
 
     use protocols::agent::{
-        CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, UpdateInterfaceRequest,
-        UpdateRoutesRequest,
+        CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
+        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -27,6 +27,8 @@ mod tests {
         CopyFile(CopyFileRequest),
         CreateContainer(CreateContainerRequest),
         CreateSandbox(CreateSandboxRequest),
+        ExecProcess(ExecProcessRequest),
+        RemoveContainer(RemoveContainerRequest),
         UpdateInterface(UpdateInterfaceRequest),
         UpdateRoutes(UpdateRoutesRequest),
     }
@@ -37,6 +39,8 @@ mod tests {
                 TestRequest::CopyFile(_) => write!(f, "CopyFileRequest"),
                 TestRequest::CreateContainer(_) => write!(f, "CreateContainerRequest"),
                 TestRequest::CreateSandbox(_) => write!(f, "CreateSandboxRequest"),
+                TestRequest::ExecProcess(_) => write!(f, "ExecProcessRequest"),
+                TestRequest::RemoveContainer(_) => write!(f, "RemoveContainerRequest"),
                 TestRequest::UpdateInterface(_) => write!(f, "UpdateInterfaceRequest"),
                 TestRequest::UpdateRoutes(_) => write!(f, "UpdateRoutesRequest"),
             }
@@ -182,5 +186,15 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_generate_name() {
         runtests("createcontainer/generate_name").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_create_container() {
+        runtests("state/createcontainer").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_exec_process() {
+        runtests("state/execprocess").await;
     }
 }
