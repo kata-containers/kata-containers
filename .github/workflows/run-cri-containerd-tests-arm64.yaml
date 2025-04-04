@@ -1,0 +1,70 @@
+name: CI | Run cri-containerd tests
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  run-cri-containerd:
+    strategy:
+      fail-fast: false
+      matrix:
+        containerd_version: ['active']
+        vmm: ['qemu']
+    runs-on: arm64-non-k8s
+    env:
+      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      GOPATH: ${{ github.workspace }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+    steps:
+      - name: Clean up workspace
+        run: |
+          if [ -z "${GITHUB_WORKSPACE}" ]; then
+            echo "ERROR: GITHUB_WORKSPACE is not set"
+            exit 1
+          fi
+
+          workspace_dir=$(sudo realpath "$GITHUB_WORKSPACE")
+          runner_base_dir=/home/github-runner/actions-runner/_work
+
+          if [[ $workspace_dir == $runner_base_dir* ]]; then
+            sudo find $GITHUB_WORKSPACE -mindepth 1 -delete
+          else
+            echo "ERROR: GITHUB_WORKSPACE ($GITHUB_WORKSPACE) must be within $runner_base_dir"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Install dependencies
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: kata-static-tarball-arm64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
+
+      - name: Run cri-containerd tests
+        run: bash tests/integration/cri-containerd/gha-run.sh run
