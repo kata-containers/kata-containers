@@ -36,6 +36,7 @@ pub struct Container {
     pub image: String,
     pub config_layer: DockerConfigLayer,
     pub image_layers: Vec<ImageLayer>,
+    pub passwd: String,
 }
 
 /// Image config layer properties.
@@ -108,7 +109,7 @@ const PASSWD_FILE_WHITEOUT_TAR_PATH: &str = "etc/.wh.passwd";
 /// A marker used to track whether a particular container layer has had its
 /// /etc/passwd file deleted, and thus any such files read from previous, lower
 /// layers should be discarded.
-const WHITEOUT_MARKER: &str = "WHITEOUT";
+pub const WHITEOUT_MARKER: &str = "WHITEOUT";
 
 impl Container {
     pub async fn new(config: &Config, image: &str) -> Result<Self> {
@@ -153,10 +154,22 @@ impl Container {
                 .await
                 .unwrap();
 
+                // Find the last layer with an /etc/passwd file,
+                // respecting whiteouts.
+                let mut passwd = "".to_string();
+                for layer in image_layers.clone() {
+                    if !layer.passwd.is_empty() {
+                        passwd = layer.passwd
+                    } else if layer.passwd == WHITEOUT_MARKER {
+                        passwd = "".to_string();
+                    }
+                }
+
                 Ok(Container {
                     image: image_string,
                     config_layer,
                     image_layers,
+                    passwd,
                 })
             }
             Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
@@ -167,6 +180,45 @@ impl Container {
                     "Failed to pull container image manifest and config - error: {:#?}",
                     &e
                 );
+            }
+        }
+    }
+
+    pub fn get_gid_from_passwd_uid(&self, uid: u32) -> Result<u32> {
+        if self.passwd.is_empty() {
+            return Err(anyhow!(
+                "No /etc/passwd file is available, unable to parse gids from uid"
+            ));
+        }
+        match parse_passwd_file(self.passwd.clone()) {
+            Ok(records) => {
+                if let Some(record) = records.iter().find(|&r| r.uid == uid) {
+                    return Ok(record.gid);
+                } else {
+                    return Err(anyhow!("Failed to find uid {} in /etc/passwd", uid));
+                }
+            }
+            Err(inner_e) => {
+                return Err(anyhow!("Failed to parse /etc/passwd - error {inner_e}"));
+            }
+        }
+    }
+
+    pub fn get_uid_gid_from_passwd_user(&self, user: String) -> Result<(u32, u32)> {
+        if user.is_empty() || self.passwd.is_empty() {
+            return Ok((0, 0));
+        }
+        match parse_passwd_file(self.passwd.clone()) {
+            Ok(records) => {
+                if let Some(record) = records.iter().find(|&r| r.user == user) {
+                    return Ok((record.uid, record.gid));
+                } else {
+                    return Err(anyhow!("Failed to find user {} in /etc/passwd", user));
+                }
+            }
+            Err(inner_e) => {
+                warn!("Failed to parse /etc/passwd - error {inner_e}, using uid = gid = 0");
+                return Ok((0, 0));
             }
         }
     }
@@ -191,6 +243,12 @@ impl Container {
          * 5. Be erroneus, somehow
          */
         if let Some(image_user) = &docker_config.User {
+            if self.passwd.is_empty() {
+                warn!("No /etc/passwd file is available, unable to parse gids from user");
+            }
+
+            println!("Cameron debug passwd: {}", self.passwd);
+
             if !image_user.is_empty() {
                 if image_user.contains(':') {
                     debug!("Splitting Docker config user = {:?}", image_user);
@@ -214,8 +272,16 @@ impl Container {
                         }
 
                         debug!("Parsing gid from user[1] = {:?}", user[1]);
-                        match user[1].parse() {
-                            Ok(id) => process.User.GID = id,
+                        match user[1].parse::<u32>() {
+                            Ok(id) => {
+                                warn!(
+                                    concat!(
+                                        "Parsed gid {} from OCI container image config, but not using it. ",
+                                        "GIDs are only picked up by the runtime from /etc/passwd."
+                                    ),
+                                    id
+                                );
+                            }
                             Err(e) => {
                                 warn!(
                                     "Failed to parse {} as u32, using gid = 0 - error {e}",
@@ -223,39 +289,26 @@ impl Container {
                                 );
                             }
                         }
+
+                        process.User.GID =
+                            self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
                     }
                 } else {
                     match image_user.parse::<u32>() {
-                        Ok(uid) => process.User.UID = uid,
+                        Ok(uid) => {
+                            process.User.UID = uid;
+                            process.User.GID =
+                                self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
+                        }
+                        // If the user is not a UID, interpret it as a user name.
                         Err(outer_e) => {
-                            // Find the last layer with an /etc/passwd file,
-                            // respecting whiteouts.
-                            let mut passwd = "".to_string();
-                            for layer in self.get_image_layers() {
-                                if !layer.passwd.is_empty() {
-                                    passwd = layer.passwd
-                                } else if layer.passwd == WHITEOUT_MARKER {
-                                    passwd = "".to_string();
-                                }
-                            }
-
-                            if passwd.is_empty() {
-                                warn!("Failed to parse {} as u32 - error {outer_e} - and no /etc/passwd file is available, using uid = gid = 0", image_user);
-                            } else {
-                                match parse_passwd_file(passwd) {
-                                    Ok(records) => {
-                                        if let Some(record) =
-                                            records.iter().find(|&r| r.user == *image_user)
-                                        {
-                                            process.User.UID = record.uid;
-                                            process.User.GID = record.gid;
-                                        }
-                                    }
-                                    Err(inner_e) => {
-                                        warn!("Failed to parse {} as u32 - error {outer_e} - and failed to parse /etc/passwd - error {inner_e}, using uid = gid = 0", image_user);
-                                    }
-                                }
-                            }
+                            debug!(
+                                "Failed to parse {} as u32, using it as a user name - error {outer_e}",
+                                image_user
+                            );
+                            (process.User.UID, process.User.GID) = self
+                                .get_uid_gid_from_passwd_user(image_user.clone())
+                                .unwrap_or((0, 0));
                         }
                     }
                 }

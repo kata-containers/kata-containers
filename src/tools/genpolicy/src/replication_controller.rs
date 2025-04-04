@@ -111,8 +111,8 @@ impl yaml::K8sResource for ReplicationController {
         false
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess) {
-        yaml::get_process_fields(process, &self.spec.template.spec.securityContext);
+    fn get_process_fields(&self, process: &mut policy::KataProcess) -> bool {
+        return yaml::get_process_fields(process, &self.spec.template.spec.securityContext);
     }
 
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
