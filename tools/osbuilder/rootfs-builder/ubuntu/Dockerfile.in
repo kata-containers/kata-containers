@@ -35,6 +35,7 @@ RUN apt-get update && \
          [ "$gcc_arch" = aarch64 ] && libc_arch=arm64; \
          [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64le && libc_arch=ppc64el; \
          [ "$gcc_arch" = s390x ] && gcc_arch=s390x && libc_arch=s390x; \
+         [ "$gcc_arch" = riscv64 ] && gcc_arch=riscv64 && libc_arch=riscv64; \
          [ "$gcc_arch" = x86_64 ] && gcc_arch=x86-64 && libc_arch=amd64; \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
@@ -66,7 +67,7 @@ RUN ARCH=$(uname -m); \
         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
     esac; \
     curl -OL "https://storage.googleapis.com/golang/go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
-    tar -C "${GO_HOME}" -xzf "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
+    tar --no-same-owner --no-same-permissions -C "${GO_HOME}" -xzf "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
     rm "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz"
 
 # aarch64 requires this name -- link for all
@@ -80,6 +81,7 @@ RUN ARCH=$(uname -m); \
         "ppc64le") rust_arch="powerpc64le"; libc="gnu"; ;; \
         "x86_64") rust_arch="${ARCH}"; libc="musl"; ;; \
         "s390x") rust_arch="${ARCH}"; libc="gnu"; ;; \
+        "riscv64") rust_arch="riscv64gc"; libc="gnu"; ;; \
         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
 	esac; \
     rustup target add "${rust_arch}-unknown-linux-${libc}"
