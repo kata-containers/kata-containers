@@ -99,8 +99,8 @@ members = ["rustjail", "policy"]
 lto = true
 
 [features]
-# The default-pull feature would support all pull types, including sharing images by virtio-fs and pulling images in the guest
-default-pull = ["guest-pull"]
+# The default-pull feature supports all sharing images by virtio-fs, for guest-pull build with the guest-pull feature
+default-pull = []
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = [ "kata-agent-policy" ]
