@@ -78,6 +78,14 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
+  build-kata-static-tarball-riscv64:
+    uses: ./.github/workflows/build-kata-static-tarball-riscv64.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
     uses: ./.github/workflows/publish-kata-deploy-payload.yaml
