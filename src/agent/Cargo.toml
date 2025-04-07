@@ -1,5 +1,5 @@
 [workspace]
-members = ["rustjail", "policy"]
+members = ["rustjail", "policy", "vsock-exporter"]
 
 [workspace.package]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
@@ -12,7 +12,7 @@ oci-spec = { version = "0.6.8", features = ["runtime"] }
 lazy_static = "1.3.0"
 ttrpc = { version = "0.8.4", features = ["async"], default-features = false }
 protobuf = "=3.7.1"
-libc = "0.2.58"
+libc = "0.2.94"
 nix = "0.24.2"
 capctl = "0.2.0"
 scan_fmt = "0.2.6"
@@ -25,7 +25,7 @@ derivative = "2.2.0"
 const_format = "0.2.30"
 
 # Async helpers
-async-trait = "0.1.42"
+async-trait = "0.1.50"
 async-recursion = "0.3.2"
 futures = "0.3.30"
 
