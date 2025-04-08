@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 use crate::registry::{
     add_verity_and_users_to_store, get_verity_hash_and_users, read_verity_and_users_from_store,
-    Container, DockerConfigLayer, ImageLayer,
+    Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -67,10 +67,29 @@ impl Container {
         )
         .await?;
 
+        // Find the last layer with an /etc/* file, respecting whiteouts.
+        let mut passwd = String::new();
+        let mut group = String::new();
+        for layer in &image_layers {
+            if layer.passwd == WHITEOUT_MARKER {
+                passwd = String::new();
+            } else if !layer.passwd.is_empty() {
+                passwd = layer.passwd.clone();
+            }
+
+            if layer.group == WHITEOUT_MARKER {
+                group = String::new();
+            } else if !layer.group.is_empty() {
+                group = layer.group.clone();
+            }
+        }
+
         Ok(Container {
             image: image_str,
             config_layer,
             image_layers,
+            passwd,
+            group,
         })
     }
 }
@@ -265,7 +284,7 @@ pub async fn get_image_layers(
             || layer_media_type.eq("application/vnd.oci.image.layer.v1.tar+gzip")
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let (verity_hash, passwd) = get_verity_and_users(
+                let (verity_hash, passwd, group) = get_verity_and_users(
                     layers_cache_file_path.clone(),
                     layer["digest"].as_str().unwrap(),
                     client,
@@ -276,6 +295,7 @@ pub async fn get_image_layers(
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
                     verity_hash,
                     passwd,
+                    group,
                 };
                 layersVec.push(imageLayer);
             } else {
@@ -293,7 +313,7 @@ async fn get_verity_and_users(
     layer_digest: &str,
     client: &containerd_client::Client,
     diff_id: &str,
-) -> Result<(String, String)> {
+) -> Result<(String, String, String)> {
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
     // Use file names supported by both Linux and Windows.
@@ -306,13 +326,12 @@ async fn get_verity_and_users(
 
     let mut verity_hash = "".to_string();
     let mut passwd = "".to_string();
+    let mut group = "".to_string();
     let mut error_message = "".to_string();
     let mut error = false;
 
     if let Some(path) = layers_cache_file_path.as_ref() {
-        let res = read_verity_and_users_from_store(path, diff_id)?;
-        verity_hash = res.0;
-        passwd = res.1;
+        (verity_hash, passwd, group) = read_verity_and_users_from_store(path, diff_id)?;
         info!("Using cache file");
         info!("dm-verity root hash: {verity_hash}");
     }
@@ -338,10 +357,15 @@ async fn get_verity_and_users(
                     error = true;
                 }
                 Ok(res) => {
-                    verity_hash = res.0;
-                    passwd = res.1;
+                    (verity_hash, passwd, group) = res;
                     if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_and_users_to_store(path, diff_id, &verity_hash, &passwd)?;
+                        add_verity_and_users_to_store(
+                            path,
+                            diff_id,
+                            &verity_hash,
+                            &passwd,
+                            &group,
+                        )?;
                     }
                     info!("dm-verity root hash: {verity_hash}");
                 }
@@ -356,7 +380,7 @@ async fn get_verity_and_users(
         }
         bail!(error_message);
     }
-    Ok((verity_hash, passwd))
+    Ok((verity_hash, passwd, group))
 }
 
 async fn create_decompressed_layer_file(
