@@ -64,7 +64,7 @@ impl Hypervisor for Remote {
     }
 
     async fn wait_vm(&self) -> Result<i32> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.wait_vm().await
     }
 
@@ -189,6 +189,11 @@ impl Hypervisor for Remote {
 
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
         Err(anyhow::anyhow!("Not yet supported"))
+    }
+
+    async fn is_running(&self) -> bool {
+        let inner = self.inner.read().await;
+        inner.is_running()
     }
 }
 
