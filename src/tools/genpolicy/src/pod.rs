@@ -297,6 +297,9 @@ struct SecurityContext {
     runAsUser: Option<i64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    runAsGroup: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     seccompProfile: Option<SeccompProfile>,
 }
 
@@ -318,6 +321,12 @@ pub struct PodSecurityContext {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sysctls: Option<Vec<Sysctl>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runAsGroup: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowPrivilegeEscalation: Option<bool>,
     // TODO: additional fields.
 }
 
@@ -962,6 +971,11 @@ impl Container {
             if let Some(uid) = context.runAsUser {
                 process.User.UID = uid.try_into().unwrap();
             }
+
+            if let Some(gid) = context.runAsGroup {
+                process.User.GID = gid.try_into().unwrap();
+            }
+
             if let Some(allow) = context.allowPrivilegeEscalation {
                 process.NoNewPrivileges = !allow
             }
@@ -1008,6 +1022,7 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
             privileged: None,
             capabilities: None,
             runAsUser: None,
+            runAsGroup: None,
             seccompProfile: None,
         }),
         ..Default::default()
