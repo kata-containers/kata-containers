@@ -8,6 +8,7 @@
 package resourcecontrol
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,7 +50,7 @@ type LinuxCgroup struct {
 	sync.Mutex
 }
 
-func sandboxDevices() []specs.LinuxDeviceCgroup {
+func sandboxDevices() ([]specs.LinuxDeviceCgroup, error) {
 	devices := []specs.LinuxDeviceCgroup{}
 
 	defaultDevices := []string{
@@ -69,12 +70,26 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	hypervisorDevices := []string{
 		"/dev/kvm",         // To run virtual machines with KVM
 		"/dev/mshv",        // To run virtual machines with Hyper-V
+	}
+	virtualDevices := []string{
 		"/dev/vhost-net",   // To create virtqueues
 		"/dev/vfio/vfio",   // To access VFIO devices
 		"/dev/vhost-vsock", // To interact with vsock if
 	}
 
-	defaultDevices = append(defaultDevices, hypervisorDevices...)
+	hypervisorDeviceAdded := false
+	for _, hypervisor := range hypervisorDevices {
+		hypervisorDevice, err := DeviceToLinuxDevice(hypervisor)
+		if err == nil {
+			devices = append(devices, hypervisorDevice)
+			hypervisorDeviceAdded = true
+			controllerLogger.WithField("source", "cgroups").Infof("Adding %s to the devices cgroup", hypervisor)
+		}
+	}
+	if !hypervisorDeviceAdded {
+		return []specs.LinuxDeviceCgroup{}, errors.New("Could not add any hypervisor device to devices cgroup")
+	}
+	defaultDevices = append(defaultDevices, virtualDevices...)
 
 	for _, device := range defaultDevices {
 		ldevice, err := DeviceToLinuxDevice(device)
@@ -127,7 +142,7 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 
 	devices = append(devices, wildcardDevices...)
 
-	return devices
+	return devices, nil
 }
 
 func NewResourceController(path string, resources *specs.LinuxResources) (ResourceController, error) {
@@ -167,7 +182,11 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 
 func NewSandboxResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (ResourceController, error) {
 	sandboxResources := *resources
-	sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevices()...)
+	sandboxDevices, err := sandboxDevices()
+	if err != nil {
+		return nil, err
+	}
+	sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevices...)
 
 	// Currently we know to handle systemd cgroup path only when it's the only cgroup (no overhead group), hence,
 	// if sandboxCgroupOnly is not true we treat it as cgroupfs path as it used to be, although it may be incorrect.
