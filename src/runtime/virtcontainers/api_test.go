@@ -131,6 +131,11 @@ func newTestSandboxConfigKataAgent() SandboxConfig {
 }
 
 func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
+
 	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
@@ -159,6 +164,11 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
+
 	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
@@ -252,6 +262,11 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 }
 
 func TestReleaseSandbox(t *testing.T) {
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
+
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -269,6 +284,11 @@ func TestReleaseSandbox(t *testing.T) {
 }
 
 func TestCleanupContainer(t *testing.T) {
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
+
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}

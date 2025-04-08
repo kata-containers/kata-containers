@@ -50,6 +50,11 @@ func testCreateSandbox(t *testing.T, id string,
 	nconfig NetworkConfig, containers []ContainerConfig,
 	volumes []types.Volume) (*Sandbox, error) {
 
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
+
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -1307,6 +1312,10 @@ func checkSandboxRemains() error {
 }
 
 func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 	ctx := context.Background()
@@ -1398,6 +1407,10 @@ func TestSandboxExperimentalFeature(t *testing.T) {
 }
 
 func TestSandbox_Cgroups(t *testing.T) {
+	// GITHUB_RUNNER_CI_NON_VIRT is set to true in .github/workflows/build-checks.yaml file for ARM64 runners because the self hosted runners do not support Virtualization
+	if os.Getenv("GITHUB_RUNNER_CI_NON_VIRT") == "true" {
+		t.Skip("Skipping the test as the GitHub self hosted runners for ARM64 do not support Virtualization")
+	}
 	sandboxContainer := ContainerConfig{}
 	sandboxContainer.Annotations = make(map[string]string)
 	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
