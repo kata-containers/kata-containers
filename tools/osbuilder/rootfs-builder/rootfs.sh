@@ -105,6 +105,8 @@ readonly -a systemd_files=(
 	"systemd-tmpfiles-cleanup.timer"
 )
 
+typeset delete_unnecessary_files="yes"
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
@@ -807,7 +809,9 @@ EOF
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
 
-	delete_unnecessary_files
+	if [[ "${delete_unnecessary_files}" == "yes" ]]; then
+	    delete_unnecessary_files
+	fi
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
@@ -824,7 +828,10 @@ parse_arguments()
 			h)	usage ;;
 			l)	get_distros | sort && exit 0;;
 			o)	OSBUILDER_VERSION="${OPTARG}" ;;
-			r)	ROOTFS_DIR="${OPTARG}" ;;
+			r)	ROOTFS_DIR="${OPTARG}"
+				# Don't remove files from a user provided rootfs
+				delete_unnecessary_files="no"
+				;;
 			t)	get_test_config "${OPTARG}" && exit 0;;
 			*)  die "Found an invalid option";;
 		esac
