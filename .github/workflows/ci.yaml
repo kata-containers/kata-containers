@@ -304,7 +304,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-metrics-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    # Skip metrics tests whilst runner is broken
+    if: false
+    # if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
