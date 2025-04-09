@@ -1,6 +1,13 @@
 [workspace]
 members = [
+    "crates/agent",
+    "crates/hypervisor",
+    "crates/persist",
+    "crates/resource",
+    "crates/runtimes",
+    "crates/service",
     "crates/shim",
     "crates/shim-ctl",
-]
 
+    "tests/utils",
+]
