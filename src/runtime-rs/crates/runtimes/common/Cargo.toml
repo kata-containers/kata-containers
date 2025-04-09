@@ -21,11 +21,13 @@ strum = { version = "0.24.0", features = ["derive"] }
 thiserror = "^1.0"
 tokio = { version = "1.38.0", features = ["rt-multi-thread", "process", "fs"] }
 ttrpc = "0.8.4" 
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+
+# Local dependencies
 persist = { path = "../../persist" }
 agent = { path = "../../agent" }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
 runtime-spec = { path = "../../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
 resource = { path = "../../resource" }
 protocols = { path = "../../../../libs/protocols"}

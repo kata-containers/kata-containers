@@ -22,10 +22,11 @@ tokio = { version = "1.38.0", features = ["fs", "rt"] }
 tracing = "0.1.36"
 url = "2.2.2"
 nix = "0.24.2"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 
+# Local dependencies
 kata-types = { path = "../../../libs/kata-types"}
 logging = { path = "../../../libs/logging"}
-oci-spec = { version = "0.6.8", features = ["runtime"] }
 protocols = { path = "../../../libs/protocols", features=["async"] }
 
 [features]

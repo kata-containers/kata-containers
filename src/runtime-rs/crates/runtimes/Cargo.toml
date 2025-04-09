@@ -24,20 +24,21 @@ nix = "0.25.0"
 url = "2.3.1"
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 
+# Local dependencies
 agent = { path = "../agent" }
 common = { path = "./common" }
 kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging"}
 runtime-spec = { path = "../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
 shim-interface = { path = "../../../libs/shim-interface" }
 persist = { path = "../persist" }
 hypervisor = { path = "../hypervisor" }
 resource = { path = "../resource" }
 
-# runtime handler
+# Local dependencies: runtime handler
 linux_container = { path = "./linux_container", optional = true }
 virt_container = { path = "./virt_container", optional = true }
 wasm_container = { path = "./wasm_container", optional = true }

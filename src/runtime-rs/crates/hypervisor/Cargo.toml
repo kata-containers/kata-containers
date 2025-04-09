@@ -14,7 +14,6 @@ async-trait = "0.1.48"
 go-flag = "0.1.0"
 libc = ">=0.2.39"
 nix = "0.24.2"
-persist = { path = "../persist" }
 rust-ini = "0.18.0"
 seccompiler = "0.2.0"
 serde = { version = "1.0.138", features = ["derive"] }
@@ -30,26 +29,28 @@ lazy_static = "1.4"
 tracing = "0.1.36"
 ttrpc = { version = "0.8.4", features = ["async"] }
 protobuf = "=3.7.1"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+futures = "0.3.25"
+safe-path = "0.1.0"
+crossbeam-channel = "0.5.6"
+tempdir = "0.3.7"
+qapi = { version = "0.14", features = ["qmp", "async-tokio-all"] }
+qapi-spec = "0.3.1"
+qapi-qmp = "0.14.0"
+hyperlocal = "0.8.0"
+hyper = { version = "0.14.18", features = ["client"] }
 
+# Local dependencies
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging" }
 protocols = { path = "../../../libs/protocols", features = ["async"] }
 shim-interface = { path = "../../../libs/shim-interface" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-
+persist = { path = "../persist" }
 ch-config = { path = "ch-config", optional = true }
 tests_utils = { path = "../../tests/utils" }
 
-futures = "0.3.25"
-safe-path = "0.1.0"
-crossbeam-channel = "0.5.6"
-tempdir = "0.3.7"
-
-qapi = { version = "0.14", features = ["qmp", "async-tokio-all"] }
-qapi-spec = "0.3.1"
-qapi-qmp = "0.14.0"
-
+# Local dependencies: Dragonball
 dragonball = { path = "../../../dragonball", features = [
     "atomic-guest-memory",
     "virtio-vsock",
@@ -65,8 +66,6 @@ dragonball = { path = "../../../dragonball", features = [
     "host-device",
 ], optional = true }
 dbs-utils = { path = "../../../dragonball/dbs_utils" }
-hyperlocal = "0.8.0"
-hyper = { version = "0.14.18", features = ["client"] }
 
 [features]
 default = []
@@ -77,14 +76,13 @@ dragonball = ["dep:dragonball"]
 cloud-hypervisor = ["ch-config"]
 
 [dev-dependencies]
+serial_test = "2.0.0"
+
+# Local dev-dependencies
 # Force the CH tests to run, even when the feature is not enabled for
 # a normal build.
 hypervisor = { path = ".", features = ["cloud-hypervisor"] }
-
 test-utils = { path = "../../../libs/test-utils" }
-
-serial_test = "2.0.0"
-
 
 [build-dependencies]
 ttrpc-codegen = "0.4.2"

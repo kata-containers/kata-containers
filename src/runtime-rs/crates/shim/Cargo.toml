@@ -31,12 +31,13 @@ tokio = { version = "1.38.0", features = [ "rt", "rt-multi-thread" ] }
 unix_socket2 = "0.5.4"
 tracing = "0.1.36"
 tracing-opentelemetry = "0.18.0"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 
+# Local dependencies
 kata-types = { path = "../../../libs/kata-types"}
 kata-sys-util = { path = "../../../libs/kata-sys-util"}
 logging = { path = "../../../libs/logging"}
 runtime-spec = { path = "../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
 service = { path = "../service" }
 runtimes = { path = "../runtimes" }
 
@@ -44,4 +45,6 @@ runtimes = { path = "../runtimes" }
 tempfile = "3.2.0"
 rand = "0.8.4"
 serial_test = "0.5.1"
+
+# Local dev-dependencies
 tests_utils = { path = "../../tests/utils"}

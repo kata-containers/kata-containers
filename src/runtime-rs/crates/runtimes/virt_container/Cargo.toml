@@ -26,7 +26,10 @@ toml = "0.4.2"
 url = "2.1.1"
 async-std = "1.12.0"
 tracing = "0.1.36"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+strum = { version = "0.24.0", features = ["derive"] }
 
+# Local dependencies
 agent = { path = "../../agent" }
 common = { path = "../common" }
 hypervisor = { path = "../../hypervisor", features = ["cloud-hypervisor"] }
@@ -34,10 +37,8 @@ kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
 logging = { path = "../../../../libs/logging"}
 runtime-spec = { path = "../../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
 persist = { path = "../../persist"}
 resource = { path = "../../resource" }
-strum = { version = "0.24.0", features = ["derive"] }
 
 [features]
 default = ["cloud-hypervisor"]
