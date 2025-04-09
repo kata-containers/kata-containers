@@ -115,7 +115,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-nvidia-gpu, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (nydus, test)
-      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf-sev, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf-snp, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu-snp-experimental, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu, test)
