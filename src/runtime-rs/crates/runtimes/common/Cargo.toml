@@ -24,10 +24,10 @@ ttrpc = "0.8.4"
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 
 # Local dependencies
-persist = { path = "../../persist" }
-agent = { path = "../../agent" }
-kata-sys-util = { path = "../../../../libs/kata-sys-util" }
-kata-types = { path = "../../../../libs/kata-types" }
-runtime-spec = { path = "../../../../libs/runtime-spec" }
-resource = { path = "../../resource" }
-protocols = { path = "../../../../libs/protocols"}
+persist = { workspace = true }
+agent = { workspace = true }
+kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
+runtime-spec = { workspace = true }
+resource = { workspace = true }
+protocols = { workspace = true }

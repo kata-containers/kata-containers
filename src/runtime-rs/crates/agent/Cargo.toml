@@ -25,9 +25,9 @@ nix = "0.24.2"
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 
 # Local dependencies
-kata-types = { path = "../../../libs/kata-types"}
-logging = { path = "../../../libs/logging"}
-protocols = { path = "../../../libs/protocols", features=["async"] }
+kata-types = { workspace = true }
+logging = { workspace = true }
+protocols = { workspace = true, features=["async"] }
 
 [features]
 default = []

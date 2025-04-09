@@ -10,6 +10,6 @@ async-trait = "0.1.48"
 tokio = { version = "1.38.0" }
 
 # Local dependencies
-common = { path = "../common" }
-kata-types = { path = "../../../../libs/kata-types" }
-resource = { path = "../../resource" }
+common = { workspace = true }
+kata-types = { workspace = true }
+resource = { workspace = true }

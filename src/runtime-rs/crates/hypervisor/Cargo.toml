@@ -41,17 +41,17 @@ hyperlocal = "0.8.0"
 hyper = { version = "0.14.18", features = ["client"] }
 
 # Local dependencies
-kata-sys-util = { path = "../../../libs/kata-sys-util" }
-kata-types = { path = "../../../libs/kata-types" }
-logging = { path = "../../../libs/logging" }
-protocols = { path = "../../../libs/protocols", features = ["async"] }
-shim-interface = { path = "../../../libs/shim-interface" }
-persist = { path = "../persist" }
-ch-config = { path = "ch-config", optional = true }
-tests_utils = { path = "../../tests/utils" }
+kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
+logging = { workspace = true }
+protocols = { workspace = true, features = ["async"] }
+shim-interface = { workspace = true }
+persist = { workspace = true }
+ch-config = { workspace = true, optional = true }
+tests_utils = { workspace = true }
 
 # Local dependencies: Dragonball
-dragonball = { path = "../../../dragonball", features = [
+dragonball = { workspace = true, features = [
     "atomic-guest-memory",
     "virtio-vsock",
     "hotplug",
@@ -65,7 +65,7 @@ dragonball = { path = "../../../dragonball", features = [
     "vhost-user-net",
     "host-device",
 ], optional = true }
-dbs-utils = { path = "../../../dragonball/dbs_utils" }
+dbs-utils = { workspace = true }
 
 [features]
 default = []
@@ -81,8 +81,8 @@ serial_test = "2.0.0"
 # Local dev-dependencies
 # Force the CH tests to run, even when the feature is not enabled for
 # a normal build.
-hypervisor = { path = ".", features = ["cloud-hypervisor"] }
-test-utils = { path = "../../../libs/test-utils" }
+hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+test-utils = { workspace = true }
 
 [build-dependencies]
 ttrpc-codegen = "0.4.2"

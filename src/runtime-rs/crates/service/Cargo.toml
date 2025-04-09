@@ -17,8 +17,8 @@ containerd-shim-protos = { version = "0.6.0", features = ["async", "sandbox"] }
 containerd-shim = { version = "0.6.0", features = ["async"] }
 
 # Local dependencies
-common = { path = "../runtimes/common" }
-logging = { path = "../../../libs/logging" }
-kata-types = { path = "../../../libs/kata-types" }
-runtimes = { path = "../runtimes" }
-persist = { path = "../persist" }
+common = { workspace = true }
+logging = { workspace = true }
+kata-types = { workspace = true }
+runtimes = { workspace = true }
+persist = { workspace = true }

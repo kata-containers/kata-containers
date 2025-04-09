@@ -12,4 +12,4 @@ anyhow = "^1.0"
 rand = "0.8.4"
 
 # Local dependencies
-kata-types = { path = "../../../libs/kata-types" }
+kata-types = { workspace = true }

@@ -9,7 +9,7 @@ license = "Apache-2.0"
 tempfile = "3.2.0"
 
 # Local dev-dependencies
-test-utils = { path = "../../../libs/test-utils" }
+test-utils = { workspace = true }
 
 [dependencies]
 anyhow = "^1.0"
@@ -38,12 +38,12 @@ uuid = { version = "0.4", features = ["v4"] }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 
 # Local dependencies
-agent = { path = "../agent" }
-hypervisor = { path = "../hypervisor" }
-kata-types = { path = "../../../libs/kata-types" }
-kata-sys-util = { path = "../../../libs/kata-sys-util" }
-logging = { path = "../../../libs/logging" }
-persist = { path = "../persist"}
-tests_utils = { path = "../../tests/utils" }
+agent = { workspace = true }
+hypervisor = { workspace = true }
+kata-types = { workspace = true }
+kata-sys-util = { workspace = true }
+logging = { workspace = true }
+persist = { workspace = true }
+tests_utils = { workspace = true }
 
 [features]
