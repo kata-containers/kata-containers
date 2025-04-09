@@ -7,8 +7,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "^1.0"
-common = { path = "../runtimes/common" }
-logging = { path = "../../../libs/logging"}
-runtimes = { path = "../runtimes" }
 tokio = { version = "1.38.0", features = [ "rt", "rt-multi-thread" ] }
 
+# Local dependencies
+common = { workspace = true }
+logging = { workspace = true }
+runtimes = { workspace = true }

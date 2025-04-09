@@ -6,8 +6,10 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dev-dependencies]
-test-utils = { path = "../../../libs/test-utils" }
 tempfile = "3.2.0"
+
+# Local dev-dependencies
+test-utils = { workspace = true }
 
 [dependencies]
 anyhow = "^1.0"
@@ -33,14 +35,15 @@ slog-scope = "4.4.0"
 tokio = { version = "1.38.0", features = ["process"] }
 tracing = "0.1.36"
 uuid = { version = "0.4", features = ["v4"] }
-
-agent = { path = "../agent" }
-hypervisor = { path = "../hypervisor" }
-kata-types = { path = "../../../libs/kata-types" }
-kata-sys-util = { path = "../../../libs/kata-sys-util" }
-logging = { path = "../../../libs/logging" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
-persist = { path = "../persist"}
-tests_utils = { path = "../../tests/utils" }
+
+# Local dependencies
+agent = { workspace = true }
+hypervisor = { workspace = true }
+kata-types = { workspace = true }
+kata-sys-util = { workspace = true }
+logging = { workspace = true }
+persist = { workspace = true }
+tests_utils = { workspace = true }
 
 [features]

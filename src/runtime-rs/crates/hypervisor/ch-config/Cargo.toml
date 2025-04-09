@@ -14,6 +14,8 @@ anyhow = "1.0.68"
 serde = { version = "1.0.145", features = ["rc", "derive"] }
 serde_json = "1.0.91"
 tokio = { version = "1.38.0", features = ["sync", "rt"] }
+nix = "0.26.2"
+thiserror = "1.0.38"
 
 # Cloud Hypervisor public HTTP API functions
 # Note that the version specified is not necessarily the version of CH
@@ -21,7 +23,6 @@ tokio = { version = "1.38.0", features = ["sync", "rt"] }
 # which is relatively static.
 api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", crate = "api_client", tag = "v27.0" }
 
-kata-types = { path = "../../../../libs/kata-types"}
-kata-sys-util = { path = "../../../../libs/kata-sys-util"}
-nix = "0.26.2"
-thiserror = "1.0.38"
+# Local dependencies
+kata-types = { workspace = true }
+kata-sys-util = { workspace = true }
