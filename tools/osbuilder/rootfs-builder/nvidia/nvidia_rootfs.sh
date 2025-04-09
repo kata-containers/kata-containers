@@ -269,9 +269,10 @@ chisseled_init() {
 	echo "nvidia: chisseling init"
 	tar xvf "${BUILD_DIR}"/kata-static-busybox.tar.xz -C .
 
+	libdir=lib/"${machine_arch}"-linux-gnu
+
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
-		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
-		 usr/bin etc/modprobe.d
+		 usr/share/nvidia ${libdir} lib64 usr/bin etc/modprobe.d
 
 	ln -sf ../run var/run
 
@@ -279,6 +280,8 @@ chisseled_init() {
 	# make sure NVRC is the init process for the initrd and image case
 	ln -sf  /bin/NVRC init
 	ln -sf  /bin/NVRC sbin/init
+
+	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	cp -a "${stage_one}"/etc/kata-opa         etc/.
