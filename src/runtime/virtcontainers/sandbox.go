@@ -2307,7 +2307,10 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	// Add default vcpus for sandbox
 	sandboxVCPUs += s.hypervisor.HypervisorConfig().NumVCPUsF
 
-	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte := s.calculateSandboxMemory()
+	sandboxMemoryByte, sandboxneedPodSwap, sandboxSwapByte, err := s.calculateSandboxMemory()
+	if err != nil {
+		return err
+	}
 
 	// Add default / rsvd memory for sandbox.
 	hypervisorMemoryByteI64 := int64(s.hypervisor.HypervisorConfig().MemorySize) << utils.MibToBytesShift
@@ -2410,20 +2413,18 @@ func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, erro
 	tmpfsMounts := []*grpc.Storage{}
 	for _, c := range s.containers {
 		for _, mount := range c.mounts {
-			// if a tmpfs ephemeral mount is present
-			// update its size to occupy the entire sandbox's memory
 			if mount.Type == KataEphemeralDevType {
-				sizeLimited := false
-				for _, opt := range mount.Options {
-					if strings.HasPrefix(opt, "size") {
-						sizeLimited = true
-					}
-				}
-				if sizeLimited { // do not resize sizeLimited emptyDirs
-					continue
+				mountSize, err := mount.GetMountSize()
+				if err != nil {
+					return nil, err
 				}
 
-				mountOptions := []string{"remount", fmt.Sprintf("size=%dM", memoryMB)}
+				// if tmpfs size isn't limited, it's size should be the total available memory
+				if mountSize == "" {
+					mountSize = fmt.Sprintf("%dM", memoryMB)
+				}
+
+				mountOptions := []string{"remount", fmt.Sprintf("size=%s", mountSize)}
 
 				origin_src := mount.Source
 				stat := syscall.Stat_t{}
@@ -2477,10 +2478,11 @@ func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {
 	return nil
 }
 
-func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
+func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64, error) {
 	memorySandbox := uint64(0)
 	needPodSwap := false
 	swapSandbox := int64(0)
+
 	for _, c := range s.config.Containers {
 		// Do not hot add again non-running containers resources
 		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
@@ -2519,9 +2521,18 @@ func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
 				}
 			}
 		}
+		// Add ephemeral mounts size limit to the sandbox memory
+		ephemeralMountsLimit, err := c.GetEphemeralMountsLimit()
+		if err != nil {
+			return 0, false, 0, err
+		}
+		if ephemeralMountsLimit > 0 {
+			memorySandbox += ephemeralMountsLimit
+		}
+
 	}
 
-	return memorySandbox, needPodSwap, swapSandbox
+	return memorySandbox, needPodSwap, swapSandbox, nil
 }
 
 func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
