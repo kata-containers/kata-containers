@@ -13,11 +13,11 @@ set -o errtrace
 kata_build_dir=${1:-build}
 kata_versions_yaml_file=${2:-""}
 
-tar_path="${PWD}/kata-static.tar.xz"
-kata_versions_yaml_file_path="${PWD}/${kata_versions_yaml_file}"
+tar_path=$(readlink -f kata-static.tar.xz)
+kata_versions_yaml_file_path=$(readlink -f "${kata_versions_yaml_file}")
 
 pushd "${kata_build_dir}"
-tarball_content_dir="${PWD}/kata-tarball-content"
+tarball_content_dir=$(readlink -f kata-tarball-content)
 rm -rf "${tarball_content_dir}"
 mkdir "${tarball_content_dir}"
 
