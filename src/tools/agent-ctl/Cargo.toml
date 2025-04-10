@@ -27,7 +27,7 @@ logging = { path = "../../libs/logging" }
 slog = "2.7.0"
 slog-scope = "4.4.0"
 rand = "0.8.4"
-protobuf = "3.2.0"
+protobuf = "3.7.1"
 log = "0.4.22"
 
 nix = "0.23.0"
@@ -47,6 +47,6 @@ image-rs = { git = "https://github.com/confidential-containers/guest-components"
 
 safe-path = { path = "../../libs/safe-path" }
 
-tokio = { version = "1.28.1", features = ["signal"] }
+tokio = { version = "1.43.1", features = ["signal"] }
 
 [workspace]

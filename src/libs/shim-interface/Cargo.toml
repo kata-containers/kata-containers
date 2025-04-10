@@ -14,7 +14,7 @@ edition = "2018"
 [dependencies]
 anyhow = "^1.0"
 nix = "0.24.0"
-tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.38.2", features = ["rt-multi-thread"] }
 hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
 hyperlocal = "0.8"
 kata-types = { path = "../kata-types" }
