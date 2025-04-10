@@ -6,6 +6,7 @@
 use anyhow::{anyhow, Result};
 
 use super::common::{DEFAULT_SLICE, SCOPE_SUFFIX, SLICE_SUFFIX};
+use serde::{Deserialize, Serialize};
 use std::string::String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
