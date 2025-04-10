@@ -1,33 +1,33 @@
 [package]
-name = "common"
-version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+name    = "common"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "^1.0"
-async-trait = "0.1.48"
+anyhow                 = "^1.0"
+async-trait            = "0.1.48"
 containerd-shim-protos = { version = "0.6.0", features = ["async"] }
-lazy_static = "1.4.0"
-nix = "0.24.2"
-protobuf = "=3.7.1"
-serde_json = "1.0.39"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-strum = { version = "0.24.0", features = ["derive"] }
-thiserror = "^1.0"
-tokio = { version = "1.38.0", features = ["rt-multi-thread", "process", "fs"] }
-ttrpc = "0.8.4" 
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+lazy_static            = "1.4.0"
+nix                    = "0.24.2"
+oci-spec               = { version = "0.6.8", features = ["runtime"] }
+protobuf               = "=3.7.1"
+serde_json             = "1.0.39"
+slog                   = "2.5.2"
+slog-scope             = "4.4.0"
+strum                  = { version = "0.24.0", features = ["derive"] }
+thiserror              = "^1.0"
+tokio                  = { version = "1.38.0", features = ["fs", "process", "rt-multi-thread"] }
+ttrpc                  = "0.8.4"
 
 # Local dependencies
-persist = { workspace = true }
-agent = { workspace = true }
+agent         = { workspace = true }
 kata-sys-util = { workspace = true }
-kata-types = { workspace = true }
-runtime-spec = { workspace = true }
-resource = { workspace = true }
-protocols = { workspace = true }
+kata-types    = { workspace = true }
+persist       = { workspace = true }
+protocols     = { workspace = true }
+resource      = { workspace = true }
+runtime-spec  = { workspace = true }
