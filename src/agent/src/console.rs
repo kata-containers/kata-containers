@@ -34,6 +34,7 @@ lazy_static! {
         let mut v = Vec::new();
 
         if !cfg!(test) {
+            v.push("/usr/bin/bash".to_string());
             v.push("/bin/bash".to_string());
             v.push("/bin/sh".to_string());
         }
