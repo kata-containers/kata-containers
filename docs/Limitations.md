@@ -180,6 +180,12 @@ The container may also be granted full access to a subset of host devices
 
 See [Privileged Kata Containers](how-to/privileged.md) for how to configure some of this behavior.
 
+## Networking
+
+### Cilium Limitations with Kata
+
+Due to the Kata Containers Networking model, there are limitations that can cause connectivity disruptions in Cilium. We have experienced 46% drop in network performance across nodes with Kata and Cilium as our CNI. There is an exisiting workaround to fix this issue: https://github.com/cilium/cilium/pull/38033/commits/6ec446dd6b123dfd8c85b06865e7f56929858d9d. But it would be better to have a patch to resolve this issue. 
+
 # Appendices
 
 ## The constraints challenge
