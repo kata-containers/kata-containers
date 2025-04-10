@@ -90,6 +90,7 @@ else
 		"k8s-shared-volume.bats" \
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
+		"k8s-debug-console.bats" \
 	)
 
 	K8S_TEST_NORMAL_HOST_UNION=( \
