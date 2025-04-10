@@ -12,6 +12,8 @@ dir /mnt 0755 0 0
 file /init /usr/sbin/init.sh 0755 0 0
 file /sbin/busybox /usr/bin/busybox 0755 0 0
 file /sbin/veritysetup /usr/sbin/veritysetup.static 0755 0 0
+slink /usr/bin /bin 755 0 0
+slink /usr/sbin /sbin 755 0 0
 slink /bin/sh /sbin/busybox 0755 0 0
 slink /sbin/mount /sbin/busybox 0755 0 0
 slink /bin/mkdir /sbin/busybox 0755 0 0
