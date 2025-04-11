@@ -172,12 +172,28 @@ For new jobs, or jobs that haven't been marked as required recently,
 the criteria to be initially marked as required is ten days
 of passing tests, with no relevant PR failures reported in that time.
 Required jobs also need one or more nominated maintainers that are
-responsible for the stability of their jobs.
+responsible for the stability of their jobs. Maintainers can be registered
+in [`maintainers.yml`](https://github.com/kata-containers/kata-containers.github.io/blob/main/maintainers.yml)
+and will then show on the CI Dashboard.
 
-> [!NOTE]
-> We don't currently have a good place to record the job maintainers, but
-> once we have this, the intention is to show it on the CI Dashboard so
-> people can find the contact easily.
+To add transparency to making jobs required/non-required and to keep the
+GitHub UI in sync with the [Gatekeeper job](../tools/testing/gatekeeper),
+the process to update a job's required state is as follows:
+1. Create a PR to update `maintainers.yml`, if new maintainers are being
+declared on a CI job.
+1. Create a PR which updates
+[`required-tests.yaml`](../tools/testing/gatekeeper/required-tests.yaml)
+adding the new job and listing the evidence that the job meets the
+requirements above. Ensure that all maintainers and
+@kata-containers/architecture-committee are notified to give them the
+opportunity to review the PR. See
+[#11015](https://github.com/kata-containers/kata-containers/pull/11015)
+as an example.
+1. The maintainers and Architecture Committee get a chance to review the PR.
+It can be discussed in an AC meeting to get broader input.
+1. Once the PR has been merged, a Kata Containers admin should be notified
+to ensure that the GitHub UI is updated to reflect the change in
+`required-tests.yaml`.
 
 #### Expectation of required job maintainers
 
