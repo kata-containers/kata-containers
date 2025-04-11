@@ -5,6 +5,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+SCRIPT_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+# kata-deploy installs binaries in /opt/kata/bin by default, which is not in the PATH.
+# Add it to PATH to ensure commands like kata-monitor and kata-runtime can be executed.
+PATH="$SCRIPT_DIR:$PATH"
+
 typeset -r script_name=${0##*/}
 typeset -r runtime_name="@RUNTIME_NAME@"
 typeset -r runtime_path=$(command -v "$runtime_name" 2>/dev/null)
