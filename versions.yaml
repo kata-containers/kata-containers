@@ -360,6 +360,11 @@ externals:
       version: "edk2-stable202411"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
+    arm64:
+      description: "UEFI for arm64 virtual machines."
+      version: "edk2-stable202411"
+      package: "ArmVirtPkg/ArmVirtQemu.dsc"
+      package_output_dir: "ArmVirtQemu-AARCH64"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
