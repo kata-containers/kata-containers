@@ -35,7 +35,10 @@ EOF
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
 		if [ "$OS_VERSION" = "focal" ]; then
 			echo "WARN: multistrap failed, proceed with hack for Ubuntu 20.04"
-			build_dbus $rootfs_dir
+			build_dbus "$rootfs_dir"
+		elif [ "$OS_VERSION" = "noble" ]; then
+			echo "WARN: multistrap failed, proceed with hack for riscv-ubuntu 24.04"
+			build_dbus "$rootfs_dir"
 		else
 			echo "ERROR: multistrap failed, cannot proceed" && exit 1
 		fi
