@@ -26,14 +26,18 @@ pub struct ObjectMeta {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
 }
 
 impl ObjectMeta {
     pub fn get_name(&self) -> String {
         if let Some(name) = &self.name {
-            name.clone()
-        } else if self.generateName.is_some() {
-            "$(generated-name)".to_string()
+            format!("^{}$", regex::escape(name))
+        } else if let Some(generateName) = &self.generateName {
+            // https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-subdomain-names
+            format!("^{}[a-z0-9.-]*[a-z0-9]$", regex::escape(generateName))
         } else {
             String::new()
         }

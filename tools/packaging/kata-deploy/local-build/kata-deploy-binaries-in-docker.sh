@@ -98,10 +98,13 @@ SHIM_V2_CONTAINER_BUILDER="${SHIM_V2_CONTAINER_BUILDER:-}"
 TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}"
 TOOLS_CONTAINER_BUILDER="${TOOLS_CONTAINER_BUILDER:-}"
 VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}"
+AGENT_INIT="${AGENT_INIT:-no}"
 MEASURED_ROOTFS="${MEASURED_ROOTFS:-}"
-PULL_TYPE="${PULL_TYPE:-default}"
+PULL_TYPE="${PULL_TYPE:-guest-pull}"
 USE_CACHE="${USE_CACHE:-}"
 BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE:-}
+NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK:-}"
+KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 
 docker run \
 	-v $HOME/.docker:/root/.docker \
@@ -127,10 +130,13 @@ docker run \
 	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER}" \
 	--env TOOLS_CONTAINER_BUILDER="${TOOLS_CONTAINER_BUILDER}" \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER}" \
+	--env AGENT_INIT="${AGENT_INIT}" \
 	--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 	--env PULL_TYPE="${PULL_TYPE}" \
 	--env USE_CACHE="${USE_CACHE}" \
 	--env BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE}" \
+	--env NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK}" \
+	--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
@@ -139,7 +145,7 @@ docker run \
 	--env ARCH="${ARCH}" \
 	--rm \
 	-w ${script_dir} \
-	build-kata-deploy "${kata_deploy_create}" $@
+	build-kata-deploy "${kata_deploy_create}" "$@"
 
 if [ $remove_dot_docker_dir == true ]; then
 	rm -rf "$HOME/.docker"

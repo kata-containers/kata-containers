@@ -308,8 +308,8 @@ impl Volume for ShareFsVolume {
 }
 
 pub(crate) fn is_share_fs_volume(m: &oci::Mount) -> bool {
-    (get_mount_type(m.typ()).as_str() == "bind"
-        || get_mount_type(m.typ()).as_str() == mount::KATA_EPHEMERAL_VOLUME_TYPE)
+    let mount_type = get_mount_type(m);
+    (mount_type == "bind" || mount_type == mount::KATA_EPHEMERAL_VOLUME_TYPE)
         && !is_host_device(&get_mount_path(&Some(m.destination().clone())))
         && !is_system_mount(&get_mount_path(m.source()))
 }

@@ -9,10 +9,11 @@ use safe_path::scoped_join;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
+use image_rs::builder::ClientBuilder;
 use image_rs::image::ImageClient;
 use kata_sys_util::validate::verify_id;
 use oci_spec::runtime as oci;
@@ -20,6 +21,9 @@ use tokio::sync::Mutex;
 
 use crate::rpc::CONTAINER_BASE;
 use crate::AGENT_CONFIG;
+
+use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
+use protocols::agent::Storage;
 
 pub const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
@@ -54,15 +58,16 @@ pub struct ImageService {
 }
 
 impl ImageService {
-    pub fn new() -> Self {
-        let mut image_client = ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR));
+    pub async fn new() -> Result<Self> {
+        let mut image_client_builder =
+            ClientBuilder::default().work_dir(KATA_IMAGE_WORK_DIR.into());
         #[cfg(feature = "guest-pull")]
         {
             if !AGENT_CONFIG.image_registry_auth.is_empty() {
                 let registry_auth = &AGENT_CONFIG.image_registry_auth;
                 debug!(sl(), "Set registry auth file {:?}", registry_auth);
-                image_client.config.file_paths.auth_file = registry_auth.clone();
-                image_client.config.auth = true;
+                image_client_builder = image_client_builder
+                    .authenticated_registry_credentials_uri(registry_auth.into());
             }
 
             let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
@@ -70,15 +75,37 @@ impl ImageService {
                 sl(),
                 "Enable image signature verification: {:?}", enable_signature_verification
             );
-            image_client.config.security_validate = *enable_signature_verification;
-
-            if !AGENT_CONFIG.image_policy_file.is_empty() {
+            if !AGENT_CONFIG.image_policy_file.is_empty() && *enable_signature_verification {
                 let image_policy_file = &AGENT_CONFIG.image_policy_file;
-                debug!(sl(), "Use imagepolicy file {:?}", image_policy_file);
-                image_client.config.file_paths.policy_path = image_policy_file.clone();
+                debug!(sl(), "Use image policy file {:?}", image_policy_file);
+                image_client_builder =
+                    image_client_builder.image_security_policy_uri(image_policy_file.into());
             }
         }
-        Self { image_client }
+        let image_client = image_client_builder.build().await?;
+        Ok(Self { image_client })
+    }
+
+    /// get guest pause image process specification
+    fn get_pause_image_process() -> Result<oci::Process> {
+        let guest_pause_bundle = Path::new(KATA_PAUSE_BUNDLE);
+        if !guest_pause_bundle.exists() {
+            bail!("Pause image not present in rootfs");
+        }
+        let guest_pause_config = scoped_join(guest_pause_bundle, CONFIG_JSON)?;
+
+        let image_oci = oci::Spec::load(guest_pause_config.to_str().ok_or_else(|| {
+            anyhow!(
+                "Failed to load the guest pause image config from {:?}",
+                guest_pause_config
+            )
+        })?)
+        .context("load image config file")?;
+
+        let image_oci_process = image_oci.process().as_ref().ok_or_else(|| {
+            anyhow!("The guest pause image config does not contain a process specification. Please check the pause image.")
+        })?;
+        Ok(image_oci_process.clone())
     }
 
     /// pause image is packaged in rootfs
@@ -132,6 +159,20 @@ impl ImageService {
         Ok(pause_rootfs.display().to_string())
     }
 
+    /// check whether the image is for sandbox or for container.
+    fn is_sandbox(image_metadata: &HashMap<String, String>) -> bool {
+        let mut is_sandbox = false;
+        for key in K8S_CONTAINER_TYPE_KEYS.iter() {
+            if let Some(value) = image_metadata.get(key as &str) {
+                if value == "sandbox" {
+                    is_sandbox = true;
+                    break;
+                }
+            }
+        }
+        is_sandbox
+    }
+
     /// pull_image is used for call image-rs to pull image in the guest.
     /// # Parameters
     /// - `image`: Image name (exp: quay.io/prometheus/busybox:latest)
@@ -147,18 +188,7 @@ impl ImageService {
     ) -> Result<String> {
         info!(sl(), "image metadata: {image_metadata:?}");
 
-        //Check whether the image is for sandbox or for container.
-        let mut is_sandbox = false;
-        for key in K8S_CONTAINER_TYPE_KEYS.iter() {
-            if let Some(value) = image_metadata.get(key as &str) {
-                if value == "sandbox" {
-                    is_sandbox = true;
-                    break;
-                }
-            }
-        }
-
-        if is_sandbox {
+        if Self::is_sandbox(image_metadata) {
             let mount_path = Self::unpack_pause_image(cid)?;
             return Ok(mount_path);
         }
@@ -194,6 +224,32 @@ impl ImageService {
     }
 }
 
+/// get_process overrides the OCI process spec with pause image process spec if needed
+pub fn get_process(
+    ocip: &oci::Process,
+    oci: &oci::Spec,
+    storages: Vec<Storage>,
+) -> Result<oci::Process> {
+    let mut guest_pull = false;
+    for storage in storages {
+        if storage.driver == KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL {
+            guest_pull = true;
+            break;
+        }
+    }
+    if guest_pull {
+        match oci.annotations() {
+            Some(a) => {
+                if ImageService::is_sandbox(a) {
+                    return ImageService::get_pause_image_process();
+                }
+            }
+            None => {}
+        }
+    }
+    Ok(ocip.clone())
+}
+
 /// Set proxy environment from AGENT_CONFIG
 pub async fn set_proxy_env_vars() {
     if env::var("HTTPS_PROXY").is_err() {
@@ -222,9 +278,10 @@ pub async fn set_proxy_env_vars() {
 }
 
 /// Init the image service
-pub async fn init_image_service() {
-    let image_service = ImageService::new();
+pub async fn init_image_service() -> Result<()> {
+    let image_service = ImageService::new().await?;
     *IMAGE_SERVICE.lock().await = Some(image_service);
+    Ok(())
 }
 
 pub async fn pull_image(

@@ -166,12 +166,6 @@ impl ConfigPlugin for DragonballConfig {
                 return Err(eother!("dragonball hypervisor does not support pflashes"));
             }
 
-            if db.memory_info.enable_guest_swap {
-                return Err(eother!(
-                    "dragonball hypervisor doesn't support enable_guest_swap"
-                ));
-            }
-
             if db.security_info.rootless {
                 return Err(eother!(
                     "dragonball hypervisor does not support rootless mode"

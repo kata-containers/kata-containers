@@ -5,6 +5,7 @@
 //
 
 use std::{
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -177,6 +178,7 @@ pub struct HostDevice {
     pub guest_pci_path: Option<PciPath>,
 
     /// vfio_vendor for vendor's some special cases.
+    #[allow(unexpected_cfgs)]
     #[cfg(feature = "enable-vendor")]
     pub vfio_vendor: VfioVendor,
 }
@@ -438,7 +440,7 @@ impl VfioDevice {
             let mut hostdev: HostDevice = self
                 .set_vfio_config(iommu_devs_path.clone(), device)
                 .context("set vfio config failed")?;
-            let dev_prefix = self.get_vfio_prefix();
+            let dev_prefix = format!("{}_{}", self.get_vfio_prefix(), &vfio_group);
             hostdev.hostdev_id = make_device_nameid(&dev_prefix, index, MAX_DEV_ID_SIZE);
 
             self.devices.push(hostdev);
@@ -560,11 +562,8 @@ impl PCIeDevice for VfioDevice {
             ))?;
             hostdev.guest_pci_path = Some(pci_path.clone());
 
-            self.device_options.push(format!(
-                "0000:{}={}",
-                hostdev.bus_slot_func,
-                pci_path.to_string()
-            ));
+            self.device_options
+                .push(format!("0000:{}={}", hostdev.bus_slot_func, pci_path));
         }
 
         Ok(())
@@ -761,14 +760,21 @@ pub fn get_vfio_iommu_group(bdf: String) -> Result<String> {
     let iommugrp_symlink = fs::read_link(&iommugrp_path)
         .map_err(|e| anyhow!("read iommu group symlink failed {:?}", e))?;
 
-    // get base name from iommu group symlink: X
-    let iommu_group = get_base_name(iommugrp_symlink)?
-        .into_string()
-        .map_err(|e| anyhow!("failed to get iommu group {:?}", e))?;
+    // Just get base name from iommu group symlink is enough as it will be checked
+    // within the full path /sys/kernel/iommu_groups/$iommu_group in the subsequent step.
+    let iommu_group = iommugrp_symlink
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| {
+            anyhow!(
+                "failed to get iommu group with symlink {:?}",
+                iommugrp_symlink
+            )
+        })?;
 
     // we'd better verify the path to ensure it dose exist.
     if !Path::new(SYS_KERN_IOMMU_GROUPS)
-        .join(&iommu_group)
+        .join(iommu_group)
         .join("devices")
         .join(dbdf.as_str())
         .exists()

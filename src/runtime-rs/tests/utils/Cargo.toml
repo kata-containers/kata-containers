@@ -10,4 +10,6 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "^1.0"
 rand = "0.8.4"
-kata-types = { path = "../../../libs/kata-types" }
+
+# Local dependencies
+kata-types = { workspace = true }

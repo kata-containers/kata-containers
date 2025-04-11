@@ -11,11 +11,11 @@ use crate::policy;
 use crate::utils::Config;
 use crate::verity;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use fs2::FileExt;
 use log::{debug, info, warn, LevelFilter};
-use oci_distribution::{
+use oci_client::{
     client::{linux_amd64_resolver, ClientConfig, ClientProtocol},
     manifest,
     secrets::RegistryAuth,
@@ -32,6 +32,7 @@ use tokio::io::AsyncWriteExt;
 /// Container image properties obtained from an OCI repository.
 #[derive(Clone, Debug, Default)]
 pub struct Container {
+    #[allow(dead_code)]
     pub image: String,
     pub config_layer: DockerConfigLayer,
     pub image_layers: Vec<ImageLayer>,
@@ -158,7 +159,7 @@ impl Container {
                     image_layers,
                 })
             }
-            Err(oci_distribution::errors::OciDistributionError::AuthenticationFailure(message)) => {
+            Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
                 panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
             }
             Err(e) => {
@@ -440,7 +441,7 @@ async fn get_verity_and_users(
         if let Some(path) = layers_cache_file_path.as_ref() {
             std::fs::remove_file(path)?;
         }
-        warn!("{error_message}");
+        bail!(error_message);
     }
     Ok((verity_hash, passwd))
 }

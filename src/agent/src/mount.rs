@@ -299,7 +299,13 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")
+    // cgroupsV2 will automatically enable memory.use_hierarchy.
+    // additinoally this directory layout is not present in cgroupsV2.
+    if !unified_cgroup_hierarchy {
+        return online_device("/sys/fs/cgroup/memory/memory.use_hierarchy");
+    }
+
+    Ok(())
 }
 
 #[instrument]
@@ -531,6 +537,7 @@ mod tests {
 
         OpenOptions::new()
             .create(true)
+            .truncate(true)
             .write(true)
             .open(test_file_filename)
             .expect("failed to create test file");

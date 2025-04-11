@@ -154,13 +154,13 @@ test_pod_policy_error() {
 
 @test "Policy failure: unexpected hostPath volume mount" {
 	# Changing the pod spec after generating its policy will cause CreateContainer to be denied.
-  yq -i \
-    '.spec.containers[0].volumeMounts += [{"name": "mountpoint-dir", "mountPath": "/var/lib/kubelet/pods"}]' \
-    "${incorrect_pod_yaml}"
+	yq -i \
+		'.spec.containers[0].volumeMounts += [{"name": "mountpoint-dir", "mountPath": "/hostpath-volume"}]' \
+		"${incorrect_pod_yaml}"
 
-  yq -i \
-    '.spec.volumes += [{"hostPath": {"path": "/var/lib/kubelet/pods", "type": "DirectoryOrCreate"}, "name": "mountpoint-dir"}]' \
-    "${incorrect_pod_yaml}"
+	yq -i \
+		'.spec.volumes += [{"hostPath": {"path": "/tmp/k8s-policy-pod-test", "type": "DirectoryOrCreate"}, "name": "mountpoint-dir"}]' \
+		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
 }

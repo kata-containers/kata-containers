@@ -33,12 +33,15 @@ else
 	# we need run k8s-guest-pull-image.bats test first, otherwise the test result will be affected
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
-	K8S_TEST_SMALL_HOST_UNION=( \
+	K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION=( \
 		"k8s-guest-pull-image-encrypted.bats" \
-		"k8s-guest-pull-image.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
 		"k8s-confidential-attestation.bats" \
+	)
+
+	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
@@ -71,6 +74,7 @@ else
 		"k8s-policy-hard-coded.bats" \
 		"k8s-policy-deployment.bats" \
 		"k8s-policy-job.bats" \
+		"k8s-policy-logs.bats" \
 		"k8s-policy-pod.bats" \
 		"k8s-policy-pvc.bats" \
 		"k8s-policy-rc.bats" \
@@ -86,15 +90,6 @@ else
 		"k8s-nginx-connectivity.bats" \
 	)
 
-	# When testing auto-generated policy, the genpolicy tool:
-	# - Is able to pull this older format container image by pulling through containerd.
-	# - Fails to pull the same container image by using the oci_distribution crate.
-	# Pulling through containerd might not be practical for all users, so both pulling
-	# methods are supported for most container images.
-	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
-		K8S_TEST_SMALL_HOST_UNION+=("k8s-pod-manifest-v1.bats")
-	fi
-
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \
@@ -104,14 +99,19 @@ else
 
 	case ${K8S_TEST_HOST_TYPE} in
 		small)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
 			;;
 		normal)
 			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
 		all|baremetal)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			;;
+		baremetal-attestation)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]})
+			;;
+		baremetal-no-attestation)
 			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
-
 			;;
 		*)
 			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
@@ -132,8 +132,9 @@ ensure_yq
 info "Running tests with bats version: $(bats --version)"
 
 tests_fail=()
-for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
+for K8S_TEST_ENTRY in "${K8S_TEST_UNION[@]}"
 do
+	K8S_TEST_ENTRY=$(echo "$K8S_TEST_ENTRY" | tr -d '[:space:][:cntrl:]')
 	info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
 	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"; then

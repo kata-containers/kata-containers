@@ -461,9 +461,13 @@ type HypervisorConfig struct {
 	// The user maps to the uid.
 	User string
 
-	// The path to the file containing the AMD SEV-SNP certificate chain
-	// (including VCEK/VLEK certificates).
-	SnpCertsPath string
+	// SnpIdBlock is the 96-byte, base64-encoded blob to provide the ‘ID Block’ structure
+	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
+	SnpIdBlock string
+
+	// SnpIdAuth is the 4096-byte, base64-encoded blob to provide the ‘ID Authentication Information Structure’
+	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
+	SnpIdAuth string
 
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
@@ -600,6 +604,10 @@ type HypervisorConfig struct {
 	// Debug changes the default hypervisor and kernel parameters to
 	// enable debug output where available.
 	Debug bool
+
+	// HypervisorLoglevel determines the level of logging emitted
+	// from the hypervisor. Accepts values 0-3.
+	HypervisorLoglevel uint32
 
 	// MemPrealloc specifies if the memory should be pre-allocated
 	MemPrealloc bool

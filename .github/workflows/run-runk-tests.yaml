@@ -15,6 +15,8 @@ on:
 
 jobs:
   run-runk:
+    # Skip runk tests as we have no maintainers. TODO: Decide when to remove altogether
+    if: false
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: lts

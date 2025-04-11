@@ -114,8 +114,6 @@ func (q *qemuS390x) appendConsole(ctx context.Context, devices []govmmQemu.Devic
 		return devices, fmt.Errorf("Failed to append console %v", err)
 	}
 
-	q.kernelParams = append(q.kernelParams, Param{"console", "ttysclp0"})
-
 	serial := govmmQemu.SerialDevice{
 		Driver:        virtioSerialCCW,
 		ID:            id,
@@ -302,6 +300,15 @@ func (q *qemuS390x) appendVSock(ctx context.Context, devices []govmmQemu.Device,
 
 func (q *qemuS390x) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
 	return devices, fmt.Errorf("S390x does not support appending a vIOMMU")
+}
+
+func (q *qemuS390x) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error {
+	ccwDev, err := types.CcwDeviceFrom(bridgeAddr, devAddr)
+	if err != nil {
+		return err
+	}
+	endpoint.SetCcwDevice(ccwDev)
+	return nil
 }
 
 func (q *qemuS390x) addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error) {

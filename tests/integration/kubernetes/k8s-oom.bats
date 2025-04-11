@@ -9,8 +9,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HOST_OS}" == "cbl-mariner" ] && skip "test not working see: see #8821"
-
 	pod_name="pod-oom"
 	get_pod_config_dir
 
@@ -34,8 +32,6 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HOST_OS}" == "cbl-mariner" ] && skip "test not working see: see #8821"
-
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 	kubectl get "pod/$pod_name" -o yaml

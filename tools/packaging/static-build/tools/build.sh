@@ -20,6 +20,7 @@ container_image="${TOOLS_CONTAINER_BUILDER:-$(get_tools_image_name)}"
 
 docker pull ${container_image} || \
 	(docker $BUILDX build $PLATFORM \
+	    	--build-arg GO_TOOLCHAIN="$(get_from_kata_deps ".languages.golang.meta.newest-version")" \
 	    	--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"

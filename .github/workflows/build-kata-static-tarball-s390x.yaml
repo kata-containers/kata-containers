@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -67,7 +67,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -87,7 +87,7 @@ jobs:
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
       # for pushing attestations to the registry
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           registry: ghcr.io
@@ -102,7 +102,6 @@ jobs:
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ inputs.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
@@ -123,7 +122,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -154,7 +153,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -205,7 +204,7 @@ jobs:
           make boot-image-se-tarball
           build_dir=$(readlink -f build)
           sudo cp -r "${build_dir}" "kata-build"
-          sudo chown -R $(id -u):$(id -g) "kata-build"
+          sudo chown -R "$(id -u)":"$(id -g)" "kata-build"
         env:
           HKD_PATH: "host-key-document"
 
@@ -217,13 +216,29 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
+  remove-rootfs-binary-artifacts:
+    runs-on: ubuntu-22.04
+    needs: [build-asset-rootfs, build-asset-boot-image-se]
+    strategy:
+      matrix:
+        asset:
+          - agent
+          - coco-guest-components
+          - pause-image
+    steps:
+      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
+        if: ${{ inputs.stage == 'release' }}
+        with:
+          name: kata-artifacts-s390x-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+
   build-asset-shim-v2:
     runs-on: s390x
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -254,7 +269,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
           KATA_ASSET: shim-v2
           TAR_OUTPUT: shim-v2.tar.gz
@@ -264,7 +279,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
-          MEASURED_ROOTFS: yes
+          MEASURED_ROOTFS: no
 
       - name: store-artifact shim-v2
         uses: actions/upload-artifact@v4
@@ -276,7 +291,11 @@ jobs:
 
   create-kata-tarball:
     runs-on: s390x
-    needs: [build-asset, build-asset-rootfs, build-asset-boot-image-se, build-asset-shim-v2]
+    needs:
+      - build-asset
+      - build-asset-rootfs
+      - build-asset-boot-image-se
+      - build-asset-shim-v2
     steps:
       - uses: actions/checkout@v4
         with:

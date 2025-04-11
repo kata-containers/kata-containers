@@ -499,7 +499,7 @@ pub struct DeviceInfo {
     ///
     /// Enabling this will result in the VM balloon device having f_reporting=on set
     #[serde(default)]
-    pub enable_balloon_f_reporting: bool,
+    pub reclaim_guest_freed_memory: bool,
 }
 
 impl DeviceInfo {
@@ -708,24 +708,39 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_virtio_mem: bool,
 
-    /// Enable swap of vm memory. Default false.
-    ///
-    /// The behaviour is undefined if mem_prealloc is also set to true
-    #[serde(default)]
-    pub enable_swap: bool,
-
     /// Enable swap in the guest. Default false.
     ///
-    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device if the
-    /// swappiness of a container (set by annotation "io.katacontainers.container.resource.swappiness")
-    /// is bigger than 0.
-    ///
-    /// The size of the swap device should be swap_in_bytes (set by annotation
-    /// "io.katacontainers.container.resource.swap_in_bytes") - memory_limit_in_bytes.
-    /// If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
-    /// If swap_in_bytes and memory_limit_in_bytes is not set, the size should be default_memory.
+    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
     #[serde(default)]
     pub enable_guest_swap: bool,
+
+    /// If enable_guest_swap is enabled, the swap device will be created in the guest
+    /// at this path. Default "/run/kata-containers/swap".
+    #[serde(default = "default_guest_swap_path")]
+    pub guest_swap_path: String,
+
+    /// The percentage of the total memory to be used as swap device.
+    /// Default 100.
+    #[serde(default = "default_guest_swap_size_percent")]
+    pub guest_swap_size_percent: u64,
+
+    /// The threshold in seconds to create swap device in the guest.
+    /// Kata will wait guest_swap_create_threshold_secs seconds before creating swap device.
+    /// Default 60.
+    #[serde(default = "default_guest_swap_create_threshold_secs")]
+    pub guest_swap_create_threshold_secs: u64,
+}
+
+fn default_guest_swap_size_percent() -> u64 {
+    100
+}
+
+fn default_guest_swap_path() -> String {
+    "/run/kata-containers/swap".to_string()
+}
+
+fn default_guest_swap_create_threshold_secs() -> u64 {
+    60
 }
 
 impl MemoryInfo {
@@ -830,6 +845,10 @@ pub struct SecurityInfo {
     /// possible one.
     #[serde(default)]
     pub confidential_guest: bool,
+
+    /// If false prefer SEV even if SEV-SNP is also available
+    #[serde(default)]
+    pub sev_snp_guest: bool,
 
     /// Path to OCI hook binaries in the *guest rootfs*.
     ///

@@ -446,8 +446,6 @@ pub struct VmConfig {
     pub numa: Option<Vec<NumaConfig>>,
     #[serde(default)]
     pub watchdog: bool,
-    #[cfg(feature = "guest_debug")]
-    pub gdb: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub platform: Option<PlatformConfig>,
 }
@@ -510,7 +508,7 @@ pub fn guest_protection_is_tdx(guest_protection_to_use: GuestProtection) -> bool
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::TDXDetails;
+    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
 
     #[test]
     fn test_guest_protection_is_tdx() {
@@ -518,6 +516,8 @@ mod tests {
             major_version: 1,
             minor_version: 0,
         };
+
+        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
 
         #[derive(Debug)]
         struct TestData {
@@ -539,11 +539,11 @@ mod tests {
                 result: false,
             },
             TestData {
-                protection: GuestProtection::Sev,
+                protection: GuestProtection::Sev(sev_snp_details.clone()),
                 result: false,
             },
             TestData {
-                protection: GuestProtection::Snp,
+                protection: GuestProtection::Snp(sev_snp_details.clone()),
                 result: false,
             },
             TestData {

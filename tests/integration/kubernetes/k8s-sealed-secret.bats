@@ -15,7 +15,9 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 export AA_KBC="${AA_KBC:-cc_kbc}"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
+	if ! is_confidential_runtime_class; then
+		skip "Test not supported for ${KATA_HYPERVISOR}."
+	fi
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
@@ -64,12 +66,14 @@ setup() {
 	# "provider_settings": {},
 	# "annotations": {}
 	# }
-	kubectl create secret generic sealed-secret --from-literal='secret=sealed.fakejwsheader.ewogICAgInZlcnNpb24iOiAiMC4xLjAiLAogICAgInR5cGUiOiAidmF1bHQiLAogICAgIm5hbWUiOiAia2JzOi8vL2RlZmF1bHQvc2VhbGVkLXNlY3JldC90ZXN0IiwKICAgICJwcm92aWRlciI6ICJrYnMiLAogICAgInByb3ZpZGVyX3NldHRpbmdzIjoge30sCiAgICAiYW5ub3RhdGlvbnMiOiB7fQp9Cg==.fakesignature'
+	kubectl create secret generic sealed-secret --from-literal='secret=sealed.fakejwsheader.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvc2VhbGVkLXNlY3JldC90ZXN0IiwicHJvdmlkZXIiOiJrYnMiLCJwcm92aWRlcl9zZXR0aW5ncyI6e30sImFubm90YXRpb25zIjp7fX0.fakesignature'
 
 	kubectl create secret generic not-sealed-secret --from-literal='secret=not_sealed_secret'
 
 	if ! is_confidential_hardware; then
 		kbs_set_allow_all_resources
+	else
+		kbs_set_default_policy
 	fi
 }
 
@@ -103,7 +107,9 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
+	if ! is_confidential_runtime_class; then
+		skip "Test not supported for ${KATA_HYPERVISOR}."
+	fi
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"

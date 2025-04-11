@@ -62,6 +62,7 @@ func testCreateSandbox(t *testing.T, id string,
 		Volumes:          volumes,
 		Containers:       containers,
 		Annotations:      sandboxAnnotations,
+		VfioMode:         config.VFIOModeGuestKernel,
 	}
 
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)

@@ -2,25 +2,25 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    run: php-apache-kata-qemu
-  name: php-apache-kata-qemu
+    run: prometheus-kata-qemu
+  name: prometheus-kata-qemu
 spec:
   replicas: 1
   selector:
     matchLabels:
-      run: php-apache-kata-qemu
+      run: prometheus-kata-qemu
   template:
     metadata:
       labels:
-        run: php-apache-kata-qemu
+        run: prometheus-kata-qemu
     spec:
       runtimeClassName: kata-qemu
       containers:
-      - image: registry.k8s.io/hpa-example
+      - image: quay.io/prometheus/prometheus
         imagePullPolicy: Always
-        name: php-apache
+        name: prometheus
         ports:
-        - containerPort: 80
+        - containerPort: 8080
           protocol: TCP
         resources:
           requests:
@@ -30,13 +30,13 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: php-apache-kata-qemu
+  name: prometheus-kata-qemu
 spec:
   ports:
   - port: 80
     protocol: TCP
-    targetPort: 80
+    targetPort: 8080
   selector:
-    run: php-apache-kata-qemu
+    run: prometheus-kata-qemu
   sessionAffinity: None
   type: ClusterIP

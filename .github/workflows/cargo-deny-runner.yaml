@@ -24,7 +24,7 @@ jobs:
         run: bash cargo-deny-generator.sh
         working-directory: ./.github/cargo-deny-composite-action/
         env:
-          GOPATH: ${{ runner.workspace }}/kata-containers
+          GOPATH: ${{ github.workspace }}/kata-containers
       - name: Run Action
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: ./.github/cargo-deny-composite-action

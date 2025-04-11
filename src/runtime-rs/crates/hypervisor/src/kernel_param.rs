@@ -118,9 +118,13 @@ impl KernelParams {
         self.params.append(&mut params.params);
     }
 
-    #[cfg(not(target_arch = "s390x"))]
     pub(crate) fn push(&mut self, new_param: Param) {
         self.params.push(new_param);
+    }
+
+    pub(crate) fn remove_all_by_key(&mut self, key: String) {
+        // Remove all params with the given key from the vector
+        self.params.retain(|param| param.key != key);
     }
 
     pub(crate) fn from_string(params_string: &str) -> Self {

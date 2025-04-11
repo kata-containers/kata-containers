@@ -205,6 +205,11 @@ block_device_driver = "virtio-blk"
 # Default false
 #enable_debug = true
 
+# This option specifies the loglevel of the hypervisor
+#
+# Default 1
+#hypervisor_loglevel = 1
+
 # Enable hot-plugging of VFIO devices to a root-port.
 # The default setting is  "no-port"
 #hot_plug_vfio = "root-port"

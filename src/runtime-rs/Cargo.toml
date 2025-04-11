@@ -1,6 +1,42 @@
 [workspace]
 members = [
+    "crates/agent",
+    "crates/hypervisor",
+    "crates/persist",
+    "crates/resource",
+    "crates/runtimes",
+    "crates/service",
     "crates/shim",
     "crates/shim-ctl",
+
+    "tests/utils",
 ]
 
+[workspace.dependencies]
+agent = { path = "crates/agent" }
+hypervisor = { path = "crates/hypervisor" }
+persist = { path = "crates/persist"}
+resource = { path = "crates/resource" }
+runtimes = { path = "crates/runtimes" }
+service = { path = "crates/service" }
+tests_utils = { path = "tests/utils" }
+
+ch-config = { path = "crates/hypervisor/ch-config" }
+common = { path = "crates/runtimes/common" }
+linux_container = { path = "crates/runtimes/linux_container" }
+virt_container = { path = "crates/runtimes/virt_container" }
+wasm_container = { path = "crates/runtimes/wasm_container" }
+
+# Local dependencies from `src/libs`
+kata-sys-util = { path = "../libs/kata-sys-util"}
+kata-types = { path = "../libs/kata-types"}
+logging = { path = "../libs/logging"}
+protocols = { path = "../libs/protocols", features=["async"] }
+runtime-spec = { path = "../libs/runtime-spec" }
+safe-path = { path = "../libs/safe-path"}
+shim-interface = { path = "../libs/shim-interface" }
+test-utils = { path = "../libs/test-utils" }
+
+# Local dependencies from `src/dragonball`
+dragonball = { path = "../dragonball" }
+dbs-utils = { path = "../dragonball/dbs_utils" }

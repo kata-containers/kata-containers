@@ -33,7 +33,7 @@ use std::io::Write;
 /// Intermediary format of policy data.
 pub struct AgentPolicy {
     /// K8s resources described by the input YAML file.
-    resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
+    pub resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
 
     /// K8s ConfigMap resources described by an additional input YAML file
     /// or by the "main" input YAML file, containing additional pod settings.
@@ -180,14 +180,20 @@ pub struct KataLinux {
     pub Namespaces: Vec<KataLinuxNamespace>,
 
     /// MaskedPaths masks over the provided paths inside the container.
+    #[serde(default)]
     pub MaskedPaths: Vec<String>,
 
     /// ReadonlyPaths sets the provided paths as RO inside the container.
+    #[serde(default)]
     pub ReadonlyPaths: Vec<String>,
 
     /// Devices contains devices to be created inside the container.
     #[serde(default)]
     pub Devices: Vec<KataLinuxDevice>,
+
+    /// Sysctls contains sysctls to be applied inside the container.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub Sysctl: BTreeMap<String, String>,
 }
 
 /// OCI container LinuxNamespace struct. This struct is similar to the LinuxNamespace
@@ -328,6 +334,29 @@ pub struct ExecProcessRequestDefaults {
     regex: Vec<String>,
 }
 
+/// UpdateRoutesRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateRoutesRequestDefaults {
+    /// Forbid adding routes to devices of these names.
+    forbidden_device_names: Vec<String>,
+
+    /// Forbid adding routes originating from these addresses.
+    forbidden_source_regex: Vec<String>,
+}
+
+/// UpdateInterfaceRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateInterfaceRequestDefaults {
+    /// Raw flag bitmask explicitly allowed to configure
+    allow_raw_flags: u32,
+
+    /// Explicitly blocked interface names. Intent is to block changes to loopback interface.
+    forbidden_names: Vec<String>,
+
+    /// Explicitly blocked mac addresses. Intent is to block changes to loopback interface.
+    forbidden_hw_addrs: Vec<String>,
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -340,6 +369,12 @@ pub struct RequestDefaults {
 
     /// Commands allowed to be executed by the Host in all Guest containers.
     pub ExecProcessRequest: ExecProcessRequestDefaults,
+
+    /// Allow the host to update routes for devices other than the loopback.
+    pub UpdateRoutesRequest: UpdateRoutesRequestDefaults,
+
+    /// Allow the host to configure only used raw_flags and reject names/mac addresses of the loopback.
+    pub UpdateInterfaceRequest: UpdateInterfaceRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,
@@ -388,8 +423,6 @@ pub struct CommonData {
 /// Configuration from "kubectl config".
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
-    default_namespace: String,
-
     /// Pause container image reference.
     pub pause_container_image: String,
 }
@@ -532,15 +565,7 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = match resource.get_namespace() {
-            Some(ns) if !ns.is_empty() => ns,
-            _ => self
-                .config
-                .settings
-                .cluster_config
-                .default_namespace
-                .clone(),
-        };
+        let namespace = resource.get_namespace().unwrap_or_default();
 
         let use_host_network = resource.use_host_network();
         let annotations = get_container_annotations(
@@ -614,6 +639,11 @@ impl AgentPolicy {
         }
         for default_device in &c_settings.Linux.Devices {
             linux.Devices.push(default_device.clone())
+        }
+
+        linux.Sysctl.extend(c_settings.Linux.Sysctl.clone());
+        for sysctl in resource.get_sysctls() {
+            linux.Sysctl.insert(sysctl.name, sysctl.value);
         }
 
         ContainerPolicy {

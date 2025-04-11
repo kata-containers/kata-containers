@@ -18,6 +18,7 @@ type VfioEndpoint struct {
 	EndpointType       EndpointType
 	HostBDF            string
 	PCIPath            vcTypes.PciPath
+	CCWDevice          *vcTypes.CcwDevice
 	Iface              NetworkInterface
 	EndpointProperties NetworkInfo
 }
@@ -62,6 +63,16 @@ func (endpoint *VfioEndpoint) SetProperties(info NetworkInfo) {
 // SetPciPath sets the PCI path of the endpoint.
 func (endpoint *VfioEndpoint) SetPciPath(path vcTypes.PciPath) {
 	endpoint.PCIPath = path
+}
+
+// CcwDevice returns the CCW device of the endpoint.
+func (endpoint *VfioEndpoint) CcwDevice() *vcTypes.CcwDevice {
+	return endpoint.CCWDevice
+}
+
+// SetCcwDevice sets the CCW device of the endpoint.
+func (endpoint *VfioEndpoint) SetCcwDevice(ccwDev vcTypes.CcwDevice) {
+	endpoint.CCWDevice = &ccwDev
 }
 
 // Attach for VFIO endpoint

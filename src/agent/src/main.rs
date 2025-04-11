@@ -134,7 +134,7 @@ lazy_static! {
 
 #[cfg(feature = "agent-policy")]
 lazy_static! {
-    static ref AGENT_POLICY: Mutex<policy::AgentPolicy> = Mutex::new(AgentPolicy::new());
+    static ref AGENT_POLICY: Mutex<AgentPolicy> = Mutex::new(AgentPolicy::new());
 }
 
 #[derive(Parser)]
@@ -228,8 +228,9 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         })?;
 
         lazy_static::initialize(&AGENT_CONFIG);
+        let cgroup_v2 = AGENT_CONFIG.unified_cgroup_hierarchy || AGENT_CONFIG.cgroup_no_v1 == "all";
 
-        init_agent_as_init(&logger, AGENT_CONFIG.unified_cgroup_hierarchy)?;
+        init_agent_as_init(&logger, cgroup_v2)?;
         drop(logger_async_guard);
     } else {
         lazy_static::initialize(&AGENT_CONFIG);
@@ -428,8 +429,23 @@ async fn start_sandbox(
         init_attestation_components(logger, config).await?;
     }
 
+    let mut oma = None;
+    let mut _ort = None;
+    if let Some(c) = &config.mem_agent {
+        let (ma, rt) =
+            mem_agent::agent::MemAgent::new(c.memcg_config.clone(), c.compact_config.clone())
+                .map_err(|e| {
+                    error!(logger, "MemAgent::new fail: {}", e);
+                    e
+                })
+                .context("start mem-agent")?;
+        oma = Some(ma);
+        _ort = Some(rt);
+    }
+
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
+    let mut server =
+        rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode, oma).await?;
 
     server.start().await?;
 
@@ -519,14 +535,13 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
 async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
     launch_guest_component_procs(logger, config).await?;
 
-    fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
-    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
-
-    // If a CDH socket exists, initialize the CDH client
+    // If a CDH socket exists, initialize the CDH client and enable ocicrypt
     match tokio::fs::metadata(CDH_SOCKET).await {
         Ok(md) => {
             if md.file_type().is_socket() {
                 cdh::init_cdh_client(CDH_SOCKET_URI).await?;
+                fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
+                env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
             } else {
                 debug!(logger, "File {} is not a socket", CDH_SOCKET);
             }
@@ -618,7 +633,15 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 
 #[cfg(feature = "agent-policy")]
 async fn initialize_policy() -> Result<()> {
-    AGENT_POLICY.lock().await.initialize().await
+    AGENT_POLICY
+        .lock()
+        .await
+        .initialize(
+            AGENT_CONFIG.log_level.as_usize(),
+            AGENT_CONFIG.policy_file.clone(),
+            None,
+        )
+        .await
 }
 
 // The Rust standard library had suppressed the default SIGPIPE behavior,
@@ -636,7 +659,7 @@ use crate::config::AgentConfig;
 use std::os::unix::io::{FromRawFd, RawFd};
 
 #[cfg(feature = "agent-policy")]
-use crate::policy::AgentPolicy;
+use kata_agent_policy::policy::AgentPolicy;
 
 #[cfg(test)]
 mod tests {

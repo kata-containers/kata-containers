@@ -100,6 +100,7 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
 
 // add writes the mount info (json string) of a direct volume into a filesystem path known to Kata Containers.
 pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
+    fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)?;
     let mount_info_dir_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
 
     // create directory if missing

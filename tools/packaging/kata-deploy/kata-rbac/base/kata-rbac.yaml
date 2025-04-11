@@ -16,6 +16,9 @@ rules:
 - apiGroups: ["node.k8s.io"]
   resources: ["runtimeclasses"]
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets"]
+  verbs: ["list"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

@@ -6,8 +6,9 @@
 use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
 use crate::{
-    hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
-    VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState,
+    utils::enter_netns, HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice,
+    HYPERVISOR_QEMU,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -109,6 +110,10 @@ impl QemuInner {
                         "ccw" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
+                            block_dev
+                                .config
+                                .is_direct
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                         )?,
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
@@ -124,6 +129,22 @@ impl QemuInner {
                         network.config.guest_mac.clone().unwrap(),
                     )?;
                 }
+                DeviceType::Protection(prot_dev) => match &prot_dev.config {
+                    ProtectionDeviceConfig::SevSnp(sev_snp_cfg) => {
+                        if sev_snp_cfg.is_snp {
+                            cmdline.add_sev_snp_protection_device(
+                                sev_snp_cfg.cbitpos,
+                                &sev_snp_cfg.firmware,
+                            )
+                        } else {
+                            cmdline.add_sev_protection_device(
+                                sev_snp_cfg.cbitpos,
+                                &sev_snp_cfg.firmware,
+                            )
+                        }
+                    }
+                    ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),
+                },
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
         }
@@ -572,6 +593,7 @@ impl QemuInner {
                     &self.config,
                     &network_device.config.host_dev_name,
                     network_device.config.guest_mac.clone().unwrap(),
+                    &mut None,
                 )?;
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?
             }

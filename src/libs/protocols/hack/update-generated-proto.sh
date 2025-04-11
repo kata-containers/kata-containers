@@ -94,14 +94,14 @@ target=$1
 # compile all proto files
 if [ "$target" = "all" ]; then
     # compile all proto files
-    for f in ${proto_files_list[@]}; do
+    for f in "${proto_files_list[@]}"; do
         echo -e "\n   [golang] compiling ${f} ..."
         generate_go_sources $f
         echo -e "   [golang] ${f} compiled\n"
     done
 else
     # compile individual proto file
-    for f in ${proto_files_list[@]}; do
+    for f in "${proto_files_list[@]}"; do
         if [ "$target" = "$f" ]; then
             echo -e "\n   [golang] compiling ${target} ..."
             generate_go_sources $target

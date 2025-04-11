@@ -8,10 +8,9 @@ mod tests {
         Annotation, KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CFG_AGENT_TRACE,
         KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP, KATA_ANNO_CFG_ENABLE_PPROF,
         KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
-        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_CTLPATH,
-        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
-        KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES,
-        KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP,
+        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY,
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP,
+        KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
         KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
         KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH,
         KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC,
@@ -105,10 +104,6 @@ mod tests {
             "false".to_string(),
         );
         anno_hash.insert(
-            KATA_ANNO_CFG_HYPERVISOR_CTLPATH.to_string(),
-            "./jvm".to_string(),
-        );
-        anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS.to_string(),
             "12".to_string(),
         );
@@ -127,10 +122,6 @@ mod tests {
         );
         anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS.to_string(),
-            "false".to_string(),
-        );
-        anno_hash.insert(
-            KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP.to_string(),
             "false".to_string(),
         );
         anno_hash.insert(
@@ -195,13 +186,11 @@ mod tests {
                 "./test_hypervisor_hook_path"
             );
             assert!(!hv.memory_info.enable_mem_prealloc);
-            assert_eq!(hv.ctlpath, "./jvm".to_string());
             assert_eq!(hv.cpu_info.default_vcpus, 12);
             assert!(!hv.memory_info.enable_guest_swap);
             assert_eq!(hv.memory_info.default_memory, 100);
             assert!(!hv.enable_iothreads);
             assert!(!hv.enable_iothreads);
-            assert!(!hv.memory_info.enable_swap);
             assert_eq!(
                 hv.memory_info.file_mem_backend,
                 "./test_file_backend_mem_root"

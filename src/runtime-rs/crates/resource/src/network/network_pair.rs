@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{convert::TryFrom, sync::Arc, usize};
+use std::{convert::TryFrom, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use futures::stream::TryStreamExt;
@@ -157,7 +157,7 @@ pub async fn create_link(
         handle
             .link()
             .set(base.index)
-            .master(base.master_index)
+            .controller(base.master_index)
             .execute()
             .await
             .context("set index")?;

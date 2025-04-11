@@ -123,7 +123,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		if containerType == vc.SingleContainer {
 			_, err = config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
 			if err != nil {
-				return nil, fmt.Errorf("adding CDI devices failed")
+				return nil, fmt.Errorf("adding CDI devices failed: %w", err)
 			}
 		}
 

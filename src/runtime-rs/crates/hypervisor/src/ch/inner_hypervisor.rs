@@ -117,11 +117,7 @@ impl CloudHypervisorInner {
     }
 
     async fn get_kernel_params(&self) -> Result<String> {
-        let cfg = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?;
+        let cfg = &self.config;
 
         let enable_debug = cfg.debug_info.enable_debug;
 
@@ -200,15 +196,10 @@ impl CloudHypervisorInner {
 
         let vsock_socket_path = get_vsock_path(&self.id)?;
 
-        let hypervisor_config = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?;
-
         debug!(
             sl!(),
-            "generic Hypervisor configuration: {:?}", hypervisor_config
+            "generic Hypervisor configuration: {:?}",
+            self.config.clone()
         );
 
         let kernel_params = self.get_kernel_params().await?;
@@ -217,7 +208,7 @@ impl CloudHypervisorInner {
             kernel_params,
             sandbox_path,
             vsock_socket_path,
-            cfg: hypervisor_config.clone(),
+            cfg: self.config.clone(),
             guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
             network_devices,
@@ -324,11 +315,7 @@ impl CloudHypervisorInner {
     async fn cloud_hypervisor_launch(&mut self, _timeout_secs: i32) -> Result<()> {
         self.cloud_hypervisor_ensure_not_launched().await?;
 
-        let cfg = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?;
+        let cfg = &self.config;
 
         let debug = cfg.debug_info.enable_debug;
 
@@ -338,13 +325,7 @@ impl CloudHypervisorInner {
 
         let _ = std::fs::remove_file(api_socket_path.clone());
 
-        let binary_path = self
-            .config
-            .as_ref()
-            .ok_or("no hypervisor config for CH")
-            .map_err(|e| anyhow!(e))?
-            .path
-            .to_string();
+        let binary_path = cfg.path.to_string();
 
         let path = Path::new(&binary_path).canonicalize()?;
 
@@ -567,11 +548,7 @@ impl CloudHypervisorInner {
     // call, if confidential_guest is set, a confidential
     // guest will be created.
     async fn handle_guest_protection(&mut self) -> Result<()> {
-        let cfg = self
-            .config
-            .as_ref()
-            .ok_or("missing hypervisor config")
-            .map_err(|e| anyhow!(e))?;
+        let cfg = &self.config;
 
         let confidential_guest = cfg.security_info.confidential_guest;
 
@@ -979,7 +956,7 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::TDXDetails;
+    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
 
     #[cfg(target_arch = "x86_64")]
     use kata_sys_util::protection::TDX_SYS_FIRMWARE_DIR;
@@ -1013,6 +990,8 @@ mod tests {
             minor_version: 0,
         };
 
+        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+
         #[derive(Debug)]
         struct TestData {
             value: Option<GuestProtection>,
@@ -1033,12 +1012,12 @@ mod tests {
                 result: Ok(GuestProtection::Se),
             },
             TestData {
-                value: Some(GuestProtection::Sev),
-                result: Ok(GuestProtection::Sev),
+                value: Some(GuestProtection::Sev(sev_snp_details.clone())),
+                result: Ok(GuestProtection::Sev(sev_snp_details.clone())),
             },
             TestData {
-                value: Some(GuestProtection::Snp),
-                result: Ok(GuestProtection::Snp),
+                value: Some(GuestProtection::Snp(sev_snp_details.clone())),
+                result: Ok(GuestProtection::Snp(sev_snp_details.clone())),
             },
             TestData {
                 value: Some(GuestProtection::Tdx(tdx_details.clone())),

@@ -34,4 +34,8 @@ RUN passwd -d root
 # Generated with `ssh-keygen -t ed25519 -f unencrypted -P "" -C ""`
 COPY ssh/unencrypted.pub /root/.ssh/authorized_keys
 
+# Set correct permissions for SSH folders and files
+RUN chmod 700 /root/.ssh
+RUN chmod 600 /root/.ssh/authorized_keys
+
 ENTRYPOINT ["/usr/sbin/sshd", "-D"]

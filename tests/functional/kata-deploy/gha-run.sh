@@ -24,9 +24,9 @@ function cleanup_runtimeclasses() {
 	# Cleanup any runtime class that was left behind in the cluster, in
 	# case of a test failure, apart from the default one that comes from
 	# AKS
-	for rc in `kubectl get runtimeclass -o name | grep -v "kata-mshv-vm-isolation" | sed 's|runtimeclass.node.k8s.io/||'`
+	for rc in $(kubectl get runtimeclass -o name | grep -v "kata-mshv-vm-isolation" | sed 's|runtimeclass.node.k8s.io/||')
 	do
-		kubectl delete runtimeclass $rc;
+		kubectl delete runtimeclass "${rc}";
 	done
 }
 
@@ -36,8 +36,8 @@ function cleanup() {
 
 	cleanup_runtimeclasses || true
 
-	if [ "${platform}" = "aks" ]; then
-		delete_cluster ${test_type}
+	if [[ "${platform}" = "aks" ]]; then
+		delete_cluster "${test_type}"
 	fi
 }
 
@@ -45,7 +45,7 @@ function main() {
     export KATA_HOST_OS="${KATA_HOST_OS:-}"
 
     platform="aks"
-    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+    if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
 	    platform="tdx"
     fi
     export platform

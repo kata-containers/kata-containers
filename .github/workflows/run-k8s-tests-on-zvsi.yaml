@@ -64,7 +64,6 @@ jobs:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
-      PR_NUMBER: ${{ inputs.pr-number }}
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: "ubuntu"
       KATA_HYPERVISOR: ${{ matrix.vmm }}
@@ -88,13 +87,13 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Set SNAPSHOTTER to empty if overlayfs
-        run: echo "SNAPSHOTTER=" >> $GITHUB_ENV
+        run: echo "SNAPSHOTTER=" >> "$GITHUB_ENV"
         if: ${{ matrix.snapshotter == 'overlayfs' }}
 
       - name: Set KBS and KBS_INGRESS if qemu-coco-dev
         run: |
-          echo "KBS=true" >> $GITHUB_ENV
-          echo "KBS_INGRESS=nodeport" >> $GITHUB_ENV
+          echo "KBS=true" >> "$GITHUB_ENV"
+          echo "KBS_INGRESS=nodeport" >> "$GITHUB_ENV"
         if: ${{ matrix.vmm == 'qemu-coco-dev' }}
 
       # qemu-runtime-rs only works with overlayfs

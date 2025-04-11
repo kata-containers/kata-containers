@@ -4,73 +4,84 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use netlink_packet_route::{
-    link::nlas::{Info, InfoBridge, InfoData, InfoKind, Nla},
-    LinkMessage,
+use netlink_packet_route::link::{
+    InfoBridge, InfoData, InfoKind, LinkAttribute, LinkFlag, LinkInfo, LinkMessage,
 };
 
 use super::{Link, LinkAttrs};
 
+pub(crate) struct VecLinkFlag(pub Vec<LinkFlag>);
+
+impl From<&VecLinkFlag> for u32 {
+    fn from(v: &VecLinkFlag) -> u32 {
+        let mut d: u32 = 0;
+        for flag in &v.0 {
+            d += u32::from(*flag);
+        }
+        d
+    }
+}
+
 #[allow(clippy::box_default)]
 pub fn get_link_from_message(mut msg: LinkMessage) -> Box<dyn Link> {
+    let flags = u32::from(&VecLinkFlag(msg.header.flags));
     let mut base = LinkAttrs {
         index: msg.header.index,
-        flags: msg.header.flags,
-        link_layer_type: msg.header.link_layer_type,
+        flags,
+        link_layer_type: u16::from(msg.header.link_layer_type),
         ..Default::default()
     };
-    if msg.header.flags & libc::IFF_PROMISC as u32 != 0 {
+    if flags & libc::IFF_PROMISC as u32 != 0 {
         base.promisc = 1;
     }
     let mut link: Option<Box<dyn Link>> = None;
-    while let Some(attr) = msg.nlas.pop() {
+    while let Some(attr) = msg.attributes.pop() {
         match attr {
-            Nla::Info(infos) => {
+            LinkAttribute::LinkInfo(infos) => {
                 link = Some(link_info(infos));
             }
-            Nla::Address(a) => {
+            LinkAttribute::Address(a) => {
                 base.hardware_addr = a;
             }
-            Nla::IfName(i) => {
+            LinkAttribute::IfName(i) => {
                 base.name = i;
             }
-            Nla::Mtu(m) => {
+            LinkAttribute::Mtu(m) => {
                 base.mtu = m;
             }
-            Nla::Link(l) => {
+            LinkAttribute::Link(l) => {
                 base.parent_index = l;
             }
-            Nla::Master(m) => {
+            LinkAttribute::Controller(m) => {
                 base.master_index = m;
             }
-            Nla::TxQueueLen(t) => {
+            LinkAttribute::TxQueueLen(t) => {
                 base.txq_len = t;
             }
-            Nla::IfAlias(a) => {
+            LinkAttribute::IfAlias(a) => {
                 base.alias = a;
             }
-            Nla::Stats(_s) => {}
-            Nla::Stats64(_s) => {}
-            Nla::Xdp(_x) => {}
-            Nla::ProtoInfo(_) => {}
-            Nla::OperState(_) => {}
-            Nla::NetnsId(n) => {
+            LinkAttribute::Stats(_s) => {}
+            LinkAttribute::Stats64(_s) => {}
+            LinkAttribute::Xdp(_x) => {}
+            LinkAttribute::OperState(_) => {}
+            LinkAttribute::NetnsId(n) => {
                 base.net_ns_id = n;
             }
-            Nla::GsoMaxSize(i) => {
+            LinkAttribute::GsoMaxSize(i) => {
                 base.gso_max_size = i;
             }
-            Nla::GsoMaxSegs(e) => {
+            LinkAttribute::GsoMaxSegs(e) => {
                 base.gso_max_seqs = e;
             }
-            Nla::VfInfoList(_) => {}
-            Nla::NumTxQueues(t) => {
+            LinkAttribute::VfInfoList(_) => {}
+            LinkAttribute::NumTxQueues(t) => {
                 base.num_tx_queues = t;
             }
-            Nla::NumRxQueues(r) => {
+            LinkAttribute::NumRxQueues(r) => {
                 base.num_rx_queues = r;
             }
-            Nla::Group(g) => {
+            LinkAttribute::Group(g) => {
                 base.group = g;
             }
             _ => {
@@ -85,11 +96,11 @@ pub fn get_link_from_message(mut msg: LinkMessage) -> Box<dyn Link> {
 }
 
 #[allow(clippy::box_default)]
-fn link_info(mut infos: Vec<Info>) -> Box<dyn Link> {
+fn link_info(mut infos: Vec<LinkInfo>) -> Box<dyn Link> {
     let mut link: Option<Box<dyn Link>> = None;
     while let Some(info) = infos.pop() {
         match info {
-            Info::Kind(kind) => match kind {
+            LinkInfo::Kind(kind) => match kind {
                 InfoKind::Tun => {
                     if link.is_none() {
                         link = Some(Box::new(Tuntap::default()));
@@ -126,7 +137,7 @@ fn link_info(mut infos: Vec<Info>) -> Box<dyn Link> {
                     }
                 }
             },
-            Info::Data(data) => match data {
+            LinkInfo::Data(data) => match data {
                 InfoData::Tun(_) => {
                     link = Some(Box::new(Tuntap::default()));
                 }
@@ -149,12 +160,12 @@ fn link_info(mut infos: Vec<Info>) -> Box<dyn Link> {
                     link = Some(Box::new(Device::default()));
                 }
             },
-            Info::SlaveKind(_sk) => {
+            LinkInfo::PortKind(_sk) => {
                 if link.is_none() {
                     link = Some(Box::new(Device::default()));
                 }
             }
-            Info::SlaveData(_sd) => {
+            LinkInfo::PortData(_sd) => {
                 link = Some(Box::new(Device::default()));
             }
             _ => {

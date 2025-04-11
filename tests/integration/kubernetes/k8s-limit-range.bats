@@ -15,7 +15,6 @@ setup() {
 	pod_yaml="${pod_config_dir}/pod-cpu-defaults.yaml"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
-	set_namespace_to_policy_settings "${policy_settings_dir}" "${namespace_name}"
 	auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 }
 

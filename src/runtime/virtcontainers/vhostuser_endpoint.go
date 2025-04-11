@@ -37,6 +37,7 @@ type VhostUserEndpoint struct {
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
 	PCIPath            vcTypes.PciPath
+	CCWDevice          *vcTypes.CcwDevice
 }
 
 // Properties returns the properties of the interface.
@@ -72,6 +73,16 @@ func (endpoint *VhostUserEndpoint) PciPath() vcTypes.PciPath {
 // SetPciPath sets the PCI path of the endpoint.
 func (endpoint *VhostUserEndpoint) SetPciPath(pciPath vcTypes.PciPath) {
 	endpoint.PCIPath = pciPath
+}
+
+// CcwDevice returns the CCW device of the endpoint.
+func (endpoint *VhostUserEndpoint) CcwDevice() *vcTypes.CcwDevice {
+	return endpoint.CCWDevice
+}
+
+// SetCcwDevice sets the CCW device of the endpoint.
+func (endpoint *VhostUserEndpoint) SetCcwDevice(ccwDev vcTypes.CcwDevice) {
+	endpoint.CCWDevice = &ccwDev
 }
 
 // NetworkPair returns the network pair of the endpoint.

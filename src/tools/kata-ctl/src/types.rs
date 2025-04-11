@@ -59,6 +59,7 @@ pub enum KernelParamType<'a> {
 }
 
 // Parameters is used to encode the module parameters
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct KernelParam<'a> {
     pub name: &'a str,

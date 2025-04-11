@@ -9,6 +9,7 @@ use self::nvdimm_device_handler::VirtioNvdimmDeviceHandler;
 use self::scsi_device_handler::ScsiDeviceHandler;
 use self::vfio_device_handler::{VfioApDeviceHandler, VfioPciDeviceHandler};
 use crate::pci;
+use crate::sandbox::PciHostGuestMapping;
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Context, Result};
 use cdi::annotations::parse_annotations;
@@ -180,6 +181,7 @@ lazy_static! {
 
 #[instrument]
 pub async fn add_devices(
+    cid: &String,
     logger: &Logger,
     devices: &[Device],
     spec: &mut Spec,
@@ -211,8 +213,9 @@ pub async fn add_devices(
                     }
 
                     let mut sb = sandbox.lock().await;
+                    let mut host_guest: PciHostGuestMapping = HashMap::new();
                     for (host, guest) in update.pci {
-                        if let Some(other_guest) = sb.pcimap.insert(host, guest) {
+                        if let Some(other_guest) = host_guest.insert(host, guest) {
                             return Err(anyhow!(
                                 "Conflicting guest address for host device {} ({} versus {})",
                                 host,
@@ -221,6 +224,9 @@ pub async fn add_devices(
                             ));
                         }
                     }
+                    // Save all the host -> guest mappings per container upon
+                    // removal of the container, the mappings will be removed
+                    sb.pcimap.insert(cid.clone(), host_guest);
                 }
                 Err(e) => {
                     error!(logger, "failed to add devices, error: {e:?}");
@@ -238,7 +244,7 @@ pub async fn add_devices(
     if let Some(process) = spec.process_mut() {
         let env_vec: &mut Vec<String> =
             &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
-        update_env_pci(env_vec, &sandbox.lock().await.pcimap)?
+        update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
     update_spec_devices(logger, spec, dev_updates)
 }
@@ -248,7 +254,7 @@ pub async fn handle_cdi_devices(
     logger: &Logger,
     spec: &mut Spec,
     spec_dir: &str,
-    cdi_timeout: u64,
+    cdi_timeout: time::Duration,
 ) -> Result<()> {
     if let Some(container_type) = spec
         .annotations()
@@ -271,7 +277,7 @@ pub async fn handle_cdi_devices(
     let options: Vec<CdiOption> = vec![with_auto_refresh(false), with_spec_dirs(&[spec_dir])];
     let cache: Arc<std::sync::Mutex<cdi::cache::Cache>> = new_cache(options);
 
-    for _ in 0..=cdi_timeout {
+    for i in 0..=cdi_timeout.as_secs() {
         let inject_result = {
             // Lock cache within this scope, std::sync::Mutex has no Send
             // and await will not work with time::sleep
@@ -294,15 +300,20 @@ pub async fn handle_cdi_devices(
                 return Ok(());
             }
             Err(e) => {
-                info!(logger, "error injecting devices: {:?}", e);
-                println!("error injecting devices: {:?}", e);
+                info!(
+                    logger,
+                    "waiting for CDI spec(s) to be generated ({} of {} max tries) {:?}",
+                    i,
+                    cdi_timeout.as_secs(),
+                    e
+                );
             }
         }
-        time::sleep(Duration::from_millis(1000)).await;
+        time::sleep(Duration::from_secs(1)).await;
     }
     Err(anyhow!(
         "failed to inject devices after CDI timeout of {} seconds",
-        cdi_timeout
+        cdi_timeout.as_secs()
     ))
 }
 
@@ -386,8 +397,9 @@ pub fn insert_devices_cgroup_rule(
 // given a map of (host address => guest address)
 #[instrument]
 pub fn update_env_pci(
+    cid: &String,
     env: &mut [String],
-    pcimap: &HashMap<pci::Address, pci::Address>,
+    pcimap: &HashMap<String, PciHostGuestMapping>,
 ) -> Result<()> {
     // SR-IOV device plugin may add two environment variables for one resource:
     // - PCIDEVICE_<prefix>_<resource-name>: a list of PCI device ids separated by comma
@@ -413,7 +425,10 @@ pub fn update_env_pci(
         for host_addr_str in val.split(',') {
             let host_addr = pci::Address::from_str(host_addr_str)
                 .with_context(|| format!("Can't parse {} environment variable", name))?;
-            let guest_addr = pcimap
+            let host_guest = pcimap
+                .get(cid)
+                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
+            let guest_addr = host_guest
                 .get(&host_addr)
                 .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
 
@@ -1047,7 +1062,7 @@ mod tests {
             "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
         ];
 
-        let pci_fixups = example_map
+        let _pci_fixups = example_map
             .iter()
             .map(|(h, g)| {
                 (
@@ -1057,7 +1072,11 @@ mod tests {
             })
             .collect();
 
-        let res = update_env_pci(&mut env, &pci_fixups);
+        let cid = "0".to_string();
+        let mut pci_fixups: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pci_fixups.insert(cid.clone(), _pci_fixups);
+
+        let res = update_env_pci(&cid, &mut env, &pci_fixups);
         assert!(res.is_ok(), "error: {}", res.err().unwrap());
 
         assert_eq!(env[0], "PCIDEVICE_x=0000:01:01.0,0000:01:02.0");
@@ -1192,9 +1211,8 @@ mod tests {
         );
         spec.set_annotations(Some(annotations));
 
-        // create a file in /tmp/cdi with nvidia.json content
-        let cdi_dir = PathBuf::from("/tmp/cdi");
-        let cdi_file = cdi_dir.join("kata.json");
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let cdi_file = temp_dir.path().join("kata.json");
 
         let cdi_version = "0.6.0";
         let kind = "kata.com/gpu";
@@ -1242,10 +1260,17 @@ mod tests {
         }}"#
         );
 
-        fs::create_dir_all(&cdi_dir).unwrap();
-        fs::write(&cdi_file, cdi_content).unwrap();
+        fs::write(&cdi_file, cdi_content).expect("Failed to write CDI file");
 
-        let res = handle_cdi_devices(&logger, &mut spec, "/tmp/cdi", 0).await;
+        let cdi_timeout = Duration::from_secs(0);
+
+        let res = handle_cdi_devices(
+            &logger,
+            &mut spec,
+            temp_dir.path().to_str().unwrap(),
+            cdi_timeout,
+        )
+        .await;
         println!("modfied spec {:?}", spec);
         assert!(res.is_ok(), "{}", res.err().unwrap());
 
@@ -1261,7 +1286,7 @@ mod tests {
 
         let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
 
-        // find string TEST_OUTER_ENV in evn
+        // find string TEST_OUTER_ENV in env
         let outer_env = env.iter().find(|e| e.starts_with("TEST_OUTER_ENV"));
         assert!(outer_env.is_some(), "TEST_OUTER_ENV not found in env");
 

@@ -12,7 +12,9 @@ use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
-use kata_types::device::{DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE};
+use kata_types::device::{
+    DRIVER_VFIO_AP_COLD_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE,
+};
 use protocols::agent::Device;
 use slog::Logger;
 use std::ffi::OsStr;
@@ -94,7 +96,7 @@ impl DeviceHandler for VfioPciDeviceHandler {
 impl DeviceHandler for VfioApDeviceHandler {
     #[instrument]
     fn driver_types(&self) -> &[&str] {
-        &[DRIVER_VFIO_AP_TYPE]
+        &[DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_AP_COLD_TYPE]
     }
 
     #[cfg(target_arch = "s390x")]
@@ -103,7 +105,16 @@ impl DeviceHandler for VfioApDeviceHandler {
         // Force AP bus rescan
         fs::write(AP_SCANS_PATH, "1")?;
         for apqn in device.options.iter() {
-            wait_for_ap_device(ctx.sandbox, ap::Address::from_str(apqn)?).await?;
+            let ap_address = ap::Address::from_str(apqn).context("Failed to parse AP address")?;
+            match device.type_.as_str() {
+                DRIVER_VFIO_AP_TYPE => {
+                    wait_for_ap_device(ctx.sandbox, ap_address).await?;
+                }
+                DRIVER_VFIO_AP_COLD_TYPE => {
+                    check_ap_device(ctx.sandbox, ap_address).await?;
+                }
+                _ => return Err(anyhow!("Unsupported AP device type: {}", device.type_)),
+            }
         }
         let dev_update = Some(DevUpdate::new(Z9_CRYPT_DEV_PATH, Z9_CRYPT_DEV_PATH)?);
         Ok(SpecUpdate {
@@ -198,6 +209,37 @@ impl UeventMatcher for PciMatcher {
 async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address) -> Result<()> {
     let matcher = ApMatcher::new(address);
     wait_for_uevent(sandbox, matcher).await?;
+    Ok(())
+}
+
+#[cfg(target_arch = "s390x")]
+#[instrument]
+async fn check_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address) -> Result<()> {
+    let ap_path = format!(
+        "/sys/{}/card{:02x}/{}/online",
+        AP_ROOT_BUS_PATH, address.adapter_id, address
+    );
+    if !Path::new(&ap_path).is_file() {
+        return Err(anyhow!(
+            "AP device online file not found or not accessible: {}",
+            ap_path
+        ));
+    }
+    match fs::read_to_string(&ap_path) {
+        Ok(content) => {
+            let is_online = content.trim() == "1";
+            if !is_online {
+                return Err(anyhow!("AP device {} exists but is not online", address));
+            }
+        }
+        Err(e) => {
+            return Err(anyhow!(
+                "Failed to read online status for AP device {}: {}",
+                address,
+                e
+            ));
+        }
+    }
     Ok(())
 }
 

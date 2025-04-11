@@ -98,7 +98,7 @@ a number larger than `0` if you have either of the `vmx` or `svm` nested virtual
 available:
 
 ```sh
-$ minikube ssh "egrep -c 'vmx|svm' /proc/cpuinfo"
+$ minikube ssh "grep -c -E 'vmx|svm' /proc/cpuinfo"
 ```
 
 ## Installing Kata Containers
@@ -122,8 +122,8 @@ and will be executing a `sleep infinity` once it has successfully completed its 
 You can accomplish this by running the following:
 
 ```sh
-$ podname=$(kubectl -n kube-system get pods -o=name | fgrep kata-deploy | sed 's?pod/??')
-$ kubectl -n kube-system exec ${podname} -- ps -ef | fgrep infinity
+$ podname=$(kubectl -n kube-system get pods -o=name | grep -F kata-deploy | sed 's?pod/??')
+$ kubectl -n kube-system exec ${podname} -- ps -ef | grep -F infinity
 ```
 
 > *NOTE:* This check only works for single node clusters, which is the default for Minikube.
@@ -197,7 +197,7 @@ $ minikube ssh -- uname -a
 And then compare that against the kernel that is running inside the container:
 
 ```sh
-$ podname=$(kubectl get pods -o=name | fgrep php-apache-kata-qemu | sed 's?pod/??')
+$ podname=$(kubectl get pods -o=name | grep -F php-apache-kata-qemu | sed 's?pod/??')
 $ kubectl exec ${podname} -- uname -a
 ```
 

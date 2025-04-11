@@ -29,7 +29,7 @@ async fn real_main() {
         stderr: None,
     });
 
-    manager.handler_message(req).await.ok();
+    manager.handler_task_message(req).await.ok();
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

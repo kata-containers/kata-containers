@@ -31,13 +31,15 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${virtiofsd_repo}" ] || die "Failed to get virtiofsd repo"
 [ -n "${virtiofsd_version}" ] || die "Failed to get virtiofsd version or commit"
 [ -n "${virtiofsd_toolchain}" ] || die "Failed to get the rust toolchain to build virtiofsd"
-[ -n "${virtiofsd_zip}" ] || die "Failed to get virtiofsd binary URL"
 
 case ${ARCH} in
 	"aarch64")
 		libc="musl"
 		;;
 	"ppc64le")
+		libc="gnu"
+		;;
+	"riscv64")
 		libc="gnu"
 		;;
 	"s390x")

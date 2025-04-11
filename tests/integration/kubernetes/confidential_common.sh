@@ -18,9 +18,9 @@ function setup_unencrypted_confidential_pod() {
 
 	export SSH_KEY_FILE="${pod_config_dir}/confidential/unencrypted/ssh/unencrypted"
 
-	if [ -n "${PR_NUMBER}" ]; then
+	if [ -n "${GH_PR_NUMBER}" ]; then
 		# Use correct address in pod yaml
-		sed -i "s/-nightly/-${PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
+		sed -i "s/-nightly/-${GH_PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
 	fi
 
 	# Set permissions on private key file

@@ -9,7 +9,7 @@ set -o nounset
 set -o pipefail
 
 DEBUG="${DEBUG:-}"
-[ -n "$DEBUG" ] && set -x
+[[ -n "${DEBUG}" ]] && set -x
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
@@ -17,24 +17,22 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 source "${kubernetes_dir}/confidential_kbs.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
-helm_chart_dir="${tools_dir}/packaging/kata-deploy/helm-chart/kata-deploy"
 kata_tarball_dir="${2:-kata-artifacts}"
 
-DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
-DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
-DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
-KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-600}
-SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}
-KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
-CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-containerd}
-KBS=${KBS:-false}
-KBS_INGRESS=${KBS_INGRESS:-}
-KUBERNETES="${KUBERNETES:-}"
-SNAPSHOTTER="${SNAPSHOTTER:-}"
-ITA_KEY="${ITA_KEY:-}"
-HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
-NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
-PULL_TYPE="${PULL_TYPE:-default}"
+export DOCKER_REGISTRY="${DOCKER_REGISTRY:-quay.io}"
+export DOCKER_REPO="${DOCKER_REPO:-kata-containers/kata-deploy-ci}"
+export DOCKER_TAG="${DOCKER_TAG:-kata-containers-latest}"
+export SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT="${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+export CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
+export KBS="${KBS:-false}"
+export KBS_INGRESS="${KBS_INGRESS:-}"
+export KUBERNETES="${KUBERNETES:-}"
+export SNAPSHOTTER="${SNAPSHOTTER:-}"
+export ITA_KEY="${ITA_KEY:-}"
+export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
+export PULL_TYPE="${PULL_TYPE:-default}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
@@ -118,7 +116,7 @@ EOF
 	sleep 60s
 	sudo cat "${containerd_config_file}"
 
-	if [ "${KUBERNETES}" = 'k3s' ]
+	if [[ "${KUBERNETES}" = 'k3s' ]]
 	then
 		local ctr_dm_status
 		local result
@@ -128,9 +126,9 @@ EOF
 			plugins ls |\
 			awk '$2 ~ /^devmapper$/ { print $0 }' || true)
 
-		result=$(echo "$ctr_dm_status" | awk '{print $4}' || true)
+		result=$(echo "${ctr_dm_status}" | awk '{print $4}' || true)
 
-		[ "$result" = 'ok' ] || die "k3s containerd device mapper not configured: '$ctr_dm_status'"
+		[[ "${result}" = 'ok' ]] || die "k3s containerd device mapper not configured: '${ctr_dm_status}'"
 	fi
 
 	info "devicemapper (DM) devices"
@@ -160,112 +158,58 @@ function delete_coco_kbs() {
 #	              service externally
 #
 function deploy_coco_kbs() {
-	kbs_k8s_deploy "$KBS_INGRESS"
+	kbs_k8s_deploy "${KBS_INGRESS}"
 }
 
 function deploy_kata() {
 	platform="${1:-}"
-	ensure_helm
-	ensure_yq
 
-	[ "$platform" = "kcli" ] && \
-	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+	[[ "${platform}" = "kcli" ]] && \
+	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]]; then
 		cleanup_kata_deploy || true
 	fi
 
 	set_default_cluster_namespace
 
-	local values_yaml
-	values_yaml=$(mktemp /tmp/values_yaml.XXXXXX)
-
-	yq -i ".k8sDistribution = \"${KUBERNETES}\""                     "${values_yaml}"
-	yq -i ".image.reference = \"${DOCKER_REGISTRY}/${DOCKER_REPO}\"" "${values_yaml}"
-	yq -i ".image.tag = \"${DOCKER_TAG}\""                           "${values_yaml}"
-	yq -i ".env.debug = \"true\""                                    "${values_yaml}"
-	yq -i ".env.shims = \"${KATA_HYPERVISOR}\""                      "${values_yaml}"
-	yq -i ".env.defaultShim = \"${KATA_HYPERVISOR}\""                "${values_yaml}"
-	yq -i ".env.createRuntimeClasses = \"true\""                     "${values_yaml}"
-	yq -i ".env.createDefaultRuntimeClass = \"true\""                "${values_yaml}"
-	yq -i ".env.allowedHypervisorAnnotations = \"default_vcpus\""    "${values_yaml}"
-	yq -i ".env.snapshotterHandlerMapping = \"\""                    "${values_yaml}"
-	yq -i ".env.agentHttpsProxy = \"\""                              "${values_yaml}"
-	yq -i ".env.agentNoProxy = \"\""                                 "${values_yaml}"
-	yq -i ".env.pullTypeMapping = \"\""                              "${values_yaml}"
-	yq -i ".env.hostOS = \"\""                                       "${values_yaml}"
-
-	if [ -n "${SNAPSHOTTER}" ]; then
-		yq -i ".env.snapshotterHandlerMapping = \"${KATA_HYPERVISOR}:${SNAPSHOTTER}\"" "${values_yaml}"
+	ANNOTATIONS="default_vcpus"
+	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+		ANNOTATIONS="image kernel default_vcpus"
+	fi
+	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
+		ANNOTATIONS="image initrd kernel default_vcpus"
 	fi
 
-	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		yq -i ".env.allowedHypervisorAnnotations = \"image kernel default_vcpus kernel_params\"" "${values_yaml}"
-		yq -i ".env.hostOS = \"${KATA_HOST_OS}\""                                   "${values_yaml}"
+	SNAPSHOTTER_HANDLER_MAPPING=""
+	if [[ -n "${SNAPSHOTTER}" ]]; then
+		SNAPSHOTTER_HANDLER_MAPPING="${KATA_HYPERVISOR}:${SNAPSHOTTER}"
 	fi
 
-	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
-		yq -i ".env.allowedHypervisorAnnotations = \"image initrd kernel default_vcpus\"" "${values_yaml}"
+	PULL_TYPE_MAPPING=""
+	if [[ "${PULL_TYPE}" != "default" ]]; then
+		PULL_TYPE_MAPPING="${KATA_HYPERVISOR}:${PULL_TYPE}"
 	fi
 
-	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		yq -i ".env.agentHttpsProxy = \"${HTTPS_PROXY}\"" "${values_yaml}"
-		yq -i ".env.agentNoProxy = \"${NO_PROXY}\""       "${values_yaml}"
+	HOST_OS=""
+	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+		HOST_OS="${KATA_HOST_OS}"
 	fi
 
-	# Set the PULL_TYPE_MAPPING
-	if [ "${PULL_TYPE}" != "default" ]; then
-		yq -i ".env.pullTypeMapping = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" "${values_yaml}"
-	fi
-
-	echo "::group::Final kata-deploy manifests used in the test"
-	cat "${values_yaml}"
-	helm template "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
-	[ "$(yq .image.reference ${values_yaml})" = "${DOCKER_REGISTRY}/${DOCKER_REPO}" ] || die "Failed to set image reference"
-	[ "$(yq .image.tag ${values_yaml})" = "${DOCKER_TAG}" ] || die "Failed to set image tag"
-	echo "::endgroup::"
-
-	local max_tries=3
-	local interval=10
-	local i=0
-	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
-	set +e # Disable immediate exit on failure
-	while true; do
-		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
-		if [ $? -eq 0 ]; then
-			echo "Helm install succeeded!"
-			break
-		fi
-		i=$((i+1))
-		[ $i -lt $max_tries ] && echo "Retrying after $interval seconds (Attempt $i of $(($max_tries - 1)))" || break
-		sleep $interval
-	done
-	set -e # Re-enable immediate exit on failure
-	if [ $i -eq $max_tries ]; then
-		die "Failed to deploy kata-deploy after $max_tries tries"
-	fi
-
-	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
-	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
-	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
-
-	# This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
-	# which may cause issues like not having the node properly labeled or the artefacts
-	# properly deployed when the tests actually start running.
-	if [ "${platform}" = "aks" ]; then
-		sleep 240s
-	else
-		sleep 60s
-	fi
-
-	echo "::group::kata-deploy logs"
-	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
-	echo "::endgroup::"
-
-	echo "::group::Runtime classes"
-	kubectl_retry get runtimeclass
-	echo "::endgroup::"
+	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
+	export HELM_IMAGE_REFERENCE="${DOCKER_REGISTRY}/${DOCKER_REPO}"
+	export HELM_IMAGE_TAG="${DOCKER_TAG}"
+	export HELM_DEBUG="true"
+	export HELM_SHIMS="${KATA_HYPERVISOR}"
+	export HELM_DEFAULT_SHIM="${KATA_HYPERVISOR}"
+	export HELM_CREATE_DEFAULT_RUNTIME_CLASS="true"
+	export HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${ANNOTATIONS}"
+	export HELM_SNAPSHOTTER_HANDLER_MAPPING="${SNAPSHOTTER_HANDLER_MAPPING}"
+	export HELM_AGENT_HTTPS_PROXY="${HTTPS_PROXY}"
+	export HELM_AGENT_NO_PROXY="${NO_PROXY}"
+	export HELM_PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING}"
+	export HELM_HOST_OS="${HOST_OS}"
+	helm_helper
 }
 
 function install_kbs_client() {
@@ -277,7 +221,7 @@ function uninstall_kbs_client() {
 }
 
 function run_tests() {
-	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]]; then
 		# Baremetal self-hosted runners end up accumulating way too much log
 		# and when those get displayed it's very hard to understand what's
 		# part of the current run and what's something from the past coming
@@ -291,10 +235,10 @@ function run_tests() {
 	ensure_yq
 	platform="${1:-}"
 
-	[ "$platform" = "kcli" ] && \
-		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+	[[ "${platform}" = "kcli" ]] && \
+		export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	if [ "${AUTO_GENERATE_POLICY}" = "yes" ] && [ "${GENPOLICY_PULL_METHOD}" = "containerd" ]; then
+	if [[ "${AUTO_GENERATE_POLICY}" = "yes" ]] && [[ "${GENPOLICY_PULL_METHOD}" = "containerd" ]]; then
 		# containerd's config on the local machine (where kubectl and genpolicy are executed by CI),
 		# might have been provided by a distro-specific package that disables the cri plug-in by using:
 		#
@@ -309,10 +253,15 @@ function run_tests() {
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
 
 		# Allow genpolicy to access the containerd image pull APIs without sudo.
-		local socket_wait_time=30
-		local socket_sleep_time=3
-		local cmd="sudo chmod a+rw /var/run/containerd/containerd.sock"
-		waitForProcess "${socket_wait_time}" "${socket_sleep_time}" "$cmd"
+		local socket_wait_time
+		local socket_sleep_time
+		local cmd
+
+		socket_wait_time=30
+		socket_sleep_time=3
+		cmd="sudo chmod a+rw /var/run/containerd/containerd.sock"
+
+		waitForProcess "${socket_wait_time}" "${socket_sleep_time}" "${cmd}"
 	fi
 
 	set_test_cluster_namespace
@@ -323,22 +272,22 @@ function run_tests() {
 	# In case of running on Github workflow it needs to save the start time
 	# on the environment variables file so that the variable is exported on
 	# next workflow steps.
-	if [ -n "${GITHUB_ENV:-}" ]; then
+	if [[ -n "${GITHUB_ENV:-}" ]]; then
 		start_time=$(date '+%Y-%m-%d %H:%M:%S')
 		export start_time
-		echo "start_time=${start_time}" >> "$GITHUB_ENV"
+		echo "start_time=${start_time}" >> "${GITHUB_ENV}"
 	fi
 
 	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
-		if [ -n "$GITHUB_ENV" ]; then
+		if [[ -n "${GITHUB_ENV}" ]]; then
 			KATA_TEST_VERBOSE=true
 			export KATA_TEST_VERBOSE
-			echo "KATA_TEST_VERBOSE=${KATA_TEST_VERBOSE}" >> "$GITHUB_ENV"
+			echo "KATA_TEST_VERBOSE=${KATA_TEST_VERBOSE}" >> "${GITHUB_ENV}"
 		fi
 	fi
 
 	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
-		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
+		echo "Skipping tests for ${KATA_HYPERVISOR} using devmapper"
 	else
 		bash run_kubernetes_tests.sh
 	fi
@@ -346,24 +295,32 @@ function run_tests() {
 }
 
 function collect_artifacts() {
-	if [ -z "${start_time:-}" ]; then
+	if [[ -z "${start_time:-}" ]]; then
 		warn "tests start time is not defined. Cannot gather journal information"
 		return
 	fi
 
-	local artifacts_dir="/tmp/artifacts"
-	if [ -d "${artifacts_dir}" ]; then
+	local artifacts_dir
+	artifacts_dir="/tmp/artifacts"
+	if [[ -d "${artifacts_dir}" ]]; then
 		rm -rf "${artifacts_dir}"
 	fi
 	mkdir -p "${artifacts_dir}"
 	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
-	local journalctl_log_filename="journalctl-$RANDOM.log"
-	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
-	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
+	local journalctl_log_filename
+	local journalctl_log_path
 
-	local k3s_dir='/var/lib/rancher/k3s/agent'
+	journalctl_log_filename="journalctl-${RANDOM}.log"
+	journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
 
-	if [ -d "$k3s_dir" ]
+	# As we want to call journalctl with sudo, we're safe to ignore SC2024 here
+	# shellcheck disable=SC2024
+	sudo journalctl --since="${start_time}" > "${journalctl_log_path}"
+
+	local k3s_dir
+	k3s_dir='/var/lib/rancher/k3s/agent'
+
+	if [[ -d "${k3s_dir}" ]]
 	then
 		info "Collecting k3s artifacts"
 
@@ -375,36 +332,35 @@ function collect_artifacts() {
 		files+=('containerd/containerd.log')
 
 		# Add any rotated containerd logs
-		files+=( $(sudo find \
-			"${k3s_dir}/containerd/" \
-			-type f \
-			-name 'containerd*\.log\.gz') )
+		files+=("$(sudo find "${k3s_dir}/containerd/" -type f -name 'containerd*\.log\.gz')")
 
 		local file
 
 		for file in "${files[@]}"
 		do
-			local path="$k3s_dir/$file"
-			sudo [ ! -e "$path" ] && continue
+			local path="${k3s_dir}/${file}"
+			sudo [[ ! -e "${path}" ]] && continue
 
 			local encoded
-			encoded=$(echo "$path" | tr '/' '-' | sed 's/^-//g')
+			encoded="$(echo "${path}" | tr '/' '-' | sed 's/^-//g')"
 
-			local from="$path"
-
+			local from
 			local to
 
+			from="${path}"
 			to="${artifacts_dir}/${encoded}"
 
-			if [[ $path = *.gz ]]
+			if [[ ${path} = *.gz ]]
 			then
-				sudo cp "$from" "$to"
+				sudo cp "${from}" "${to}"
 			else
 				to="${to}.gz"
-				sudo gzip -c "$from" > "$to"
+				# As we want to call gzip with sudo, we're safe to ignore SC2024 here
+				# shellcheck disable=SC2024
+				sudo gzip -c "${from}" > "${to}"
 			fi
 
-			info "  Collected k3s file '$from' to '$to'"
+			info "  Collected k3s file '${from}' to '${to}'"
 		done
 	fi
 }
@@ -422,21 +378,21 @@ function cleanup() {
 	test_type="${2:-k8s}"
 	ensure_yq
 
-	[ "$platform" = "kcli" ] && \
-		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+	[[ "${platform}" = "kcli" ]] && \
+		export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
 	echo "Gather information about the nodes and pods before cleaning up the node"
 	get_nodes_and_pods_info
 
-	if [ "${platform}" = "aks" ]; then
+	if [[ "${platform}" = "aks" ]]; then
 		delete_cluster "${test_type}"
 		return
 	fi
 
-	# In case of canceling workflow manually, 'run_kubernetes_tests.sh' continues running and triggers new tests, 
-	# resulting in the CI being in an unexpected state. So we need kill all running test scripts before cleaning up the node. 
+	# In case of canceling workflow manually, 'run_kubernetes_tests.sh' continues running and triggers new tests,
+	# resulting in the CI being in an unexpected state. So we need kill all running test scripts before cleaning up the node.
 	# See issue https://github.com/kata-containers/kata-containers/issues/9980
-	delete_test_runners	|| true
+	delete_test_runners || true
 	# Switch back to the default namespace and delete the tests one
 	delete_test_cluster_namespace || true
 
@@ -444,7 +400,7 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -458,7 +414,7 @@ function deploy_snapshotter() {
 }
 
 function cleanup_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -475,8 +431,9 @@ function deploy_nydus_snapshotter() {
 	echo "::group::deploy_nydus_snapshotter"
 	ensure_yq
 
-	local nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
-	if [ -d "${nydus_snapshotter_install_dir}" ]; then
+	local nydus_snapshotter_install_dir
+	nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
+	if [[ -d "${nydus_snapshotter_install_dir}" ]]; then
 		rm -rf "${nydus_snapshotter_install_dir}"
 	fi
 	mkdir -p "${nydus_snapshotter_install_dir}"
@@ -484,11 +441,11 @@ function deploy_nydus_snapshotter() {
 	nydus_snapshotter_version=$(get_from_kata_deps ".externals.nydus-snapshotter.version")
 	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
 
-	pushd "$nydus_snapshotter_install_dir"
-	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+	pushd "${nydus_snapshotter_install_dir}"
+	if [[ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]]; then
 		cleanup_nydus_snapshotter || true
 	fi
-	if [ "${PULL_TYPE}" == "guest-pull" ]; then
+	if [[ "${PULL_TYPE}" == "guest-pull" ]]; then
 		# Enable guest pull feature in nydus snapshotter
 		yq -i \
       'select(.kind == "ConfigMap").data.FS_DRIVER = "proxy"' \
@@ -518,14 +475,14 @@ function deploy_nydus_snapshotter() {
 
 	# Deploy nydus snapshotter as a daemonset
 	kubectl_retry create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
-	if [ "${KUBERNETES}" = "k3s" ]; then
+	if [[ "${KUBERNETES}" = "k3s" ]]; then
 		kubectl_retry apply -k "misc/snapshotter/overlays/k3s"
 	else
 		kubectl_retry apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
 	popd
 
-	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout ${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}
+	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout "${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}"
 
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
@@ -538,15 +495,16 @@ function deploy_nydus_snapshotter() {
 
 function cleanup_nydus_snapshotter() {
 	echo "cleanup_nydus_snapshotter"
-	local nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
-	if [ ! -d "${nydus_snapshotter_install_dir}" ]; then
+	local nydus_snapshotter_install_dir
+	nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
+	if [[ ! -d "${nydus_snapshotter_install_dir}" ]]; then
 		>&2 echo "nydus snapshotter dir not found"
 		exit 1
 	fi
 
-	pushd "$nydus_snapshotter_install_dir"
+	pushd "${nydus_snapshotter_install_dir}"
 
-	if [ "${KUBERNETES}" = "k3s" ]; then
+	if [[ "${KUBERNETES}" = "k3s" ]]; then
 		kubectl_retry delete --ignore-not-found -k "misc/snapshotter/overlays/k3s"
 	else
 		kubectl_retry delete --ignore-not-found -f "misc/snapshotter/base/nydus-snapshotter.yaml"
@@ -567,7 +525,7 @@ function main() {
 	case "${action}" in
 		install-azure-cli) install_azure_cli ;;
 		login-azure) login_azure ;;
-		create-cluster) create_cluster ;;
+		create-cluster) create_cluster "" ;;
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
 		setup-crio) setup_crio ;;
@@ -577,7 +535,8 @@ function main() {
 		install-kata-tools) install_kata_tools ;;
 		install-kbs-client) install_kbs_client ;;
 		install-kubectl) install_kubectl ;;
-		get-cluster-credentials) get_cluster_credentials ;;
+		get-cluster-credentials) get_cluster_credentials "" ;;
+		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
@@ -593,12 +552,14 @@ function main() {
 		collect-artifacts) collect_artifacts ;;
 		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
+		cleanup-kubeadm) cleanup "kubeadm" ;;
 		cleanup-sev) cleanup "sev" ;;
 		cleanup-snp) cleanup "snp" ;;
 		cleanup-tdx) cleanup "tdx" ;;
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
+		delete-csi-driver) return 0 ;;
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;

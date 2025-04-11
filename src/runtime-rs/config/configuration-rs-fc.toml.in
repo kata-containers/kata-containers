@@ -122,11 +122,6 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 #block_device_cache_set = true
 
 # Specifies cache-related options for block devices.
-# Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
-# Default false
-#block_device_cache_direct = true
-
-# Specifies cache-related options for block devices.
 # Denotes whether flush requests for the device are ignored.
 # Default false
 #block_device_cache_noflush = true

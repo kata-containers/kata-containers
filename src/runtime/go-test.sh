@@ -22,8 +22,8 @@ if [ -z "$go_test_flags" ]; then
     # "go test -timeout X"
     go_test_flags="-timeout ${KATA_GO_TEST_TIMEOUT:-30s}"
 
-    # -race flag is not supported on s390x
-    [ "$(go env GOARCH)" != "s390x" ] && go_test_flags+=" -race"
+    # -race flag is not supported on s390x and riscv64
+    [ "$(go env GOARCH)" != "s390x" ] && [ "$(go env GOARCH)" != "riscv64" ] && go_test_flags+=" -race"
 
     # s390x requires special linker flags
     [ "$(go env GOARCH)" = s390x ] && go_test_flags+=" -ldflags '-extldflags -Wl,--s390-pgste'"

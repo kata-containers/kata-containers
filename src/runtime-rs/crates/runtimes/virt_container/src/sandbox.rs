@@ -14,20 +14,25 @@ use async_trait::async_trait;
 use common::message::{Action, Message};
 use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
-use common::{types::SandboxConfig, ContainerManager, Sandbox, SandboxNetworkEnv};
+use common::{
+    types::{SandboxConfig, SandboxExitInfo, SandboxStatus},
+    ContainerManager, Sandbox, SandboxNetworkEnv,
+};
+
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
-#[cfg(not(target_arch = "s390x"))]
 use hypervisor::HYPERVISOR_FIRECRACKER;
 use hypervisor::HYPERVISOR_REMOTE;
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
+use hypervisor::{ProtectionDeviceConfig, SevSnpConfig};
 use kata_sys_util::hooks::HookStates;
+use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::CapabilityBits;
-#[cfg(not(target_arch = "s390x"))]
+use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use oci_spec::runtime as oci;
@@ -38,6 +43,7 @@ use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, Networ
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::sync::Arc;
+use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
 
@@ -51,7 +57,7 @@ pub struct SandboxRestoreArgs {
     pub sender: Sender<Message>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Display)]
 pub enum SandboxState {
     Init,
     Running,
@@ -149,6 +155,15 @@ impl VirtSandbox {
         {
             let vm_rootfs = ResourceConfig::VmRootfs(block_config);
             resource_configs.push(vm_rootfs);
+        }
+
+        // prepare protection device config
+        if let Some(protection_dev_config) = self
+            .prepare_protection_device_config(&self.hypervisor.hypervisor_config().await)
+            .await
+            .context("failed to prepare protection device config")?
+        {
+            resource_configs.push(ResourceConfig::Protection(protection_dev_config));
         }
 
         Ok(resource_configs)
@@ -256,13 +271,18 @@ impl VirtSandbox {
 
     async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
+        let security_info = self.hypervisor.hypervisor_config().await.security_info;
 
         if !boot_info.initrd.is_empty() {
             return Ok(None);
         }
 
         if boot_info.image.is_empty() {
-            return Err(anyhow!("both of image and initrd isn't set"));
+            if boot_info.vm_rootfs_driver.ends_with("ccw") && security_info.confidential_guest {
+                return Ok(None);
+            } else {
+                return Err(anyhow!("both of image and initrd isn't set"));
+            }
         }
 
         Ok(Some(BlockConfig {
@@ -295,6 +315,58 @@ impl VirtSandbox {
         };
 
         Ok(vm_socket)
+    }
+
+    async fn prepare_protection_device_config(
+        &self,
+        hypervisor_config: &HypervisorConfig,
+    ) -> Result<Option<ProtectionDeviceConfig>> {
+        if !hypervisor_config.security_info.confidential_guest {
+            return Ok(None);
+        }
+
+        let available_protection = available_guest_protection()?;
+        info!(
+            sl!(),
+            "sandbox: available protection: {:?}", available_protection
+        );
+
+        match available_protection {
+            GuestProtection::Sev(details) => {
+                if hypervisor_config.boot_info.firmware.is_empty() {
+                    return Err(anyhow!("SEV protection requires a path to firmaware"));
+                }
+
+                Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
+                    is_snp: false,
+                    cbitpos: details.cbitpos,
+                    firmware: hypervisor_config.boot_info.firmware.clone(),
+                })))
+            }
+            GuestProtection::Snp(details) => {
+                if hypervisor_config.boot_info.firmware.is_empty() {
+                    return Err(anyhow!("SEV-SNP protection requires a path to firmaware"));
+                }
+
+                // If we got here SEV-SNP is available.  However, if
+                // 'sev_snp_guest' is 'false' in the configuration file we
+                // still have to revert to SEV.
+                let is_snp = hypervisor_config.security_info.sev_snp_guest;
+                if !is_snp {
+                    info!(sl!(), "reverting to SEV even though SEV-SNP is available as requested by 'sev_snp_guest'");
+                }
+
+                Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
+                    is_snp,
+                    cbitpos: details.cbitpos,
+                    firmware: hypervisor_config.boot_info.firmware.clone(),
+                })))
+            }
+            GuestProtection::Se => {
+                Ok(Some(ProtectionDeviceConfig::Se))
+            }
+            _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
+        }
     }
 
     fn has_prestart_hooks(
@@ -485,6 +557,28 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
+    async fn status(&self) -> Result<SandboxStatus> {
+        info!(sl!(), "get sandbox status");
+        let inner = self.inner.read().await;
+        let state = inner.state.to_string();
+
+        Ok(SandboxStatus {
+            sandbox_id: self.sid.clone(),
+            pid: std::process::id(),
+            state,
+            ..Default::default()
+        })
+    }
+
+    async fn wait(&self) -> Result<SandboxExitInfo> {
+        info!(sl!(), "wait sandbox");
+        let exit_code = self.hypervisor.wait_vm().await.context("wait vm")?;
+        Ok(SandboxExitInfo {
+            exit_status: exit_code as u32,
+            exited_at: Some(std::time::SystemTime::now()),
+        })
+    }
+
     async fn stop(&self) -> Result<()> {
         let mut sandbox_inner = self.inner.write().await;
 
@@ -647,11 +741,9 @@ impl Persist for VirtSandbox {
             resource: Some(self.resource_manager.save().await?),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 // TODO support other hypervisors
-                #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+                #[cfg(feature = "dragonball")]
                 HYPERVISOR_DRAGONBALL => Ok(Some(hypervisor_state)),
-                #[cfg(not(target_arch = "s390x"))]
                 HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
-                #[cfg(not(target_arch = "s390x"))]
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
                 HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
@@ -687,7 +779,7 @@ impl Persist for VirtSandbox {
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
             // TODO support other hypervisors
-            #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+            #[cfg(feature = "dragonball")]
             HYPERVISOR_DRAGONBALL => {
                 let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)

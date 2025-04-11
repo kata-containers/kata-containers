@@ -22,6 +22,7 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 kernel_builder_args="-a ${ARCH} $*"
 
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
@@ -71,6 +72,7 @@ docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
 	--env USER="${USER}" \
+	--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} build-headers"

@@ -12,6 +12,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "dragonball" ] || [ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && \
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test see https://github.com/kata-containers/kata-containers/issues/8660"
 	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "$(uname -m)" == "aarch64" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10928"
 
 	get_pod_config_dir
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
@@ -38,6 +39,7 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "dragonball" ] || [ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && \
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test see https://github.com/kata-containers/kata-containers/issues/8660"
 	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "$(uname -m)" == "aarch64" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10928"
 
 	for pod in "${pods[@]}"; do
 		kubectl logs ${pod}

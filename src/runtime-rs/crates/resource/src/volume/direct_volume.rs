@@ -98,7 +98,7 @@ pub(crate) async fn handle_direct_volume(
 }
 
 pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
-    let mnt_type = get_mount_type(m.typ());
+    let mnt_type = get_mount_type(m);
     let mount_type = mnt_type.as_str();
 
     // Filter the non-bind volume and non-direct-vol volume

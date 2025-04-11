@@ -17,10 +17,6 @@ CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
 include ../../utils.mk
 
-ifeq ($(ARCH), ppc64le)
-    override ARCH = powerpc64le
-endif
-
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
@@ -88,8 +84,15 @@ HYPERVISOR_QEMU = qemu
 HYPERVISOR_CLH = cloud-hypervisor
 HYPERVISOR_REMOTE = remote
 
-# When set to true, builds the built-in Dragonball hypervisor
-USE_BUILDIN_DB := true
+ARCH_SUPPORT_DB := x86_64 aarch64
+ifneq ($(filter $(ARCH),$(ARCH_SUPPORT_DB)),)
+    # When set to true, builds the built-in Dragonball hypervisor
+    USE_BUILDIN_DB := true
+else
+    USE_BUILDIN_DB := false
+    $(info Dragonball does not support ARCH $(ARCH), disabled. \
+        Specify "USE_BUILDIN_DB=true" to force enable.)
+endif
 
 HYPERVISOR ?= $(HYPERVISOR_DB)
 
@@ -270,9 +273,24 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU)
 
+    CONFIG_FILE_QEMU_SE = configuration-qemu-se-runtime-rs.toml
+    CONFIG_QEMU_SE = config/$(CONFIG_FILE_QEMU_SE)
+    CONFIG_QEMU_SE_IN = $(CONFIG_QEMU_SE).in
+
+    CONFIG_PATH_QEMU_SE = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_SE))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_SE)
+
+    SYSCONFIG_QEMU_SE = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_SE))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_SE)
+
+    CONFIGS += $(CONFIG_QEMU_SE)
+
     KERNELTYPE_QEMU = uncompressed
     KERNEL_NAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_QEMU))
     KERNELPATH_QEMU = $(KERNELDIR)/$(KERNEL_NAME_QEMU)
+
+    KERNEL_NAME_QEMU_SE = kata-containers-se.img
+    KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
 
     # overriding options
     DEFSTATICRESOURCEMGMT_QEMU := true
@@ -352,6 +370,7 @@ USER_VARS += CONFIG_DB_IN
 USER_VARS += CONFIG_FC_IN
 USER_VARS += CONFIG_PATH
 USER_VARS += CONFIG_QEMU_IN
+USER_VARS += CONFIG_QEMU_SE_IN
 USER_VARS += CONFIG_REMOTE_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
@@ -389,6 +408,7 @@ USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
 USER_VARS += KERNELPATH_DB
 USER_VARS += KERNELPATH_QEMU
+USER_VARS += KERNELPATH_QEMU_SE
 USER_VARS += KERNELPATH_FC
 USER_VARS += KERNELPATH
 USER_VARS += KERNELVIRTIOFSPATH
@@ -580,7 +600,7 @@ static-checks-build: $(GENERATED_FILES)
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed \

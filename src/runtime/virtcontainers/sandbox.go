@@ -742,7 +742,7 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 			//
 			_, err := config.WithCDI(cdiSpec.Annotations, []string{}, cdiSpec)
 			if err != nil {
-				return coldPlugVFIO, fmt.Errorf("adding CDI devices failed")
+				return coldPlugVFIO, fmt.Errorf("adding CDI devices failed: %w", err)
 			}
 
 			for _, dev := range cdiSpec.Linux.Devices {
@@ -1172,7 +1172,7 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 	}()
 
 	// Add network for vm
-	inf.PciPath = endpoints[0].PciPath().String()
+	inf.DevicePath = endpoints[0].PciPath().String()
 	result, err := s.agent.updateInterface(ctx, inf)
 	if err != nil {
 		return nil, err
@@ -1275,12 +1275,15 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 
 	go func() {
 		for scanner.Scan() {
-			s.Logger().WithFields(logrus.Fields{
-				"console-protocol": cw.proto,
-				"console-url":      cw.consoleURL,
-				"sandbox":          s.id,
-				"vmconsole":        scanner.Text(),
-			}).Debug("reading guest console")
+			text := scanner.Text()
+			if text != "" {
+				s.Logger().WithFields(logrus.Fields{
+					"console-protocol": cw.proto,
+					"console-url":      cw.consoleURL,
+					"sandbox":          s.id,
+					"vmconsole":        text,
+				}).Debug("reading guest console")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {

@@ -1,0 +1,30 @@
+[package]
+name = "kata-agent-policy"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Async runtime
+tokio.workspace = true
+
+anyhow.workspace = true
+
+# Configuration
+serde.workspace = true
+serde_json.workspace = true
+
+# Agent Policy
+regorus = { version = "0.2.8", default-features = false, features = [
+    "arc",
+    "regex",
+    "std",
+] }
+json-patch = "2.0.0"
+
+
+# Note: this crate sets the slog 'max_*' features which allows the log level
+# to be modified at runtime.
+slog.workspace = true
+slog-scope.workspace = true

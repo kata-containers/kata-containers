@@ -34,14 +34,9 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Prepare the self-hosted runner
-        run: |
-            ${HOME}/scripts/prepare_runner.sh
-            sudo rm -rf $GITHUB_WORKSPACE/*
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -63,7 +58,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -75,7 +70,6 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ inputs.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
@@ -93,14 +87,9 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Prepare the self-hosted runner
-        run: |
-            ${HOME}/scripts/prepare_runner.sh
-            sudo rm -rf $GITHUB_WORKSPACE/*
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -130,7 +119,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -149,18 +138,27 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
+  remove-rootfs-binary-artifacts:
+    runs-on: ubuntu-22.04
+    needs: build-asset-rootfs
+    strategy:
+      matrix:
+        asset:
+          - agent
+    steps:
+      - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
+        if: ${{ inputs.stage == 'release' }}
+        with:
+          name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+
   build-asset-shim-v2:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
-      - name: Prepare the self-hosted runner
-        run: |
-            ${HOME}/scripts/prepare_runner.sh
-            sudo rm -rf $GITHUB_WORKSPACE/*
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -190,7 +188,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
         env:
           KATA_ASSET: shim-v2
           TAR_OUTPUT: shim-v2.tar.gz
@@ -215,7 +213,7 @@ jobs:
     steps:
       - name: Adjust a permission for repo
         run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
 
       - uses: actions/checkout@v4
         with:

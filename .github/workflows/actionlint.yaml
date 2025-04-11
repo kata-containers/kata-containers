@@ -1,0 +1,33 @@
+name: Lint GHA workflows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+    paths:
+      - '.github/workflows/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-actionlint:
+    env:
+      GH_TOKEN: ${{ github.token }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install actionlint gh extension
+        run: gh extension install https://github.com/cschleiden/gh-actionlint
+
+      - name: Run actionlint
+        run:  gh actionlint

@@ -10,6 +10,7 @@ use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::LinuxResources;
 use oci_spec::runtime as oci;
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -41,7 +42,8 @@ pub struct Manager {
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         if self.dbus_client.unit_exists()? {
-            self.dbus_client.add_process(pid)?;
+            let subcgroup = self.fs_manager.subcgroup();
+            self.dbus_client.add_process(pid, subcgroup)?;
         } else {
             self.dbus_client.start_unit(
                 (pid as u32).try_into().unwrap(),

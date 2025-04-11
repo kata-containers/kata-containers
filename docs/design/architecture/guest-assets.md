@@ -135,7 +135,7 @@ See also the [process overview](README.md#process-overview).
 
 | Image type | Default distro | Init daemon | Reason | Notes |
 |-|-|-|-|-|
-| [image](background.md#root-filesystem-image) | [Clear Linux](https://clearlinux.org) (for x86_64 systems)| systemd | Minimal and highly optimized | systemd offers flexibility |
+| [image](background.md#root-filesystem-image) | [Ubuntu](https://ubuntu.com) (for x86_64 systems) | systemd | Fully tested in our CI |  systemd offers flexibility |
 | [initrd](#initrd-image) | [Alpine Linux](https://alpinelinux.org) | Kata [agent](README.md#agent) (as no systemd support) | Security hardened and tiny C library |
 
 See also:

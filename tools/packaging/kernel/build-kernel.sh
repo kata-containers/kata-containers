@@ -32,6 +32,7 @@ readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # xPU vendor
 readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
+readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 
 #Path to kernel directory
 kernel_path=""
@@ -69,6 +70,7 @@ measured_rootfs="false"
 CROSS_BUILD_ARG=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
+# shellcheck source=tools/packaging/scripts/lib.sh
 source "${packaging_scripts_dir}/lib.sh"
 
 usage() {
@@ -92,7 +94,7 @@ Commands:
 
 Options:
 
-	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
+	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/riscv64/s390x/x86_64.
 	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
 	-D <vendor> 	: DPU/SmartNIC vendor, only nvidia.
@@ -122,6 +124,7 @@ arch_to_kernel() {
 	case "$arch" in
 		aarch64) echo "arm64" ;;
 		ppc64le) echo "powerpc" ;;
+		riscv64) echo "riscv" ;;
 		s390x) echo "s390" ;;
 		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
@@ -293,6 +296,9 @@ get_kernel_frag_path() {
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
+
+		local tmpfs_configs="$(ls ${common_path}/confidential_containers/tmpfs.conf)"
+		all_configs="${all_configs} ${tmpfs_configs}"
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
@@ -490,6 +496,15 @@ build_kernel_headers() {
 	if [ "$linux_headers" == "rpm" ]; then
 		make -j $(nproc) rpm-pkg ARCH="${arch_target}"
 	fi
+	# If we encrypt the key earlier it will break the kernel_headers build.
+	# At this stage the kernel has created the certs/signing_key.pem
+	# encrypt it for later usage in another job or out-of-tree build
+	# only encrypt if we have KBUILD_SIGN_PIN set
+	local key="certs/signing_key.pem"
+	if [ -n "${KBUILD_SIGN_PIN}" ]; then
+		[ -e "${key}" ] || die "${key} missing but KBUILD_SIGN_PIN is set"
+		openssl rsa -aes256 -in ${key} -out ${key} -passout env:KBUILD_SIGN_PIN
+	fi
 
 	popd >>/dev/null
 }
@@ -537,7 +552,7 @@ install_kata() {
 	fi
 
 	# Install uncompressed kernel
-	if [ "${arch_target}" = "arm64" ]; then
+	if [ "${arch_target}" = "arm64" ] || [ "${arch_target}" = "riscv" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
 	elif [ "${arch_target}" = "s390" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/vmlinux" "${install_path}/${vmlinux}"
@@ -704,4 +719,4 @@ main() {
 	esac
 }
 
-main $@
+main "$@"

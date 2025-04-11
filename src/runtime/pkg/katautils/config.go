@@ -61,6 +61,9 @@ const (
 	maxPCIeRootPorts   uint32 = 16
 	maxPCIeSwitchPorts uint32 = 16
 
+	// the maximum valid loglevel for the hypervisor
+	maxHypervisorLoglevel uint32 = 3
+
 	errInvalidHypervisorPrefix = "configuration file contains invalid hypervisor section"
 )
 
@@ -104,7 +107,8 @@ type hypervisor struct {
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
 	BlockDeviceAIO                 string                    `toml:"block_device_aio"`
 	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
-	SnpCertsPath                   string                    `toml:"snp_certs_path"`
+	SnpIdBlock                     string                    `toml:"snp_id_block"`
+	SnpIdAuth                      string                    `toml:"snp_id_auth"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
@@ -126,6 +130,7 @@ type hypervisor struct {
 	NetRateLimiterBwOneTimeBurst   int64                     `toml:"net_rate_limiter_bw_one_time_burst"`
 	NetRateLimiterOpsMaxRate       int64                     `toml:"net_rate_limiter_ops_max_rate"`
 	NetRateLimiterOpsOneTimeBurst  int64                     `toml:"net_rate_limiter_ops_one_time_burst"`
+	HypervisorLoglevel             uint32                    `toml:"hypervisor_loglevel"`
 	VirtioFSCacheSize              uint32                    `toml:"virtio_fs_cache_size"`
 	VirtioFSQueueSize              uint32                    `toml:"virtio_fs_queue_size"`
 	DefaultMaxVCPUs                uint32                    `toml:"default_maxvcpus"`
@@ -283,34 +288,6 @@ func (h hypervisor) firmware() (string, error) {
 	}
 
 	return ResolvePath(p)
-}
-
-func (h hypervisor) snpCertsPath() (string, error) {
-	// snpCertsPath only matter when using Confidential Guests
-	if !h.ConfidentialGuest {
-		return "", nil
-	}
-
-	// snpCertsPath only matter for SNP guests
-	if !h.SevSnpGuest {
-		return "", nil
-	}
-
-	p := h.SnpCertsPath
-
-	if p == "" {
-		p = defaultSnpCertsPath
-	}
-
-	path, err := ResolvePath(p)
-	if err != nil {
-		if p == defaultSnpCertsPath {
-			msg := fmt.Sprintf("failed to resolve SNP certificates path: %s", defaultSnpCertsPath)
-			kataUtilsLogger.Warn(msg)
-			return "", nil
-		}
-	}
-	return path, err
 }
 
 func (h hypervisor) coldPlugVFIO() config.PCIePort {
@@ -543,6 +520,16 @@ func (h hypervisor) defaultBridges() uint32 {
 	}
 
 	return h.DefaultBridges
+}
+
+func (h hypervisor) defaultHypervisorLoglevel() uint32 {
+	if h.HypervisorLoglevel == 0 {
+		return defaultHypervisorLoglevel
+	} else if h.HypervisorLoglevel > maxHypervisorLoglevel {
+		return maxHypervisorLoglevel
+	}
+
+	return h.HypervisorLoglevel
 }
 
 func (h hypervisor) defaultVirtioFSCache() string {
@@ -872,11 +859,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	snpCertsPath, err := h.snpCertsPath()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
 	machineAccelerators := h.machineAccelerators()
 	cpuFeatures := h.cpuFeatures()
 	kernelParams := h.kernelParams()
@@ -941,7 +923,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:               rootfsType,
 		FirmwarePath:             firmware,
 		FirmwareVolumePath:       firmwareVolume,
-		SnpCertsPath:             snpCertsPath,
 		PFlash:                   pflashes,
 		MachineAccelerators:      machineAccelerators,
 		CPUFeatures:              cpuFeatures,
@@ -962,6 +943,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SharedFS:                 sharedFS,
 		VirtioFSDaemon:           h.VirtioFSDaemon,
 		VirtioFSDaemonList:       h.VirtioFSDaemonList,
+		HypervisorLoglevel:       h.defaultHypervisorLoglevel(),
 		VirtioFSCacheSize:        h.VirtioFSCacheSize,
 		VirtioFSCache:            h.defaultVirtioFSCache(),
 		VirtioFSQueueSize:        h.VirtioFSQueueSize,
@@ -1006,6 +988,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeLinux:           h.DisableSeLinux,
 		DisableGuestSeLinux:      h.DisableGuestSeLinux,
 		ExtraMonitorSocket:       extraMonitorSocket,
+		SnpIdBlock:               h.SnpIdBlock,
+		SnpIdAuth:                h.SnpIdAuth,
 	}, nil
 }
 
@@ -1094,6 +1078,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SharedFS:                       sharedFS,
 		VirtioFSDaemon:                 h.VirtioFSDaemon,
 		VirtioFSDaemonList:             h.VirtioFSDaemonList,
+		HypervisorLoglevel:             h.defaultHypervisorLoglevel(),
 		VirtioFSCacheSize:              h.VirtioFSCacheSize,
 		VirtioFSCache:                  h.VirtioFSCache,
 		MemPrealloc:                    h.MemPrealloc,
@@ -1248,6 +1233,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SharedFS:              sharedFS,
 		VirtioFSDaemon:        h.VirtioFSDaemon,
 		VirtioFSDaemonList:    h.VirtioFSDaemonList,
+		HypervisorLoglevel:    h.defaultHypervisorLoglevel(),
 		VirtioFSCacheSize:     h.VirtioFSCacheSize,
 		VirtioFSCache:         h.defaultVirtioFSCache(),
 		VirtioFSExtraArgs:     h.VirtioFSExtraArgs,
@@ -1469,6 +1455,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		GuestHookPath:            defaultGuestHookPath,
 		VhostUserStorePath:       defaultVhostUserStorePath,
 		VhostUserDeviceReconnect: defaultVhostUserDeviceReconnect,
+		HypervisorLoglevel:       defaultHypervisorLoglevel,
 		VirtioFSCache:            defaultVirtioFSCacheMode,
 		DisableImageNvdimm:       defaultDisableImageNvdimm,
 		RxRateLimiterMaxRate:     defaultRxRateLimiterMaxRate,

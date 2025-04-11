@@ -21,6 +21,9 @@ on:
         required: false
         type: string
         default: ""
+      tarball-suffix:
+        required: false
+        type: string
 
 jobs:
   # Generate jobs for testing CoCo on non-TEE environments
@@ -34,13 +37,12 @@ jobs:
           - nydus
         pull-type:
           - guest-pull
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       GH_PR_NUMBER: ${{ inputs.pr-number }}
-      KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       # Some tests rely on that variable to run (or not)
       KBS: "true"
@@ -64,8 +66,14 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
       - name: Install kata
-        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
 
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
@@ -79,8 +87,13 @@ jobs:
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
       - name: Create AKS cluster
-        timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh create-cluster
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
+        with:
+          timeout_minutes: 15
+          max_attempts: 20
+          retry_on: error
+          retry_wait_seconds: 10
+          command: bash tests/integration/kubernetes/gha-run.sh create-cluster
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats

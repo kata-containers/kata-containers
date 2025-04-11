@@ -9,12 +9,17 @@ use anyhow::anyhow;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+use std::fs;
 #[cfg(target_arch = "x86_64")]
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 
-#[cfg(any(target_arch = "s390x", target_arch = "powerpc64le"))]
+#[cfg(any(
+    target_arch = "s390x",
+    all(target_arch = "powerpc64", target_endian = "little")
+))]
 use nix::unistd::Uid;
 
 #[cfg(target_arch = "x86_64")]
@@ -26,14 +31,19 @@ pub struct TDXDetails {
     pub minor_version: u32,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SevSnpDetails {
+    pub cbitpos: u32,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub enum GuestProtection {
     #[default]
     NoProtection,
     Tdx(TDXDetails),
-    Sev,
-    Snp,
+    Sev(SevSnpDetails),
+    Snp(SevSnpDetails),
     Pef,
     Se,
 }
@@ -46,8 +56,8 @@ impl fmt::Display for GuestProtection {
                 "tdx (major_version: {}, minor_version: {})",
                 details.major_version, details.minor_version
             ),
-            GuestProtection::Sev => write!(f, "sev"),
-            GuestProtection::Snp => write!(f, "snp"),
+            GuestProtection::Sev(details) => write!(f, "sev (cbitpos: {}", details.cbitpos),
+            GuestProtection::Snp(details) => write!(f, "snp (cbitpos: {}", details.cbitpos),
             GuestProtection::Pef => write!(f, "pef"),
             GuestProtection::Se => write!(f, "se"),
             GuestProtection::NoProtection => write!(f, "none"),
@@ -185,12 +195,22 @@ pub fn arch_guest_protection(
         Ok(false)
     };
 
-    if check_contents(snp_path)? {
-        return Ok(GuestProtection::Snp);
-    }
+    let retrieve_sev_cbitpos = || -> Result<u32, ProtectionError> {
+        Err(ProtectionError::CheckFailed(
+            "cbitpos retrieval NOT IMPLEMENTED YET".to_owned(),
+        ))
+    };
 
-    if check_contents(sev_path)? {
-        return Ok(GuestProtection::Sev);
+    let is_snp_available = check_contents(snp_path)?;
+    let is_sev_available = is_snp_available || check_contents(sev_path)?;
+    if is_snp_available || is_sev_available {
+        let cbitpos = retrieve_sev_cbitpos()?;
+        let sev_snp_details = SevSnpDetails { cbitpos };
+        return Ok(if is_snp_available {
+            GuestProtection::Snp(sev_snp_details)
+        } else {
+            GuestProtection::Sev(sev_snp_details)
+        });
     }
 
     Ok(GuestProtection::NoProtection)
@@ -198,7 +218,6 @@ pub fn arch_guest_protection(
 
 #[cfg(target_arch = "s390x")]
 #[allow(dead_code)]
-// Guest protection is not supported on ARM64.
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     if !Uid::effective().is_root() {
         return Err(ProtectionError::NoPerms)?;
@@ -234,23 +253,33 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
     Ok(GuestProtection::Se)
 }
 
-#[cfg(target_arch = "powerpc64le")]
-pub fn available_guest_protection() -> Result<check::GuestProtection, check::ProtectionError> {
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+const PEF_SYS_FIRMWARE_DIR: &str = "/sys/firmware/ultravisor/";
+
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     if !Uid::effective().is_root() {
-        return Err(check::ProtectionError::NoPerms);
+        return Err(ProtectionError::NoPerms);
     }
 
     let metadata = fs::metadata(PEF_SYS_FIRMWARE_DIR);
     if metadata.is_ok() && metadata.unwrap().is_dir() {
-        Ok(check::GuestProtection::Pef)
+        return Ok(GuestProtection::Pef);
     }
 
-    Ok(check::GuestProtection::NoProtection)
+    Ok(GuestProtection::NoProtection)
 }
 
 #[cfg(target_arch = "aarch64")]
 #[allow(dead_code)]
 // Guest protection is not supported on ARM64.
+pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
+    Ok(GuestProtection::NoProtection)
+}
+
+#[cfg(target_arch = "riscv64")]
+#[allow(dead_code)]
+// Guest protection is not supported on RISC-V.
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     Ok(GuestProtection::NoProtection)
 }

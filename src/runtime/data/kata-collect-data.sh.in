@@ -277,8 +277,8 @@ find_system_journal_problems()
 
 	local problems=$(journalctl -q -o cat -a "$selector" "$program" |\
 		grep "time=" |\
-		egrep -i "$problem_pattern" |\
-		egrep -iv "$problem_exclude_pattern" |\
+		grep -i -E "$problem_pattern" |\
+		grep -iv -E "$problem_exclude_pattern" |\
 		tail -n ${PROBLEM_LIMIT})
 
 	if [ -n "$problems" ]; then
@@ -370,11 +370,11 @@ show_package_versions()
 	pattern+=")"
 
 	if have_cmd "dpkg"; then
-		run_cmd_and_show_quoted_output "" "dpkg -l|egrep \"$pattern\""
+		run_cmd_and_show_quoted_output "" "dpkg -l|grep -E \"$pattern\""
 	fi
 
 	if have_cmd "rpm"; then
-		run_cmd_and_show_quoted_output "" "rpm -qa|egrep \"$pattern\""
+		run_cmd_and_show_quoted_output "" "rpm -qa|grep -E \"$pattern\""
 	fi
 
 	separator
@@ -633,7 +633,7 @@ get_image_file()
 
 	local image=$(eval "$cmdline" 2>/dev/null |\
 		grep -A 1 '^\[Image\]' |\
-		egrep "\<Path\> =" |\
+		grep -E "\<Path\> =" |\
 		awk '{print $3}' |\
 		tr -d '"')
 
@@ -648,7 +648,7 @@ get_initrd_file()
 
 	local initrd=$(eval "$cmdline" 2>/dev/null |\
 		grep -A 1 '^\[Initrd\]' |\
-		egrep "\<Path\> =" |\
+		grep -E "\<Path\> =" |\
 		awk '{print $3}' |\
 		tr -d '"')
 
@@ -742,7 +742,7 @@ show_throttler_details()
 
 	throttlers=$(find /usr/libexec /usr/lib* -type f |\
 		grep -v trigger |\
-		egrep "(cc|kata)-ksm-throttler" |\
+		grep -E "(cc|kata)-ksm-throttler" |\
 		sort -u)
 
 	echo "$throttlers" | while read throttler

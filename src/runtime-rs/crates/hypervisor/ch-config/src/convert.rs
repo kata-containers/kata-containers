@@ -180,6 +180,15 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let platform = get_platform_cfg(guest_protection_to_use);
 
+        let balloon = if cfg.device_info.reclaim_guest_freed_memory {
+            Some(crate::BalloonConfig {
+                free_page_reporting: true,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
         let cfg = VmConfig {
             cpus,
             memory,
@@ -193,6 +202,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             vsock: Some(vsock),
             rng,
             platform,
+            balloon,
 
             ..Default::default()
         };
@@ -539,7 +549,7 @@ fn get_platform_cfg(guest_protection_to_use: GuestProtection) -> Option<Platform
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::TDXDetails;
+    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
     use kata_types::config::hypervisor::{
         BlockDeviceInfo, Hypervisor as HypervisorConfig, SecurityInfo,
     };
@@ -1643,7 +1653,6 @@ mod tests {
             result: Result<VmConfig, VmConfigError>,
         }
 
-        let u8_max = std::u8::MAX;
         let sysinfo = nix::sys::sysinfo::sysinfo().unwrap();
 
         let actual_max_mem_bytes = sysinfo.ram_total();
@@ -1669,8 +1678,8 @@ mod tests {
         let valid_vsock =
             VsockConfig::try_from((vsock_socket_path.to_string(), DEFAULT_VSOCK_CID)).unwrap();
 
-        let (cpu_info, cpus_config) = make_cpu_objects(7, u8_max, false);
-        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, u8_max, true);
+        let (cpu_info, cpus_config) = make_cpu_objects(7, u8::MAX, false);
+        let (cpu_info_tdx, cpus_config_tdx) = make_cpu_objects(7, u8::MAX, true);
 
         let (memory_info_std, mem_config_std) =
             make_memory_objects(79, usable_max_mem_bytes, false);
@@ -2171,6 +2180,8 @@ mod tests {
             minor_version: 0,
         };
 
+        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+
         #[derive(Debug)]
         struct TestData<'a> {
             use_image: bool,
@@ -2193,14 +2204,14 @@ mod tests {
                 use_image: true,
                 container_rootfs_driver: "container",
                 vm_rootfs_driver: "vm",
-                guest_protection_to_use: GuestProtection::Sev,
+                guest_protection_to_use: GuestProtection::Sev(sev_snp_details.clone()),
                 result: Ok(()),
             },
             TestData {
                 use_image: true,
                 container_rootfs_driver: "container",
                 vm_rootfs_driver: "vm",
-                guest_protection_to_use: GuestProtection::Snp,
+                guest_protection_to_use: GuestProtection::Snp(sev_snp_details.clone()),
                 result: Ok(()),
             },
             TestData {

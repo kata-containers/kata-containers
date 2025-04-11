@@ -43,7 +43,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 ARCH=${ARCH:-$(uname -m)}
 BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
-PULL_TYPE=${PULL_TYPE:-default}
+PULL_TYPE=${PULL_TYPE:-guest-pull}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
@@ -53,6 +53,7 @@ TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 RELEASE="${RELEASE:-"no"}"
+KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -99,6 +100,7 @@ options:
 	coco-guest-components
 	cloud-hypervisor
 	cloud-hypervisor-glibc
+	csi-kata-directvolume
 	firecracker
 	genpolicy
 	kata-ctl
@@ -115,6 +117,7 @@ options:
 	ovmf-sev
 	qemu
 	qemu-snp-experimental
+	qemu-tdx-experimental
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
@@ -190,7 +193,7 @@ cleanup_and_fail() {
 	if [ -n "${extra_tarballs}" ]; then
 		local mapping
 		IFS=' ' read -a mapping <<< "${extra_tarballs}"
-		for m in ${mapping[@]}; do
+		for m in "${mapping[@]}"; do
 			local extra_tarball_name=${m%:*}
 			rm -f "${extra_tarball_name}"
 		done
@@ -270,7 +273,7 @@ install_cached_tarball_component() {
 
 	local mapping
 	IFS=' ' read -a mapping <<< "${extra_tarballs}"
-	for m in ${mapping[@]}; do
+	for m in "${mapping[@]}"; do
 		local extra_tarball_name=${m%:*}
 		local extra_tarball_path=${m#*:}
 
@@ -331,8 +334,12 @@ install_image() {
 	local variant="${1:-}"
 
 	image_type="image"
+	os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
+	os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
 	if [ -n "${variant}" ]; then
 		image_type+="-${variant}"
+		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
 	fi
 
 	local component="rootfs-${image_type}"
@@ -348,13 +355,13 @@ install_image() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 
-	latest_artefact="$(get_kata_version)-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -370,16 +377,10 @@ install_image() {
 	info "Create image"
 
 	if [ -n "${variant}" ]; then
-		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
-		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
-
-		if [ "${variant}" == "confidential" ]; then
+		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
-	else
-		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
-		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
@@ -390,7 +391,11 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 	export PULL_TYPE=default
 	install_image "confidential"
 }
@@ -405,8 +410,12 @@ install_initrd() {
 	local variant="${1:-}"
 
 	initrd_type="initrd"
+	os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.name")"
+	os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.version")"
 	if [ -n "${variant}" ]; then
 		initrd_type+="-${variant}"
+		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
 	fi
 
 	local component="rootfs-${initrd_type}"
@@ -421,13 +430,13 @@ install_initrd() {
 		"$(get_last_modification "${repo_root_dir}/src/agent")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
-	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
+	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -445,16 +454,15 @@ install_initrd() {
 	info "Create initrd"
 
 	if [ -n "${variant}" ]; then
-		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
-		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
-
-		if [ "${variant}" == "confidential" ]; then
+		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
-		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.name")"
-		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.version")"
+		# No variant is passed, it means vanilla kata containers
+		if [ "${os_name}" = "alpine" ]; then
+			export AGENT_INIT=yes
+		fi
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
@@ -465,40 +473,61 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export MEASURED_ROOTFS=yes
+	export MEASURED_ROOTFS=no
 	export PULL_TYPE=default
 	install_initrd "confidential"
 }
 
-#Instal NVIDIA GPU image
+# For all nvidia_gpu targets we can customize the stack that is enbled
+# in the VM by setting the NVIDIA_GPU_STACK= environment variable
+#
+# latest | lts | version
+#              -> use the latest and greatest driver,
+#                 lts release or e.g. version=550.127.1
+# driver       -> enable open or closed drivers
+# debug        -> enable debugging support
+# compute      -> enable the compute GPU stack, includes utility
+# graphics     -> enable the graphics GPU stack, includes compute
+# dcgm         -> enable the DCGM stack + DGCM exporter
+# nvswitch     -> enable DGX like systems
+# gpudirect    -> enable use-cases like GPUDirect RDMA, GPUDirect GDS
+# dragonball   -> enable dragonball support
+#
+# The full stack can be enabled by setting all the options like:
+#
+# NVIDIA_GPU_STACK="latest,compute,dcgm,nvswitch,gpudirect"
+#
+# Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu"
 }
 
-#Install NVIDIA GPU initrd
+# Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_initrd "nvidia-gpu"
 }
 
-#Instal NVIDIA GPU confidential image
+# Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	# TODO: export MEASURED_ROOTFS=yes
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
 	install_image "nvidia-gpu-confidential"
 }
 
-#Install NVIDIA GPU confidential initrd
+# Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY="yes"
-	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	# TODO: export MEASURED_ROOTFS=yes
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
 	install_initrd "nvidia-gpu-confidential"
 }
 
@@ -587,7 +616,11 @@ install_kernel() {
 }
 
 install_kernel_confidential() {
-	export MEASURED_ROOTFS=yes
+	if [ "${ARCH}" == "s390x" ]; then
+		export MEASURED_ROOTFS=no
+	else
+		export MEASURED_ROOTFS=yes
+	fi
 
 	install_kernel_helper \
 		"assets.kernel.confidential" \
@@ -662,6 +695,17 @@ install_qemu() {
 
 install_qemu_snp_experimental() {
 	export qemu_suffix="snp-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
+}
+
+install_qemu_tdx_experimental() {
+	export qemu_suffix="tdx-experimental"
 	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
 
 	install_qemu_helper \
@@ -1000,6 +1044,7 @@ install_tools_helper() {
 
 	tool_binary=${tool}
 	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
+	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="directvolplugin"
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
 	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
 
@@ -1021,6 +1066,7 @@ install_tools_helper() {
 
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
+	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="csi-kata-directvolume"
 	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
@@ -1030,6 +1076,10 @@ install_agent_ctl() {
 
 install_genpolicy() {
 	install_tools_helper "genpolicy"
+}
+
+install_csi_kata_directvolume() {
+	install_tools_helper "csi-kata-directvolume"
 }
 
 install_kata_ctl() {
@@ -1088,6 +1138,7 @@ handle_build() {
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
+		install_qemu_tdx_experimental
 		install_stratovirt
 		install_runk
 		install_shimv2
@@ -1109,6 +1160,8 @@ handle_build() {
 
 	cloud-hypervisor-glibc) install_clh_glibc ;;
 
+	csi-kata-directvolume) install_csi_kata_directvolume ;;
+
 	firecracker) install_firecracker ;;
 
 	genpolicy) install_genpolicy ;;
@@ -1122,6 +1175,7 @@ handle_build() {
 	kernel-confidential) install_kernel_confidential ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
+
 	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
@@ -1139,6 +1193,8 @@ handle_build() {
 	qemu) install_qemu ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
+
+	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 
 	stratovirt) install_stratovirt ;;
 
@@ -1168,6 +1224,10 @@ handle_build() {
 
 	virtiofsd) install_virtiofsd ;;
 
+	dummy)
+		tar cvfJ ${final_tarball_path} --files-from /dev/null
+	       	;;
+
 	*)
 		die "Invalid build target ${build_target}"
 		;;
@@ -1187,7 +1247,15 @@ handle_build() {
 				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
 
 				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar rvf kernel-headers.tar {} +
+				if [ -n "${KBUILD_SIGN_PIN}" ]; then
+					head -n1 kata-linux-*/certs/signing_key.pem | grep -q "ENCRYPTED PRIVATE KEY" || die "signing_key.pem is not encrypted"
+					mv kata-linux-*/certs/signing_key.pem .
+					mv kata-linux-*/certs/signing_key.x509 .
+					tar -rvf kernel-headers.tar signing_key.pem signing_key.x509 --remove-files
+				fi
+				xz -T0 kernel-headers.tar
+				mv kernel-headers.tar.xz "${kernel_headers_final_tarball_path}"
 				popd
 			fi
 			tar tvf "${kernel_headers_final_tarball_path}"
@@ -1323,6 +1391,7 @@ main() {
 		agent-ctl
 		cloud-hypervisor
 		coco-guest-components
+		csi-kata-directvolume
 		firecracker
 		genpolicy
 		kata-ctl
@@ -1342,6 +1411,7 @@ main() {
 		shim-v2
 		trace-forwarder
 		virtiofsd
+		dummy
 	)
 	silent=false
 	while getopts "hs-:" opt; do
@@ -1400,5 +1470,5 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-	main $@
+	main "$@"
 fi

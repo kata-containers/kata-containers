@@ -17,7 +17,7 @@ GITHUB_TOKEN="..." REQUIRED_JOBS="skipper / skipper"
 REQUIRED_REGEXPS=".*" REQUIRED_LABELS="ok-to-test;bar"
 COMMIT_HASH=b8382cea886ad9a8f77d237bcfc0eba0c98775dd
 GITHUB_REPOSITORY=kata-containers/kata-containers
-PR_NUMBER=123 python3 jobs.py
+GH_PR_NUMBER=123 python3 jobs.py
 """
 
 import os
@@ -43,7 +43,7 @@ class Checker:
     """Object to keep watching required GH action workflows"""
     def __init__(self):
         self.latest_commit_sha = os.getenv("COMMIT_HASH")
-        self.pr_number = os.getenv("PR_NUMBER")
+        self.pr_number = os.getenv("GH_PR_NUMBER")
         required_labels = os.getenv("REQUIRED_LABELS")
         if required_labels:
             self.required_labels = set(required_labels.split(";"))
@@ -80,12 +80,10 @@ class Checker:
             else:
                 # Not a required job
                 return
-        # TODO: Check if multiple re-runs use the same "run_id". If so use
-        #       job['run_attempt'] in case of matching "run_id".
-        elif job['run_id'] <= self.results[job_name]['run_id']:
+        elif job['run_id'] < self.results[job_name]['run_id']:
             # Newer results already stored
             print(f"older {job_name} - {job['status']} {job['conclusion']} "
-                  f"{job['id']}", file=sys.stderr)
+                  f"{job['id']} (newer_id={self.results[job_name]['id']})", file=sys.stderr)
             return
         print(f"{job_name} - {job['status']} {job['conclusion']} {job['id']}",
               file=sys.stderr)
@@ -180,7 +178,7 @@ class Checker:
         )
         response.raise_for_status()
         workflow_runs = response.json()["workflow_runs"]
-        for i, run in enumerate(workflow_runs):
+        for run in workflow_runs:
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
                 self.record(run["name"], job)
@@ -215,7 +213,7 @@ class Checker:
             return True
 
         if not self.pr_number:
-            print("The PR_NUMBER not specified, skipping the "
+            print("The GH_PR_NUMBER not specified, skipping the "
                   f"required-labels-check ({self.required_labels})")
             return True
 

@@ -2,8 +2,17 @@ name: CI | Run test metrics
 on:
   workflow_call:
     inputs:
-      tarball-suffix:
-        required: false
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
         type: string
       commit-hash:
         required: false
@@ -14,34 +23,7 @@ on:
         default: ""
 
 jobs:
-  setup-kata:
-    name: Kata Setup
-    runs-on: metrics
-    env:
-      GOPATH: ${{ github.workspace }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: get-kata-tarball
-        uses: actions/download-artifact@v4
-        with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
-
-      - name: Install kata
-        run: bash tests/metrics/gha-run.sh install-kata kata-artifacts
-
   run-metrics:
-    needs: setup-kata
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -54,33 +36,77 @@ jobs:
     env:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      K8S_TEST_HOST_TYPE: "baremetal"
+      USING_NFD: "false"
+      KUBERNETES: kubeadm
     steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy Kata
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-kubeadm
+
+      - name: Install check metrics
+        run: bash tests/metrics/gha-run.sh install-checkmetrics
+
       - name: enabling the hypervisor
         run: bash tests/metrics/gha-run.sh enabling-hypervisor
 
       - name: run launch times test
+        timeout-minutes: 15
+        continue-on-error: true
         run: bash tests/metrics/gha-run.sh run-test-launchtimes
 
       - name: run memory foot print test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-memory-usage
 
       - name: run memory usage inside container test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-memory-usage-inside-container
 
       - name: run blogbench test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-blogbench
 
       - name: run tensorflow test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-tensorflow
 
       - name: run fio test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-fio
 
       - name: run iperf test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-iperf
 
       - name: run latency test
+        timeout-minutes: 15
+        continue-on-error: true
         run:  bash tests/metrics/gha-run.sh run-test-latency
+
+      - name: check metrics
+        run:  bash tests/metrics/gha-run.sh check-metrics
 
       - name: make metrics tarball ${{ matrix.vmm }}
         run: bash tests/metrics/gha-run.sh make-tarball-results
@@ -92,3 +118,8 @@ jobs:
           path: results-${{ matrix.vmm }}.tar.gz
           retention-days: 1
           if-no-files-found: error
+
+      - name: Delete kata-deploy
+        timeout-minutes: 10
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-kubeadm

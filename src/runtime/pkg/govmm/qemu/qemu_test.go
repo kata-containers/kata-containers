@@ -127,6 +127,27 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 	testAppend(object, deviceNVDIMMString, t)
 }
 
+var (
+	tdxObjectVsock = `-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`
+	tdxObjectUnix  = `-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}}`
+)
+
+func TestTdxQuoteSocket(t *testing.T) {
+	object := Object{
+		Type:     TDXGuest,
+		ID:       "tdx",
+		File:     "unused",
+		DeviceID: "unused",
+		QgsPort:  0,
+	}
+
+	testAppend(object, tdxObjectUnix, t)
+
+	object.QgsPort = 4050
+
+	testAppend(object, tdxObjectVsock, t)
+}
+
 var objectEPCString = "-object memory-backend-epc,id=epc0,size=65536,prealloc=on"
 
 func TestAppendEPCObject(t *testing.T) {

@@ -46,11 +46,7 @@ impl MemResource {
             .await
             .context("update container memory resources")?;
         // the unit here is MB
-        let mut mem_sb_mb = self
-            .total_mems()
-            .await
-            .context("failed to calculate total memory requirement for containers")?;
-        mem_sb_mb += self.orig_toml_default_mem;
+        let mem_sb_mb = self.get_current_mb().await?;
         info!(sl!(), "calculate mem_sb_mb {}", mem_sb_mb);
 
         let _curr_mem = self
@@ -59,6 +55,16 @@ impl MemResource {
             .context("failed to update_mem_resource")?;
 
         Ok(())
+    }
+
+    pub(crate) async fn get_current_mb(&self) -> Result<u32> {
+        let mut mem_sb_mb = self
+            .total_mems()
+            .await
+            .context("failed to calculate total memory requirement for containers")?;
+        mem_sb_mb += self.orig_toml_default_mem;
+
+        Ok(mem_sb_mb)
     }
 
     async fn total_mems(&self) -> Result<u32> {

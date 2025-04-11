@@ -56,7 +56,7 @@ ARCH := $(if $(GOARCH),$(GOARCH),$(shell go env GOARCH))
 # Specific packages can be excluded from each of the tests below by setting the *_FILTER_CMD variables
 # to something like "| grep -v 'github.com/kubernetes-csi/project/pkg/foobar'". See usage below.
 
-build-%: check-go-version-go
+build-%:
 	mkdir -p bin
 	CGO_ENABLED=0 GOOS=linux go build $(GOFLAGS_VENDOR) -a -ldflags '-X main.version=$(REV) -extldflags "-static"' -o ./bin/$* ./cmd/$*
 	if [ "$$ARCH" = "amd64" ]; then \
@@ -92,9 +92,6 @@ push: $(CMDS:%=push-%)
 clean:
 	-rm -rf bin
 
-test: check-go-version-go
-
-
 .PHONY: test-vet
 test: test-vet
 test-vet:
@@ -111,12 +108,3 @@ test-fmt:
 		gofmt -d $$files; \
 		false; \
 	fi
-
-
-# Targets in the makefile can depend on check-go-version-<path to go binary>
-# to trigger a warning if the x.y version of that binary does not match
-# what the project uses. Make ensures that this is only checked once per
-# invocation.
-.PHONY: check-go-version-%
-check-go-version-%:
-	./release-tools/verify-go-version.sh "$*"

@@ -430,7 +430,7 @@ impl DragonballInner {
                         use_shared_irq: None,
                         use_generic_irq: None,
                         f_deflate_on_oom: false,
-                        f_reporting: self.config.device_info.enable_balloon_f_reporting,
+                        f_reporting: self.config.device_info.reclaim_guest_freed_memory,
                     };
                     self.vmm_instance
                         .insert_balloon_device(balloon_config)
@@ -462,7 +462,7 @@ impl DragonballInner {
                     use_shared_irq: None,
                     use_generic_irq: None,
                     f_deflate_on_oom: false,
-                    f_reporting: self.config.device_info.enable_balloon_f_reporting,
+                    f_reporting: self.config.device_info.reclaim_guest_freed_memory,
                 };
                 self.balloon_size = had_mem_mb - new_mem_mb;
                 self.vmm_instance

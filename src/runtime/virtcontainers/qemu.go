@@ -792,11 +792,25 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			return fmt.Errorf("Cannot get host path for device: %v err: %v", dev, err)
 		}
 
-		devicesPerIOMMUGroup, err := drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
-		if err != nil {
-			return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
+		var vfioDevices []*config.VFIODev
+		// This works for IOMMUFD enabled kernels > 6.x
+		// In the case of IOMMUFD the device.HostPath will look like
+		// /dev/vfio/devices/vfio0
+		// (1) Check if we have the new IOMMUFD or old container based VFIO
+		if strings.HasPrefix(dev.HostPath, drivers.IommufdDevPath) {
+			q.Logger().Infof("### IOMMUFD Path: %s", dev.HostPath)
+			vfioDevices, err = drivers.GetDeviceFromVFIODev(dev)
+			if err != nil {
+				return fmt.Errorf("Cannot get VFIO device from IOMMUFD with device: %v err: %v", dev, err)
+			}
+		} else {
+			vfioDevices, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+			if err != nil {
+				return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
+			}
 		}
-		for _, vfioDevice := range devicesPerIOMMUGroup {
+
+		for _, vfioDevice := range vfioDevices {
 			if drivers.IsPCIeDevice(vfioDevice.BDF) {
 				numOfPluggablePorts = numOfPluggablePorts + 1
 			}
@@ -1928,16 +1942,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			}
 		}()
 
-		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
-		if err != nil {
-			return err
-		}
-		devSlot, err := types.PciSlotFromString(addr)
-		if err != nil {
-			return err
-		}
-		pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
-		endpoint.SetPciPath(pciPath)
+		q.arch.setEndpointDevicePath(endpoint, bridge.Addr, addr)
 
 		var machine govmmQemu.Machine
 		machine, err = q.getQemuMachine()
@@ -1945,7 +1950,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			return err
 		}
 		if machine.Type == QemuCCWVirtio {
-			devNoHotplug := fmt.Sprintf("fe.%x.%x", bridge.Addr, addr)
+			devNoHotplug := fmt.Sprintf("fe.%x.%v", bridge.Addr, addr)
 			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs()))
 		}
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)

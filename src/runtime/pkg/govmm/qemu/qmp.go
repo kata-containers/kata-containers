@@ -869,7 +869,7 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	}
 
 	if shared {
-		args["share-rw"] = "on"
+		args["share-rw"] = true
 	}
 	if transport.isVirtioPCI(nil) {
 		args["romfile"] = romfile
@@ -923,7 +923,7 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 		args["lun"] = lun
 	}
 	if shared {
-		args["share-rw"] = "on"
+		args["share-rw"] = true
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1050,7 +1050,7 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 		// Clearlinux automatically sets up the queues properly
 		// The agent implementation should do this to ensure that it is
 		// always set
-		args["mq"] = "on"
+		args["mq"] = true
 		args["vectors"] = 2*queues + 2
 	}
 
@@ -1071,7 +1071,7 @@ func (q *QMP) ExecuteNetCCWDeviceAdd(ctx context.Context, netdevID, devID, macAd
 	}
 
 	if queues > 0 {
-		args["mq"] = "on"
+		args["mq"] = true
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1113,7 +1113,7 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 		args["bus"] = bus
 	}
 	if shared {
-		args["share-rw"] = "on"
+		args["share-rw"] = true
 	}
 	if queues > 0 {
 		args["num-queues"] = strconv.Itoa(queues)

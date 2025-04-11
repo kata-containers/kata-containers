@@ -95,6 +95,8 @@ impl StorageState {
     }
 }
 
+pub type PciHostGuestMapping = HashMap<pci::Address, pci::Address>;
+
 #[derive(Debug)]
 pub struct Sandbox {
     pub logger: Logger,
@@ -118,7 +120,7 @@ pub struct Sandbox {
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
-    pub pcimap: HashMap<pci::Address, pci::Address>,
+    pub pcimap: HashMap<String, PciHostGuestMapping>,
     pub devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
 }
 
@@ -1065,7 +1067,7 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
 
-        let test_pids = [std::i32::MIN, -1, 0, 1, std::i32::MAX];
+        let test_pids = [i32::MIN, -1, 0, 1, i32::MAX];
 
         for test_pid in test_pids {
             let mut s = Sandbox::new(&logger).unwrap();
