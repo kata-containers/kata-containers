@@ -1,9 +1,9 @@
 [package]
-name = "resource"
-version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
+name    = "resource"
+version = "0.1.0"
 
 [dev-dependencies]
 tempfile = "3.2.0"
@@ -12,38 +12,38 @@ tempfile = "3.2.0"
 test-utils = { workspace = true }
 
 [dependencies]
-anyhow = "^1.0"
-actix-rt = "2.7.0"
-async-trait = "0.1.48"
-bitflags = "1.2.1"
-byte-unit = "4.0.14"
-cgroups-rs = "0.3.2"
-futures = "0.3.11"
-lazy_static = "1.4.0"
-libc = ">=0.2.39"
-netns-rs = "0.1.0"
-netlink-sys = "0.8.3"
+actix-rt             = "2.7.0"
+anyhow               = "^1.0"
+async-trait          = "0.1.48"
+bitflags             = "1.2.1"
+byte-unit            = "4.0.14"
+cgroups-rs           = "0.3.2"
+futures              = "0.3.11"
+lazy_static          = "1.4.0"
+libc                 = ">=0.2.39"
 netlink-packet-route = "0.19.0"
-nix = "0.24.2"
-rand = "^0.7.2"
-rtnetlink = "0.14.0"
-scopeguard = "1.0.0"
-serde = { version = "1.0.138", features = ["derive"] }
-serde_json = "1.0.82"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-tokio = { version = "1.38.0", features = ["process"] }
-tracing = "0.1.36"
-uuid = { version = "0.4", features = ["v4"] }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+netlink-sys          = "0.8.3"
+netns-rs             = "0.1.0"
+nix                  = "0.24.2"
+oci-spec             = { version = "0.6.8", features = ["runtime"] }
+rand                 = "^0.7.2"
+rtnetlink            = "0.14.0"
+scopeguard           = "1.0.0"
+serde                = { version = "1.0.138", features = ["derive"] }
+serde_json           = "1.0.82"
+slog                 = "2.5.2"
+slog-scope           = "4.4.0"
+tokio                = { version = "1.38.0", features = ["process"] }
+tracing              = "0.1.36"
+uuid                 = { version = "0.4", features = ["v4"] }
 
 # Local dependencies
-agent = { workspace = true }
-hypervisor = { workspace = true }
-kata-types = { workspace = true }
+agent         = { workspace = true }
+hypervisor    = { workspace = true }
 kata-sys-util = { workspace = true }
-logging = { workspace = true }
-persist = { workspace = true }
-tests_utils = { workspace = true }
+kata-types    = { workspace = true }
+logging       = { workspace = true }
+persist       = { workspace = true }
+tests_utils   = { workspace = true }
 
 [features]

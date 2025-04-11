@@ -1,15 +1,15 @@
 [package]
-name = "safe-path"
-version = "0.1.0"
+authors     = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+categories  = ["filesystem", "parser-implementations"]
 description = "A library to safely handle file system paths for container runtimes"
-keywords = ["kata", "container", "path", "securejoin"]
-categories = ["parser-implementations", "filesystem"]
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-homepage = "https://katacontainers.io/"
-readme = "README.md"
-license = "Apache-2.0"
-edition = "2018"
+edition     = "2018"
+homepage    = "https://katacontainers.io/"
+keywords    = ["container", "kata", "path", "securejoin"]
+license     = "Apache-2.0"
+name        = "safe-path"
+readme      = "README.md"
+repository  = "https://github.com/kata-containers/kata-containers.git"
+version     = "0.1.0"
 
 [dependencies]
 libc = "0.2.100"

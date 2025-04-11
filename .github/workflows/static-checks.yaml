@@ -123,3 +123,25 @@ jobs:
         run: |
           export PATH="${PATH}:${GOPATH}/bin"
           cd "${GOPATH}/src/github.com/${{ github.repository }}" && ${{ matrix.cmd }}
+
+  taplo-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install rust
+        run: |
+          export PATH="$PATH:/usr/local/bin"
+          ./tests/install_rust.sh
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get -yqq install build-essential libssl-dev
+
+      - name: Install taplo
+        run: cargo install taplo-cli --locked
+
+      - name: Check formatting
+        run: taplo fmt --check

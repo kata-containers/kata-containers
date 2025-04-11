@@ -1,15 +1,15 @@
 [package]
-name = "linux_container"
-version = "0.1.0"
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
+name    = "linux_container"
+version = "0.1.0"
 
 [dependencies]
-anyhow = "^1.0"
+anyhow      = "^1.0"
 async-trait = "0.1.48"
-tokio = { version = "1.38.0" }
+tokio       = { version = "1.38.0" }
 
 # Local dependencies
-common = { workspace = true }
+common     = { workspace = true }
 kata-types = { workspace = true }
-resource = { workspace = true }
+resource   = { workspace = true }
