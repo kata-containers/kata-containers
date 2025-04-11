@@ -65,7 +65,8 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 65535
           },
           "Args": [
             "/pause"
@@ -197,7 +198,8 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 65535
           },
           "Args": [
             "/pause"
