@@ -11,8 +11,12 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::mount::Mount;
 mod block_rootfs;
-use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+pub mod virtual_volume;
 
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+use virtual_volume::{is_kata_virtual_volume, VirtualVolume};
+
+use std::collections::HashMap;
 use std::{sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
@@ -58,6 +62,7 @@ impl RootFsResource {
     #[allow(clippy::too_many_arguments)]
     pub async fn handler_rootfs(
         &self,
+        annotations: &HashMap<String, String>,
         share_fs: &Option<Arc<dyn ShareFs>>,
         device_manager: &RwLock<DeviceManager>,
         h: &dyn Hypervisor,
@@ -99,6 +104,14 @@ impl RootFsResource {
                             .context("new block rootfs")?,
                     );
                     Ok(block_rootfs)
+                } else if share_fs.is_none() && is_kata_virtual_volume(layer) {
+                    let mount_options = layer.options.clone();
+                    let virtual_volume: Arc<dyn Rootfs> = Arc::new(
+                        VirtualVolume::new(cid, annotations, mount_options.to_vec())
+                            .await
+                            .context("kata virtual volume failed.")?,
+                    );
+                    Ok(virtual_volume)
                 } else if let Some(share_fs) = share_fs {
                     // handle nydus rootfs
                     let share_rootfs: Arc<dyn Rootfs> = if layer.fs_type == NYDUS_ROOTFS_TYPE {
