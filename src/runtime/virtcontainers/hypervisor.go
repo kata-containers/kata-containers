@@ -682,6 +682,14 @@ type HypervisorConfig struct {
 	// Initdata defines the initdata passed into guest when CreateVM
 	Initdata string
 
+	// InitdataDigest represents opaque binary data attached to a TEE and typically used
+	// for Guest attestation. This will be encoded in the format expected by QEMU for each TEE type.
+	InitdataDigest []byte
+
+	// The initdata image on the host side to store the initdata and be mounted
+	// as a raw block device to guest
+	InitdataImage string
+
 	// GPU specific annotations (currently only applicable for Remote Hypervisor)
 	//DefaultGPUs specifies the number of GPUs required for the Kata VM
 	DefaultGPUs uint32

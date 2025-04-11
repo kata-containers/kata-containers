@@ -1,0 +1,193 @@
+#!/usr/bin/env bats
+# Copyright (c) 2025 Alibaba Cloud
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This test we will test initdata in the following logic
+# 1. Enable image signature verification via kernel commandline
+# 2. Set Trustee address via initdata
+# 3. Pull an image from a banned registry
+# 4. Check if the pulling fails with log `image security validation failed`,
+# the initdata works.
+# 
+# Note that if initdata does not work, the pod still fails to launch. But the
+# error information is `[CDH] [ERROR]: Get Resource failed` which internally
+# means that the KBS URL has not been set correctly.
+#
+# TODO: After https://github.com/kata-containers/kata-containers/issues/9266
+# is resolved, both KBS URI and policy URI can be set via initdata.
+
+load "${BATS_TEST_DIRNAME}/lib.sh"
+load "${BATS_TEST_DIRNAME}/confidential_common.sh"
+
+export KBS="${KBS:-false}"
+
+setup() {
+    if ! is_confidential_runtime_class; then
+        info "not confidential"
+        skip "Test not supported for ${KATA_HYPERVISOR}."
+    fi
+
+    # # TODO: add supports for archs except for TDX/SNP
+    # if [ "$(uname -m)" != "x86_64" ]; then
+    #     info "not x86-64"
+    #     skip "Test not supported for $(uname -m)."
+    # fi
+
+    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+
+    setup_common || die "setup_common failed"
+    FAIL_TEST_IMAGE="quay.io/prometheus/busybox:latest"
+    SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
+    info "setup successfully"
+}
+
+function setup_kbs_image_policy_for_initdata() {
+    if [ "${KBS}" = "false" ]; then
+        info "no kbs"
+        skip "Test skipped as KBS not setup"
+    fi
+
+    info "setup kbs image policy for initdata"
+    default_policy="${1:-insecureAcceptAnything}"
+    policy_json=$(cat << EOF
+{
+    "default": [
+        {
+        "type": "${default_policy}"
+        }
+    ],
+    "transports": {
+        "docker": {
+            "quay.io/prometheus": [
+                {
+                    "type": "reject"
+                }
+            ]
+        }
+    }
+}
+EOF
+    )
+
+    info "prepared policy json"
+    if ! is_confidential_hardware; then
+        info "is not confidential hardware, set allow all resources"
+        kbs_set_allow_all_resources
+    fi
+
+    info "kbs set resource"
+    kbs_set_resource "default" "security-policy" "test" "${policy_json}"
+    info "kbs set resource done"
+}
+
+@test "Test that creating a container from an rejected image for initdata, with initdata fails" {
+
+    setup_kbs_image_policy_for_initdata
+
+    info "setup_kbs_image_policy_for_initdata done"
+    local CC_KBS_ADDR
+    export CC_KBS_ADDR=$(kbs_k8s_svc_http_addr)
+    info "CC_KBS_ADDR: ${CC_KBS_ADDR}"
+
+    kernel_parameter="agent.image_policy_file=${SECURITY_POLICY_KBS_URI} agent.enable_signature_verification=true"
+    initdata_annotation=$(gzip -c << EOF | base64 -w0
+version = "0.1.0"
+algorithm = "sha256"
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.coco_as]
+# TODO: we should fix this on AA side to set this a default value if not set.
+url = "${CC_KBS_ADDR}"
+
+[token_configs.kbs]
+url = "${CC_KBS_ADDR}"
+'''
+
+"cdh.toml" = '''
+[kbc]
+name = "cc_kbc"
+url = "${CC_KBS_ADDR}"
+'''
+
+"policy.rego" = '''
+# Copyright (c) 2023 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+package agent_policy
+
+default AddARPNeighborsRequest := true
+default AddSwapRequest := true
+default CloseStdinRequest := true
+default CopyFileRequest := true
+default CreateContainerRequest := true
+default CreateSandboxRequest := true
+default DestroySandboxRequest := true
+default ExecProcessRequest := true
+default GetMetricsRequest := true
+default GetOOMEventRequest := true
+default GuestDetailsRequest := true
+default ListInterfacesRequest := true
+default ListRoutesRequest := true
+default MemHotplugByProbeRequest := true
+default OnlineCPUMemRequest := true
+default PauseContainerRequest := true
+default PullImageRequest := true
+default ReadStreamRequest := true
+default RemoveContainerRequest := true
+default RemoveStaleVirtiofsShareMountsRequest := true
+default ReseedRandomDevRequest := true
+default ResumeContainerRequest := true
+default SetGuestDateTimeRequest := true
+default SetPolicyRequest := true
+default SignalProcessRequest := true
+default StartContainerRequest := true
+default StartTracingRequest := true
+default StatsContainerRequest := true
+default StopTracingRequest := true
+default TtyWinResizeRequest := true
+default UpdateContainerRequest := true
+default UpdateEphemeralMountsRequest := true
+default UpdateInterfaceRequest := true
+default UpdateRoutesRequest := true
+default WaitProcessRequest := true
+default WriteStreamRequest := true
+'''
+EOF
+    )
+    info "kernel parameter: ${kernel_parameter}"
+    info "initdata annotation: ${initdata_annotation}"
+    create_coco_pod_yaml_with_annotations "${kernel_parameter}" "${initdata_annotation}" "${node}"
+
+    info "create_coco_pod_yaml_with_annotations done"
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    info "acreate pod and try to test fail"
+    assert_pod_fail "${kata_pod}"
+
+    info "assert log.."
+    assert_logs_contain "${node}" kata "${node_start_time}" "image security validation failed"
+}
+
+teardown() {
+    if ! is_confidential_runtime_class; then
+        skip "Test not supported for ${KATA_HYPERVISOR}."
+    fi
+
+    # if [ "$(uname -m)" != "x86_64" ]; then
+    #     skip "Test not supported for $(uname -m)."
+    # fi
+
+    if [ "${KBS}" = "false" ]; then
+        skip "Test skipped as KBS not setup"
+    fi
+
+    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+
+    teardown_common "${node}" "${node_start_time:-}"
+}

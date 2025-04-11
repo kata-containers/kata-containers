@@ -182,6 +182,11 @@ safe-path.workspace = true
 logging.workspace = true
 vsock-exporter.workspace = true
 
+# Initdata
+base64 = "0.22"
+sha2 = "0.10.8"
+async-compression = { version = "0.4.22", features = ["tokio", "gzip"] }
+
 [dev-dependencies]
 tempfile.workspace = true
 which.workspace = true
