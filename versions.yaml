@@ -392,6 +392,7 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
+    # Keep in sync with rust-toolchain.toml
     version: "1.80.0"
     meta:
       description: |
