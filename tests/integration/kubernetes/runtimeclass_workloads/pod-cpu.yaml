@@ -15,7 +15,7 @@ spec:
     image: quay.io/prometheus/busybox:latest
     command:
         - sleep
-        - "30"
+        - "infinity"
     resources:
       limits:
         cpu: "1"
