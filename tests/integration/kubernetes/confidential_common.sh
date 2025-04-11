@@ -32,10 +32,10 @@ function setup_unencrypted_confidential_pod() {
 # in order to identify whether the workload is running on a TEE environment
 function get_remote_command_per_hypervisor() {
 	declare -A REMOTE_COMMAND_PER_HYPERVISOR
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-sev]="dmesg | grep \"Memory Encryption Features active:.*\(SEV$\|SEV \)\""
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-tdx]="cpuid | grep TDX_GUEST"
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
+	REMOTE_COMMAND_PER_HYPERVISOR[qemu - sev]="dmesg | grep \"Memory Encryption Features active:.*\(SEV$\|SEV \)\""
+	REMOTE_COMMAND_PER_HYPERVISOR[qemu - snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
+	REMOTE_COMMAND_PER_HYPERVISOR[qemu - tdx]="cpuid | grep TDX_GUEST"
+	REMOTE_COMMAND_PER_HYPERVISOR[qemu - se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
 
 	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
 }
@@ -46,8 +46,8 @@ function check_hypervisor_for_confidential_tests() {
 	local kata_hypervisor="${1}"
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
-	if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||\
-	[[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
+	if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||
+		[[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
 		return 0
 	else
 		return 1
@@ -85,7 +85,7 @@ function is_confidential_hardware() {
 	return 1
 }
 
-function create_loop_device(){
+function create_loop_device() {
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
 	local node="$(get_one_kata_node)"
 	cleanup_loop_device "$loop_file"
@@ -97,7 +97,7 @@ function create_loop_device(){
 	echo $device
 }
 
-function cleanup_loop_device(){
+function cleanup_loop_device() {
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
 	local node="$(get_one_kata_node)"
 	# Find all loop devices associated with $loop_file
@@ -187,22 +187,30 @@ function create_coco_pod_yaml_with_annotations() {
 	cc_initdata_annotation_key="io.katacontainers.config.runtime.cc_init_data"
 
 	# Note: this is not local as we use it in the caller test
-	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
+	kata_pod="$(new_pod_config "${image}" "kata-${KATA_HYPERVISOR}")"
+
+	info "kata pod yaml: ${kata_pod}"
 	set_container_command "${kata_pod}" "0" "sleep" "30"
 
+	info "set container command done"
 	# Set annotations
+
+	info "set runtime handler annotation"
 	set_metadata_annotation "${kata_pod}" \
 		"io.containerd.cri.runtime-handler" \
 		"kata-${KATA_HYPERVISOR}"
+	info "set kernel parameter annotation"
 	set_metadata_annotation "${kata_pod}" \
 		"${kernel_params_annotation_key}" \
 		"${kernel_params_annotation_value}"
+	info "set initdata annotation"
 	set_metadata_annotation "${kata_pod}" \
 		"${cc_initdata_annotation_key}" \
 		"${cc_initdata_annotation_value}"
 
+	info "set policy"
 	add_allow_all_policy_to_yaml "${kata_pod}"
-
+	info "set policy done"
 	if [ -n "$node" ]; then
 		set_node "${kata_pod}" "$node"
 	fi

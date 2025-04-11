@@ -25,29 +25,31 @@ export KBS="${KBS:-false}"
 
 setup() {
     if ! is_confidential_runtime_class; then
+        info "not confidential"
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    # TODO: add supports for archs except for TDX/SNP
-    if [ "$(uname -m)" != "x86_64" ]; then
-        skip "Test not supported for $(uname -m)."
-    fi
+    # # TODO: add supports for archs except for TDX/SNP
+    # if [ "$(uname -m)" != "x86_64" ]; then
+    #     info "not x86-64"
+    #     skip "Test not supported for $(uname -m)."
+    # fi
 
+    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+
+    setup_common || die "setup_common failed"
+    FAIL_TEST_IMAGE="quay.io/prometheus/busybox:latest"
+    SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
+    info "setup successfully"
+}
+
+function setup_kbs_image_policy_for_initdata() {
     if [ "${KBS}" = "false" ]; then
         info "no kbs"
         skip "Test skipped as KBS not setup"
     fi
 
-    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
-
-    setup_common || die "setup_common failed"
-
-    FAIL_TEST_IMAGE="quay.io/prometheus/busybox:latest"
-    
-    SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
-}
-
-function setup_kbs_image_policy() {
+    info "setup kbs image policy for initdata"
     default_policy="${1:-insecureAcceptAnything}"
     policy_json=$(cat << EOF
 {
@@ -69,19 +71,25 @@ function setup_kbs_image_policy() {
 EOF
     )
 
+    info "prepared policy json"
     if ! is_confidential_hardware; then
+        info "is not confidential hardware, set allow all resources"
         kbs_set_allow_all_resources
     fi
 
+    info "kbs set resource"
     kbs_set_resource "default" "security-policy" "test" "${policy_json}"
+    info "kbs set resource done"
 }
 
 @test "Test that creating a container from an rejected image for initdata, with initdata fails" {
+
     setup_kbs_image_policy_for_initdata
 
     info "setup_kbs_image_policy_for_initdata done"
     local CC_KBS_ADDR
     export CC_KBS_ADDR=$(kbs_k8s_svc_http_addr)
+    info "CC_KBS_ADDR: ${CC_KBS_ADDR}"
 
     kernel_parameter="agent.image_policy_file=${SECURITY_POLICY_KBS_URI} agent.enable_signature_verification=true"
     initdata_annotation=$(gzip -c << EOF | base64 -w0
@@ -151,12 +159,18 @@ default WriteStreamRequest := true
 '''
 EOF
     )
+    info "kernel parameter: ${kernel_parameter}"
+    info "initdata annotation: ${initdata_annotation}"
     create_coco_pod_yaml_with_annotations "${kernel_parameter}" "${initdata_annotation}" "${node}"
 
+    info "create_coco_pod_yaml_with_annotations done"
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
+    info "acreate pod and try to test fail"
     assert_pod_fail "${kata_pod}"
+
+    info "assert log.."
     assert_logs_contain "${node}" kata "${node_start_time}" "image security validation failed"
 }
 
@@ -165,9 +179,9 @@ teardown() {
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    if [ "$(uname -m)" != "x86_64" ]; then
-        skip "Test not supported for $(uname -m)."
-    fi
+    # if [ "$(uname -m)" != "x86_64" ]; then
+    #     skip "Test not supported for $(uname -m)."
+    # fi
 
     if [ "${KBS}" = "false" ]; then
         skip "Test skipped as KBS not setup"
