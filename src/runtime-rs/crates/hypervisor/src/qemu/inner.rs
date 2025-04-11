@@ -5,6 +5,7 @@
 
 use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
+use crate::device::topology::PCIePort;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState,
     utils::enter_netns, HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice,
@@ -145,6 +146,26 @@ impl QemuInner {
                     }
                     ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),
                 },
+                DeviceType::PortDevice(port_device) => {
+                    let port_type = port_device.config.port_type;
+                    let mem_reserve = port_device.config.memsz_reserve;
+                    let pref64_reserve = port_device.config.pref64_reserve;
+                    let devices_per_port = port_device.port_devices.clone();
+
+                    match port_type {
+                        PCIePort::RootPort => cmdline.add_pcie_root_ports(
+                            devices_per_port,
+                            mem_reserve,
+                            pref64_reserve,
+                        )?,
+                        PCIePort::SwitchPort => cmdline.add_pcie_switch_ports(
+                            devices_per_port,
+                            mem_reserve,
+                            pref64_reserve,
+                        )?,
+                        _ => info!(sl!(), "no need to add {} ports", port_type),
+                    }
+                }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
         }
