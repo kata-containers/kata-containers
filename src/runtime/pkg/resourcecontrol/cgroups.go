@@ -17,6 +17,7 @@ import (
 	cgroupsv2 "github.com/containerd/cgroups/v2"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -79,7 +80,9 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	for _, device := range defaultDevices {
 		ldevice, err := DeviceToLinuxDevice(device)
 		if err != nil {
-			controllerLogger.WithField("source", "cgroups").Warnf("Could not add %s to the devices cgroup", device)
+			if device != "/dev/mshv" || err != unix.ENOENT{
+				controllerLogger.WithField("source", "cgroups").Warnf("Could not add %s to the devices cgroup", device)
+			}
 			continue
 		}
 		devices = append(devices, ldevice)
