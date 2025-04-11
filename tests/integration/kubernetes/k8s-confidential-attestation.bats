@@ -90,5 +90,5 @@ teardown() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	teardown_common "${node}" "${node_start_time:-}"
+	confidential_teardown_common "${node}" "${node_start_time:-}"
 }
