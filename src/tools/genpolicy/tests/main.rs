@@ -190,4 +190,10 @@ mod tests {
     async fn test_exec_process() {
         runtests("execprocess").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_mounts() {
+        runtests("createcontainer/volumes/emptydir").await;
+    }
+
 }
