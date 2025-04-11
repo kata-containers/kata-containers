@@ -47,9 +47,9 @@ make -C BaseTools/
 info "Calling edksetup script"
 source edksetup.sh
 
-if [ "${ovmf_build}" == "sev" ]; then
+if [ "${ovmf_build}" == "snp" ]; then
 	info "Creating dummy grub file"
-	#required for building AmdSev package without grub
+	#required for building AmdSNP package without grub
 	touch OvmfPkg/AmdSev/Grub/grub.efi
 fi
 
