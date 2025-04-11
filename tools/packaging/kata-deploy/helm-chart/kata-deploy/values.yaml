@@ -9,7 +9,7 @@ env:
   debug: "false"
   shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
   defaultShim: "qemu"
-  createRuntimeClasses: "false"
+  createRuntimeClasses: "true"
   createDefaultRuntimeClass: "false"
   allowedHypervisorAnnotations: ""
   snapshotterHandlerMapping: ""

@@ -6,10 +6,12 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **NumPciSegments** | Pointer to **int32** |  | [optional] 
 **IommuSegments** | Pointer to **[]int32** |  | [optional] 
+**IommuAddressWidth** | Pointer to **int32** |  | [optional] 
 **SerialNumber** | Pointer to **string** |  | [optional] 
 **Uuid** | Pointer to **string** |  | [optional] 
 **OemStrings** | Pointer to **[]string** |  | [optional] 
 **Tdx** | Pointer to **bool** |  | [optional] [default to false]
+**SevSnp** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods
 
@@ -79,6 +81,31 @@ SetIommuSegments sets IommuSegments field to given value.
 `func (o *PlatformConfig) HasIommuSegments() bool`
 
 HasIommuSegments returns a boolean if a field has been set.
+
+### GetIommuAddressWidth
+
+`func (o *PlatformConfig) GetIommuAddressWidth() int32`
+
+GetIommuAddressWidth returns the IommuAddressWidth field if non-nil, zero value otherwise.
+
+### GetIommuAddressWidthOk
+
+`func (o *PlatformConfig) GetIommuAddressWidthOk() (*int32, bool)`
+
+GetIommuAddressWidthOk returns a tuple with the IommuAddressWidth field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetIommuAddressWidth
+
+`func (o *PlatformConfig) SetIommuAddressWidth(v int32)`
+
+SetIommuAddressWidth sets IommuAddressWidth field to given value.
+
+### HasIommuAddressWidth
+
+`func (o *PlatformConfig) HasIommuAddressWidth() bool`
+
+HasIommuAddressWidth returns a boolean if a field has been set.
 
 ### GetSerialNumber
 
@@ -179,6 +206,31 @@ SetTdx sets Tdx field to given value.
 `func (o *PlatformConfig) HasTdx() bool`
 
 HasTdx returns a boolean if a field has been set.
+
+### GetSevSnp
+
+`func (o *PlatformConfig) GetSevSnp() bool`
+
+GetSevSnp returns the SevSnp field if non-nil, zero value otherwise.
+
+### GetSevSnpOk
+
+`func (o *PlatformConfig) GetSevSnpOk() (*bool, bool)`
+
+GetSevSnpOk returns a tuple with the SevSnp field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSevSnp
+
+`func (o *PlatformConfig) SetSevSnp(v bool)`
+
+SetSevSnp sets SevSnp field to given value.
+
+### HasSevSnp
+
+`func (o *PlatformConfig) HasSevSnp() bool`
+
+HasSevSnp returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

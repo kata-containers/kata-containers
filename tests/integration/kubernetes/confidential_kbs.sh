@@ -39,6 +39,11 @@ kbs_set_allow_all_resources() {
 		"${COCO_KBS_DIR}/sample_policies/allow_all.rego"
 }
 
+kbs_set_default_policy() {
+	kbs_set_resources_policy \
+		"${COCO_KBS_DIR}/src/policy_engine/opa/default_policy.rego"
+}
+
 # Set "deny all" policy to resources.
 #
 kbs_set_deny_all_resources() {

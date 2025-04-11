@@ -466,7 +466,7 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 4
+        memory_actual_size: 7
         state: Created
         config:
           memory:
@@ -595,11 +595,13 @@ components:
             - 1
             - 1
             num_pci_segments: 4
+            iommu_address_width: 4
             oem_strings:
             - oem_strings
             - oem_strings
             tdx: false
             serial_number: serial_number
+            sev_snp: false
             uuid: uuid
           pmem:
           - pci_segment: 3
@@ -617,7 +619,9 @@ components:
           iommu: false
           payload:
             cmdline: cmdline
+            igvm: igvm
             kernel: kernel
+            host_data: host_data
             initramfs: initramfs
             firmware: firmware
           rate_limit_groups:
@@ -886,7 +890,9 @@ components:
       description: Payloads to boot in guest
       example:
         cmdline: cmdline
+        igvm: igvm
         kernel: kernel
+        host_data: host_data
         initramfs: initramfs
         firmware: firmware
       properties:
@@ -897,6 +903,10 @@ components:
         cmdline:
           type: string
         initramfs:
+          type: string
+        igvm:
+          type: string
+        host_data:
           type: string
       type: object
     VmConfig:
@@ -1028,11 +1038,13 @@ components:
           - 1
           - 1
           num_pci_segments: 4
+          iommu_address_width: 4
           oem_strings:
           - oem_strings
           - oem_strings
           tdx: false
           serial_number: serial_number
+          sev_snp: false
           uuid: uuid
         pmem:
         - pci_segment: 3
@@ -1050,7 +1062,9 @@ components:
         iommu: false
         payload:
           cmdline: cmdline
+          igvm: igvm
           kernel: kernel
+          host_data: host_data
           initramfs: initramfs
           firmware: firmware
         rate_limit_groups:
@@ -1431,11 +1445,13 @@ components:
         - 1
         - 1
         num_pci_segments: 4
+        iommu_address_width: 4
         oem_strings:
         - oem_strings
         - oem_strings
         tdx: false
         serial_number: serial_number
+        sev_snp: false
         uuid: uuid
       properties:
         num_pci_segments:
@@ -1446,6 +1462,9 @@ components:
             format: int16
             type: integer
           type: array
+        iommu_address_width:
+          format: uint8
+          type: integer
         serial_number:
           type: string
         uuid:
@@ -1455,6 +1474,9 @@ components:
             type: string
           type: array
         tdx:
+          default: false
+          type: boolean
+        sev_snp:
           default: false
           type: boolean
       type: object
