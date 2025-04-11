@@ -187,6 +187,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS: &str =
 /// PCIeRootPort is used to indicate the number of PCIe Root Port devices
 pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT: &str =
     "io.katacontainers.config.hypervisor.pcie_root_port";
+/// PCIeSwitchPort is used to indicate the number of PCIe Switch Port devices
+pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_SWITCH_PORT: &str =
+    "io.katacontainers.config.hypervisor.pcie_switch_port";
 /// A sandbox annotation to specify if the VM should have a vIOMMU device.
 pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU: &str = "io.katacontainers.config.hypervisor.enable_iommu";
 /// Enable Hypervisor Devices IOMMU_PLATFORM
@@ -312,6 +315,12 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PREFETCH_FILES_LIST: &str =
 /// A sandbox annotation for sandbox level volume sharing with host.
 pub const KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS: &str =
     "io.katacontainers.config.runtime.sandbox_bind_mounts";
+
+/// Max PCIe root ports is 16
+pub const MAX_PCIE_ROOT_PORT: u32 = 16_u32;
+
+/// Max PCIe switch ports is 16
+pub const MAX_PCIE_SWITCH_PORT: u32 = 16_u32;
 
 /// A helper structure to query configuration information by check annotations.
 #[derive(Debug, Default, Deserialize)]
@@ -658,9 +667,53 @@ impl Annotation {
                             }
                         }
                     }
+                    // Limitations documents aligned with runtime-go:
+                    // If number of PCIe root ports > 16 then bail out otherwise we may
+                    // use up all slots or IO memory on the root bus and vfio-XXX-pci devices
+                    // cannot be added which are crucial for Kata max slots on root bus is 32
+                    // max slots on the complete pci(e) topology is 256 in QEMU
+                    // If a user uses 8 GPUs with 4 devices in each IOMMU Group that means we need
+                    // to hotplug 32 devices. We do not have enough PCIe root bus slots to
+                    // accomplish this task. Kata will use already some slots for vfio-xxxx-pci
+                    // devices.
+                    // Max PCI slots per root bus is 32
+                    // Max PCIe root ports is 16
+                    // Max PCIe switch ports is 16
+                    // There is only 64kB of IO memory each root,switch port will consume 4k hence
+                    // only 16 ports possible.
                     KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT => match self.get_value::<u32>(key) {
                         Ok(r) => {
-                            hv.device_info.pcie_root_port = r.unwrap_or_default();
+                            let root_ports = r.unwrap_or_default();
+                            if root_ports > MAX_PCIE_ROOT_PORT {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "root ports allocated exceeds the max {}",
+                                        MAX_PCIE_ROOT_PORT
+                                    ),
+                                ));
+                            } else {
+                                hv.device_info.pcie_root_port = root_ports;
+                            }
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_PCIE_SWITCH_PORT => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            let switch_ports = r.unwrap_or_default();
+                            if switch_ports > MAX_PCIE_SWITCH_PORT {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "switch ports allocated exceeds the max {}",
+                                        MAX_PCIE_SWITCH_PORT
+                                    ),
+                                ));
+                            } else {
+                                hv.device_info.pcie_switch_port = switch_ports;
+                            }
                         }
                         Err(_e) => {
                             return Err(u32_err);
