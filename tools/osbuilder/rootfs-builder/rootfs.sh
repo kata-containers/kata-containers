@@ -32,6 +32,7 @@ SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
+GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL:-}"
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
 PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
@@ -520,6 +521,11 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname ${PAUSE_IMAGE_TARBALL}):$(dirname ${PAUSE_IMAGE_TARBALL})"
 		fi
 
+		if [[ -n "${GUEST_HOOKS_TARBALL}" ]]; then
+			engine_run_args+=" --env GUEST_HOOKS_TARBALL=${GUEST_HOOKS_TARBALL}"
+			engine_run_args+=" -v $(dirname ${GUEST_HOOKS_TARBALL}):$(dirname ${GUEST_HOOKS_TARBALL})"
+		fi
+
 		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 
 		engine_run_args+=" $(docker_extra_args $distro)"
@@ -782,6 +788,11 @@ EOF
 		mkdir -p "${policy_dir}"
 		install -D -o root -g root -m 0644 "${agent_policy_file}" -T "${policy_dir}/${policy_file_name}"
 		ln -sf "${policy_file_name}" "${policy_dir}/default-policy.rego"
+	fi
+
+	if [[ -n "${GUEST_HOOKS_TARBALL}" ]]; then
+		info "Install the ${GUEST_HOOKS_TARBALL} guest hooks"
+		tar xvJpf "${GUEST_HOOKS_TARBALL}" -C "${ROOTFS_DIR}"
 	fi
 
 	info "Check init is installed"

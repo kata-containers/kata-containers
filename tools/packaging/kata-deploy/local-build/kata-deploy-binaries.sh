@@ -49,6 +49,7 @@ ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
+GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
@@ -311,6 +312,13 @@ get_pause_image_tarball_path() {
 	echo "${pause_image_local_build_dir}/${pause_image_tarball_name}"
 }
 
+get_guest_hooks_tarball_path() {
+	guest_hooks_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	guest_hooks_tarball_name="${GUEST_HOOKS_TARBALL_NAME}"
+
+	echo "${guest_hooks_local_build_dir}/${guest_hooks_tarball_name}"
+}
+
 get_latest_pause_image_artefact_and_builder_image_version() {
 	local pause_image_repo="$(get_from_kata_deps ".externals.pause.repo")"
 	local pause_image_version=$(get_from_kata_deps ".externals.pause.version")
@@ -385,6 +393,10 @@ install_image() {
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	export AGENT_POLICY=yes
+
+	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
+		export GUEST_HOOKS_TARBALL="$(get_guest_hooks_tarball_path)"
+	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
@@ -467,6 +479,10 @@ install_initrd() {
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	export AGENT_POLICY=yes
+
+	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
+		export GUEST_HOOKS_TARBALL="$(get_guest_hooks_tarball_path)"
+	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
