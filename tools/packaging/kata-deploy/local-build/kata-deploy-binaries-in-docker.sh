@@ -107,6 +107,7 @@ NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK:-}"
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
 EXTRA_PKGS="${EXTRA_PKGS:-}"
+AGENT_POLICY="${AGENT_POLICY:-yes}"
 
 docker run \
 	-v $HOME/.docker:/root/.docker \
@@ -141,6 +142,7 @@ docker run \
 	--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
 	--env GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME}" \
 	--env EXTRA_PKGS="${EXTRA_PKGS}" \
+	--env AGENT_POLICY="${AGENT_POLICY}" \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \

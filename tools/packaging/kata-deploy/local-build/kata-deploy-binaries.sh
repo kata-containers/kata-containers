@@ -51,6 +51,7 @@ ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
 EXTRA_PKGS="${EXTRA_PKGS:-}"
+AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
@@ -393,7 +394,7 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
-	export AGENT_POLICY=yes
+	export AGENT_POLICY
 
 	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
 		export GUEST_HOOKS_TARBALL="$(get_guest_hooks_tarball_path)"
@@ -483,7 +484,7 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
-	export AGENT_POLICY=yes
+	export AGENT_POLICY
 
 	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
 		export GUEST_HOOKS_TARBALL="$(get_guest_hooks_tarball_path)"
@@ -524,7 +525,7 @@ install_initrd_confidential() {
 #
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
-	export AGENT_POLICY="yes"
+	export AGENT_POLICY
 	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu"
@@ -532,7 +533,7 @@ install_image_nvidia_gpu() {
 
 # Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
-	export AGENT_POLICY="yes"
+	export AGENT_POLICY
 	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_initrd "nvidia-gpu"
@@ -540,7 +541,7 @@ install_initrd_nvidia_gpu() {
 
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
-	export AGENT_POLICY="yes"
+	export AGENT_POLICY
 	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
@@ -549,7 +550,7 @@ install_image_nvidia_gpu_confidential() {
 
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
-	export AGENT_POLICY="yes"
+	export AGENT_POLICY
 	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
@@ -962,7 +963,7 @@ install_agent() {
 	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
+	DESTDIR="${destdir}" AGENT_POLICY="${AGENT_POLICY}" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_coco_guest_components() {
