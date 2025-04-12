@@ -4,9 +4,11 @@
 //
 
 use crate::device::pci_path::PciPath;
+use crate::device::DeviceType;
 use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
+use crate::BlockDevice;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
@@ -488,6 +490,119 @@ impl Qmp {
         }
 
         Err(anyhow!("no target device found"))
+    }
+
+    /// hotplug block device:
+    /// {
+    ///     "execute": "blockdev-add",
+    ///     "arguments": {
+    ///         "node-name": "drive-0",
+    ///         "file": {"driver": "file", "filename": "/path/to/block"},
+    ///         "cache": {"direct": true},
+    ///         "read-only": false
+    ///     }
+    /// }
+    ///
+    /// {
+    ///     "execute": "device_add",
+    ///     "arguments": {
+    ///         "id": "drive-0",
+    ///         "driver": "virtio-blk-pci",
+    ///         "drive": "drive-0",
+    ///         "addr":"0x0",
+    ///         "bus": "pcie.1"
+    ///     }
+    /// }
+    pub fn hotplug_block_device(
+        &mut self,
+        block_driver: &str,
+        block_device: &BlockDevice,
+    ) -> Result<DeviceType> {
+        let mut block_dev = block_device.clone();
+        info!(
+            sl!(),
+            "hotplug_block_device() with block device: {:?}", &block_dev,
+        );
+        let (bus, slot) = self.find_free_slot()?;
+
+        // `blockdev-add`
+        let node_name = format!("drive-{}", &block_dev.device_id);
+        self.qmp
+            .execute(&qmp::blockdev_add(qmp::BlockdevOptions::raw {
+                base: qmp::BlockdevOptionsBase {
+                    detect_zeroes: None,
+                    cache: None,
+                    discard: None,
+                    force_share: None,
+                    auto_read_only: None,
+                    node_name: Some(node_name.clone()),
+                    read_only: None,
+                },
+                raw: qmp::BlockdevOptionsRaw {
+                    base: qmp::BlockdevOptionsGenericFormat {
+                        file: qmp::BlockdevRef::definition(Box::new(qmp::BlockdevOptions::file {
+                            base: qapi_qmp::BlockdevOptionsBase {
+                                auto_read_only: None,
+                                cache: if block_dev.config.is_direct.is_none() {
+                                    None
+                                } else {
+                                    Some(qapi_qmp::BlockdevCacheOptions {
+                                        direct: block_dev.config.is_direct,
+                                        no_flush: None,
+                                    })
+                                },
+                                detect_zeroes: None,
+                                discard: None,
+                                force_share: None,
+                                node_name: None,
+                                read_only: Some(block_dev.config.is_readonly),
+                            },
+                            file: qapi_qmp::BlockdevOptionsFile {
+                                aio: None,
+                                aio_max_batch: None,
+                                drop_cache: if !block_dev.config.no_drop {
+                                    None
+                                } else {
+                                    Some(block_dev.config.no_drop)
+                                },
+                                locking: None,
+                                pr_manager: None,
+                                x_check_cache_dropped: None,
+                                filename: block_dev.config.path_on_host.clone(),
+                            },
+                        })),
+                    },
+                    offset: None,
+                    size: None,
+                },
+            }))
+            .map_err(|e| anyhow!("blockdev_add {:?}", e))
+            .map(|_| ())?;
+
+        // `device_add`
+        let mut blkdev_add_args = Dictionary::new();
+        blkdev_add_args.insert("addr".to_owned(), format!("{:02}", slot).into());
+        blkdev_add_args.insert("drive".to_owned(), node_name.clone().into());
+        self.qmp
+            .execute(&qmp::device_add {
+                bus: Some(bus),
+                id: Some(node_name.clone()),
+                driver: block_driver.to_string(),
+                arguments: blkdev_add_args,
+            })
+            .map_err(|e| anyhow!("device_add {:?}", e))
+            .map(|_| ())?;
+
+        let pci_path = self
+            .get_device_by_qdev_id(&node_name)
+            .context("get device by qdev_id failed")?;
+        info!(
+            sl!(),
+            "hotplug_block_device return pci path: {:?}", &pci_path
+        );
+        block_dev.config.pci_path = Some(pci_path);
+
+        Ok(DeviceType::Block(block_dev))
     }
 }
 
