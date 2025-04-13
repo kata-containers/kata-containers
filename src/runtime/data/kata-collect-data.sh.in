@@ -527,7 +527,7 @@ show_containerd_shimv2()
 {
 	start_section "Containerd shim v2"
 
-	local cmd="${containerd_shim_v2_name} --version"
+	local cmd="${containerd_shim_v2} --version"
 
 	msg "Containerd shim v2 is \`$containerd_shim_v2\`."
 
@@ -781,7 +781,7 @@ show_kata_monitor_version()
 {
 	start_section "Kata Monitor"
 
-	local cmd="${kata_monitor_name} --version"
+	local cmd="${kata_monitor} --version"
 
 	msg "Kata Monitor \`$kata_monitor_name\`."
 
