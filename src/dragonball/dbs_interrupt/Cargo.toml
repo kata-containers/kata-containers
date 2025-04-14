@@ -11,8 +11,8 @@ keywords = ["dragonball", "secure-sandbox", "device", "interrupt"]
 readme = "README.md"
 
 [dependencies]
-dbs-device = { path = "../dbs_device" }
-dbs-arch = { path = "../dbs_arch" }
+dbs-device = { workspace = true }
+dbs-arch = { workspace = true }
 kvm-bindings = { workspace = true, optional = true }
 kvm-ioctls = { workspace = true, optional = true }
 libc = "0.2"
