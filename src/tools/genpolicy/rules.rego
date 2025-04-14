@@ -1133,6 +1133,20 @@ check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
 
     print("check_mount 2: true")
 }
+check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
+    # This check passes if the policy container has RW, the input container has
+    # RO and the volume type is sysfs, working around different handling of
+    # privileged containers after containerd 2.0.4.
+    i_mount.type_ == "sysfs"
+    p_mount.type_ == i_mount.type_
+    p_mount.destination == i_mount.destination
+    p_mount.source == i_mount.source
+
+    i_options := {x | x = i_mount.options[_]} | {"rw"}
+    p_options := {x | x = p_mount.options[_]} | {"ro"}
+    p_options == i_options
+    print("check_mount 3: true")
+}
 
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
