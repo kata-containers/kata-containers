@@ -675,6 +675,9 @@ impl AgentPolicy {
         );
 
         let is_privileged = yaml_container.is_privileged();
+        let needs_privileged_mounts = is_privileged
+            || (is_pause_container && resource.get_containers().iter().any(|c| c.is_privileged()));
+
         let process = self.get_container_process(
             resource,
             yaml_container,
@@ -684,7 +687,7 @@ impl AgentPolicy {
             is_privileged,
         );
 
-        let mut mounts = containerd::get_mounts(is_pause_container, is_privileged);
+        let mut mounts = containerd::get_mounts(is_pause_container, needs_privileged_mounts);
         mount_and_storage::get_policy_mounts(
             &self.config.settings,
             &mut mounts,
