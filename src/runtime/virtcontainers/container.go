@@ -842,6 +842,20 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	coldPlugDevices := []config.DeviceInfo{}
 
 	for i, vfio := range deviceInfos {
+		// If device is already attached during sandbox creation, e.g.
+		// with an CDI annotation, skip it in the container creation and
+		// only create the proper CDI annotation for the kata-agent
+		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
+			if dev.HostPath == vfio.ContainerPath {
+				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
+			}
+		}
+		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
+			if dev.HostPath == vfio.ContainerPath {
+				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
+			}
+		}
+
 		// Only considering VFIO updates for Port and ColdPlug or
 		// HotPlug updates
 		isVFIODevice := deviceManager.IsVFIODevice(vfio.ContainerPath)
