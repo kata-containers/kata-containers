@@ -11,7 +11,7 @@ keywords = ["dragonball", "boot", "VMM"]
 readme = "README.md"
 
 [dependencies]
-dbs-arch = { path = "../dbs_arch" }
+dbs-arch = { workspace = true }
 kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
 kvm-ioctls = {workspace = true}
 lazy_static = "1"
@@ -23,4 +23,4 @@ vm-fdt = {workspace= true}
 [dev-dependencies]
 vm-memory = { workspace = true, features = ["backend-mmap"] }
 device_tree = ">=1.1.0"
-dbs-device = { path = "../dbs_device" }
+dbs-device = { workspace = true }

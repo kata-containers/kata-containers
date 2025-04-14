@@ -27,8 +27,8 @@ members = [
 ]
 resolver = "2"
 
-# Rust-VMM crates
 [workspace.dependencies]
+# Rust-VMM crates
 event-manager = "0.2.1"
 kvm-bindings = "0.6.0"
 kvm-ioctls = "0.12.0"
@@ -43,23 +43,41 @@ vm-memory = "0.10.0"
 vm-superio = "0.5.0"
 vmm-sys-util = "0.11.0"
 
-[dependencies]
-anyhow = "1.0.32"
-arc-swap = "1.5.0"
-bytes = "1.1.0"
+# Local dependencies from Dragonball Sandbox crates
+dbs-acpi = { path = "dbs_acpi" }
 dbs-address-space = { path = "dbs_address_space" }
 dbs-allocator = { path = "dbs_allocator" }
 dbs-arch = { path = "dbs_arch" }
 dbs-boot = { path = "dbs_boot" }
 dbs-device = { path = "dbs_device" }
-dbs-interrupt = { path = "dbs_interrupt", features = ["kvm-irq"] }
+dbs-interrupt = { path = "dbs_interrupt" }
 dbs-legacy-devices = { path = "dbs_legacy_devices" }
-dbs-upcall = { path = "dbs_upcall", optional = true }
+dbs-pci = { path = "dbs_pci" }
+dbs-tdx = { path = "dbs_tdx" }
+dbs-upcall = { path = "dbs_upcall" }
 dbs-utils = { path = "dbs_utils" }
-dbs-virtio-devices = { path = "dbs_virtio_devices", optional = true, features = [
+dbs-virtio-devices = { path = "dbs_virtio_devices" }
+
+# Local dependencies from `src/lib`
+test-utils = { path = "../libs/test-utils" }
+
+[dependencies]
+anyhow = "1.0.32"
+arc-swap = "1.5.0"
+bytes = "1.1.0"
+dbs-address-space = { workspace = true }
+dbs-allocator = { workspace = true }
+dbs-arch = { workspace = true }
+dbs-boot = { workspace = true }
+dbs-device = { workspace = true }
+dbs-interrupt = { workspace = true, features = ["kvm-irq"] }
+dbs-legacy-devices = { workspace = true }
+dbs-upcall = { workspace = true, optional = true }
+dbs-utils = { workspace = true }
+dbs-virtio-devices = { workspace = true, optional = true, features = [
   "virtio-mmio",
 ] }
-dbs-pci = { path = "dbs_pci", optional = true }
+dbs-pci = { workspace = true, optional = true }
 derivative = "2.2.0"
 kvm-bindings = { workspace = true }
 kvm-ioctls = { workspace = true }
@@ -89,7 +107,7 @@ vfio-ioctls = { workspace = true, optional = true }
 [dev-dependencies]
 slog-async = "2.7.0"
 slog-term = "2.9.0"
-test-utils = { path = "../libs/test-utils" }
+test-utils = { workspace = true }
 
 [features]
 acpi = []
