@@ -187,6 +187,10 @@ impl QemuInner {
         let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
         cmdline.add_console(console_socket_path.to_str().unwrap());
 
+        if !self.config.boot_info.firmware.is_empty() {
+            cmdline.add_bios(&self.config.boot_info.firmware)?;
+        }
+
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
         let mut command = Command::new(&self.config.path);
         command.args(cmdline.build().await?);
@@ -629,7 +633,8 @@ impl QemuInner {
                     network_device.config.guest_mac.clone().unwrap(),
                     &mut None,
                 )?;
-                qmp.hotplug_network_device(&netdev, &virtio_net_device)?
+                let machine_type = &self.config.machine_info.machine_type;
+                qmp.hotplug_network_device(&netdev, &virtio_net_device, machine_type)?
             }
             DeviceType::Block(mut block_device) => {
                 let (pci_path, scsi_addr) = qmp
