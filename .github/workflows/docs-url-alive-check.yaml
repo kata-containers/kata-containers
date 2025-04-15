@@ -14,7 +14,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.22.11
+        go-version: 1.23.7
       env:
         GOPATH: ${{ github.workspace }}/kata-containers
     - name: Set env
