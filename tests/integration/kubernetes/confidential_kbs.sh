@@ -425,7 +425,7 @@ function kbs_k8s_deploy() {
 kbs_k8s_svc_host() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
 		kubectl get ingress "$KBS_INGRESS_NAME" -n "$KBS_NS" \
-			-o jsonpath='{.spec.rules[0].host}' 2>/dev/null
+			-o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null
 	elif kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" &>/dev/null; then
 			local host
 			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "$KBS_NS")
@@ -514,29 +514,17 @@ _handle_ingress() {
 # Implement the ingress handler for AKS.
 #
 _handle_ingress_aks() {
-	local dns_zone
-
-	dns_zone=$(get_cluster_specific_dns_zone "")
-
-	# In case the DNS zone name is empty, the cluster might not have the HTTP
-	# application routing add-on. Let's try to enable it.
-	if [ -z "$dns_zone" ]; then
-		echo "::group::Enable HTTP application routing add-on"
-		enable_cluster_http_application_routing ""
-		echo "::endgroup::"
-		dns_zone=$(get_cluster_specific_dns_zone "")
-	fi
-
-	if [ -z "$dns_zone" ]; then
-		echo "ERROR: the DNS zone name is nil, it cannot configure Ingress"
-		return 1
-	fi
+	echo "::group::Enable approuting (application routing) add-on"
+	enable_cluster_approuting ""
+	echo "::endgroup::"
 
 	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/"
 
 	echo "::group::$(pwd)/ingress.yaml"
-	KBS_INGRESS_CLASS="addon-http-application-routing" \
-		KBS_INGRESS_HOST="kbs.${dns_zone}" \
+	# We don't use a cluster DNS zone, instead get the ingress public IP,
+	# thus KBS_INGRESS_HOST is set empty.
+	KBS_INGRESS_CLASS="webapprouting.kubernetes.azure.com" \
+		KBS_INGRESS_HOST="\"\"" \
 		envsubst < ingress.yaml | tee ingress.yaml.tmp
 	echo "::endgroup::"
 	mv ingress.yaml.tmp ingress.yaml
