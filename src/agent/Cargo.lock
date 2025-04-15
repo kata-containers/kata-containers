@@ -2710,7 +2710,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "ttrpc",
- "ttrpc-codegen 0.5.0",
+ "ttrpc-codegen",
  "url",
  "walkdir",
  "xattr 1.5.0",
@@ -4794,7 +4794,7 @@ dependencies = [
  "serde",
  "serde_json",
  "ttrpc",
- "ttrpc-codegen 0.4.2",
+ "ttrpc-codegen",
 ]
 
 [[package]]
@@ -6723,18 +6723,6 @@ dependencies = [
 
 [[package]]
 name = "ttrpc-codegen"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94d7f7631d7a9ebed715a47cd4cb6072cbc7ae1d4ec01598971bbec0024340c2"
-dependencies = [
- "protobuf 2.28.0",
- "protobuf-codegen 3.7.1",
- "protobuf-support",
- "ttrpc-compiler 0.6.2",
-]
-
-[[package]]
-name = "ttrpc-codegen"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdc0529f65223eca94fc5830e7d552d0d152ff42b74aff5c641edac39592f41f"
@@ -6743,22 +6731,7 @@ dependencies = [
  "protobuf 2.28.0",
  "protobuf-codegen 3.7.1",
  "protobuf-support",
- "ttrpc-compiler 0.7.0",
-]
-
-[[package]]
-name = "ttrpc-compiler"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0672eb06e5663ad190c7b93b2973f5d730259859b62e4e3381301a12a7441107"
-dependencies = [
- "derive-new",
- "prost",
- "prost-build",
- "prost-types",
- "protobuf 2.28.0",
- "protobuf-codegen 2.28.0",
- "tempfile",
+ "ttrpc-compiler",
 ]
 
 [[package]]
