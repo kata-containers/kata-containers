@@ -16,6 +16,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use ttrpc::{
     self,
     error::get_rpc_status,
@@ -185,7 +186,7 @@ impl<T> OptionToTtrpcResult<T> for Option<T> {
 #[derive(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
-    init_mode: bool,
+    init_mode: AtomicBool,
     oma: Option<mem_agent::agent::MemAgent>,
 }
 
@@ -1794,7 +1795,7 @@ pub async fn start(
 ) -> Result<TtrpcServer> {
     let agent_service = Box::new(AgentService {
         sandbox: s,
-        init_mode,
+        init_mode: AtomicBool::new(init_mode),
         oma,
     });
     let aservice = agent_ttrpc::create_agent_service(Arc::new(*agent_service));
