@@ -13,14 +13,14 @@ readme = "README.md"
 [dependencies]
 byteorder = "1.4.3"
 caps = "0.5.3"
-dbs-device = { path = "../dbs_device" }
-dbs-interrupt = { path = "../dbs_interrupt", features = [
+dbs-device = { workspace = true }
+dbs-interrupt = { workspace = true, features = [
     "kvm-legacy-irq",
     "kvm-msi-irq",
 ] }
-dbs-utils = { path = "../dbs_utils" }
-dbs-address-space = { path = "../dbs_address_space" }
-dbs-boot = { path = "../dbs_boot" }
+dbs-utils = { workspace = true }
+dbs-address-space = { workspace = true }
+dbs-boot = { workspace = true }
 epoll = ">=4.3.1, <4.3.2"
 io-uring = "0.5.2"
 fuse-backend-rs = { version = "0.10.5", optional = true }

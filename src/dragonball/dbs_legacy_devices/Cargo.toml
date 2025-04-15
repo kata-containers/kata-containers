@@ -11,8 +11,8 @@ keywords = ["dragonball", "secure-sandbox", "devices", "legacy"]
 readme = "README.md"
 
 [dependencies]
-dbs-device = { path = "../dbs_device" }
-dbs-utils = { path = "../dbs_utils" }
+dbs-device = { workspace = true }
+dbs-utils = { workspace = true }
 libc = "0.2.39"
 log = "0.4.14"
 serde = { version = "1.0.27", features = ["derive", "rc"] }
