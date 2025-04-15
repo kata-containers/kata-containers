@@ -57,6 +57,7 @@ PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 RELEASE="${RELEASE:-"no"}"
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
+RUNTIME_CHOICE="${RUNTIME_CHOICE:-both}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -897,6 +898,7 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 	export MEASURED_ROOTFS
+	export RUNTIME_CHOICE
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
