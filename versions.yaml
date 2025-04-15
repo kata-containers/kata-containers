@@ -234,7 +234,7 @@ externals:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
     version: "1191f8257eb65f42892ab0328cec02e58d40de84"
-    toolchain: "1.80.0"
+    toolchain: "1.86.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
@@ -245,7 +245,7 @@ externals:
     image_tag: "bc26ac5acd8314ba34fe837d6886beb1ce384106"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
     ita_image_tag: "bc26ac5acd8314ba34fe837d6886beb1ce384106-x86_64"
-    toolchain: "1.80.0"
+    toolchain: "1.86.0"
 
   crio:
     description: |
@@ -365,7 +365,7 @@ externals:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
     version: "v1.13.1"
-    toolchain: "1.80.0"
+    toolchain: "1.86.0"
     meta:
       # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.13.1,
       # this is the link labelled virtiofsd-v1.13.1.zip
@@ -398,12 +398,12 @@ languages:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
     # Keep in sync with rust-toolchain.toml
-    version: "1.80.0"
+    version: "1.86.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.80.0"
+      newest-version: "1.86.0"
 
   golangci-lint:
     description: "golangci-lint"
