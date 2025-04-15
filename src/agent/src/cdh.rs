@@ -65,6 +65,7 @@ impl CDHClient {
         Ok(unsealed_secret.plaintext)
     }
 
+    #[cfg(feature = "guest-pull")]
     pub async fn secure_mount(
         &self,
         volume_type: &str,
