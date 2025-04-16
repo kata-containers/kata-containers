@@ -17,6 +17,7 @@ REPO_URL=http://ports.ubuntu.com
 case "$ARCH" in
 	aarch64) DEB_ARCH=arm64;;
 	ppc64le) DEB_ARCH=ppc64el;;
+	riscv64) DEB_ARCH="$ARCH";;
 	s390x) DEB_ARCH="$ARCH";;
 	x86_64) DEB_ARCH=amd64; REPO_URL=http://archive.ubuntu.com/ubuntu;;
 	*) die "$ARCH not supported"
