@@ -326,10 +326,10 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-tests-s390x:
+  run-basic-s390x-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/run-cri-containerd-tests-s390x.yaml
+    uses: ./.github/workflows/basic-ci-s390x.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
