@@ -170,7 +170,7 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
 
     let mut flags: u32 = 0;
     for flag in &route_msg.header.flags {
-        flags += u32::from(*flag);
+        flags |= u32::from(*flag);
     }
 
     let mut route = Route {

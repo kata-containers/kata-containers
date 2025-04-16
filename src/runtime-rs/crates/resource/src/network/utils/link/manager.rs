@@ -16,7 +16,7 @@ impl From<&VecLinkFlag> for u32 {
     fn from(v: &VecLinkFlag) -> u32 {
         let mut d: u32 = 0;
         for flag in &v.0 {
-            d += u32::from(*flag);
+            d |= u32::from(*flag);
         }
         d
     }
