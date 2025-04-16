@@ -117,7 +117,7 @@ options:
 	nydus
 	pause-image
 	ovmf
-	ovmf-sev
+	ovmf-snp
 	qemu
 	qemu-snp-experimental
 	qemu-tdx-experimental
@@ -906,7 +906,7 @@ install_ovmf() {
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
-	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
+	[ "${ovmf_type}" == "snp" ] && component_name="ovmf-snp"
 
 	latest_artefact="$(get_from_kata_deps ".externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -923,9 +923,9 @@ install_ovmf() {
 	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
 }
 
-# Install OVMF SEV
-install_ovmf_sev() {
-	install_ovmf "sev" "edk2-sev.tar.gz"
+# Install OVMF SNP
+install_ovmf_snp() {
+	install_ovmf "snp" "edk2-sev.tar.gz"
 }
 
 install_busybox() {
@@ -1161,7 +1161,7 @@ handle_build() {
 		install_log_parser_rs
 		install_nydus
 		install_ovmf
-		install_ovmf_sev
+		install_ovmf_snp
 		install_qemu
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
@@ -1212,7 +1212,7 @@ handle_build() {
 
 	ovmf) install_ovmf ;;
 
-	ovmf-sev) install_ovmf_sev ;;
+	ovmf-snp) install_ovmf_snp ;;
 
 	pause-image) install_pause_image ;;
 

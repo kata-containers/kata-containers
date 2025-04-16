@@ -450,7 +450,7 @@ function install_artifacts() {
 			sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
 			# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-			[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-sev|qemu-se|qemu-coco-dev)$ ]] && \
+			[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-se|qemu-coco-dev)$ ]] && \
 				adjust_qemu_cmdline "${shim}" "${kata_config_file}"
 		fi
 	done
