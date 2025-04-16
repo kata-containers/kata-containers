@@ -2652,7 +2652,7 @@ func (s *Sandbox) SetPolicy(ctx context.Context, policy string) error {
 
 // GuestVolumeStats return the filesystem stat of a given volume in the guest.
 func (s *Sandbox) GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error) {
-	guestMountPath, err := s.guestMountPath(volumePath)
+	_, guestMountPath, err := s.getMountDetails(volumePath)
 	if err != nil {
 		return nil, err
 	}
@@ -2661,30 +2661,47 @@ func (s *Sandbox) GuestVolumeStats(ctx context.Context, volumePath string) ([]by
 
 // ResizeGuestVolume resizes a volume in the guest.
 func (s *Sandbox) ResizeGuestVolume(ctx context.Context, volumePath string, size uint64) error {
-	// TODO: https://github.com/kata-containers/kata-containers/issues/3694.
-	guestMountPath, err := s.guestMountPath(volumePath)
+
+	id, guestMountPath, err := s.getMountDetails(volumePath)
+
 	if err != nil {
 		return err
 	}
+	device := s.devManager.GetDeviceByID(id)
+	if device == nil {
+		s.Logger().WithField("device", id).Error("failed to find device by id")
+		return fmt.Errorf("failed to find device by id (id=%s)", id)
+	}
+
+	d, ok := device.GetDeviceInfo().(*config.BlockDrive)
+	if !ok || d == nil {
+		s.Logger().WithField("device", device).Error("device is not a block drive or is nil")
+		return fmt.Errorf("device is not a block drive or is nil")
+	}
+	if err := s.hypervisor.ResizeBlock(ctx, d.ID, size); err != nil {
+		s.Logger().WithError(err).Error("Failed to resize block device in hypervisor")
+		return err
+	}
+
 	return s.agent.resizeGuestVolume(ctx, guestMountPath, size)
 }
 
-func (s *Sandbox) guestMountPath(volumePath string) (string, error) {
+func (s *Sandbox) getMountDetails(volumePath string) (string, string, error) {
 	// verify the device even exists
 	if _, err := os.Stat(volumePath); err != nil {
 		s.Logger().WithError(err).WithField("volume", volumePath).Error("Cannot get stats for volume that doesn't exist")
-		return "", err
+		return "", "", err
 	}
 
 	// verify that we have a mount in this sandbox who's source maps to this
 	for _, c := range s.containers {
 		for _, m := range c.mounts {
 			if volumePath == m.Source {
-				return m.GuestDeviceMount, nil
+				return m.BlockDeviceID, m.GuestDeviceMount, nil
 			}
 		}
 	}
-	return "", fmt.Errorf("mount %s not found in sandbox", volumePath)
+	return "", "", fmt.Errorf("mount %s not found in sandbox", volumePath)
 }
 
 // getSandboxCPUSet returns the union of each of the sandbox's containers' CPU sets'

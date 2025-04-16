@@ -229,7 +229,9 @@ func (rh *remoteHypervisor) GetTotalMemoryMB(ctx context.Context) uint32 {
 func (rh *remoteHypervisor) ResizeVCPUs(ctx context.Context, vcpus uint32) (uint32, uint32, error) {
 	return vcpus, vcpus, nil
 }
-
+func (rh *remoteHypervisor) ResizeBlock(ctx context.Context, deviceID string, size uint64) error {
+	return nil
+}
 func (rh *remoteHypervisor) GetVMConsole(ctx context.Context, sandboxID string) (string, string, error) {
 	return "", "", notImplemented("GetVMConsole")
 }

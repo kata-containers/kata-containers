@@ -1183,6 +1183,9 @@ func (fc *firecracker) ResizeMemory(ctx context.Context, reqMemMB uint32, memory
 func (fc *firecracker) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	return 0, 0, nil
 }
+func (fc *firecracker) ResizeBlock(ctx context.Context, deviceID string, size uint64) error {
+	return nil
+}
 
 // This is used to apply cgroup information on the host.
 //
