@@ -723,79 +723,7 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	// for correct number of PCIe root ports.
 	var vhostUserBlkDevices []config.DeviceInfo
 
-	//io.katacontainers.pkg.oci.container_type:pod_sandbox
-
 	for cnt, container := range sandboxConfig.Containers {
-		// Do not alter the original spec, we do not want to inject
-		// CDI devices into the sandbox container, were using the CDI
-		// devices as additional information to determine the number of
-		// PCIe root ports to reserve for the hypervisor.
-		// A single_container type will have the CDI devices injected
-		// only do this if we're a pod_sandbox type.
-		if container.Annotations["io.katacontainers.pkg.oci.container_type"] == "pod_sandbox" && container.CustomSpec != nil {
-			cdiSpec := container.CustomSpec
-			// We can provide additional directories where to search for
-			// CDI specs if needed. immutable OS's only have specific
-			// directories where applications can write too. For instance /opt/cdi
-			//
-			// _, err = withCDI(ociSpec.Annotations, []string{"/opt/cdi"}, ociSpec)
-			//
-			_, err := config.WithCDI(cdiSpec.Annotations, []string{}, cdiSpec)
-			if err != nil {
-				return coldPlugVFIO, fmt.Errorf("adding CDI devices failed: %w", err)
-			}
-
-			for _, dev := range cdiSpec.Linux.Devices {
-				isVFIODevice := deviceManager.IsVFIODevice(dev.Path)
-				if hotPlugVFIO && isVFIODevice {
-					vfioDev := config.DeviceInfo{
-						ColdPlug:      true,
-						ContainerPath: dev.Path,
-						Port:          sandboxConfig.HypervisorConfig.HotPlugVFIO,
-						DevType:       dev.Type,
-						Major:         dev.Major,
-						Minor:         dev.Minor,
-					}
-					if dev.FileMode != nil {
-						vfioDev.FileMode = *dev.FileMode
-					}
-					if dev.UID != nil {
-						vfioDev.UID = *dev.UID
-					}
-					if dev.GID != nil {
-						vfioDev.GID = *dev.GID
-					}
-
-					vfioDevices = append(vfioDevices, vfioDev)
-					continue
-				}
-				if coldPlugVFIO && isVFIODevice {
-					vfioDev := config.DeviceInfo{
-						ColdPlug:      true,
-						ContainerPath: dev.Path,
-						Port:          sandboxConfig.HypervisorConfig.ColdPlugVFIO,
-						DevType:       dev.Type,
-						Major:         dev.Major,
-						Minor:         dev.Minor,
-					}
-					if dev.FileMode != nil {
-						vfioDev.FileMode = *dev.FileMode
-					}
-					if dev.UID != nil {
-						vfioDev.UID = *dev.UID
-					}
-					if dev.GID != nil {
-						vfioDev.GID = *dev.GID
-					}
-
-					vfioDevices = append(vfioDevices, vfioDev)
-					continue
-				}
-			}
-		}
-		// As stated before the single_container will have the  CDI
-		// devices injected by the runtime. For the pod_container use-case
-		// see container.go how cold and hot-plug are handled.
 		for dev, device := range container.DeviceInfos {
 			if deviceManager.IsVhostUserBlk(device) {
 				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
