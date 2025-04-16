@@ -316,19 +316,19 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-metrics-tests:
-    # Skip metrics tests whilst runner is broken
-    if: false
-    # if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-metrics.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
+#  run-metrics-tests:
+#    # Skip metrics tests whilst runner is broken
+#    if: false
+#    # if: ${{ inputs.skip-test != 'yes' }}
+#    needs: build-kata-static-tarball-amd64
+#    uses: ./.github/workflows/run-metrics.yaml
+#    with:
+#      registry: ghcr.io
+#      repo: ${{ github.repository_owner }}/kata-deploy-ci
+#      tag: ${{ inputs.tag }}-amd64
+#      commit-hash: ${{ inputs.commit-hash }}
+#      pr-number: ${{ inputs.pr-number }}
+#      target-branch: ${{ inputs.target-branch }}
 
   run-basic-amd64-tests:
     if: ${{ inputs.skip-test != 'yes' }}
