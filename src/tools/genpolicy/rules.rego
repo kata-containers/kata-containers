@@ -633,6 +633,8 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
 
     allow_root_path(p_oci, i_oci, bundle_id)
 
+    check_unique_mount_destinations(i_oci.Mounts)
+
     every i_mount in input.OCI.Mounts {
         allow_mount(p_oci, i_mount, bundle_id, sandbox_id)
     }
@@ -900,6 +902,15 @@ allow_root_path(p_oci, i_oci, bundle_id) {
 }
 
 # device mounts
+check_unique_mount_destinations(mounts) {
+    print("check_unique_mount_destinations: start")
+
+    destinations := { m.destination | m := mounts[_] }
+    count(destinations) == count(mounts)
+
+    print("check_unique_mount_destinations: true")
+}
+
 allow_mount(p_oci, i_mount, bundle_id, sandbox_id) {
     print("allow_mount: i_mount =", i_mount)
 
