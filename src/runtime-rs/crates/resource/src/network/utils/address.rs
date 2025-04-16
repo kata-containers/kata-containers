@@ -60,7 +60,7 @@ impl TryFrom<AddressMessage> for Address {
                     //thus here just implemeted a simple transformer.
                     let mut d: u32 = 0;
                     for flag in &f {
-                        d += u32::from(*flag);
+                        d |= u32::from(*flag);
                     }
                     addr.flags = d;
                 }
