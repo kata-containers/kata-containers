@@ -71,7 +71,7 @@ CreateContainerRequest:= {"ops": ops, "allowed": true} {
     ops_builder1 := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
 
     # Check if any element from the policy_data.containers array allows the input request.
-    some p_container in policy_data.containers
+    some idx, p_container in policy_data.containers
     print("======== CreateContainerRequest: trying next policy container")
 
     p_pidns := p_container.sandbox_pidns
@@ -105,7 +105,13 @@ CreateContainerRequest:= {"ops": ops, "allowed": true} {
     ret := allow_linux(ops_builder2, p_oci, i_oci)
     ret.allowed
 
-    ops := ret.ops
+    # save to policy state
+    # key: input.container_id
+    # val: index of p_container in the policy_data.containers array
+    print("CreateContainerRequest: addding container_id=", input.container_id, " to state")
+    add_p_container_to_state := state_allows(input.container_id, idx)
+
+    ops := concat_op_if_not_null(ret.ops, add_p_container_to_state)
 
     print("CreateContainerRequest: true")
 }
@@ -176,9 +182,26 @@ state_allows(key, value) = action {
   action := null
 }
 
+# delete key=value from state
+state_del_key(key) = action {
+  print("state_del_key: ", key)
+  state := get_state()
+  print("state_del_key: deleting from state key =", key)
+  path := get_state_path(key)
+  action := {
+    "op": "remove",
+    "path": path,
+  }
+}
+
 # helper functions to interact with the state
 get_state() = state {
   state := data["pstate"]
+}
+
+get_state_val(key) = value {
+    state := get_state()
+    value := state[key]
 }
 
 get_state_path(key) = path {
@@ -1288,9 +1311,11 @@ ExecProcessRequest {
     print("ExecProcessRequest 2: input =", input)
     allow_exec_process_input
 
-    # TODO: match input container ID with its corresponding container.exec_commands.
-    some container in policy_data.containers
-    some p_command in container.exec_commands
+    # get p_container from state
+    idx := get_state_val(input.container_id)
+    p_container := policy_data.containers[idx]
+
+    some p_command in p_container.exec_commands
     print("ExecProcessRequest 2: p_command =", p_command)
 
     # TODO: should other input data fields be validated as well?
@@ -1380,4 +1405,15 @@ UpdateEphemeralMountsRequest {
 
 WriteStreamRequest {
     policy_data.request_defaults.WriteStreamRequest == true
+}
+
+RemoveContainerRequest:= {"ops": ops, "allowed": true} {
+    print("RemoveContainerRequest: input =", input)
+
+    # Delete input.container_id from p_state
+    ops_builder1 := []
+    del_container := state_del_key(input.container_id)
+    ops := concat_op_if_not_null(ops_builder1, del_container)
+
+    print("RemoveContainerRequest: true")
 }
