@@ -12,6 +12,22 @@ on:
         required: false
         type: string
         default: ""
+      runner:
+        description: The runner to execute the workflow on.
+        required: true
+        type: string
+      arch:
+        description: The arch of the tarball.
+        required: true
+        type: string
+      containerd_version:
+        description: The version of containerd for testing.
+        required: true
+        type: string
+      vmm:
+        description: The kata hypervisor for testing.
+        required: true
+        type: string
 
 jobs:
   run-cri-containerd:
@@ -20,14 +36,11 @@ jobs:
       # the all the tests are not flaky, otherwise we'll fail
       # all the tests due to a single flaky instance
       fail-fast: false
-      matrix:
-        containerd_version: ['active']
-        vmm: ['qemu', 'qemu-runtime-rs']
-    runs-on: s390x-large
+    runs-on: ${{ inputs.runner }}
     env:
-      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      CONTAINERD_VERSION: ${{ inputs.containerd_version }}
       GOPATH: ${{ github.workspace }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KATA_HYPERVISOR: ${{ inputs.vmm }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,16 +54,17 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        timeout-minutes: 15
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
-      - name: get-kata-tarball
+      - name: get-kata-tarball for ${{ inputs.arch }}
         uses: actions/download-artifact@v4
         with:
-          name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
+          name: kata-static-tarball-${{ inputs.arch }}${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
         run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
 
-      - name: Run cri-containerd tests
+      - name: Run cri-containerd tests for ${{ inputs.arch }}
         run: bash tests/integration/cri-containerd/gha-run.sh run
