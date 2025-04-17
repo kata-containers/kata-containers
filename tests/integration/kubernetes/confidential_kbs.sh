@@ -419,13 +419,20 @@ function kbs_k8s_deploy() {
 	fi
 }
 
-# Return the kbs service host name in case ingress is configured
+# Return the kbs service public IP in case ingress is configured
 # otherwise the cluster IP.
 #
 kbs_k8s_svc_host() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
-		kubectl get ingress "$KBS_INGRESS_NAME" -n "$KBS_NS" \
-			-o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null
+		local host
+		# The ingress IP address can take a while to show up.
+		SECONDS=0
+		while true; do
+			host=$(kubectl get ingress "${KBS_INGRESS_NAME}" -n "${KBS_NS}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+			[[ -z "${host}" && ${SECONDS} -lt 30 ]] || break
+			sleep 5
+		done
+		echo "${host}"
 	elif kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" &>/dev/null; then
 			local host
 			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "$KBS_NS")
