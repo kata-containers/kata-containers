@@ -222,4 +222,21 @@ func TestQemuArm64AppendProtectionDevice(t *testing.T) {
 	assert.Empty(devices)
 	assert.Empty(bios)
 	assert.NoError(err)
+
+	// RME protection
+	arm64.(*qemuArm64).protection = rmeProtection
+	devices, bios, err = arm64.appendProtectionDevice(devices, firmware, "")
+	assert.Empty(bios)
+	assert.NoError(err)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Type:            govmmQemu.RMEGuest,
+			ID:              "rme0",
+			Debug:           false,
+			File:            firmware,
+			MeasurementAlgo: "sha512",
+		},
+	}
+	assert.Equal(expectedOut, devices)
 }

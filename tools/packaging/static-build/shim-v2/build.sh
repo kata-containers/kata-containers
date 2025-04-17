@@ -38,6 +38,11 @@ if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
 fi
 
+# add kernel header package
+rm -rf "${script_dir}/pkg"
+mkdir -p "${script_dir}/pkg"
+find ${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/ -maxdepth 1 -name "kata-static-*-headers.tar.xz" -exec tar -Jxvf {} -C ${script_dir}/pkg \;
+
 docker pull ${container_image} || \
 	(docker ${BUILDX} build ${PLATFORM}  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
