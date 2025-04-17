@@ -425,6 +425,9 @@ pub struct CommonData {
 pub struct ClusterConfig {
     /// Pause container image reference.
     pub pause_container_image: String,
+    /// Whether or not the cluster uses the nydus snapshotter
+    /// See issue https://github.com/kata-containers/kata-containers/issues/11162
+    pub is_nydus: bool,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.

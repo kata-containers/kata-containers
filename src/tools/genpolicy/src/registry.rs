@@ -178,16 +178,20 @@ impl Container {
                 // respecting whiteouts.
                 let mut passwd = "".to_string();
                 let mut group = "".to_string();
-                for layer in image_layers.clone() {
-                    if !layer.passwd.is_empty() {
-                        passwd = layer.passwd
-                    } else if layer.passwd == WHITEOUT_MARKER {
-                        passwd = "".to_string();
-                    }
-                    if !layer.group.is_empty() {
-                        group = layer.group
-                    } else if layer.group == WHITEOUT_MARKER {
-                        group = "".to_string();
+                // Nydus doesn't make available passwd/group files from layers properly.
+                // See issue https://github.com/kata-containers/kata-containers/issues/11162
+                if !config.settings.cluster_config.is_nydus {
+                    for layer in image_layers.clone() {
+                        if !layer.passwd.is_empty() {
+                            passwd = layer.passwd
+                        } else if layer.passwd == WHITEOUT_MARKER {
+                            passwd = "".to_string();
+                        }
+                        if !layer.group.is_empty() {
+                            group = layer.group
+                        } else if layer.group == WHITEOUT_MARKER {
+                            group = "".to_string();
+                        }
                     }
                 }
 
@@ -737,7 +741,7 @@ pub fn get_verity_hash_and_users(path: &Path) -> Result<(String, String, String)
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
     if let Some(socket_path) = &config.containerd_socket_path {
         return Container::new_containerd_pull(
-            config.layers_cache_file_path.clone(),
+            config,
             image,
             socket_path,
         )
