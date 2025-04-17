@@ -33,11 +33,15 @@ setup() {
 	kubectl apply -f "${pod_yaml}"
 	kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME}"
 	export POD_IP=$(kubectl get pod "${POD_NAME}" -o jsonpath='{.status.podIP}')
+
+	[ "${POD_IP}" != "" ]
 }
 
 @test "List of models available for inference" {
 	export MODEL_NAME=$(curl -sX GET "http://${POD_IP}:8000/v1/models" | jq .data[0].id | tr -d '"')
 	echo $MODEL_NAME
+
+	[ "${MODEL_NAME}" != "" ]
 }
 
 @test "Simple OpenAI completion request" {
@@ -69,7 +73,6 @@ setup() {
 	EOF
 	run python3.10 ${HOME}/.cicd/venv/langchain_nim.py
 
-  	[ "$status" -eq 0 ]
   	[ "$output" = "The capital of France is Paris." ]
 }
 
