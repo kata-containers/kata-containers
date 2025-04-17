@@ -106,6 +106,8 @@ readonly -a systemd_files=(
 	"systemd-tmpfiles-cleanup.timer"
 )
 
+typeset should_delete_unnecessary_files="no"
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
@@ -158,6 +160,7 @@ $(get_distros | tr "\n" " ")
 Options:
   -a <version>      Specify the agent version. Overrides the AGENT_VERSION
                     environment variable.
+  -d                Delete unnecessary systemd units and files
   -h                Show this help message.
   -l                List the supported Linux distributions and exit immediately.
   -o <version>      Specify the version of osbuilder to embed in the rootfs
@@ -818,7 +821,9 @@ EOF
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
 
-	delete_unnecessary_files
+	if [[ "${should_delete_unnecessary_files}" == "yes" ]]; then
+	    delete_unnecessary_files
+	fi
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
@@ -828,10 +833,11 @@ parse_arguments()
 {
 	[ "$#" -eq 0 ] && usage && return 0
 
-	while getopts a:hlo:r:t: opt
+	while getopts a:dhlo:r:t: opt
 	do
 		case $opt in
 			a)	AGENT_VERSION="${OPTARG}" ;;
+			d)	should_delete_unnecessary_files="yes" ;;
 			h)	usage ;;
 			l)	get_distros | sort && exit 0;;
 			o)	OSBUILDER_VERSION="${OPTARG}" ;;
