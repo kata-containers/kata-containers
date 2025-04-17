@@ -18,11 +18,22 @@ GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION}
 CC=""
 
+RUNTIME_CHOICE="${RUNTIME_CHOICE:-both}"
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${SHIM_V2_CONTAINER_BUILDER:-$(get_shim_v2_image_name)}"
 
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
+
+case "${RUNTIME_CHOICE}" in
+	"go"|"rust"|"both")
+		echo "Building ${RUNTIME_CHOICE} runtime(s)"
+		;;
+	*)
+		echo "Invalid option for RUNTIME_CHOICE: ${RUNTIME_CHOICE}"
+		exit 1
+		;;
+esac
 
 [ "${CROSS_BUILD}" == "true" ] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
@@ -53,40 +64,48 @@ if [ ${arch} = "ppc64le" ]; then
 	arch="ppc64"
 fi
 
-#Build rust project using cross build musl image to speed up
-[[ "${CROSS_BUILD}" == "true" && ${ARCH} != "s390x" ]] && container_image="messense/rust-musl-cross:${GCC_ARCH}-musl" && CC=${GCC_ARCH}-unknown-linux-musl-gcc
+case "${RUNTIME_CHOICE}" in
+	"rust"|"both")
+		#Build rust project using cross build musl image to speed up
+		[[ "${CROSS_BUILD}" == "true" && ${ARCH} != "s390x" ]] && container_image="messense/rust-musl-cross:${GCC_ARCH}-musl" && CC=${GCC_ARCH}-unknown-linux-musl-gcc
 
-docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	--env CROSS_BUILD=${CROSS_BUILD} \
-	--env ARCH=${ARCH} \
-	--env CC="${CC}" \
-	-w "${repo_root_dir}/src/runtime-rs" \
-	--user "$(id -u)":"$(id -g)" \
-	"${container_image}" \
-	bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+			--env CROSS_BUILD=${CROSS_BUILD} \
+			--env ARCH=${ARCH} \
+			--env CC="${CC}" \
+			-w "${repo_root_dir}/src/runtime-rs" \
+			--user "$(id -u)":"$(id -g)" \
+			"${container_image}" \
+			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
-docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	--env CROSS_BUILD=${CROSS_BUILD} \
-        --env ARCH=${ARCH} \
-        --env CC="${CC}" \
-	-w "${repo_root_dir}/src/runtime-rs" \
-	--user "$(id -u)":"$(id -g)" \
-	"${container_image}" \
-	bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
+		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+			--env CROSS_BUILD=${CROSS_BUILD} \
+		        --env ARCH=${ARCH} \
+		        --env CC="${CC}" \
+			-w "${repo_root_dir}/src/runtime-rs" \
+			--user "$(id -u)":"$(id -g)" \
+			"${container_image}" \
+			bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
+		;;
+esac
 
-[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image_bk}-cross-build"
+case "${RUNTIME_CHOICE}" in
+	"go"|"both")
+		[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image_bk}-cross-build"
 
-docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	-w "${repo_root_dir}/src/runtime" \
-	--user "$(id -u)":"$(id -g)" \
-	"${container_image}" \
-	bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
+		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+			-w "${repo_root_dir}/src/runtime" \
+			--user "$(id -u)":"$(id -g)" \
+			"${container_image}" \
+			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
 
-docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	-w "${repo_root_dir}/src/runtime" \
-	--user "$(id -u)":"$(id -g)" \
-	"${container_image}" \
-	bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" ${EXTRA_OPTS} install"
+		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+			-w "${repo_root_dir}/src/runtime" \
+			--user "$(id -u)":"$(id -g)" \
+			"${container_image}" \
+			bash -c "make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" ${EXTRA_OPTS} install"
+		;;
+esac
 
 for vmm in ${VMM_CONFIGS}; do
 	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
