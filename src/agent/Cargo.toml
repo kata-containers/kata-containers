@@ -182,6 +182,9 @@ safe-path.workspace = true
 logging.workspace = true
 vsock-exporter.workspace = true
 
+[target.'cfg(target_arch = "s390x")'.dependencies]
+pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", rev = "4942504a9a2977d49989a5e5b7c1c8e07dc0fa41", package = "s390_pv_core" }
+
 [dev-dependencies]
 tempfile.workspace = true
 which.workspace = true
