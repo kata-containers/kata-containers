@@ -177,18 +177,24 @@ impl Container {
                 // Find the last layer with an /etc/* file, respecting whiteouts.
                 let mut passwd = String::new();
                 let mut group = String::new();
-                for layer in &image_layers {
-                    if layer.passwd == WHITEOUT_MARKER {
-                        passwd = String::new();
-                    } else if !layer.passwd.is_empty() {
-                        passwd = layer.passwd.clone();
-                    }
+                // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
+                // See issue https://github.com/kata-containers/kata-containers/issues/11162
+                if !config.settings.cluster_config.guest_pull {
+                    for layer in &image_layers {
+                        if layer.passwd == WHITEOUT_MARKER {
+                            passwd = String::new();
+                        } else if !layer.passwd.is_empty() {
+                            passwd = layer.passwd.clone();
+                        }
 
-                    if layer.group == WHITEOUT_MARKER {
-                        group = String::new();
-                    } else if !layer.group.is_empty() {
-                        group = layer.group.clone();
+                        if layer.group == WHITEOUT_MARKER {
+                            group = String::new();
+                        } else if !layer.group.is_empty() {
+                            group = layer.group.clone();
+                        }
                     }
+                } else {
+                    info!("Guest pull is enabled, skipping passwd/group file parsing");
                 }
 
                 Ok(Container {
@@ -730,12 +736,7 @@ pub fn get_verity_hash_and_users(path: &Path) -> Result<(String, String, String)
 
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
     if let Some(socket_path) = &config.containerd_socket_path {
-        return Container::new_containerd_pull(
-            config.layers_cache_file_path.clone(),
-            image,
-            socket_path,
-        )
-        .await;
+        return Container::new_containerd_pull(config, image, socket_path).await;
     }
     Container::new(config, image).await
 }

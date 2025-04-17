@@ -425,6 +425,10 @@ pub struct CommonData {
 pub struct ClusterConfig {
     /// Pause container image reference.
     pub pause_container_image: String,
+    /// Whether or not the cluster uses the guest pull mechanism
+    /// In guest pull, host can't look into layers to determine GID.
+    /// See issue https://github.com/kata-containers/kata-containers/issues/11162
+    pub guest_pull: bool,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
