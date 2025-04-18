@@ -3,16 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 
 /// Generic manager to manage registered handlers.
 pub struct HandlerManager<H> {
     handlers: HashMap<String, H>,
 }
 
-impl<H> Default for HandlerManager<H> 
+impl<H> Default for HandlerManager<H>
 where
     H: Clone,
 {
@@ -21,7 +21,7 @@ where
     }
 }
 
-impl<H> HandlerManager<H> 
+impl<H> HandlerManager<H>
 where
     H: Clone,
 {

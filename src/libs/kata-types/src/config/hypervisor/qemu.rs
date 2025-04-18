@@ -119,7 +119,9 @@ impl ConfigPlugin for QemuConfig {
             }
             if qemu.boot_info.image.is_empty() && qemu.boot_info.initrd.is_empty() {
                 // IBM SE (CCW + confidential guest) does not require neither image nor initrd.
-                if !(qemu.boot_info.vm_rootfs_driver.ends_with("ccw") && qemu.security_info.confidential_guest) {
+                if !(qemu.boot_info.vm_rootfs_driver.ends_with("ccw")
+                    && qemu.security_info.confidential_guest)
+                {
                     return Err(eother!(
                         "Both guest boot image and initrd for qemu are empty"
                     ));
@@ -151,9 +153,7 @@ impl ConfigPlugin for QemuConfig {
             }
 
             if qemu.memory_info.enable_guest_swap {
-                return Err(eother!(
-                    "Qemu hypervisor doesn't support enable_guest_swap"
-                ));
+                return Err(eother!("Qemu hypervisor doesn't support enable_guest_swap"));
             }
         }
 
