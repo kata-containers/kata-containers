@@ -2,7 +2,9 @@
   {
     "description": "sysctls listed in yaml or settings",
     "allowed": true,
-    "state": {"sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"},
+    "state": {
+      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
+    },
     "request": {
       "type": "CreateContainer",
       "OCI": {
@@ -238,7 +240,7 @@
             "AdditionalGids": [
               0
             ],
-            "GID": 0,
+            "GID": 65535,
             "UID": 65535,
             "Username": ""
           }
@@ -278,7 +280,9 @@
   {
     "description": "sysctl not listed in yaml or settings",
     "allowed": false,
-    "state": {"sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"},
+    "state": {
+      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
+    },
     "request": {
       "type": "CreateContainer",
       "OCI": {
@@ -514,7 +518,7 @@
             "AdditionalGids": [
               0
             ],
-            "GID": 0,
+            "GID": 65535,
             "UID": 65535,
             "Username": ""
           }

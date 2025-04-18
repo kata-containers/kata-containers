@@ -90,7 +90,8 @@ adapt_common_policy_settings_for_tdx() {
 	local settings_dir=$1
 
 	info "Adapting common policy settings for TDX, SNP, or the non-TEE development environment"
-	jq '.common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	# Regarding is_nydus, see issue https://github.com/kata-containers/kata-containers/issues/11162
+	jq '.settings.cluster_config.is_nydus = true | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for qemu-sev
