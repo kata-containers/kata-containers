@@ -26,7 +26,7 @@ serde_json = "1.0.73"
 thiserror = "1.0"
 toml = "0.5.8"
 serde-enum-str = "0.4"
-sysinfo = "0.30.5"
+sysinfo = "0.34.2"
 
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 safe-path = { path = "../safe-path" }
