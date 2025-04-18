@@ -13,7 +13,9 @@ use crate::{
     config::{
         default::{self, MAX_REMOTE_VCPUS, MIN_REMOTE_MEMORY_SIZE_MB},
         ConfigPlugin,
-    }, device::DRIVER_NVDIMM_TYPE, eother, resolve_path
+    },
+    device::DRIVER_NVDIMM_TYPE,
+    eother, resolve_path,
 };
 
 use super::register_hypervisor_plugin;
