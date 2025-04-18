@@ -30,6 +30,10 @@ setup() {
 
 
 @test "NVIDIA NIM Llama 3.1-8b Instruct" {
+
+	echo  "${pod_yaml}"
+	sleep 3600
+
 	kubectl apply -f "${pod_yaml}"
 	kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME}"
 	export POD_IP=$(kubectl get pod "${POD_NAME}" -o jsonpath='{.status.podIP}')
