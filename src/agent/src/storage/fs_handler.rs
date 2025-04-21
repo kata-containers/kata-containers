@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 use anyhow::{anyhow, Context, Result};
 use kata_types::device::{DRIVER_9P_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_VIRTIOFS_TYPE};
-use kata_types::mount::StorageDevice;
+use kata_types::mount::{StorageDevice, KATA_VOLUME_OVERLAYFS_CREATE_DIR};
 use protocols::agent::Storage;
 use tracing::instrument;
 
@@ -55,7 +55,15 @@ impl StorageHandler for OverlayfsHandler {
                 .options
                 .push(format!("workdir={}", work.to_string_lossy()));
         }
-
+        let overlay_create_dir_prefix = &(KATA_VOLUME_OVERLAYFS_CREATE_DIR.to_string() + "=");
+        for driver_option in &storage.driver_options {
+            if let Some(dir) = driver_option
+                .as_str()
+                .strip_prefix(overlay_create_dir_prefix)
+            {
+                fs::create_dir_all(dir).context("Failed to create directory")?;
+            }
+        }
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
