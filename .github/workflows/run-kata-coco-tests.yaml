@@ -92,7 +92,12 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 100
-        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+        # GHA container doesn't support TTY by default
+        # script shell workaround required to start a session with TTY support
+        # See: https://github.com/actions/runner/issues/241
+        shell: 'script -q -e -c "bash --noprofile --norc -eo pipefail {0}"'
+        run: |
+          ./tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete kata-deploy
         if: always()
@@ -177,7 +182,12 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 50
-        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+        # GHA container doesn't support TTY by default
+        # script shell workaround required to start a session with TTY support
+        # See: https://github.com/actions/runner/issues/241
+        shell: 'script -q -e -c "bash --noprofile --norc -eo pipefail {0}"'
+        run: |
+          ./tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete kata-deploy
         if: always()
