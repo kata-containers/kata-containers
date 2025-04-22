@@ -13,7 +13,7 @@ mod tests {
 
     use protocols::agent::{
         CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
-        UpdateInterfaceRequest, UpdateRoutesRequest,
+        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -27,9 +27,10 @@ mod tests {
         CopyFile(CopyFileRequest),
         CreateContainer(CreateContainerRequest),
         CreateSandbox(CreateSandboxRequest),
+        ExecProcess(ExecProcessRequest),
+        RemoveContainer(RemoveContainerRequest),
         UpdateInterface(UpdateInterfaceRequest),
         UpdateRoutes(UpdateRoutesRequest),
-        ExecProcess(ExecProcessRequest),
     }
 
     impl Display for TestRequest {
@@ -38,9 +39,10 @@ mod tests {
                 TestRequest::CopyFile(_) => write!(f, "CopyFileRequest"),
                 TestRequest::CreateContainer(_) => write!(f, "CreateContainerRequest"),
                 TestRequest::CreateSandbox(_) => write!(f, "CreateSandboxRequest"),
+                TestRequest::ExecProcess(_) => write!(f, "ExecProcessRequest"),
+                TestRequest::RemoveContainer(_) => write!(f, "RemoveContainerRequest"),
                 TestRequest::UpdateInterface(_) => write!(f, "UpdateInterfaceRequest"),
                 TestRequest::UpdateRoutes(_) => write!(f, "UpdateRoutesRequest"),
-                TestRequest::ExecProcess(_) => write!(f, "ExecProcessRequest"),
             }
         }
     }
@@ -187,7 +189,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_exec_process() {
-        runtests("execprocess").await;
+    async fn test_state_create_container() {
+        runtests("state/createcontainer").await;
+    }
+
+    #[tokio::test]
+    async fn test_state_exec_process() {
+        runtests("state/execprocess").await;
     }
 }
