@@ -89,6 +89,7 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 30
+        shell: 'script -q -e -c "bash {0}"'
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Collect artifacts ${{ matrix.vmm }}
