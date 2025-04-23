@@ -1783,17 +1783,18 @@ struct ObjectSevSnpGuest {
     cbitpos: u32,
     reduced_phys_bits: u32,
     kernel_hashes: bool,
-
+    host_data: Option<String>,
     is_snp: bool,
 }
 
 impl ObjectSevSnpGuest {
-    fn new(is_snp: bool, cbitpos: u32) -> Self {
+    fn new(is_snp: bool, cbitpos: u32, host_data: Option<String>) -> Self {
         ObjectSevSnpGuest {
             id: (if is_snp { "snp" } else { "sev" }).to_owned(),
             cbitpos,
             reduced_phys_bits: 1,
             kernel_hashes: true,
+            host_data,
             is_snp,
         }
     }
@@ -1819,6 +1820,9 @@ impl ToQemuParams for ObjectSevSnpGuest {
                 "kernel-hashes={}",
                 if self.kernel_hashes { "on" } else { "off" }
             ));
+            if let Some(host_data) = &self.host_data {
+                params.push(format!("host-data={}", host_data))
+            }
         }
         Ok(vec!["-object".to_owned(), params.join(",")])
     }
@@ -2169,7 +2173,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_sev_protection_device(&mut self, cbitpos: u32, firmware: &str) {
-        let sev_object = ObjectSevSnpGuest::new(false, cbitpos);
+        let sev_object = ObjectSevSnpGuest::new(true, cbitpos, None);
         self.devices.push(Box::new(sev_object));
 
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
@@ -2179,8 +2183,13 @@ impl<'a> QemuCmdLine<'a> {
             .set_nvdimm(false);
     }
 
-    pub fn add_sev_snp_protection_device(&mut self, cbitpos: u32, firmware: &str) {
-        let sev_snp_object = ObjectSevSnpGuest::new(true, cbitpos);
+    pub fn add_sev_snp_protection_device(
+        &mut self,
+        cbitpos: u32,
+        firmware: &str,
+        host_data: &Option<String>,
+    ) {
+        let sev_snp_object = ObjectSevSnpGuest::new(true, cbitpos, host_data.clone());
         self.devices.push(Box::new(sev_snp_object));
 
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
