@@ -37,6 +37,7 @@ pub enum ResourceConfig {
     HybridVsock(HybridVsockConfig),
     Vsock(VsockConfig),
     Protection(ProtectionDeviceConfig),
+    InitData(BlockConfig),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
