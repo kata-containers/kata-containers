@@ -81,11 +81,11 @@ jobs:
           ./tests/install_rust.sh
           echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
           if [ "$(uname -m)" == "x86_64" ] || [ "$(uname -m)" == "aarch64" ]; then
-            sudo apt-get -y install musl-tools
+            sudo apt-get update && sudo apt-get -y install musl-tools
           fi
       - name: Install devicemapper
         if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
-        run: sudo apt-get -y install libdevmapper-dev
+        run: sudo apt-get update && sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
         if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make vendor' && matrix.command != 'make check'
         run: |
@@ -97,10 +97,10 @@ jobs:
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> "$GITHUB_ENV"
       - name: Install protobuf-compiler
         if: contains(matrix.component.needs, 'protobuf-compiler') && matrix.command != 'make vendor'
-        run: sudo apt-get -y install protobuf-compiler
+        run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: contains(matrix.component.needs, 'clang') && matrix.command == 'make check'
-        run: sudo apt-get -y install clang
+        run: sudo apt-get update && sudo apt-get -y install clang
       - name: Setup XDG_RUNTIME_DIR
         if: contains(matrix.component.needs, 'XDG_RUNTIME_DIR') && matrix.command != 'make check'
         run: |
