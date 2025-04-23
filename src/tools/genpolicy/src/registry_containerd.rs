@@ -11,7 +11,7 @@ use crate::registry::{
 };
 use crate::utils::Config;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Context, Result};
 use containerd_client::{services::v1::GetImageRequest, with_namespace};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use k8s_cri::v1::{image_service_client::ImageServiceClient, AuthConfig};
@@ -26,6 +26,11 @@ use tokio::{
 use tonic::transport::{Endpoint, Uri};
 use tonic::Request;
 use tower::service_fn;
+
+const TAR_LAYER_TYPE: &str = "application/vnd.oci.image.layer.v1.tar";
+const TAR_DIFF_LAYER_TYPE: &str = "application/vnd.docker.image.rootfs.diff.tar";
+const TAR_GZIP_LAYER_TYPE: &str = "application/vnd.oci.image.layer.v1.tar+gzip";
+const TAR_GZIP_DIFF_LAYER_TYPE: &str = "application/vnd.docker.image.rootfs.diff.tar.gzip";
 
 impl Container {
     pub async fn new_containerd_pull(
@@ -283,12 +288,16 @@ pub async fn get_image_layers(
     let mut layer_index = 0;
     let mut layersVec = Vec::new();
 
-    let layers = manifest["layers"].as_array().unwrap();
+    let layers = manifest["layers"].as_array().context("Missing layers")?;
 
     for layer in layers {
-        let layer_media_type = layer["mediaType"].as_str().unwrap();
-        if layer_media_type.eq("application/vnd.docker.image.rootfs.diff.tar.gzip")
-            || layer_media_type.eq("application/vnd.oci.image.layer.v1.tar+gzip")
+        let layer_media_type = layer["mediaType"]
+            .as_str()
+            .context("Missing mediaType attribute")?;
+        if layer_media_type.eq(TAR_GZIP_LAYER_TYPE)
+            || layer_media_type.eq(TAR_GZIP_DIFF_LAYER_TYPE)
+            || layer_media_type.eq(TAR_LAYER_TYPE)
+            || layer_media_type.eq(TAR_DIFF_LAYER_TYPE)
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
                 let (verity_hash, passwd, group) = get_verity_and_users(
@@ -331,63 +340,52 @@ async fn get_verity_and_users(
     let mut compressed_path = decompressed_path.clone();
     compressed_path.set_extension("gz");
 
-    let mut verity_hash = "".to_string();
-    let mut passwd = "".to_string();
-    let mut group = "".to_string();
-    let mut error_message = "".to_string();
-    let mut error = false;
-
-    if let Some(path) = layers_cache_file_path.as_ref() {
-        (verity_hash, passwd, group) = read_verity_and_users_from_store(path, diff_id)?;
+    // get value from store and return if it exists
+    let cached = if let Some(path) = layers_cache_file_path.as_ref() {
         info!("Using cache file");
-        info!("dm-verity root hash: {verity_hash}");
-    }
+        read_verity_and_users_from_store(path, diff_id)?
+    } else {
+        None
+    };
 
-    if verity_hash.is_empty() {
-        // go find verity hash if not found in cache
-        if let Err(e) = create_decompressed_layer_file(
-            client,
-            layer_digest,
-            &decompressed_path,
-            &compressed_path,
-        )
-        .await
-        {
-            error = true;
-            error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
+    // // create the layer files
+    let verity = match cached {
+        Some(v) => Ok(v),
+        None => {
+            create_decompressed_layer_file(
+                client,
+                layer_digest,
+                &decompressed_path,
+                &compressed_path,
+            )
+            .await
+            .context("Failed to create verity hash for {layer_digest}")?;
+
+            let (verity_hash, passwd, group) = get_verity_hash_and_users(&decompressed_path)
+                .context("Failed to get verity hash")?;
+            if let Some(path) = layers_cache_file_path.as_ref() {
+                add_verity_and_users_to_store(path, diff_id, &verity_hash, &passwd, &group)?;
+            }
+
+            Ok((verity_hash, passwd, group))
         }
+    };
 
-        if !error {
-            match get_verity_hash_and_users(&decompressed_path) {
-                Err(e) => {
-                    error_message = format!("Failed to get verity hash {e}");
-                    error = true;
-                }
-                Ok(res) => {
-                    (verity_hash, passwd, group) = res;
-                    if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_and_users_to_store(
-                            path,
-                            diff_id,
-                            &verity_hash,
-                            &passwd,
-                            &group,
-                        )?;
-                    }
-                    info!("dm-verity root hash: {verity_hash}");
-                }
+    temp_dir.close()?;
+
+    match &verity {
+        Ok(result) => {
+            info!("dm-verity root hash: {}", result.0);
+        }
+        Err(_) => {
+            // remove the cache file if we're using it
+            if let Some(path) = layers_cache_file_path.as_ref() {
+                std::fs::remove_file(path)?;
             }
         }
-    }
-    temp_dir.close()?;
-    if error {
-        // remove the cache file if we're using it
-        if let Some(path) = layers_cache_file_path.as_ref() {
-            std::fs::remove_file(path)?;
-        }
-        bail!(error_message);
-    }
-    Ok((verity_hash, passwd, group))
+    };
+
+    verity
 }
 
 async fn create_decompressed_layer_file(
