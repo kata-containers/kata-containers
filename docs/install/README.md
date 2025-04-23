@@ -26,7 +26,7 @@ The packaged installation method uses your distribution's native package format 
 
 ### Kata Deploy Helm Chart
 
-The Kata Deploy Helm chart is a conveient way to install all of the binaries and
+The Kata Deploy Helm chart is a convenient way to install all of the binaries and
 artifacts required to run Kata Containers on Kubernetes.
 
 [Use Kata Deploy Helm Chart](/tools/packaging/kata-deploy/helm-chart/README.md) to install Kata Containers on a Kubernetes Cluster.
