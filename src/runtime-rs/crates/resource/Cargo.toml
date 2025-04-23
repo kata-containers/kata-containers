@@ -36,6 +36,8 @@ tokio = { version = "1.38.0", features = ["process"] }
 tracing = "0.1.36"
 uuid = { version = "0.4", features = ["v4"] }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
+flate2 = { version = "1.0", features = ["zlib"] }
+tempfile = "3.19.1"
 
 # Local dependencies
 agent = { workspace = true }
