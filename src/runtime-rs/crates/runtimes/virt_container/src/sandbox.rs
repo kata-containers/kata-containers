@@ -30,7 +30,7 @@ use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
-use hypervisor::{ProtectionDeviceConfig, SevSnpConfig};
+use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::CapabilityBits;
@@ -398,6 +398,15 @@ impl VirtSandbox {
             GuestProtection::Se => {
                 Ok(Some(ProtectionDeviceConfig::Se))
             }
+            GuestProtection::Tdx(_details) => {
+                Ok(Some(ProtectionDeviceConfig::Tdx(TdxConfig {
+                    id: "tdx".to_owned(),
+                    firmware: hypervisor_config.boot_info.firmware.clone(),
+                    qgs_port: 4050,
+                    mrconfigid: None,
+                    debug: false,
+                })))
+            },
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
         }
     }
