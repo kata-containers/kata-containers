@@ -164,7 +164,7 @@ impl VirtSandbox {
         }
 
         // prepare protection device config
-        let _init_data = if let Some(initdata) = self
+        let init_data = if let Some(initdata) = self
             .prepare_initdata_device_config(&self.hypervisor.hypervisor_config().await)
             .await
             .context("failed to prepare initdata device config")?
@@ -178,7 +178,7 @@ impl VirtSandbox {
 
         // prepare protection device config
         if let Some(protection_dev_config) = self
-            .prepare_protection_device_config(&self.hypervisor.hypervisor_config().await)
+            .prepare_protection_device_config(&self.hypervisor.hypervisor_config().await, init_data)
             .await
             .context("failed to prepare protection device config")?
         {
@@ -339,6 +339,7 @@ impl VirtSandbox {
     async fn prepare_protection_device_config(
         &self,
         hypervisor_config: &HypervisorConfig,
+        init_data: Option<String>,
     ) -> Result<Option<ProtectionDeviceConfig>> {
         if !hypervisor_config.security_info.confidential_guest {
             return Ok(None);
@@ -360,6 +361,7 @@ impl VirtSandbox {
                     is_snp: false,
                     cbitpos: details.cbitpos,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
+                    host_data: None,
                 })))
             }
             GuestProtection::Snp(details) => {
@@ -379,6 +381,7 @@ impl VirtSandbox {
                     is_snp,
                     cbitpos: details.cbitpos,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
+                    host_data: init_data,
                 })))
             }
             GuestProtection::Se => {
@@ -416,7 +419,7 @@ impl VirtSandbox {
             sl!(),
             "calculate initdata: {:?} with initdata  digest {:?}", &initdata, &initdata_digest
         );
-    
+
         // initdata within compressed rawblock
         let image_path = Path::new(KATA_SHARED_INIT_DATA_PATH)
             .join(&self.sid)
