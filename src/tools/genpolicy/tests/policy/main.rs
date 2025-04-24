@@ -68,7 +68,7 @@ mod tests {
             .expect("should be able to create directories under CARGO_TARGET_TMPDIR");
 
         let testdata_dir = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/testdata")
+            .join("tests/policy/testdata")
             .join(test_case_dir);
         fs::copy(testdata_dir.join("pod.yaml"), workdir.join("pod.yaml"))
             .expect("copying files around should not fail");
