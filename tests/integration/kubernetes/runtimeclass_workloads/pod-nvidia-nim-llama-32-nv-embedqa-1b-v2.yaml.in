@@ -1,0 +1,91 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret-embedqa
+  namespace: default
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nvidia-nim-llama-32-nv-embedqa-1b-v2
+  labels:
+    app: nvidia-nim-llama-32-nv-embedqa-1b-v2
+spec:
+  runtimeClassName: "${RUNTIME_CLASS_NAME}"
+  serviceAccountName: default
+  imagePullSecrets:
+    - name: ngc-secret-embedqa
+  securityContext:
+    fsGroup: 0
+    runAsGroup: 0
+    runAsUser: 0
+  containers:
+  - name: nvidia-nim-llama-32-nv-embedqa-1b-v2
+    image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.5.0
+    imagePullPolicy: IfNotPresent
+    env:
+      - name: NIM_CACHE_PATH
+        value: "/opt/nim/.cache"
+      - name: NGC_API_KEY
+        value: "${NGC_API_KEY}"
+      - name: NIM_HTTP_API_PORT
+        value: "8000"
+      - name: NIM_JSONL_LOGGING
+        value: "1"
+      - name: NIM_LOG_LEVEL
+        value: "INFO"
+    ports:
+      - containerPort: 8000
+        name: http
+
+    livenessProbe:
+      httpGet:
+        path: /v1/health/live
+        port: 8000
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+
+    readinessProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: 8000
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+
+    startupProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: 8000
+      initialDelaySeconds: 40
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 180
+
+    resources:
+      limits:
+        nvidia.com/pgpu: 1
+        cpu: "16"
+        memory: "64Gi"
+
+    volumeMounts:
+      - name: nim-cache
+        mountPath: /opt/nim/.cache
+
+  volumes:
+  - name: nim-cache
+    hostPath:
+      path: "/opr/nim/.cache"
+      type: DirectoryOrCreate
+
+
