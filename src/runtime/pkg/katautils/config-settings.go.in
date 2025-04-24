@@ -76,6 +76,7 @@ const defaultBlockDeviceCacheDirect bool = false
 const defaultBlockDeviceCacheNoflush bool = false
 const defaultEnableIOThreads bool = false
 const defaultEnableMemPrealloc bool = false
+const defaultEnableReclaimGuestFreedMemory bool = false
 const defaultEnableHugePages bool = false
 const defaultEnableIOMMU bool = false
 const defaultEnableIOMMUPlatform bool = false

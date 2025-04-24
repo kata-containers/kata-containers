@@ -527,7 +527,15 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		hotplugSize := clh.config.DefaultMaxMemorySize
 		// OpenAPI only supports int64 values
 		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+
+		if clh.config.ReclaimGuestFreedMemory {
+			// Create VM with a balloon config so we can enable free page reporting (size of the balloon can be set to zero)
+			clh.vmconfig.Balloon = chclient.NewBalloonConfig(0)
+			// Set the free page reporting flag for ballooning to be true
+			clh.vmconfig.Balloon.SetFreePageReporting(true)
+		}
 	}
+
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 

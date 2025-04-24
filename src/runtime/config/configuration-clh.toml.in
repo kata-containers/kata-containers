@@ -185,6 +185,16 @@ block_device_driver = "virtio-blk"
 # Default false
 #block_device_cache_direct = true
 
+# Reclaim guest freed memory.
+# Enabling this will result in the VM balloon device having f_reporting=on set.
+# Then the hypervisor will use it to reclaim guest freed memory.
+# This is useful for reducing the amount of memory used by a VM.
+# Enabling this feature may sometimes reduce the speed of memory access in
+# the VM.
+#
+# Default false
+#reclaim_guest_freed_memory = true
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.
