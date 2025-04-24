@@ -171,3 +171,39 @@ function create_coco_pod_yaml() {
 		set_node "${kata_pod}" "$node"
 	fi
 }
+
+# This function creates pod yaml. Parameters
+# - $1: image reference
+# - $2: annotation `io.katacontainers.config.hypervisor.kernel_params`
+# - $3: anootation `io.katacontainers.config.runtime.cc_init_data`
+# - $4: node
+function create_coco_pod_yaml_with_annotations() {
+	image=$1
+	kernel_params_annotation_value=${2:-}
+	cc_initdata_annotation_value=${3:-}
+	node=${4:-}
+
+	kernel_params_annotation_key="io.katacontainers.config.hypervisor.kernel_params"
+	cc_initdata_annotation_key="io.katacontainers.config.runtime.cc_init_data"
+
+	# Note: this is not local as we use it in the caller test
+	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
+	set_container_command "${kata_pod}" "0" "sleep" "30"
+
+	# Set annotations
+	set_metadata_annotation "${kata_pod}" \
+		"io.containerd.cri.runtime-handler" \
+		"kata-${KATA_HYPERVISOR}"
+	set_metadata_annotation "${kata_pod}" \
+		"${kernel_params_annotation_key}" \
+		"${kernel_params_annotation_value}"
+	set_metadata_annotation "${kata_pod}" \
+		"${cc_initdata_annotation_key}" \
+		"${cc_initdata_annotation_value}"
+
+	add_allow_all_policy_to_yaml "${kata_pod}"
+
+	if [ -n "$node" ]; then
+		set_node "${kata_pod}" "$node"
+	fi
+}

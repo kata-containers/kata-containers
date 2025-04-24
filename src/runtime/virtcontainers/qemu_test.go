@@ -8,9 +8,14 @@
 package virtcontainers
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -769,4 +774,54 @@ func TestQemuStartSandbox(t *testing.T) {
 
 	err = q.StartVM(context.Background(), 10)
 	assert.Error(err)
+}
+
+func TestPrepareInitdataImage(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+	}{
+		{
+			"create an initdata image",
+			"some content",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			imageDir := t.TempDir()
+			imagePath := path.Join(imageDir, "initdata.img")
+			err := prepareInitdataImage(tt.content, imagePath)
+			if err != nil {
+				t.Errorf("prepareInitdataImage() error = %v", err)
+			}
+			defer os.Remove(imagePath)
+
+			fullContent, err := os.ReadFile(imagePath)
+			if err != nil {
+				t.Errorf("read initdata image failed: %v", err)
+			}
+
+			magicNumber := fullContent[:8]
+			if string(magicNumber) != "initdata" {
+				t.Errorf("initdata magic number is not correct, got %s, want initdata", string(magicNumber))
+			}
+
+			length := binary.LittleEndian.Uint64(fullContent[8:16])
+			contentSlice := fullContent[16 : 16+length]
+			gzipReader, err := gzip.NewReader(bytes.NewBuffer(contentSlice))
+			if err != nil {
+				t.Errorf("read gzipped initdata failed: %v", err)
+			}
+			defer gzipReader.Close()
+
+			content, err := io.ReadAll(gzipReader)
+			if err != nil {
+				t.Errorf("read gzipped initdata failed: %v", err)
+			}
+
+			if string(content) != tt.content {
+				t.Errorf("initdata content is not correct, got %s, want %s", string(content), tt.content)
+			}
+		})
+	}
 }
