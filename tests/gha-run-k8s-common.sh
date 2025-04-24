@@ -92,8 +92,10 @@ function enable_cluster_http_application_routing() {
 
 function install_azure_cli() {
 	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-	# The aks-preview extension is required while the Mariner Kata host is in preview.
-	az extension add --name aks-preview
+
+	# TODO: Remove the version spec when this bug is fixed:
+	# https://github.com/Azure/azure-cli/issues/31345
+	az extension add --name aks-preview --version 14.0.0b3
 }
 
 function login_azure() {
