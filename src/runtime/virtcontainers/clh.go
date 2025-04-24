@@ -1108,7 +1108,27 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	defer cancel()
 	resize := *chclient.NewVmResize()
 	resize.DesiredVcpus = func(i int32) *int32 { return &i }(int32(reqVCPUs))
-	if _, err = cl.VmResizePut(ctx, resize); err != nil {
+	tries := 3
+	for i := 1; i <= tries; i++ {
+		_, err = cl.VmResizePut(ctx, resize);
+		if err == nil {
+			break;
+		}
+
+		clh.Logger().WithFields(log.Fields{
+			"function": "ResizeVCPUs",
+			"error":     err,
+		}).Warnf("Temptative %d of %d of resizing the vCPUs to %d failed", i, tries, reqVCPUs)
+
+		if (i < tries ) {
+			clh.Logger().WithFields(log.Fields{
+				"function": "ResizeVCPUs",
+				"error":     err,
+			}).Warn("Trying again ...")
+			time.Sleep(1 * time.Second)
+			continue
+		}
+			
 		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
 	}
 
