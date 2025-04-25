@@ -372,6 +372,10 @@ function kbs_k8s_deploy() {
 	fi
 	echo "::endgroup::"
 
+	echo "::group::Post deploy actions"
+	_post_deploy "${ingress}"
+	echo "::endgroup::"
+
 	# By default, the KBS service is reachable within the cluster only,
 	# thus the following healthy checker should run from a pod. So start a
 	# debug pod where it will try to get a response from the service. The
@@ -547,6 +551,22 @@ _handle_ingress_nodeport() {
 	export DEPLOYMENT_DIR=nodeport
 }
 
+# Run further actions after the kbs was deployed, usually to apply further
+# configurations.
+#
+_post_deploy() {
+	local ingress="${1:-}"
+
+	if [[ "${ingress}" = "aks" ]]; then
+		# The AKS managed ingress controller defaults to two nginx pod
+		# replicas where both request 500m of CPU. On cluster made of small
+		# VMs (e.g. 2 vCPU) one of the pod might not even start. We need only
+		# one nginx, so patching the controller to keep only one replica.
+		echo "Patch the ingress controller to have only one replica of nginx"
+		waitForProcess "20" "5" \
+			"kubectl patch nginxingresscontroller/default -n app-routing-system --type=merge -p='{\"spec\":{\"scaling\": {\"minReplicas\": 1}}}'"
+	fi
+}
 
 # Prepare necessary resources for qemu-se runtime
 # Documentation: https://github.com/confidential-containers/trustee/tree/main/attestation-service/verifier/src/se
