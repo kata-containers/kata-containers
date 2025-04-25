@@ -222,6 +222,11 @@ jobs:
       AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
+      # Caution: current ingress controller used to expose the KBS service
+      # requires much vCPUs, lefting only a few for the tests. Depending on the
+      # host type chose it will result on the creation of a cluster with
+      # insufficient resources.
+      K8S_TEST_HOST_TYPE: "all"
       USING_NFD: "false"
       AUTO_GENERATE_POLICY: "yes"
     steps:
