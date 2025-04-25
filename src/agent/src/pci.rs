@@ -7,7 +7,7 @@ use std::fmt;
 use std::ops::Deref;
 use std::str::FromStr;
 
-use anyhow::anyhow;
+use anyhow::{anyhow,Context};
 
 // The PCI spec reserves 5 bits (0..31) for slot number (a.k.a. device
 // number)
@@ -18,11 +18,21 @@ const SLOT_MAX: u8 = (1 << SLOT_BITS) - 1;
 const FUNCTION_BITS: u8 = 3;
 const FUNCTION_MAX: u8 = (1 << FUNCTION_BITS) - 1;
 
+const PCI_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
+const PCI_RESCAN_SIGNAL: &str = "1";
 // Represents a PCI function's slot (a.k.a. device) and function
 // numbers, giving its location on a single logical bus
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SlotFn(u8);
-
+pub async fn rescan_pci_meta() -> anyhow::Result<()> {
+    tokio::fs::write(PCI_RESCAN_FILE, PCI_RESCAN_SIGNAL)
+        .await
+        .context(format!(
+            "PCI rescan failed: writing '{}' to {}",
+            PCI_RESCAN_SIGNAL, PCI_RESCAN_FILE
+        ))?;
+    Ok(())
+}
 impl SlotFn {
     pub fn new<T, U>(ss: T, f: U) -> anyhow::Result<Self>
     where

@@ -27,6 +27,7 @@ default ReadStreamRequest := false
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
 default ReseedRandomDevRequest := false
+default ResizeVolumeRequest := false
 default ResumeContainerRequest := false
 default SetGuestDateTimeRequest := false
 default SetPolicyRequest := false

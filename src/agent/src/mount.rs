@@ -9,7 +9,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::ops::Deref;
 use std::path::Path;
-
+use std::process::Command;
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{get_linux_mount_info, parse_mount_options};
 use nix::mount::MsFlags;
@@ -63,6 +63,52 @@ lazy_static! {
     ];
 }
 
+#[instrument]
+pub async fn resize_file_system(mountpoint: &String, logger: &Logger) -> Result<()> {
+    let logger = logger.new(o!("subsystem" => "resize_file_system"));
+    match get_linux_mount_info(mountpoint) {
+        Ok(info) => {
+            info!(
+                logger,
+                "Resizing {} file system on device {:?}", 
+                info.fs_type, 
+                info.device
+            );
+
+            let status = match info.fs_type.as_str() {
+                "ext2" | "ext3" | "ext4" => {
+                    Command::new("resize2fs")
+                        .arg(&info.device)
+                        .status()
+                        .context("Failed to execute resize2fs")?
+                }
+                "xfs" => {
+                    Command::new("xfs_growfs")
+                        .arg(&info.path)
+                        .status()
+                        .context("Failed to execute xfs_growfs")?
+                }
+                other => {
+                    return Err(anyhow!(
+                        "Unsupported filesystem type: {} for device {}",
+                        other,
+                        info.device
+                    ));
+                }
+            };
+
+            if !status.success() {
+                return Err(anyhow!(
+                    "Filesystem resize failed with exit code: {:?}",
+                    status.code()
+                ));
+            }
+
+            Ok(())
+        }
+        Err(e) => Err(anyhow!("Error getting mount info: {:?}", e)),
+    }
+}
 #[instrument]
 pub fn baremount(
     source: &Path,
