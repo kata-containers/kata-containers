@@ -1,0 +1,85 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret-instruct
+  namespace: default
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME}
+  namespace: default
+  labels:
+    app: ${POD_NAME}
+spec:
+  runtimeClassName: kata-qemu-nvidia-gpu
+  imagePullSecrets:
+    - name: ngc-secret-instruct
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  containers:
+  - name: ${POD_NAME}
+    image: nvcr.io/nim/meta/llama3-8b-instruct:1.0.0
+    # Ports exposed by the container:
+    ports:
+      - containerPort: 8000
+        name: http-openai
+    livenessProbe:
+      httpGet:
+        path: /v1/health/live
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    startupProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 40
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 180
+    # Environment variable for NGC_API_KEY. In production, use a Secret.
+    env:
+      - name: NGC_API_KEY
+        value: "${NGC_API_KEY}"
+    # GPU resource request/limit (for NVIDIA GPU)
+    resources:
+      requests:
+        cpu: "16"
+        memory: "64Gi"
+      limits:
+        nvidia.com/pgpu: "1"
+        cpu: "16"
+        memory: "64Gi"
+    # Mount the local .cache directory into the container
+    volumeMounts:
+      - name: nim-cache
+        mountPath: /opt/nim/.cache
+
+  # Host path volume for the local .cache directory.
+  # Adjust 'path' to match your $LOCAL_NIM_CACHE location.
+  volumes:
+  - name: nim-cache
+    hostPath:
+      path: "/opr/nim/.cache"
+      type: DirectoryOrCreate
+
