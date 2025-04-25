@@ -452,6 +452,37 @@ func (clh *cloudHypervisor) enableProtection() error {
 	}
 }
 
+func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bool, debug bool, confidential bool, iommu bool) ([]Param, error) {
+	params, err := GetKernelRootParams(rootfstype, disableNvdimm, dax)
+	if err != nil {
+		return []Param{}, err
+	}
+	params = append(params, clhKernelParams...)
+
+	if iommu {
+		params = append(params, Param{"iommu", "pt"})
+	}
+
+	if !debug {
+		// start the guest kernel with 'quiet' in non-debug mode
+		params = append(params, Param{"quiet", ""})
+		return params, nil
+	}
+
+	// In case of debug ...
+
+	// Followed by extra debug parameters if debug enabled in configuration file
+	if confidential {
+		params = append(params, clhDebugConfidentialGuestKernelParams...)
+	} else if runtime.GOARCH == "arm64" {
+		params = append(params, clhArmDebugKernelParams...)
+	} else {
+		params = append(params, clhDebugKernelParams...)
+	}
+	params = append(params, clhDebugKernelParamsCommon...)
+	return params, nil
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through StartVM().
 func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
@@ -539,30 +570,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
-	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, !clh.config.ConfidentialGuest)
+	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, !clh.config.ConfidentialGuest, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
 	if err != nil {
 		return err
 	}
-	params = append(params, clhKernelParams...)
-
-	// Followed by extra debug parameters if debug enabled in configuration file
-	if clh.config.Debug {
-		if clh.config.ConfidentialGuest {
-			params = append(params, clhDebugConfidentialGuestKernelParams...)
-		} else if runtime.GOARCH == "arm64" {
-			params = append(params, clhArmDebugKernelParams...)
-		} else {
-			params = append(params, clhDebugKernelParams...)
-		}
-		params = append(params, clhDebugKernelParamsCommon...)
-	} else {
-		// start the guest kernel with 'quiet' in non-debug mode
-		params = append(params, Param{"quiet", ""})
-	}
-	if clh.config.IOMMU {
-		params = append(params, Param{"iommu", "pt"})
-	}
-
 	// Followed by extra kernel parameters defined in the configuration file
 	params = append(params, clh.config.KernelParams...)
 
