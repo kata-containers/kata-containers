@@ -27,6 +27,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	cri "github.com/containerd/containerd/pkg/cri/annotations"
 	crio "github.com/containers/podman/v4/pkg/annotations"
@@ -2834,4 +2835,49 @@ func (s *Sandbox) resetVCPUsPinning(ctx context.Context, vCPUThreadsMap VcpuThre
 		}
 	}
 	return nil
+}
+
+// ResizeBlockDevice resizes a block device in the guest.
+func (s *Sandbox) ResizeBlockDevice(ctx context.Context, blockDevice string, size uint64) error {
+	id, err := s.getDeviceByName(blockDevice)
+
+	if err != nil {
+		return err
+	}
+	if err := s.hypervisor.ResizeBlock(ctx, id, size); err != nil {
+		s.Logger().WithError(err).Error("Failed to resize raw block device in hypervisor")
+		return err
+	}
+
+	return nil
+}
+func (s *Sandbox) getDeviceByName(blockDevice string) (string, error) {
+	stat := syscall.Stat_t{}
+	err := syscall.Stat(blockDevice, &stat)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat blockDevice %s :%v", blockDevice, err)
+	}
+	targetMajor := int64(unix.Major(uint64(stat.Rdev)))
+	targetMinor := int64(unix.Minor(uint64(stat.Rdev)))
+	for _, c := range s.containers {
+		for _, d := range c.devices {
+			device := s.devManager.GetDeviceByID(d.ID)
+			if device == nil {
+				s.Logger().WithField("device", d.ID).Error("failed to find device by id")
+				return "", fmt.Errorf("failed to find device by id (id=%s)", d.ID)
+			}
+			devMajor, devMinor := device.GetMajorMinor()
+			if devMajor == targetMajor && devMinor == targetMinor {
+				deviceInfo, ok := device.GetDeviceInfo().(*config.BlockDrive)
+				if !ok || deviceInfo == nil {
+					s.Logger().WithField("device", device).Error("device is not a block drive or is nil")
+					return "", fmt.Errorf("device is not a block drive or is nil")
+				}
+				return deviceInfo.ID, nil
+			}
+
+		}
+	}
+
+	return "", fmt.Errorf("blockDevice %s not found in sandbox", blockDevice)
 }
