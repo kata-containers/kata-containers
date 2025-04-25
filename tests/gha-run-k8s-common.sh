@@ -41,7 +41,7 @@ function _print_instance_type() {
 		small)
 			echo "Standard_D2s_v5"
 			;;
-		normal)
+		all|normal)
 			echo "Standard_D4s_v5"
 			;;
 		*)
