@@ -162,9 +162,6 @@ clap.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 
-# Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "0a06ef241190780840fbb0542e51b198f1f72b0b", default-features = false, optional = true }
-
 # Agent Policy
 cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
 
@@ -202,12 +199,9 @@ test-utils.workspace = true
 lto = true
 
 [features]
-# The default-pull feature supports all sharing images by virtio-fs, for guest-pull build with the guest-pull feature
-default-pull = []
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["kata-agent-policy"]
-guest-pull = ["image-rs/kata-cc-rustls-tls"]
 
 [[bin]]
 name = "kata-agent"
