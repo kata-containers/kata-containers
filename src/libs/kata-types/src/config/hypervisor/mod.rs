@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use std::io::{self, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use sysinfo::System;
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 mod dragonball;
 pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
@@ -751,7 +751,9 @@ impl MemoryInfo {
             "Memory backend file {} is invalid: {}"
         )?;
         if self.default_maxmemory == 0 {
-            let s = System::new_all();
+            let s = System::new_with_specifics(
+                RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+            );
             self.default_maxmemory = Byte::from_u64(s.total_memory())
                 .get_adjusted_unit(Unit::MiB)
                 .get_value() as u32;
