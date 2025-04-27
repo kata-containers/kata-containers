@@ -4,7 +4,7 @@
 //
 
 use super::new_device;
-use crate::image;
+use crate::confidential_data_hub;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Result};
 use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
@@ -53,7 +53,9 @@ impl StorageHandler for ImagePullHandler {
             .cid
             .clone()
             .ok_or_else(|| anyhow!("failed to get container id"))?;
-        let bundle_path = image::pull_image(image_name, &cid, &image_pull_volume.metadata).await?;
+        let bundle_path =
+            confidential_data_hub::pull_image(image_name, &cid, &image_pull_volume.metadata)
+                .await?;
 
         new_device(bundle_path)
     }
