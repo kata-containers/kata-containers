@@ -906,6 +906,10 @@ install_shimv2() {
 install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
+	if [ "${ARCH}" == "aarch64" ]; then
+		ovmf_type="arm64"
+		tarball_name="edk2-arm64.tar.gz"
+	fi
 
 	local component_name="ovmf"
 	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
