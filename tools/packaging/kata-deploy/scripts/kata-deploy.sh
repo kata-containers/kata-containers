@@ -352,6 +352,11 @@ function adjust_qemu_cmdline() {
 	[[ "${shim}" =~ ^(qemu|qemu-coco-dev)$ ]] && qemu_share="qemu"
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]] && [[ "${qemu_binary}" == *-installation-prefix ]]; then
+		# This means that we'e already adapted the qemu-binary to the
+		# correct path, and we have nothing else to do here.
+		return
+	fi
 	qemu_binary_script="${qemu_binary}-installation-prefix"
 	qemu_binary_script_host_path="/host/${qemu_binary_script}"
 
