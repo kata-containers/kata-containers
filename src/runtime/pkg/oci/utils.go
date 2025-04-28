@@ -705,6 +705,12 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.ReclaimGuestFreedMemory).setBool(func(reclaimGuestFreedMemory bool) {
+		sbConfig.HypervisorConfig.ReclaimGuestFreedMemory = reclaimGuestFreedMemory
+	}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.HugePages).setBool(func(hugePages bool) {
 		sbConfig.HypervisorConfig.HugePages = hugePages
 	}); err != nil {

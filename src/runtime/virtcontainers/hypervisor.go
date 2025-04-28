@@ -612,6 +612,9 @@ type HypervisorConfig struct {
 	// MemPrealloc specifies if the memory should be pre-allocated
 	MemPrealloc bool
 
+	// ReclaimGuestFreedMemory is a sandbox annotation that specifies whether the memory freed by the guest will be reclaimed by the hypervisor or not.
+	ReclaimGuestFreedMemory bool
+
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
