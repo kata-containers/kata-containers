@@ -15,7 +15,7 @@ test-utils = { workspace = true }
 actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitflags = "1.2.1"
+bitflags = "2.9.0"
 byte-unit = "4.0.14"
 cgroups-rs = "0.3.2"
 futures = "0.3.11"
@@ -35,9 +35,9 @@ uuid = { version = "0.4", features = ["v4"] }
 oci-spec = { workspace = true }
 
 ## Dependencies from `rust-netlink`
-netlink-packet-route = "0.19.0"
-netlink-sys = "0.8.3"
-rtnetlink = "0.14.0"
+netlink-packet-route = "0.22"
+netlink-sys = "0.8"
+rtnetlink = "0.16"
 
 # Local dependencies
 agent = { workspace = true }

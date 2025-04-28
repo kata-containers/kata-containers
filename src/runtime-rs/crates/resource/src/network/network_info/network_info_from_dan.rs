@@ -7,7 +7,7 @@
 use agent::{ARPNeighbor, IPAddress, Interface, Route};
 use anyhow::Result;
 use async_trait::async_trait;
-use netlink_packet_route::link::LinkFlag::Noarp;
+use netlink_packet_route::link::LinkFlags;
 
 use super::NetworkInfo;
 use crate::network::dan::DanDevice;
@@ -55,7 +55,7 @@ impl NetworkInfoFromDan {
             hw_addr: dan_device.guest_mac.clone(),
             device_path: String::default(),
             field_type: dan_device.network_info.interface.ntype.clone(),
-            raw_flags: dan_device.network_info.interface.flags & u32::from(Noarp),
+            raw_flags: dan_device.network_info.interface.flags & LinkFlags::Noarp.bits(),
         };
 
         let routes = dan_device

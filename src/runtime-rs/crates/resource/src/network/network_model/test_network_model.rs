@@ -11,6 +11,7 @@ mod tests {
         network_pair::NetworkPair,
     };
     use anyhow::Context;
+    use rtnetlink::LinkVeth;
     use scopeguard::defer;
     #[actix_rt::test]
     async fn test_tc_redirect_network() {
@@ -20,10 +21,9 @@ mod tests {
                 thread_handler.abort();
             });
 
-            handle
-                .link()
-                .add()
-                .veth("foo".to_string(), "bar".to_string());
+            let veth = LinkVeth::new("foo", "bar").build();
+
+            handle.link().add(veth);
 
             if let Ok(net_pair) =
                 NetworkPair::new(&handle, 1, "bar", TC_FILTER_NET_MODEL_STR, 2).await

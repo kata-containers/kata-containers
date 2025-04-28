@@ -10,6 +10,8 @@ mod tests {
 
     use anyhow::{anyhow, Context, Result};
     use kata_types::config::hypervisor::TopologyConfigInfo;
+    use netlink_packet_route::link::MacVlanMode;
+    use rtnetlink::{LinkDummy, LinkMacVlan, LinkVeth, LinkVlan};
     use scopeguard::defer;
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
@@ -71,10 +73,11 @@ mod tests {
                 thread_handler.abort();
             });
 
+            let dummy = LinkDummy::new(&dummy_name).build();
+
             if let Ok(()) = handle
                 .link()
-                .add()
-                .dummy(dummy_name.clone())
+                .add(dummy)
                 .execute()
                 .await
                 .context("failed to create dummy link")
@@ -83,12 +86,13 @@ mod tests {
                     .await
                     .expect("failed to get the index of dummy link");
 
+                let vlan = LinkVlan::new(&manual_vlan_iface_name, dummy_index, vlanid).build();
+
                 // since IPVlanEndpoint::new() needs an EXISTING virt_iface (which is created
                 // by containerd normally), we have to manually create a virt_iface.
                 if let Ok(()) = handle
                     .link()
-                    .add()
-                    .vlan(manual_vlan_iface_name.clone(), dummy_index, vlanid)
+                    .add(vlan)
                     .execute()
                     .await
                     .context("failed to create manual veth pair")
@@ -187,10 +191,11 @@ mod tests {
                 thread_handler.abort();
             });
 
+            let dummy = LinkDummy::new(&dummy_name).build();
+
             if let Ok(()) = handle
                 .link()
-                .add()
-                .dummy(dummy_name.clone())
+                .add(dummy)
                 .execute()
                 .await
                 .context("failed to create dummy link")
@@ -199,18 +204,17 @@ mod tests {
                     .await
                     .expect("failed to get the index of dummy link");
 
-                // Available MACVLAN MODES
-                let macvlan_mode_private: u32 = 1;
+                let macvlan = LinkMacVlan::new(
+                    &manual_macvlan_iface_name,
+                    dummy_index,
+                    MacVlanMode::Private,
+                )
+                .build();
 
                 // the mode here does not matter, could be any of available modes
                 if let Ok(()) = handle
                     .link()
-                    .add()
-                    .macvlan(
-                        manual_macvlan_iface_name.clone(),
-                        dummy_index,
-                        macvlan_mode_private,
-                    )
+                    .add(macvlan)
                     .execute()
                     .await
                     .context("failed to create manual macvlan pair")
@@ -318,12 +322,13 @@ mod tests {
                 thread_handler.abort();
             });
 
+            let veth = LinkVeth::new("foo", &manual_virt_iface_name).build();
+
             // since IPVlanEndpoint::new() needs an EXISTING virt_iface (which is created
             // by containerd normally), we have to manually create a virt_iface.
             if let Ok(()) = handle
                 .link()
-                .add()
-                .veth("foo".to_string(), manual_virt_iface_name.clone())
+                .add(veth)
                 .execute()
                 .await
                 .context("failed to create manual veth pair")
