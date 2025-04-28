@@ -64,7 +64,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			rootfstype: string(XFS),
 			expected: []Param{
 				{"root", string(Nvdimm)},
-				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootflags", "ro"},
 				{"rootfstype", string(XFS)},
 			},
 			disableNvdimm: false,
@@ -75,7 +75,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			rootfstype: string(XFS),
 			expected: []Param{
 				{"root", string(Nvdimm)},
-				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+				{"rootflags", "dax ro"},
 				{"rootfstype", string(XFS)},
 			},
 			disableNvdimm: false,
@@ -86,7 +86,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			rootfstype: string(XFS),
 			expected: []Param{
 				{"root", string(VirtioBlk)},
-				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootflags", "ro"},
 				{"rootfstype", string(XFS)},
 			},
 			disableNvdimm: true,
