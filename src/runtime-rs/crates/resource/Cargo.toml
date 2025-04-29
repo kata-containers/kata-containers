@@ -32,7 +32,7 @@ serde = { version = "1.0.138", features = ["derive"] }
 serde_json = "1.0.82"
 slog = "2.5.2"
 slog-scope = "4.4.0"
-tokio = { version = "1.38.0", features = ["process"] }
+tokio = { version = "1.38.2", features = ["process"] }
 tracing = "0.1.36"
 uuid = { version = "0.4", features = ["v4"] }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
