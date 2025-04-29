@@ -36,6 +36,8 @@ export PULL_TYPE="${PULL_TYPE:-default}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
+export GHCR_ACTOR="${GHCR_ACTOR:-}"
+export GHCR_TOKEN="${GHCR_TOKEN:-}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -276,6 +278,8 @@ function run_tests() {
 		start_time=$(date '+%Y-%m-%d %H:%M:%S')
 		export start_time
 		echo "start_time=${start_time}" >> "${GITHUB_ENV}"
+
+		set_docker_config_secret
 	fi
 
 	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then

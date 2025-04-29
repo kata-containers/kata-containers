@@ -57,6 +57,8 @@ jobs:
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: all
       CONTAINER_RUNTIME: ${{ matrix.container_runtime }}
+      GHCR_ACTOR: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:

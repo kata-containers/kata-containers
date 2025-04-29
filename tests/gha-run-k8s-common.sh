@@ -408,6 +408,21 @@ function set_test_cluster_namespace() {
 	kubectl config set-context --current --namespace="${TEST_CLUSTER_NAMESPACE}"
 }
 
+function set_docker_config_secret() {
+	echo "Cameron debug ${GHCR_ACTOR}"
+	
+	echo "{\"auths\":{\"ghcr.io\":{\"username\":\"${{ GHCR_ACTOR }}\",\"password\":\"${{ GHCR_TOKEN }}\"}}}" > .dockerconfigjson
+	kubectl create secret generic ghcr-secret \
+        --from-file=.dockerconfigjson=.dockerconfigjson \
+        --type=kubernetes.io/dockerconfigjson \
+        --namespace="${TEST_CLUSTER_NAMESPACE}"
+
+	kubectl patch serviceaccount default \
+	    -n "${TEST_CLUSTER_NAMESPACE}" \
+	    -p "{"imagePullSecrets": [{"name": "ghcr-secret"}]}"
+
+}
+
 function set_default_cluster_namespace() {
 	kubectl config set-context --current --namespace=default
 }
