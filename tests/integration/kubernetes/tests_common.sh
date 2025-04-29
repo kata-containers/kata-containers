@@ -116,6 +116,15 @@ adapt_common_policy_settings_for_cbl_mariner() {
 	true
 }
 
+# adapt common policy settings for guest-pull Hosts
+# see issue https://github.com/kata-containers/kata-containers/issues/11162
+adapt_common_policy_settings_for_guest_pull() {
+	local settings_dir=$1
+
+	info "Adapting common policy settings for guest-pull environment"
+	jq '.cluster_config.guest_pull = true' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
@@ -141,6 +150,12 @@ adapt_common_policy_settings() {
 	case "${KATA_HOST_OS}" in
 		"cbl-mariner")
 			adapt_common_policy_settings_for_cbl_mariner "${settings_dir}"
+			;;
+	esac
+
+	case "${PULL_TYPE}" in
+		"guest-pull")
+			adapt_common_policy_settings_for_guest_pull "${settings_dir}"
 			;;
 	esac
 }

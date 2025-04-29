@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dummy
+spec:
+  runtimeClassName: kata-cc-isolation
+  securityContext:
+    runAsUser: 65534
+    runAsGroup: 65534
+  containers:
+  - name: dummy
+    image: quay.io/opstree/redis@sha256:2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48

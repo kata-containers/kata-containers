@@ -233,7 +233,7 @@
             "AdditionalGids": [
               0
             ],
-            "GID": 0,
+            "GID": 65535,
             "UID": 65535,
             "Username": ""
           }
