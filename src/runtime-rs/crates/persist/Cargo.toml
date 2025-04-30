@@ -1,16 +1,16 @@
 [package]
 name = "persist"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
-async-trait = "0.1.48"
-anyhow = "^1.0"
-libc = "0.2"
-serde = { version = "1.0.138", features = ["derive"] }
-serde_json = "1.0.82"
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+libc = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Local dependencies
 kata-sys-util = { workspace = true }
