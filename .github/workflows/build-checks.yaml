@@ -122,4 +122,5 @@ jobs:
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
+          RUST_LIB_BACKTRACE: "0"
           SKIP_GO_VERSION_CHECK: "1"
