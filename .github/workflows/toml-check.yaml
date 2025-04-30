@@ -1,0 +1,39 @@
+name: Check Cargo.toml format 
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: 
+        - '**/Cargo.toml'
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo_toml_format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install rust
+        run: |
+          export PATH="$PATH:/usr/local/bin"
+          ./tests/install_rust.sh
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get -yqq install build-essential libssl-dev
+
+      - name: Install taplo
+        run: cargo install taplo-cli --locked
+
+      - name: Check formatting
+        run: taplo fmt --check
