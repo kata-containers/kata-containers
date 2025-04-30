@@ -943,7 +943,7 @@ function run_get_pr_changed_file_details()
 	# Make sure we have the targeting branch
 	git remote set-branches --add origin "${branch}"
 	git fetch -a
-	get_pr_changed_file_details
+	get_pr_changed_file_details || true
 }
 
 # Check if the 1st argument version is greater than and equal to 2nd one
