@@ -13,10 +13,10 @@ readme = "README.md"
 [dependencies]
 log = "0.4.14"
 thiserror = "1"
-dbs-allocator = { path = "../dbs_allocator" }
-dbs-boot = { path = "../dbs_boot" }
-dbs-device = { path = "../dbs_device" }
-dbs-interrupt = { path = "../dbs_interrupt", features = [
+dbs-allocator = { workspace = true }
+dbs-boot = { workspace = true }
+dbs-device = { workspace = true }
+dbs-interrupt = { workspace = true, features = [
     "kvm-irq",
     "kvm-legacy-irq",
     "kvm-msi-irq",
@@ -31,7 +31,7 @@ vfio-bindings = {workspace = true}
 libc = "0.2.39"
 
 [dev-dependencies]
-dbs-arch = { path = "../dbs_arch" }
+dbs-arch = { workspace = true }
 kvm-ioctls = {workspace = true}
 
 [lints.rust]
