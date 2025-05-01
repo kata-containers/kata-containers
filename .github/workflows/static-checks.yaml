@@ -87,6 +87,7 @@ jobs:
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
+          RUST_LIB_BACKTRACE: "0"
 
   static-checks:
     runs-on: ubuntu-22.04
