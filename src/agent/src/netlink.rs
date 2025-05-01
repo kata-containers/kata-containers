@@ -20,6 +20,7 @@ use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 use rtnetlink::{new_connection, IpVersion};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::fs;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 use std::str::{self, FromStr};
@@ -113,12 +114,30 @@ impl Handle {
             self.enable_link(link.index(), false).await?;
         }
 
+        // Get whether the network stack has ipv6 enabled or disabled.
+        let supports_ipv6_all = fs::read_to_string("/proc/sys/net/ipv6/conf/all/disable_ipv6")
+            .map(|s| s.trim() == "0")
+            .unwrap_or(false);
+        let supports_ipv6_default =
+            fs::read_to_string("/proc/sys/net/ipv6/conf/default/disable_ipv6")
+                .map(|s| s.trim() == "0")
+                .unwrap_or(false);
+        let supports_ipv6 = supports_ipv6_default || supports_ipv6_all;
+
         // Add new ip addresses from request
         for ip_address in &iface.IPAddresses {
             let ip = IpAddr::from_str(ip_address.address())?;
             let mask = ip_address.mask().parse::<u8>()?;
 
-            self.add_addresses(link.index(), std::iter::once(IpNetwork::new(ip, mask)?))
+            let net = IpNetwork::new(ip, mask)?;
+            if !net.is_ipv4() && !supports_ipv6 {
+                // If we're dealing with an ipv6 address, but the stack does not
+                // support ipv6, skip adding it otherwise it will lead to an
+                // error at the "CreatePodSandbox" time.
+                continue;
+            }
+
+            self.add_addresses(link.index(), std::iter::once(net))
                 .await?;
         }
 
