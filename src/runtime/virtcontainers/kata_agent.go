@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -1776,9 +1777,18 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 	if len(vol.Options) == 0 {
 		vol.Options = m.Options
 	}
+
 	if m.FSGroup != nil {
+		var safeFsgroup uint32
+		// Check conversions from int to uint32 is safe
+		if *m.FSGroup > 0 && *m.FSGroup <= math.MaxUint32 {
+			safeFsgroup = uint32(*m.FSGroup)
+		} else {
+			return nil, fmt.Errorf("m.FSGroup value was out of range: %d", m.FSGroup)
+
+		}
 		vol.FsGroup = &grpc.FSGroup{
-			GroupId:           uint32(*m.FSGroup),
+			GroupId:           safeFsgroup,
 			GroupChangePolicy: getFSGroupChangePolicy(m.FSGroupChangePolicy),
 		}
 	}
