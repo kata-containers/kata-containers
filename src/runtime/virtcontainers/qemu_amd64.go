@@ -73,10 +73,6 @@ var supportedQemuMachines = []govmmQemu.Machine{
 		Options: defaultQemuMachineOptions,
 	},
 	{
-		Type:    QemuVirt,
-		Options: defaultQemuMachineOptions,
-	},
-	{
 		Type:    QemuMicrovm,
 		Options: defaultQemuMachineOptions,
 	},
@@ -169,8 +165,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 func (q *qemuAmd64) capabilities(hConfig HypervisorConfig) types.Capabilities {
 	var caps types.Capabilities
 
-	if q.qemuMachine.Type == QemuQ35 ||
-		q.qemuMachine.Type == QemuVirt {
+	if q.qemuMachine.Type == QemuQ35 {
 		caps.SetBlockDeviceHotplugSupport()
 		caps.SetNetworkDeviceHotplugSupported()
 	}
