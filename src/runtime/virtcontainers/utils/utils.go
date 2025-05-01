@@ -497,7 +497,7 @@ func IsDockerContainer(spec *specs.Spec) bool {
 		return false
 	}
 
-	for _, hook := range spec.Hooks.Prestart {
+	for _, hook := range spec.Hooks.Prestart { //nolint:all
 		for _, arg := range hook.Args {
 			if strings.HasPrefix(arg, "libnetwork") {
 				return true
