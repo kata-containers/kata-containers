@@ -13,7 +13,7 @@ use futures::stream::TryStreamExt;
 use netlink_packet_route::{
     self,
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
-    route::{RouteAddress, RouteAttribute, RouteMessage},
+    route::{RouteAddress, RouteAttribute, RouteMessage, RouteMetric},
 };
 
 use super::NetworkInfo;
@@ -200,6 +200,14 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
                 let dest = parse_route_addr(s)?;
 
                 route.source = dest.to_string();
+            }
+            RouteAttribute::Metrics(metrics) => {
+                for m in metrics {
+                    if let RouteMetric::Mtu(mtu) = m {
+                        route.mtu = *mtu;
+                        break;
+                    }
+                }
             }
             _ => {}
         }

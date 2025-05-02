@@ -6,10 +6,13 @@
 use anyhow::{anyhow, Context, Result};
 use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
-use netlink_packet_route::address::{AddressAttribute, AddressMessage};
 use netlink_packet_route::link::{LinkAttribute, LinkMessage};
 use netlink_packet_route::neighbour::{self, NeighbourFlag};
 use netlink_packet_route::route::{RouteFlag, RouteHeader, RouteProtocol, RouteScope, RouteType};
+use netlink_packet_route::{
+    address::{AddressAttribute, AddressMessage},
+    route::RouteMetric,
+};
 use netlink_packet_route::{
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourState},
     route::{RouteAddress, RouteAttribute, RouteMessage},
@@ -388,6 +391,15 @@ impl Handle {
                         .unwrap_or_default();
                 }
 
+                if let RouteAttribute::Metrics(metrics) = attribute {
+                    for m in metrics {
+                        if let RouteMetric::Mtu(mtu) = m {
+                            route.mtu = *mtu;
+                            break;
+                        }
+                    }
+                }
+
                 if let RouteAttribute::Oif(index) = attribute {
                     route.device = self.find_link(LinkFilter::Index(*index)).await?.name();
                 }
@@ -452,6 +464,13 @@ impl Handle {
             }
 
             message.header.flags = flags;
+
+            if route.mtu != 0 {
+                let route_metrics = vec![RouteMetric::Mtu(route.mtu)];
+                message
+                    .attributes
+                    .push(RouteAttribute::Metrics(route_metrics));
+            }
 
             // `rtnetlink` offers a separate request builders for different IP versions (IP v4 and v6).
             // This if branch is a bit clumsy because it does almost the same.

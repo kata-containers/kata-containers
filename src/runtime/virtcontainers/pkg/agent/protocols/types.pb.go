@@ -308,6 +308,7 @@ type Route struct {
 	Scope   uint32   `protobuf:"varint,5,opt,name=scope,proto3" json:"scope,omitempty"`
 	Family  IPFamily `protobuf:"varint,6,opt,name=family,proto3,enum=types.IPFamily" json:"family,omitempty"`
 	Flags   uint32   `protobuf:"varint,7,opt,name=flags,proto3" json:"flags,omitempty"`
+	Mtu     uint32   `protobuf:"varint,8,opt,name=mtu,proto3" json:"mtu,omitempty"`
 }
 
 func (x *Route) Reset() {
