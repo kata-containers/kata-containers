@@ -39,14 +39,15 @@ impl Sock for HybridVsock {
                 Ok(stream) => {
                     info!(
                         sl!(),
-                        "connect success on {} current client fd {}",
-                        i,
+                        "connect hvsock success on uds {} port {} current client fd {}",
+                        self.uds,
+                        self.port,
                         stream.as_raw_fd()
                     );
                     return Ok(Stream::Unix(stream));
                 }
                 Err(err) => {
-                    debug!(sl!(), "connect on {} err : {:?}", i, err);
+                    trace!(sl!(), "connect hvsock uds on {} err : {:?}", i, err);
                     tokio::time::sleep(std::time::Duration::from_millis(config.dial_timeout_ms))
                         .await;
                     continue;
@@ -58,7 +59,6 @@ impl Sock for HybridVsock {
 }
 
 async fn connect_helper(uds: &str, port: u32) -> Result<UnixStream> {
-    info!(sl!(), "connect uds {:?} port {}", &uds, port);
     let mut stream = UnixStream::connect(&uds).await.context("connect")?;
     stream
         .write_all(format!("connect {}\n", port).as_bytes())
