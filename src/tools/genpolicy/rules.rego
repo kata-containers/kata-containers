@@ -1361,7 +1361,9 @@ ExecProcessRequest {
     print("ExecProcessRequest 1: p_command =", p_command)
     p_command == input.process.Args
 
-    some p_container in policy_data.containers
+    # get p_container from state
+    idx := get_state_val(input.container_id)
+    p_container := policy_data.containers[idx]
     allow_interactive_exec(p_container, input.process)
 
     print("ExecProcessRequest 1: true")
@@ -1396,7 +1398,10 @@ ExecProcessRequest {
 
     regex.match(p_regex, i_command)
 
-    some p_container in policy_data.containers
+    # get p_container from state
+    idx := get_state_val(input.container_id)
+    p_container := policy_data.containers[idx]
+
     allow_interactive_exec(p_container, input.process)
 
     print("ExecProcessRequest 3: true")
