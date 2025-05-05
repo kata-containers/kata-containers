@@ -8,6 +8,7 @@ use std::{convert::TryFrom, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use futures::stream::TryStreamExt;
+use rtnetlink::LinkUnspec;
 
 use super::{
     network_model,
@@ -88,16 +89,22 @@ impl NetworkPair {
 
         handle
             .link()
-            .set(tap_link.attrs().index)
-            .mtu(virt_link.attrs().mtu)
+            .set(
+                LinkUnspec::new_with_index(tap_link.attrs().index)
+                    .mtu(virt_link.attrs().mtu)
+                    .build(),
+            )
             .execute()
             .await
             .context("set link mtu")?;
 
         handle
             .link()
-            .set(tap_link.attrs().index)
-            .up()
+            .set(
+                LinkUnspec::new_with_index(tap_link.attrs().index)
+                    .up()
+                    .build(),
+            )
             .execute()
             .await
             .context("set link up")?;
@@ -156,8 +163,11 @@ pub async fn create_link(
     if base.master_index != 0 {
         handle
             .link()
-            .set(base.index)
-            .controller(base.master_index)
+            .set(
+                LinkUnspec::new_with_index(base.index)
+                    .controller(base.master_index)
+                    .build(),
+            )
             .execute()
             .await
             .context("set index")?;

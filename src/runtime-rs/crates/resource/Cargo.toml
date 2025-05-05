@@ -15,18 +15,15 @@ test-utils = { workspace = true }
 actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-bitflags = "1.2.1"
+bitflags = "2.9.0"
 byte-unit = "4.0.14"
 cgroups-rs = "0.3.2"
 futures = "0.3.11"
 lazy_static = { workspace = true }
 libc = { workspace = true }
 netns-rs = { workspace = true }
-netlink-sys = "0.8.3"
-netlink-packet-route = "0.19.0"
 nix = { workspace = true }
 rand = { workspace = true }
-rtnetlink = "0.14.0"
 scopeguard = "1.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -36,6 +33,11 @@ tokio = { workspace = true, features = ["process"] }
 tracing = { workspace = true }
 uuid = { version = "0.4", features = ["v4"] }
 oci-spec = { workspace = true }
+
+## Dependencies from `rust-netlink`
+netlink-packet-route = "0.22"
+netlink-sys = "0.8"
+rtnetlink = "0.16"
 
 # Local dependencies
 agent = { workspace = true }
