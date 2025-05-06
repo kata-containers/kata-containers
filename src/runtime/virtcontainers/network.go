@@ -310,6 +310,8 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			r.Scope = uint32(route.Scope)
 			r.Family = utils.ConvertAddressFamily((int32)(route.Family))
 			r.Flags = uint32(route.Flags)
+			r.Mtu = uint32(route.MTU)
+
 			routes = append(routes, &r)
 		}
 
