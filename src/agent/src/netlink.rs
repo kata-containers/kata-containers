@@ -8,8 +8,8 @@ use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use netlink_packet_route::address::{AddressAttribute, AddressMessage};
 use netlink_packet_route::link::{LinkAttribute, LinkMessage};
-use netlink_packet_route::neighbour::{self, NeighbourFlag};
-use netlink_packet_route::route::{RouteFlag, RouteHeader, RouteProtocol, RouteScope, RouteType};
+use netlink_packet_route::neighbour::{self, NeighbourFlags};
+use netlink_packet_route::route::{RouteFlags, RouteHeader, RouteProtocol, RouteScope, RouteType};
 use netlink_packet_route::{
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourState},
     route::{RouteAddress, RouteAttribute, RouteMessage},
@@ -17,7 +17,7 @@ use netlink_packet_route::{
 };
 use nix::errno::Errno;
 use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
-use rtnetlink::{new_connection, IpVersion};
+use rtnetlink::{new_connection, IpVersion, LinkUnspec, RouteMessageBuilder};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::fs;
@@ -44,36 +44,6 @@ impl fmt::Display for LinkFilter<'_> {
         }
     }
 }
-
-const ALL_RULE_FLAGS: [NeighbourFlag; 8] = [
-    NeighbourFlag::Use,
-    NeighbourFlag::Own,
-    NeighbourFlag::Controller,
-    NeighbourFlag::Proxy,
-    NeighbourFlag::ExtLearned,
-    NeighbourFlag::Offloaded,
-    NeighbourFlag::Sticky,
-    NeighbourFlag::Router,
-];
-
-const ALL_ROUTE_FLAGS: [RouteFlag; 16] = [
-    RouteFlag::Dead,
-    RouteFlag::Pervasive,
-    RouteFlag::Onlink,
-    RouteFlag::Offload,
-    RouteFlag::Linkdown,
-    RouteFlag::Unresolved,
-    RouteFlag::Trap,
-    RouteFlag::Notify,
-    RouteFlag::Cloned,
-    RouteFlag::Equalize,
-    RouteFlag::Prefix,
-    RouteFlag::LookupTable,
-    RouteFlag::FibMatch,
-    RouteFlag::RtOffload,
-    RouteFlag::RtTrap,
-    RouteFlag::OffloadFailed,
-];
 
 /// A filter to query addresses.
 pub enum AddressFilter {
@@ -154,23 +124,23 @@ impl Handle {
 
                 // update the existing interface name with a temporary name, otherwise
                 // it would failed to udpate this interface with an existing name.
-                let mut request = self.handle.link().set(link.index());
-                request.message_mut().header = link.header.clone();
                 let link_name = link.name();
                 let temp_name = link_name.clone() + "_temp";
+                let request = self.handle.link().set(
+                    LinkUnspec::new_with_index(link.index())
+                        .name(temp_name.clone())
+                        .set_header(link.header.clone())
+                        .build(),
+                );
 
-                request
-                    .name(temp_name.clone())
-                    .execute()
-                    .await
-                    .map_err(|err| {
-                        anyhow!(
-                            "Failed to rename interface {} to {}with error: {}",
-                            link_name,
-                            temp_name,
-                            err
-                        )
-                    })?;
+                request.execute().await.map_err(|err| {
+                    anyhow!(
+                        "Failed to rename interface {} to {}with error: {}",
+                        link_name,
+                        temp_name,
+                        err
+                    )
+                })?;
 
                 new_link = Some(link);
             }
@@ -178,42 +148,42 @@ impl Handle {
 
         // Update link
         let link = self.find_link(LinkFilter::Address(&iface.hwAddr)).await?;
-        let mut request = self.handle.link().set(link.index());
-        request.message_mut().header = link.header.clone();
+        let request = self.handle.link().set(
+            LinkUnspec::new_with_index(link.index())
+                .name(iface.name.clone())
+                .mtu(iface.mtu as u32)
+                .arp(iface.raw_flags & libc::IFF_NOARP as u32 == 0)
+                .up()
+                .set_header(link.header.clone())
+                .build(),
+        );
 
-        request
-            .mtu(iface.mtu as _)
-            .name(iface.name.clone())
-            .arp(iface.raw_flags & libc::IFF_NOARP as u32 == 0)
-            .up()
-            .execute()
-            .await
-            .map_err(|err| {
-                anyhow!(
-                    "Failure in LinkSetRequest for interface {}: {}",
-                    iface.name.as_str(),
-                    err
-                )
-            })?;
+        request.execute().await.map_err(|err| {
+            anyhow!(
+                "Failure in LinkSetRequest for interface {}: {}",
+                iface.name.as_str(),
+                err
+            )
+        })?;
 
         // swap the updated iface's name.
         if let Some(nlink) = new_link {
-            let mut request = self.handle.link().set(nlink.index());
-            request.message_mut().header = nlink.header.clone();
+            let request = self.handle.link().set(
+                LinkUnspec::new_with_index(nlink.index())
+                    .name(link.name())
+                    .up()
+                    .set_header(nlink.header.clone())
+                    .build(),
+            );
 
-            request
-                .name(link.name())
-                .up()
-                .execute()
-                .await
-                .map_err(|err| {
-                    anyhow!(
-                        "Error swapping back interface name {} to {}: {}",
-                        nlink.name().as_str(),
-                        link.name(),
-                        err
-                    )
-                })?;
+            request.execute().await.map_err(|err| {
+                anyhow!(
+                    "Error swapping back interface name {} to {}: {}",
+                    nlink.name().as_str(),
+                    link.name(),
+                    err
+                )
+            })?;
         }
 
         Ok(())
@@ -305,17 +275,23 @@ impl Handle {
     }
 
     pub async fn enable_link(&self, link_index: u32, up: bool) -> Result<()> {
-        let link_req = self.handle.link().set(link_index);
-        let set_req = if up { link_req.up() } else { link_req.down() };
-        set_req.execute().await?;
+        let link_msg = LinkUnspec::new_with_index(link_index);
+        let link_msg = if up { link_msg.up() } else { link_msg.down() };
+
+        let link_req = self.handle.link().set(link_msg.build());
+        link_req.execute().await?;
         Ok(())
     }
 
     async fn query_routes(&self, ip_version: Option<IpVersion>) -> Result<Vec<RouteMessage>> {
         let list = if let Some(ip_version) = ip_version {
+            let route_message = match ip_version {
+                IpVersion::V4 => RouteMessageBuilder::<Ipv4Addr>::new().build(),
+                IpVersion::V6 => RouteMessageBuilder::<Ipv6Addr>::new().build(),
+            };
             self.handle
                 .route()
-                .get(ip_version)
+                .get(route_message)
                 .execute()
                 .try_collect()
                 .await?
@@ -325,7 +301,7 @@ impl Handle {
             let routes4 = self
                 .handle
                 .route()
-                .get(IpVersion::V4)
+                .get(RouteMessageBuilder::<Ipv4Addr>::new().build())
                 .execute()
                 .try_collect::<Vec<_>>()
                 .await
@@ -334,7 +310,7 @@ impl Handle {
             let routes6 = self
                 .handle
                 .route()
-                .get(IpVersion::V6)
+                .get(RouteMessageBuilder::<Ipv6Addr>::new().build())
                 .execute()
                 .try_collect::<Vec<_>>()
                 .await
@@ -423,123 +399,136 @@ impl Handle {
             let boot_prot: RouteProtocol = RouteProtocol::from(libc::RTPROT_BOOT);
 
             let scope = RouteScope::from(route.scope as u8);
+            let flags = RouteFlags::from_bits(route.flags).unwrap();
 
             use RouteAttribute as Nla;
 
-            // Build a common indeterminate ip request
-            let mut request = self
-                .handle
-                .route()
-                .add()
-                .table_id(MAIN_TABLE)
-                .kind(uni_cast)
-                .protocol(boot_prot)
-                .scope(scope);
-
-            let message = request.message_mut();
-
-            // calculate the Flag vec from the u32 flags
-            let mut got: u32 = 0;
-            let mut flags = Vec::new();
-            for flag in ALL_ROUTE_FLAGS {
-                if (route.flags & (u32::from(flag))) > 0 {
-                    flags.push(flag);
-                    got += u32::from(flag);
-                }
-            }
-            if got != route.flags {
-                flags.push(RouteFlag::Other(route.flags - got));
-            }
-
-            message.header.flags = flags;
-
             // `rtnetlink` offers a separate request builders for different IP versions (IP v4 and v6).
             // This if branch is a bit clumsy because it does almost the same.
-            if route.family() == IPFamily::v6 {
-                let dest_addr = if !route.dest.is_empty() {
-                    Ipv6Network::from_str(&route.dest)?
-                } else {
-                    Ipv6Network::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 0)?
-                };
+            match route.family() {
+                IPFamily::v6 => {
+                    let rmb = RouteMessageBuilder::<Ipv6Addr>::new()
+                        .table_id(MAIN_TABLE)
+                        .kind(uni_cast)
+                        .protocol(boot_prot)
+                        .scope(scope);
 
-                // Build IP v6 request
-                let mut request = request
-                    .v6()
-                    .destination_prefix(dest_addr.ip(), dest_addr.prefix())
-                    .output_interface(link.index())
-                    .replace();
-
-                if !route.source.is_empty() {
-                    let network = Ipv6Network::from_str(&route.source)?;
-                    if network.prefix() > 0 {
-                        request = request.source_prefix(network.ip(), network.prefix());
+                    let dest_addr = if !route.dest.is_empty() {
+                        Ipv6Network::from_str(&route.dest)?
                     } else {
-                        request
-                            .message_mut()
+                        Ipv6Network::new(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 0), 0)?
+                    };
+
+                    let rmb = rmb
+                        .destination_prefix(dest_addr.ip(), dest_addr.prefix())
+                        .output_interface(link.index());
+
+                    let mut no_prefix = false;
+                    let network = Ipv6Network::from_str(&route.source)?;
+                    let rmb = if !route.source.is_empty() {
+                        if network.prefix() > 0 {
+                            rmb.source_prefix(network.ip(), network.prefix())
+                        } else {
+                            no_prefix = true;
+                            rmb
+                        }
+                    } else {
+                        rmb
+                    };
+
+                    let rmb = if !route.gateway.is_empty() {
+                        let ip = Ipv6Addr::from_str(&route.gateway)?;
+                        rmb.gateway(ip)
+                    } else {
+                        rmb
+                    };
+
+                    let mut request = self.handle.route().add(rmb.build());
+
+                    let message = request.message_mut();
+
+                    if no_prefix {
+                        message
                             .attributes
                             .push(Nla::PrefSource(RouteAddress::from(network.ip())));
                     }
-                }
 
-                if !route.gateway.is_empty() {
-                    let ip = Ipv6Addr::from_str(&route.gateway)?;
-                    request = request.gateway(ip);
-                }
+                    message.header.flags = flags;
 
-                if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
-                    if let Some(code) = message.code {
-                        if Errno::from_i32(code.get()) != Errno::EEXIST {
-                            return Err(anyhow!(
-                                "Failed to add IP v6 route (src: {}, dst: {}, gtw: {},Err: {})",
-                                route.source(),
-                                route.dest(),
-                                route.gateway(),
-                                message
-                            ));
+                    if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
+                        if let Some(code) = message.code {
+                            if Errno::from_i32(code.get()) != Errno::EEXIST {
+                                return Err(anyhow!(
+                                    "Failed to add IP v6 route (src: {}, dst: {}, gtw: {},Err: {})",
+                                    route.source(),
+                                    route.dest(),
+                                    route.gateway(),
+                                    message
+                                ));
+                            }
                         }
                     }
                 }
-            } else {
-                let dest_addr = if !route.dest.is_empty() {
-                    Ipv4Network::from_str(&route.dest)?
-                } else {
-                    Ipv4Network::new(Ipv4Addr::new(0, 0, 0, 0), 0)?
-                };
+                IPFamily::v4 => {
+                    let rmb = RouteMessageBuilder::<Ipv4Addr>::new()
+                        .table_id(MAIN_TABLE)
+                        .kind(uni_cast)
+                        .protocol(boot_prot)
+                        .scope(scope);
 
-                // Build IP v4 request
-                let mut request = request
-                    .v4()
-                    .destination_prefix(dest_addr.ip(), dest_addr.prefix())
-                    .output_interface(link.index())
-                    .replace();
-
-                if !route.source.is_empty() {
-                    let network = Ipv4Network::from_str(&route.source)?;
-                    if network.prefix() > 0 {
-                        request = request.source_prefix(network.ip(), network.prefix());
+                    let dest_addr = if !route.dest.is_empty() {
+                        Ipv4Network::from_str(&route.dest)?
                     } else {
-                        request
-                            .message_mut()
+                        Ipv4Network::new(Ipv4Addr::new(0, 0, 0, 0), 0)?
+                    };
+
+                    let rmb = rmb
+                        .destination_prefix(dest_addr.ip(), dest_addr.prefix())
+                        .output_interface(link.index());
+
+                    let mut no_prefix = false;
+                    let network = Ipv4Network::from_str(&route.source)?;
+                    let rmb = if !route.source.is_empty() {
+                        if network.prefix() > 0 {
+                            rmb.source_prefix(network.ip(), network.prefix())
+                        } else {
+                            no_prefix = true;
+                            rmb
+                        }
+                    } else {
+                        rmb
+                    };
+
+                    let rmb = if !route.gateway.is_empty() {
+                        let ip = Ipv4Addr::from_str(&route.gateway)?;
+                        rmb.gateway(ip)
+                    } else {
+                        rmb
+                    };
+
+                    let mut request = self.handle.route().add(rmb.build());
+
+                    let message = request.message_mut();
+
+                    if no_prefix {
+                        message
                             .attributes
-                            .push(RouteAttribute::PrefSource(RouteAddress::from(network.ip())));
+                            .push(Nla::PrefSource(RouteAddress::from(network.ip())));
                     }
-                }
 
-                if !route.gateway.is_empty() {
-                    let ip = Ipv4Addr::from_str(&route.gateway)?;
-                    request = request.gateway(ip);
-                }
+                    message.header.flags = flags;
 
-                if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
-                    if let Some(code) = message.code {
-                        if Errno::from_i32(code.get()) != Errno::EEXIST {
-                            return Err(anyhow!(
-                                "Failed to add IP v4 route (src: {}, dst: {}, gtw: {},Err: {})",
-                                route.source(),
-                                route.dest(),
-                                route.gateway(),
-                                message
-                            ));
+                    if let Err(rtnetlink::Error::NetlinkError(message)) = request.execute().await {
+                        if let Some(code) = message.code {
+                            if Errno::from_i32(code.get()) != Errno::EEXIST {
+                                return Err(anyhow!(
+                                    "Failed to add IP v4 route (src: {}, dst: {}, gtw: {},Err: {})",
+                                    route.source(),
+                                    route.dest(),
+                                    route.gateway(),
+                                    message
+                                ));
+                            }
                         }
                     }
                 }
@@ -635,12 +624,7 @@ impl Handle {
 
         let link = self.find_link(LinkFilter::Name(&neigh.device)).await?;
 
-        let mut flags = Vec::new();
-        for flag in ALL_RULE_FLAGS {
-            if (neigh.flags as u8 & (u8::from(flag))) > 0 {
-                flags.push(flag);
-            }
-        }
+        let flags = NeighbourFlags::from_bits(neigh.flags as u8).unwrap();
 
         let mut message = NeighbourMessage::default();
 
@@ -768,12 +752,7 @@ impl Link {
 
     /// Returns whether the link is UP
     fn is_up(&self) -> bool {
-        let mut flags: u32 = 0;
-        for flag in &self.header.flags {
-            flags += u32::from(*flag);
-        }
-
-        flags as i32 & libc::IFF_UP > 0
+        self.header.flags.bits() as i32 & libc::IFF_UP > 0
     }
 
     fn index(&self) -> u32 {
