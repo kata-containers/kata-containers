@@ -821,6 +821,21 @@ func (c *Container) createMounts(ctx context.Context) error {
 	return c.createBlockDevices(ctx)
 }
 
+func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
+	var deviceInfos []config.DeviceInfo
+	if HasErofsOptions(c.rootFs.Options) {
+		parsedOptions := parseRootFsOptions(c.rootFs.Options)
+		for _, path := range parsedOptions {
+			di, err := c.createDeviceInfo(path+"/layer.erofs", path+"/layer.erofs", true, true)
+			if err != nil {
+				return nil, err
+			}
+			deviceInfos = append(deviceInfos, *di)
+		}
+	}
+	return deviceInfos, nil
+}
+
 func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
@@ -830,6 +845,12 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 		return err
 	}
 	deviceInfos := append(virtualVolumesDeviceInfos, contConfig.DeviceInfos...)
+
+	erofsDeviceInfos, err := c.createErofsDevices()
+	if err != nil {
+		return err
+	}
+	deviceInfos = append(erofsDeviceInfos, deviceInfos...)
 
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
@@ -1053,7 +1074,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) {
+	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !HasErofsOptions(c.rootFs.Options) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
