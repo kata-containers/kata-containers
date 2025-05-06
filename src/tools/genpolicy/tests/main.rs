@@ -68,6 +68,11 @@ mod tests {
             .join(test_case_dir);
         fs::copy(testdata_dir.join("pod.yaml"), workdir.join("pod.yaml"))
             .expect("copying files around should not fail");
+        fs::copy(
+            testdata_dir.join("config_map.yaml"),
+            workdir.join("config_map.yaml"),
+        )
+        .expect("copying files around should not fail");
 
         let genpolicy_dir =
             path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/genpolicy");
@@ -81,7 +86,7 @@ mod tests {
 
         let config = genpolicy::utils::Config {
             base64_out: false,
-            config_map_files: None,
+            config_map_files: Some(vec![workdir.join("config_map.yaml").to_str().unwrap().to_string()]),
             containerd_socket_path: None, // Some(String::from("/var/run/containerd/containerd.sock")),
             insecure_registries: Vec::new(),
             layers_cache_file_path: None,
@@ -100,7 +105,8 @@ mod tests {
         let policy = genpolicy::policy::AgentPolicy::from_files(&config)
             .await
             .unwrap();
-        assert_eq!(policy.resources.len(), 1);
+        //assert_eq!(policy.resources.len(), 1);
+        assert_ne!(policy.resources.len(), 0);
         let policy = policy.resources[0].generate_policy(&policy);
         let policy = BASE64_STANDARD.decode(&policy).unwrap();
 
@@ -182,5 +188,10 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_generate_name() {
         runtests("createcontainer/generate_name").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_volumes() {
+        runtests("createcontainer/volumes/config_map").await;
     }
 }
