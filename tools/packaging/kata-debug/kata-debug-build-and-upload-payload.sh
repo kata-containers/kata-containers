@@ -11,7 +11,7 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-KATA_DEBUG_DIR="`dirname ${0}`"
+KATA_DEBUG_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
 
 REGISTRY="${1:-"quay.io/kata-containers/kata-debug"}"
 TAG="${2:-}"
