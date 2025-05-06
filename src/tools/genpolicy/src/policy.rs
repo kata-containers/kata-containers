@@ -418,6 +418,9 @@ pub struct CommonData {
 
     /// Default capabilities for a privileged container.
     pub privileged_caps: Vec<String>,
+
+    /// Parse Container image as a storage object
+    pub enable_image_layer_storage: bool
 }
 
 /// Configuration from "kubectl config".
@@ -597,7 +600,9 @@ impl AgentPolicy {
 
         let image_layers = yaml_container.registry.get_image_layers();
         let mut storages = Default::default();
-        get_image_layer_storages(&mut storages, &image_layers, &root);
+        if self.config.settings.common.enable_image_layer_storage {
+            get_image_layer_storages(&mut storages, &image_layers, &root);
+        }
         resource.get_container_mounts_and_storages(
             &mut mounts,
             &mut storages,
