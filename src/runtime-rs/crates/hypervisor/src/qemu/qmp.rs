@@ -2,20 +2,26 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+#![allow(dead_code)]
 
 use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
+use crate::VfioDevice;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
+use crate::device::pci_path::PciPath;
 use qapi::qmp;
-use qapi_qmp;
+use qapi_qmp::{self, PciDeviceInfo};
 use qapi_spec::Dictionary;
+use serde_json::Value;
+use std::convert::TryFrom;
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -467,8 +473,111 @@ impl Qmp {
 
         Ok(())
     }
+
+    pub fn get_device_by_qdev_id(&mut self, qdev_id: &str) -> Result<PciPath> {
+        let format_str = |vec: &Vec<i64>| -> String {
+            vec.iter()
+                .map(|num| format!("{:02x}", num))
+                .collect::<Vec<String>>()
+                .join("/")
+        };
+
+        let mut path = vec![];
+        let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
+        for pci_info in pci.iter() {
+            if let Some(_device) = get_pci_path_by_qdev_id(&pci_info.devices, qdev_id, &mut path) {
+                let pci_path = format_str(&path);
+                return PciPath::try_from(pci_path.as_str());
+            }
+        }
+
+        Err(anyhow!("no target device found"))
+    }
+
+    pub fn hotplug_vfio_device(&mut self, vfiodev: &mut VfioDevice) -> Result<()> {
+        // FIXME: the first one might not the true device we want to passthrough.
+        // TODO multifunction=on case
+        let primary_device = vfiodev.devices.first_mut().unwrap();
+        info!(
+            sl!(),
+            "qmp hotplug vfio primary_device {:?}", &primary_device
+        );
+
+        let mut vfio_args = Dictionary::new();
+        let bdf = if !primary_device.bus_slot_func.clone().starts_with("0000") {
+            format!("0000:{}", primary_device.bus_slot_func.clone())
+        } else {
+            primary_device.bus_slot_func.clone()
+        };
+        vfio_args.insert("addr".to_owned(), "0x0".into());
+        vfio_args.insert("host".to_owned(), bdf.into());
+        vfio_args.insert("multifunction".to_owned(), "off".into());
+
+        let vfio_dev_add = VfioDeviceAdd {
+            id: Some(primary_device.hostdev_id.clone()),
+            bus: Some(vfiodev.bus.clone()),
+            driver: vfiodev.driver_type.clone(),
+            arguments: vfio_args,
+        };
+
+        let vfio_device_add = qmp::device_add {
+            driver: vfio_dev_add.driver,
+            bus: vfio_dev_add.bus,
+            id: vfio_dev_add.id,
+            arguments: vfio_dev_add.arguments,
+        };
+        info!(sl!(), "vfio_device_add: {:?}", vfio_device_add.clone());
+
+        self.qmp
+            .execute(&vfio_device_add)
+            .map_err(|e| anyhow!("device_add vfio device failed {:?}", e))?;
+
+        let vfio_device_pci_path = self
+            .get_device_by_qdev_id(&primary_device.hostdev_id)
+            .context("get device by qdev_id failed")?;
+
+        primary_device.guest_pci_path = Some(vfio_device_pci_path);
+
+        Ok(())
+    }
 }
 
 fn vcpu_id_from_core_id(core_id: i64) -> String {
     format!("cpu-{}", core_id)
+}
+
+#[derive(Clone, Debug)]
+struct VfioDeviceAdd {
+    id: Option<String>,
+    bus: Option<String>,
+    driver: String,
+    arguments: serde_json::Map<String, Value>,
+}
+
+// The get_pci_path_by_qdev_id function searches a device list for a device matching a given qdev_id,
+// tracking the device's path. It recursively explores bridge devices and returns the found device along
+// with its updated path.
+pub fn get_pci_path_by_qdev_id(
+    devices: &[PciDeviceInfo],
+    qdev_id: &str,
+    path: &mut Vec<i64>,
+) -> Option<PciDeviceInfo> {
+    for device in devices {
+        path.push(device.slot);
+        if device.qdev_id == qdev_id {
+            return Some(device.clone());
+        }
+
+        if let Some(ref bridge) = device.pci_bridge {
+            if let Some(ref bridge_devices) = bridge.devices {
+                if let Some(found_device) = get_pci_path_by_qdev_id(bridge_devices, qdev_id, path) {
+                    return Some(found_device);
+                }
+            }
+        }
+
+        // If the device not found, pop the current slot before moving to next device
+        path.pop();
+    }
+    None
 }
