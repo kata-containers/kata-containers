@@ -2286,6 +2286,12 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 
 	hconfig := s.hypervisor.HypervisorConfig()
 
+	if finalMemoryMB > uint32(hconfig.DefaultMaxMemorySize) {
+		s.Logger().Errorf("Requested hot-pluggable memory to %d MB exceeds the default max memory %d MB. Current memory allocation is invalid.", finalMemoryMB, hconfig.DefaultMaxMemorySize)
+		return fmt.Errorf("could not update the memory to %d MB: requested memory exceeds the default max memory limit of %d MB",
+			finalMemoryMB, hconfig.DefaultMaxMemorySize)
+	}
+
 	for {
 		currentMemoryMB := s.hypervisor.GetTotalMemoryMB(ctx)
 
