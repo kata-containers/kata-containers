@@ -1,71 +1,71 @@
 [package]
-name = "hypervisor"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "hypervisor"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-rt = { workspace = true }
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-go-flag = { workspace = true }
-libc = { workspace = true }
-nix = { workspace = true }
-rust-ini = "0.18.0"
-seccompiler = "0.2.0"
-serde = { workspace = true }
-serde_json = { workspace = true }
-slog = { workspace = true }
-slog-scope = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync", "fs", "process", "io-util"] }
-vmm-sys-util = "0.11.0"
-rand = { workspace = true }
-path-clean = "1.0.1"
-lazy_static = { workspace = true }
-tracing = { workspace = true }
-ttrpc = { workspace = true, features = ["async"] }
-protobuf = { workspace = true }
-oci-spec = { workspace = true }
-futures = "0.3.25"
-safe-path = "0.1.0"
+actix-rt          = { workspace = true }
+anyhow            = { workspace = true }
+async-trait       = { workspace = true }
 crossbeam-channel = "0.5.6"
-tempdir = "0.3.7"
-qapi = { version = "0.14", features = ["qmp", "async-tokio-all"] }
-qapi-spec = "0.3.1"
-qapi-qmp = "0.14.0"
-hyperlocal = { workspace = true }
-hyper = { workspace = true, features = ["client"] }
+futures           = "0.3.25"
+go-flag           = { workspace = true }
+hyper             = { workspace = true, features = ["client"] }
+hyperlocal        = { workspace = true }
+lazy_static       = { workspace = true }
+libc              = { workspace = true }
+nix               = { workspace = true }
+oci-spec          = { workspace = true }
+path-clean        = "1.0.1"
+protobuf          = { workspace = true }
+qapi              = { version = "0.14", features = ["async-tokio-all", "qmp"] }
+qapi-qmp          = "0.14.0"
+qapi-spec         = "0.3.1"
+rand              = { workspace = true }
+rust-ini          = "0.18.0"
+safe-path         = "0.1.0"
+seccompiler       = "0.2.0"
+serde             = { workspace = true }
+serde_json        = { workspace = true }
+slog              = { workspace = true }
+slog-scope        = { workspace = true }
+tempdir           = "0.3.7"
+thiserror         = { workspace = true }
+tokio             = { workspace = true, features = ["fs", "io-util", "process", "sync"] }
+tracing           = { workspace = true }
+ttrpc             = { workspace = true, features = ["async"] }
+vmm-sys-util      = "0.11.0"
 
 # Local dependencies
-kata-sys-util = { workspace = true }
-kata-types = { workspace = true }
-logging = { workspace = true }
-protocols = { workspace = true, features = ["async"] }
+ch-config      = { workspace = true, optional = true }
+kata-sys-util  = { workspace = true }
+kata-types     = { workspace = true }
+logging        = { workspace = true }
+persist        = { workspace = true }
+protocols      = { workspace = true, features = ["async"] }
 shim-interface = { workspace = true }
-persist = { workspace = true }
-ch-config = { workspace = true, optional = true }
-tests_utils = { workspace = true }
+tests_utils    = { workspace = true }
 
 # Local dependencies: Dragonball
-dragonball = { workspace = true, features = [
-    "atomic-guest-memory",
-    "virtio-vsock",
-    "hotplug",
-    "virtio-blk",
-    "virtio-net",
-    "virtio-fs",
-    "vhost-net",
-    "dbs-upcall",
-    "virtio-mem",
-    "virtio-balloon",
-    "vhost-user-net",
-    "host-device",
-], optional = true }
 dbs-utils = { workspace = true }
+dragonball = { workspace = true, features = [
+  "atomic-guest-memory",
+  "dbs-upcall",
+  "host-device",
+  "hotplug",
+  "vhost-net",
+  "vhost-user-net",
+  "virtio-balloon",
+  "virtio-blk",
+  "virtio-fs",
+  "virtio-mem",
+  "virtio-net",
+  "virtio-vsock",
+], optional = true }
 
 [features]
 default = []
@@ -89,5 +89,5 @@ ttrpc-codegen = "0.4.2"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(feature, values("enable-vendor"))',
+  'cfg(feature, values("enable-vendor"))',
 ] }

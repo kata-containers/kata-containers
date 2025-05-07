@@ -1,33 +1,33 @@
 [package]
-name = "common"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "common"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
+anyhow                 = { workspace = true }
+async-trait            = { workspace = true }
 containerd-shim-protos = { workspace = true }
-lazy_static = { workspace = true }
-nix = { workspace = true }
-protobuf = { workspace = true }
-serde_json = { workspace = true }
-slog = { workspace = true }
-slog-scope = { workspace = true }
-strum = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "process", "fs"] }
-ttrpc = { workspace = true }
-oci-spec = { workspace = true }
+lazy_static            = { workspace = true }
+nix                    = { workspace = true }
+oci-spec               = { workspace = true }
+protobuf               = { workspace = true }
+serde_json             = { workspace = true }
+slog                   = { workspace = true }
+slog-scope             = { workspace = true }
+strum                  = { workspace = true }
+thiserror              = { workspace = true }
+tokio                  = { workspace = true, features = ["fs", "process", "rt-multi-thread"] }
+ttrpc                  = { workspace = true }
 
 # Local dependencies
-persist = { workspace = true }
-agent = { workspace = true }
+agent         = { workspace = true }
 kata-sys-util = { workspace = true }
-kata-types = { workspace = true }
-runtime-spec = { workspace = true }
-resource = { workspace = true }
-protocols = { workspace = true }
+kata-types    = { workspace = true }
+persist       = { workspace = true }
+protocols     = { workspace = true }
+resource      = { workspace = true }
+runtime-spec  = { workspace = true }
