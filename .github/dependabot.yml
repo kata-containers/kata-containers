@@ -1,0 +1,36 @@
+---
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directories:
+      - "/src/agent"
+      - "/src/dragonball"
+      - "/src/libs"
+      - "/src/mem-agent"
+      - "/src/mem-agent/example"
+      - "/src/runtime-rs"
+      - "/src/runtime-rs/crates/hypervisor"
+      - "/src/tools/agent-ctl"
+      - "/src/tools/genpolicy"
+      - "/src/tools/kata-ctl"
+      - "/src/tools/runk"
+      - "/src/tools/trace-forwarder"
+    schedule:
+      interval: "daily"
+    ignore:
+    # rust-vmm repos might cause incompatibilities on patch versions, so
+    # lets handle them manually for now.
+      - dependency-name: "vhost"
+      - dependency-name: "vhost-user-backend"
+      - dependency-name: "virtio-bindings"
+      - dependency-name: "virtio-queue"
+      - dependency-name: "virtio-vsock"
+      - dependency-name: "vm-memory"
+      - dependency-name: "vmm-sys-util"
+  - package-ecosystem: "gomod"
+    directories:
+      - "src/runtime"
+      - "tools/testing/kata-webhook"
+      - "src/tools/csi-kata-directvolume"
+    schedule:
+      interval: "daily"
