@@ -70,7 +70,7 @@ jobs:
           fetch-depth: 0
       - name: Install system deps
         run: |
-          sudo apt-get install -y build-essential musl-tools
+          sudo apt-get update && sudo apt-get install -y build-essential musl-tools
       - name: Install yq
         run: |
           sudo -E ./ci/install_yq.sh
@@ -87,6 +87,7 @@ jobs:
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
+          RUST_LIB_BACKTRACE: "0"
 
   static-checks:
     runs-on: ubuntu-22.04
@@ -118,7 +119,7 @@ jobs:
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
       - name: Install system dependencies
         run: |
-          sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
+          sudo apt-get update && sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
       - name: Run check
         run: |
           export PATH="${PATH}:${GOPATH}/bin"

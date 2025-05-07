@@ -93,7 +93,7 @@ rootfs-%: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 
 .PRECIOUS: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX):: rootfs-builder/%
-	$(call silent_run,Creating rootfs for "$*",$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*)
+	$(call silent_run,Creating rootfs for "$*",$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -d -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*)
 	@touch $@
 
 # To generate a dracut rootfs, we first generate a dracut initrd and then

@@ -6,10 +6,13 @@
 use anyhow::{anyhow, Context, Result};
 use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
-use netlink_packet_route::address::{AddressAttribute, AddressMessage};
 use netlink_packet_route::link::{LinkAttribute, LinkMessage};
 use netlink_packet_route::neighbour::{self, NeighbourFlag};
 use netlink_packet_route::route::{RouteFlag, RouteHeader, RouteProtocol, RouteScope, RouteType};
+use netlink_packet_route::{
+    address::{AddressAttribute, AddressMessage},
+    route::RouteMetric,
+};
 use netlink_packet_route::{
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourState},
     route::{RouteAddress, RouteAttribute, RouteMessage},
@@ -20,6 +23,7 @@ use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 use rtnetlink::{new_connection, IpVersion};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::fs;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 use std::str::{self, FromStr};
@@ -113,12 +117,30 @@ impl Handle {
             self.enable_link(link.index(), false).await?;
         }
 
+        // Get whether the network stack has ipv6 enabled or disabled.
+        let supports_ipv6_all = fs::read_to_string("/proc/sys/net/ipv6/conf/all/disable_ipv6")
+            .map(|s| s.trim() == "0")
+            .unwrap_or(false);
+        let supports_ipv6_default =
+            fs::read_to_string("/proc/sys/net/ipv6/conf/default/disable_ipv6")
+                .map(|s| s.trim() == "0")
+                .unwrap_or(false);
+        let supports_ipv6 = supports_ipv6_default || supports_ipv6_all;
+
         // Add new ip addresses from request
         for ip_address in &iface.IPAddresses {
             let ip = IpAddr::from_str(ip_address.address())?;
             let mask = ip_address.mask().parse::<u8>()?;
 
-            self.add_addresses(link.index(), std::iter::once(IpNetwork::new(ip, mask)?))
+            let net = IpNetwork::new(ip, mask)?;
+            if !net.is_ipv4() && !supports_ipv6 {
+                // If we're dealing with an ipv6 address, but the stack does not
+                // support ipv6, skip adding it otherwise it will lead to an
+                // error at the "CreatePodSandbox" time.
+                continue;
+            }
+
+            self.add_addresses(link.index(), std::iter::once(net))
                 .await?;
         }
 
@@ -369,6 +391,15 @@ impl Handle {
                         .unwrap_or_default();
                 }
 
+                if let RouteAttribute::Metrics(metrics) = attribute {
+                    for m in metrics {
+                        if let RouteMetric::Mtu(mtu) = m {
+                            route.mtu = *mtu;
+                            break;
+                        }
+                    }
+                }
+
                 if let RouteAttribute::Oif(index) = attribute {
                     route.device = self.find_link(LinkFilter::Index(*index)).await?.name();
                 }
@@ -433,6 +464,13 @@ impl Handle {
             }
 
             message.header.flags = flags;
+
+            if route.mtu != 0 {
+                let route_metrics = vec![RouteMetric::Mtu(route.mtu)];
+                message
+                    .attributes
+                    .push(RouteAttribute::Metrics(route_metrics));
+            }
 
             // `rtnetlink` offers a separate request builders for different IP versions (IP v4 and v6).
             // This if branch is a bit clumsy because it does almost the same.

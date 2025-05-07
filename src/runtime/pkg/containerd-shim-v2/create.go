@@ -112,19 +112,16 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		if s.sandbox != nil {
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
+		// Here we deal with CDI devices that are cold-plugged (k8s) and
+		// for the single_container (nerdctl, podman, ...) use-case.
 		// We can provide additional directories where to search for
 		// CDI specs if needed. immutable OS's only have specific
 		// directories where applications can write too. For instance /opt/cdi
 		//
 		// _, err = withCDI(ociSpec.Annotations, []string{"/opt/cdi"}, ociSpec)
-		//
-		// Only inject CDI devices if single_container we do not want
-		// CDI devices in the pod_sandbox
-		if containerType == vc.SingleContainer {
-			_, err = config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
-			if err != nil {
-				return nil, fmt.Errorf("adding CDI devices failed: %w", err)
-			}
+		_, err = config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
+		if err != nil {
+			return nil, fmt.Errorf("adding CDI devices failed: %w", err)
 		}
 
 		s.config = runtimeConfig
@@ -315,6 +312,10 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 		}
 
 		if virtcontainers.HasOptionPrefix(m.Options, annotations.FileSystemLayer) {
+			return false, nil
+		}
+
+		if virtcontainers.HasErofsOptions(m.Options) {
 			return false, nil
 		}
 

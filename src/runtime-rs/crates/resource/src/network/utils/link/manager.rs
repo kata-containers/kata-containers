@@ -5,26 +5,15 @@
 //
 
 use netlink_packet_route::link::{
-    InfoBridge, InfoData, InfoKind, LinkAttribute, LinkFlag, LinkInfo, LinkMessage,
+    InfoBridge, InfoData, InfoKind, LinkAttribute, LinkInfo, LinkMessage,
 };
 
 use super::{Link, LinkAttrs};
 
-pub(crate) struct VecLinkFlag(pub Vec<LinkFlag>);
-
-impl From<&VecLinkFlag> for u32 {
-    fn from(v: &VecLinkFlag) -> u32 {
-        let mut d: u32 = 0;
-        for flag in &v.0 {
-            d += u32::from(*flag);
-        }
-        d
-    }
-}
-
 #[allow(clippy::box_default)]
 pub fn get_link_from_message(mut msg: LinkMessage) -> Box<dyn Link> {
-    let flags = u32::from(&VecLinkFlag(msg.header.flags));
+    let flags = msg.header.flags.bits();
+
     let mut base = LinkAttrs {
         index: msg.header.index,
         flags,
@@ -65,7 +54,7 @@ pub fn get_link_from_message(mut msg: LinkMessage) -> Box<dyn Link> {
             LinkAttribute::Stats64(_s) => {}
             LinkAttribute::Xdp(_x) => {}
             LinkAttribute::OperState(_) => {}
-            LinkAttribute::NetnsId(n) => {
+            LinkAttribute::LinkNetNsId(n) => {
                 base.net_ns_id = n;
             }
             LinkAttribute::GsoMaxSize(i) => {
@@ -187,7 +176,7 @@ fn parse_bridge(mut ibs: Vec<InfoBridge>) -> Bridge {
                 bridge.multicast_snooping = m == 1;
             }
             InfoBridge::VlanFiltering(v) => {
-                bridge.vlan_filtering = v == 1;
+                bridge.vlan_filtering = v;
             }
             _ => {}
         }

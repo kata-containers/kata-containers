@@ -37,6 +37,7 @@ else
 		"k8s-guest-pull-image-encrypted.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
+		"k8s-initdata.bats" \
 		"k8s-confidential-attestation.bats" \
 	)
 
@@ -73,6 +74,7 @@ else
 		"k8s-pod-quota.bats" \
 		"k8s-policy-hard-coded.bats" \
 		"k8s-policy-deployment.bats" \
+		"k8s-policy-deployment-sc.bats" \
 		"k8s-policy-job.bats" \
 		"k8s-policy-logs.bats" \
 		"k8s-policy-pod.bats" \

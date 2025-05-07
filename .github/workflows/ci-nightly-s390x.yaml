@@ -11,6 +11,7 @@ jobs:
       matrix:
         test_title:
           - kata-vfio-ap-e2e-tests
+          - cc-vfio-ap-e2e-tests
           - cc-se-e2e-tests
     steps:
     - name: Fetch a test result for {{ matrix.test_title }}

@@ -1,32 +1,33 @@
 [package]
 name = "agent"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 [dev-dependencies]
 futures = "0.1.27"
 
 [dependencies]
-anyhow = "1.0.26"
-async-trait = "0.1.48"
-log = "0.4.14"
-protobuf = "3.2.0"
-serde = { version = "^1.0", features = ["derive"] }
-serde_json = ">=1.0.9"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-ttrpc = "0.8.4"
-tokio = { version = "1.38.0", features = ["fs", "rt"] }
-tracing = "0.1.36"
-url = "2.2.2"
-nix = "0.24.2"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+log = { workspace = true }
+protobuf = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
+ttrpc = { workspace = true }
+tokio = { workspace = true, features = ["fs", "rt"] }
+tracing = { workspace = true }
+url = { workspace = true }
+nix = { workspace = true }
+oci-spec = { workspace = true }
 
-kata-types = { path = "../../../libs/kata-types"}
-logging = { path = "../../../libs/logging"}
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-protocols = { path = "../../../libs/protocols", features=["async"] }
+# Local dependencies
+kata-types = { workspace = true }
+logging = { workspace = true }
+protocols = { workspace = true, features = ["async"] }
 
 [features]
 default = []

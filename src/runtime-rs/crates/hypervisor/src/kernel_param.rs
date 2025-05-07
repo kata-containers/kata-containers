@@ -76,11 +76,14 @@ impl KernelParams {
             VM_ROOTFS_DRIVER_PMEM => {
                 params.push(Param::new("root", VM_ROOTFS_ROOT_PMEM));
                 match rootfs_type {
-                    VM_ROOTFS_FILESYSTEM_EXT4 | VM_ROOTFS_FILESYSTEM_XFS => {
+                    VM_ROOTFS_FILESYSTEM_EXT4 => {
                         params.push(Param::new(
                             "rootflags",
                             "dax,data=ordered,errors=remount-ro ro",
                         ));
+                    }
+                    VM_ROOTFS_FILESYSTEM_XFS => {
+                        params.push(Param::new("rootflags", "dax ro"));
                     }
                     VM_ROOTFS_FILESYSTEM_EROFS => {
                         params.push(Param::new("rootflags", "dax ro"));
@@ -93,8 +96,11 @@ impl KernelParams {
             VM_ROOTFS_DRIVER_BLK | VM_ROOTFS_DRIVER_BLK_CCW | VM_ROOTFS_DRIVER_MMIO => {
                 params.push(Param::new("root", VM_ROOTFS_ROOT_BLK));
                 match rootfs_type {
-                    VM_ROOTFS_FILESYSTEM_EXT4 | VM_ROOTFS_FILESYSTEM_XFS => {
+                    VM_ROOTFS_FILESYSTEM_EXT4 => {
                         params.push(Param::new("rootflags", "data=ordered,errors=remount-ro ro"));
+                    }
+                    VM_ROOTFS_FILESYSTEM_XFS => {
+                        params.push(Param::new("rootflags", "ro"));
                     }
                     VM_ROOTFS_FILESYSTEM_EROFS => {
                         params.push(Param::new("rootflags", "ro"));
@@ -259,7 +265,7 @@ mod tests {
                 expect_params: KernelParams {
                     params: [
                         Param::new("root", VM_ROOTFS_ROOT_PMEM),
-                        Param::new("rootflags", "dax,data=ordered,errors=remount-ro ro"),
+                        Param::new("rootflags", "dax ro"),
                         Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_XFS),
                     ]
                     .to_vec(),
@@ -272,7 +278,7 @@ mod tests {
                 expect_params: KernelParams {
                     params: [
                         Param::new("root", VM_ROOTFS_ROOT_BLK),
-                        Param::new("rootflags", "data=ordered,errors=remount-ro ro"),
+                        Param::new("rootflags", "ro"),
                         Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_XFS),
                     ]
                     .to_vec(),

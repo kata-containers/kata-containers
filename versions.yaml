@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v41.0"
+      version: "v45.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -196,11 +196,11 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.13"
+    version: "v6.12.22"
     confidential:
       description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.12.13"
+      version: "v6.12.22"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -288,7 +288,7 @@ externals:
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
-    url: "http://ftp.gnu.org/pub/gnu/gperf/"
+    url: "http://ftpmirror.gnu.org/gperf/"
     version: "3.1"
 
   hadolint:
@@ -364,9 +364,14 @@ externals:
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    # v1.13.0 + seccomp patch allowing the tkill syscall
-    version: "cecc61bca981ab42aae6ec490dfd59965e79025e"
-    toolchain: "1.83.0"
+    version: "v1.13.1"
+    toolchain: "1.80.0"
+    meta:
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.13.1,
+      # this is the link labelled virtiofsd-v1.13.1.zip
+      #
+      # yamllint disable-line rule:line-length
+      binary: "https://gitlab.com/-/project/21523468/uploads/05d4925181301a59b8c322cd9f9d44a7/virtiofsd-v1.13.1.zip"
 
   xurls:
     description: |
@@ -382,16 +387,17 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.22.11"
+    version: "1.23.7"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.22.11"
+      newest-version: "1.23.7"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
+    # Keep in sync with rust-toolchain.toml
     version: "1.80.0"
     meta:
       description: |
@@ -403,12 +409,12 @@ languages:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
     url: "github.com/golangci/golangci-lint"
-    version: "1.57.2"
+    version: "1.64.8"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.57.2"
+      newest-version: "1.64.8"
 
 plugins:
   description: |

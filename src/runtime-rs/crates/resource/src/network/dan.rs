@@ -292,6 +292,8 @@ pub(crate) struct Route {
     pub scope: u32,
     #[serde(default)]
     pub flags: u32,
+    #[serde(default)]
+    pub mtu: u32,
 }
 
 impl Route {
@@ -369,7 +371,8 @@ mod tests {
                     "source": "172.18.0.1",
                     "gateway": "172.18.31.1",
                     "scope": 0,
-                    "flags": 0
+                    "flags": 0,
+                    "mtu": 1450
                 }],
                 "neighbors": [{
                     "ip_address": "192.168.0.3/16",
@@ -402,6 +405,7 @@ mod tests {
                     gateway: "172.18.31.1".to_owned(),
                     scope: 0,
                     flags: 0,
+                    mtu: 1450,
                 }],
                 neighbors: vec![ARPNeighbor {
                     ip_address: Some("192.168.0.3/16".to_owned()),

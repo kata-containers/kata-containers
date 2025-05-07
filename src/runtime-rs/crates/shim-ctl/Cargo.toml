@@ -1,14 +1,17 @@
 [package]
 name = "shim-ctl"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "^1.0"
-common = { path = "../runtimes/common" }
-logging = { path = "../../../libs/logging"}
-runtimes = { path = "../runtimes" }
-tokio = { version = "1.38.0", features = [ "rt", "rt-multi-thread" ] }
+anyhow = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
+# Local dependencies
+common = { workspace = true }
+logging = { workspace = true }
+runtimes = { workspace = true }

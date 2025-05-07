@@ -34,6 +34,10 @@ pub const KATA_MOUNT_OPTION_FS_GID: &str = "fsgid";
 /// KATA_DIRECT_VOLUME_ROOT_PATH is the root path used for concatenating with the direct-volume mount info file path
 pub const KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/direct-volumes";
 
+/// Key to indentify directory creation in `Storage.driver_options`.
+pub const KATA_VOLUME_OVERLAYFS_CREATE_DIR: &str =
+    "io.katacontainers.volume.overlayfs.create_directory";
+
 /// SANDBOX_BIND_MOUNTS_DIR is for sandbox bindmounts
 pub const SANDBOX_BIND_MOUNTS_DIR: &str = "sandbox-mounts";
 

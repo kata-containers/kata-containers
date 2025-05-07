@@ -130,7 +130,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	}
 
 	if !rootFs.Mounted && len(sandboxConfig.Containers) == 1 {
-		if rootFs.Source != "" && !vc.HasOptionPrefix(rootFs.Options, vc.VirtualVolumePrefix) {
+		if rootFs.Source != "" && !vc.HasOptionPrefix(rootFs.Options, vc.VirtualVolumePrefix) && !vc.HasErofsOptions(rootFs.Options) {
 			realPath, err := ResolvePath(rootFs.Source)
 			if err != nil {
 				return nil, vc.Process{}, err
@@ -244,7 +244,7 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	}
 
 	if !rootFs.Mounted {
-		if rootFs.Source != "" && !vc.IsNydusRootFSType(rootFs.Type) {
+		if rootFs.Source != "" && !vc.IsNydusRootFSType(rootFs.Type) && !vc.HasErofsOptions(rootFs.Options) {
 			realPath, err := ResolvePath(rootFs.Source)
 			if err != nil {
 				return vc.Process{}, err

@@ -25,6 +25,14 @@ jobs:
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
         component:
+          - name: agent
+            path: src/agent
+            needs:
+              - rust
+              - libdevmapper
+              - libseccomp
+              - protobuf-compiler
+              - clang
           - name: agent-ctl
             path: src/tools/agent-ctl
             needs:
@@ -43,6 +51,11 @@ jobs:
               - rust
               - musl-tools
               - protobuf-compiler
+          - name: runtime
+            path: src/runtime
+            needs:
+              - golang
+              - XDG_RUNTIME_DIR
           - name: runtime-rs
             path: src/runtime-rs
             needs:
@@ -76,11 +89,11 @@ jobs:
           ./tests/install_rust.sh
           echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
           if [ "$(uname -m)" == "x86_64" ] || [ "$(uname -m)" == "aarch64" ]; then
-            sudo apt-get -y install musl-tools
+            sudo apt-get update && sudo apt-get -y install musl-tools
           fi
       - name: Install devicemapper
         if: contains(matrix.component.needs, 'libdevmapper') && matrix.command == 'make check'
-        run: sudo apt-get -y install libdevmapper-dev
+        run: sudo apt-get update && sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
         if: contains(matrix.component.needs, 'libseccomp') && matrix.command != 'make vendor' && matrix.command != 'make check'
         run: |
@@ -92,19 +105,24 @@ jobs:
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> "$GITHUB_ENV"
       - name: Install protobuf-compiler
         if: contains(matrix.component.needs, 'protobuf-compiler') && matrix.command != 'make vendor'
-        run: sudo apt-get -y install protobuf-compiler
+        run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: contains(matrix.component.needs, 'clang') && matrix.command == 'make check'
-        run: sudo apt-get -y install clang
+        run: sudo apt-get update && sudo apt-get -y install clang
       - name: Setup XDG_RUNTIME_DIR
         if: contains(matrix.component.needs, 'XDG_RUNTIME_DIR') && matrix.command != 'make check'
         run: |
           XDG_RUNTIME_DIR=$(mktemp -d "/tmp/kata-tests-$USER.XXX" | tee >(xargs chmod 0700))
           echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> "$GITHUB_ENV"
+      - name: Skip tests that depend on virtualization capable runners when needed
+        if: inputs.instance == 'riscv-builder'
+        run: |
+          echo "GITHUB_RUNNER_CI_NON_VIRT=true" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
           cd ${{ matrix.component.path }}
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
+          RUST_LIB_BACKTRACE: "0"
           SKIP_GO_VERSION_CHECK: "1"

@@ -58,11 +58,7 @@ impl TryFrom<AddressMessage> for Address {
                 AddressAttribute::Flags(f) => {
                     //since the AddressAttribute::Flags(f) didn't implemented the u32 from trait,
                     //thus here just implemeted a simple transformer.
-                    let mut d: u32 = 0;
-                    for flag in &f {
-                        d += u32::from(*flag);
-                    }
-                    addr.flags = d;
+                    addr.flags = f.bits();
                 }
                 AddressAttribute::CacheInfo(_c) => {}
                 _ => {}

@@ -43,17 +43,21 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 ARCH=${ARCH:-$(uname -m)}
 BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
-PULL_TYPE=${PULL_TYPE:-default}
+PULL_TYPE=${PULL_TYPE:-guest-pull}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
+GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
+EXTRA_PKGS="${EXTRA_PKGS:-}"
+AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 RELEASE="${RELEASE:-"no"}"
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
+RUNTIME_CHOICE="${RUNTIME_CHOICE:-both}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -311,6 +315,13 @@ get_pause_image_tarball_path() {
 	echo "${pause_image_local_build_dir}/${pause_image_tarball_name}"
 }
 
+get_guest_hooks_tarball_path() {
+	guest_hooks_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	guest_hooks_tarball_name="${GUEST_HOOKS_TARBALL_NAME}"
+
+	echo "${guest_hooks_local_build_dir}/${guest_hooks_tarball_name}"
+}
+
 get_latest_pause_image_artefact_and_builder_image_version() {
 	local pause_image_repo="$(get_from_kata_deps ".externals.pause.repo")"
 	local pause_image_version=$(get_from_kata_deps ".externals.pause.version")
@@ -384,7 +395,15 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
-	export AGENT_POLICY=yes
+	export AGENT_POLICY
+
+	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
+		export GUEST_HOOKS_TARBALL="$(get_guest_hooks_tarball_path)"
+	fi
+
+	if [[ -n "${EXTRA_PKGS}" ]]; then
+		export EXTRA_PKGS
+	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
@@ -466,7 +485,15 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
-	export AGENT_POLICY=yes
+	export AGENT_POLICY
+
+	if [[ -n "${GUEST_HOOKS_TARBALL_NAME}" ]]; then
+		export GUEST_HOOKS_TARBALL="$(get_guest_hooks_tarball_path)"
+	fi
+
+	if [[ -n "${EXTRA_PKGS}" ]]; then
+		export EXTRA_PKGS
+	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
@@ -499,24 +526,24 @@ install_initrd_confidential() {
 #
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
-	export AGENT_POLICY="yes"
-	export EXTRA_PKGS="apt"
+	export AGENT_POLICY
+	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu"
 }
 
 # Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
-	export AGENT_POLICY="yes"
-	export EXTRA_PKGS="apt"
+	export AGENT_POLICY
+	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_initrd "nvidia-gpu"
 }
 
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
-	export AGENT_POLICY="yes"
-	export EXTRA_PKGS="apt"
+	export AGENT_POLICY
+	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
 	install_image "nvidia-gpu-confidential"
@@ -524,8 +551,8 @@ install_image_nvidia_gpu_confidential() {
 
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
-	export AGENT_POLICY="yes"
-	export EXTRA_PKGS="apt"
+	export AGENT_POLICY
+	EXTRA_PKGS="apt ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
 	install_initrd "nvidia-gpu-confidential"
@@ -871,6 +898,7 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 	export MEASURED_ROOTFS
+	export RUNTIME_CHOICE
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
@@ -937,7 +965,7 @@ install_agent() {
 	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
+	DESTDIR="${destdir}" AGENT_POLICY="${AGENT_POLICY}" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_coco_guest_components() {

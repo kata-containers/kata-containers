@@ -37,7 +37,7 @@ spec:
             - name: DEFAULT_SHIM
               value: "qemu"
             - name: CREATE_RUNTIMECLASSES
-              value: "false"
+              value: "true"
             - name: CREATE_DEFAULT_RUNTIMECLASS
               value: "false"
             - name: ALLOWED_HYPERVISOR_ANNOTATIONS

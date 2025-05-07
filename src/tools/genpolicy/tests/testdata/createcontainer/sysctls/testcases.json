@@ -2,8 +2,11 @@
   {
     "description": "sysctls listed in yaml or settings",
     "allowed": true,
-    "state": {"sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"},
+    "state": {
+      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
+    },
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/4bae4a8e74302a8edfe17424aff0b632cae893687f4d9ad2f2115666899f9a12",
@@ -237,7 +240,7 @@
             "AdditionalGids": [
               0
             ],
-            "GID": 0,
+            "GID": 65535,
             "UID": 65535,
             "Username": ""
           }
@@ -277,8 +280,11 @@
   {
     "description": "sysctl not listed in yaml or settings",
     "allowed": false,
-    "state": {"sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"},
+    "state": {
+      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
+    },
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/4bae4a8e74302a8edfe17424aff0b632cae893687f4d9ad2f2115666899f9a12",
@@ -512,7 +518,7 @@
             "AdditionalGids": [
               0
             ],
-            "GID": 0,
+            "GID": 65535,
             "UID": 65535,
             "Username": ""
           }

@@ -1,43 +1,43 @@
 [package]
 name = "virt_container"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
-anyhow = "^1.0"
-async-trait = "0.1.48"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
 awaitgroup = "0.6.0"
-containerd-shim-protos = { version = "0.6.0", features = ["async"] }
+containerd-shim-protos = { workspace = true }
 futures = "0.3.19"
-lazy_static = "1.4.0"
-libc = ">=0.2.39"
-nix = "0.24.2"
-protobuf = "3.2.0"
+lazy_static = { workspace = true }
+libc = { workspace = true }
+nix = { workspace = true }
+protobuf = { workspace = true }
 sendfd = { version = "0.4.3", features = ["tokio"] }
-serde = { version = "1.0.100", features = ["derive"] }
-serde_derive = "1.0.27"
-serde_json = "1.0.82"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-tokio = { version = "1.38.0" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
+tokio = { workspace = true }
 toml = "0.4.2"
-url = "2.1.1"
+url = { workspace = true }
 async-std = "1.12.0"
-tracing = "0.1.36"
+tracing = { workspace = true }
+oci-spec = { workspace = true }
+strum = { workspace = true }
 
-agent = { path = "../../agent" }
-common = { path = "../common" }
-hypervisor = { path = "../../hypervisor", features = ["cloud-hypervisor"] }
-kata-sys-util = { path = "../../../../libs/kata-sys-util" }
-kata-types = { path = "../../../../libs/kata-types" }
-logging = { path = "../../../../libs/logging"}
-runtime-spec = { path = "../../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-persist = { path = "../../persist"}
-resource = { path = "../../resource" }
-strum = { version = "0.24.0", features = ["derive"] }
+# Local dependencies
+agent = { workspace = true }
+common = { workspace = true }
+hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
+logging = { workspace = true }
+runtime-spec = { workspace = true }
+persist = { workspace = true }
+resource = { workspace = true }
 
 [features]
 default = ["cloud-hypervisor"]

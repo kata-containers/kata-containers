@@ -17,24 +17,22 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 source "${kubernetes_dir}/confidential_kbs.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
-helm_chart_dir="${tools_dir}/packaging/kata-deploy/helm-chart/kata-deploy"
 kata_tarball_dir="${2:-kata-artifacts}"
 
-DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
-DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
-DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
-KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-600}
-SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}
-KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
-CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-containerd}
-KBS=${KBS:-false}
-KBS_INGRESS=${KBS_INGRESS:-}
-KUBERNETES="${KUBERNETES:-}"
-SNAPSHOTTER="${SNAPSHOTTER:-}"
-ITA_KEY="${ITA_KEY:-}"
-HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
-NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
-PULL_TYPE="${PULL_TYPE:-default}"
+export DOCKER_REGISTRY="${DOCKER_REGISTRY:-quay.io}"
+export DOCKER_REPO="${DOCKER_REPO:-kata-containers/kata-deploy-ci}"
+export DOCKER_TAG="${DOCKER_TAG:-kata-containers-latest}"
+export SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT="${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+export CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
+export KBS="${KBS:-false}"
+export KBS_INGRESS="${KBS_INGRESS:-}"
+export KUBERNETES="${KUBERNETES:-}"
+export SNAPSHOTTER="${SNAPSHOTTER:-}"
+export ITA_KEY="${ITA_KEY:-}"
+export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
+export PULL_TYPE="${PULL_TYPE:-default}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
@@ -165,8 +163,6 @@ function deploy_coco_kbs() {
 
 function deploy_kata() {
 	platform="${1:-}"
-	ensure_helm
-	ensure_yq
 
 	[[ "${platform}" = "kcli" ]] && \
 	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
@@ -177,106 +173,43 @@ function deploy_kata() {
 
 	set_default_cluster_namespace
 
-	local values_yaml
-	values_yaml=$(mktemp /tmp/values_yaml.XXXXXX)
-
-	yq -i ".k8sDistribution = \"${KUBERNETES}\""                     "${values_yaml}"
-	yq -i ".image.reference = \"${DOCKER_REGISTRY}/${DOCKER_REPO}\"" "${values_yaml}"
-	yq -i ".image.tag = \"${DOCKER_TAG}\""                           "${values_yaml}"
-	yq -i ".env.debug = \"true\""                                    "${values_yaml}"
-	yq -i ".env.shims = \"${KATA_HYPERVISOR}\""                      "${values_yaml}"
-	yq -i ".env.defaultShim = \"${KATA_HYPERVISOR}\""                "${values_yaml}"
-	yq -i ".env.createRuntimeClasses = \"true\""                     "${values_yaml}"
-	yq -i ".env.createDefaultRuntimeClass = \"true\""                "${values_yaml}"
-	yq -i ".env.allowedHypervisorAnnotations = \"default_vcpus\""    "${values_yaml}"
-	yq -i ".env.snapshotterHandlerMapping = \"\""                    "${values_yaml}"
-	yq -i ".env.agentHttpsProxy = \"\""                              "${values_yaml}"
-	yq -i ".env.agentNoProxy = \"\""                                 "${values_yaml}"
-	yq -i ".env.pullTypeMapping = \"\""                              "${values_yaml}"
-	yq -i ".env.hostOS = \"\""                                       "${values_yaml}"
-
-	if [[ -n "${SNAPSHOTTER}" ]]; then
-		yq -i ".env.snapshotterHandlerMapping = \"${KATA_HYPERVISOR}:${SNAPSHOTTER}\"" "${values_yaml}"
-	fi
-
+	ANNOTATIONS="default_vcpus"
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		yq -i ".env.allowedHypervisorAnnotations = \"image kernel default_vcpus\"" "${values_yaml}"
-		yq -i ".env.hostOS = \"${KATA_HOST_OS}\""                                   "${values_yaml}"
+		ANNOTATIONS="image kernel default_vcpus"
 	fi
-
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
-		yq -i ".env.allowedHypervisorAnnotations = \"image initrd kernel default_vcpus\"" "${values_yaml}"
+		ANNOTATIONS="image initrd kernel default_vcpus"
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
-		yq -i ".env.agentHttpsProxy = \"${HTTPS_PROXY}\"" "${values_yaml}"
-		yq -i ".env.agentNoProxy = \"${NO_PROXY}\""       "${values_yaml}"
+	SNAPSHOTTER_HANDLER_MAPPING=""
+	if [[ -n "${SNAPSHOTTER}" ]]; then
+		SNAPSHOTTER_HANDLER_MAPPING="${KATA_HYPERVISOR}:${SNAPSHOTTER}"
 	fi
 
-	# Set the PULL_TYPE_MAPPING
+	PULL_TYPE_MAPPING=""
 	if [[ "${PULL_TYPE}" != "default" ]]; then
-		yq -i ".env.pullTypeMapping = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" "${values_yaml}"
+		PULL_TYPE_MAPPING="${KATA_HYPERVISOR}:${PULL_TYPE}"
 	fi
 
-	echo "::group::Final kata-deploy manifests used in the test"
-	cat "${values_yaml}"
-	helm template "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
-	[[ "$(yq .image.reference "${values_yaml}")" = "${DOCKER_REGISTRY}/${DOCKER_REPO}" ]] || die "Failed to set image reference"
-	[[ "$(yq .image.tag "${values_yaml}")" = "${DOCKER_TAG}" ]] || die "Failed to set image tag"
-	echo "::endgroup::"
-
-	local max_tries
-	local interval
-	local i
-
-	max_tries=3
-	interval=10
-	i=10
-
-	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
-	set +e # Disable immediate exit on failure
-	while true; do
-		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
-		ret=${?}
-		if [[ ${ret} -eq 0 ]]; then
-			echo "Helm install succeeded!"
-			break
-		fi
-		i=$((i+1))
-		if [[ ${i} -lt ${max_tries} ]]; then
-			echo "Retrying after ${interval} seconds (Attempt ${i} of $((max_tries - 1)))"
-		else
-			break
-		fi
-		sleep "${interval}"
-	done
-	set -e # Re-enable immediate exit on failure
-	if [[ ${i} -eq ${max_tries} ]]; then
-		die "Failed to deploy kata-deploy after ${max_tries} tries"
+	HOST_OS=""
+	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+		HOST_OS="${KATA_HOST_OS}"
 	fi
 
-	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
-	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
-	local cmd
-	cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "${cmd}"
-
-	# This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
-	# which may cause issues like not having the node properly labeled or the artefacts
-	# properly deployed when the tests actually start running.
-	if [[ "${platform}" = "aks" ]]; then
-		sleep 240s
-	else
-		sleep 60s
-	fi
-
-	echo "::group::kata-deploy logs"
-	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
-	echo "::endgroup::"
-
-	echo "::group::Runtime classes"
-	kubectl_retry get runtimeclass
-	echo "::endgroup::"
+	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
+	export HELM_IMAGE_REFERENCE="${DOCKER_REGISTRY}/${DOCKER_REPO}"
+	export HELM_IMAGE_TAG="${DOCKER_TAG}"
+	export HELM_DEBUG="true"
+	export HELM_SHIMS="${KATA_HYPERVISOR}"
+	export HELM_DEFAULT_SHIM="${KATA_HYPERVISOR}"
+	export HELM_CREATE_DEFAULT_RUNTIME_CLASS="true"
+	export HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${ANNOTATIONS}"
+	export HELM_SNAPSHOTTER_HANDLER_MAPPING="${SNAPSHOTTER_HANDLER_MAPPING}"
+	export HELM_AGENT_HTTPS_PROXY="${HTTPS_PROXY}"
+	export HELM_AGENT_NO_PROXY="${NO_PROXY}"
+	export HELM_PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING}"
+	export HELM_HOST_OS="${HOST_OS}"
+	helm_helper
 }
 
 function install_kbs_client() {

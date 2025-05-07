@@ -89,6 +89,7 @@ MACVTAP/AB
 MDEV/AB
 MITRE/B
 MacOS/B
+MgLRU
 Mellanox/B
 Minikube/B
 MonitorTest/A
@@ -223,6 +224,7 @@ cpuset/AB
 cri-o/B
 crypto
 cryptoprocessor/AB
+ctl
 dbs
 deliverable/AB
 deploy
@@ -234,6 +236,7 @@ dialog/A
 dind/B
 distro/AB
 dracut/B
+dragonball
 emptydir/A
 enablement/AB
 entrypoint/AB
@@ -284,6 +287,7 @@ longterm
 loopback
 macOS/B
 mem/B
+memcg
 memcpy/A
 memdisk/B
 mergeable
@@ -307,6 +311,7 @@ openSUSE/B
 openshift/B
 osbuilder/B
 packagecloud/B
+pagetypeinfo
 parallelize/AC
 passthrough
 patchset/A
@@ -321,6 +326,7 @@ ppc64le/B
 pre
 prefetch/ACD
 prestart
+proc
 programmatically
 proxying
 ramdisk/A

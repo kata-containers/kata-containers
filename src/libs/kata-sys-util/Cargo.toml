@@ -28,6 +28,8 @@ subprocess = "0.2.8"
 rand = "0.8.5"
 thiserror = "1.0.30"
 hex = "0.4.3"
+pci-ids = "0.2.5"
+mockall = "0.13.1"
 
 kata-types = { path = "../kata-types" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }

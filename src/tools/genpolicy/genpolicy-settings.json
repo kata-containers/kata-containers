@@ -34,6 +34,13 @@
             "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)"
         },
         "Process": {
+            "NoNewPrivileges": true,
+            "User": {
+                "UID": 65535,
+                "GID": 65535,
+                "AdditionalGids": [],
+                "Username": ""
+            },
             "Args": [
                 "/pause"
             ]
@@ -315,7 +322,8 @@
         "oci_version": "1.1.0"
     },
     "cluster_config": {
-        "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6"
+        "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
+        "guest_pull": false
     },
     "request_defaults": {
         "CreateContainerRequest": {

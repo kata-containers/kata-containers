@@ -3,6 +3,7 @@
     "description": "compliant routes",
     "allowed": true,
     "request": {
+      "type": "UpdateRoutes",
       "routes": {
         "Routes": [
           {
@@ -21,6 +22,7 @@
     "description": "forbidden device",
     "allowed": false,
     "request": {
+      "type": "UpdateRoutes",
       "routes": {
         "Routes": [
           {
@@ -39,6 +41,7 @@
     "description": "one compliant route, one noncompliant",
     "allowed": false,
     "request": {
+      "type": "UpdateRoutes",
       "routes": {
         "Routes": [
           {
@@ -65,6 +68,7 @@
     "description": "noncompliant routes",
     "allowed": false,
     "request": {
+      "type": "UpdateRoutes",
       "routes": {
         "Routes": [
           {
@@ -83,6 +87,7 @@
     "description": "noncompliant routes ipv6 1",
     "allowed": false,
     "request": {
+      "type": "UpdateRoutes",
       "routes": {
         "Routes": [
           {
@@ -101,6 +106,7 @@
     "description": "noncompliant routes ipv6 2",
     "allowed": false,
     "request": {
+      "type": "UpdateRoutes",
       "routes": {
         "Routes": [
           {

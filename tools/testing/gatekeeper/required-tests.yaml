@@ -3,6 +3,7 @@ required_tests:
   - Commit Message Check / Commit Message Check
   - Pull request WIP checks / WIP Check
   - Darwin tests / test
+  - Shellcheck required / shellcheck-required
   # TODO: cargo-deny-runner.yaml not yet treated as conditional
   - Cargo Crates Check Runner / cargo-deny-runner
 
@@ -16,10 +17,9 @@ paths:
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
   - "^\\.github/workflows/": []
+  - "^tools/testing/gatekeeper/required-tests.yaml": []
+  - "\\.md$": ["static"]
   # TODO: Expand filters
-  # Documentation
-  #- "\\.rst$": ["build"]
-  #- "\\.md$": ["build"]
   # Sources
   #- "^src/": ["static", "build", "test"]
 
@@ -79,8 +79,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, stratovirt)
-      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-tests-s390x / run-cri-containerd (active, qemu)
-      - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev, nydus, guest-pull)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-s390x-tests / run-cri-containerd (active, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-arm64 / run-k8s-tests-on-arm64 (qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, normal, yes)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, containerd, yes)
@@ -95,10 +94,11 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (devmapper, qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-sev-snp (qemu-snp, nydus, guest-pull)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k0s)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k3s)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
-      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / Kata Setup
-      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (clh)
-      - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (qemu)
     required-labels:
       - ok-to-test
   build:
@@ -124,78 +124,76 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / create-kata-tarball
       - Kata Containers CI / kata-containers-ci-on-push / publish-kata-deploy-payload-amd64 / kata-payload
     required-labels:
-      - ok-to-test
   static:
     # Checks that static checks are passing
     names:
       # static-checks.yaml (build-checks.yaml)
-      - Static checks / build-checks / check (agent-ctl, make check)
-      - Static checks / build-checks / check (agent-ctl, make test)
-      - Static checks / build-checks / check (agent-ctl, make vendor)
-      - Static checks / build-checks / check (agent-ctl, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (agent, make check)
-      - Static checks / build-checks / check (agent, make test)
-      - Static checks / build-checks / check (agent, make vendor)
-      - Static checks / build-checks / check (agent, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (dragonball, make check)
-      - Static checks / build-checks / check (dragonball, make test)
-      - Static checks / build-checks / check (dragonball, make vendor)
-      - Static checks / build-checks / check (dragonball, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (genpolicy, make check)
-      - Static checks / build-checks / check (genpolicy, make test)
-      - Static checks / build-checks / check (genpolicy, make vendor)
-      - Static checks / build-checks / check (genpolicy, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (kata-ctl, make check)
-      - Static checks / build-checks / check (kata-ctl, make test)
-      - Static checks / build-checks / check (kata-ctl, make vendor)
-      - Static checks / build-checks / check (kata-ctl, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (runtime-rs, make check)
-      - Static checks / build-checks / check (runtime-rs, make test)
-      - Static checks / build-checks / check (runtime-rs, make vendor)
-      - Static checks / build-checks / check (runtime-rs, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (runtime, make check)
-      - Static checks / build-checks / check (runtime, make test)
-      - Static checks / build-checks / check (runtime, make vendor)
-      - Static checks / build-checks / check (runtime, sudo -E PATH="$PATH" make test)
-      - Static checks / build-checks / check (trace-forwarder, make check)
-      - Static checks / build-checks / check (trace-forwarder, make test)
-      - Static checks / build-checks / check (trace-forwarder, make vendor)
-      - Static checks / build-checks / check (trace-forwarder, sudo -E PATH="$PATH" make test)
+      - Static checks / build-checks / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make check, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (make check, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (make check, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (make check, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks / check (make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make test, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (make test, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks / check (make vendor, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make vendor, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make vendor, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (make vendor, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (make vendor, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (make vendor, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust)
       - Static checks / build-checks-depending-on-kvm (runtime-rs)
       - Static checks / check-kernel-config-version
       - Static checks / static-checks (make static-checks)
       # static-checks-self-hosted.yaml
-      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (agent-ctl, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (agent, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (agent, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (agent, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (agent, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (dragonball, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (dragonball, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (dragonball, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (dragonball, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (genpolicy, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (kata-ctl, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime-rs, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (runtime, sudo -E PATH="$PATH" make test)
-      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, make check)
-      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, make test)
-      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, make vendor)
-      - Static checks self-hosted / build-checks (s390x) / check (trace-forwarder, sudo -E PATH="$PATH" make test)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust)
     required-labels:
       - ok-to-test

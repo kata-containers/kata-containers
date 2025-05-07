@@ -108,6 +108,7 @@ build_nvidia_drivers() {
 
 	local certs_dir
 	local kernel_version
+	local ARCH
 	for version in /lib/modules/*; do
 		kernel_version=$(basename "${version}")
 		certs_dir=/lib/modules/"${kernel_version}"/build/certs
@@ -118,11 +119,15 @@ build_nvidia_drivers() {
 
 		if [[ "${arch_target}" == "aarch64" ]]; then
 			ln -sf /lib/modules/"${kernel_version}"/build/arch/arm64 /lib/modules/"${kernel_version}"/build/arch/aarch64
+			ARCH=arm64
 		fi
 
 		if [[ "${arch_target}" == "x86_64" ]]; then
 			ln -sf /lib/modules/"${kernel_version}"/build/arch/x86 /lib/modules/"${kernel_version}"/build/arch/amd64
+			ARCH=x86_64
 		fi
+
+		echo "chroot: Building GPU modules for: ${kernel_version} ${ARCH}"
 
 		make -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build > /dev/null
 

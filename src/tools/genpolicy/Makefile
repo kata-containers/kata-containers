@@ -24,7 +24,7 @@ $(GENERATED_FILES): %: %.in
 default: build
 
 build: $(GENERATED_FILES)
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
 
 static-checks-build:
 	@echo "INFO: static-checks-build do nothing.."

@@ -8,6 +8,8 @@ license = "Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "^1.0"
-rand = "0.8.4"
-kata-types = { path = "../../../libs/kata-types" }
+anyhow = { workspace = true }
+rand = { workspace = true }
+
+# Local dependencies
+kata-types = { workspace = true }

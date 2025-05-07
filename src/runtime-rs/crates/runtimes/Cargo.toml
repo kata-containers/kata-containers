@@ -1,46 +1,55 @@
 [package]
 name = "runtimes"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
-anyhow = "^1.0"
-lazy_static = "1.4.0"
-netns-rs = "0.1.0"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
-tracing = "0.1.36"
-tracing-opentelemetry = "0.18.0"
-opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread", "trace", "rt-tokio"] }
-opentelemetry-jaeger = { version = "0.17.0", features = ["rt-tokio", "hyper_collector_client", "collector_client"] }
+anyhow = { workspace = true }
+lazy_static = { workspace = true }
+netns-rs = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { version = "0.18.0", features = [
+    "rt-tokio-current-thread",
+    "trace",
+    "rt-tokio",
+] }
+opentelemetry-jaeger = { version = "0.17.0", features = [
+    "rt-tokio",
+    "hyper_collector_client",
+    "collector_client",
+] }
 tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
-hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
-hyperlocal = "0.8"
-serde_json = "1.0.88"
+hyper = { workspace = true, features = ["stream", "server", "http1"] }
+hyperlocal = { workspace = true }
+serde_json = { workspace = true }
 nix = "0.25.0"
-url = "2.3.1"
+url = { workspace = true }
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
+oci-spec = { workspace = true }
 
-agent = { path = "../agent" }
-common = { path = "./common" }
-kata-types = { path = "../../../libs/kata-types" }
-kata-sys-util = { path = "../../../libs/kata-sys-util" }
-logging = { path = "../../../libs/logging"}
-runtime-spec = { path = "../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-shim-interface = { path = "../../../libs/shim-interface" }
-persist = { path = "../persist" }
-hypervisor = { path = "../hypervisor" }
-resource = { path = "../resource" }
+# Local dependencies
+agent = { workspace = true }
+common = { workspace = true }
+kata-types = { workspace = true }
+kata-sys-util = { workspace = true }
+logging = { workspace = true }
+runtime-spec = { workspace = true }
+shim-interface = { workspace = true }
+persist = { workspace = true }
+hypervisor = { workspace = true }
+resource = { workspace = true }
 
-# runtime handler
-linux_container = { path = "./linux_container", optional = true }
-virt_container = { path = "./virt_container", optional = true }
-wasm_container = { path = "./wasm_container", optional = true }
+# Local dependencies: runtime handler
+linux_container = { workspace = true, optional = true }
+virt_container = { workspace = true, optional = true }
+wasm_container = { workspace = true, optional = true }
 
 [features]
 default = ["virt"]

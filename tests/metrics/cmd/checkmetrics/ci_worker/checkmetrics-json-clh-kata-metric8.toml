@@ -211,6 +211,6 @@ description = "iperf"
 # within (inclusive)
 checkvar = ".\"network-iperf3\".Results | .[] | .jitter.Result"
 checktype = "mean"
-midval = 0.02
-minpercent = 70.0
-maxpercent = 60.0
+midval = 0.04
+minpercent = 85.0
+maxpercent = 80.0

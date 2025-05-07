@@ -11,10 +11,14 @@ use anyhow::{Context, Result};
 use crate::Error;
 
 pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_async::AsyncGuard> {
+    //it's better to open the log pipe file with read & write option,
+    //otherwise, once the containerd reboot and closed the read endpoint,
+    //kata shim would write the log pipe with broken pipe error.
     let fifo = std::fs::OpenOptions::new()
         .custom_flags(libc::O_NONBLOCK)
         .create(true)
-        .append(true)
+        .read(true)
+        .write(true)
         .open(path)
         .context(Error::FileOpen(path.to_string()))?;
 

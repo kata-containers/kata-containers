@@ -241,7 +241,11 @@ impl AgentService {
         // readonly
         handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
 
-        cdh_handler(&mut oci).await?;
+        // Handle trusted storage configuration before mounting any storage
+        #[cfg(feature = "guest-pull")]
+        cdh_handler_trusted_storage(&mut oci)
+            .await
+            .map_err(|e| anyhow!("failed to handle trusted storage: {}", e))?;
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
@@ -257,6 +261,11 @@ impl AgentService {
             Some(req.container_id),
         )
         .await?;
+
+        // Handle sealed secrets after storage is mounted
+        cdh_handler_sealed_secrets(&mut oci)
+            .await
+            .map_err(|e| anyhow!("failed to handle sealed secrets: {}", e))?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -2234,7 +2243,42 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
             .any(|suffix| source_path.ends_with(suffix))
 }
 
-async fn cdh_handler(oci: &mut Spec) -> Result<()> {
+#[cfg(feature = "guest-pull")]
+async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
+    if !cdh::is_cdh_client_initialized().await {
+        return Ok(());
+    }
+    let linux = oci
+        .linux()
+        .as_ref()
+        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
+
+    if let Some(devices) = linux.devices() {
+        for specdev in devices.iter() {
+            if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
+                let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
+                let secure_storage_integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
+                info!(
+                    sl(),
+                    "trusted_store device major:min {}, enable data integrity {}",
+                    dev_major_minor,
+                    secure_storage_integrity
+                );
+
+                let options = std::collections::HashMap::from([
+                    ("deviceId".to_string(), dev_major_minor),
+                    ("encryptType".to_string(), "LUKS".to_string()),
+                    ("dataIntegrity".to_string(), secure_storage_integrity),
+                ]);
+                cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
     if !cdh::is_cdh_client_initialized().await {
         return Ok(());
     }
@@ -2291,35 +2335,6 @@ async fn cdh_handler(oci: &mut Spec) -> Result<()> {
         }
     }
 
-    #[cfg(feature = "guest-pull")]
-    let linux = oci
-        .linux()
-        .as_ref()
-        .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
-
-    #[cfg(feature = "guest-pull")]
-    if let Some(devices) = linux.devices() {
-        for specdev in devices.iter() {
-            if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
-                let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
-                let secure_storage_integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
-                info!(
-                    sl(),
-                    "trusted_store device major:min {}, enable data integrity {}",
-                    dev_major_minor,
-                    secure_storage_integrity
-                );
-
-                let options = std::collections::HashMap::from([
-                    ("deviceId".to_string(), dev_major_minor),
-                    ("encryptType".to_string(), "LUKS".to_string()),
-                    ("dataIntegrity".to_string(), secure_storage_integrity),
-                ]);
-                cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
-                break;
-            }
-        }
-    }
     Ok(())
 }
 

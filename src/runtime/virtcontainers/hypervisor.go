@@ -150,7 +150,11 @@ func GetKernelRootParams(rootfstype string, disableNvdimm bool, dax bool) ([]Par
 			kernelRootParams = append(kernelRootParams, Param{"rootflags", "ro"})
 		}
 	case XFS:
-		fallthrough
+		if dax {
+			kernelRootParams = append(kernelRootParams, Param{"rootflags", "dax ro"})
+		} else {
+			kernelRootParams = append(kernelRootParams, Param{"rootflags", "ro"})
+		}
 	// EXT4 filesystem is used by default.
 	case EXT4:
 		if dax {
@@ -612,6 +616,9 @@ type HypervisorConfig struct {
 	// MemPrealloc specifies if the memory should be pre-allocated
 	MemPrealloc bool
 
+	// ReclaimGuestFreedMemory is a sandbox annotation that specifies whether the memory freed by the guest will be reclaimed by the hypervisor or not.
+	ReclaimGuestFreedMemory bool
+
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
@@ -681,6 +688,14 @@ type HypervisorConfig struct {
 
 	// Initdata defines the initdata passed into guest when CreateVM
 	Initdata string
+
+	// InitdataDigest represents opaque binary data attached to a TEE and typically used
+	// for Guest attestation. This will be encoded in the format expected by QEMU for each TEE type.
+	InitdataDigest []byte
+
+	// The initdata image on the host side to store the initdata and be mounted
+	// as a raw block device to guest
+	InitdataImage string
 
 	// GPU specific annotations (currently only applicable for Remote Hypervisor)
 	//DefaultGPUs specifies the number of GPUs required for the Kata VM

@@ -32,6 +32,7 @@ SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
+GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL:-}"
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
 PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
@@ -105,6 +106,8 @@ readonly -a systemd_files=(
 	"systemd-tmpfiles-cleanup.timer"
 )
 
+typeset should_delete_unnecessary_files="no"
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
@@ -157,6 +160,7 @@ $(get_distros | tr "\n" " ")
 Options:
   -a <version>      Specify the agent version. Overrides the AGENT_VERSION
                     environment variable.
+  -d                Delete unnecessary systemd units and files
   -h                Show this help message.
   -l                List the supported Linux distributions and exit immediately.
   -o <version>      Specify the version of osbuilder to embed in the rootfs
@@ -520,6 +524,11 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname ${PAUSE_IMAGE_TARBALL}):$(dirname ${PAUSE_IMAGE_TARBALL})"
 		fi
 
+		if [[ -n "${GUEST_HOOKS_TARBALL}" ]]; then
+			engine_run_args+=" --env GUEST_HOOKS_TARBALL=${GUEST_HOOKS_TARBALL}"
+			engine_run_args+=" -v $(dirname ${GUEST_HOOKS_TARBALL}):$(dirname ${GUEST_HOOKS_TARBALL})"
+		fi
+
 		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 
 		engine_run_args+=" $(docker_extra_args $distro)"
@@ -784,6 +793,11 @@ EOF
 		ln -sf "${policy_file_name}" "${policy_dir}/default-policy.rego"
 	fi
 
+	if [[ -n "${GUEST_HOOKS_TARBALL}" ]]; then
+		info "Install the ${GUEST_HOOKS_TARBALL} guest hooks"
+		tar xvJpf "${GUEST_HOOKS_TARBALL}" -C "${ROOTFS_DIR}"
+	fi
+
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
@@ -807,7 +821,9 @@ EOF
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
 
-	delete_unnecessary_files
+	if [[ "${should_delete_unnecessary_files}" == "yes" ]]; then
+	    delete_unnecessary_files
+	fi
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
@@ -817,10 +833,11 @@ parse_arguments()
 {
 	[ "$#" -eq 0 ] && usage && return 0
 
-	while getopts a:hlo:r:t: opt
+	while getopts a:dhlo:r:t: opt
 	do
 		case $opt in
 			a)	AGENT_VERSION="${OPTARG}" ;;
+			d)	should_delete_unnecessary_files="yes" ;;
 			h)	usage ;;
 			l)	get_distros | sort && exit 0;;
 			o)	OSBUILDER_VERSION="${OPTARG}" ;;

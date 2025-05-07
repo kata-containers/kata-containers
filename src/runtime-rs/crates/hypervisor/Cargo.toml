@@ -1,56 +1,57 @@
 [package]
 name = "hypervisor"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-rt = "2.7.0"
-anyhow = "^1.0"
-async-trait = "0.1.48"
-go-flag = "0.1.0"
-libc = ">=0.2.39"
-nix = "0.24.2"
-persist = { path = "../persist" }
+actix-rt = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+go-flag = { workspace = true }
+libc = { workspace = true }
+nix = { workspace = true }
 rust-ini = "0.18.0"
 seccompiler = "0.2.0"
-serde = { version = "1.0.138", features = ["derive"] }
-serde_json = ">=1.0.9"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-thiserror = "1.0"
-tokio = { version = "1.38.0", features = ["sync", "fs", "process", "io-util"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "fs", "process", "io-util"] }
 vmm-sys-util = "0.11.0"
-rand = "0.8.4"
+rand = { workspace = true }
 path-clean = "1.0.1"
-lazy_static = "1.4"
-tracing = "0.1.36"
-ttrpc = { version = "0.8.4", features = ["async"] }
-protobuf = "3.1.0"
-
-kata-sys-util = { path = "../../../libs/kata-sys-util" }
-kata-types = { path = "../../../libs/kata-types" }
-logging = { path = "../../../libs/logging" }
-protocols = { path = "../../../libs/protocols", features = ["async"] }
-shim-interface = { path = "../../../libs/shim-interface" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-
-ch-config = { path = "ch-config", optional = true }
-tests_utils = { path = "../../tests/utils" }
-
+lazy_static = { workspace = true }
+tracing = { workspace = true }
+ttrpc = { workspace = true, features = ["async"] }
+protobuf = { workspace = true }
+oci-spec = { workspace = true }
 futures = "0.3.25"
 safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
 tempdir = "0.3.7"
-
 qapi = { version = "0.14", features = ["qmp", "async-tokio-all"] }
 qapi-spec = "0.3.1"
 qapi-qmp = "0.14.0"
+hyperlocal = { workspace = true }
+hyper = { workspace = true, features = ["client"] }
 
-dragonball = { path = "../../../dragonball", features = [
+# Local dependencies
+kata-sys-util = { workspace = true }
+kata-types = { workspace = true }
+logging = { workspace = true }
+protocols = { workspace = true, features = ["async"] }
+shim-interface = { workspace = true }
+persist = { workspace = true }
+ch-config = { workspace = true, optional = true }
+tests_utils = { workspace = true }
+
+# Local dependencies: Dragonball
+dragonball = { workspace = true, features = [
     "atomic-guest-memory",
     "virtio-vsock",
     "hotplug",
@@ -64,9 +65,7 @@ dragonball = { path = "../../../dragonball", features = [
     "vhost-user-net",
     "host-device",
 ], optional = true }
-dbs-utils = { path = "../../../dragonball/dbs_utils" }
-hyperlocal = "0.8.0"
-hyper = { version = "0.14.18", features = ["client"] }
+dbs-utils = { workspace = true }
 
 [features]
 default = []
@@ -77,14 +76,13 @@ dragonball = ["dep:dragonball"]
 cloud-hypervisor = ["ch-config"]
 
 [dev-dependencies]
-# Force the CH tests to run, even when the feature is not enabled for
-# a normal build.
-hypervisor = { path = ".", features = ["cloud-hypervisor"] }
-
-test-utils = { path = "../../../libs/test-utils" }
-
 serial_test = "2.0.0"
 
+# Local dev-dependencies
+# Force the CH tests to run, even when the feature is not enabled for
+# a normal build.
+hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+test-utils = { workspace = true }
 
 [build-dependencies]
 ttrpc-codegen = "0.4.2"

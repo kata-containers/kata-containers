@@ -3,6 +3,7 @@
     "description": "one network namespace",
     "allowed": true,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -64,7 +65,8 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 65535
           },
           "Args": [
             "/pause"
@@ -134,6 +136,7 @@
     "description": "same network namespace",
     "allowed": true,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -195,7 +198,8 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 65535
           },
           "Args": [
             "/pause"
@@ -265,6 +269,7 @@
     "description": "no network namespace",
     "allowed": false,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -322,7 +327,8 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 65535
           },
           "Args": [
             "/pause"
@@ -392,6 +398,7 @@
     "description": "different network namespace",
     "allowed": false,
     "request": {
+      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -453,7 +460,8 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 65535
           },
           "Args": [
             "/pause"

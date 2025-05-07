@@ -1,23 +1,24 @@
 [package]
 name = "service"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
-anyhow = "^1.0"
-async-trait = "0.1.48"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
-tracing = "0.1.36"
-ttrpc = "0.8.4"
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+slog = { workspace = true }
+slog-scope = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing = { workspace = true }
+ttrpc = { workspace = true }
+containerd-shim-protos = { workspace = true, features = ["async", "sandbox"] }
+containerd-shim = { workspace = true }
 
-common = { path = "../runtimes/common" }
-containerd-shim-protos = { version = "0.6.0", features = ["async", "sandbox"] }
-containerd-shim = { version = "0.6.0", features = ["async"] }
-logging = { path = "../../../libs/logging" }
-kata-types = { path = "../../../libs/kata-types" }
-runtimes = { path = "../runtimes" }
-persist = { path = "../persist" }
+# Local dependencies
+common = { workspace = true }
+logging = { workspace = true }
+kata-types = { workspace = true }
+runtimes = { workspace = true }
+persist = { workspace = true }

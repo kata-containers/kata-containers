@@ -16,8 +16,33 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 containerd_conf_tmpl_file=""
 use_containerd_drop_in_conf_file="false"
 
+# If we fail for any reason a message will be displayed
+die() {
+        msg="$*"
+        echo "ERROR: $msg" >&2
+        exit 1
+}
+
+warn() {
+        msg="$*"
+        echo "WARN: $msg" >&2
+}
+
+info() {
+	msg="$*"
+	echo "INFO: $msg" >&2
+}
+
+DEBUG="${DEBUG:-"false"}"
+
+SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
 IFS=' ' read -a shims <<< "$SHIMS"
+DEFAULT_SHIM="${DEFAULT_SHIM:-"qemu"}"
 default_shim="$DEFAULT_SHIM"
+
+CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
+CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
+
 ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
 
 IFS=' ' read -a non_formatted_allowed_hypervisor_annotations <<< "$ALLOWED_HYPERVISOR_ANNOTATIONS"
@@ -41,6 +66,9 @@ INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
 dest_dir="${default_dest_dir}"
 if [ -n "${INSTALLATION_PREFIX}" ]; then
+	if [[ "${INSTALLATION_PREFIX:0:1}" != "/" ]]; then
+		die 'INSTALLATION_PREFIX must begin with a "/"(ex. /hoge/fuga)'
+	fi
 	# There's no `/` in between ${INSTALLATION_PREFIX} and ${default_dest_dir}
 	# as, otherwise, we'd have it doubled there, as: `/foo/bar//opt/kata`
 	dest_dir="${INSTALLATION_PREFIX}${default_dest_dir}"
@@ -58,23 +86,6 @@ containerd_drop_in_conf_file="${dest_dir}/containerd/config.d/kata-deploy.toml"
 host_install_dir="/host${dest_dir}"
 
 HELM_POST_DELETE_HOOK="${HELM_POST_DELETE_HOOK:-"false"}"
-
-# If we fail for any reason a message will be displayed
-die() {
-        msg="$*"
-        echo "ERROR: $msg" >&2
-        exit 1
-}
-
-warn() {
-        msg="$*"
-        echo "WARN: $msg" >&2
-}
-
-info() {
-	msg="$*"
-	echo "INFO: $msg" >&2
-}
 
 function host_systemctl() {
 	nsenter --target 1 --mount systemctl "${@}"
@@ -221,7 +232,7 @@ function get_kata_containers_config_path() {
 	local shim="$1"
 
 	# Directory holding pristine configuration files for the current default golang runtime.
-	local golang_config_path="${dest_dir}/share/defaults/kata-containers/"
+	local golang_config_path="${dest_dir}/share/defaults/kata-containers"
 
 	# Directory holding pristine configuration files for the new rust runtime.
 	#
@@ -909,8 +920,8 @@ function main() {
 			reset_runtime $runtime
 			;;
 		*)
-			echo invalid arguments
 			print_usage
+			die "invalid arguments"
 			;;
 		esac
 	fi

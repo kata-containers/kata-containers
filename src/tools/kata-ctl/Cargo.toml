@@ -44,7 +44,7 @@ logging = { path = "../../libs/logging" }
 slog = "2.7.0"
 slog-scope = "4.4.0"
 hyper = "0.14.20"
-tokio = { version = "1.28.1", features = ["signal"] }
+tokio = { version = "1.44.2", features = ["signal"] }
 ttrpc = "0.8.4"
 
 prometheus = { version = "0.13.0", features = ["process"] }

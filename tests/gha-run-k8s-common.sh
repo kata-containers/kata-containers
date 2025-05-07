@@ -7,6 +7,7 @@
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
+helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
 AZ_APPID="${AZ_APPID:-}"
 AZ_PASSWORD="${AZ_PASSWORD:-}"
@@ -14,6 +15,22 @@ AZ_SUBSCRIPTION_ID="${AZ_SUBSCRIPTION_ID:-}"
 AZ_TENANT_ID="${AZ_TENANT_ID:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
+HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
+HELM_AGENT_HTTPS_PROXY="${HELM_AGENT_HTTPS_PROXY:-}"
+HELM_AGENT_NO_PROXY="${HELM_AGENT_NO_PROXY:-}"
+HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
+HELM_CREATE_RUNTIME_CLASSES="${HELM_CREATE_RUNTIME_CLASSES:-}"
+HELM_CREATE_DEFAULT_RUNTIME_CLASS="${HELM_CREATE_DEFAULT_RUNTIME_CLASS:-}"
+HELM_DEBUG="${HELM_DEBUG:-}"
+HELM_DEFAULT_SHIM="${HELM_DEFAULT_SHIM:-}"
+HELM_HOST_OS="${HELM_HOST_OS:-}"
+HELM_IMAGE_REFERENCE="${HELM_IMAGE_REFERENCE:-}"
+HELM_IMAGE_TAG="${HELM_IMAGE_TAG:-}"
+HELM_K8S_DISTRIBUTION="${HELM_K8S_DISTRIBUTION:-}"
+HELM_PULL_TYPE_MAPPING="${HELM_PULL_TYPE_MAPPING:-}"
+HELM_SHIMS="${HELM_SHIMS:-}"
+HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
+KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-600}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
@@ -24,7 +41,7 @@ function _print_instance_type() {
 		small)
 			echo "Standard_D2s_v5"
 			;;
-		normal)
+		all|normal)
 			echo "Standard_D4s_v5"
 			;;
 		*)
@@ -58,10 +75,10 @@ function _print_rg_name() {
 	echo "${AZ_RG:-"kataCI-$(_print_cluster_name "${test_type}")"}"
 }
 
-# Enable the HTTP application routing add-on to AKS.
+# Enable the approuting routing add-on to AKS.
 # Use with ingress to expose a service API externally.
 #
-function enable_cluster_http_application_routing() {
+function enable_cluster_approuting() {
 	local test_type="${1:-k8s}"
 	local cluster_name
 	local rg
@@ -69,13 +86,11 @@ function enable_cluster_http_application_routing() {
 	rg="$(_print_rg_name "${test_type}")"
 	cluster_name="$(_print_cluster_name "${test_type}")"
 
-	az aks enable-addons -g "${rg}" -n "${cluster_name}" \
-		--addons http_application_routing
+	az aks approuting enable -g "${rg}" -n "${cluster_name}"
 }
 
 function install_azure_cli() {
 	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-	# The aks-preview extension is required while the Mariner Kata host is in preview.
 	az extension add --name aks-preview
 }
 
@@ -173,24 +188,6 @@ function get_cluster_credentials() {
 		--overwrite-existing \
 		-g "$(_print_rg_name "${test_type}")" \
 		-n "$(_print_cluster_name "${test_type}")"
-}
-
-
-# Get the AKS DNS zone name of HTTP application routing.
-#
-# Note: if the HTTP application routing add-on isn't installed in the cluster
-# then it will return an empty string.
-#
-function get_cluster_specific_dns_zone() {
-	local test_type="${1:-k8s}"
-	local cluster_name
-	local rg
-	local q="addonProfiles.httpApplicationRouting.config.HTTPApplicationRoutingZoneName"
-
-	rg="$(_print_rg_name "${test_type}")"
-	cluster_name="$(_print_cluster_name "${test_type}")"
-
-	az aks show -g "${rg}" -n "${cluster_name}" --query "${q}" | tr -d \"
 }
 
 function delete_cluster() {
@@ -426,4 +423,96 @@ function delete_test_runners(){
 			echo "${pids}" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
 		fi
 	done
+}
+
+function helm_helper() {
+	local max_tries
+	local interval
+	local i
+	local values_yaml
+
+	ensure_yq
+	ensure_helm
+
+	values_yaml=$(mktemp -t values_yaml.XXXXXX)
+
+	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
+		die "HELM_IMAGE_REFERENCE environment variable cannot be empty."
+	fi
+	yq -i ".image.reference = \"${HELM_IMAGE_REFERENCE}\"" "${values_yaml}"
+
+	if [[ -z "${HELM_IMAGE_TAG}" ]]; then
+		die "HELM_IMAGE_TAG environment variable cannot be empty."
+	fi
+	yq -i ".image.tag = \"${HELM_IMAGE_TAG}\"" "${values_yaml}"
+
+	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
+
+	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
+		[[ -n "${HELM_DEBUG}" ]] && yq -i ".env.debug = \"${HELM_DEBUG}\"" "${values_yaml}"
+		[[ -n "${HELM_SHIMS}" ]] && yq -i ".env.shims = \"${HELM_SHIMS}\"" "${values_yaml}"
+		[[ -n "${HELM_DEFAULT_SHIM}" ]] && yq -i ".env.defaultShim = \"${HELM_DEFAULT_SHIM}\"" "${values_yaml}"
+		[[ -n "${HELM_CREATE_RUNTIME_CLASSES}" ]] && yq -i ".env.createRuntimeClasses = \"${HELM_CREATE_RUNTIME_CLASSES}\"" "${values_yaml}"
+		[[ -n "${HELM_CREATE_DEFAULT_RUNTIME_CLASS}" ]] && yq -i ".env.createDefaultRuntimeClass = \"${HELM_CREATE_DEFAULT_RUNTIME_CLASS}\"" "${values_yaml}"
+		[[ -n "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" ]] && yq -i ".env.allowedHypervisorAnnotations = \"${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}\"" "${values_yaml}"
+		[[ -n "${HELM_SNAPSHOTTER_HANDLER_MAPPING}" ]] && yq -i ".env.snapshotterHandlerMapping = \"${HELM_SNAPSHOTTER_HANDLER_MAPPING}\"" "${values_yaml}"
+		[[ -n "${HELM_AGENT_HTTPS_PROXY}" ]] && yq -i ".env.agentHttpsProxy = \"${HELM_AGENT_HTTPS_PROXY}\"" "${values_yaml}"
+		[[ -n "${HELM_AGENT_NO_PROXY}" ]] && yq -i ".env.agentNoProxy = \"${HELM_AGENT_NO_PROXY}\"" "${values_yaml}"
+		[[ -n "${HELM_PULL_TYPE_MAPPING}" ]] && yq -i ".env.pullTypeMapping = \"${HELM_PULL_TYPE_MAPPING}\"" "${values_yaml}"
+		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
+	fi
+
+	echo "::group::Final kata-deploy manifests used in the test"
+	cat "${values_yaml}"
+	echo ""
+	helm template "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
+	[[ "$(yq .image.reference "${values_yaml}")" = "${HELM_IMAGE_REFERENCE}" ]] || die "Failed to set image reference"
+	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
+	echo "::endgroup::"
+
+	max_tries=3
+	interval=10
+	i=10
+
+	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
+	set +e # Disable immediate exit on failure
+	while true; do
+		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
+		ret=${?}
+		if [[ ${ret} -eq 0 ]]; then
+			echo "Helm install succeeded!"
+			break
+		fi
+		i=$((i+1))
+		if [[ ${i} -lt ${max_tries} ]]; then
+			echo "Retrying after ${interval} seconds (Attempt ${i} of $((max_tries - 1)))"
+		else
+			break
+		fi
+		sleep "${interval}"
+	done
+	set -e # Re-enable immediate exit on failure
+	if [[ ${i} -eq ${max_tries} ]]; then
+		die "Failed to deploy kata-deploy after ${max_tries} tries"
+	fi
+
+	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
+	# like kata-deploy on CI. So wait for pods being Running in the "traditional" way.
+	local cmd
+	cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
+	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "${cmd}"
+
+	# FIXME: This is needed as the kata-deploy pod will be set to "Ready"
+	# when it starts running, which may cause issues like not having the
+	# node properly labeled or the artefacts properly deployed when the
+	# tests actually start running.
+	sleep 60s
+
+	echo "::group::kata-deploy logs"
+	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
+	echo "::endgroup::"
+
+	echo "::group::Runtime classes"
+	kubectl_retry get runtimeclass
+	echo "::endgroup::"
 }

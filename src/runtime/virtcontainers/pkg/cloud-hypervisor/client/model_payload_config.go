@@ -20,6 +20,8 @@ type PayloadConfig struct {
 	Kernel    *string `json:"kernel,omitempty"`
 	Cmdline   *string `json:"cmdline,omitempty"`
 	Initramfs *string `json:"initramfs,omitempty"`
+	Igvm      *string `json:"igvm,omitempty"`
+	HostData  *string `json:"host_data,omitempty"`
 }
 
 // NewPayloadConfig instantiates a new PayloadConfig object
@@ -167,6 +169,70 @@ func (o *PayloadConfig) SetInitramfs(v string) {
 	o.Initramfs = &v
 }
 
+// GetIgvm returns the Igvm field value if set, zero value otherwise.
+func (o *PayloadConfig) GetIgvm() string {
+	if o == nil || o.Igvm == nil {
+		var ret string
+		return ret
+	}
+	return *o.Igvm
+}
+
+// GetIgvmOk returns a tuple with the Igvm field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PayloadConfig) GetIgvmOk() (*string, bool) {
+	if o == nil || o.Igvm == nil {
+		return nil, false
+	}
+	return o.Igvm, true
+}
+
+// HasIgvm returns a boolean if a field has been set.
+func (o *PayloadConfig) HasIgvm() bool {
+	if o != nil && o.Igvm != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetIgvm gets a reference to the given string and assigns it to the Igvm field.
+func (o *PayloadConfig) SetIgvm(v string) {
+	o.Igvm = &v
+}
+
+// GetHostData returns the HostData field value if set, zero value otherwise.
+func (o *PayloadConfig) GetHostData() string {
+	if o == nil || o.HostData == nil {
+		var ret string
+		return ret
+	}
+	return *o.HostData
+}
+
+// GetHostDataOk returns a tuple with the HostData field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PayloadConfig) GetHostDataOk() (*string, bool) {
+	if o == nil || o.HostData == nil {
+		return nil, false
+	}
+	return o.HostData, true
+}
+
+// HasHostData returns a boolean if a field has been set.
+func (o *PayloadConfig) HasHostData() bool {
+	if o != nil && o.HostData != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetHostData gets a reference to the given string and assigns it to the HostData field.
+func (o *PayloadConfig) SetHostData(v string) {
+	o.HostData = &v
+}
+
 func (o PayloadConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Firmware != nil {
@@ -180,6 +246,12 @@ func (o PayloadConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Initramfs != nil {
 		toSerialize["initramfs"] = o.Initramfs
+	}
+	if o.Igvm != nil {
+		toSerialize["igvm"] = o.Igvm
+	}
+	if o.HostData != nil {
+		toSerialize["host_data"] = o.HostData
 	}
 	return json.Marshal(toSerialize)
 }

@@ -270,7 +270,8 @@ chisseled_init() {
 	tar xvf "${BUILD_DIR}"/kata-static-busybox.tar.xz -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
-		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64 usr/bin
+		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
+		 usr/bin etc/modprobe.d
 
 	ln -sf ../run var/run
 
@@ -286,6 +287,9 @@ chisseled_init() {
 
 	cp -a "${stage_one}"/lib/firmware/nvidia  lib/firmware/.
 	cp -a "${stage_one}"/sbin/ldconfig.real   sbin/ldconfig
+
+	local conf_file="etc/modprobe.d/0000-nvidia.conf"
+	echo 'options nvidia NVreg_DeviceFileMode=0660' > "${conf_file}"
 }
 
 compress_rootfs() {

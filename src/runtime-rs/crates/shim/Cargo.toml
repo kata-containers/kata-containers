@@ -1,47 +1,50 @@
 [package]
 name = "shim"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+authors = { workspace = true }
 description = "Containerd shim runtime for Kata Containers"
 keywords = ["kata-containers", "shim"]
 repository = "https://github.com/kata-containers/kata-containers.git"
-license = "Apache-2.0"
-edition = "2018"
+license  = { workspace = true }
+edition = { workspace = true }
 
 [[bin]]
 name = "containerd-shim-kata-v2"
 path = "src/bin/main.rs"
 
 [dependencies]
-anyhow = "^1.0"
+anyhow = { workspace = true }
 backtrace = {version = ">=0.3.35", features = ["libunwind", "libbacktrace", "std"], default-features = false}
-containerd-shim-protos = { version = "0.6.0", features = ["async"]}
-go-flag = "0.1.0"
-libc = "0.2.108"
-log = "0.4.14"
-nix = "0.24.2"
-protobuf = "3.2.0"
+containerd-shim-protos = { workspace = true }
+go-flag = { workspace = true }
+libc = { workspace = true }
+log = { workspace = true }
+nix  = { workspace = true }
+protobuf = { workspace = true }
 sha2 = "=0.9.3"
-slog = {version = "2.5.2", features = ["std", "release_max_level_trace", "max_level_trace"]}
+slog = {workspace = true, features = ["std", "release_max_level_trace", "max_level_trace"]}
 slog-async = "2.5.2"
-slog-scope = "4.4.0"
+slog-scope = { workspace = true }
 slog-stdlog = "4.1.0"
-thiserror = "1.0.30"
-tokio = { version = "1.38.0", features = [ "rt", "rt-multi-thread" ] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 unix_socket2 = "0.5.4"
-tracing = "0.1.36"
-tracing-opentelemetry = "0.18.0"
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+oci-spec = { workspace = true }
 
-kata-types = { path = "../../../libs/kata-types"}
-kata-sys-util = { path = "../../../libs/kata-sys-util"}
-logging = { path = "../../../libs/logging"}
-runtime-spec = { path = "../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-service = { path = "../service" }
-runtimes = { path = "../runtimes" }
+# Local dependencies
+kata-types = { workspace = true }
+kata-sys-util = { workspace = true }
+logging = { workspace = true }
+runtime-spec = { workspace = true }
+service = { workspace = true }
+runtimes = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.2.0"
-rand = "0.8.4"
+tempfile = { workspace = true }
+rand = { workspace = true }
 serial_test = "0.5.1"
-tests_utils = { path = "../../tests/utils"}
+
+# Local dev-dependencies
+tests_utils = { workspace = true }

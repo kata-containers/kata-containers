@@ -15,6 +15,7 @@ package qemu
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -45,6 +46,8 @@ type Machine struct {
 const (
 	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
 	MachineTypeMicrovm string = "microvm"
+	// (fixed) Unix Domain Socket Path served by Intel TDX Quote Generation Service
+	qgsSocketPath string = "/var/run/tdx-qgs/qgs.socket"
 )
 
 const (
@@ -316,7 +319,7 @@ type Object struct {
 	// Prealloc enables memory preallocation
 	Prealloc bool
 
-	// QgsPort defines Intel Quote Generation Service port exposed from the host
+	// QgsPort defines Intel TDX Quote Generation Service port configuration
 	QgsPort uint32
 
 	// SnpIdBlock is the 96-byte, base64-encoded blob to provide the ‘ID Block’ structure
@@ -326,6 +329,9 @@ type Object struct {
 	// SnpIdAuth is the 4096-byte, base64-encoded blob to provide the ‘ID Authentication Information Structure’
 	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
 	SnpIdAuth string
+
+	// Raw byte slice of initdata digest
+	InitdataDigest []byte
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -336,7 +342,7 @@ func (object Object) Valid() bool {
 	case MemoryBackendEPC:
 		return object.ID != "" && object.Size != 0
 	case TDXGuest:
-		return object.ID != "" && object.File != "" && object.DeviceID != "" && object.QgsPort != 0
+		return object.ID != "" && object.File != "" && object.DeviceID != ""
 	case SEVGuest:
 		fallthrough
 	case SNPGuest:
@@ -349,6 +355,12 @@ func (object Object) Valid() bool {
 	default:
 		return false
 	}
+}
+
+func adjustProperLength(data []byte, len int) []byte {
+	adjusted := make([]byte, len)
+	copy(adjusted, data)
+	return adjusted
 }
 
 // QemuParams returns the qemu parameters built out of this Object device.
@@ -392,6 +404,14 @@ func (object Object) QemuParams(config *Config) []string {
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SNPGuest:
+		if len(object.InitdataDigest) > 0 {
+			// due to https://github.com/confidential-containers/qemu/blob/amd-snp-202402240000/qapi/qom.json#L926-L929
+			// hostdata in SEV-SNP should be exactly 32 bytes
+			hostdataSlice := adjustProperLength(object.InitdataDigest, 32)
+			hostdata := base64.StdEncoding.EncodeToString(hostdataSlice)
+			objectParams = append(objectParams, fmt.Sprintf("host-data=%s", hostdata))
+		}
+
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
@@ -436,8 +456,9 @@ func (object Object) QemuParams(config *Config) []string {
 
 type SocketAddress struct {
 	Type string `json:"type"`
-	Cid  string `json:"cid"`
-	Port string `json:"port"`
+	Cid  string `json:"cid,omitempty"`
+	Port string `json:"port,omitempty"`
+	Path string `json:"path,omitempty"`
 }
 
 type TdxQomObject struct {
@@ -472,12 +493,31 @@ func (this *TdxQomObject) String() string {
 	return string(b)
 }
 
+func getQgsSocketAddress(portNum uint32) SocketAddress {
+	if portNum == 0 {
+		return SocketAddress{Type: "unix", Path: qgsSocketPath}
+	}
+
+	return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: fmt.Sprint(portNum)}
+}
+
 func prepareTDXObject(object Object) string {
-	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
+	qgsSocket := getQgsSocketAddress(object.QgsPort)
+	// due to https://github.com/intel-staging/qemu-tdx/blob/tdx-qemu-upstream-2023.9.21-v8.1.0/qapi/qom.json#L880
+	// mrconfigid in TDX should be exactly 48 bytes
+
+	var mrconfigid string
+	if len(object.InitdataDigest) > 0 {
+		mrconfigidSlice := adjustProperLength(object.InitdataDigest, 48)
+		mrconfigid = base64.StdEncoding.EncodeToString(mrconfigidSlice)
+
+	} else {
+		mrconfigid = ""
+	}
 	tdxObject := TdxQomObject{
 		string(object.Type), // qom-type
 		object.ID,           // id
-		"",                  // mrconfigid
+		mrconfigid,          // mrconfigid
 		"",                  // mrowner
 		"",                  // mrownerconfig
 		qgsSocket,           // quote-generation-socket

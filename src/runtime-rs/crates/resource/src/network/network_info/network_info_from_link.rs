@@ -4,7 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{convert::TryFrom, net::IpAddr};
+use std::{
+    convert::TryFrom,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+};
 
 use agent::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
 use anyhow::{anyhow, Context, Result};
@@ -13,8 +16,9 @@ use futures::stream::TryStreamExt;
 use netlink_packet_route::{
     self,
     neighbour::{NeighbourAddress, NeighbourAttribute, NeighbourMessage},
-    route::{RouteAddress, RouteAttribute, RouteMessage},
+    route::{RouteAddress, RouteAttribute, RouteMessage, RouteMetric},
 };
+use rtnetlink::{IpVersion, RouteMessageBuilder};
 
 use super::NetworkInfo;
 use crate::network::utils::{
@@ -168,11 +172,6 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
         return Ok(None);
     }
 
-    let mut flags: u32 = 0;
-    for flag in &route_msg.header.flags {
-        flags += u32::from(*flag);
-    }
-
     let mut route = Route {
         scope: u8::from(route_msg.header.scope) as u32,
         device: name.to_string(),
@@ -181,7 +180,7 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
         } else {
             IPFamily::V6
         },
-        flags,
+        flags: route_msg.header.flags.bits(),
         ..Default::default()
     };
 
@@ -201,6 +200,14 @@ fn generate_route(name: &str, route_msg: &RouteMessage) -> Result<Option<Route>>
 
                 route.source = dest.to_string();
             }
+            RouteAttribute::Metrics(metrics) => {
+                for m in metrics {
+                    if let RouteMetric::Mtu(mtu) = m {
+                        route.mtu = *mtu;
+                        break;
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -212,10 +219,14 @@ async fn get_route_from_msg(
     routes: &mut Vec<Route>,
     handle: &rtnetlink::Handle,
     attrs: &LinkAttrs,
-    ip_version: rtnetlink::IpVersion,
+    ip_version: IpVersion,
 ) -> Result<()> {
     let name = &attrs.name;
-    let mut route_msg_list = handle.route().get(ip_version).execute();
+    let route_message = match ip_version {
+        IpVersion::V4 => RouteMessageBuilder::<Ipv4Addr>::new().build(),
+        IpVersion::V6 => RouteMessageBuilder::<Ipv6Addr>::new().build(),
+    };
+    let mut route_msg_list = handle.route().get(route_message).execute();
     while let Some(route_msg) = route_msg_list.try_next().await? {
         // get route filter with index
         for attr in &route_msg.attributes {

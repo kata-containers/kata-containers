@@ -425,6 +425,10 @@ pub struct CommonData {
 pub struct ClusterConfig {
     /// Pause container image reference.
     pub pause_container_image: String,
+    /// Whether or not the cluster uses the guest pull mechanism
+    /// In guest pull, host can't look into layers to determine GID.
+    /// See issue https://github.com/kata-containers/kata-containers/issues/11162
+    pub guest_pull: bool,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -713,7 +717,17 @@ impl AgentPolicy {
         substitute_args_env_variables(&mut process.Args, &process.Env);
 
         c_settings.get_process_fields(&mut process);
-        resource.get_process_fields(&mut process);
+        let mut must_check_passwd = false;
+        resource.get_process_fields(&mut process, &mut must_check_passwd);
+
+        // The actual GID of the process run by the CRI
+        // Depends on the contents of /etc/passwd in the container
+        if must_check_passwd {
+            process.User.GID = yaml_container
+                .registry
+                .get_gid_from_passwd_uid(process.User.UID)
+                .unwrap_or(0);
+        }
         yaml_container.get_process_fields(&mut process);
 
         process

@@ -15,7 +15,9 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 export AA_KBC="${AA_KBC:-cc_kbc}"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
+	if ! is_confidential_runtime_class; then
+		skip "Test not supported for ${KATA_HYPERVISOR}."
+	fi
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
@@ -70,6 +72,8 @@ setup() {
 
 	if ! is_confidential_hardware; then
 		kbs_set_allow_all_resources
+	else
+		kbs_set_default_policy
 	fi
 }
 
@@ -103,13 +107,15 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
+	if ! is_confidential_runtime_class; then
+		skip "Test not supported for ${KATA_HYPERVISOR}."
+	fi
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
 	fi
 
-	teardown_common "${node}" "${node_start_time:-}"
+	confidential_teardown_common "${node}" "${node_start_time:-}"
 	kubectl delete secret sealed-secret --ignore-not-found
 	kubectl delete secret not-sealed-secret --ignore-not-found
 }

@@ -39,6 +39,11 @@ kbs_set_allow_all_resources() {
 		"${COCO_KBS_DIR}/sample_policies/allow_all.rego"
 }
 
+kbs_set_default_policy() {
+	kbs_set_resources_policy \
+		"${COCO_KBS_DIR}/src/policy_engine/opa/default_policy.rego"
+}
+
 # Set "deny all" policy to resources.
 #
 kbs_set_deny_all_resources() {
@@ -323,7 +328,7 @@ function kbs_k8s_deploy() {
 			# ITA/ITTS specific configuration
 			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
 		popd
-		
+
 		if [ -n "${HTTPS_PROXY}" ]; then
 			# Ideally this should be something kustomizable on trustee side.
 			#
@@ -332,7 +337,7 @@ function kbs_k8s_deploy() {
 			# solved.
 			pushd "${COCO_KBS_DIR}/config/kubernetes/base/"
 				ensure_yq
-				
+
 				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"$HTTPS_PROXY\"}]" -i deployment.yaml
 			popd
 		fi
@@ -365,6 +370,10 @@ function kbs_k8s_deploy() {
 		echo "::endgroup::"
 		return 1
 	fi
+	echo "::endgroup::"
+
+	echo "::group::Post deploy actions"
+	_post_deploy "${ingress}"
 	echo "::endgroup::"
 
 	# By default, the KBS service is reachable within the cluster only,
@@ -414,13 +423,20 @@ function kbs_k8s_deploy() {
 	fi
 }
 
-# Return the kbs service host name in case ingress is configured
+# Return the kbs service public IP in case ingress is configured
 # otherwise the cluster IP.
 #
 kbs_k8s_svc_host() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
-		kubectl get ingress "$KBS_INGRESS_NAME" -n "$KBS_NS" \
-			-o jsonpath='{.spec.rules[0].host}' 2>/dev/null
+		local host
+		# The ingress IP address can take a while to show up.
+		SECONDS=0
+		while true; do
+			host=$(kubectl get ingress "${KBS_INGRESS_NAME}" -n "${KBS_NS}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+			[[ -z "${host}" && ${SECONDS} -lt 30 ]] || break
+			sleep 5
+		done
+		echo "${host}"
 	elif kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" &>/dev/null; then
 			local host
 			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "$KBS_NS")
@@ -456,6 +472,18 @@ kbs_k8s_svc_http_addr() {
 	port=$(kbs_k8s_svc_port)
 
 	echo "http://${host}:${port}"
+}
+
+kbs_k8s_print_logs() {
+	local start_time="$1"
+
+	# Convert to iso time for kubectl
+	local iso_start_time
+	iso_start_time=$(date -d "${start_time}" --iso-8601=seconds)
+
+	echo "::group::DEBUG - kbs logs since ${start_time}"
+	kubectl -n "${KBS_NS}" logs -l app=kbs --since-time="${iso_start_time}" --timestamps=true || true
+	echo "::endgroup::"
 }
 
 # Ensure rust is installed in the host.
@@ -509,29 +537,17 @@ _handle_ingress() {
 # Implement the ingress handler for AKS.
 #
 _handle_ingress_aks() {
-	local dns_zone
-
-	dns_zone=$(get_cluster_specific_dns_zone "")
-
-	# In case the DNS zone name is empty, the cluster might not have the HTTP
-	# application routing add-on. Let's try to enable it.
-	if [ -z "$dns_zone" ]; then
-		echo "::group::Enable HTTP application routing add-on"
-		enable_cluster_http_application_routing ""
-		echo "::endgroup::"
-		dns_zone=$(get_cluster_specific_dns_zone "")
-	fi
-
-	if [ -z "$dns_zone" ]; then
-		echo "ERROR: the DNS zone name is nil, it cannot configure Ingress"
-		return 1
-	fi
+	echo "::group::Enable approuting (application routing) add-on"
+	enable_cluster_approuting ""
+	echo "::endgroup::"
 
 	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/"
 
 	echo "::group::$(pwd)/ingress.yaml"
-	KBS_INGRESS_CLASS="addon-http-application-routing" \
-		KBS_INGRESS_HOST="kbs.${dns_zone}" \
+	# We don't use a cluster DNS zone, instead get the ingress public IP,
+	# thus KBS_INGRESS_HOST is set empty.
+	KBS_INGRESS_CLASS="webapprouting.kubernetes.azure.com" \
+		KBS_INGRESS_HOST="\"\"" \
 		envsubst < ingress.yaml | tee ingress.yaml.tmp
 	echo "::endgroup::"
 	mv ingress.yaml.tmp ingress.yaml
@@ -547,6 +563,22 @@ _handle_ingress_nodeport() {
 	export DEPLOYMENT_DIR=nodeport
 }
 
+# Run further actions after the kbs was deployed, usually to apply further
+# configurations.
+#
+_post_deploy() {
+	local ingress="${1:-}"
+
+	if [[ "${ingress}" = "aks" ]]; then
+		# The AKS managed ingress controller defaults to two nginx pod
+		# replicas where both request 500m of CPU. On cluster made of small
+		# VMs (e.g. 2 vCPU) one of the pod might not even start. We need only
+		# one nginx, so patching the controller to keep only one replica.
+		echo "Patch the ingress controller to have only one replica of nginx"
+		waitForProcess "20" "5" \
+			"kubectl patch nginxingresscontroller/default -n app-routing-system --type=merge -p='{\"spec\":{\"scaling\": {\"minReplicas\": 1}}}'"
+	fi
+}
 
 # Prepare necessary resources for qemu-se runtime
 # Documentation: https://github.com/confidential-containers/trustee/tree/main/attestation-service/verifier/src/se

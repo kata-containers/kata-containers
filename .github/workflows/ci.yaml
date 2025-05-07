@@ -78,6 +78,14 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
+  build-kata-static-tarball-riscv64:
+    uses: ./.github/workflows/build-kata-static-tarball-riscv64.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
     uses: ./.github/workflows/publish-kata-deploy-payload.yaml
@@ -296,7 +304,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-metrics-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
+    # Skip metrics tests whilst runner is broken
+    if: false
+    # if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
@@ -316,10 +326,10 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-tests-s390x:
+  run-basic-s390x-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/run-cri-containerd-tests-s390x.yaml
+    uses: ./.github/workflows/basic-ci-s390x.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}

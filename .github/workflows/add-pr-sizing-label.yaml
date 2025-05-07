@@ -48,6 +48,6 @@ jobs:
           pr=${{ github.event.number }}
           # Removing man-db, workflow kept failing, fixes: #4480
           sudo apt -y remove --purge man-db
-          sudo apt -y install diffstat patchutils
+          sudo apt update && sudo apt -y install diffstat patchutils
 
           pr-add-size-label.sh -p "$pr"

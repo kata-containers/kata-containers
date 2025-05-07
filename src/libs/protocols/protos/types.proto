@@ -59,6 +59,7 @@ message Route {
 	uint32 scope = 5;
 	IPFamily family = 6;
 	uint32 flags = 7;
+	uint32 mtu = 8;
 }
 
 message ARPNeighbor {

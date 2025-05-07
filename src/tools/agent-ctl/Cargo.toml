@@ -47,6 +47,6 @@ image-rs = { git = "https://github.com/confidential-containers/guest-components"
 
 safe-path = { path = "../../libs/safe-path" }
 
-tokio = { version = "1.28.1", features = ["signal"] }
+tokio = { version = "1.44.2", features = ["signal"] }
 
 [workspace]
