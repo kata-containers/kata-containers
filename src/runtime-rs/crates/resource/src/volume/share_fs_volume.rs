@@ -136,6 +136,70 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&dest)));
                     oci_mount.set_options(m.options().clone());
                     volume.mounts.push(oci_mount);
+                } else if src.is_dir() {
+                    // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
+                    info!(sl!(), "copying directory {:?} to guest", &source_path);
+
+                    // create target path in guest
+                    let dest_dir = [
+                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
+                        PASSTHROUGH_FS_DIR,
+                        file_name.clone().as_str(),
+                    ]
+                    .join("/");
+
+                    // create directory
+                    let dir_metadata = std::fs::metadata(src.clone())
+                        .context(format!("read metadata from directory: {:?}", src))?;
+
+                    // ttRPC request for creating directory
+                    let dir_request = agent::CopyFileRequest {
+                        path: dest_dir.clone(),
+                        file_size: 0, // useless for dir
+                        uid: dir_metadata.uid() as i32,
+                        gid: dir_metadata.gid() as i32,
+                        dir_mode: dir_metadata.mode(),
+                        file_mode: SFlag::S_IFDIR.bits(),
+                        data: vec![], // no files
+                        ..Default::default()
+                    };
+
+                    // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
+                    info!(
+                        sl!(),
+                        "creating directory: {:?} in sandbox with file_mode: {:?}",
+                        dest_dir,
+                        dir_request.file_mode
+                    );
+
+                    // send request for creating directory
+                    agent
+                        .copy_file(dir_request)
+                        .await
+                        .context(format!("create directory in sandbox: {:?}", dest_dir))?;
+
+                    // recursively copy files from this directory
+                    // similar to `scp -r $source_dir $target_dir`
+                    copy_dir_recursively(src.clone(), &dest_dir, &agent)
+                        .await
+                        .context(format!("failed to copy directory contents: {:?}", src))?;
+
+                    // handle special mount options
+                    let mut options = m.options().clone().unwrap_or_default();
+                    if !options.iter().any(|x| x == "rbind") {
+                        options.push("rbind".into());
+                    }
+                    if !options.iter().any(|x| x == "rprivate") {
+                        options.push("rprivate".into());
+                    }
+
+                    // add OCI Mount
+                    let mut oci_mount = oci::Mount::default();
+                    oci_mount.set_destination(m.destination().clone());
+                    oci_mount.set_typ(Some("bind".to_string()));
+                    oci_mount.set_source(Some(PathBuf::from(&dest_dir)));
+                    oci_mount.set_options(Some(options));
+                    volume.mounts.push(oci_mount);
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
