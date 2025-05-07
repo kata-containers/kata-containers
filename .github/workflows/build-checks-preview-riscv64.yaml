@@ -25,6 +25,14 @@ jobs:
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
         component:
+          - name: agent
+            path: src/agent
+            needs:
+              - rust
+              - libdevmapper
+              - libseccomp
+              - protobuf-compiler
+              - clang
           - name: agent-ctl
             path: src/tools/agent-ctl
             needs:
