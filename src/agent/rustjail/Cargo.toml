@@ -21,6 +21,7 @@ protobuf.workspace = true
 slog.workspace = true
 slog-scope.workspace = true
 scan_fmt.workspace = true
+safe-path.workspace = true
 regex.workspace = true
 path-absolutize = "1.2.0"
 anyhow = "1.0.32"
