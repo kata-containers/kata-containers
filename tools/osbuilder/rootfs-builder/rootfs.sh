@@ -700,6 +700,10 @@ EOF
 		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' \
 		       -e 's/^ReadWritePaths=\(.\+\) \/var\/lib\/chrony \(.\+\)$/ReadWritePaths=\1 -\/var\/lib\/chrony \2/m' \
 		       ${chrony_systemd_service}
+		# Disable automatic directory creation
+		sed -i -e 's/^\(StateDirectory=\)/#\1/g' \
+		       -e 's/^\(LogsDirectory=\)/#\1/g' \
+		       ${chrony_systemd_service}
 	fi
 
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
