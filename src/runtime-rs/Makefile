@@ -175,6 +175,7 @@ DEFMSIZE9P := 8192
 DEFVFIOMODE := guest-kernel
 DEFBINDMOUNTS := []
 DEFDANCONF := /run/kata-containers/dans
+DEFFORCEGUESTPULL := false
 SED = sed
 CLI_DIR = cmd
 SHIMV2 = containerd-shim-kata-v2
@@ -503,6 +504,7 @@ USER_VARS += KATA_INSTALL_GROUP
 USER_VARS += KATA_INSTALL_OWNER
 USER_VARS += KATA_INSTALL_CFG_PERMS
 USER_VARS += DEFDANCONF
+USER_VARS += DEFFORCEGUESTPULL
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \
