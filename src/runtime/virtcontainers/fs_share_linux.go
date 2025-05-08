@@ -93,7 +93,7 @@ type FilesystemShare struct {
 	prepared bool
 }
 
-func NewFilesystemShare(s *Sandbox) (FilesystemSharer, error) {
+func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("Creating watcher returned error %w", err)
@@ -594,8 +594,29 @@ func (f *FilesystemShare) shareRootFilesystemWithErofs(ctx context.Context, c *C
 	}, nil
 }
 
+func forceGuestPull(c *Container) (*SharedFile, error) {
+	sf := &SharedFile{
+		guestPath: filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix),
+	}
+	guestPullVolume := &types.KataVirtualVolume{
+		VolumeType: types.KataVirtualVolumeImageGuestPullType,
+		ImagePull: &types.ImagePullVolume{
+			Metadata: map[string]string{},
+		},
+	}
+	vol, err := handleVirtualVolumeStorageObject(c, "", guestPullVolume)
+	if err != nil {
+		return nil, fmt.Errorf("forcing guest pull virtual volume: %w", err)
+	}
+	sf.containerStorages = append(sf.containerStorages, vol)
+	return sf, nil
+}
+
 // func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
 func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
+	if f.sandbox.IsGuestPullForced() {
+		return forceGuestPull(c)
+	}
 
 	if HasOptionPrefix(c.rootFs.Options, VirtualVolumePrefix) {
 		return f.shareRootFilesystemWithVirtualVolume(ctx, c)

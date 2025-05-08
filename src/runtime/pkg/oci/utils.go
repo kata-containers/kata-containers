@@ -171,6 +171,9 @@ type RuntimeConfig struct {
 
 	// Base directory of directly attachable network config
 	DanConfig string
+
+	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
+	ForceGuestPull bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -1000,6 +1003,12 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.ForceGuestPull).setBool(func(forceGuestPull bool) {
+		sbConfig.ForceGuestPull = forceGuestPull
+	}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableVCPUsPinning).setBool(func(enableVCPUsPinning bool) {
 		sbConfig.EnableVCPUsPinning = enableVCPUsPinning
 	}); err != nil {
@@ -1145,6 +1154,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		Experimental: runtime.Experimental,
 
 		CreateContainerTimeout: runtime.CreateContainerTimeout,
+
+		ForceGuestPull: runtime.ForceGuestPull,
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {

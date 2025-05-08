@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -95,4 +97,88 @@ func TestSandboxSharedFilesystem(t *testing.T) {
 	assert.NoError(err)
 	err = sandbox.fsShare.Cleanup(sandbox.ctx)
 	assert.NoError(err)
+}
+
+func TestShareRootFilesystem(t *testing.T) {
+	requireNewFilesystemShare := func(sandbox *Sandbox) *FilesystemShare {
+		fsShare, err := NewFilesystemShare(sandbox)
+		assert.NoError(t, err)
+		return fsShare
+	}
+
+	testCases := map[string]struct {
+		fsSharer       *FilesystemShare
+		container      *Container
+		wantErr        bool
+		wantSharedFile *SharedFile
+	}{
+		"force guest pull successful": {
+			fsSharer: requireNewFilesystemShare(&Sandbox{
+				config: &SandboxConfig{
+					ForceGuestPull: true,
+				},
+			}),
+			container: &Container{
+				id:           "container-id-abc",
+				rootfsSuffix: "test-suffix",
+				config: &ContainerConfig{
+					Annotations: map[string]string{
+						"io.kubernetes.cri.image-name": "test-image-name",
+					},
+					CustomSpec: &specs.Spec{
+						Annotations: map[string]string{
+							"io.kubernetes.cri.container-type": "",
+						},
+					},
+				},
+			},
+			wantSharedFile: &SharedFile{
+				containerStorages: []*grpc.Storage{{
+					Fstype:     "overlay",
+					Source:     "test-image-name",
+					MountPoint: "/run/kata-containers/container-id-abc/test-suffix",
+					Driver:     "image_guest_pull",
+					DriverOptions: []string{
+						"image_guest_pull={\"metadata\":{\"io.kubernetes.cri.image-name\":\"test-image-name\"}}",
+					},
+				}},
+				guestPath: "/run/kata-containers/container-id-abc/test-suffix",
+			},
+		},
+		"force guest pull image name missing": {
+			fsSharer: requireNewFilesystemShare(&Sandbox{
+				config: &SandboxConfig{
+					ForceGuestPull: true,
+				},
+			}),
+			container: &Container{
+				id:           "container-id-abc",
+				rootfsSuffix: "test-suffix",
+				config: &ContainerConfig{
+					Annotations: map[string]string{},
+					CustomSpec: &specs.Spec{
+						Annotations: map[string]string{
+							"io.kubernetes.cri.container-type": "",
+						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			sharedFile, err := tc.fsSharer.ShareRootFilesystem(context.Background(), tc.container)
+			if tc.wantErr {
+				assert.Error(err)
+				return
+			}
+			assert.NoError(err)
+
+			assert.Equal(tc.wantSharedFile, sharedFile)
+		})
+	}
 }
