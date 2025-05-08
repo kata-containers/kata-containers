@@ -28,6 +28,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.runtime.sandbox_cgroup_only`| `boolean` | determines if Kata processes are managed only in sandbox cgroup |
 | `io.katacontainers.config.runtime.enable_pprof` | `boolean` | enables Golang `pprof` for `containerd-shim-kata-v2` process |
 | `io.katacontainers.config.runtime.create_container_timeout` | `uint64` | the timeout for create a container in `seconds`, default is `60` |
+| `io.katacontainers.config.runtime.experimental_force_guest_pull` | `boolean` | forces the runtime to pull the image in the guest VM, default is `false`. This is an experimental feature and might be removed in the future. |
 
 ## Agent Options
 | Key | Value Type | Comments |
