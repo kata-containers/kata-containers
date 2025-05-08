@@ -202,4 +202,9 @@ mod tests {
     async fn test_create_container_security_context() {
         runtests("createcontainer/security_context").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_mounts() {
+        runtests("createcontainer/volumes/emptydir").await;
+    }
 }
