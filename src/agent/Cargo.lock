@@ -5488,6 +5488,7 @@ dependencies = [
  "regex",
  "rlimit",
  "runtime-spec",
+ "safe-path",
  "scan_fmt",
  "scopeguard",
  "serde",
