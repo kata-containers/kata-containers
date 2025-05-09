@@ -2,6 +2,7 @@
 version: 2
 updates:
   - package-ecosystem: "cargo"
+    open-pull-requests-limit: 100
     directories:
       - "/src/agent"
       - "/src/dragonball"
