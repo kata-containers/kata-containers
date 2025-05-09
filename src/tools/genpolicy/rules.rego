@@ -699,8 +699,8 @@ allow_user(p_process, i_process) {
     print("allow_user: input gid =", i_user.GID, "policy gid =", p_user.GID)
     p_user.GID == i_user.GID
 
-    # TODO: compare the additionalGids field too after computing its value
-    # based on /etc/passwd and /etc/group from the container image.
+    print("allow_user: input additionalGids =", i_user.AdditionalGids, "policy additionalGids =", p_user.AdditionalGids)
+    p_user.AdditionalGids == i_user.AdditionalGids
 }
 
 allow_args(p_process, i_process, s_name) {

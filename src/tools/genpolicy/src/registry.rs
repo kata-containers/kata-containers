@@ -108,8 +108,7 @@ struct GroupRecord {
     #[allow(dead_code)]
     pub validate: bool,
     pub gid: u32,
-    #[allow(dead_code)]
-    pub user_list: String,
+    pub user_list: Vec<String>,
 }
 
 /// Path to /etc/passwd in a container layer's tar file.
@@ -250,6 +249,37 @@ impl Container {
             Err(inner_e) => {
                 warn!("Failed to parse /etc/passwd - error {inner_e}, using uid = gid = 0");
                 Ok((0, 0))
+            }
+        }
+    }
+
+    pub fn get_additional_groups_from_uid(&self, uid: u32) -> Result<Vec<u32>> {
+        if self.group.is_empty() || self.passwd.is_empty() {
+            return Err(anyhow!(
+                "No /etc/group, /etc/passwd file is available, unable to parse additional group membership from uid"
+            ));
+        }
+        match parse_group_file(&self.group) {
+            Ok(records) => {
+                let mut groups = Vec::new();
+                for record in records.iter() {
+                    record.user_list.iter().for_each(|u| {
+                        match self.get_uid_gid_from_passwd_user(u.to_string()) {
+                            Ok((record_uid, _)) => {
+                                if record_uid == uid {
+                                    groups.push(record.gid);
+                                }
+                            },
+                            Err(inner_e) => warn!(
+                                "/etc/group indicates a user {u} that is not in /etc/passwd - error {inner_e}"
+                            ),
+                        };
+                    });
+                }
+                return Ok(groups);
+            }
+            Err(inner_e) => {
+                return Err(anyhow!("Failed to parse /etc/group - error {inner_e}"));
             }
         }
     }
@@ -824,11 +854,20 @@ fn parse_group_file(group: &str) -> Result<Vec<GroupRecord>> {
             ));
         }
 
+        let mut user_list = vec![];
+        if fields[3] != "" {
+            user_list = fields[3]
+                .to_string()
+                .split(',')
+                .map(|s| s.to_string())
+                .collect();
+        }
+
         records.push(GroupRecord {
             name: fields[0].to_string(),
             validate: fields[1] == "x",
             gid: fields[2].parse().unwrap(),
-            user_list: fields[3].to_string(),
+            user_list: user_list,
         });
     }
 

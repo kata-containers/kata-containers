@@ -326,8 +326,13 @@ pub struct PodSecurityContext {
     pub runAsGroup: Option<i64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub fsGroup: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supplementalGroups: Option<Vec<u32>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub allowPrivilegeEscalation: Option<bool>,
-    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -992,6 +997,15 @@ impl Container {
             if let Some(allow) = context.allowPrivilegeEscalation {
                 process.NoNewPrivileges = !allow
             }
+        }
+
+        // Handle AdditionalGids here as this is the last time the UID can be updated.
+        for gid in self
+            .registry
+            .get_additional_groups_from_uid(process.User.UID)
+            .unwrap_or_default()
+        {
+            process.User.AdditionalGids.insert(gid);
         }
     }
 }

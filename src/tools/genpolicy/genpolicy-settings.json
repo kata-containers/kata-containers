@@ -38,7 +38,9 @@
             "User": {
                 "UID": 65535,
                 "GID": 65535,
-                "AdditionalGids": [],
+                "AdditionalGids": [
+                    65535
+                ],
                 "Username": ""
             },
             "Args": [
