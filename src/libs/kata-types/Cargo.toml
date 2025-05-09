@@ -32,7 +32,7 @@ oci-spec = { version = "0.6.8", features = ["runtime"] }
 safe-path = { path = "../safe-path" }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
 nix = "0.24.2"
 

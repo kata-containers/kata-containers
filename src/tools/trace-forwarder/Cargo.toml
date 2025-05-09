@@ -35,4 +35,4 @@ slog = "2.5.2"
 privdrop = "0.5.1"
 
 [dev-dependencies]
-tempfile = "3.1.0"
+tempfile = "3.19.1"

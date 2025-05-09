@@ -39,5 +39,5 @@ safe-path = { path = "../safe-path" }
 [dev-dependencies]
 num_cpus = "1.13.1"
 serial_test = "0.5.1"
-tempfile = "3.2.0"
+tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }

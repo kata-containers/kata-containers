@@ -21,5 +21,5 @@ kata-types = { path = "../kata-types" }
 kata-sys-util = { path = "../kata-sys-util" }
 
 [dev-dependencies]
-tempfile = "3.2.0"
+tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
