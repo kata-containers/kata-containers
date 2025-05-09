@@ -52,8 +52,7 @@ function setup_kbs_decryption_key() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
-    assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get a proper image decryption key'
 }
 
 
@@ -80,8 +79,7 @@ function setup_kbs_decryption_key() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
-    assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to decrypt image'
 }
 
 teardown() {
