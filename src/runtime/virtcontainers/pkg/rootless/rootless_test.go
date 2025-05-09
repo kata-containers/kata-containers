@@ -9,7 +9,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/opencontainers/runc/libcontainer/userns"
+	"github.com/moby/sys/userns"
 	"github.com/stretchr/testify/assert"
 )
 
