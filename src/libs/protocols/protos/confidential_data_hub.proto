@@ -35,3 +35,15 @@ service SealedSecretService {
 service SecureMountService {
     rpc SecureMount(SecureMountRequest) returns (SecureMountResponse) {};
 }
+
+message GetResourceRequest {
+    string ResourcePath = 1;
+}
+
+message GetResourceResponse {
+    bytes Resource = 1;
+}
+
+service GetResourceService {
+    rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {};
+}

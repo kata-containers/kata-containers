@@ -3085,6 +3085,7 @@ dependencies = [
  "rtnetlink",
  "runtime-spec",
  "rustjail",
+ "s390_pv_core",
  "safe-path",
  "scan_fmt",
  "scopeguard",
@@ -5576,6 +5577,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6518fc26bced4d53678a22d6e423e9d8716377def84545fe328236e3af070e7f"
 
 [[package]]
+name = "s390_pv_core"
+version = "0.11.0"
+source = "git+https://github.com/ibm-s390-linux/s390-tools?rev=4942504a9a2977d49989a5e5b7c1c8e07dc0fa41#4942504a9a2977d49989a5e5b7c1c8e07dc0fa41"
+dependencies = [
+ "byteorder",
+ "libc",
+ "log",
+ "regex",
+ "serde",
+ "thiserror 2.0.12",
+ "zerocopy 0.7.35",
+]
+
+[[package]]
 name = "safe-path"
 version = "0.1.0"
 dependencies = [
@@ -7768,6 +7783,7 @@ version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
 dependencies = [
+ "byteorder",
  "zerocopy-derive 0.7.35",
 ]
 

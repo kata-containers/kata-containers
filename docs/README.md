@@ -32,6 +32,7 @@ See the [how-to documentation](how-to).
 * [Intel QAT with Kata](./use-cases/using-Intel-QAT-and-kata.md)
 * [SPDK vhost-user with Kata](./use-cases/using-SPDK-vhostuser-and-kata.md)
 * [Intel SGX with Kata](./use-cases/using-Intel-SGX-and-kata.md)
+* [IBM Crypto Express passthrough with Confidential Containers](./use-cases/CEX-passthrough-and-coco.md)
 
 ## Developer Guide
 
