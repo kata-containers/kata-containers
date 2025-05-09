@@ -186,6 +186,9 @@ type SandboxConfig struct {
 	// Create container timeout which, if provided, indicates the create container timeout
 	// needed for the workload(s)
 	CreateContainerTimeout uint64
+
+	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
+	ForceGuestPull bool
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -446,6 +449,14 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 	}
 
 	return c.ioStream(processID)
+}
+
+// IsGuestPullEnforced returns true if guest pull is forced through the sandbox configuration.
+func (s *Sandbox) IsGuestPullForced() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.ForceGuestPull
 }
 
 func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
