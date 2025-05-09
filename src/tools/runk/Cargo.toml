@@ -30,7 +30,7 @@ tabwriter = "1.2.1"
 seccomp = ["rustjail/seccomp"]
 
 [dev-dependencies]
-tempfile = "3.3.0"
+tempfile = "3.19.1"
 
 [workspace]
 members = [

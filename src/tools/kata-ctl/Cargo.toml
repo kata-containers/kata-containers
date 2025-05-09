@@ -67,7 +67,7 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "blo
 
 [dev-dependencies]
 semver = "1.0.12"
-tempfile = "3.1.0"
+tempfile = "3.19.1"
 nix = "0.25.0"
 test-utils = { path = "../../libs/test-utils" }
 micro_http = { git = "https://github.com/firecracker-microvm/micro-http", branch = "main" }

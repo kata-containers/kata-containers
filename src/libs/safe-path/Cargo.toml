@@ -15,4 +15,4 @@ edition = "2018"
 libc = "0.2.100"
 
 [dev-dependencies]
-tempfile = "3.2.0"
+tempfile = "3.19.1"

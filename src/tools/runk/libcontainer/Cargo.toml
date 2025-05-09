@@ -25,6 +25,6 @@ cgroups = { package = "cgroups-rs", version = "0.3.2" }
 procfs = "0.14.0"
 
 [dev-dependencies]
-tempfile = "3.3.0"
+tempfile = "3.19.1"
 test-utils = { path = "../../../libs/test-utils" }
 protocols = { path ="../../../libs/protocols" }
