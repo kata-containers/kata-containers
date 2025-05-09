@@ -2013,22 +2013,35 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         ));
     }
 
+    // Create parent directories if missing
     if let Some(parent) = path.parent() {
         if !parent.exists() {
             let dir = parent.to_path_buf();
+            // Attempt to create directory, ignore AlreadyExists errors
             if let Err(e) = fs::create_dir_all(&dir) {
                 if e.kind() != std::io::ErrorKind::AlreadyExists {
                     return Err(e.into());
                 }
-            } else {
-                std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
             }
+
+            // Set directory permissions and ownership
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
+            unistd::chown(
+                &dir,
+                Some(Uid::from_raw(req.uid as u32)),
+                Some(Gid::from_raw(req.gid as u32)),
+            )?;
         }
     }
 
     let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
 
     if sflag.contains(stat::SFlag::S_IFDIR) {
+        // Remove existing non-directory file if present
+        if path.exists() && !path.is_dir() {
+            fs::remove_file(&path)?;
+        }
+
         fs::create_dir(&path).or_else(|e| {
             if e.kind() != std::io::ErrorKind::AlreadyExists {
                 return Err(e);
@@ -2047,16 +2060,25 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         return Ok(());
     }
 
+    // Handle symlink creation
     if sflag.contains(stat::SFlag::S_IFLNK) {
-        // After kubernetes secret's volume update, the '..data' symlink should point to
-        // the new timestamped directory.
-        // TODO:The old and deleted timestamped dir still exists due to missing DELETE api in agent.
-        // Hence, Unlink the existing symlink.
-        if path.is_symlink() && path.exists() {
-            unistd::unlink(&path)?;
+        // Clean up existing path (whether symlink, dir, or file)
+        if path.exists() || path.is_symlink() {
+            // Use appropriate removal method based on path type
+            if path.is_symlink() {
+                unistd::unlink(&path)?;
+            } else if path.is_dir() {
+                fs::remove_dir_all(&path)?;
+            } else {
+                fs::remove_file(&path)?;
+            }
         }
+
+        // Create new symbolic link
         let src = PathBuf::from(OsStr::from_bytes(&req.data));
         unistd::symlinkat(&src, None, &path)?;
+
+        // Set symlink ownership (permissions not supported for symlinks)
         let path_str = CString::new(path.as_os_str().as_bytes())?;
 
         let ret = unsafe { libc::lchown(path_str.as_ptr(), req.uid as u32, req.gid as u32) };
@@ -2071,7 +2093,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     let file = OpenOptions::new()
         .write(true)
         .create(true)
-        .truncate(false)
+        .truncate(req.offset == 0) // Only truncate when offset is 0
         .open(&tmpfile)?;
 
     file.write_all_at(req.data.as_slice(), req.offset as u64)?;
@@ -2088,6 +2110,15 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         Some(Uid::from_raw(req.uid as u32)),
         Some(Gid::from_raw(req.gid as u32)),
     )?;
+
+    // Remove existing target path before rename
+    if path.exists() || path.is_symlink() {
+        if path.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+    }
 
     fs::rename(tmpfile, path)?;
 
