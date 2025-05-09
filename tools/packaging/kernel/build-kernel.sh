@@ -226,8 +226,15 @@ get_kernel_frag_path() {
 	local config_path="${arch_path}/.config"
 
 	local arch_configs="$(ls ${arch_path}/*.conf)"
-	# Exclude configs if they have !$arch tag in the header
-	local common_configs="$(grep "\!${arch}" ${common_path}/*.conf -L)"
+	# By default, exclude configs if they have !$arch tag in the header
+	local exclude_tags="-e "\!${arch}""
+
+	# Also, let confidential guest opt-out some insecure configs
+	if [[ "${conf_guest}" != "" ]];then
+		exclude_tags="${exclude_tags} -e "\!${conf_guest}""
+	fi
+
+	local common_configs="$(grep ${exclude_tags} ${common_path}/*.conf -L)"
 
 	local extra_configs=""
 	if [ "${build_type}" != "" ];then
