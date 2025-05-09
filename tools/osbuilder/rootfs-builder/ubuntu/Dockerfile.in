@@ -42,7 +42,7 @@ RUN apt-get update && \
     libclang-dev \
     make \
     makedev \
-    multistrap \
+    mmdebstrap \
     musl \
     musl-dev \
     musl-tools \
