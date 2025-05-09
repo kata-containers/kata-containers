@@ -52,8 +52,7 @@ function setup_kbs_decryption_key() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'decrypt image (unwrap key) failed'
-    assert_logs_contain "${node}" kata "${node_start_time}" 'kms interface when get KEK failed'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'Failed to decrypt the image layer, please ensure that the decryption key is placed and correct'
 }
 
 
@@ -80,7 +79,7 @@ function setup_kbs_decryption_key() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'decrypt image (unwrap key) failed'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'Failed to decrypt the image layer, please ensure that the decryption key is placed and correct'
 }
 
 teardown() {
