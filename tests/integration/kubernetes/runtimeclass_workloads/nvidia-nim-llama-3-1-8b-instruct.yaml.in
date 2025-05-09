@@ -1,4 +1,3 @@
-
 # Copyright (c) 2025 NVIDIA Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -20,13 +19,13 @@ metadata:
     app: ${POD_NAME_INSTRUCT}
 spec:
   restartPolicy: Never
-  runtimeClassName: kata-qemu-nvidia-gpu
+  runtimeClassName: "${RUNTIME_CLASS_NAME}"
   imagePullSecrets:
     - name: ngc-secret-instruct
   securityContext:
-    runAsUser: 0
-    runAsGroup: 0
-    fsGroup: 0
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   containers:
   - name: ${POD_NAME_INSTRUCT}
     image: nvcr.io/nim/meta/llama3-8b-instruct:1.0.0
@@ -84,6 +83,6 @@ spec:
   volumes:
   - name: nim-cache
     hostPath:
-      path: "/opr/nim/.cache"
+      path: "${LOCAL_NIM_CACHE}"
       type: DirectoryOrCreate
 
