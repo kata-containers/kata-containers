@@ -1,27 +1,27 @@
 [package]
-name = "mem-agent-bin"
-version = "0.1.0"
 edition = "2018"
+name    = "mem-agent-bin"
+version = "0.1.0"
 
 [dependencies]
-slog = "2.5.2"
-slog-scope = "4.1.2"
-slog-term = "2.9.0"
-slog-async = "2.7"
-structopt = "0.3"
-anyhow = "1.0"
-libc = "0.2"
-page_size = "0.6"
-chrono = "0.4"
-maplit = "1.0"
-ttrpc = { version = "0.8", features = ["async"] }
-tokio = { version = "1.44.2", features = ["full"] }
+anyhow      = "1.0"
 async-trait = "0.1"
-byteorder = "1.5"
-protobuf = "3.1"
+byteorder   = "1.5"
+chrono      = "0.4"
 lazy_static = "1.4"
+libc        = "0.2"
+maplit      = "1.0"
+page_size   = "0.6"
+protobuf    = "3.1"
+slog        = "2.5.2"
+slog-async  = "2.7"
+slog-scope  = "4.1.2"
+slog-term   = "2.9.0"
+structopt   = "0.3"
+tokio       = { version = "1.44.2", features = ["full"] }
+ttrpc       = { version = "0.8", features = ["async"] }
 # Rust 1.68 doesn't support 0.5.9
-home = "=0.5.5"
+home      = "=0.5.5"
 mem-agent = { path = "../" }
 
 [[example]]
