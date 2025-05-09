@@ -38,7 +38,7 @@ serde_yaml = "0.8"
 
 # Container repository.
 anyhow = "1.0.32"
-async-trait = "0.1.68"
+async-trait = "0.1.88"
 docker_credential = "1.3.1"
 flate2 = { version = "1.0.26", features = ["zlib-ng"], default-features = false }
 libz-ng-sys = "1.1.15" # force newer version that compiles on ppc64le

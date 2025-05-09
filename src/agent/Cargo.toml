@@ -25,7 +25,7 @@ derivative = "2.2.0"
 const_format = "0.2.30"
 
 # Async helpers
-async-trait = "0.1.50"
+async-trait = "0.1.88"
 async-recursion = "0.3.2"
 futures = "0.3.30"
 
