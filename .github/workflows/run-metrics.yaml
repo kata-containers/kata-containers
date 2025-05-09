@@ -43,6 +43,8 @@ jobs:
       K8S_TEST_HOST_TYPE: "baremetal"
       USING_NFD: "false"
       KUBERNETES: kubeadm
+      GHCR_ACTOR: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:

@@ -36,6 +36,8 @@ jobs:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
       #CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      GHCR_ACTOR: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
