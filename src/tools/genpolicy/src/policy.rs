@@ -438,6 +438,11 @@ pub struct SandboxData {
     pub storages: Vec<agent::Storage>,
 }
 
+enum K8sEnvFromSource {
+    ConfigMap(config_map::ConfigMap),
+    Secret(secret::Secret),
+}
+
 impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
@@ -488,9 +493,18 @@ impl AgentPolicy {
             }
         }
 
-        if let Some(config_map_files) = &config.config_map_files {
-            for file in config_map_files {
-                config_maps.push(config_map::ConfigMap::new(file)?);
+        if let Some(config_files) = &config.config_files {
+            for resource_file in config_files {
+                for config_resource in parse_config_file(resource_file.to_string(), config).await? {
+                    match config_resource {
+                        K8sEnvFromSource::ConfigMap(config_map) => {
+                            config_maps.push(config_map);
+                        }
+                        K8sEnvFromSource::Secret(secret) => {
+                            secrets.push(secret);
+                        }
+                    }
+                }
             }
         }
 
@@ -820,6 +834,37 @@ fn get_image_layer_storages(
     };
 
     storages.push(overlay_storage);
+}
+
+async fn parse_config_file(
+    yaml_file: String,
+    config: &utils::Config,
+) -> Result<Vec<K8sEnvFromSource>> {
+    let mut k8sRes = Vec::new();
+    let yaml_contents = yaml::get_input_yaml(&Some(yaml_file))?;
+    for document in serde_yaml::Deserializer::from_str(&yaml_contents) {
+        let doc_mapping = Value::deserialize(document)?;
+        if doc_mapping != Value::Null {
+            let yaml_string = serde_yaml::to_string(&doc_mapping)?;
+            let silent = config.silent_unsupported_fields;
+            let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
+
+            resource.init(config, &doc_mapping, silent).await;
+
+            // ConfigMap and Secret documents contain additional input for policy generation.
+            if kind.eq("ConfigMap") {
+                let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
+                debug!("{:#?}", &config_map);
+                k8sRes.push(K8sEnvFromSource::ConfigMap(config_map));
+            } else if kind.eq("Secret") {
+                let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
+                debug!("{:#?}", &secret);
+                k8sRes.push(K8sEnvFromSource::Secret(secret));
+            }
+        }
+    }
+
+    Ok(k8sRes)
 }
 
 /// Converts the given name to a string representation of its sha256 hash.
