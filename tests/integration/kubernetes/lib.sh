@@ -372,3 +372,19 @@ get_node_kata_sandbox_id() {
 	done
 	echo $kata_sandbox_id
 }
+
+get_kata_sandbox_id_by_pod_name() {
+  local pod_name="${1}"
+
+  # Get sandbox ID from crictl
+  local sandbox_id=$(sudo crictl inspectp --name "${pod_name}" | jq -r '.status.id')
+
+  # Error handle
+  if [ -z "${sandbox_id}" ]; then
+    echo "ERROR: Could not determine sandbox ID for pod with name: ${pod_name}" >&2
+    return 1
+  fi
+
+  # Return
+  echo "${sandbox_id}"
+}
