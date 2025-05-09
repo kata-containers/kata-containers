@@ -165,7 +165,7 @@ EOF
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull image"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Image policy rejected: Denied by policy"
 }
 
 @test "Test that creating a container from an rejected image not configured by initdata, fails according to CDH error" {
