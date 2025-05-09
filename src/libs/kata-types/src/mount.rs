@@ -19,7 +19,7 @@ pub const KATA_GUEST_MOUNT_PREFIX: &str = "kata:guest-mount:";
 /// The sharedfs volume is mounted by guest OS before starting the kata-agent.
 pub const KATA_SHAREDFS_GUEST_PREMOUNT_TAG: &str = "kataShared";
 
-/// KATA_EPHEMERAL_DEV_TYPE creates a tmpfs backed volume for sharing files between containers.
+/// KATA_EPHEMERAL_VOLUME_TYPE creates a tmpfs backed volume for sharing files between containers.
 pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
 
 /// KATA_HOST_DIR_TYPE use for host empty dir
