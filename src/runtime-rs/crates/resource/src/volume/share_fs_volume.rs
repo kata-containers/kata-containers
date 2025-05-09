@@ -5,23 +5,30 @@
 //
 
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     fs::File,
     io::Read,
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
+    time::Duration,
 };
 
 use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
+use inotify::{EventMask, Inotify, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
-use tokio::io::AsyncReadExt;
-use tokio::sync::RwLock;
+use tokio::{
+    io::AsyncReadExt,
+    sync::{Mutex, RwLock},
+    task::JoinHandle,
+    time::Instant,
+};
+use walkdir::WalkDir;
 
 use super::Volume;
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
@@ -31,6 +38,8 @@ use kata_types::mount;
 use oci_spec::runtime as oci;
 
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
+const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
+const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
 
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
@@ -42,6 +51,198 @@ pub(crate) struct ShareFsVolume {
     share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
+    monitor_task: Option<JoinHandle<()>>,
+}
+
+/// Directory Monitor Config
+/// path: the to be watched target directory
+/// recursive: recursively monitor sub-dirs or not,
+/// follow_symlinks: track symlinks or not,
+/// exclude_hidden: exclude hidden files or not,
+/// watch_events: Watcher Event types with CREATE/DELETE/MODIFY/MOVED_FROM/MOVED_TO
+#[derive(Clone, Debug)]
+struct MonitorConfig {
+    path: PathBuf,
+    recursive: bool,
+    follow_symlinks: bool,
+    exclude_hidden: bool,
+    watch_events: WatchMask,
+}
+
+impl MonitorConfig {
+    fn new(path: &Path) -> Self {
+        Self {
+            path: path.to_path_buf(),
+            recursive: true,
+            follow_symlinks: false,
+            exclude_hidden: true,
+            watch_events: WatchMask::CREATE
+                | WatchMask::DELETE
+                | WatchMask::MODIFY
+                | WatchMask::MOVED_FROM
+                | WatchMask::MOVED_TO
+                | WatchMask::CLOSE_WRITE,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct FsWatcher {
+    config: MonitorConfig,
+    inotify: Arc<Mutex<Inotify>>,
+    watch_dirs: Arc<Mutex<HashSet<PathBuf>>>,
+    pending_events: Arc<Mutex<HashSet<PathBuf>>>,
+    need_sync: Arc<Mutex<bool>>,
+}
+
+impl FsWatcher {
+    async fn new(source_path: &Path) -> Result<Self> {
+        let inotify = Inotify::init()?;
+        let mon_cfg = MonitorConfig::new(source_path);
+        let mut watcher = Self {
+            config: mon_cfg,
+            inotify: Arc::new(Mutex::new(inotify)),
+            pending_events: Arc::new(Mutex::new(HashSet::new())),
+            watch_dirs: Arc::new(Mutex::new(HashSet::new())),
+            need_sync: Arc::new(Mutex::new(false)),
+        };
+
+        watcher.add_watchers().await?;
+
+        Ok(watcher)
+    }
+
+    /// add watched directory recursively
+    async fn add_watchers(&mut self) -> Result<()> {
+        let mut watched_dirs = self.watch_dirs.lock().await;
+        let config: &MonitorConfig = &self.config;
+        let walker = WalkDir::new(&config.path)
+            .follow_links(config.follow_symlinks)
+            .min_depth(0)
+            .max_depth(if config.recursive { usize::MAX } else { 1 })
+            .into_iter()
+            .filter_entry(|e| {
+                !(config.exclude_hidden
+                    && e.file_name()
+                        .to_str()
+                        .map(|s| s.starts_with('.'))
+                        .unwrap_or(false))
+            });
+
+        for entry in walker.filter_map(|e| e.ok()) {
+            if entry.file_type().is_dir() {
+                let path = entry.path();
+                if watched_dirs.insert(path.to_path_buf()) {
+                    self.inotify
+                        .lock()
+                        .await
+                        .watches()
+                        .add(path, config.watch_events)?; // we don't use WatchMask::ALL_EVENTS
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// start monitor
+    pub async fn start_monitor(
+        &self,
+        agent: Arc<dyn Agent>,
+        src: PathBuf,
+        dst: PathBuf,
+    ) -> JoinHandle<()> {
+        let need_sync = self.need_sync.clone();
+        let pending_events = self.pending_events.clone();
+        let inotify = self.inotify.clone();
+        let monitor_config = self.config.clone();
+
+        tokio::spawn(async move {
+            let mut buffer = [0u8; 4096];
+            let mut last_event_time = None;
+
+            loop {
+                // use cloned inotify instance
+                match inotify.lock().await.read_events(&mut buffer) {
+                    Ok(events) => {
+                        for event in events {
+                            if !event.mask.intersects(
+                                EventMask::CREATE
+                                    | EventMask::MODIFY
+                                    | EventMask::DELETE
+                                    | EventMask::MOVED_FROM
+                                    | EventMask::MOVED_TO,
+                            ) {
+                                continue;
+                            }
+
+                            if let Some(file_name) = event.name {
+                                let full_path = &monitor_config.path.join(file_name);
+                                let event_types: Vec<&str> = event
+                                    .mask
+                                    .iter()
+                                    .map(|m| match m {
+                                        EventMask::CREATE => "CREATE",
+                                        EventMask::DELETE => "DELETE",
+                                        EventMask::MODIFY => "MODIFY",
+                                        EventMask::MOVED_FROM => "MOVED_FROM",
+                                        EventMask::MOVED_TO => "MOVED_TO",
+                                        EventMask::CLOSE_WRITE => "CLOSE_WRITE",
+                                        _ => "OTHER",
+                                    })
+                                    .collect();
+
+                                info!(
+                                    sl!(),
+                                    "handle events [{}] {:?} -> {:?}",
+                                    event_types.join("|"),
+                                    event.mask,
+                                    full_path
+                                );
+                                pending_events.lock().await.insert(full_path.clone());
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("inotify error: {}", e),
+                }
+
+                // handle events to be synchronized
+                let events_paths = {
+                    let mut pending = pending_events.lock().await;
+                    pending.drain().collect::<Vec<_>>()
+                };
+                if !events_paths.is_empty() {
+                    *need_sync.lock().await = true;
+                    last_event_time = Some(Instant::now());
+                }
+
+                // Debounce handling
+                // It is used to prevent unnecessary repeated copies when file changes are triggered
+                // multiple times in a short period; we only execute the last one.
+                if let Some(t) = last_event_time {
+                    if Instant::now().duration_since(t) > DEBOUNCE_TIME && *need_sync.lock().await {
+                        info!(sl!(), "debounce handle copyfile {:?} -> {:?}", &src, &dst);
+                        if let Err(e) =
+                            copy_dir_recursively(&src, &dst.display().to_string(), &agent).await
+                        {
+                            error!(
+                                sl!(),
+                                "debounce handle copyfile {:?} -> {:?} failed with error: {:?}",
+                                &src,
+                                &dst,
+                                e
+                            );
+                            eprintln!("sync host/guest files failed: {}", e);
+                        }
+                        *need_sync.lock().await = false;
+                        last_event_time = None;
+                    }
+                }
+
+                tokio::time::sleep(MONITOR_INTERVAL).await;
+            }
+        })
+    }
 }
 
 impl ShareFsVolume {
@@ -65,6 +266,7 @@ impl ShareFsVolume {
             share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
+            monitor_task: None,
         };
         match share_fs {
             None => {
@@ -200,6 +402,13 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&dest_dir)));
                     oci_mount.set_options(Some(options));
                     volume.mounts.push(oci_mount);
+
+                    // start monitoring
+                    let watcher = FsWatcher::new(Path::new(&source_path)).await?;
+                    let monitor_task = watcher
+                        .start_monitor(agent.clone(), src.clone(), dest_dir.into())
+                        .await;
+                    volume.monitor_task = Some(monitor_task);
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
