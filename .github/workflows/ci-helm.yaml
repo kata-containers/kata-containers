@@ -1,0 +1,21 @@
+name: Kata Containers CI - Helm Chart
+
+on:
+  pull_request:
+    paths:
+      - 'tools/packaging/kata-deploy/helm-chart/kata-deploy/**'
+
+jobs:
+  generate-json-schema:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Generate values schema json
+        uses: losisin/helm-values-schema-json-action@c9de829e00215f0c858dc598f6b661c500052dd1 # v1.6.3
+        with:
+          input: values.yaml
+          git-push: true
+          working-directory: tools/packaging/kata-deploy/helm-chart/kata-deploy
+
