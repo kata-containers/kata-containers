@@ -28,8 +28,8 @@ function run() {
 	info "Running docker with runc"
 	sudo docker run --rm --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
 
-	info "Running docker with Kata Containers (${KATA_HYPERVISOR})"
-	sudo docker run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
+	info "Running docker with Kata Containers (${KATA_HYPERVISOR}) and --dns=8.8.8.8"
+	sudo docker run --rm --dns=8.8.8.8 --dns=2001:4860:4860::8888 --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
 }
 
 function main() {
