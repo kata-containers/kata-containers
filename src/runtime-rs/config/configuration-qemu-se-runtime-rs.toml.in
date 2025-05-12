@@ -332,6 +332,18 @@ pflashes = []
 # Default is false
 #disable_image_nvdimm = true
 
+# Enable hot-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
+# The default setting is "no-port"
+#hot_plug_vfio = "root-port"
+
+# In a confidential compute environment hot-plugging can compromise
+# security.
+# Enable cold-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
+# The default setting is "no-port", which means disabled.
+cold_plug_vfio = "root-port"
+
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
 # a large PCI bar, as this is a current limitation with hotplugging on
@@ -647,7 +659,7 @@ sandbox_bind_mounts=@DEFBINDMOUNTS@
 #    Using this mode requires specially built workloads that know how
 #    to locate the relevant device interfaces within the VM.
 #
-vfio_mode="@DEFVFIOMODE@"
+vfio_mode="@DEFVFIOMODE_SE@"
 
 # If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
 # be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
