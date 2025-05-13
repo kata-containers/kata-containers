@@ -26,10 +26,11 @@ function run() {
 
 	info "Update the host resolv.conf to add google DNS servers"
 	sudo mkdir -p /etc/resolvconf/resolv.conf.d
-	sudo cat >> /etc/resolvconf/resolv.conf.d/head<< EOF
+	sudo sh -c "cat >>/etc/resolvconf/resolv.conf.d/head" <<-EOF
 nameserver 8.8.8.8
 nameserver 8.8.4.4
 EOF
+
 	sudo apt install resolvconf
 	sudo resolvconf --enable-updates
 	sudo resolvconf -u
