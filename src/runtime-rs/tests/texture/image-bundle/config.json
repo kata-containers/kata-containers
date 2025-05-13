@@ -45,13 +45,13 @@
 		"rlimits": [
 			{
 				"type": "RLIMIT_CORE",
-				"hard": 1024,
-				"soft": 1024
+				"hard": 1024000,
+				"soft": 1024000
 			},
 			{
 				"type": "RLIMIT_NOFILE",
-				"hard": 1024,
-				"soft": 1024
+				"hard": 1024000,
+				"soft": 1024000
 			}
 		],
 		"apparmorProfile": "acme_secure_profile",

@@ -98,8 +98,8 @@
 		"rlimits": [
 			{
 				"type": "RLIMIT_NOFILE",
-				"hard": 1024,
-				"soft": 1024
+				"hard": 1024000,
+				"soft": 1024000
 			}
 		]
 	},
