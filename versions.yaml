@@ -232,8 +232,8 @@ externals:
 
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
-    url: "https://github.com/confidential-containers/guest-components/"
-    version: "1191f8257eb65f42892ab0328cec02e58d40de84"
+    url: "https://github.com/switchboard-xyz/guest-components"
+    version: "ec11a2f89dde202d8a3f14a85542c5db49539e8b"
     toolchain: "1.80.0"
 
   coco-trustee:
