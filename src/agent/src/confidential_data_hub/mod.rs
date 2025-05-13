@@ -131,7 +131,7 @@ impl CDHClient {
         let _ = self
             .image_pull_client
             .pull_image(
-                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                ttrpc::context::with_timeout(AGENT_CONFIG.image_pull_timeout.as_nanos() as i64),
                 &req,
             )
             .await?;
