@@ -66,7 +66,10 @@
           "User": {
             "Username": "",
             "UID": 65535,
-            "GID": 65535
+            "GID": 65535,
+            "AdditionalGids": [
+              65535
+            ]
           },
           "Args": [
             "/pause"
@@ -199,7 +202,10 @@
           "User": {
             "Username": "",
             "UID": 65535,
-            "GID": 65535
+            "GID": 65535,
+            "AdditionalGids": [
+              65535
+            ]
           },
           "Args": [
             "/pause"

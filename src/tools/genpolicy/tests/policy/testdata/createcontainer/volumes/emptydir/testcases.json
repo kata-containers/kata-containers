@@ -64,7 +64,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -227,7 +231,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -370,7 +378,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -523,7 +535,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -660,7 +676,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -813,7 +833,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -966,7 +990,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -1149,7 +1177,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"
@@ -1292,7 +1324,11 @@
           "SelinuxLabel": "",
           "User": {
             "Username": "",
-            "UID": 65535
+            "UID": 65535,
+            "GID": 0,
+            "AdditionalGids": [
+              0
+            ]
           },
           "Args": [
             "/pause"

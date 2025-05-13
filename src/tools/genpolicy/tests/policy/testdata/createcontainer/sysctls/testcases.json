@@ -238,7 +238,7 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              65535
             ],
             "GID": 65535,
             "UID": 65535,
@@ -516,7 +516,7 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0
+              65535
             ],
             "GID": 65535,
             "UID": 65535,

@@ -229,7 +229,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_container_security_context() {
-        runtests("createcontainer/security_context").await;
+        runtests("createcontainer/security_context/runas").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_security_context_supplemental_groups() {
+        runtests("createcontainer/security_context/supplemental_groups").await;
     }
 
     #[tokio::test]
