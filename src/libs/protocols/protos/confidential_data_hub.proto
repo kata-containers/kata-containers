@@ -28,6 +28,24 @@ message SecureMountResponse {
     string mount_path = 1;
 }
 
+message ImagePullRequest {
+    // - `image_url`: The reference of the image to pull
+    string image_url = 1;
+
+    // - `bundle_path`: The path to store the bundle. After the RPC is
+    // called, Confidential Data Hub will put a `config.json` file
+    // and a mounted `rootfs` directory under the this path. Note
+    // that usually the caller and the server (CDH) runs on the same
+    // machine, so the the filesystem of the client and the server are
+    // the same. The bundle path is relative to the server's filesystem.
+    string bundle_path = 2;
+}
+
+message ImagePullResponse {
+    // The image configuration digest
+    string manifest_digest = 1;
+}
+
 service SealedSecretService {
     rpc UnsealSecret(UnsealSecretInput) returns (UnsealSecretOutput) {};
 }
@@ -46,4 +64,12 @@ message GetResourceResponse {
 
 service GetResourceService {
     rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {};
+}
+
+// ImagePullService is used to pull images from a remote registry
+// The workdir to store the original image layers and configurations
+// are all kept by the CDH server, which the caller does not need to
+// know.
+service ImagePullService {
+    rpc PullImage(ImagePullRequest) returns (ImagePullResponse) {};
 }

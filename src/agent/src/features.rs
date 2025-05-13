@@ -8,8 +8,6 @@ pub fn get_build_features() -> Vec<String> {
     let features: Vec<&str> = vec![
         #[cfg(feature = "agent-policy")]
         "agent-policy",
-        #[cfg(feature = "guest-pull")]
-        "guest-pull",
         #[cfg(feature = "seccomp")]
         "seccomp",
         #[cfg(feature = "standard-oci-runtime")]
