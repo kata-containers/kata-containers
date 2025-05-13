@@ -230,3 +230,15 @@ kubectl create ns default || true
 kubectl config set-context --current --namespace=default
 KATA_RUNTIME=kata-remote ./deploy_webhook.sh
 popd
+
+
+##################################
+# Log warning when peering created
+##################################
+if [[ "${AZURE_REGION}" != "${PP_REGION}" ]]; then
+	echo "This script created additional resources to create peering between ${AZURE_REGION} and ${PP_REGION}. Ensure you release those resources after the testing (or use temporary subscription)"
+	PP_VARS=("PP_RESOURCE_GROUP" "PP_VNET_NAME" "PP_SUBNET_NAME" "PP_NSG_NAME" "AZURE_VNET_ID" "PP_VNET_ID" "PP_SUBNET_ID")
+	for PP_VAR in "${PP_VARS[@]}"; do
+		echo "${PP_VAR}=${!PP_VAR}"
+	done
+fi
