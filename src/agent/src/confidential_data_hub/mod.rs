@@ -131,7 +131,7 @@ impl CDHClient {
         let res = self
             .image_pull_client
             .pull_image(
-                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                ttrpc::context::with_timeout(AGENT_CONFIG.image_pull_timeout.as_nanos() as i64),
                 &req,
             )
             .await?;
@@ -174,7 +174,7 @@ pub async fn unseal_env(env: &str) -> Result<String> {
 /// pull_image is used for call confidential data hub to pull image in the guest.
 /// Image layers will store at [`image::KATA_IMAGE_WORK_DIR`]`,
 /// rootfs and config.json will store under given `bundle_path`.
-/// 
+///
 /// # Parameters
 /// - `image`: Image name (exp: quay.io/prometheus/busybox:latest)
 /// - `bundle_path`: The path to store the image bundle (exp. /run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/rootfs)
@@ -189,7 +189,7 @@ pub async fn pull_image(image: &str, bundle_path: PathBuf) -> Result<String> {
     let _ = cdh_client
         .pull_image(image, bundle_path.to_string_lossy().as_ref())
         .await?;
-    
+
     let image_bundle_path = scoped_join(&bundle_path, "rootfs")?;
     Ok(image_bundle_path.as_path().display().to_string())
 }
