@@ -10,6 +10,8 @@
 #          resource group in "eastus" region and peers the network. You
 #          have to remove these manually (or use temporary accounts)
 
+SCRIPT_DIR=$(dirname "$0")
+
 ###############################
 # Disable security to allow e2e
 ###############################
@@ -228,7 +230,7 @@ done; exit 1 ) || { echo "kata-remote runtimeclass not initialized in 60s"; kube
 ################
 # Deploy webhook
 ################
-pushd ci/openshift-ci/cluster/
+pushd "${SCRIPT_DIR}/cluster/"
 kubectl create ns default || true
 kubectl config set-context --current --namespace=default
 KATA_RUNTIME=kata-remote ./deploy_webhook.sh
