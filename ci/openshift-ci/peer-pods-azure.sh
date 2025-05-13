@@ -32,8 +32,21 @@ AZURE_SUBSCRIPTION_ID="$(jq -r .data.azure_subscription_id azure_credentials.jso
 rm -f azure_credentials.json
 AZURE_RESOURCE_GROUP=$(oc get infrastructure/cluster -o jsonpath='{.status.platformStatus.azure.resourceGroupName}')
 az login --service-principal -u "${AZURE_CLIENT_ID}" -p "${AZURE_CLIENT_SECRET}" --tenant "${AZURE_TENANT_ID}"
-
-AZURE_VNET_NAME=$(az network vnet list --resource-group "${AZURE_RESOURCE_GROUP}" --query "[].{Name:name}" --output tsv)
+# Recommended on az sites to refresh the subscription
+az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+# This command still sometimes fails directly after login
+for I in {1..30}; do
+	AZURE_VNET_NAME=$(az network vnet list --resource-group "${AZURE_RESOURCE_GROUP}" --query "[].{Name:name}" --output tsv ||:)
+	if [[ -z "${AZURE_VNET_NAME}" ]]; then
+		sleep "${I}"
+	else	# VNET set, we are done
+		break
+	fi
+done
+if [[ -z "${AZURE_VNET_NAME}" ]]; then
+	echo "Failed to get AZURE_VNET_NAME in 30 iterations"
+	exit 1
+fi
 AZURE_SUBNET_NAME=$(az network vnet subnet list --resource-group "${AZURE_RESOURCE_GROUP}" --vnet-name "${AZURE_VNET_NAME}" --query "[].{Id:name} | [? contains(Id, 'worker')]" --output tsv)
 AZURE_SUBNET_ID=$(az network vnet subnet list --resource-group "${AZURE_RESOURCE_GROUP}" --vnet-name "${AZURE_VNET_NAME}" --query "[].{Id:id} | [? contains(Id, 'worker')]" --output tsv)
 AZURE_REGION=$(az group show --resource-group "${AZURE_RESOURCE_GROUP}" --query "{Location:location}" --output tsv)
