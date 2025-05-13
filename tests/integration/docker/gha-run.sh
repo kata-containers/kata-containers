@@ -21,6 +21,24 @@ function install_dependencies() {
 }
 
 function run() {
+	echo "Debug>> Current resolv.conf $(cat /etc/resolv.conf)"
+	echo "Debug>> Current resolvectl status $(resolvectl status)"
+
+	info "Update the host resolv.conf to add google DNS servers"
+	sudo mkdir -p /etc/resolvconf/resolv.conf.d
+	sudo cat >> /etc/resolvconf/resolv.conf.d/head<< EOF
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+EOF
+	sudo apt install resolvconf
+	sudo resolvconf --enable-updates
+	sudo resolvconf -u
+	sudo systemctl restart resolvconf.service
+	sudo systemctl restart systemd-resolved.service
+
+	echo "Debug>> Updated resolv.conf $(cat /etc/resolv.conf)"
+	echo "Debug>> Updated resolvectl status $(resolvectl status)"
+
 	info "Running docker smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
