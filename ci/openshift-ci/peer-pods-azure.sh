@@ -66,16 +66,19 @@ USER_ASSIGNED_CLIENT_ID="$(az identity show --resource-group "${AZURE_RESOURCE_G
 PP_REGION=eastus
 if [[ "${AZURE_REGION}" == "${PP_REGION}" ]]; then
     echo "Using the current region ${AZURE_REGION}"
+    PEERING=0
     PP_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}"
     PP_VNET_NAME="${AZURE_VNET_NAME}"
     PP_SUBNET_NAME="${AZURE_SUBNET_NAME}"
     PP_SUBNET_ID="${AZURE_SUBNET_ID}"
 else
     echo "Creating peering between ${AZURE_REGION} and ${PP_REGION}"
+    PEERING=1
     PP_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}-eastus"
     PP_VNET_NAME="${AZURE_VNET_NAME}-eastus"
     PP_SUBNET_NAME="${AZURE_SUBNET_NAME}-eastus"
     PP_NSG_NAME="${AZURE_VNET_NAME}-nsg-eastus"
+    echo "  creating new PP_RESOURCE_GROUP=${PP_RESOURCE_GROUP}"
     az group create --name "${PP_RESOURCE_GROUP}" --location "${PP_REGION}"
     az network vnet create --resource-group "${PP_RESOURCE_GROUP}" --name "${PP_VNET_NAME}" --location "${PP_REGION}" --address-prefixes 10.2.0.0/16 --subnet-name "${PP_SUBNET_NAME}" --subnet-prefixes 10.2.1.0/24
     az network nsg create --resource-group "${PP_RESOURCE_GROUP}" --name "${PP_NSG_NAME}" --location "${PP_REGION}"
@@ -235,3 +238,17 @@ kubectl create ns default || true
 kubectl config set-context --current --namespace=default
 KATA_RUNTIME=kata-remote ./deploy_webhook.sh
 popd
+
+
+##################################
+# Log warning when peering created
+##################################
+if [[ ${PEERING} -ne 0 ]]; then
+    echo "This script created additional resources to create peering between ${AZURE_REGION} and ${PP_REGION}. Ensure you release those resources after the testing (or use temporary subscription)"
+    PP_VARS=("PP_RESOURCE_GROUP" "PP_VNET_NAME" "PP_SUBNET_NAME" "PP_NSG_NAME" "AZURE_VNET_ID" "PP_VNET_ID" "PP_SUBNET_ID")
+    for PP_VAR in "${PP_VARS[@]}"; do
+        echo "${PP_VAR}=${!PP_VAR}"
+    done
+    echo
+    echo "by running 'az group delete --name ${PP_RESOURCE_GROUP}'"
+fi
