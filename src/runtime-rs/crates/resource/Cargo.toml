@@ -16,7 +16,7 @@ actix-rt = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitflags = "2.9.0"
-byte-unit = "4.0.14"
+byte-unit = "5.1.6"
 cgroups-rs = "0.3.2"
 futures = "0.3.11"
 lazy_static = { workspace = true }

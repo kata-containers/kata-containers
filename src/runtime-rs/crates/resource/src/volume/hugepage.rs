@@ -15,7 +15,7 @@ use crate::share_fs::EPHEMERAL_PATH;
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use byte_unit::Byte;
+use byte_unit::{Byte, Unit};
 use hypervisor::{device::device_manager::DeviceManager, HUGETLBFS};
 use kata_sys_util::{
     fs::get_base_name,
@@ -49,7 +49,13 @@ impl Hugepage {
         let page_size = get_page_size(fs_options).context("failed to get page size")?;
         let option = hugepage_limits_map
             .get(&page_size)
-            .map(|limit| format!("pagesize={},size={}", page_size.get_bytes(), limit))
+            .map(|limit| {
+                format!(
+                    "pagesize={},size={}",
+                    page_size.get_adjusted_unit(Unit::B).get_value(),
+                    limit
+                )
+            })
             .context("failed to get hugepage option")?;
         let base_name = get_base_name(get_mount_path(mount.source()).clone())?
             .into_string()
@@ -140,7 +146,7 @@ pub(crate) fn get_huge_page_limits_map(spec: &oci::Spec) -> Result<HashMap<PageS
                 .map(|hugepage_limit| {
                     // the pagesize send from oci spec is MB or GB, change it to Mi and Gi
                     let page_size_str = hugepage_limit.page_size().replace('B', "i");
-                    let page_size = Byte::from_str(page_size_str)
+                    let page_size = Byte::parse_str(page_size_str, true)
                         .context("failed to create Byte object from String")?;
                     Ok((page_size, hugepage_limit.limit() as u64))
                 })
@@ -159,7 +165,7 @@ fn get_page_size(fs_options: Vec<String>) -> Result<Byte> {
                 // the parameters passed are in unit M or G, append i to be Mi and Gi
                 .map(|s| format!("{}i", s))
                 .context("failed to strip prefix pagesize")?;
-            return Byte::from_str(page_size)
+            return Byte::parse_str(page_size, true)
                 .map_err(|_| anyhow!("failed to convert string to byte"));
         }
     }
@@ -213,8 +219,8 @@ mod tests {
         assert!(get_huge_page_limits_map(&spec).is_ok());
 
         let mut expect_res = HashMap::new();
-        expect_res.insert(Byte::from_str("1Gi").ok().unwrap(), 100000);
-        expect_res.insert(Byte::from_str("2Mi").ok().unwrap(), 100000);
+        expect_res.insert(Byte::parse_str("1Gi", false).ok().unwrap(), 100000);
+        expect_res.insert(Byte::parse_str("2Mi", false).ok().unwrap(), 100000);
         assert_eq!(get_huge_page_limits_map(&spec).unwrap(), expect_res);
     }
 
@@ -239,7 +245,7 @@ mod tests {
 
             let option = get_huge_page_option(&mount).unwrap().unwrap();
             let page_size = get_page_size(option).unwrap();
-            assert_eq!(page_size, Byte::from_str(format_size).unwrap());
+            assert_eq!(page_size, Byte::parse_str(format_size, true).unwrap());
             umount(&dst).unwrap();
             fs::remove_dir(&dst).unwrap();
         }
