@@ -352,11 +352,6 @@ function adjust_qemu_cmdline() {
 	[[ "${shim}" =~ ^(qemu|qemu-coco-dev)$ ]] && qemu_share="qemu"
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
-	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]] && [[ "${qemu_binary}" == *-installation-prefix ]]; then
-		# This means that we'e already adapted the qemu-binary to the
-		# correct path, and we have nothing else to do here.
-		return
-	fi
 	qemu_binary_script="${qemu_binary}-installation-prefix"
 	qemu_binary_script_host_path="/host/${qemu_binary_script}"
 
@@ -450,13 +445,23 @@ function install_artifacts() {
 		fi
 
 		if [ "${dest_dir}" != "${default_dest_dir}" ]; then
-			# We could always do this sed, regardless, but I have a strong preference
-			# on not touching the configuration files unless extremelly needed
-			sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
+			kernel_path=$(tomlq ".hypervisor.${shim}.path" ${kata_config_file} | tr -d \")
+			if echo $kernel_path | grep -q "${dest_dir}"; then
+				# If we got to this point here, it means that we're dealing with
+				# a kata containers configuration file that has already been changed
+				# to support multi-install suffix, and we're here most likely due to
+				# and update or container restart, and we simply should not try to
+				# do anything else, thus just leave the conditional.
+				break
+			else
+				# We could always do this sed, regardless, but I have a strong preference
+				# on not touching the configuration files unless extremelly needed
+				sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
-			# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-			[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-sev|qemu-se|qemu-coco-dev)$ ]] && \
-				adjust_qemu_cmdline "${shim}" "${kata_config_file}"
+				# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
+				[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-sev|qemu-se|qemu-coco-dev)$ ]] && \
+					adjust_qemu_cmdline "${shim}" "${kata_config_file}"
+			fi
 		fi
 	done
 
