@@ -34,7 +34,10 @@ use super::Volume;
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use crate::share_fs::PASSTHROUGH_FS_DIR;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
-use kata_types::mount;
+use kata_types::{
+    k8s::{is_configmap, is_downward_api, is_projected, is_secret},
+    mount,
+};
 use oci_spec::runtime as oci;
 
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
@@ -338,7 +341,11 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&dest)));
                     oci_mount.set_options(m.options().clone());
                     volume.mounts.push(oci_mount);
-                } else if src.is_dir() {
+                } else if is_allowlisted_copy_volume(&src) {
+                    // For security reasons, we have restricted directory copying. Currently, only directories under
+                    // the path `/var/lib/kubelet/pods/<uid>/volumes/{kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api, kubernetes.io~projected}`
+                    // are allowed to be copied into the guest. Copying of other directories will be prohibited.
+
                     // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
                     info!(sl!(), "copying directory {:?} to guest", &source_path);
 
@@ -763,6 +770,20 @@ pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     format!("{}-{}-{}", nid, uid, file_name)
 }
 
+/// This function is used to check whether a given volume is in the allowed copy allowlist.
+/// More specifically, it determines whether the volume's path is located under a predefined
+/// list of allowed copy directories.
+pub(crate) fn is_allowlisted_copy_volume(source_path: &PathBuf) -> bool {
+    if !source_path.is_dir() {
+        return false;
+    }
+    // allowlist: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
+    is_projected(source_path)
+        || is_downward_api(source_path)
+        || is_secret(source_path)
+        || is_configmap(source_path)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -780,5 +801,35 @@ mod test {
         assert!(is_system_mount(sys_sub_dir));
         assert!(is_system_mount(proc_sub_dir));
         assert!(!is_system_mount(not_sys_dir));
+    }
+
+    #[test]
+    fn test_is_allowlisted_copy_volume() {
+        // The configmap is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~configmap/kube-configmap-0s2no/{..data, key1, key2,...}
+        // The secret is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~secret/kube-secret-2s2np/{..data, key1, key2,...}
+        // The projected is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~projected/kube-api-access-8s2nl/{..data, key1, key2,...}
+        // The downward-api is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~downward-api/downward-api-xxxx/{..data, key1, key2,...}
+        let configmap =
+            "var/lib/kubelet/pods/1000/volumes/kubernetes.io~configmap/kube-configmap-0s2no";
+        let secret = "var/lib/kubelet/pods/1000/volumes/kubernetes.io~secret/kube-secret-2s2np";
+        let projected =
+            "var/lib/kubelet/1000/<uid>/volumes/kubernetes.io~projected/kube-api-access-8s2nl";
+        let downward_api =
+            "var/lib/kubelet/1000/<uid>/volumes/kubernetes.io~downward-api/downward-api-xxxx";
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cm_path = temp_dir.path().join(configmap);
+        std::fs::create_dir_all(&cm_path).unwrap();
+        let secret_path = temp_dir.path().join(secret);
+        std::fs::create_dir_all(&secret_path).unwrap();
+        let projected_path = temp_dir.path().join(projected);
+        std::fs::create_dir_all(&projected_path).unwrap();
+        let downward_api_path = temp_dir.path().join(downward_api);
+        std::fs::create_dir_all(&downward_api_path).unwrap();
+
+        assert!(is_allowlisted_copy_volume(&cm_path));
+        assert!(is_allowlisted_copy_volume(&secret_path));
+        assert!(is_allowlisted_copy_volume(&projected_path));
+        assert!(is_allowlisted_copy_volume(&downward_api_path));
     }
 }
