@@ -464,6 +464,13 @@ ifneq (,$(QEMUCMD))
     DEFSANDBOXCGROUPONLY_NV = true
     # The latest OVMF build should be good for both TDX and SNP
     FIRMWAREPATH_NV := $(PREFIXDEPS)/share/ovmf/OVMF.fd
+
+    ifneq (,$(QEMUFW))
+        FIRMWAREPATH := $(PREFIXDEPS)/share/ovmf/$(QEMUFW)
+    endif
+    ifneq (,$(QEMUFWVOL))
+        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/ovmf/$(QEMUFWVOL)
+    endif
 endif
 
 ifneq (,$(CLHCMD))
