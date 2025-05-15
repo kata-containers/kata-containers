@@ -43,6 +43,10 @@ if os.environ.get("DEBUG", "false") == "true":
     os.makedirs(DEBUG_DIR)
 else:
     DEBUG_DIR = None
+if os.environ.get("DEBUG_INPUT", "") == "":
+    DEBUG_INPUT = None
+else:
+    DEBUG_INPUT = os.path.abspath(os.environ["DEBUG_INPUT"])
 
 
 class Checker:
@@ -153,10 +157,15 @@ class Checker:
     def fetch_json_from_url(self, url, task, params=None):
         """Fetches URL and reports json output"""
         print(url, file=sys.stderr)
-        response = requests.get(url, headers=_GH_HEADERS, params=params,
-                                timeout=60)
-        response.raise_for_status()
-        output = response.json()
+        if DEBUG_INPUT:
+            with open(f"{os.path.join(DEBUG_INPUT, task)}.json", "r",
+                      encoding="utf8") as inp:
+                output = json.load(inp)
+        else:
+            response = requests.get(url, headers=_GH_HEADERS, params=params,
+                                    timeout=60)
+            response.raise_for_status()
+            output = response.json()
         if DEBUG_DIR:
             with open(f"{os.path.join(DEBUG_DIR, task)}.json", "w",
                       encoding="utf8") as out:
