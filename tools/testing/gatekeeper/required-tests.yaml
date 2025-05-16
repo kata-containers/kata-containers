@@ -152,8 +152,8 @@ mapping:
       - Static checks / build-checks / check (make vendor, runtime-rs, src/runtime-rs, rust)
       - Static checks / build-checks / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
       - Static checks / build-checks / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
-      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
-      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf...
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
       - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
@@ -188,7 +188,7 @@ mapping:
       - Static checks self-hosted / build-checks (s390x) / check (make vendor, runtime-rs, src/runtime-rs, rust)
       - Static checks self-hosted / build-checks (s390x) / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
       - Static checks self-hosted / build-checks (s390x) / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
-      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
       - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
       - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
       - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
