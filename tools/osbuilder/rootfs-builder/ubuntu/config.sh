@@ -12,6 +12,7 @@ PACKAGES="chrony iptables dbus"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
+REPO_COMPONENTS=${REPO_COMPONENTS:-main}
 
 case "$ARCH" in
 	aarch64) DEB_ARCH=arm64;;
