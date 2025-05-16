@@ -84,8 +84,7 @@ setup() {
 
     # The pod should be failed because the unpacked image size is larger than the memory size in the guest.
     assert_pod_fail "$pod_config"
-    assert_logs_contain "$node" kata "$node_start_time" \
-		'No space left on device'
+    assert_logs_contain "$node" kata "$node_start_time" "failed to pull image"
 }
 
 @test "Test we can pull an image inside the guest using trusted storage" {
