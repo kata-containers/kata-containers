@@ -24,6 +24,7 @@ use ttrpc::{
 
 use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
+use oci::Process as OCIProcess;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
 use protobuf::MessageField;
@@ -57,7 +58,6 @@ use rustjail::process::ProcessOperations;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
-use crate::cdh;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 #[cfg(target_arch = "s390x")]
 use crate::device::network_device_handler::wait_for_ccw_net_interface;
@@ -80,6 +80,7 @@ use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
+use crate::{cdh, user};
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -447,7 +448,10 @@ impl AgentService {
         update_env_pci(&cid, &mut process.Env, &sandbox.pcimap)?;
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
-        let ocip = process.into();
+        let mut ocip = process.into();
+
+        update_process_user(&cid, &mut ocip)?;
+
         let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
 
         let ctr = sandbox
@@ -1812,6 +1816,37 @@ pub async fn start(
     Ok(server)
 }
 
+pub fn update_process_user(cid: &str, process: &mut OCIProcess) -> Result<()> {
+    let rootfs_path = Path::new(CONTAINER_BASE).join(cid).join("rootfs");
+    let user = process.user_mut();
+    if let Ok(pe) = user::get_user_identity(&rootfs_path, user.uid(), user.gid()) {
+        info!(
+            sl(),
+            "get user [UID:GID]->[{}:{}] from rootfs: {:?}", &pe.uid, &pe.gid, rootfs_path
+        );
+        let additional_gids = user::get_additional_gids(&rootfs_path, &pe.username, pe.gid)
+            .context("get additional gids failed")?;
+        let mut user = oci::User::default();
+        user.set_uid(pe.uid);
+        user.set_gid(pe.gid);
+        user.set_additional_gids(if additional_gids.is_empty() {
+            None
+        } else {
+            Some(additional_gids)
+        });
+        user.set_username(if !pe.username.is_empty() {
+            Some(pe.username)
+        } else {
+            None
+        });
+
+        process.set_user(user);
+    }
+    info!(sl(), "updated process user: {:?}", process);
+
+    Ok(())
+}
+
 // This function updates the container namespaces configuration based on the
 // sandbox information. When the sandbox is created, it can be setup in a way
 // that all containers will share some specific namespaces. This is the agent
@@ -2167,6 +2202,12 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     oci_root.set_path(rootfs_path);
     oci_root.set_readonly(spec_root.readonly());
     spec.set_root(Some(oci_root));
+
+    let process = spec
+        .process_mut()
+        .as_mut()
+        .ok_or_else(|| anyhow!("there's no process field."))?;
+    update_process_user(cid, process)?;
 
     let _ = spec.save(
         config_path
