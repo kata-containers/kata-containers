@@ -418,6 +418,19 @@ pub fn get_process_fields(
             *must_check_passwd = false;
         }
 
+        if let Some(fs_group) = context.fsGroup {
+            process
+                .User
+                .AdditionalGids
+                .insert(fs_group.try_into().unwrap());
+        }
+
+        if let Some(supplemental_groups) = &context.supplementalGroups {
+            supplemental_groups.iter().for_each(|g| {
+                process.User.AdditionalGids.insert(*g);
+            });
+        }
+
         if let Some(allow) = context.allowPrivilegeEscalation {
             process.NoNewPrivileges = !allow
         }

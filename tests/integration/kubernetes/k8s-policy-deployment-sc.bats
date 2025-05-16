@@ -15,6 +15,7 @@ setup() {
 
     deployment_name="policy-redis-deployment"
     pod_sc_deployment_yaml="${pod_config_dir}/k8s-pod-sc-deployment.yaml"
+    pod_sc_deployment_supplementalgroups_yaml="${pod_config_dir}/k8s-pod-sc-supplementalgroups-deployment.yaml"
     pod_sc_nobodyupdate_deployment_yaml="${pod_config_dir}/k8s-pod-sc-nobodyupdate-deployment.yaml"
     pod_sc_layered_deployment_yaml="${pod_config_dir}/k8s-layered-sc-deployment.yaml"
 
@@ -24,18 +25,31 @@ setup() {
         policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
         add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
         auto_generate_policy "${policy_settings_dir}" "${pod_sc_deployment_yaml}"
+        auto_generate_policy "${policy_settings_dir}" "${pod_sc_deployment_supplementalgroups_yaml}"
         auto_generate_policy "${policy_settings_dir}" "${pod_sc_nobodyupdate_deployment_yaml}"
         auto_generate_policy "${policy_settings_dir}" "${pod_sc_layered_deployment_yaml}"
     fi
 
     # Start each test case with a copy of the correct yaml file.
     incorrect_deployment_yaml="${pod_config_dir}/k8s-layered-sc-deployment-incorrect.yaml"
+    incorrect_deployment_yaml_supplementalgroups="${pod_config_dir}/k8s-layered-sc-deployment-incorrect-supplementalgroups.yaml"
     cp "${pod_sc_layered_deployment_yaml}" "${incorrect_deployment_yaml}"
+    cp "${pod_sc_deployment_supplementalgroups_yaml}" "${incorrect_deployment_yaml_supplementalgroups}"
 }
 
 @test "Successful sc deployment with auto-generated policy and container image volumes" {
     # Initiate deployment
     kubectl apply -f "${pod_sc_deployment_yaml}"
+
+    # Wait for the deployment to be created
+    cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
+    info "Waiting for: ${cmd}"
+    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+}
+
+@test "Successful sc with fsGroup/supplementalGroup deployment with auto-generated policy and container image volumes" {
+    # Initiate deployment
+    kubectl apply -f "${pod_sc_deployment_supplementalgroups_yaml}"
 
     # Wait for the deployment to be created
     cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
@@ -64,8 +78,10 @@ setup() {
 }
 
 test_deployment_policy_error() {
+    local yaml=$1
+
     # Initiate deployment
-    kubectl apply -f "${incorrect_deployment_yaml}"
+    kubectl apply -f "${yaml}"
 
     # Wait for the deployment pod to fail
     wait_for_blocked_request "CreateContainerRequest" "${deployment_name}"
@@ -79,7 +95,16 @@ test_deployment_policy_error() {
         '.spec.template.spec.securityContext.runAsGroup = 0' \
         "${incorrect_deployment_yaml}"
 
-    test_deployment_policy_error
+    test_deployment_policy_error "${incorrect_deployment_yaml}"
+}
+
+@test "Policy failure: malicious root group added via supplementalGroups deployment" {
+    # Inject a supplementalGroup of 0 (root) after the policy has been generated
+    yq -i \
+        '.spec.template.spec.securityContext.supplementalGroups += 0' \
+        "${incorrect_deployment_yaml_supplementalgroups}"
+
+    test_deployment_policy_error "${incorrect_deployment_yaml_supplementalgroups}"
 }
 
 teardown() {

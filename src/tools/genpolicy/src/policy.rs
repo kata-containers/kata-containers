@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use sha2::{Digest, Sha256};
 use std::boxed;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::read_to_string;
 use std::io::Write;
 
@@ -150,7 +150,7 @@ pub struct KataUser {
     pub GID: u32,
 
     /// AdditionalGids are additional group ids set for the container's process.
-    pub AdditionalGids: Vec<u32>,
+    pub AdditionalGids: BTreeSet<u32>,
 
     /// Username is the user name.
     pub Username: String,
@@ -744,6 +744,13 @@ impl AgentPolicy {
         }
         yaml_container.get_process_fields(&mut process);
 
+        // The last step containerd always does is add the User.GID to AdditionalGids
+        // The sandbox path does not respect the securityContext fsGroup/supplementalGroups
+        if is_pause_container {
+            process.User.AdditionalGids.clear();
+        }
+        process.User.AdditionalGids.insert(process.User.GID);
+
         process
     }
 }
@@ -763,7 +770,7 @@ impl KataSpec {
             process.User.GID = self.Process.User.GID;
         }
 
-        process.User.AdditionalGids = self.Process.User.AdditionalGids.to_vec();
+        process.User.AdditionalGids = self.Process.User.AdditionalGids.clone();
         process.User.Username = String::from(&self.Process.User.Username);
         add_missing_strings(&self.Process.Args, &mut process.Args);
 
