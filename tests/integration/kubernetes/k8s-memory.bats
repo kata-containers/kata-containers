@@ -40,8 +40,6 @@ setup_yaml() {
 }
 
 @test "Running within memory constraints" {
-	[ "$(uname -m)" == "aarch64" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10926"
-
 	memory_limit_size="600Mi"
 	allocated_size="150M"
 
