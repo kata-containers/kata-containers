@@ -68,6 +68,8 @@ jobs:
       matrix:
         containerd_version: ['active']
         vmm: ['qemu-runtime-rs']
+    # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
+    if: false
     runs-on: s390x-large
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}

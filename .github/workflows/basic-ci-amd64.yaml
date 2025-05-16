@@ -69,6 +69,8 @@ jobs:
       matrix:
         containerd_version: ['active']
         vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
+    # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
+    if: false
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
