@@ -50,7 +50,7 @@ into a fragment.
 If adding config entries for a new subsystem or feature, consider making a new
 fragment with an appropriately descriptive name.
 
-If you want to disable an entire fragment for a specific architecture, you can add the tag `# !${arch}` in the first line of the fragment. You can also exclude multiple architectures on the same line. Note the `#` at the beginning of the line, this is required to avoid that the tag is interpreted as a configuration.
+If you want to disable an entire fragment for a specific configuration, you can add the tag `# !${arch}` or `# !confidential` in the first line of the fragment. You can also exclude multiple tags on the same line. Note the `#` at the beginning of the line, this is required to avoid that the tag is interpreted as a configuration.
 Example of valid exclusion:
 ```
 # !s390x !ppc64le
