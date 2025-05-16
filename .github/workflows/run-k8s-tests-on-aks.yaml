@@ -70,6 +70,8 @@ jobs:
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
       GENPOLICY_PULL_METHOD: ${{ matrix.genpolicy-pull-method }}
       AUTO_GENERATE_POLICY: ${{ matrix.auto-generate-policy }}
+      GHCR_ACTOR: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
