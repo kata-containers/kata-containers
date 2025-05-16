@@ -13,6 +13,7 @@ PACKAGES="chrony iptables dbus"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
 REPO_URL=http://ports.ubuntu.com
+REPO_COMPONENTS=${REPO_COMPONENTS:-main}
 
 case "$ARCH" in
 	aarch64) DEB_ARCH=arm64;;
