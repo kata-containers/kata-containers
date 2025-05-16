@@ -768,6 +768,257 @@
     }
   },
   {
+    "description": "test exec process in first container with Terminal=true",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b300",
+      "string_user": null,
+      "process": {
+        "Terminal": true,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 0,
+          "GID": 0,
+          "AdditionalGids": [
+            0,
+            10
+          ],
+          "Username": ""
+        },
+        "Args": [
+          "test1"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process in first container with non-empty capabilities",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b302",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 0,
+          "GID": 0,
+          "AdditionalGids": [
+            0,
+            10
+          ],
+          "Username": ""
+        },
+        "Args": [
+          "test1"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": {
+          "Ambient": [],
+          "Bounding": [
+            "CAP_CHOWN"
+          ],
+          "Effective": [],
+          "Inheritable": [],
+          "Permitted": []
+        },
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process in first container with different Cwd",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b303",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 0,
+          "GID": 0,
+          "AdditionalGids": [
+            0,
+            10
+          ],
+          "Username": ""
+        },
+        "Args": [
+          "test1"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/tmp",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process in first container with NoNewPrivileges=true",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b304",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 0,
+          "GID": 0,
+          "AdditionalGids": [
+            0,
+            10
+          ],
+          "Username": ""
+        },
+        "Args": [
+          "test1"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": true,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process in first container with non-null/different User",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b305",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 1000,
+          "GID": 1000,
+          "AdditionalGids": [],
+          "Username": ""
+        },
+        "Args": [
+          "test1"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process in first container with additional environment variables",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b306",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 0,
+          "GID": 0,
+          "AdditionalGids": [
+            0,
+            10
+          ],
+          "Username": ""
+        },
+        "Args": [
+          "test1"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc",
+          "TERM=xterm",
+          "PROBE_TYPE=liveness"
+        ],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
+    "description": "test exec process in first container with multi-arg command",
+    "allowed": false,
+    "request": {
+      "type": "ExecProcess",
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b308",
+      "string_user": null,
+      "process": {
+        "Terminal": false,
+        "ConsoleSize": null,
+        "User": {
+          "UID": 0,
+          "GID": 0,
+          "AdditionalGids": [0, 10],
+          "Username": ""
+        },
+        "Args": ["test1", "--flag"],
+        "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+        "Cwd": "/",
+        "Capabilities": null,
+        "Rlimits": [],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "SelinuxLabel": ""
+      }
+    }
+  },
+  {
     "description": "test exec process in first container with non-null selinuxLabel",
     "allowed": false,
     "request": {

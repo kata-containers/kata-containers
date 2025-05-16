@@ -340,7 +340,8 @@
                 "^AZURE_CLIENT_ID=[A-Fa-f0-9-]*$",
                 "^AZURE_TENANT_ID=[A-Fa-f0-9-]*$",
                 "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",
-                "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$"
+                "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$",
+                "^TERM=xterm$"
             ]
         },
         "UpdateInterfaceRequest": {
