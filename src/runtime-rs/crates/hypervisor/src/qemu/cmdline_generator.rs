@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::device::topology::{PCIePortBusPrefix, TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
 use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
@@ -1824,6 +1825,167 @@ impl ToQemuParams for ObjectSevSnpGuest {
     }
 }
 
+/// PCIeRootPortDevice directly attached onto the root bus
+/// -device pcie-root-port,id=rp0,bus=pcie.0,chassis=0,slot=0,multifunction=off,pref64-reserve=<X>B,mem-reserve=<Y>B
+#[derive(Debug, Default)]
+pub struct PCIeRootPortDevice {
+    id: String,
+    bus: String,
+    chassis: String,
+    slot: String,
+    multifunction: String,
+    addr: String,
+
+    mem_reserve: String,
+    pref64_reserve: String,
+}
+
+impl PCIeRootPortDevice {
+    fn new(id: &str, bus: &str, chassis: &str, slot: &str, multifunc: bool, addr: &str) -> Self {
+        PCIeRootPortDevice {
+            id: id.to_string(),
+            bus: if bus.is_empty() {
+                DEFAULT_PCIE_ROOT_BUS.to_owned()
+            } else {
+                bus.to_string()
+            },
+            chassis: if chassis.is_empty() {
+                "0x00".to_owned()
+            } else {
+                chassis.to_owned()
+            },
+            slot: if slot.is_empty() {
+                "0x00".to_owned()
+            } else {
+                slot.to_owned()
+            },
+            multifunction: if multifunc {
+                "on".to_owned()
+            } else {
+                "off".to_owned()
+            },
+            addr: if addr.is_empty() {
+                "0x00".to_owned()
+            } else {
+                addr.to_owned()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn set_mem_reserve(&mut self, mem_reserve: u64) -> &mut Self {
+        if mem_reserve > 0 {
+            self.mem_reserve = format!("{}B", mem_reserve);
+        }
+
+        self
+    }
+
+    fn set_pref64_reserve(&mut self, pref64_reserve: u64) -> &mut Self {
+        if pref64_reserve > 0 {
+            self.pref64_reserve = format!("{}B", pref64_reserve);
+        }
+
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeRootPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        // -device pcie-root-port,id=rp0
+        device_params.push(format!("{},id={}", "pcie-root-port", self.id));
+        device_params.push(format!("bus={}", self.bus));
+        device_params.push(format!("chassis={}", self.chassis));
+        device_params.push(format!("slot={}", self.slot));
+        device_params.push(format!("multifunction={}", self.multifunction));
+        if self.multifunction.as_str() == "on" {
+            device_params.push(format!("addr={}", self.addr));
+        }
+        if !self.mem_reserve.is_empty() {
+            device_params.push(format!("mem-reserve={}", self.mem_reserve));
+        }
+        if !self.pref64_reserve.is_empty() {
+            device_params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        }
+
+        Ok(vec!["-device".to_string(), device_params.join(",")])
+    }
+}
+
+/// PCIeSwitchUpstreamPortDevice is the port attached to the root port.
+#[derive(Debug, Default)]
+pub struct PCIeSwitchUpstreamPortDevice {
+    id: String,
+    bus: String,
+}
+
+impl PCIeSwitchUpstreamPortDevice {
+    fn new(id: &str, bus: &str) -> Self {
+        PCIeSwitchUpstreamPortDevice {
+            id: id.to_string(),
+            bus: bus.to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeSwitchUpstreamPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        device_params.push(format!("{},id={}", "x3130-upstream", self.id));
+        device_params.push(format!("bus={}", self.bus));
+
+        Ok(vec!["-device".to_string(), device_params.join(",")])
+    }
+}
+
+/// PCIeSwitchDownstreamPortDevice is the port attached to the root port.
+#[derive(Debug, Default)]
+pub struct PCIeSwitchDownstreamPortDevice {
+    // format: sup{n}, n>=0
+    pub id: String,
+
+    // default is rp0
+    pub bus: String,
+
+    // (slot, chassis) pair is mandatory and must be unique for each downstream port, >=0, default is 0x00
+    pub chassis: String,
+
+    // >=0, default is 0x00
+    pub slot: String,
+}
+
+impl PCIeSwitchDownstreamPortDevice {
+    fn new(bus: &str, chassis: u32, index: u32) -> Self {
+        PCIeSwitchDownstreamPortDevice {
+            // "swdp{i}"
+            id: format!("{}{}", PCIePortBusPrefix::SwitchDownstreamPort, index),
+            // "swup0"
+            bus: bus.to_string(),
+            chassis: chassis.to_string(),
+            slot: index.to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeSwitchDownstreamPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        device_params.push(format!("{},id={}", "xio3130-downstream", self.id));
+        device_params.push(format!("bus={}", self.bus));
+        device_params.push(format!("chassis={}", self.chassis));
+        device_params.push(format!("slot={}", self.slot));
+
+        Ok(vec!["-device".to_string(), device_params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -2190,6 +2352,147 @@ impl<'a> QemuCmdLine<'a> {
             .set_nvdimm(false);
 
         self.cpu.set_type("EPYC-v4");
+    }
+
+    /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.
+    /// The design origins from https://github.com/qemu/qemu/blob/master/docs/pcie.txt
+    ///
+    ///     pcie.0 bus
+    ///     ---------------------------------------------------------------------
+    ///          |                                         |
+    ///     -------------                            -------------
+    ///     | Root Port |                            | Root Port |
+    ///     ------------                             -------------
+    ///           |               -------------------------|------------------------
+    ///      ------------         |                 -----------------              |
+    ///      | PCIe Dev |         |    PCI Express  | Upstream Port |              |
+    ///      ------------         |      Switch     -----------------              |
+    ///                           |                  |            |                |
+    ///                           |    -------------------    -------------------  |
+    ///                           |    | Downstream Port |    | Downstream Port |  |
+    ///                           |    -------------------    -------------------  |
+    ///                           -------------|-----------------------|------------
+    ///                                  ------------
+    ///                                  | PCIe Dev |
+    ///                                  ------------
+    ///  Using multi-function PCI Express Root Ports:
+    ///     -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0] \
+    ///     -device pcie-root-port,id=root_port2,chassis=x1,addr=z.1[,slot=y1][,bus=pcie.0] \
+    ///     -device pcie-root-port,id=root_port3,chassis=x2,addr=z.2[,slot=y2][,bus=pcie.0] \
+    pub fn add_pcie_root_ports(
+        &mut self,
+        root_ports: HashMap<u32, TopologyPortDevice>,
+        mem_reserve: u64,
+        pref64_reserve: u64,
+    ) -> Result<()> {
+        if root_ports.is_empty() {
+            return Ok(());
+        }
+
+        let machine_type: &str = &self.config.machine_info.machine_type;
+        let (addr, multi_function) = match machine_type {
+            "q35" | "virt" => ("0", false),
+            _ => {
+                info!(
+                    sl!(),
+                    "PCIe root ports not supported for machine type: {}", machine_type
+                );
+                return Ok(());
+            }
+        };
+
+        // -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0]
+        for (index, rp) in root_ports.iter() {
+            let (chassis, slot) = (format!("{}", index + 1), format!("{}", index));
+            let mut root_port_dev = PCIeRootPortDevice::new(
+                &rp.port_id(), // rpX
+                &rp.bus,       // pcie.0
+                &chassis,
+                &slot,
+                multi_function,
+                addr,
+            );
+            root_port_dev
+                .set_mem_reserve(mem_reserve)
+                .set_pref64_reserve(pref64_reserve);
+
+            self.devices.push(Box::new(root_port_dev));
+        }
+
+        Ok(())
+    }
+
+    ///  Plugging a PCI Express device into a Switch:
+    ///     -device pcie-root-port,id=root_port1,chassis=x,slot=y[,bus=pcie.0][,addr=z]  \
+    ///     -device x3130-upstream,id=upstream_port1,bus=root_port1[,addr=x]          \
+    ///     -device xio3130-downstream,id=downstream_port1,bus=upstream_port1,chassis=x1,slot=y1[,addr=z1]] \
+    ///     -device <dev>,bus=downstream_port1
+    ///         Root Port
+    ///             |
+    ///        PCIe Switch
+    ///         /   |   \
+    ///    Device Device Device
+    pub fn add_pcie_switch_ports(
+        &mut self,
+        switch_ports: HashMap<u32, TopologyPortDevice>,
+        mem_reserve: u64,
+        pref64_reserve: u64,
+    ) -> Result<()> {
+        if switch_ports.is_empty() {
+            return Ok(());
+        }
+
+        let machine_type = &self.config.machine_info.machine_type;
+        if machine_type != "q35" && machine_type != "virt" {
+            info!(
+                sl!(),
+                "PCIe switch ports not supported for machine type: {}", machine_type
+            );
+            return Ok(());
+        }
+
+        for (index, rp) in switch_ports.iter() {
+            // 1. Create Root Port
+            // -device pcie-root-port,id=root_port1,chassis=x,slot=y[,bus=pcie.0][,addr=z]
+
+            // (slot, chassis) pair is mandatory and must be unique for each PCI Express Root Port
+            let (slot, chassis) = (format!("{}", index), format!("{}", index + 1));
+            let mut pcie_root_port = PCIeRootPortDevice::new(
+                &rp.port_id(),
+                &rp.bus, // pcie.0
+                &chassis,
+                &slot,
+                false,
+                "0",
+            );
+            pcie_root_port
+                .set_mem_reserve(mem_reserve)
+                .set_pref64_reserve(pref64_reserve);
+            self.devices.push(Box::new(pcie_root_port));
+
+            if let Some(switch) = &rp.connected_switch {
+                // 2. Create Upstream Port
+                // -device x3130-upstream,id=upstream_port1,bus=root_port1[,addr=x]
+                let upstream_port_id = switch.port_id();
+                let pcie_switch_upstream_port =
+                    PCIeSwitchUpstreamPortDevice::new(&upstream_port_id, &switch.bus);
+                self.devices.push(Box::new(pcie_switch_upstream_port));
+
+                // 3. Create Downstream Ports
+                // -device xio3130-downstream,id=downstream_port1,bus=upstream_port1,chassis=x1,slot=y1[,addr=z1]]
+                let next_chassis = chassis.parse::<u32>()? + 1;
+                for (index, swdp) in switch.switch_ports.iter() {
+                    let pcie_switch_downstream_port = PCIeSwitchDownstreamPortDevice::new(
+                        &swdp.bus,
+                        next_chassis + index,
+                        *index,
+                    );
+                    self.devices.push(Box::new(pcie_switch_downstream_port));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
