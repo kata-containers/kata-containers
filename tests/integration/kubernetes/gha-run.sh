@@ -294,6 +294,49 @@ function run_tests() {
 	popd
 }
 
+# Print a report about tests executed.
+#
+# Crawl over the output files found on each "reports/yyyy-mm-dd-hh:mm:ss"
+# directory.
+#
+function report_tests() {
+	local reports_dir="${kubernetes_dir}/reports"
+	local ok
+	local not_ok
+	local status
+
+	if [[ ! -d "${reports_dir}" ]]; then
+		info "no reports directory found: ${reports_dir}"
+		return
+	fi
+
+	for report_dir in "${reports_dir}"/*; do
+		mapfile -t ok < <(find "${report_dir}" -name "ok-*.out")
+		mapfile -t not_ok < <(find "${report_dir}" -name "not_ok-*.out")
+
+		cat <<-EOF
+		SUMMARY ($(basename "${report_dir}")):
+		 Pass:  ${#ok[*]}
+		 Fail:  ${#not_ok[*]}
+		EOF
+
+		echo -e "\nSTATUSES:"
+		for out in "${not_ok[@]}" "${ok[@]}"; do
+			status=$(basename "${out}" | cut -d '-' -f1)
+			bats=$(basename "${out}" | cut -d '-' -f2- | sed 's/.out$//')
+			echo " ${status} ${bats}"
+		done
+
+		echo -e "\nOUTPUTS:"
+		for out in "${not_ok[@]}" "${ok[@]}"; do
+			bats=$(basename "${out}" | cut -d '-' -f2- | sed 's/.out$//')
+			echo "::group::${bats}"
+			cat "${out}"
+			echo "::endgroup::"
+		done
+	done
+}
+
 function collect_artifacts() {
 	if [[ -z "${start_time:-}" ]]; then
 		warn "tests start time is not defined. Cannot gather journal information"
@@ -547,6 +590,7 @@ function main() {
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
 		deploy-snapshotter) deploy_snapshotter ;;
+		report-tests) report_tests ;;
 		run-tests) run_tests ;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
