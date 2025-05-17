@@ -68,6 +68,9 @@ const (
 	// IPVlanEndpointType is ipvlan network interface.
 	IPVlanEndpointType EndpointType = "ipvlan"
 
+	// VlanEndpointType is vlan network interface.
+	VlanEndpointType EndpointType = "vlan"
+
 	// VfioEndpointType is a VFIO device that will be claimed as a network interface
 	// in the guest VM. Unlike PhysicalEndpointType, which requires a VF network interface
 	// with its network configured on the host before creating the sandbox, VfioEndpointType
@@ -103,6 +106,9 @@ func (endpointType *EndpointType) Set(value string) error {
 	case "ipvlan":
 		*endpointType = IPVlanEndpointType
 		return nil
+	case "vlan":
+		*endpointType = VlanEndpointType
+		return nil
 	case "vfio":
 		*endpointType = VfioEndpointType
 		return nil
@@ -130,6 +136,8 @@ func (endpointType *EndpointType) String() string {
 		return string(TuntapEndpointType)
 	case IPVlanEndpointType:
 		return string(IPVlanEndpointType)
+	case VlanEndpointType:
+		return string(VlanEndpointType)
 	case VfioEndpointType:
 		return string(VfioEndpointType)
 	default:
