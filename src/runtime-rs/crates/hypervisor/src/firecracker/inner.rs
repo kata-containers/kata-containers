@@ -186,6 +186,10 @@ impl FcInner {
         warn!(sl(), "guest memory block size Not implemented");
         0
     }
+
+    pub(crate) fn is_running(&self) -> bool {
+        self.state == VmmState::VmRunning
+    }
 }
 
 async fn log_fc_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Result<()> {
