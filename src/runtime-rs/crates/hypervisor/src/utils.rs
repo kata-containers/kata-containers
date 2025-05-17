@@ -16,6 +16,8 @@ use nix::{
     fcntl,
     sched::{setns, CloneFlags},
 };
+use serde::{Deserialize, Serialize};
+use serde_json;
 
 use crate::device::Tap;
 
@@ -144,9 +146,37 @@ fn create_fds(device: &str, num_fds: usize) -> Result<Vec<File>> {
     Ok(fds)
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SocketAddress {
+    #[serde(rename = "type")]
+    pub typ: String,
+    pub cid: String,
+    pub port: String,
+}
+
+impl SocketAddress {
+    pub fn new(typ: &str, cid: u32, port: u32) -> Self {
+        Self {
+            typ: typ.to_string(),
+            cid: cid.to_string(),
+            port: port.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for SocketAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        serde_json::to_string(self)
+            .map_err(|_| std::fmt::Error)
+            .and_then(|s| write!(f, "{}", s))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::create_fds;
+    use super::SocketAddress;
 
     #[test]
     fn test_ctreate_fds() {
@@ -155,5 +185,39 @@ mod tests {
         let fds = create_fds(device, num_fds);
         assert!(fds.is_ok());
         assert_eq!(fds.unwrap().len(), num_fds);
+    }
+
+    #[test]
+    fn test_socket_address_new() {
+        let socket = SocketAddress::new("unix", 123, 8866);
+        assert_eq!(socket.typ, "unix");
+        assert_eq!(socket.cid, "123");
+        assert_eq!(socket.port, "8866");
+    }
+
+    #[test]
+    fn test_socket_address_display() {
+        let socket = SocketAddress::new("tcp", 456, 6688);
+        let expected_json = r#"{"type":"tcp","cid":"456","port":"6688"}"#;
+        assert_eq!(format!("{}", socket), expected_json);
+    }
+
+    #[test]
+    fn test_socket_address_serialize_deserialize() {
+        let socket = SocketAddress::new("unix", 789, 8686);
+        let serialized = serde_json::to_string(&socket).unwrap();
+        let deserialized: SocketAddress = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(socket.typ, deserialized.typ);
+        assert_eq!(socket.cid, deserialized.cid);
+        assert_eq!(socket.port, deserialized.port);
+    }
+
+    #[test]
+    fn test_socket_address_kebab_case() {
+        let socket = SocketAddress::new("unix", 101, 6868);
+        let serialized = serde_json::to_string(&socket).unwrap();
+        assert!(serialized.contains(r#""type":"#));
+        assert!(serialized.contains(r#""cid":"#));
+        assert!(serialized.contains(r#""port":"#));
     }
 }
