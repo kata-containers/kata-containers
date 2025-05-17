@@ -175,6 +175,7 @@ DEFMSIZE9P := 8192
 DEFVFIOMODE := guest-kernel
 DEFBINDMOUNTS := []
 DEFDANCONF := /run/kata-containers/dans
+DEFFORCEGUESTPULL := false
 SED = sed
 CLI_DIR = cmd
 SHIMV2 = containerd-shim-kata-v2
