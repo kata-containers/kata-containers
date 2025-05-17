@@ -1,4 +1,9 @@
 #!/bin/bash -e
+#
+# Copyright (c) 2025 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 # Setup peer-pods using cloud-api-adaptor on azure
 #
 # WARNING: When running outside "eastus" region this script creates a new
