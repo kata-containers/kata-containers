@@ -13,7 +13,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
-    NetworkDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
+    NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
     VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
     KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
@@ -110,6 +110,10 @@ impl DeviceManager {
             shared_info: SharedInfo::new().await,
             pcie_topology: PCIeTopology::new(topo_config),
         })
+    }
+
+    pub fn get_pcie_topology(&self) -> Option<PCIeTopology> {
+        self.pcie_topology.clone()
     }
 
     async fn get_block_driver(&self) -> String {
@@ -250,7 +254,10 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
-                DeviceType::HybridVsock(_) | DeviceType::Vsock(_) | DeviceType::Protection(_) => {
+                DeviceType::HybridVsock(_)
+                | DeviceType::Vsock(_)
+                | DeviceType::Protection(_)
+                | DeviceType::PortDevice(_) => {
                     continue;
                 }
             }
@@ -392,6 +399,9 @@ impl DeviceManager {
                     device_id.clone(),
                     pconfig,
                 )))
+            }
+            DeviceConfig::PortDeviceCfg(config) => {
+                Arc::new(Mutex::new(PCIePortDevice::new(&device_id, config)))
             }
         };
 
