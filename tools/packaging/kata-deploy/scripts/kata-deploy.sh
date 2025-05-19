@@ -91,6 +91,10 @@ function host_systemctl() {
 	nsenter --target 1 --mount systemctl "${@}"
 }
 
+function host_exec() {
+	nsenter --target 1 --mount bash -c "$*"
+}
+
 function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
@@ -876,9 +880,9 @@ function main() {
 			       mkdir -p $(dirname "$containerd_conf_file")
 			       touch "$containerd_conf_file"
 			elif [[ "$runtime" == "containerd" ]]; then
-			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
-					containerd config default > "$containerd_conf_file"
-			       fi
+				if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ]; then
+					host_exec containerd config default > "$containerd_conf_file"
+				fi
 			fi
 
 			if [ $use_containerd_drop_in_conf_file = "true" ]; then
