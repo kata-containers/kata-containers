@@ -127,7 +127,7 @@ pub struct BlockDeviceInfo {
 
     /// The size in MiB will be plused to max memory of hypervisor.
     ///
-    /// It is the memory address space for the NVDIMM devie. If set block storage driver
+    /// It is the memory address space for the NVDIMM device. If set block storage driver
     /// (block_device_driver) to "nvdimm", should set memory_offset to the size of block device.
     #[serde(default)]
     pub memory_offset: u64,

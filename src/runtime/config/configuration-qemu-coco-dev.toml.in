@@ -155,7 +155,7 @@ default_memory = @DEFMEMSZ@
 default_maxmemory = @DEFMAXMEMSZ@
 
 # The size in MiB will be plused to max memory of hypervisor.
-# It is the memory address space for the NVDIMM devie.
+# It is the memory address space for the NVDIMM device.
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
