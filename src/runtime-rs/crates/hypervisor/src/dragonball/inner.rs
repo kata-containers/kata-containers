@@ -509,6 +509,10 @@ impl DragonballInner {
     pub fn set_passfd_listener_port(&mut self, port: u32) {
         self.passfd_listener_port = Some(port);
     }
+
+    pub(crate) fn is_running(&self) -> bool {
+        self.state == VmmState::VmRunning
+    }
 }
 
 #[async_trait]
