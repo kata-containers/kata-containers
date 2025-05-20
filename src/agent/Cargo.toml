@@ -163,7 +163,7 @@ strum.workspace = true
 strum_macros.workspace = true
 
 # Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "1191f8257eb65f42892ab0328cec02e58d40de84", default-features = false, optional = true }
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "0a06ef241190780840fbb0542e51b198f1f72b0b", default-features = false, optional = true }
 
 # Agent Policy
 cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }

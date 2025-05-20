@@ -87,7 +87,7 @@ function setup_kbs_credentials() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
+    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull image"
 }
 
 @test "Test that creating a container from an authenticated image, with no credentials fails" {
@@ -100,7 +100,7 @@ function setup_kbs_credentials() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
+    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull image"
 }
 
 teardown() {
