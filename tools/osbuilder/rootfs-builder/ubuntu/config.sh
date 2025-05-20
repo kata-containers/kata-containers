@@ -12,15 +12,15 @@ PACKAGES="chrony iptables dbus"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
-REPO_URL=http://ports.ubuntu.com
 
 case "$ARCH" in
 	aarch64) DEB_ARCH=arm64;;
 	ppc64le) DEB_ARCH=ppc64el;;
 	s390x) DEB_ARCH="$ARCH";;
-	x86_64) DEB_ARCH=amd64; REPO_URL=http://archive.ubuntu.com/ubuntu;;
+	x86_64) DEB_ARCH=amd64; REPO_URL=${REPO_URL_X86_64:-${REPO_URL:-http://archive.ubuntu.com/ubuntu}};;
 	*) die "$ARCH not supported"
 esac
+REPO_URL=${REPO_URL:-http://ports.ubuntu.com}
 
 if [ "$(uname -m)" != "$ARCH" ]; then
 	case "$ARCH" in

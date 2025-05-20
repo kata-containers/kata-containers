@@ -51,6 +51,8 @@ ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
 EXTRA_PKGS="${EXTRA_PKGS:-}"
+REPO_URL="${REPO_URL:-}"
+REPO_URL_X86_64="${REPO_URL_X86_64:-}"
 AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
@@ -405,6 +407,14 @@ install_image() {
 		export EXTRA_PKGS
 	fi
 
+	if [[ -n "${REPO_URL}" ]]; then
+		export REPO_URL
+	fi
+
+	if [[ -n "${REPO_URL_X86_64}" ]]; then
+		export REPO_URL_X86_64
+	fi
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -493,6 +503,14 @@ install_initrd() {
 
 	if [[ -n "${EXTRA_PKGS}" ]]; then
 		export EXTRA_PKGS
+	fi
+
+	if [[ -n "${REPO_URL}" ]]; then
+		export REPO_URL
+	fi
+
+	if [[ -n "${REPO_URL_X86_64}" ]]; then
+		export REPO_URL_X86_64
 	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
