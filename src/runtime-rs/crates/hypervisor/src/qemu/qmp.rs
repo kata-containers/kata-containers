@@ -19,6 +19,8 @@ use qapi::qmp;
 use qapi_qmp::{self, PciDeviceInfo};
 use qapi_spec::Dictionary;
 
+const DEFAULT_QMP_READ_TIMEOUT: u64 = 5000;
+
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
 
@@ -621,7 +623,10 @@ impl Qmp {
             arguments: vfio_args,
         };
         info!(sl!(), "vfio_device_add: {:?}", vfio_device_add.clone());
-
+        self.qmp
+            .inner_mut()
+            .get_mut_write()
+            .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))?;
         self.qmp
             .execute(&vfio_device_add)
             .map_err(|e| anyhow!("device_add vfio device failed {:?}", e))?;
