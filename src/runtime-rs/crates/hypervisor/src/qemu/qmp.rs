@@ -596,6 +596,42 @@ impl Qmp {
 
         Ok(Some(pci_path))
     }
+
+    pub fn hotplug_vfio_device(
+        &mut self,
+        hostdev_id: &str,
+        bus_slot_func: &str,
+        driver: &str,
+        bus: &str,
+    ) -> Result<Option<PciPath>> {
+        let mut vfio_args = Dictionary::new();
+        let bdf = if !bus_slot_func.starts_with("0000") {
+            format!("0000:{}", bus_slot_func)
+        } else {
+            bus_slot_func.to_owned()
+        };
+        vfio_args.insert("addr".to_owned(), "0x0".into());
+        vfio_args.insert("host".to_owned(), bdf.into());
+        vfio_args.insert("multifunction".to_owned(), "off".into());
+
+        let vfio_device_add = qmp::device_add {
+            driver: driver.to_string(),
+            bus: Some(bus.to_string()),
+            id: Some(hostdev_id.to_string()),
+            arguments: vfio_args,
+        };
+        info!(sl!(), "vfio_device_add: {:?}", vfio_device_add.clone());
+
+        self.qmp
+            .execute(&vfio_device_add)
+            .map_err(|e| anyhow!("device_add vfio device failed {:?}", e))?;
+
+        let pci_path = self
+            .get_device_by_qdev_id(hostdev_id)
+            .context("get device by qdev_id failed")?;
+
+        Ok(Some(pci_path))
+    }
 }
 
 fn vcpu_id_from_core_id(core_id: i64) -> String {
