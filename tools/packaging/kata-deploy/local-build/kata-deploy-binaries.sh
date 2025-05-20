@@ -53,6 +53,7 @@ GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
 EXTRA_PKGS="${EXTRA_PKGS:-}"
 REPO_URL="${REPO_URL:-}"
 REPO_URL_X86_64="${REPO_URL_X86_64:-}"
+REPO_COMPONENTS="${REPO_COMPONENTS:-}"
 AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
@@ -415,6 +416,10 @@ install_image() {
 		export REPO_URL_X86_64
 	fi
 
+	if [[ -n "${REPO_COMPONENTS}" ]]; then
+		export REPO_COMPONENTS
+	fi
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -511,6 +516,10 @@ install_initrd() {
 
 	if [[ -n "${REPO_URL_X86_64}" ]]; then
 		export REPO_URL_X86_64
+	fi
+
+	if [[ -n "${REPO_COMPONENTS}" ]]; then
+		export REPO_COMPONENTS
 	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
