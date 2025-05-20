@@ -429,11 +429,12 @@ function kbs_k8s_deploy() {
 kbs_k8s_svc_host() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
 		local host
+		local timeout=50
 		# The ingress IP address can take a while to show up.
 		SECONDS=0
 		while true; do
 			host=$(kubectl get ingress "${KBS_INGRESS_NAME}" -n "${KBS_NS}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-			[[ -z "${host}" && ${SECONDS} -lt 30 ]] || break
+			[[ -z "${host}" && ${SECONDS} -lt "${timeout}" ]] || break
 			sleep 5
 		done
 		echo "${host}"
