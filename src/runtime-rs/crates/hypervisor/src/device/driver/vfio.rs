@@ -20,7 +20,7 @@ use kata_sys_util::fs::get_base_name;
 use crate::{
     device::{
         pci_path::PciPath,
-        topology::{do_add_pcie_endpoint, PCIePort, PCIeTopology},
+        topology::{do_add_pcie_endpoint, AvailableNode, PCIePort, PCIeTopology},
         util::{do_decrease_count, do_increase_count},
         Device, DeviceType, PCIeDevice,
     },
@@ -559,6 +559,34 @@ impl PCIeDevice for VfioDevice {
     async fn register(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
         if self.bus_mode != VfioBusMode::PCI {
             return Ok(());
+        }
+
+        // handle port devices
+        if !self.allocated {
+            let (port_type, _) = pcie_topo
+                .get_pcie_port()
+                .ok_or_else(|| anyhow!("No validated port type supported."))?;
+            let avail_port = match port_type {
+                PCIePort::RootPort | PCIePort::SwitchPort => pcie_topo.find_available_node(),
+                _ => {
+                    info!(
+                        sl!(),
+                        "There's no need to set ports used to hot-plug vfio devices"
+                    );
+                    None
+                }
+            };
+            // vfio device attached onto port(root port | switch port)
+            let port_device = avail_port
+                .ok_or_else(|| anyhow!("No available node found for {:?} device", port_type))?;
+            self.bus = match port_device {
+                AvailableNode::TopologyPortDevice(root_port) => root_port.port_id(),
+                AvailableNode::SwitchDownPort(swdown_port) => swdown_port.port_id(),
+            };
+
+            self.port = port_type;
+            self.allocated = true;
+            info!(sl!(), "bus: {:?}, port type: {:?}", &self.bus, &self.port);
         }
 
         self.device_options.clear();
