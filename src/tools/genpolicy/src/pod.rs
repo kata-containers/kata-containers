@@ -782,7 +782,13 @@ impl EnvVar {
                 let path: &str = &field_ref.fieldPath;
                 match path {
                     "metadata.name" => return "$(sandbox-name)".to_string(),
-                    "metadata.namespace" => return namespace.to_string(),
+                    "metadata.namespace" => {
+                        return if namespace.is_empty() {
+                            "$(sandbox-namespace)".to_string()
+                        } else {
+                            namespace.to_string()
+                        };
+                    }
                     "metadata.uid" => return "$(pod-uid)".to_string(),
                     "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
