@@ -303,6 +303,10 @@ jobs:
         timeout-minutes: 80
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
       - name: Delete AKS cluster
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
