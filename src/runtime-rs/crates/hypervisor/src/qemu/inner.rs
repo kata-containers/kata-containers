@@ -618,6 +618,20 @@ impl QemuInner {
                 )?;
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?
             }
+            DeviceType::Block(mut block_device) => {
+                block_device.config.pci_path = qmp
+                    .hotplug_block_device(
+                        &self.config.blockdev_info.block_device_driver,
+                        &block_device.device_id,
+                        &block_device.config.path_on_host,
+                        block_device.config.is_direct,
+                        block_device.config.is_readonly,
+                        block_device.config.no_drop,
+                    )
+                    .context("hotplug block device")?;
+
+                return Ok(DeviceType::Block(block_device));
+            }
             _ => info!(sl!(), "hotplugging of {:#?} is unsupported", device),
         }
         Ok(device)
