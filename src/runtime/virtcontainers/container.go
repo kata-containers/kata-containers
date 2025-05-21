@@ -860,7 +860,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	hotPlugVFIO := (c.sandbox.config.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
 	hotPlugDevices := []config.DeviceInfo{}
-	coldPlugDevices := []config.DeviceInfo{}
+	vfioColdPlugDevices := []config.DeviceInfo{}
 
 	for i, vfio := range deviceInfos {
 		// If device is already attached during sandbox creation, e.g.
@@ -889,7 +889,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 		// Device is already cold-plugged at sandbox creation time
 		// ignore it for the container creation
 		if coldPlugVFIO && isVFIODevice {
-			coldPlugDevices = append(coldPlugDevices, deviceInfos[i])
+			vfioColdPlugDevices = append(vfioColdPlugDevices, deviceInfos[i])
 			continue
 		}
 		hotPlugDevices = append(hotPlugDevices, deviceInfos[i])
@@ -904,7 +904,9 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
 		// This ensures that ociSpec.Linux.Devices is updated with
 		// this information before the container is created on the guest.
-		deviceInfos = sortContainerVFIODevices(coldPlugDevices)
+		sortedVFIODevices := sortContainerVFIODevices(vfioColdPlugDevices)
+		// Combine sorted VFIO devices with hot-plug devices
+		deviceInfos = append(sortedVFIODevices, hotPlugDevices...)
 	} else {
 		deviceInfos = sortContainerVFIODevices(hotPlugDevices)
 	}
@@ -927,7 +929,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 
 	// If we're hot-plugging this will be a no-op because at this stage
 	// no devices are attached to the root-port or switch-port
-	c.annotateContainerWithVFIOMetadata(coldPlugDevices)
+	c.annotateContainerWithVFIOMetadata(vfioColdPlugDevices)
 
 	return nil
 }
