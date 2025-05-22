@@ -52,18 +52,18 @@ if [[ "${AZURE_REGION}" == "${PP_REGION}" ]]; then
     PP_SUBNET_ID="${AZURE_SUBNET_ID}"
 else
     echo "Creating peering between ${AZURE_REGION} and ${PP_REGION}"
-    PP_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}-eastus"
-    PP_VNET_NAME="${AZURE_VNET_NAME}-eastus"
-    PP_SUBNET_NAME="${AZURE_SUBNET_NAME}-eastus"
-    PP_NSG_NAME="${AZURE_VNET_NAME}-nsg-eastus"
+    PP_RESOURCE_GROUP="${AZURE_RESOURCE_GROUP}-${PP_REGION}"
+    PP_VNET_NAME="${AZURE_VNET_NAME}-${PP_REGION}"
+    PP_SUBNET_NAME="${AZURE_SUBNET_NAME}-${PP_REGION}"
+    PP_NSG_NAME="${AZURE_VNET_NAME}-nsg-${PP_REGION}"
     az group create --name "${PP_RESOURCE_GROUP}" --location "${PP_REGION}"
     az network vnet create --resource-group "${PP_RESOURCE_GROUP}" --name "${PP_VNET_NAME}" --location "${PP_REGION}" --address-prefixes 10.2.0.0/16 --subnet-name "${PP_SUBNET_NAME}" --subnet-prefixes 10.2.1.0/24
     az network nsg create --resource-group "${PP_RESOURCE_GROUP}" --name "${PP_NSG_NAME}" --location "${PP_REGION}"
     az network vnet subnet update --resource-group "${PP_RESOURCE_GROUP}" --vnet-name "${PP_VNET_NAME}" --name "${PP_SUBNET_NAME}" --network-security-group "${PP_NSG_NAME}"
     AZURE_VNET_ID=$(az network vnet show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_VNET_NAME}" --query id --output tsv)
     PP_VNET_ID=$(az network vnet show --resource-group "${PP_RESOURCE_GROUP}" --name "${PP_VNET_NAME}" --query id --output tsv)
-    az network vnet peering create --name westus-to-eastus --resource-group "${AZURE_RESOURCE_GROUP}" --vnet-name "${AZURE_VNET_NAME}" --remote-vnet "${PP_VNET_ID}" --allow-vnet-access
-    az network vnet peering create --name eastus-to-westus --resource-group "${PP_RESOURCE_GROUP}" --vnet-name "${PP_VNET_NAME}" --remote-vnet "${AZURE_VNET_ID}" --allow-vnet-access
+    az network vnet peering create --name ${AZURE_REGION}-to-${PP_REGION} --resource-group "${AZURE_RESOURCE_GROUP}" --vnet-name "${AZURE_VNET_NAME}" --remote-vnet "${PP_VNET_ID}" --allow-vnet-access
+    az network vnet peering create --name ${PP_REGION}-to-${AZURE_REGION} --resource-group "${PP_RESOURCE_GROUP}" --vnet-name "${PP_VNET_NAME}" --remote-vnet "${AZURE_VNET_ID}" --allow-vnet-access
     PP_SUBNET_ID=$(az network vnet subnet list --resource-group "${PP_RESOURCE_GROUP}" --vnet-name "${PP_VNET_NAME}" --query "[].{Id:id} | [? contains(Id, 'worker')]" --output tsv)
 fi
 
