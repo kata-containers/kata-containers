@@ -591,7 +591,7 @@ prepare_credentials_for_qemu_se() {
 	fi
 	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
 	kata_base_dir=$(dirname "$(kata-runtime --config "${config_file_path}" env --json | jq -r '.Kernel.Path')")
-	if [[ ! -d "${HKD_PATH}" ]]; then
+	if [[ -z "${HKD_PATH:-}" || ! -d "${HKD_PATH}" ]]; then
 		>&2 echo "ERROR: HKD_PATH is not set"
 		return 1
 	fi
