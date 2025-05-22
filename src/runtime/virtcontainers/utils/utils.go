@@ -134,7 +134,7 @@ func CalculateCPUsF(quota int64, period, shares uint64) float32 {
 		return float32(quota) / float32(period)
 	}
 
-	// If not CPU limit is set (or no CPU limit is enforced),
+	// If CPU limit is not set (or no CPU limit is enforced),
 	// Default to the CPU requests (i.e. CPU shares)
 	return float32(shares) / 1024.0
 }
