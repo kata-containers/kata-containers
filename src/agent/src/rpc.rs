@@ -96,7 +96,7 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use tracing::instrument;
 
-use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
+use libc::{self, c_char, c_ushort, winsize, TIOCSWINSZ};
 use std::fs;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
@@ -577,15 +577,12 @@ impl AgentService {
             "exec-id" => &eid
         );
 
-        let pid: pid_t;
         let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
         let exit_rx = {
             let mut sandbox = self.sandbox.lock().await;
             let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
 
             p.exit_watchers.push(exit_send);
-            pid = p.pid;
-
             p.exit_rx.clone()
         };
 
@@ -600,7 +597,7 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        let p = match ctr.processes.get_mut(&pid) {
+        let p = match ctr.processes.get_mut(&eid) {
             Some(p) => p,
             None => {
                 // Lost race, pick up exit code from channel
@@ -624,7 +621,7 @@ impl AgentService {
             let _ = s.send(p.exit_code).await;
         }
 
-        ctr.processes.remove(&pid);
+        ctr.processes.remove(&eid);
 
         Ok(resp)
     }
@@ -2653,7 +2650,7 @@ mod tests {
                 }
                 linux_container
                     .processes
-                    .insert(exec_process_id, exec_process);
+                    .insert(exec_process.exec_id.clone(), exec_process);
 
                 sandbox.add_container(linux_container);
             }
