@@ -1046,6 +1046,12 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
     print("allow_storages: true")
 }
 
+# Currently, Image Layer Integrity Verification through Policy is only required for Guest VMs
+# that use container image layers provided as dm-verity-protected block device images created on the Host.
+allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } {
+    policy_data.common.image_layer_verification != "host-tarfs-dm-verity"
+}
+
 allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hashes": root_hashes } {
     policy_data.common.image_layer_verification == "host-tarfs-dm-verity"
 
@@ -1055,10 +1061,6 @@ allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hash
 
     layer_ids := split(overlay_storage.options[0], ":")
     root_hashes := split(overlay_storage.options[1], ":")
-}
-
-allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } {
-    policy_data.common.image_layer_verification != "host-tarfs-dm-verity"
 }
 
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
