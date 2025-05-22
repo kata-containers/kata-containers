@@ -554,7 +554,7 @@ impl AgentService {
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
         let cid = req.container_id;
-        let eid = req.exec_id;
+        let mut eid = req.exec_id;
         let mut resp = WaitProcessResponse::new();
 
         info!(
@@ -587,7 +587,7 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        let p = match ctr.processes.get_mut(&pid) {
+        let p = match ctr.processes.values_mut().find(|p| p.pid == pid) {
             Some(p) => p,
             None => {
                 // Lost race, pick up exit code from channel
@@ -600,6 +600,8 @@ impl AgentService {
             }
         };
 
+        eid = p.exec_id.clone();
+
         // need to close all fd
         // ignore errors for some fd might be closed by stream
         p.cleanup_process_stream();
@@ -611,7 +613,7 @@ impl AgentService {
             let _ = s.send(p.exit_code).await;
         }
 
-        ctr.processes.remove(&pid);
+        ctr.processes.remove(&eid);
 
         Ok(resp)
     }
@@ -2673,7 +2675,7 @@ mod tests {
                 }
                 linux_container
                     .processes
-                    .insert(exec_process_id, exec_process);
+                    .insert(exec_process.exec_id.clone(), exec_process);
 
                 sandbox.add_container(linux_container);
             }
