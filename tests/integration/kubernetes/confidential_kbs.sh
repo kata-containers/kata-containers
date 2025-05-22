@@ -13,6 +13,7 @@ kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../tests/common.bash"
+# shellcheck disable=1091
 source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 # For kata-runtime
 export PATH="${PATH}:/opt/kata/bin"
