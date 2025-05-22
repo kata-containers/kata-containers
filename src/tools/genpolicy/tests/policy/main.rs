@@ -284,4 +284,9 @@ mod tests {
     async fn test_create_container_mounts() {
         runtests("createcontainer/volumes/emptydir").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_volumes_config_map() {
+        runtests("createcontainer/volumes/config_map").await;
+    }
 }
