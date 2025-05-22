@@ -237,7 +237,7 @@ generate_dockerfile()
 ENV http_proxy=${http_proxy:-}
 ENV https_proxy=${http_proxy:-}
 RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | \
-    sh -s -- -y --default-toolchain ${RUST_VERSION} -t ${rustarch}-unknown-linux-${LIBC}
+	sh -s -- -y --default-toolchain ${RUST_VERSION} -t ${rustarch}-unknown-linux-${LIBC}
 RUN . /root/.cargo/env; cargo install cargo-when
 "
 	fi
@@ -255,24 +255,24 @@ RUN . /root/.cargo/env; cargo install cargo-when
 
 get_package_version_from_kata_yaml()
 {
-    local yq_path="$1"
-    local yq_version
-    local yq_args
+	local yq_path="$1"
+	local yq_version
+	local yq_args
 
 	typeset -r yq=$(command -v yq || command -v "${GOPATH}/bin/yq" || echo "${GOPATH}/bin/yq")
 	if [ ! -f "$yq" ]; then
 		source "$yq_file"
 	fi
 
-    yq_version=$($yq -V)
-    case $yq_version in
-    *"version "[1-3]*)
-        yq_args="r -X - ${yq_path}"
-        ;;
-    *)
-        yq_args="e .${yq_path} -"
-        ;;
-    esac
+	yq_version=$($yq -V)
+	case $yq_version in
+	*"version "[1-3]*)
+		yq_args="r -X - ${yq_path}"
+		;;
+	*)
+		yq_args="e .${yq_path} -"
+		;;
+	esac
 
 	PKG_VERSION="$(cat "${kata_versions_file}" | $yq ${yq_args})"
 
@@ -282,7 +282,7 @@ get_package_version_from_kata_yaml()
 detect_rust_version()
 {
 	info "Detecting agent rust version"
-    local yq_path="languages.rust.meta.newest-version"
+	local yq_path="languages.rust.meta.newest-version"
 
 	info "Get rust version from ${kata_versions_file}"
 	RUST_VERSION="$(get_package_version_from_kata_yaml "$yq_path")"
