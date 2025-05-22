@@ -17,6 +17,9 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ">=1.24.0"
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison
       - name: Build Ubuntu image ${{ matrix.arch }}
@@ -26,13 +29,18 @@ jobs:
           cd tools/packaging/kernel
           sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} setup
           sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} build
+      - name: Build containerd-shim-kata-v2
+        run: |
+          cd src/runtime
+          make -j$(nproc) containerd-shim-v2
       - name: Bundle artifacts
         run: |
           cp tools/packaging/kernel/kata-linux-*/vmlinux /tmp/vmlinux
           cp tools/osbuilder/kata-containers-image-ubuntu.img /tmp/kata-containers-image-ubuntu.img
           cp sbom.cdx.gz /tmp/sbom.cdx.gz
+          cp src/runtime/containerd-shim-kata-v2 /tmp/containerd-shim-kata-v2
           mkdir -p /tmp/artifacts
-          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.cdx.gz
+          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.cdx.gz /tmp/containerd-shim-kata-v2
           cd /tmp/artifacts
           sha256sum artifacts-${{ matrix.arch }}.zip > checksum-${{ matrix.arch }}.sha256
       - name: Upload Artifact

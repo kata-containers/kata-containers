@@ -1457,7 +1457,7 @@ func (a *annotationConfiguration) setFloat32WithCheck(f func(float32) error) err
 // be added to the VM if sandbox annotations are provided with this sizing details
 func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
-	var period uint64
+	var period, shares uint64
 	var err error
 
 	if spec == nil || spec.Annotations == nil {
@@ -1488,6 +1488,15 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
+	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUShares]
+	if ok {
+		shares, err = strconv.ParseUint(annotation, 10, 64)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUShares: %s", annotation)
+			shares = 0
+		}
+	}
+
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
 		memory, err = strconv.ParseInt(annotation, 10, 64)
@@ -1497,14 +1506,14 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
-	return calculateVMResources(period, quota, memory)
+	return calculateVMResources(period, quota, shares, memory)
 }
 
 // CalculateContainerSizing will calculate the number of CPUs and amount of memory that is needed
 // based on the provided LinuxResources
 func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
-	var period uint64
+	var period, shares uint64
 
 	if spec == nil || spec.Linux == nil || spec.Linux.Resources == nil {
 		return 0, 0
@@ -1512,20 +1521,25 @@ func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint3
 
 	resources := spec.Linux.Resources
 
-	if resources.CPU != nil && resources.CPU.Quota != nil && resources.CPU.Period != nil {
-		quota = *resources.CPU.Quota
-		period = *resources.CPU.Period
+	if resources.CPU != nil {
+		if resources.CPU.Quota != nil && resources.CPU.Period != nil {
+			quota = *resources.CPU.Quota
+			period = *resources.CPU.Period
+		}
+		if resources.CPU.Shares != nil {
+			shares = *resources.CPU.Shares
+		}
 	}
 
 	if resources.Memory != nil && resources.Memory.Limit != nil {
 		memory = *resources.Memory.Limit
 	}
 
-	return calculateVMResources(period, quota, memory)
+	return calculateVMResources(period, quota, shares, memory)
 }
 
-func calculateVMResources(period uint64, quota int64, memory int64) (numCPU float32, memSizeMB uint32) {
-	numCPU = vcutils.CalculateCPUsF(quota, period)
+func calculateVMResources(period uint64, quota int64, shares uint64, memory int64) (numCPU float32, memSizeMB uint32) {
+	numCPU = vcutils.CalculateCPUsF(quota, period, shares)
 
 	if memory < 0 {
 		// While spec allows for a negative value to indicate unconstrained, we don't

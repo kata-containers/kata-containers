@@ -150,20 +150,28 @@ func TestWriteToFile(t *testing.T) {
 func TestCalculateCPUsF(t *testing.T) {
 	assert := assert.New(t)
 
-	n := CalculateCPUsF(1, 1)
+	n := CalculateCPUsF(1, 1, 0)
 	expected := float32(1)
 	assert.Equal(n, expected)
 
-	n = CalculateCPUsF(1, 0)
+	n = CalculateCPUsF(1, 0, 0)
 	expected = float32(0)
 	assert.Equal(n, expected)
 
-	n = CalculateCPUsF(-1, 1)
+	n = CalculateCPUsF(-1, 1, 0)
 	expected = float32(0)
 	assert.Equal(n, expected)
 
-	n = CalculateCPUsF(500, 1000)
+	n = CalculateCPUsF(500, 1000, 0)
 	expected = float32(0.5)
+	assert.Equal(n, expected)
+
+	n = CalculateCPUsF(500, 1000, 1024)
+	expected = float32(0.5)
+	assert.Equal(n, expected)
+
+	n = CalculateCPUsF(0, 0, 1024)
+	expected = float32(1)
 	assert.Equal(n, expected)
 }
 
