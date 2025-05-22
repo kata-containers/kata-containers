@@ -403,17 +403,22 @@ pub fn get_image_mount_and_storage(
         "get_image_mount_and_storage: settings for container image volumes: {:?}",
         settings_image
     );
+    // NOTE: The following code is adding storages from volumes defined in the
+    // docker container image configuration layer. K8S in its OCI spec translates volumes
+    // only defined in the pod spec. So this causes a mismatch.
+    // The code is kept here for reference, in case we need to
+    // support this in the future.
 
-    storages.push(agent::Storage {
-        driver: settings_image.driver.clone(),
-        driver_options: Vec::new(),
-        source: settings_image.source.clone(),
-        fstype: settings_image.fstype.clone(),
-        options: settings_image.options.clone(),
-        mount_point: destination_string.clone(),
-        fs_group: protobuf::MessageField::none(),
-        special_fields: ::protobuf::SpecialFields::new(),
-    });
+    // storages.push(agent::Storage {
+    //     driver: settings_image.driver.clone(),
+    //     driver_options: Vec::new(),
+    //     source: settings_image.source.clone(),
+    //     fstype: settings_image.fstype.clone(),
+    //     options: settings_image.options.clone(),
+    //     mount_point: destination_string.clone(),
+    //     fs_group: protobuf::MessageField::none(),
+    //     special_fields: ::protobuf::SpecialFields::new(),
+    // });
 
     let file_name = Path::new(&destination_string).file_name().unwrap();
     let name = OsString::from(file_name).into_string().unwrap();
