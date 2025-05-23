@@ -271,6 +271,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_extra_args";
 /// A sandbox annotation to specify as the msize for 9p shares.
 pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
+/// A sandbox annotation to support Intel tdx quote generation service socket port(only supported in QEMU currently).
+pub const KATA_ANNO_CFG_HYPERVISOR_QGS_SOCKET_PORT: &str =
+    "io.katacontainers.config.hypervisor.qgs_socket_port";
 
 // Runtime related annotations
 /// Prefix for Runtime configurations.
@@ -923,6 +926,14 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             hv.shared_fs.msize_9p = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_QGS_SOCKET_PORT => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            hv.security_info.qgs_port = v.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(u32_err);
