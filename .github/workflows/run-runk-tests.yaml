@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: lts
+      GHCR_ACTOR: ${{ github.actor }}
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
