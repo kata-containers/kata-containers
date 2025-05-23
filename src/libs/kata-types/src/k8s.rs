@@ -16,6 +16,10 @@ const K8S_EMPTY_DIR: &str = "kubernetes.io~empty-dir";
 const K8S_CONFIGMAP: &str = "kubernetes.io~configmap";
 // K8S_SECRET is the K8s specific path for `secret` volumes
 const K8S_SECRET: &str = "kubernetes.io~secret";
+// K8S_PROJECTED is the K8s specific path for `projected` volumes
+const K8S_PROJECTED: &str = "kubernetes.io~projected";
+// K8S_DOWNWARD_API is the K8s specific path for `downward-api` volumes
+const K8S_DOWNWARD_API: &str = "kubernetes.io~downward-api";
 
 /// Check whether the path is a K8s empty directory.
 pub fn is_empty_dir<P: AsRef<Path>>(path: P) -> bool {
@@ -30,6 +34,16 @@ pub fn is_configmap<P: AsRef<Path>>(path: P) -> bool {
 /// Check whether the path is a K8s secret.
 pub fn is_secret<P: AsRef<Path>>(path: P) -> bool {
     is_special_dir(path, K8S_SECRET)
+}
+
+/// Check whether the path is a K8s projected volume.
+pub fn is_projected<P: AsRef<Path>>(path: P) -> bool {
+    is_special_dir(path, K8S_PROJECTED)
+}
+
+/// Check whether the path is a K8s downward-api volume.
+pub fn is_downward_api<P: AsRef<Path>>(path: P) -> bool {
+    is_special_dir(path, K8S_DOWNWARD_API)
 }
 
 /// Check whether the path is a K8s empty directory, configmap, or secret.
@@ -319,6 +333,36 @@ mod tests {
 
         let path = "/volumes/kubernetes.io~secret";
         assert!(!is_secret(path));
+    }
+
+    #[test]
+    fn test_is_projected() {
+        let path = "/volumes/kubernetes.io~projected/foo";
+        assert!(is_projected(path));
+
+        let path = "/volumes/kubernetes.io~projected//foo";
+        assert!(is_projected(path));
+
+        let path = "/volumes/kubernetes.io~projected-test/foo";
+        assert!(!is_projected(path));
+
+        let path = "/volumes/kubernetes.io~projected";
+        assert!(!is_projected(path));
+    }
+
+    #[test]
+    fn test_is_downward_api() {
+        let path = "/volumes/kubernetes.io~downward-api/foo";
+        assert!(is_downward_api(path));
+
+        let path = "/volumes/kubernetes.io~downward-api//foo";
+        assert!(is_downward_api(path));
+
+        let path = "/volumes/kubernetes.io~downward-api-test/foo";
+        assert!(!is_downward_api(path));
+
+        let path = "/volumes/kubernetes.io~downward-api";
+        assert!(!is_downward_api(path));
     }
 
     #[test]
