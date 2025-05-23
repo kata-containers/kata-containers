@@ -1,1 +1,2 @@
 src/version.rs
+tests/**/layers-cache.json
