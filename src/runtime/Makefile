@@ -280,6 +280,8 @@ DEFCREATECONTAINERTIMEOUT ?= 60
 # Default directory of directly attachable network config.
 DEFDANCONF := /run/kata-containers/dans
 
+DEFFORCEGUESTPULL := false
+
 SED = sed
 
 CLI_DIR = cmd
