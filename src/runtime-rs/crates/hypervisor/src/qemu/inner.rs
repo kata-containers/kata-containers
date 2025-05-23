@@ -632,6 +632,25 @@ impl QemuInner {
 
                 return Ok(DeviceType::Block(block_device));
             }
+            DeviceType::Vfio(mut vfiodev) => {
+                // FIXME: the first one might not the true device we want to passthrough.
+                // The `multifunction=on` is temporarily unsupported.
+                // Tracking issue #11292 has been created to monitor progress towards full multifunction support.
+                let primary_device = vfiodev.devices.first_mut().unwrap();
+                info!(
+                    sl!(),
+                    "qmp hotplug vfio primary_device {:?}", &primary_device
+                );
+
+                primary_device.guest_pci_path = qmp.hotplug_vfio_device(
+                    &primary_device.hostdev_id,
+                    &primary_device.bus_slot_func,
+                    &vfiodev.driver_type,
+                    &vfiodev.bus,
+                )?;
+
+                return Ok(DeviceType::Vfio(vfiodev));
+            }
             _ => info!(sl!(), "hotplugging of {:#?} is unsupported", device),
         }
         Ok(device)
