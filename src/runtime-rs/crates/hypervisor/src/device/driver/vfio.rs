@@ -165,6 +165,9 @@ pub struct HostDevice {
     /// Sysfs path for mdev bus type device
     pub sysfs_path: String,
 
+    /// PCI device information (Domain)
+    pub domain: String,
+
     /// PCI device information (BDF): "bus:slot:function"
     pub bus_slot_func: String,
 
@@ -342,12 +345,13 @@ impl VfioDevice {
     }
 
     // read vendor and deviceor from /sys/bus/pci/devices/BDF/X
-    fn get_vfio_device_vendor_class(&self, bdf: &str) -> Result<DeviceVendorClass> {
+    fn get_vfio_device_vendor_class(&self, device_name: &str) -> Result<DeviceVendorClass> {
         let device =
-            get_device_property(bdf, "device").context("get device from syspath failed")?;
+            get_device_property(device_name, "device").context("get device from syspath failed")?;
         let vendor =
-            get_device_property(bdf, "vendor").context("get vendor from syspath failed")?;
-        let class = get_device_property(bdf, "class").context("get class from syspath failed")?;
+            get_device_property(device_name, "vendor").context("get vendor from syspath failed")?;
+        let class =
+            get_device_property(device_name, "class").context("get class from syspath failed")?;
 
         Ok(DeviceVendorClass(device, vendor, class))
     }
@@ -364,10 +368,14 @@ impl VfioDevice {
         // It's safe as BDF really exists.
         let dev_bdf = vfio_dev_details.0.unwrap();
         let dev_vendor_class = self
-            .get_vfio_device_vendor_class(&dev_bdf)
+            .get_vfio_device_vendor_class(device_name)
             .context("get property device and vendor failed")?;
 
+        let parts: Vec<&str> = device_name.splitn(2, ':').collect();
+        let domain_part = parts.first().context("missing domain segment")?;
+
         let vfio_dev = HostDevice {
+            domain: domain_part.to_string(),
             bus_slot_func: dev_bdf.clone(),
             device_vendor_class: Some(dev_vendor_class),
             sysfs_path: vfio_dev_details.1,
@@ -562,8 +570,10 @@ impl PCIeDevice for VfioDevice {
             ))?;
             hostdev.guest_pci_path = Some(pci_path.clone());
 
-            self.device_options
-                .push(format!("0000:{}={}", hostdev.bus_slot_func, pci_path));
+            self.device_options.push(format!(
+                "{}:{}={}",
+                hostdev.domain, hostdev.bus_slot_func, pci_path
+            ));
         }
 
         Ok(())
@@ -679,13 +689,14 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 // expected format <bus>:<slot>.<func> eg. 02:10.0
 fn get_device_bdf(dev_sys_str: String) -> Option<String> {
     let dev_sys = dev_sys_str;
-    if !dev_sys.starts_with("0000:") {
-        return Some(dev_sys);
-    }
-
     let parts: Vec<&str> = dev_sys.as_str().splitn(2, ':').collect();
     if parts.len() < 2 {
         return None;
+    }
+
+    let domain_part = parts.first()?;
+    if domain_part.len() != 4 {
+        return Some(dev_sys);
     }
 
     parts.get(1).copied().map(|bdf| bdf.to_owned())
@@ -693,7 +704,8 @@ fn get_device_bdf(dev_sys_str: String) -> Option<String> {
 
 // expected format <domain>:<bus>:<slot>.<func> eg. 0000:02:10.0
 fn normalize_device_bdf(bdf: &str) -> String {
-    if !bdf.starts_with("0000") {
+    let parts: Vec<&str> = bdf.split(':').collect();
+    if parts.len() == 2 {
         format!("0000:{}", bdf)
     } else {
         bdf.to_string()
@@ -728,9 +740,7 @@ fn get_mediated_device_bdf(dev_sys_str: String) -> Option<String> {
 
 // dev_sys_path: /sys/bus/pci/devices/DDDD:BB:DD.F
 // cfg_path: : /sys/bus/pci/devices/DDDD:BB:DD.F/xxx
-fn get_device_property(bdf: &str, property: &str) -> Result<String> {
-    let device_name = normalize_device_bdf(bdf);
-
+fn get_device_property(device_name: &str, property: &str) -> Result<String> {
     let dev_sys_path = Path::new(SYS_BUS_PCI_DEVICES).join(device_name);
     let cfg_path = fs::read_to_string(dev_sys_path.join(property)).with_context(|| {
         format!(
