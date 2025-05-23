@@ -90,6 +90,8 @@ pub enum ProtectionError {
 #[cfg(target_arch = "x86_64")]
 pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx/";
 #[cfg(target_arch = "x86_64")]
+pub const TDX_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_intel/parameters/tdx";
+#[cfg(target_arch = "x86_64")]
 pub const SEV_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev";
 #[cfg(target_arch = "x86_64")]
 pub const SNP_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev_snp";
@@ -177,6 +179,19 @@ pub fn arch_guest_protection(
         };
 
         return Ok(GuestProtection::Tdx(details));
+    } else {
+        // Check if /sys/module/kvm_intel/parameters/tdx is set to 'Y'
+        if Path::new(TDX_KVM_PARAMETER_PATH).exists() {
+            if let Ok(content) = fs::read(TDX_KVM_PARAMETER_PATH) {
+                if !content.is_empty() && content[0] == b'Y' {
+                    // TODO: hardcode with tdx details(1.0) is acceptable ?
+                    return Ok(GuestProtection::Tdx(TDXDetails {
+                        major_version: 1_u32,
+                        minor_version: 0_u32,
+                    }));
+                }
+            }
+        }
     }
 
     let check_contents = |file_name: &str| -> Result<bool, ProtectionError> {
