@@ -5,7 +5,7 @@ members = ["rustjail", "policy", "vsock-exporter"]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
-rust-version = "1.80.0"
+rust-version = "1.85.1"
 
 [workspace.dependencies]
 oci-spec = { version = "0.6.8", features = ["runtime"] }
