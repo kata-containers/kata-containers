@@ -205,6 +205,10 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 #    Metadata, data, and pathname lookup are not cached in guest. They are
 #    always fetched from host and any changes are immediately pushed to host.
 #
+#  - metadata
+#    Metadata and pathname lookup are cached in guest and never expire.
+#    Data is never cached in guest.
+#
 #  - auto
 #    Metadata and pathname lookup cache expires after a configured amount of
 #    time (default is 1 second). Data is cached while the file is open (close
