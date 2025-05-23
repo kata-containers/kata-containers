@@ -321,12 +321,11 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
     let fs_group = storage.fs_group();
     let read_only = storage.options.contains(&String::from("ro"));
     let mount_path = Path::new(&storage.mount_point);
-    let metadata = mount_path.metadata().map_err(|err| {
+    let metadata = mount_path.metadata().inspect_err(|err| {
         error!(logger, "failed to obtain metadata for mount path";
             "mount-path" => mount_path.to_str(),
             "error" => err.to_string(),
-        );
-        err
+        )
     })?;
 
     if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch.into()
