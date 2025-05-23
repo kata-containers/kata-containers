@@ -230,10 +230,13 @@ externals:
     url: "https://github.com/containernetworking/plugins"
     version: "v1.2.0"
 
+  # This change is for CI test in #11197 and will not be merged.
+  # If CI passes and the https://github.com/confidential-containers/guest-components/pull/995
+  # gets merged, we will remove this change.
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
-    url: "https://github.com/confidential-containers/guest-components/"
-    version: "0a06ef241190780840fbb0542e51b198f1f72b0b"
+    url: "https://github.com/Xynnn007/guest-components"
+    version: "e15a391b0fe8582da3a50816961af1d8ddc6aa0a"
     toolchain: "1.80.0"
 
   coco-trustee:
