@@ -450,11 +450,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
         let s = s.unwrap();
 
-        if ns
-            .path()
-            .as_ref()
-            .map_or(true, |p| p.as_os_str().is_empty())
-        {
+        if ns.path().as_ref().is_none_or(|p| p.as_os_str().is_empty()) {
             // skip the pidns since it has been done in parent process.
             if *s != CloneFlags::CLONE_NEWPID {
                 to_new.set(*s, true);
@@ -1424,7 +1420,7 @@ pub fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> R
                 if namespace
                     .path()
                     .as_ref()
-                    .map_or(true, |p| p.as_os_str().is_empty())
+                    .is_none_or(|p| p.as_os_str().is_empty())
                 {
                     namespace.set_path(Some(PathBuf::from(&ns_path)));
                 }
