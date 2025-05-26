@@ -14,7 +14,7 @@ mod packet;
 
 use std::os::unix::io::AsRawFd;
 
-use vm_memory::GuestMemoryError;
+use vm_memory::{GuestAddress, GuestMemoryError};
 
 pub use self::defs::{NUM_QUEUES, QUEUE_SIZES};
 pub use self::device::Vsock;
@@ -136,6 +136,9 @@ pub enum VsockError {
     /// Encountered an unexpected read-only virtio descriptor.
     #[error("Encountered an unexpected read-only virtio descriptor")]
     UnwritableDescriptor,
+    /// Overflow occurred during an arithmetic operation.
+    #[error("Overflow occurred during an arithmetic operation, base({0:?}) + offset({0:?})")]
+    Overflow(GuestAddress, usize),
 }
 
 type Result<T> = std::result::Result<T, VsockError>;
