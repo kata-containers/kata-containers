@@ -18,7 +18,7 @@
 use std::ops::{Deref, DerefMut};
 
 use virtio_queue::{Descriptor, DescriptorChain};
-use vm_memory::GuestMemory;
+use vm_memory::{Address, GuestMemory};
 
 use super::defs;
 use super::{Result, VsockError};
@@ -190,15 +190,25 @@ pub struct BufWrapper {
 
 impl BufWrapper {
     /// Create the data wrapper from a virtq descriptor.
-    pub fn from_virtq_desc<M: GuestMemory>(desc: &Descriptor, mem: &M) -> Result<Self> {
+    /// Add offset and size, to support different forms of descriptor.
+    pub fn from_virtq_desc<M: GuestMemory>(
+        desc: &Descriptor,
+        mem: &M,
+        offset: usize,
+        size: usize,
+    ) -> Result<Self> {
         // Check the guest provided pointer and data size.
         mem.checked_offset(desc.addr(), desc.len() as usize)
             .ok_or_else(|| VsockError::GuestMemoryBounds(desc.addr().0, desc.len() as usize))?;
 
         Ok(Self::from_fat_ptr_unchecked(
-            mem.get_host_address(desc.addr())
-                .map_err(VsockError::GuestMemory)?,
-            desc.len() as usize,
+            mem.get_host_address(
+                desc.addr()
+                    .checked_add(offset as u64)
+                    .ok_or(VsockError::Overflow(desc.addr(), offset))?,
+            )
+            .map_err(VsockError::GuestMemory)?,
+            size,
         ))
     }
 
@@ -265,23 +275,48 @@ impl VsockPacket {
             return Ok(Self { hdr, buf: None });
         }
 
-        let buf_desc = desc_chain.next().ok_or(VsockError::BufDescMissing)?;
+        if desc.has_next() {
+            let buf_desc = desc_chain.next().ok_or(VsockError::BufDescMissing)?;
 
-        // All TX buffers must be readable.
-        if buf_desc.is_write_only() {
-            return Err(VsockError::UnreadableDescriptor);
+            // All TX buffers must be readable.
+            if buf_desc.is_write_only() {
+                return Err(VsockError::UnreadableDescriptor);
+            }
+
+            // The data descriptor should be large enough to hold the data length
+            // indicated by the header.
+            if buf_desc.len() < hdr.len {
+                return Err(VsockError::BufDescTooSmall);
+            }
+
+            Ok(Self {
+                hdr,
+                buf: Some(BufWrapper::from_virtq_desc(
+                    &buf_desc,
+                    desc_chain.memory(),
+                    0,
+                    buf_desc.len() as usize,
+                )?),
+            })
+        } else {
+            let buf_size = desc.len() as usize - VSOCK_PKT_HDR_SIZE;
+
+            // The data descriptor should be large enough to hold the data length
+            // indicated by the header.
+            if buf_size < hdr.len as usize {
+                return Err(VsockError::BufDescTooSmall);
+            }
+
+            Ok(Self {
+                hdr,
+                buf: Some(BufWrapper::from_virtq_desc(
+                    &desc,
+                    desc_chain.memory(),
+                    VSOCK_PKT_HDR_SIZE,
+                    buf_size,
+                )?),
+            })
         }
-
-        // The data descriptor should be large enough to hold the data length
-        // indicated by the header.
-        if buf_desc.len() < hdr.len {
-            return Err(VsockError::BufDescTooSmall);
-        }
-
-        Ok(Self {
-            hdr,
-            buf: Some(BufWrapper::from_virtq_desc(&buf_desc, desc_chain.memory())?),
-        })
     }
 
     /// Create the packet wrapper from an RX virtq chain head.
@@ -301,15 +336,34 @@ impl VsockPacket {
 
         let hdr = HdrWrapper::from_virtq_desc(&desc, desc_chain.memory())?;
 
-        let buf_desc = desc_chain.next().ok_or(VsockError::BufDescMissing)?;
-        if !buf_desc.is_write_only() {
-            return Err(VsockError::UnwritableDescriptor);
-        }
+        if desc.has_next() {
+            let buf_desc = desc_chain.next().ok_or(VsockError::BufDescMissing)?;
+            if !buf_desc.is_write_only() {
+                return Err(VsockError::UnwritableDescriptor);
+            }
 
-        Ok(Self {
-            hdr,
-            buf: Some(BufWrapper::from_virtq_desc(&buf_desc, desc_chain.memory())?),
-        })
+            Ok(Self {
+                hdr,
+                buf: Some(BufWrapper::from_virtq_desc(
+                    &buf_desc,
+                    desc_chain.memory(),
+                    0,
+                    buf_desc.len() as usize,
+                )?),
+            })
+        } else {
+            let buf_size = desc.len() as usize - VSOCK_PKT_HDR_SIZE;
+
+            Ok(Self {
+                hdr,
+                buf: Some(BufWrapper::from_virtq_desc(
+                    &desc,
+                    desc_chain.memory(),
+                    VSOCK_PKT_HDR_SIZE,
+                    buf_size,
+                )?),
+            })
+        }
     }
 
     /// Provides in-place, byte-slice, access to the vsock packet header.
@@ -575,11 +629,12 @@ mod tests {
         // Test case:
         // - packet header advertises some data length; and
         // - the data descriptor is missing.
+        // This will be treated as single descriptor now.
         {
             create_context!(test_ctx, handler_ctx);
             set_pkt_len(1024, &handler_ctx.guest_txvq.dtable(0), &test_ctx.mem);
             handler_ctx.guest_txvq.dtable(0).flags().store(0);
-            expect_asm_error!(tx, test_ctx, handler_ctx, VsockError::BufDescMissing);
+            expect_asm_error!(tx, test_ctx, handler_ctx, VsockError::BufDescTooSmall);
         }
 
         // Test case: error on write-only buf descriptor.
@@ -641,6 +696,7 @@ mod tests {
         }
 
         // Test case: RX descriptor chain is missing the packet buffer descriptor.
+        // This will be treated as single descriptor now.
         {
             create_context!(test_ctx, handler_ctx);
             handler_ctx
@@ -648,7 +704,14 @@ mod tests {
                 .dtable(0)
                 .flags()
                 .store(VIRTQ_DESC_F_WRITE);
-            expect_asm_error!(rx, test_ctx, handler_ctx, VsockError::BufDescMissing);
+            let pkt = VsockPacket::from_rx_virtq_head(
+                &mut handler_ctx.queues[RXQ_EVENT as usize]
+                    .queue_mut()
+                    .pop_descriptor_chain(&test_ctx.mem)
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(pkt.buf(), Some(vec![]).as_deref());
         }
     }
 
