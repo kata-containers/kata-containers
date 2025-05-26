@@ -428,7 +428,7 @@ impl Sandbox {
     pub fn setup_shared_mounts(&self, c: &LinuxContainer, mounts: &Vec<SharedMount>) -> Result<()> {
         let mut src_ctrs: HashMap<String, i32> = HashMap::new();
         for shared_mount in mounts {
-            if src_ctrs.get(&shared_mount.src_ctr) == None {
+            if src_ctrs.get(&shared_mount.src_ctr).is_none() {
                 if let Some(c) = self.find_container_by_name(&shared_mount.src_ctr) {
                     src_ctrs.insert(shared_mount.src_ctr.clone(), c.init_process_pid);
                 }
