@@ -398,7 +398,7 @@ impl VirtSandbox {
             GuestProtection::Se => {
                 Ok(Some(ProtectionDeviceConfig::Se))
             }
-            GuestProtection::Tdx(_details) => {
+            GuestProtection::Tdx => {
                 Ok(Some(ProtectionDeviceConfig::Tdx(TdxConfig {
                     id: "tdx".to_owned(),
                     firmware: hypervisor_config.boot_info.firmware.clone(),
