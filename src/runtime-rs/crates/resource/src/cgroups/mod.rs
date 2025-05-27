@@ -123,11 +123,11 @@ impl CgroupsResource {
     /// delete will move the running processes in the cgroup_manager and
     /// overhead_cgroup_manager to the parent and then delete the cgroups.
     pub async fn delete(&self) -> Result<()> {
-        for cg_pid in self.cgroup_manager.tasks() {
-            // For now, we can't guarantee that the thread in cgroup_manager does still
-            // exist. Once it exit, we should ignore that error returned by remove_task
+        for cg_pid in self.cgroup_manager.procs() {
+            // For now, we can't guarantee that the process in cgroup_manager does still
+            // exist. Once it exit, we should ignore that error returned by remove_task_by_tgid
             // to let it go.
-            if let Err(error) = self.cgroup_manager.remove_task(cg_pid) {
+            if let Err(error) = self.cgroup_manager.remove_task_by_tgid(cg_pid) {
                 match error.source() {
                     Some(err) => match err.downcast_ref::<io::Error>() {
                         Some(e) => {
