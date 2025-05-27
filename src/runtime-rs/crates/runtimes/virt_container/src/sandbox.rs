@@ -402,7 +402,7 @@ impl VirtSandbox {
                 Ok(Some(ProtectionDeviceConfig::Tdx(TdxConfig {
                     id: "tdx".to_owned(),
                     firmware: hypervisor_config.boot_info.firmware.clone(),
-                    qgs_port: 4050,
+                    qgs_port: hypervisor_config.security_info.qgs_port,
                     mrconfigid: None,
                     debug: false,
                 })))
