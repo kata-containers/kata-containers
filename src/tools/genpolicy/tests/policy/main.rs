@@ -289,5 +289,4 @@ mod tests {
     async fn test_create_container_volumes_container_image() {
         runtests("createcontainer/volumes/container_image").await;
     }
-
 }
