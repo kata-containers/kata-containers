@@ -33,6 +33,8 @@ tokio = { workspace = true, features = ["process"] }
 tracing = { workspace = true }
 uuid = { version = "0.4", features = ["v4"] }
 oci-spec = { workspace = true }
+inotify = "0.11.0"
+walkdir = "2.5.0"
 
 ## Dependencies from `rust-netlink`
 netlink-packet-route = "0.22"
