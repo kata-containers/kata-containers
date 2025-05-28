@@ -20,7 +20,9 @@ jobs:
   gatekeeper:
     runs-on: ubuntu-22.04
     permissions:
+      actions: read
       contents: read
+      issues: read
     steps:
       - uses: actions/checkout@v4
         with:
