@@ -15,7 +15,7 @@ Wants=kata-containers.target
 StandardOutput=tty
 Type=simple
 ExecStart=@BINDIR@/@AGENT_NAME@
-LimitNOFILE=1048576
+LimitNOFILE=1073741824
 # ExecStop is required for static agent tracing; in all other scenarios
 # the runtime handles shutting down the VM.
 ExecStop=/bin/sync ; /usr/bin/systemctl --force poweroff
