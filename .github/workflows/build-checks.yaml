@@ -5,6 +5,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 name: Build checks
 jobs:
   check:

@@ -21,6 +21,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build-asset:
     runs-on: ubuntu-22.04

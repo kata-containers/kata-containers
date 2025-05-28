@@ -25,6 +25,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   # Generate jobs for testing CoCo on non-TEE environments
   run-stability-k8s-tests-coco-nontee:

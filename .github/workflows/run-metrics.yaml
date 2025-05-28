@@ -22,6 +22,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   run-metrics:
     strategy:

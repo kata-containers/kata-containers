@@ -13,6 +13,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   run-runk:
     # Skip runk tests as we have no maintainers. TODO: Decide when to remove altogether

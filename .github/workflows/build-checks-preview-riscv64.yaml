@@ -12,6 +12,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 name: Build checks preview riscv64
 jobs:
   check:

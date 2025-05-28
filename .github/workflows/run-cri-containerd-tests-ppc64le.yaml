@@ -1,4 +1,8 @@
 name: CI | Run cri-containerd tests on ppc64le
+
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:

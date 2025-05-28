@@ -31,6 +31,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   kata-payload:
     runs-on: ${{ inputs.runner }}
