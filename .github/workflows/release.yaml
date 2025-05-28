@@ -19,6 +19,11 @@ jobs:
 
   build-and-push-assets-amd64:
     needs: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release-amd64.yaml
     with:
       target-arch: amd64
@@ -26,6 +31,11 @@ jobs:
 
   build-and-push-assets-arm64:
     needs: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release-arm64.yaml
     with:
       target-arch: arm64
@@ -33,6 +43,11 @@ jobs:
 
   build-and-push-assets-s390x:
     needs: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release-s390x.yaml
     with:
       target-arch: s390x
@@ -40,6 +55,9 @@ jobs:
 
   build-and-push-assets-ppc64le:
     needs: release
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/release-ppc64le.yaml
     with:
       target-arch: ppc64le

@@ -10,6 +10,11 @@ concurrency:
 
 jobs:
   build-assets-amd64:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -18,6 +23,11 @@ jobs:
     secrets: inherit
 
   build-assets-arm64:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -26,6 +36,11 @@ jobs:
     secrets: inherit
 
   build-assets-s390x:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
     with:
       commit-hash: ${{ github.sha }}
@@ -34,6 +49,9 @@ jobs:
     secrets: inherit
 
   build-assets-ppc64le:
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
     with:
       commit-hash: ${{ github.sha }}
