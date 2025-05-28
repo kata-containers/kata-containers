@@ -19,6 +19,9 @@ jobs:
 
   kata-deploy:
     needs: build-kata-static-tarball-arm64
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-22.04-arm
     steps:
       - name: Login to Kata Containers docker.io

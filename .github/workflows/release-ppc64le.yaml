@@ -19,6 +19,9 @@ jobs:
 
   kata-deploy:
     needs: build-kata-static-tarball-ppc64le
+    permissions:
+      contents: read
+      packages: write
     runs-on: ppc64le
     steps:
       - name: Login to Kata Containers docker.io
