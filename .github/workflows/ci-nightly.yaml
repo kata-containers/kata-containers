@@ -9,6 +9,11 @@ concurrency:
 
 jobs:
   kata-containers-ci-on-push:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/ci.yaml
     with:
       commit-hash: ${{ github.sha }}

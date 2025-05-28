@@ -23,6 +23,9 @@ on:
 
 jobs:
   build-asset:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ppc64le
     strategy:
       matrix:
