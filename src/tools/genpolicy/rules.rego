@@ -835,7 +835,7 @@ allow_var(p_process, i_process, i_var, s_name, s_namespace) {
     some p_regex1 in policy_data.request_defaults.CreateContainerRequest.allow_env_regex
     p_regex2 := replace(p_regex1, "$(ipv4_a)", policy_data.common.ipv4_a)
     p_regex3 := replace(p_regex2, "$(ip_p)", policy_data.common.ip_p)
-    p_regex4 := replace(p_regex3, "$(svc_name)", policy_data.common.svc_name)
+    p_regex4 := replace(p_regex3, "$(svc_name_downward_env)", policy_data.common.svc_name_downward_env)
     p_regex5 := replace(p_regex4, "$(dns_label)", policy_data.common.dns_label)
 
     print("allow_var 3: p_regex5 =", p_regex5)

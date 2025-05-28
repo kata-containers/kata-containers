@@ -407,8 +407,8 @@ pub struct CommonData {
     /// Regex for an IP port number.
     pub ip_p: String,
 
-    /// Regex for a K8s service name.
-    pub svc_name: String,
+    /// Regex for a K8s service name (RFC 1035), after downward API transformation.
+    pub svc_name_downward_env: String,
 
     // Regex for a DNS label (e.g., host name).
     pub dns_label: String,
