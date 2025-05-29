@@ -349,7 +349,7 @@ function adjust_qemu_cmdline() {
 	# The paths on the kata-containers tarball side look like:
 	# ${dest_dir}/opt/kata/share/kata-qemu/qemu
 	# ${dest_dir}/opt/kata/share/kata-qemu-snp-experimnental/qemu
-	[[ "${shim}" =~ ^(qemu-snp|qemu-nvidia-snp)$ ]] && qemu_share=${shim}-experimental
+	[[ "${shim}" =~ ^(qemu-snp|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)$ ]] && qemu_share=${shim}-experimental
 
 	# Both qemu and qemu-coco-dev use exactly the same QEMU, so we can adjust
 	# the shim on the qemu-coco-dev case to qemu
@@ -463,7 +463,7 @@ function install_artifacts() {
 				sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
 				# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-				[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-se|qemu-coco-dev)$ ]] && \
+				[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-se|qemu-coco-dev)$ ]] && \
 					adjust_qemu_cmdline "${shim}" "${kata_config_file}"
 			fi
 		fi
