@@ -30,6 +30,11 @@ on:
         description: The arch of the tarball.
         required: true
         type: string
+    secrets:
+      quay_deployer_username:
+        required: true
+      quay_deployer_password:
+        required: true
 
 permissions:
   contents: read
@@ -62,8 +67,8 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          username: ${{ secrets.quay_deployer_username }}
+          password: ${{ secrets.quay_deployer_password }}
 
       - name: Login to Kata Containers ghcr.io
         if: ${{ inputs.registry == 'ghcr.io' }}

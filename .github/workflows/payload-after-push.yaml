@@ -23,7 +23,9 @@ jobs:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-arm64:
     permissions:
@@ -36,7 +38,9 @@ jobs:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-s390x:
     permissions:
@@ -49,7 +53,10 @@ jobs:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
-    secrets: inherit
+    secrets:
+      ci_hkd_path: ${{ secrets.CI_HKD_PATH }}
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-ppc64le:
     permissions:
@@ -60,7 +67,9 @@ jobs:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-amd64:
     needs: build-assets-amd64
@@ -76,7 +85,9 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-22.04
       arch: amd64
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-arm64:
     needs: build-assets-arm64
@@ -92,7 +103,9 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-22.04-arm
       arch: arm64
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-s390x:
     needs: build-assets-s390x
@@ -108,7 +121,9 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: s390x
       arch: s390x
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-ppc64le:
     needs: build-assets-ppc64le
@@ -124,7 +139,9 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ppc64le
       arch: ppc64le
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-manifest:
     runs-on: ubuntu-22.04
