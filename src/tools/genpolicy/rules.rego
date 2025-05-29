@@ -1031,9 +1031,10 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
     p_count := count(p_storages)
     i_count := count(i_storages)
-    print("allow_storages: p_count =", p_count, "i_count =", i_count)
+    img_pull_count := count([s | s := i_storages[_]; s.driver == "image_guest_pull"])
+    print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count)
 
-    p_count == i_count
+    p_count + img_pull_count == i_count
 
     image_info := allow_container_image_storage(p_storages)
     layer_ids := image_info.layer_ids
@@ -1079,6 +1080,17 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
     allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids)
 
     print("allow_storage: true")
+}
+
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
+    i_storage.driver == "image_guest_pull"
+    print("allow_storage with image_guest_pull: start")
+    i_storage.fstype == "overlay"
+    i_storage.fs_group == null
+    count(i_storage.options) == 0
+    p_storage := i_storage
+    allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids)
+    print("allow_storage with image_guest_pull: true")
 }
 
 allow_storage_source(p_storage, i_storage, bundle_id) {
@@ -1276,6 +1288,24 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     regex.match(mount1, i_storage.mount_point)
 
     print("allow_mount_point 5: true")
+}
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+    print("allow_mount_point 6: start")
+    p_storage.driver == "image_guest_pull"
+    p_storage.fstype == "overlay"
+
+    mount1 := p_storage.mount_point
+    print("allow_mount_point 6: mount1 =", mount1)
+
+    mount2 := replace(mount1, "$(cpath)", policy_data.common.cpath)
+    print("allow_mount_point 6: mount2 =", mount2)
+
+    mount3 := replace(mount2, "$(bundle-id)", bundle_id)
+    print("allow_mount_point 6: mount3 =", mount3)
+
+    regex.match(mount3, i_storage.mount_point)
+
+    print("allow_mount_point 6: true")
 }
 
 # ExecProcessRequest.process.Capabilities
