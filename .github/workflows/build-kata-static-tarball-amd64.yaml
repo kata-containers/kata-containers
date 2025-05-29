@@ -81,6 +81,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -179,6 +180,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -269,6 +271,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -321,6 +324,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
       - name: Rebase atop of the latest target branch
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
