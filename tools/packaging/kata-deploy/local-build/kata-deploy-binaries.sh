@@ -436,6 +436,7 @@ install_image_confidential() {
 
 #Install cbl-mariner guest image
 install_image_mariner() {
+	export IMAGE_SIZE_ALIGNMENT_MB=2
 	install_image "mariner"
 }
 
