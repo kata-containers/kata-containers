@@ -36,6 +36,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -79,6 +80,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -119,7 +121,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
-
+          persist-credentials: false
       - name: Rebase atop of the latest target branch
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
@@ -161,6 +163,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -195,6 +198,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -236,6 +240,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -279,6 +284,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -319,6 +325,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -362,6 +369,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -400,14 +408,13 @@ jobs:
           retention-days: 1
 
   run-kata-agent-apis:
-    strategy:
-      fail-fast: false
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |

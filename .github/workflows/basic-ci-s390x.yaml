@@ -36,6 +36,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -78,6 +79,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -118,6 +120,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -157,6 +160,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
