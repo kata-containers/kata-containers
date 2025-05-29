@@ -92,7 +92,7 @@ mod tests {
 
         let config = genpolicy::utils::Config {
             base64_out: false,
-            config_files: config_files,
+            config_files,
             containerd_socket_path: None, // Some(String::from("/var/run/containerd/containerd.sock")),
             insecure_registries: Vec::new(),
             layers_cache_file_path: None,
