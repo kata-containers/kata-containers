@@ -2,6 +2,9 @@ name: Kata Containers CI (manually triggered)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   kata-containers-ci-on-push:
     permissions:

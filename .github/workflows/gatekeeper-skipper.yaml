@@ -31,6 +31,8 @@ on:
       skip_static:
         value: ${{ jobs.skipper.outputs.skip_static }}
 
+permissions:
+  contents: read
 
 jobs:
   skipper:

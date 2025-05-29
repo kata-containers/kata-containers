@@ -31,8 +31,14 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   kata-payload:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v4

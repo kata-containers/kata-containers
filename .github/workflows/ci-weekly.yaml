@@ -16,8 +16,16 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build-kata-static-tarball-amd64:
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -26,6 +34,9 @@ jobs:
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -39,6 +50,9 @@ jobs:
     secrets: inherit
 
   build-and-publish-tee-confidential-unencrypted-image:
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code

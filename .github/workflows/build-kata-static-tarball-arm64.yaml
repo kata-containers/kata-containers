@@ -21,6 +21,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build-asset:
     runs-on: ubuntu-22.04-arm
@@ -130,6 +133,9 @@ jobs:
   build-asset-rootfs:
     runs-on: ubuntu-22.04-arm
     needs: build-asset
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         asset:
@@ -219,6 +225,9 @@ jobs:
   build-asset-shim-v2:
     runs-on: ubuntu-22.04-arm
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts, remove-rootfs-binary-artifacts-for-release]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -274,6 +283,9 @@ jobs:
   create-kata-tarball:
     runs-on: ubuntu-22.04-arm
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:

@@ -3,6 +3,10 @@ on:
     - cron: '0 5 * * *'
 
 name: Nightly CI for s390x
+
+permissions:
+  contents: read
+
 jobs:
   check-internal-test-result:
     runs-on: s390x

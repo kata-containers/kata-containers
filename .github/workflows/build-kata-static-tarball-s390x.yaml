@@ -21,6 +21,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   build-asset:
     runs-on: s390x
@@ -112,6 +115,9 @@ jobs:
   build-asset-rootfs:
     runs-on: s390x
     needs: build-asset
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         asset:
@@ -175,6 +181,9 @@ jobs:
   build-asset-boot-image-se:
     runs-on: s390x
     needs: [build-asset, build-asset-rootfs]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -235,6 +244,9 @@ jobs:
   build-asset-shim-v2:
     runs-on: s390x
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -296,6 +308,9 @@ jobs:
       - build-asset-rootfs
       - build-asset-boot-image-se
       - build-asset-shim-v2
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:

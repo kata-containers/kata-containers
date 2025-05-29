@@ -6,6 +6,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   build-kata-static-tarball-ppc64le:
     uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
@@ -16,6 +19,9 @@ jobs:
 
   kata-deploy:
     needs: build-kata-static-tarball-ppc64le
+    permissions:
+      contents: read
+      packages: write
     runs-on: ppc64le
     steps:
       - name: Login to Kata Containers docker.io

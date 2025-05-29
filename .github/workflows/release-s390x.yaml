@@ -6,6 +6,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   build-kata-static-tarball-s390x:
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
@@ -16,6 +19,9 @@ jobs:
 
   kata-deploy:
     needs: build-kata-static-tarball-s390x
+    permissions:
+      contents: read
+      packages: write
     runs-on: s390x
     steps:
       - name: Login to Kata Containers docker.io

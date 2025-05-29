@@ -25,6 +25,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   run-k8s-tests-on-tdx:
     strategy:

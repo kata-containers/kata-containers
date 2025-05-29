@@ -2,6 +2,9 @@ name: Release Kata Containers
 on:
   workflow_dispatch
 
+permissions:
+  contents: read
+
 jobs:
   release:
     runs-on: ubuntu-22.04
