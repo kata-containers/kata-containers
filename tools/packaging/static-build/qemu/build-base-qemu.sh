@@ -16,9 +16,9 @@ source "${script_dir}/../qemu.blacklist"
 
 ARCH=${ARCH:-$(uname -m)}
 dpkg_arch=":${ARCH}"
-[ ${dpkg_arch} == ":aarch64" ] && dpkg_arch=":arm64"
-[ ${dpkg_arch} == ":x86_64" ] && dpkg_arch=""
-[ "${dpkg_arch}" == ":ppc64le" ] && dpkg_arch=":ppc64el"
+[[ "${dpkg_arch}" == ":aarch64" ]] && dpkg_arch=":arm64"
+[[ "${dpkg_arch}" == ":x86_64" ]] && dpkg_arch=""
+[[ "${dpkg_arch}" == ":ppc64le" ]] && dpkg_arch=":ppc64el"
 
 packaging_dir="${script_dir}/../.."
 qemu_destdir="/tmp/qemu-static/"
@@ -30,8 +30,8 @@ qemu_version="${qemu_version:-$2}"
 build_suffix="${3:-}"
 qemu_tar="${4:-}"
 
-[ -n "$qemu_repo" ] || die "qemu repo not provided"
-[ -n "$qemu_version" ] || die "qemu version not provided"
+[[ -n "${qemu_repo}" ]] || die "qemu repo not provided"
+[[ -n "${qemu_version}" ]] || die "qemu version not provided"
 
 info "Build ${qemu_repo} version: ${qemu_version}"
 
@@ -41,13 +41,13 @@ prefix="${prefix:-"/opt/kata"}"
 
 CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
-[ -n "${build_suffix}" ] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
-[ -n "${build_suffix}" ] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
+[[ -n "${build_suffix}" ]] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
+[[ -n "${build_suffix}" ]] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
 
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
-[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
+[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
-${container_engine} pull ${container_image} || ("${container_engine}" build \
+${container_engine} pull "${container_image}" || ("${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
