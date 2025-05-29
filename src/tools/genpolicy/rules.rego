@@ -1034,7 +1034,7 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
     img_pull_count := count([s | s := i_storages[_]; s.driver == "image_guest_pull"])
     print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count)
 
-    p_count + img_pull_count == i_count
+    p_count == i_count - img_pull_count
 
     image_info := allow_container_image_storage(p_storages)
     layer_ids := image_info.layer_ids
@@ -1052,7 +1052,6 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
 allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } {
     policy_data.common.image_layer_verification != "host-tarfs-dm-verity"
 }
-
 allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hashes": root_hashes } {
     policy_data.common.image_layer_verification == "host-tarfs-dm-verity"
 
@@ -1081,7 +1080,6 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
 
     print("allow_storage: true")
 }
-
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
     i_storage.driver == "image_guest_pull"
     print("allow_storage with image_guest_pull: start")
