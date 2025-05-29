@@ -404,14 +404,6 @@ func (object Object) QemuParams(config *Config) []string {
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SNPGuest:
-		if len(object.InitdataDigest) > 0 {
-			// due to https://github.com/confidential-containers/qemu/blob/amd-snp-202402240000/qapi/qom.json#L926-L929
-			// hostdata in SEV-SNP should be exactly 32 bytes
-			hostdataSlice := adjustProperLength(object.InitdataDigest, 32)
-			hostdata := base64.StdEncoding.EncodeToString(hostdataSlice)
-			objectParams = append(objectParams, fmt.Sprintf("host-data=%s", hostdata))
-		}
-
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
@@ -422,6 +414,13 @@ func (object Object) QemuParams(config *Config) []string {
 		}
 		if object.SnpIdAuth != "" {
 			objectParams = append(objectParams, fmt.Sprintf("id-auth=%s", object.SnpIdAuth))
+		}
+		if len(object.InitdataDigest) > 0 {
+			// due to https://github.com/confidential-containers/qemu/blob/amd-snp-202402240000/qapi/qom.json#L926-L929
+			// hostdata in SEV-SNP should be exactly 32 bytes
+			hostdataSlice := adjustProperLength(object.InitdataDigest, 32)
+			hostdata := base64.StdEncoding.EncodeToString(hostdataSlice)
+			objectParams = append(objectParams, fmt.Sprintf("host-data=%s", hostdata))
 		}
 		config.Bios = object.File
 	case SecExecGuest:
