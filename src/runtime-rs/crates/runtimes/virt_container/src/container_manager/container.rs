@@ -110,6 +110,8 @@ impl Container {
             // is 'true'.
             None => true,
         };
+        let annotations = spec.annotations().clone().unwrap_or_default();
+
         amend_spec(
             &mut spec,
             toml_config.runtime.disable_guest_seccomp,
@@ -127,6 +129,7 @@ impl Container {
         let rootfs = self
             .resource_manager
             .handler_rootfs(
+                &annotations,
                 &config.container_id,
                 root,
                 &config.bundle,
