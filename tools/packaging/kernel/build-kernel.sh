@@ -308,6 +308,13 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${tmpfs_configs}"
 	fi
 
+	if [[ "${KBUILD_SIGN_PIN}" != "" ]]; then
+		info "Enabling config for module signing"
+		local sign_configs
+		sign_configs="$(ls ${common_path}/signing/module_signing.conf)"
+		all_configs="${all_configs} ${sign_configs}"
+	fi
+
 	if [[ "$force_setup_generate_config" == "true" ]]; then
 		info "Remove existing config ${config_path} due to '-f'"
 		[ -f "$config_path" ] && rm -f "${config_path}"
