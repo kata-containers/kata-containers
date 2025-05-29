@@ -1033,9 +1033,10 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
     p_count := count(p_storages)
     i_count := count(i_storages)
-    print("allow_storages: p_count =", p_count, "i_count =", i_count)
+    img_pull_count := count([s | s := i_storages[_]; s.driver == "image_guest_pull"])
+    print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count)
 
-    p_count == i_count
+    p_count == i_count - img_pull_count
 
     image_info := allow_container_image_storage(p_storages)
     layer_ids := image_info.layer_ids
@@ -1053,7 +1054,6 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
 allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } {
     policy_data.common.image_layer_verification != "host-tarfs-dm-verity"
 }
-
 allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hashes": root_hashes } {
     policy_data.common.image_layer_verification == "host-tarfs-dm-verity"
 
@@ -1081,6 +1081,15 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
     allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids)
 
     print("allow_storage: true")
+}
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
+    i_storage.driver == "image_guest_pull"
+    print("allow_storage with image_guest_pull: start")
+    i_storage.fstype == "overlay"
+    i_storage.fs_group == null
+    count(i_storage.options) == 0
+    # TODO: Check Mount Point, Source, Driver Options, etc.
+    print("allow_storage with image_guest_pull: true")
 }
 
 allow_storage_source(p_storage, i_storage, bundle_id) {
