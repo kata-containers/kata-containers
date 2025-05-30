@@ -1,43 +1,43 @@
 [package]
-name = "virt_container"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "virt_container"
+version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-awaitgroup = "0.6.0"
+anyhow                 = { workspace = true }
+async-std              = "1.12.0"
+async-trait            = { workspace = true }
+awaitgroup             = "0.6.0"
 containerd-shim-protos = { workspace = true }
-futures = "0.3.19"
-lazy_static = { workspace = true }
-libc = { workspace = true }
-nix = { workspace = true }
-protobuf = { workspace = true }
-sendfd = { version = "0.4.3", features = ["tokio"] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-slog = { workspace = true }
-slog-scope = { workspace = true }
-tokio = { workspace = true }
-toml = "0.4.2"
-url = { workspace = true }
-async-std = "1.12.0"
-tracing = { workspace = true }
-oci-spec = { workspace = true }
-strum = { workspace = true }
+futures                = "0.3.19"
+lazy_static            = { workspace = true }
+libc                   = { workspace = true }
+nix                    = { workspace = true }
+oci-spec               = { workspace = true }
+protobuf               = { workspace = true }
+sendfd                 = { version = "0.4.3", features = ["tokio"] }
+serde                  = { workspace = true, features = ["derive"] }
+serde_json             = { workspace = true }
+slog                   = { workspace = true }
+slog-scope             = { workspace = true }
+strum                  = { workspace = true }
+tokio                  = { workspace = true }
+toml                   = "0.4.2"
+tracing                = { workspace = true }
+url                    = { workspace = true }
 
 # Local dependencies
-agent = { workspace = true }
-common = { workspace = true }
-hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
+agent         = { workspace = true }
+common        = { workspace = true }
+hypervisor    = { workspace = true, features = ["cloud-hypervisor"] }
 kata-sys-util = { workspace = true }
-kata-types = { workspace = true }
-logging = { workspace = true }
-runtime-spec = { workspace = true }
-persist = { workspace = true }
-resource = { workspace = true }
+kata-types    = { workspace = true }
+logging       = { workspace = true }
+persist       = { workspace = true }
+resource      = { workspace = true }
+runtime-spec  = { workspace = true }
 
 [features]
 default = ["cloud-hypervisor"]

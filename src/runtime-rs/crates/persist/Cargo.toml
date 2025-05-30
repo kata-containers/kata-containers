@@ -1,19 +1,19 @@
 [package]
-name = "persist"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "persist"
+version = "0.1.0"
 
 [dependencies]
+anyhow      = { workspace = true }
 async-trait = { workspace = true }
-anyhow = { workspace = true }
-libc = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+libc        = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
 
 # Local dependencies
-kata-sys-util = { workspace = true }
-kata-types = { workspace = true }
+kata-sys-util  = { workspace = true }
+kata-types     = { workspace = true }
+safe-path      = { workspace = true }
 shim-interface = { workspace = true }
-safe-path = { workspace = true }

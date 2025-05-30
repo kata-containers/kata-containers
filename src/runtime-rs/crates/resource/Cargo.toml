@@ -1,9 +1,9 @@
 [package]
-name = "resource"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "resource"
+version = "0.1.0"
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -12,42 +12,42 @@ tempfile = { workspace = true }
 test-utils = { workspace = true }
 
 [dependencies]
-actix-rt = { workspace = true }
-anyhow = { workspace = true }
+actix-rt    = { workspace = true }
+anyhow      = { workspace = true }
 async-trait = { workspace = true }
-bitflags = "2.9.0"
-byte-unit = "5.1.6"
-cgroups-rs = "0.3.2"
-futures = "0.3.11"
+bitflags    = "2.9.0"
+byte-unit   = "5.1.6"
+cgroups-rs  = "0.3.2"
+futures     = "0.3.11"
+inotify     = "0.11.0"
 lazy_static = { workspace = true }
-libc = { workspace = true }
-netns-rs = { workspace = true }
-nix = { workspace = true }
-rand = { workspace = true }
-scopeguard = "1.0.0"
-serde = { workspace = true }
-serde_json = { workspace = true }
-slog = { workspace = true }
-slog-scope = { workspace = true }
-tokio = { workspace = true, features = ["process"] }
-tracing = { workspace = true }
-uuid = { version = "0.4", features = ["v4"] }
-oci-spec = { workspace = true }
-inotify = "0.11.0"
-walkdir = "2.5.0"
+libc        = { workspace = true }
+netns-rs    = { workspace = true }
+nix         = { workspace = true }
+oci-spec    = { workspace = true }
+rand        = { workspace = true }
+scopeguard  = "1.0.0"
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+slog        = { workspace = true }
+slog-scope  = { workspace = true }
+tokio       = { workspace = true, features = ["process"] }
+tracing     = { workspace = true }
+uuid        = { version = "0.4", features = ["v4"] }
+walkdir     = "2.5.0"
 
 ## Dependencies from `rust-netlink`
 netlink-packet-route = "0.22"
-netlink-sys = "0.8"
-rtnetlink = "0.16"
+netlink-sys          = "0.8"
+rtnetlink            = "0.16"
 
 # Local dependencies
-agent = { workspace = true }
-hypervisor = { workspace = true }
-kata-types = { workspace = true }
+agent         = { workspace = true }
+hypervisor    = { workspace = true }
 kata-sys-util = { workspace = true }
-logging = { workspace = true }
-persist = { workspace = true }
-tests_utils = { workspace = true }
+kata-types    = { workspace = true }
+logging       = { workspace = true }
+persist       = { workspace = true }
+tests_utils   = { workspace = true }
 
 [features]

@@ -1,26 +1,26 @@
 [package]
-name = "dbs-boot"
-version = "0.4.0"
-authors = ["Alibaba Dragonball Team"]
+authors     = ["Alibaba Dragonball Team"]
 description = "Traits and structs for booting sandbox"
-license = "Apache-2.0 AND BSD-3-Clause"
-edition = "2018"
-homepage = "https://github.com/openanolis/dragonball-sandbox"
-repository = "https://github.com/openanolis/dragonball-sandbox"
-keywords = ["dragonball", "boot", "VMM"]
-readme = "README.md"
+edition     = "2018"
+homepage    = "https://github.com/openanolis/dragonball-sandbox"
+keywords    = ["VMM", "boot", "dragonball"]
+license     = "Apache-2.0 AND BSD-3-Clause"
+name        = "dbs-boot"
+readme      = "README.md"
+repository  = "https://github.com/openanolis/dragonball-sandbox"
+version     = "0.4.0"
 
 [dependencies]
-dbs-arch = { workspace = true }
+dbs-arch     = { workspace = true }
 kvm-bindings = { workspace = true, features = ["fam-wrappers"] }
-kvm-ioctls = {workspace = true}
-lazy_static = "1"
-libc = "0.2.39"
-thiserror = "1"
-vm-memory = {workspace = true}
-vm-fdt = {workspace= true}
+kvm-ioctls   = { workspace = true }
+lazy_static  = "1"
+libc         = "0.2.39"
+thiserror    = "1"
+vm-fdt       = { workspace = true }
+vm-memory    = { workspace = true }
 
 [dev-dependencies]
-vm-memory = { workspace = true, features = ["backend-mmap"] }
+dbs-device  = { workspace = true }
 device_tree = ">=1.1.0"
-dbs-device = { workspace = true }
+vm-memory   = { workspace = true, features = ["backend-mmap"] }

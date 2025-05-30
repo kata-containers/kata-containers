@@ -1,16 +1,16 @@
 [package]
-name = "linux_container"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "linux_container"
+version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow      = { workspace = true }
 async-trait = { workspace = true }
-tokio = { workspace = true }
+tokio       = { workspace = true }
 
 # Local dependencies
-common = { workspace = true }
+common     = { workspace = true }
 kata-types = { workspace = true }
-resource = { workspace = true }
+resource   = { workspace = true }

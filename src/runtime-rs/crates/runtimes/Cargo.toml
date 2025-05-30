@@ -1,58 +1,58 @@
 [package]
-name = "runtimes"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "runtimes"
+version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+hyper = { workspace = true, features = ["http1", "server", "stream"] }
+hyperlocal = { workspace = true }
 lazy_static = { workspace = true }
 netns-rs = { workspace = true }
+nix = "0.25.0"
+oci-spec = { workspace = true }
+opentelemetry = { version = "0.18.0", features = [
+  "rt-tokio",
+  "rt-tokio-current-thread",
+  "trace",
+] }
+opentelemetry-jaeger = { version = "0.17.0", features = [
+  "collector_client",
+  "hyper_collector_client",
+  "rt-tokio",
+] }
+procfs = "0.12.0"
+prometheus = { version = "0.13.0", features = ["process"] }
+serde_json = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
-opentelemetry = { version = "0.18.0", features = [
-    "rt-tokio-current-thread",
-    "trace",
-    "rt-tokio",
-] }
-opentelemetry-jaeger = { version = "0.17.0", features = [
-    "rt-tokio",
-    "hyper_collector_client",
-    "collector_client",
-] }
 tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
-hyper = { workspace = true, features = ["stream", "server", "http1"] }
-hyperlocal = { workspace = true }
-serde_json = { workspace = true }
-nix = "0.25.0"
 url = { workspace = true }
-procfs = "0.12.0"
-prometheus = { version = "0.13.0", features = ["process"] }
-oci-spec = { workspace = true }
 
 # Local dependencies
-agent = { workspace = true }
-common = { workspace = true }
-kata-types = { workspace = true }
-kata-sys-util = { workspace = true }
-logging = { workspace = true }
-runtime-spec = { workspace = true }
+agent          = { workspace = true }
+common         = { workspace = true }
+hypervisor     = { workspace = true }
+kata-sys-util  = { workspace = true }
+kata-types     = { workspace = true }
+logging        = { workspace = true }
+persist        = { workspace = true }
+resource       = { workspace = true }
+runtime-spec   = { workspace = true }
 shim-interface = { workspace = true }
-persist = { workspace = true }
-hypervisor = { workspace = true }
-resource = { workspace = true }
 
 # Local dependencies: runtime handler
 linux_container = { workspace = true, optional = true }
-virt_container = { workspace = true, optional = true }
-wasm_container = { workspace = true, optional = true }
+virt_container  = { workspace = true, optional = true }
+wasm_container  = { workspace = true, optional = true }
 
 [features]
 default = ["virt"]
-linux = ["linux_container"]
-virt = ["virt_container"]
-wasm = ["wasm_container"]
+linux   = ["linux_container"]
+virt    = ["virt_container"]
+wasm    = ["wasm_container"]

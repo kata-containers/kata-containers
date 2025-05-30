@@ -1,25 +1,25 @@
 [package]
-name = "shim-interface"
-version = "0.1.0"
+authors     = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+categories  = ["services"]
 description = "A library to provide service interface of Kata Containers"
-keywords = ["kata", "container", "http"]
-categories = ["services"]
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-repository = "https://github.com/kata-containers/kata-containers.git"
-homepage = "https://katacontainers.io/"
-readme = "README.md"
-license = "Apache-2.0"
-edition = "2018"
+edition     = "2018"
+homepage    = "https://katacontainers.io/"
+keywords    = ["container", "http", "kata"]
+license     = "Apache-2.0"
+name        = "shim-interface"
+readme      = "README.md"
+repository  = "https://github.com/kata-containers/kata-containers.git"
+version     = "0.1.0"
 
 [dependencies]
-anyhow = "^1.0"
-nix = "0.24.0"
-tokio = { version = "1.44.2", features = ["rt-multi-thread"] }
-hyper = { version = "0.14.20", features = ["stream", "server", "http1"] }
-hyperlocal = "0.8"
-kata-types = { path = "../kata-types" }
+anyhow        = "^1.0"
+hyper         = { version = "0.14.20", features = ["http1", "server", "stream"] }
+hyperlocal    = "0.8"
 kata-sys-util = { path = "../kata-sys-util" }
+kata-types    = { path = "../kata-types" }
+nix           = "0.24.0"
+tokio         = { version = "1.44.2", features = ["rt-multi-thread"] }
 
 [dev-dependencies]
-tempfile = "3.19.1"
+tempfile   = "3.19.1"
 test-utils = { path = "../test-utils" }
