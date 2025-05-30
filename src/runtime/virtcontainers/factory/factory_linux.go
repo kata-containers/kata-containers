@@ -80,6 +80,8 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.SharedPath = ""
 	config.HypervisorConfig.VMStorePath = ""
 	config.HypervisorConfig.RunStorePath = ""
+	config.HypervisorConfig.SandboxName = ""
+	config.HypervisorConfig.SandboxNamespace = ""
 }
 
 // It's important that baseConfig and newConfig are passed by value!
