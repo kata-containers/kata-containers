@@ -193,6 +193,9 @@ jobs:
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   publish-csi-driver-amd64:
+    permissions:
+      contents: read
+      packages: write
     needs: build-kata-static-tarball-amd64
     runs-on: ubuntu-22.04
     steps:
