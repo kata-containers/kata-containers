@@ -28,6 +28,7 @@ RUN apt-get update && \
 	libssl-dev \
 	libtss2-dev \
 	make \
+	cmake \
 	musl-tools \
 	openssl \
 	perl \
