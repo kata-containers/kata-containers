@@ -54,7 +54,7 @@ procfs = "0.12.0"
 
 anyhow = "1"
 
-cgroups = { package = "cgroups-rs", version = "0.3.3" }
+cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
 
 # Tracing
 tracing = "0.1.26"

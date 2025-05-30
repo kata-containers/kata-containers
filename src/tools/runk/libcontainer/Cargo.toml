@@ -21,7 +21,7 @@ chrono = { version = "0.4.19", features = ["serde"] }
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
 scopeguard = "1.1.0"
-cgroups = { package = "cgroups-rs", version = "0.3.2" }
+cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
 procfs = "0.14.0"
 
 [dev-dependencies]

@@ -511,6 +511,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cgroups-rs"
+version = "0.3.5"
+source = "git+https://github.com/kata-containers/cgroups-rs?rev=v0.3.5#de9625ff57d156967b5b2a637c2c41bb2366e39b"
+dependencies = [
+ "libc",
+ "log",
+ "nix 0.25.1",
+ "regex",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "ch-config"
 version = "0.1.0"
 dependencies = [
@@ -614,7 +626,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063d0e137d508846210c2f8b6c6dc3db9f1abd4c20b0a9aecdb962385dcb7899"
 dependencies = [
  "async-trait",
- "cgroups-rs",
+ "cgroups-rs 0.3.4",
  "command-fds",
  "containerd-shim-protos",
  "futures 0.3.28",
@@ -3594,7 +3606,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.9.0",
  "byte-unit",
- "cgroups-rs",
+ "cgroups-rs 0.3.5",
  "futures 0.3.28",
  "hypervisor",
  "inotify",
