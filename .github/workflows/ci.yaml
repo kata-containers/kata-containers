@@ -194,6 +194,9 @@ jobs:
 
   publish-csi-driver-amd64:
     needs: build-kata-static-tarball-amd64
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
