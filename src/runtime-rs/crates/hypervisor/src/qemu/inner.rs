@@ -108,7 +108,7 @@ impl QemuInner {
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "ccw" => cmdline.add_block_device(
+                        "ccw" | "blk" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
                             block_dev
