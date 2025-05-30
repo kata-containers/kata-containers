@@ -1,13 +1,13 @@
 [package]
-name = "dragonball"
-version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+authors     = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 description = "A secure sandbox for Kata Containers"
-keywords = ["kata-containers", "sandbox", "vmm", "dragonball"]
-homepage = "https://katacontainers.io/"
-repository = "https://github.com/kata-containers/kata-containers.git"
-license = "Apache-2.0"
-edition = "2018"
+edition     = "2018"
+homepage    = "https://katacontainers.io/"
+keywords    = ["dragonball", "kata-containers", "sandbox", "vmm"]
+license     = "Apache-2.0"
+name        = "dragonball"
+repository  = "https://github.com/kata-containers/kata-containers.git"
+version     = "0.1.0"
 
 [workspace]
 members = [
@@ -29,33 +29,33 @@ resolver = "2"
 
 [workspace.dependencies]
 # Rust-VMM crates
-event-manager = "0.2.1"
-kvm-bindings = "0.6.0"
-kvm-ioctls = "0.12.0"
-linux-loader = "0.8.0"
-seccompiler = "0.2.0"
-vfio-bindings = "0.3.0"
-vfio-ioctls = "0.1.0"
+event-manager   = "0.2.1"
+kvm-bindings    = "0.6.0"
+kvm-ioctls      = "0.12.0"
+linux-loader    = "0.8.0"
+seccompiler     = "0.2.0"
+vfio-bindings   = "0.3.0"
+vfio-ioctls     = "0.1.0"
 virtio-bindings = "0.1.0"
-virtio-queue = "0.7.0"
-vm-fdt = "0.2.0"
-vm-memory = "0.10.0"
-vm-superio = "0.5.0"
-vmm-sys-util = "0.11.0"
+virtio-queue    = "0.7.0"
+vm-fdt          = "0.2.0"
+vm-memory       = "0.10.0"
+vm-superio      = "0.5.0"
+vmm-sys-util    = "0.11.0"
 
 # Local dependencies from Dragonball Sandbox crates
-dbs-acpi = { path = "dbs_acpi" }
-dbs-address-space = { path = "dbs_address_space" }
-dbs-allocator = { path = "dbs_allocator" }
-dbs-arch = { path = "dbs_arch" }
-dbs-boot = { path = "dbs_boot" }
-dbs-device = { path = "dbs_device" }
-dbs-interrupt = { path = "dbs_interrupt" }
+dbs-acpi           = { path = "dbs_acpi" }
+dbs-address-space  = { path = "dbs_address_space" }
+dbs-allocator      = { path = "dbs_allocator" }
+dbs-arch           = { path = "dbs_arch" }
+dbs-boot           = { path = "dbs_boot" }
+dbs-device         = { path = "dbs_device" }
+dbs-interrupt      = { path = "dbs_interrupt" }
 dbs-legacy-devices = { path = "dbs_legacy_devices" }
-dbs-pci = { path = "dbs_pci" }
-dbs-tdx = { path = "dbs_tdx" }
-dbs-upcall = { path = "dbs_upcall" }
-dbs-utils = { path = "dbs_utils" }
+dbs-pci            = { path = "dbs_pci" }
+dbs-tdx            = { path = "dbs_tdx" }
+dbs-upcall         = { path = "dbs_upcall" }
+dbs-utils          = { path = "dbs_utils" }
 dbs-virtio-devices = { path = "dbs_virtio_devices" }
 
 # Local dependencies from `src/lib`
@@ -65,6 +65,7 @@ test-utils = { path = "../libs/test-utils" }
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
+crossbeam-channel = "0.5.6"
 dbs-address-space = { workspace = true }
 dbs-allocator = { workspace = true }
 dbs-arch = { workspace = true }
@@ -72,23 +73,24 @@ dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
 dbs-interrupt = { workspace = true, features = ["kvm-irq"] }
 dbs-legacy-devices = { workspace = true }
+dbs-pci = { workspace = true, optional = true }
 dbs-upcall = { workspace = true, optional = true }
 dbs-utils = { workspace = true }
 dbs-virtio-devices = { workspace = true, optional = true, features = [
   "virtio-mmio",
 ] }
-dbs-pci = { workspace = true, optional = true }
 derivative = "2.2.0"
+fuse-backend-rs = "0.10.5"
 kvm-bindings = { workspace = true }
 kvm-ioctls = { workspace = true }
 lazy_static = "1.2"
 libc = "0.2.39"
-linux-loader = {workspace = true}
+linux-loader = { workspace = true }
 log = "0.4.14"
 nix = "0.24.2"
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
-seccompiler = {workspace = true}
+seccompiler = { workspace = true }
 serde = "1.0.27"
 serde_derive = "1.0.27"
 serde_json = "1.0.9"
@@ -96,45 +98,43 @@ slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
 tracing = "0.1.37"
-vmm-sys-util = {workspace = true}
-virtio-queue = { workspace = true, optional = true }
-vm-memory = { workspace = true, features = ["backend-mmap"] }
-crossbeam-channel = "0.5.6"
-fuse-backend-rs = "0.10.5"
 vfio-bindings = { workspace = true, optional = true }
 vfio-ioctls = { workspace = true, optional = true }
+virtio-queue = { workspace = true, optional = true }
+vm-memory = { workspace = true, features = ["backend-mmap"] }
+vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
 slog-async = "2.7.0"
-slog-term = "2.9.0"
+slog-term  = "2.9.0"
 test-utils = { workspace = true }
 
 [features]
-acpi = []
+acpi                = []
 atomic-guest-memory = ["vm-memory/backend-atomic"]
-hotplug = ["virtio-vsock"]
-virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
-virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
-virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
+hotplug             = ["virtio-vsock"]
+virtio-blk          = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
+virtio-net          = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
+virtio-vsock        = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory
-virtio-fs = [
-    "dbs-virtio-devices/virtio-fs-pro",
-    "virtio-queue",
-    "atomic-guest-memory",
-]
-virtio-mem = [
-    "dbs-virtio-devices/virtio-mem",
-    "virtio-queue",
-    "atomic-guest-memory",
-]
-virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
+host-device = ["dep:dbs-pci", "dep:vfio-bindings", "dep:vfio-ioctls"]
 vhost-net = ["dbs-virtio-devices/vhost-net"]
+vhost-user-blk = ["dbs-virtio-devices/vhost-user-blk"]
 vhost-user-fs = ["dbs-virtio-devices/vhost-user-fs"]
 vhost-user-net = ["dbs-virtio-devices/vhost-user-net"]
-vhost-user-blk = ["dbs-virtio-devices/vhost-user-blk"]
-host-device = ["dep:vfio-bindings", "dep:vfio-ioctls", "dep:dbs-pci"]
+virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
+virtio-fs = [
+  "atomic-guest-memory",
+  "dbs-virtio-devices/virtio-fs-pro",
+  "virtio-queue",
+]
+virtio-mem = [
+  "atomic-guest-memory",
+  "dbs-virtio-devices/virtio-mem",
+  "virtio-queue",
+]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(feature, values("test-mock"))',
+  'cfg(feature, values("test-mock"))',
 ] }

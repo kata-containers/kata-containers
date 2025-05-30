@@ -1,24 +1,24 @@
 [package]
-name = "service"
-version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
+name    = "service"
+version = "0.1.0"
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
-slog = { workspace = true }
-slog-scope = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
-tracing = { workspace = true }
-ttrpc = { workspace = true }
+anyhow                 = { workspace = true }
+async-trait            = { workspace = true }
+containerd-shim        = { workspace = true }
 containerd-shim-protos = { workspace = true, features = ["async", "sandbox"] }
-containerd-shim = { workspace = true }
+slog                   = { workspace = true }
+slog-scope             = { workspace = true }
+tokio                  = { workspace = true, features = ["rt-multi-thread"] }
+tracing                = { workspace = true }
+ttrpc                  = { workspace = true }
 
 # Local dependencies
-common = { workspace = true }
-logging = { workspace = true }
+common     = { workspace = true }
 kata-types = { workspace = true }
-runtimes = { workspace = true }
-persist = { workspace = true }
+logging    = { workspace = true }
+persist    = { workspace = true }
+runtimes   = { workspace = true }

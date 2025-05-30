@@ -1,23 +1,23 @@
 [package]
-name = "dbs-legacy-devices"
-version = "0.1.1"
-authors = ["Alibaba Dragonball Team"]
-license = "Apache-2.0 AND BSD-3-Clause"
-edition = "2018"
+authors     = ["Alibaba Dragonball Team"]
 description = "dbs-legacy-devices provides emulation for legacy devices."
-homepage = "https://github.com/openanolis/dragonball-sandbox"
-repository = "https://github.com/openanolis/dragonball-sandbox"
-keywords = ["dragonball", "secure-sandbox", "devices", "legacy"]
-readme = "README.md"
+edition     = "2018"
+homepage    = "https://github.com/openanolis/dragonball-sandbox"
+keywords    = ["devices", "dragonball", "legacy", "secure-sandbox"]
+license     = "Apache-2.0 AND BSD-3-Clause"
+name        = "dbs-legacy-devices"
+readme      = "README.md"
+repository  = "https://github.com/openanolis/dragonball-sandbox"
+version     = "0.1.1"
 
 [dependencies]
-dbs-device = { workspace = true }
-dbs-utils = { workspace = true }
-libc = "0.2.39"
-log = "0.4.14"
-serde = { version = "1.0.27", features = ["derive", "rc"] }
-vm-superio = {workspace = true}
-vmm-sys-util = {workspace = true}
+dbs-device   = { workspace = true }
+dbs-utils    = { workspace = true }
+libc         = "0.2.39"
+log          = "0.4.14"
+serde        = { version = "1.0.27", features = ["derive", "rc"] }
+vm-superio   = { workspace = true }
+vmm-sys-util = { workspace = true }
 
 [dev-dependencies]
 libc = "0.2.39"

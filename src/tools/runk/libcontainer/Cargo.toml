@@ -1,30 +1,32 @@
 [package]
-name = "libcontainer"
-version = "0.0.1"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+authors     = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 description = "Library for runk container"
-license = "Apache-2.0"
-edition = "2018"
+edition     = "2018"
+license     = "Apache-2.0"
+name        = "libcontainer"
+version     = "0.0.1"
 
 [dependencies]
-rustjail = { path = "../../../agent/rustjail", features = ["standard-oci-runtime"] }
-runtime-spec = { path = "../../../libs/runtime-spec" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-kata-sys-util = { path = "../../../libs/kata-sys-util" }
-logging = { path = "../../../libs/logging" }
-derive_builder = "0.10.2"
-libc = "0.2.108"
-nix = "0.23.0"
 anyhow = "1.0.52"
-slog = "2.7.0"
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
 chrono = { version = "0.4.19", features = ["serde"] }
+derive_builder = "0.10.2"
+kata-sys-util = { path = "../../../libs/kata-sys-util" }
+libc = "0.2.108"
+logging = { path = "../../../libs/logging" }
+nix = "0.23.0"
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+procfs = "0.14.0"
+runtime-spec = { path = "../../../libs/runtime-spec" }
+rustjail = { path = "../../../agent/rustjail", features = [
+  "standard-oci-runtime",
+] }
+scopeguard = "1.1.0"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
-scopeguard = "1.1.0"
-cgroups = { package = "cgroups-rs", version = "0.3.2" }
-procfs = "0.14.0"
+slog = "2.7.0"
 
 [dev-dependencies]
-tempfile = "3.19.1"
+protocols  = { path = "../../../libs/protocols" }
+tempfile   = "3.19.1"
 test-utils = { path = "../../../libs/test-utils" }
-protocols = { path ="../../../libs/protocols" }

@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "kata-sys-util",
-    "kata-types",
-    "logging",
-    "runtime-spec",
-    "protocols",
-    "safe-path",
-    "shim-interface",
-    "test-utils",
+  "kata-sys-util",
+  "kata-types",
+  "logging",
+  "protocols",
+  "runtime-spec",
+  "safe-path",
+  "shim-interface",
+  "test-utils",
 ]
 resolver = "2"
