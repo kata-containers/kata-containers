@@ -98,10 +98,6 @@ algorithm = "sha256"
 [data]
 "aa.toml" = '''
 [token_configs]
-[token_configs.coco_as]
-# TODO: we should fix this on AA side to set this a default value if not set.
-url = "${CC_KBS_ADDRESS}"
-
 [token_configs.kbs]
 url = "${CC_KBS_ADDRESS}"
 '''
