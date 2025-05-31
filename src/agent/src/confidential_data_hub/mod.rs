@@ -1,4 +1,5 @@
 // Copyright (c) 2023 Intel Corporation
+// Copyright (c) 2025 Alibaba Cloud
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -15,19 +16,19 @@ use protocols::{
     confidential_data_hub::GetResourceRequest,
     confidential_data_hub_ttrpc_async,
     confidential_data_hub_ttrpc_async::{
-        GetResourceServiceClient, SealedSecretServiceClient, SecureMountServiceClient,
+        GetResourceServiceClient, ImagePullServiceClient, SealedSecretServiceClient,
+        SecureMountServiceClient,
     },
 };
+use safe_path::scoped_join;
 use std::fs;
-use std::os::unix::fs::symlink;
 use std::path::Path;
+use std::{os::unix::fs::symlink, path::PathBuf};
 use tokio::sync::OnceCell;
 
-// Nanoseconds
-lazy_static! {
-    static ref CDH_API_TIMEOUT: i64 = AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64;
-    pub static ref CDH_CLIENT: OnceCell<CDHClient> = OnceCell::new();
-}
+pub mod image;
+
+pub static CDH_CLIENT: OnceCell<CDHClient> = OnceCell::const_new();
 
 const SEALED_SECRET_PREFIX: &str = "sealed.";
 
@@ -45,6 +46,8 @@ pub struct CDHClient {
     secure_mount_client: SecureMountServiceClient,
     #[derivative(Debug = "ignore")]
     get_resource_client: GetResourceServiceClient,
+    #[derivative(Debug = "ignore")]
+    image_pull_client: ImagePullServiceClient,
 }
 
 impl CDHClient {
@@ -52,6 +55,8 @@ impl CDHClient {
         let client = ttrpc::asynchronous::Client::connect(cdh_socket_uri)?;
         let sealed_secret_client =
             confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client.clone());
+        let image_pull_client =
+            confidential_data_hub_ttrpc_async::ImagePullServiceClient::new(client.clone());
         let secure_mount_client =
             confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client.clone());
         let get_resource_client =
@@ -60,6 +65,7 @@ impl CDHClient {
             sealed_secret_client,
             secure_mount_client,
             get_resource_client,
+            image_pull_client,
         })
     }
 
@@ -69,7 +75,10 @@ impl CDHClient {
 
         let unsealed_secret = self
             .sealed_secret_client
-            .unseal_secret(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &input)
+            .unseal_secret(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &input,
+            )
             .await?;
         Ok(unsealed_secret.plaintext)
     }
@@ -89,7 +98,10 @@ impl CDHClient {
             ..Default::default()
         };
         self.secure_mount_client
-            .secure_mount(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
+            .secure_mount(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
             .await?;
         Ok(())
     }
@@ -101,9 +113,30 @@ impl CDHClient {
         };
         let res = self
             .get_resource_client
-            .get_resource(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
+            .get_resource(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
             .await?;
         Ok(res.Resource)
+    }
+
+    pub async fn pull_image(&self, image: &str, bundle_path: &str) -> Result<()> {
+        let req = confidential_data_hub::ImagePullRequest {
+            image_url: image.to_string(),
+            bundle_path: bundle_path.to_string(),
+            ..Default::default()
+        };
+
+        let _ = self
+            .image_pull_client
+            .pull_image(
+                ttrpc::context::with_timeout(AGENT_CONFIG.image_pull_timeout.as_nanos() as i64),
+                &req,
+            )
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -113,11 +146,12 @@ pub async fn init_cdh_client(cdh_socket_uri: &str) -> Result<()> {
             CDHClient::new(cdh_socket_uri).context("Failed to create CDH Client")
         })
         .await?;
+
     Ok(())
 }
 
 /// Check if the CDH client is initialized
-pub async fn is_cdh_client_initialized() -> bool {
+pub fn is_cdh_client_initialized() -> bool {
     CDH_CLIENT.get().is_some() // Returns true if CDH_CLIENT is initialized, false otherwise
 }
 
@@ -135,6 +169,29 @@ pub async fn unseal_env(env: &str) -> Result<String> {
         }
     }
     Ok((*env.to_owned()).to_string())
+}
+
+/// pull_image is used for call confidential data hub to pull image in the guest.
+/// Image layers will store at [`image::KATA_IMAGE_WORK_DIR`]`,
+/// rootfs and config.json will store under given `bundle_path`.
+///
+/// # Parameters
+/// - `image`: Image name (exp: quay.io/prometheus/busybox:latest)
+/// - `bundle_path`: The path to store the image bundle (exp. /run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/rootfs)
+pub async fn pull_image(image: &str, bundle_path: PathBuf) -> Result<String> {
+    fs::create_dir_all(&bundle_path)?;
+    info!(sl(), "pull image {image:?}, bundle path {bundle_path:?}");
+
+    let cdh_client = CDH_CLIENT
+        .get()
+        .expect("Confidential Data Hub not initialized");
+
+    cdh_client
+        .pull_image(image, bundle_path.to_string_lossy().as_ref())
+        .await?;
+
+    let image_bundle_path = scoped_join(&bundle_path, "rootfs")?;
+    Ok(image_bundle_path.as_path().display().to_string())
 }
 
 pub async fn unseal_file(path: &str) -> Result<()> {
@@ -205,7 +262,6 @@ pub async fn unseal_file(path: &str) -> Result<()> {
     Ok(())
 }
 
-#[cfg(feature = "guest-pull")]
 pub async fn secure_mount(
     volume_type: &str,
     options: &std::collections::HashMap<String, String>,
@@ -252,6 +308,18 @@ mod tests {
         ) -> ttrpc::error::Result<confidential_data_hub::UnsealSecretOutput> {
             let mut output = confidential_data_hub::UnsealSecretOutput::new();
             output.set_plaintext("unsealed".into());
+            Ok(output)
+        }
+    }
+
+    #[async_trait]
+    impl confidential_data_hub_ttrpc_async::ImagePullService for TestService {
+        async fn pull_image(
+            &self,
+            _ctx: &::ttrpc::asynchronous::TtrpcContext,
+            _req: confidential_data_hub::ImagePullRequest,
+        ) -> ttrpc::error::Result<confidential_data_hub::ImagePullResponse> {
+            let output = confidential_data_hub::ImagePullResponse::new();
             Ok(output)
         }
     }
