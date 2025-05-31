@@ -359,7 +359,6 @@ disable_image_nvdimm = true
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when machine_type is "q35"
 # Default 0
 #pcie_root_port = 2
 
