@@ -35,6 +35,8 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+    secrets:
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
