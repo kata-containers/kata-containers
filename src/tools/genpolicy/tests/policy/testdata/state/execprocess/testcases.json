@@ -299,51 +299,7 @@
       "devices": [],
       "sandbox_pidns": false,
       "shared_mounts": [],
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [],
-          "source": "0001:00:02.0",
-          "fstype": "tar",
-          "options": [
-            "ro",
-            "io.katacontainers.fs-opt.block_device=file",
-            "io.katacontainers.fs-opt.is-layer",
-            "io.katacontainers.fs-opt.root-hash=75ed5e78d30374b9557d32c17ae6d2e1b4afdc5efd128812e6c99a0f60708dba"
-          ],
-          "mount_point": "/run/kata-containers/sandbox/layers/b1ef3d18661ad727a8ad01d462fffc63ec90420a938056bc0422822328f83ff7",
-          "fs_group": null
-        },
-        {
-          "driver": "blk",
-          "driver_options": [],
-          "source": "0001:00:03.0",
-          "fstype": "tar",
-          "options": [
-            "ro",
-            "io.katacontainers.fs-opt.block_device=file",
-            "io.katacontainers.fs-opt.is-layer",
-            "io.katacontainers.fs-opt.root-hash=2e52d86498030b4b99318650826d3f121bdfac5fe7bbbea9d18c546d48003aa0"
-          ],
-          "mount_point": "/run/kata-containers/sandbox/layers/a8650d4a279d4537d7fc43c582a264528a96f041b1327d41b503f368c301594f",
-          "fs_group": null
-        },
-        {
-          "driver": "overlayfs",
-          "driver_options": [],
-          "source": "none",
-          "fstype": "fuse3.kata-overlay",
-          "options": [
-            "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers",
-            "io.katacontainers.fs-opt.layer=YjFlZjNkMTg2NjFhZDcyN2E4YWQwMWQ0NjJmZmZjNjNlYzkwNDIwYTkzODA1NmJjMDQyMjgyMjMyOGY4M2ZmNyx0YXIscm8saW8ua2F0YWNvbnRhaW5lcnMuZnMtb3B0LmJsb2NrX2RldmljZT1maWxlLGlvLmthdGFjb250YWluZXJzLmZzLW9wdC5pcy1sYXllcixpby5rYXRhY29udGFpbmVycy5mcy1vcHQucm9vdC1oYXNoPTc1ZWQ1ZTc4ZDMwMzc0Yjk1NTdkMzJjMTdhZTZkMmUxYjRhZmRjNWVmZDEyODgxMmU2Yzk5YTBmNjA3MDhkYmE=",
-            "io.katacontainers.fs-opt.layer=YTg2NTBkNGEyNzlkNDUzN2Q3ZmM0M2M1ODJhMjY0NTI4YTk2ZjA0MWIxMzI3ZDQxYjUwM2YzNjhjMzAxNTk0Zix0YXIscm8saW8ua2F0YWNvbnRhaW5lcnMuZnMtb3B0LmJsb2NrX2RldmljZT1maWxlLGlvLmthdGFjb250YWluZXJzLmZzLW9wdC5pcy1sYXllcixpby5rYXRhY29udGFpbmVycy5mcy1vcHQucm9vdC1oYXNoPTJlNTJkODY0OTgwMzBiNGI5OTMxODY1MDgyNmQzZjEyMWJkZmFjNWZlN2JiYmVhOWQxOGM1NDZkNDgwMDNhYTA=",
-            "io.katacontainers.fs-opt.overlay-rw",
-            "lowerdir=b1ef3d18661ad727a8ad01d462fffc63ec90420a938056bc0422822328f83ff7:a8650d4a279d4537d7fc43c582a264528a96f041b1327d41b503f368c301594f"
-          ],
-          "mount_point": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-          "fs_group": null
-        }
-      ],
+      "storages": [],
       "string_user": null
     }
   },
@@ -647,51 +603,7 @@
       "devices": [],
       "sandbox_pidns": false,
       "shared_mounts": [],
-      "storages": [
-        {
-          "driver": "blk",
-          "driver_options": [],
-          "source": "0001:00:02.0",
-          "fstype": "tar",
-          "options": [
-            "ro",
-            "io.katacontainers.fs-opt.block_device=file",
-            "io.katacontainers.fs-opt.is-layer",
-            "io.katacontainers.fs-opt.root-hash=75ed5e78d30374b9557d32c17ae6d2e1b4afdc5efd128812e6c99a0f60708dba"
-          ],
-          "mount_point": "/run/kata-containers/sandbox/layers/b1ef3d18661ad727a8ad01d462fffc63ec90420a938056bc0422822328f83ff7",
-          "fs_group": null
-        },
-        {
-          "driver": "blk",
-          "driver_options": [],
-          "source": "0001:00:03.0",
-          "fstype": "tar",
-          "options": [
-            "ro",
-            "io.katacontainers.fs-opt.block_device=file",
-            "io.katacontainers.fs-opt.is-layer",
-            "io.katacontainers.fs-opt.root-hash=2e52d86498030b4b99318650826d3f121bdfac5fe7bbbea9d18c546d48003aa0"
-          ],
-          "mount_point": "/run/kata-containers/sandbox/layers/a8650d4a279d4537d7fc43c582a264528a96f041b1327d41b503f368c301594f",
-          "fs_group": null
-        },
-        {
-          "driver": "overlayfs",
-          "driver_options": [],
-          "source": "none",
-          "fstype": "fuse3.kata-overlay",
-          "options": [
-            "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers",
-            "io.katacontainers.fs-opt.layer=YjFlZjNkMTg2NjFhZDcyN2E4YWQwMWQ0NjJmZmZjNjNlYzkwNDIwYTkzODA1NmJjMDQyMjgyMjMyOGY4M2ZmNyx0YXIscm8saW8ua2F0YWNvbnRhaW5lcnMuZnMtb3B0LmJsb2NrX2RldmljZT1maWxlLGlvLmthdGFjb250YWluZXJzLmZzLW9wdC5pcy1sYXllcixpby5rYXRhY29udGFpbmVycy5mcy1vcHQucm9vdC1oYXNoPTc1ZWQ1ZTc4ZDMwMzc0Yjk1NTdkMzJjMTdhZTZkMmUxYjRhZmRjNWVmZDEyODgxMmU2Yzk5YTBmNjA3MDhkYmE=",
-            "io.katacontainers.fs-opt.layer=YTg2NTBkNGEyNzlkNDUzN2Q3ZmM0M2M1ODJhMjY0NTI4YTk2ZjA0MWIxMzI3ZDQxYjUwM2YzNjhjMzAxNTk0Zix0YXIscm8saW8ua2F0YWNvbnRhaW5lcnMuZnMtb3B0LmJsb2NrX2RldmljZT1maWxlLGlvLmthdGFjb250YWluZXJzLmZzLW9wdC5pcy1sYXllcixpby5rYXRhY29udGFpbmVycy5mcy1vcHQucm9vdC1oYXNoPTJlNTJkODY0OTgwMzBiNGI5OTMxODY1MDgyNmQzZjEyMWJkZmFjNWZlN2JiYmVhOWQxOGM1NDZkNDgwMDNhYTA=",
-            "io.katacontainers.fs-opt.overlay-rw",
-            "lowerdir=b1ef3d18661ad727a8ad01d462fffc63ec90420a938056bc0422822328f83ff7:a8650d4a279d4537d7fc43c582a264528a96f041b1327d41b503f368c301594f"
-          ],
-          "mount_point": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-          "fs_group": null
-        }
-      ],
+      "storages": [],
       "string_user": null
     }
   },
