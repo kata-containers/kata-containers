@@ -36,9 +36,10 @@ func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
 	case unix.S_IFCHR:
 		deviceRule.Type = 'c'
 	case unix.S_IFBLK:
+	case unix.S_IFREG:
 		deviceRule.Type = 'b'
 	default:
-		return nil, fmt.Errorf("unsupported device type: %v", devType)
+		return nil, fmt.Errorf("unsupported type %v for device: %v", devType, device)
 	}
 
 	major := int64(unix.Major(uint64(st.Rdev)))
