@@ -24,6 +24,16 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      az_appid:
+        required: true
+      az_password:
+        required: true
+      az_tenant_id:
+        required: true
+      az_subscription_id:
+        required: true
+
 
 permissions:
   contents: read
@@ -100,10 +110,10 @@ jobs:
       - name: Log into the Azure account
         run: bash tests/integration/kubernetes/gha-run.sh login-azure
         env:
-          AZ_APPID: ${{ secrets.AZ_APPID }}
-          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
-          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          AZ_APPID: ${{ secrets.az_appid }}
+          AZ_PASSWORD: ${{ secrets.az_password }}
+          AZ_TENANT_ID: ${{ secrets.az_tenant_id }}
+          AZ_SUBSCRIPTION_ID: ${{ secrets.az_subscription_id }}
 
       - name: Create AKS cluster
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2

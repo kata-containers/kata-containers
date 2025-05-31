@@ -5,6 +5,17 @@ on:
       target-arch:
         required: true
         type: string
+    secrets:
+      ci_hkd_path:
+        required: true
+      quay_deployer_username:
+        required: true
+      quay_deployer_password:
+        required: true
+      docker_username:
+        required: true
+      docker_password:
+        required: true
 
 permissions:
   contents: read
@@ -15,7 +26,11 @@ jobs:
     with:
       push-to-registry: yes
       stage: release
-    secrets: inherit
+    secrets:
+      ci_hkd_path: ${{ secrets.ci_hkd_path }}
+      quay_deployer_username: ${{ secrets.quay_deployer_username }}
+      quay_deployer_password: ${{ secrets.quay_deployer_password }}
+
 
   kata-deploy:
     needs: build-kata-static-tarball-s390x
@@ -27,15 +42,15 @@ jobs:
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          username: ${{ secrets.docker_username }}
+          password: ${{ secrets.docker_password }}
 
       - name: Login to Kata Containers quay.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          username: ${{ secrets.quay_deployer_username }}
+          password: ${{ secrets.quay_deployer_password }}
 
       - uses: actions/checkout@v4
       - name: get-kata-tarball

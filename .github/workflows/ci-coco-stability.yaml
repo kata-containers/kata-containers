@@ -24,4 +24,12 @@ jobs:
       pr-number: "weekly"
       tag: ${{ github.sha }}-weekly
       target-branch: ${{ github.ref_name }}
-    secrets: inherit
+    secrets:
+      authenticated_image_user: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
+      authenticated_image_password: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      az_appid: ${{ secrets.AZ_APPID }}
+      az_password: ${{ secrets.AZ_PASSWORD }}
+      az_tenant_id: ${{ secrets.AZ_TENANT_ID }}
+      az_subscription_id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      quay_deployer_username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+      quay_deployer_password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}

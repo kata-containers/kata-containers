@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      authenticated_image_user:
+        required: true
+      authenticated_image_password:
+        required: true
 
 permissions:
   contents: read
@@ -75,8 +80,8 @@ jobs:
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: ${{ matrix.using-nfd }}
       TARGET_ARCH: "s390x"
-      AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AUTHENTICATED_IMAGE_USER: ${{ secrets.authenticated_image_user }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.authenticated_image_password }}
     steps:
       - uses: actions/checkout@v4
         with:

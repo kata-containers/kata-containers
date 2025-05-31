@@ -15,6 +15,23 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      authenticated_image_user:
+        required: true
+      authenticated_image_password:
+        required: true
+      az_appid:
+        required: true
+      az_password:
+        required: true
+      az_tenant_id:
+        required: true
+      az_subscription_id:
+        required: true
+      quay_deployer_username:
+        required: true
+      quay_deployer_password:
+        required: true
 
 permissions:
   contents: read
@@ -32,6 +49,7 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
+
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
     permissions:
@@ -47,7 +65,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
-    secrets: inherit
+    secrets:
+      quay_deployer_username: ${{ secrets.quay_deployer_username }}
+      quay_deployer_password: ${{ secrets.quay_deployer_password }}
 
   build-and-publish-tee-confidential-unencrypted-image:
     permissions:
@@ -100,4 +120,10 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
       tarball-suffix: -${{ inputs.tag }}
-    secrets: inherit
+    secrets:
+      authenticated_image_user: ${{ secrets.authenticated_image_user }}
+      authenticated_image_password: ${{ secrets.authenticated_image_password }}
+      az_appid: ${{ secrets.az_appid }}
+      az_password: ${{ secrets.az_password }}
+      az_tenant_id: ${{ secrets.az_tenant_id }}
+      az_subscription_id: ${{ secrets.az_subscription_id }}

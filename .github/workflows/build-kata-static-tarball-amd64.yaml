@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      quay_deployer_username:
+        required: false
+      quay_deployer_password:
+        required: false
 
 permissions:
   contents: read
@@ -74,8 +79,8 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          username: ${{ secrets.quay_deployer_username }}
+          password: ${{ secrets.quay_deployer_password }}
 
       - uses: actions/checkout@v4
         with:
@@ -172,8 +177,8 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          username: ${{ secrets.quay_deployer_username }}
+          password: ${{ secrets.quay_deployer_password }}
 
       - uses: actions/checkout@v4
         with:
@@ -262,8 +267,8 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          username: ${{ secrets.quay_deployer_username }}
+          password: ${{ secrets.quay_deployer_password }}
 
       - uses: actions/checkout@v4
         with:
