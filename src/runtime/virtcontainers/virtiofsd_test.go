@@ -133,6 +133,9 @@ func TestValid(t *testing.T) {
 		{"invalid cache mode", func(v *virtiofsd) {
 			v.cache = "foo"
 		}, errVirtiofsdInvalidVirtiofsCacheMode("foo"), nil},
+		{"valid metadata cache mode", func(v *virtiofsd) {
+			v.cache = typeVirtioFSCacheModeMetadata
+		}, nil, nil},
 	}
 
 	for _, tt := range tests {
