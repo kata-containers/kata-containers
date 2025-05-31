@@ -238,13 +238,10 @@ pub fn get_process(
         }
     }
     if guest_pull {
-        match oci.annotations() {
-            Some(a) => {
-                if ImageService::is_sandbox(a) {
-                    return ImageService::get_pause_image_process();
-                }
+        if let Some(a) = oci.annotations() {
+            if ImageService::is_sandbox(a) {
+                return ImageService::get_pause_image_process();
             }
-            None => {}
         }
     }
     Ok(ocip.clone())

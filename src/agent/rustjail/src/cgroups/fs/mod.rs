@@ -560,11 +560,7 @@ fn build_blk_io_device_throttle_resource(
 }
 
 fn linux_device_cgroup_to_device_resource(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.typ().unwrap_or_default().as_str().chars().next())
-    {
-        Some(t) => t,
-        None => return None,
-    };
+    let dev_type = DeviceType::from_char(d.typ().unwrap_or_default().as_str().chars().next())?;
 
     let mut permissions: Vec<DevicePermissions> = vec![];
     for p in d
@@ -1324,10 +1320,7 @@ fn default_allowed_devices() -> Vec<DeviceResource> {
 
 /// Convert LinuxDevice to DeviceResource.
 fn linux_device_to_device_resource(d: &LinuxDevice) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.typ().as_str().chars().next()) {
-        Some(t) => t,
-        None => return None,
-    };
+    let dev_type = DeviceType::from_char(d.typ().as_str().chars().next())?;
 
     let permissions = vec![
         DevicePermissions::Read,
