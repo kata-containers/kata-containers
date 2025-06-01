@@ -64,6 +64,9 @@ pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS: &str = "layer_nydus_fs";
 /// Download and extra container image inside guest vm.
 pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
 
+/// force_guest_pull enforces guest pull without remote snapshotter but the prerequsitive setting of `shared_fs = none` should be ensured.
+pub const KATA_IMAGE_FORCE_GUEST_PULL: &str = "force_guest_pull";
+
 /// Manager to manage registered storage device handlers.
 pub type StorageHandlerManager<H> = HandlerManager<H>;
 
