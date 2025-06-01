@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent::{Agent, Storage};
@@ -100,10 +101,11 @@ impl ResourceManager {
         root: &oci::Root,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
+        annotations: &HashMap<String, String>,
     ) -> Result<Arc<dyn Rootfs>> {
         let inner = self.inner.read().await;
         inner
-            .handler_rootfs(cid, root, bundle_path, rootfs_mounts)
+            .handler_rootfs(cid, root, bundle_path, rootfs_mounts, annotations)
             .await
     }
 
