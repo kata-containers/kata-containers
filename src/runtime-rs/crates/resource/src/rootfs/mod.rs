@@ -12,7 +12,9 @@ use async_trait::async_trait;
 use kata_types::mount::Mount;
 mod block_rootfs;
 pub mod virtual_volume;
+
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+use virtual_volume::{is_kata_virtual_volume, VirtualVolume};
 
 use std::{collections::HashMap, sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
@@ -67,7 +69,7 @@ impl RootFsResource {
         root: &oci::Root,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
-        _annotations: &HashMap<String, String>,
+        annotations: &HashMap<String, String>,
     ) -> Result<Arc<dyn Rootfs>> {
         match rootfs_mounts {
             // if rootfs_mounts is empty
@@ -92,6 +94,17 @@ impl RootFsResource {
                 // Safe as single_layer_rootfs must have one layer
                 let layer = &mounts_vec[0];
                 let mut inner = self.inner.write().await;
+
+                if is_guest_pull_volume(share_fs, layer) {
+                    let mount_options = layer.options.clone();
+                    let virtual_volume: Arc<dyn Rootfs> = Arc::new(
+                        VirtualVolume::new(cid, annotations, mount_options.to_vec())
+                            .await
+                            .context("kata virtual volume failed.")?,
+                    );
+                    return Ok(virtual_volume);
+                }
+
                 let rootfs = if let Some(dev_id) = is_block_rootfs(&layer.source) {
                     // handle block rootfs
                     info!(sl!(), "block device: {}", dev_id);
@@ -159,4 +172,11 @@ impl RootFsResource {
 
 fn is_single_layer_rootfs(rootfs_mounts: &[Mount]) -> bool {
     rootfs_mounts.len() == 1
+}
+
+pub fn is_guest_pull_volume(
+    share_fs: &Option<Arc<dyn ShareFs>>,
+    m: &kata_types::mount::Mount,
+) -> bool {
+    share_fs.is_none() && is_kata_virtual_volume(m)
 }
