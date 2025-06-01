@@ -14,7 +14,7 @@ mod block_rootfs;
 pub mod virtual_volume;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
-use std::{sync::Arc, vec::Vec};
+use std::{collections::HashMap, sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
 use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
@@ -67,6 +67,7 @@ impl RootFsResource {
         root: &oci::Root,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
+        _annotations: &HashMap<String, String>,
     ) -> Result<Arc<dyn Rootfs>> {
         match rootfs_mounts {
             // if rootfs_mounts is empty
