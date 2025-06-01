@@ -11,6 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::mount::Mount;
 mod block_rootfs;
+pub mod virtual_volume;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
 use std::{sync::Arc, vec::Vec};
