@@ -63,6 +63,8 @@ pub const KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS: &str = "image_nydus_fs";
 pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS: &str = "layer_nydus_fs";
 /// Download and extra container image inside guest vm.
 pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
+/// In CoCo scenario, we support force_guest_pull to enforce container image guest pull without remote snapshotter.
+pub const KATA_IMAGE_FORCE_GUEST_PULL: &str = "force_guest_pull";
 
 /// Manager to manage registered storage device handlers.
 pub type StorageHandlerManager<H> = HandlerManager<H>;

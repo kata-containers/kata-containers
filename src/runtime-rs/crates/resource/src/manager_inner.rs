@@ -17,8 +17,11 @@ use hypervisor::{
     },
     BlockConfig, Hypervisor, VfioConfig,
 };
-use kata_types::config::{hypervisor::TopologyConfigInfo, TomlConfig};
 use kata_types::mount::Mount;
+use kata_types::{
+    config::{hypervisor::TopologyConfigInfo, TomlConfig},
+    mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
+};
 use oci::{Linux, LinuxCpu, LinuxResources};
 use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
@@ -322,6 +325,16 @@ impl ResourceManagerInner {
         rootfs_mounts: &[Mount],
         annotations: &HashMap<String, String>,
     ) -> Result<Arc<dyn Rootfs>> {
+        let adjust_rootfs_mounts = if !self
+            .config()
+            .runtime
+            .is_experiment_enabled(KATA_IMAGE_FORCE_GUEST_PULL)
+        {
+            rootfs_mounts.to_vec()
+        } else {
+            adjust_rootfs_mounts()?
+        };
+
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
@@ -331,7 +344,7 @@ impl ResourceManagerInner {
                 cid,
                 root,
                 bundle_path,
-                rootfs_mounts,
+                &adjust_rootfs_mounts,
                 annotations,
             )
             .await
