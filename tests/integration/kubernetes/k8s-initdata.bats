@@ -51,7 +51,7 @@ function setup_kbs_image_policy_for_initdata() {
 
     # TODO: Enable for more archs
     case "$KATA_HYPERVISOR" in
-        "qemu-tdx"|"qemu-coco-dev")
+        "qemu-tdx"|"qemu-coco-dev"|"qemu-snp")
             ;;
         *)
             skip "Test not supported for ${KATA_HYPERVISOR}."
