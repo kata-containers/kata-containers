@@ -26,6 +26,52 @@ updates:
       - dependency-name: "virtio-vsock"
       - dependency-name: "vm-memory"
       - dependency-name: "vmm-sys-util"
+    # As we often have up to 8/9 components that need the same versions bumps
+    # create groups for common dependencies, so they can all go in a single PR
+    # We can extend this as we see more frequent groups
+    groups:
+      atty:
+        patterns:
+          - atty
+      bit-vec:
+        patterns:
+          - bit-vec
+      bumpalo:
+        patterns:
+          - bumpalo
+      clap:
+        patterns:
+          - clap
+      crossbeam:
+        patterns:
+          - crossbeam
+      h2:
+        patterns:
+          - h2
+      idna:
+        patterns:
+          - idna
+      openssl:
+        patterns:
+          - openssl
+      protobuf:
+        patterns:
+          - protobuf
+      rsa:
+        patterns:
+          - rsa
+      rustix:
+        patterns:
+          - rustix
+      time:
+        patterns:
+          - time
+      tokio:
+        patterns:
+          - tokio
+      tracing:
+        patterns:
+          - tracing
 
   - package-ecosystem: "gomod"
     directories:
