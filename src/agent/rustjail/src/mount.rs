@@ -481,7 +481,7 @@ fn mount_cgroups(
 
         if key != base {
             let src = format!("{}/{}", &mount_dest, key);
-            unix::fs::symlink(destination.as_str(), &src[1..]).map_err(|e| {
+            unix::fs::symlink(destination.as_str(), &src[1..]).inspect_err(|e| {
                 log_child!(
                     cfd_log,
                     "symlink: {} {} err: {}",
@@ -489,8 +489,6 @@ fn mount_cgroups(
                     destination.as_str(),
                     e.to_string()
                 );
-
-                e
             })?;
         }
     }
@@ -793,14 +791,13 @@ fn mount_from(
             Path::new(&dest).parent().unwrap()
         };
 
-        fs::create_dir_all(dir).map_err(|e| {
+        fs::create_dir_all(dir).inspect_err(|e| {
             log_child!(
                 cfd_log,
                 "create dir {}: {}",
                 dir.to_str().unwrap(),
                 e.to_string()
             );
-            e
         })?;
 
         // make sure file exists so we can bind over it
@@ -830,9 +827,8 @@ fn mount_from(
         }
     };
 
-    let _ = stat::stat(dest.as_str()).map_err(|e| {
+    let _ = stat::stat(dest.as_str()).inspect_err(|e| {
         log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e);
-        e
     })?;
 
     // Set the SELinux context for the mounts
@@ -878,9 +874,8 @@ fn mount_from(
         flags,
         Some(d.as_str()),
     )
-    .map_err(|e| {
+    .inspect_err(|e| {
         log_child!(cfd_log, "mount error: {:?}", e);
-        e
     })?;
 
     if !label.is_empty() && selinux::is_enabled()? && use_xattr {
@@ -904,9 +899,8 @@ fn mount_from(
             flags | MsFlags::MS_REMOUNT,
             None::<&str>,
         )
-        .map_err(|e| {
+        .inspect_err(|e| {
             log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e);
-            e
         })?;
     }
     Ok(())
