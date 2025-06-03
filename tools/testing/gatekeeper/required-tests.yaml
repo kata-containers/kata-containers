@@ -68,6 +68,7 @@ mapping:
       # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (cloud-hypervisor)
       # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (dragonball)
       # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-kata-agent-apis
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (cloud-hypervisor)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu)
