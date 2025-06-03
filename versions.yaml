@@ -198,7 +198,7 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
     version: "v6.12.28"
     confidential:
-      description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
+      description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
       version: "v6.12.28"
 
@@ -360,11 +360,6 @@ externals:
       version: "edk2-stable202411"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
-    sev:
-      description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202411"
-      package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
-      package_output_dir: "AmdSev"
     arm64:
       description: "UEFI for arm64 virtual machines."
       version: "edk2-stable202411"
