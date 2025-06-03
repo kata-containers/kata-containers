@@ -104,6 +104,7 @@ struct PasswdRecord {
 /// A single record in a Unix group file.
 #[derive(Debug)]
 struct GroupRecord {
+    #[allow(dead_code)]
     pub name: String,
     #[allow(dead_code)]
     pub validate: bool,
@@ -286,24 +287,6 @@ impl Container {
         }
     }
 
-    fn get_gid_from_group_name(&self, name: &str) -> Result<u32> {
-        if self.group.is_empty() {
-            return Err(anyhow!(
-                "No /etc/group file is available, unable to parse gids from group name"
-            ));
-        }
-        match parse_group_file(&self.group) {
-            Ok(records) => {
-                if let Some(record) = records.iter().find(|&r| r.name == name) {
-                    Ok(record.gid)
-                } else {
-                    Err(anyhow!("Failed to find name {} in /etc/group", name))
-                }
-            }
-            Err(inner_e) => Err(anyhow!("Failed to parse /etc/group - error {inner_e}")),
-        }
-    }
-
     fn parse_user_string(&self, user: &str) -> u32 {
         if user.is_empty() {
             return 0;
@@ -321,34 +304,6 @@ impl Container {
                     .get_uid_gid_from_passwd_user(user.to_string().clone())
                     .unwrap_or((0, 0));
                 uid
-            }
-        }
-    }
-
-    fn parse_group_string(&self, group: &str) -> u32 {
-        if group.is_empty() {
-            return 0;
-        }
-
-        match group.parse::<u32>() {
-            Ok(id) => {
-                warn!(
-                    concat!(
-                        "Parsed gid {} from OCI container image config, but not using it. ",
-                        "GIDs are only picked up by the runtime from /etc/passwd."
-                    ),
-                    id
-                );
-                0
-            }
-            // If the group is not a number, interpret it as a group name.
-            Err(outer_e) => {
-                debug!(
-                    "Failed to parse {} as u32, using it as a group name - error {outer_e}",
-                    group
-                );
-
-                self.get_gid_from_group_name(group).unwrap_or(0)
             }
         }
     }
@@ -392,22 +347,17 @@ impl Container {
                         debug!("Parsing uid from user[0] = {}", &user[0]);
                         process.User.UID = self.parse_user_string(user[0]);
 
-                        debug!("Parsing gid from user[1] = {:?}", user[1]);
-                        process.User.GID = self.parse_group_string(user[1]);
-
                         debug!(
                             "Overriding OCI container GID with UID:GID mapping from /etc/passwd"
                         );
-                        process.User.GID =
-                            self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
                     }
                 } else {
                     debug!("Parsing uid from image_user = {}", image_user);
                     process.User.UID = self.parse_user_string(image_user);
 
                     debug!("Using UID:GID mapping from /etc/passwd");
-                    process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
                 }
+                process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
             }
         }
 
