@@ -300,10 +300,16 @@ impl Container {
                     "Failed to parse {} as u32, using it as a user name - error {outer_e}",
                     user
                 );
-                let (uid, _) = self
-                    .get_uid_gid_from_passwd_user(user.to_string().clone())
-                    .unwrap_or((0, 0));
-                uid
+                match self.get_uid_gid_from_passwd_user(user.to_string().clone()) {
+                    Ok((uid, _)) => uid,
+                    Err(err) => {
+                        warn!(
+                            "could not resolve named user {}, defaulting to uid 0: {}",
+                            user, err
+                        );
+                        0
+                    }
+                }
             }
         }
     }
@@ -329,10 +335,6 @@ impl Container {
          * 6. Be erroneus, somehow
          */
         if let Some(image_user) = &docker_config.User {
-            if self.passwd.is_empty() {
-                warn!("No /etc/passwd file is available, unable to parse gids from user");
-            }
-
             if !image_user.is_empty() {
                 if image_user.contains(':') {
                     debug!("Splitting Docker config user = {:?}", image_user);
