@@ -91,10 +91,6 @@ function host_systemctl() {
 	nsenter --target 1 --mount systemctl "${@}"
 }
 
-function host_exec() {
-	nsenter --target 1 --mount bash -c "$*"
-}
-
 function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
@@ -449,23 +445,13 @@ function install_artifacts() {
 		fi
 
 		if [ "${dest_dir}" != "${default_dest_dir}" ]; then
-			kernel_path=$(tomlq ".hypervisor.${shim}.path" ${kata_config_file} | tr -d \")
-			if echo $kernel_path | grep -q "${dest_dir}"; then
-				# If we got to this point here, it means that we're dealing with
-				# a kata containers configuration file that has already been changed
-				# to support multi-install suffix, and we're here most likely due to
-				# and update or container restart, and we simply should not try to
-				# do anything else, thus just leave the conditional.
-				break
-			else
-				# We could always do this sed, regardless, but I have a strong preference
-				# on not touching the configuration files unless extremelly needed
-				sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
+			# We could always do this sed, regardless, but I have a strong preference
+			# on not touching the configuration files unless extremelly needed
+			sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
-				# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-				[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-sev|qemu-se|qemu-coco-dev)$ ]] && \
-					adjust_qemu_cmdline "${shim}" "${kata_config_file}"
-			fi
+			# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
+			[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-se|qemu-coco-dev)$ ]] && \
+				adjust_qemu_cmdline "${shim}" "${kata_config_file}"
 		fi
 	done
 
@@ -880,9 +866,9 @@ function main() {
 			       mkdir -p $(dirname "$containerd_conf_file")
 			       touch "$containerd_conf_file"
 			elif [[ "$runtime" == "containerd" ]]; then
-				if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ]; then
-					host_exec containerd config default > "$containerd_conf_file"
-				fi
+			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
+					containerd config default > "$containerd_conf_file"
+			       fi
 			fi
 
 			if [ $use_containerd_drop_in_conf_file = "true" ]; then
@@ -946,3 +932,4 @@ function main() {
 }
 
 main "$@"
+
