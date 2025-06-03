@@ -271,7 +271,9 @@ impl Container {
                     record.user_list.iter().for_each(|u| {
                         match self.get_uid_gid_from_passwd_user(u.to_string()) {
                             Ok((record_uid, _)) => {
-                                if record_uid == uid {
+                                if record_uid == uid && &record.name != u {
+                                    // The second condition works around containerd bug
+                                    // https://github.com/containerd/containerd/issues/11937.
                                     groups.push(record.gid);
                                 }
                             },
