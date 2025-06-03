@@ -114,3 +114,12 @@ func CmdDel(cniNetns, cniContainerID, cniIfname string, f func() error) error {
 func CmdDelWithArgs(args *skel.CmdArgs, f func() error) error {
 	return CmdDel(args.Netns, args.ContainerID, args.IfName, f)
 }
+
+func CmdStatus(f func() error) error {
+	os.Setenv("CNI_COMMAND", "STATUS")
+	os.Setenv("CNI_PATH", os.Getenv("PATH"))
+	os.Setenv("CNI_NETNS_OVERRIDE", "1")
+	defer envCleanup()
+
+	return f()
+}
