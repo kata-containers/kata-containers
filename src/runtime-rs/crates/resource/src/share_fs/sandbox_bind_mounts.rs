@@ -103,13 +103,12 @@ impl SandboxBindMounts {
             // mount -o bind,ro host_shared mount_dest
             // host_shared: ${bindmount}
             mount::bind_mount_unchecked(Path::new(bindmount), &mount_dest, true, MsFlags::MS_SLAVE)
-                .map_err(|e| {
+                .inspect_err(|_| {
                     for p in &mounted_list {
                         nix::mount::umount(p).unwrap_or_else(|e| {
                             error!(sl!(), "do umount failed: {:?}", e);
                         });
                     }
-                    e
                 })?;
 
             // default sandbox bind mounts mode is ro.
