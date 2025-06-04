@@ -233,7 +233,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/switchboard-xyz/guest-components"
-    version: "ec11a2f89dde202d8a3f14a85542c5db49539e8b"
+    version: "0a06ef241190780840fbb0542e51b198f1f72b0b"
     toolchain: "1.80.0"
 
   coco-trustee:
