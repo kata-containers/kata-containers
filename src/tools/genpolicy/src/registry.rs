@@ -258,29 +258,34 @@ impl Container {
         }
     }
 
+    fn get_user_from_passwd_uid(&self, uid: u32) -> Result<String> {
+        for record in parse_passwd_file(&self.passwd)? {
+            if record.uid == uid {
+                return Ok(record.user);
+            }
+        }
+        Err(anyhow!("No user found with uid {uid}"))
+    }
+
     pub fn get_additional_groups_from_uid(&self, uid: u32) -> Result<Vec<u32>> {
         if self.group.is_empty() || self.passwd.is_empty() {
             return Err(anyhow!(
                 "No /etc/group, /etc/passwd file is available, unable to parse additional group membership from uid"
             ));
         }
+
+        let user = self.get_user_from_passwd_uid(uid)?;
+
         match parse_group_file(&self.group) {
             Ok(records) => {
                 let mut groups = Vec::new();
                 for record in records.iter() {
                     record.user_list.iter().for_each(|u| {
-                        match self.get_uid_gid_from_passwd_user(u.to_string()) {
-                            Ok((record_uid, _)) => {
-                                if record_uid == uid && &record.name != u {
-                                    // The second condition works around containerd bug
-                                    // https://github.com/containerd/containerd/issues/11937.
-                                    groups.push(record.gid);
-                                }
-                            },
-                            Err(inner_e) => warn!(
-                                "/etc/group indicates a user {u} that is not in /etc/passwd - error {inner_e}"
-                            ),
-                        };
+                        if u == &user && &record.name != u {
+                            // The second condition works around containerd bug
+                            // https://github.com/containerd/containerd/issues/11937.
+                            groups.push(record.gid);
+                        }
                     });
                 }
                 Ok(groups)
