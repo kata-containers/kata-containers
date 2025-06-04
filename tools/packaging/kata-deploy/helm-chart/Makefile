@@ -16,3 +16,9 @@ package: helm release
 
 clean:
 	rm kata-deploy-*.tgz
+
+schema: plugins
+	cd kata-deploy && helm schema -input values.yaml kata-deploy/values.schema.json && cd .. 
+
+plugins:
+	helm plugin install https://github.com/losisin/helm-values-schema-json.git || true
