@@ -602,7 +602,7 @@ pub fn add_verity_and_users_to_store(
     let mut writer = BufWriter::new(&file);
     writeln!(writer, "{}", serialized)?;
     writer.flush()?;
-    file.unlock()?;
+    fs2::FileExt::unlock(&file)?;
     Ok(())
 }
 
