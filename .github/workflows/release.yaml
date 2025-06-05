@@ -73,11 +73,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Login to Kata Containers docker.io
+      - name: Login to Kata Containers ghcr.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Kata Containers quay.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -91,11 +92,11 @@ jobs:
           release_version=$(./tools/packaging/release/release.sh release-version)
           echo "KATA_DEPLOY_IMAGE_TAGS=$release_version latest" >> "$GITHUB_ENV"
 
-      - name: Publish multi-arch manifest on docker.io and quay.io
+      - name: Publish multi-arch manifest on quay.io & ghcr.io
         run: |
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
-          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy docker.io/katadocker/kata-deploy"
+          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy ghcr.io/kata-containers/kata-deploy"
 
   upload-multi-arch-static-tarball:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
@@ -216,14 +217,12 @@ jobs:
       - name: Login to the OCI registries
         run: |
           echo "${{ secrets.QUAY_DEPLOYER_PASSWORD }}" | helm registry login quay.io --username "${{ secrets.QUAY_DEPLOYER_USERNAME }}" --password-stdin
-          echo "${{ secrets.DOCKER_PASSWORD }}" | helm registry login docker.io --username "${{ secrets.DOCKER_USERNAME }}" --password-stdin
           echo "${{ github.token }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
 
       - name: Push helm chart to the OCI registries
         run: |
           release_version=$(./tools/packaging/release/release.sh release-version)
           helm push "kata-deploy-${release_version}.tgz" oci://quay.io/kata-containers/kata-deploy-charts
-          helm push "kata-deploy-${release-version}.tgz" oci://docker.io/katadocker/kata-deploy-charts
           helm push "kata-deploy-${release-version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
 
   publish-release:
