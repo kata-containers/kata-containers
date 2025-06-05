@@ -1363,7 +1363,7 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	}
 
 	// set the scsi scan mode to none for virtio-scsi
-	if runtimeConfig.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI {
+	if runtimeConfig.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI && !runtimeConfig.HypervisorConfig.DisableBlockDeviceUse {
 		p := vc.Param{
 			Key:   "scsi_mod.scan",
 			Value: "none",
