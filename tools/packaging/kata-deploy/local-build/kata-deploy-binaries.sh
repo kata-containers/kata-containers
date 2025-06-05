@@ -51,9 +51,6 @@ ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 GUEST_HOOKS_TARBALL_NAME="${GUEST_HOOKS_TARBALL_NAME:-}"
 EXTRA_PKGS="${EXTRA_PKGS:-}"
-REPO_URL="${REPO_URL:-}"
-REPO_URL_X86_64="${REPO_URL_X86_64:-}"
-REPO_COMPONENTS="${REPO_COMPONENTS:-}"
 AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
@@ -121,7 +118,7 @@ options:
 	nydus
 	pause-image
 	ovmf
-	ovmf-sev
+	ovmf-snp
 	qemu
 	qemu-snp-experimental
 	qemu-tdx-experimental
@@ -408,18 +405,6 @@ install_image() {
 		export EXTRA_PKGS
 	fi
 
-	if [[ -n "${REPO_URL}" ]]; then
-		export REPO_URL
-	fi
-
-	if [[ -n "${REPO_URL_X86_64}" ]]; then
-		export REPO_URL_X86_64
-	fi
-
-	if [[ -n "${REPO_COMPONENTS}" ]]; then
-		export REPO_COMPONENTS
-	fi
-
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -509,18 +494,6 @@ install_initrd() {
 
 	if [[ -n "${EXTRA_PKGS}" ]]; then
 		export EXTRA_PKGS
-	fi
-
-	if [[ -n "${REPO_URL}" ]]; then
-		export REPO_URL
-	fi
-
-	if [[ -n "${REPO_URL_X86_64}" ]]; then
-		export REPO_URL_X86_64
-	fi
-
-	if [[ -n "${REPO_COMPONENTS}" ]]; then
-		export REPO_COMPONENTS
 	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
@@ -934,13 +907,9 @@ install_shimv2() {
 install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
-	if [ "${ARCH}" == "aarch64" ]; then
-		ovmf_type="arm64"
-		tarball_name="edk2-arm64.tar.gz"
-	fi
 
 	local component_name="ovmf"
-	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
+	[ "${ovmf_type}" == "snp" ] && component_name="ovmf-snp"
 
 	latest_artefact="$(get_from_kata_deps ".externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -957,9 +926,9 @@ install_ovmf() {
 	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
 }
 
-# Install OVMF SEV
-install_ovmf_sev() {
-	install_ovmf "sev" "edk2-sev.tar.gz"
+# Install OVMF SNP
+install_ovmf_snp() {
+	install_ovmf "snp" "edk2-sev.tar.gz"
 }
 
 install_busybox() {
@@ -1195,7 +1164,7 @@ handle_build() {
 		install_log_parser_rs
 		install_nydus
 		install_ovmf
-		install_ovmf_sev
+		install_ovmf_snp
 		install_qemu
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
@@ -1246,7 +1215,7 @@ handle_build() {
 
 	ovmf) install_ovmf ;;
 
-	ovmf-sev) install_ovmf_sev ;;
+	ovmf-snp) install_ovmf_snp ;;
 
 	pause-image) install_pause_image ;;
 
@@ -1532,3 +1501,4 @@ main() {
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 	main "$@"
 fi
+
