@@ -1796,11 +1796,11 @@ pub async fn start(
         sandbox: s,
         init_mode,
         oma,
-    }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
-    let aservice = agent_ttrpc::create_agent_service(Arc::new(agent_service));
+    });
+    let aservice = agent_ttrpc::create_agent_service(Arc::new(*agent_service));
 
-    let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
-    let hservice = health_ttrpc::create_health(Arc::new(health_service));
+    let health_service = Box::new(HealthService {});
+    let hservice = health_ttrpc::create_health(Arc::new(*health_service));
 
     let server = TtrpcServer::new()
         .bind(server_address)?

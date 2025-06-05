@@ -270,9 +270,8 @@ mod tests {
 
     fn start_ttrpc_server(cdh_socket_uri: String) {
         tokio::spawn(async move {
-            let ss = Box::new(TestService {})
-                as Box<dyn confidential_data_hub_ttrpc_async::SealedSecretService + Send + Sync>;
-            let ss = Arc::new(ss);
+            let ss = Box::new(TestService {});
+            let ss = Arc::new(*ss);
             let ss_service = confidential_data_hub_ttrpc_async::create_sealed_secret_service(ss);
 
             remove_if_sock_exist(&cdh_socket_uri).unwrap();
