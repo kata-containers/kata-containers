@@ -2884,6 +2884,7 @@ func (q *qemu) GetVirtioFsPid() *int {
 
 type qemuGrpc struct {
 	ID             string
+	ContextID      uint64
 	QmpChannelpath string
 	State          QemuState
 	NvdimmCount    int
@@ -2919,6 +2920,15 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qemuConfig.SMP = qp.QemuSMP
 
 	q.arch.setBridges(q.state.Bridges)
+
+	vsock := types.VSock{
+		ContextID: qp.ContextID,
+		Port:      uint32(vSockPort),
+	}
+	q.qemuConfig.Devices, err = q.arch.appendVSock(ctx, q.qemuConfig.Devices, vsock)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -2937,6 +2947,13 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 		NvdimmCount:    q.nvdimmCount,
 
 		QemuSMP: q.qemuConfig.SMP,
+	}
+
+	for _, device := range q.qemuConfig.Devices {
+		if vsockdev, ok := device.(govmmQemu.VSOCKDevice); ok {
+			qp.ContextID = vsockdev.ContextID
+			break
+		}
 	}
 
 	return json.Marshal(&qp)
@@ -3016,6 +3033,16 @@ func (q *qemu) Check() error {
 }
 
 func (q *qemu) GenerateSocket(id string) (interface{}, error) {
+	// In vmcache, we already have VSock.
+	for _, device := range q.qemuConfig.Devices {
+		if vsockdev, ok := device.(govmmQemu.VSOCKDevice); ok {
+			return types.VSock{
+				VhostFd:   vsockdev.VHostFD,
+				ContextID: vsockdev.ContextID,
+				Port:      uint32(vSockPort),
+			}, nil
+		}
+	}
 	return generateVMSocket(id, q.config.VMStorePath)
 }
 
