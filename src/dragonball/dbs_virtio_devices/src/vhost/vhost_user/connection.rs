@@ -134,7 +134,7 @@ pub(super) struct EndpointParam<'a, AS: GuestAddressSpace, Q: QueueT, R: GuestMe
     pub slave_req_fd: Option<RawFd>,
 }
 
-impl<'a, AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'a, AS, Q, R> {
+impl<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'_, AS, Q, R> {
     fn get_host_address(&self, addr: GuestAddress, mem: &AS::M) -> VirtioResult<*mut u8> {
         mem.get_host_address(addr)
             .map_err(|_| VirtioError::InvalidGuestAddress(addr))

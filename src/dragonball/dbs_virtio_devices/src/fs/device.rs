@@ -1146,7 +1146,7 @@ pub mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&fs),
             TYPE_VIRTIO_FS
         );
-        let queue_size = vec![QUEUE_SIZE; NUM_QUEUE_OFFSET + NUM_QUEUES];
+        let queue_size = [QUEUE_SIZE; NUM_QUEUE_OFFSET + NUM_QUEUES];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &fs

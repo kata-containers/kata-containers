@@ -224,7 +224,7 @@ impl VhostUserBlockDevice {
         // config_path = "spdk://xxxxxxx.sock", remove the prefix "spdk://"
         let vhost_socket = config_path
             .strip_prefix("spdk://")
-            .ok_or_else(|| VirtIoError::InvalidInput)?
+            .ok_or(VirtIoError::InvalidInput)?
             .to_string();
 
         let init_queues = queue_sizes.len() as u32;
@@ -612,7 +612,7 @@ mod tests {
 
         // get config
         let config_len = mem::size_of::<VirtioBlockConfig>();
-        let mut config_space: Vec<u8> = vec![0u8; config_len as usize];
+        let mut config_space: Vec<u8> = vec![0u8; config_len];
         let (hdr, _msg, _payload, rfds) = slave
             .recv_payload_into_buf::<VhostUserConfig>(&mut config_space)
             .unwrap();
@@ -652,7 +652,7 @@ mod tests {
             TYPE_BLOCK
         );
 
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

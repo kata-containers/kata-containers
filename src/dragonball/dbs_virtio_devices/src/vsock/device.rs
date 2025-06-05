@@ -30,7 +30,7 @@ use crate::{ActivateResult, ConfigResult, DbsGuestAddressSpace, VirtioDevice};
 const VSOCK_DRIVER_NAME: &str = "virtio-vsock";
 const VSOCK_CONFIG_SPACE_SIZE: usize = 8;
 const VSOCK_AVAIL_FEATURES: u64 =
-    1u64 << uapi::VIRTIO_F_VERSION_1 | 1u64 << uapi::VIRTIO_F_IN_ORDER;
+    (1u64 << uapi::VIRTIO_F_VERSION_1) | (1u64 << uapi::VIRTIO_F_IN_ORDER);
 
 /// This is the `VirtioDevice` implementation for our vsock device. It handles
 /// the virtio-level device logic: feature negociation, device configuration,

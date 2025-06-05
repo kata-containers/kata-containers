@@ -838,7 +838,7 @@ mod tests {
             TYPE_VIRTIO_FS
         );
 
-        let queue_size = vec![2, 2, 2];
+        let queue_size = [2, 2, 2];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

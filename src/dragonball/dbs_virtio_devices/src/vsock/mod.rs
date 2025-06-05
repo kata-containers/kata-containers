@@ -426,7 +426,7 @@ mod tests {
         pub mem: Arc<GuestMemoryMmap>,
     }
 
-    impl<'a> EventHandlerContext<'a> {
+    impl EventHandlerContext<'_> {
         // Artificially activate the device.
         pub fn arti_activate(&mut self, mem: &GuestMemoryMmap) {
             let kvm = Kvm::new().unwrap();
