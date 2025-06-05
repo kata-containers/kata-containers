@@ -53,7 +53,7 @@ jobs:
       KBS_INGRESS: "aks"
       KUBERNETES: "vanilla"
       PULL_TYPE: ${{ matrix.pull-type }}
-      AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
+      AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
