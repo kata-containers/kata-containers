@@ -105,8 +105,8 @@ impl SandboxBindMounts {
             mount::bind_mount_unchecked(Path::new(bindmount), &mount_dest, true, MsFlags::MS_SLAVE)
                 .map_err(|e| {
                     for p in &mounted_list {
-                        nix::mount::umount(p).unwrap_or_else(|x| {
-                            format!("do umount failed: {:?}", x);
+                        nix::mount::umount(p).unwrap_or_else(|e| {
+                            error!(sl!(), "do umount failed: {:?}", e);
                         });
                     }
                     e
