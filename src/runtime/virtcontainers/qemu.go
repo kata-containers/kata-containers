@@ -2907,6 +2907,7 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.qmpMonitorCh.ctx = ctx
 	q.qmpMonitorCh.path = qp.QmpChannelpath
 	q.qemuConfig.Ctx = ctx
+	q.qemuConfig.PidFile = filepath.Join(hypervisorConfig.VMStorePath, q.id, "pid")
 	q.state = qp.State
 	q.arch, err = newQemuArch(q.config)
 	if err != nil {
@@ -2925,6 +2926,10 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 	q.qmpShutdown()
 
 	q.Cleanup(ctx)
+
+	if q.arch != nil {
+		q.state.Bridges = q.arch.getBridges()
+	}
 	qp := qemuGrpc{
 		ID:             q.id,
 		QmpChannelpath: q.qmpMonitorCh.path,
