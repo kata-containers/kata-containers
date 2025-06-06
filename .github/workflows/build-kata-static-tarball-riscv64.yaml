@@ -76,7 +76,7 @@ jobs:
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v4
         with:
-          name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          name: kata-artifacts-riscv64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
           retention-days: 15
           if-no-files-found: error
