@@ -20,7 +20,9 @@ on:
         required: false
         type: string
         default: ""
-
+    secrets:
+      KBUILD_SIGN_PIN:
+        required: false
 permissions:
   contents: read
 
@@ -84,7 +86,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
-
+          KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
       - name: Parse OCI image name and digest
         id: parse-oci-segments
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
@@ -185,7 +187,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
-
+          KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v4
         with:
