@@ -20,6 +20,9 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read

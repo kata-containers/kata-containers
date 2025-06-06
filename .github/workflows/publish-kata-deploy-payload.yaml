@@ -30,6 +30,9 @@ on:
         description: The arch of the tarball.
         required: true
         type: string
+    secrets:
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read

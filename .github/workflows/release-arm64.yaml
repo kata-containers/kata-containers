@@ -5,6 +5,9 @@ on:
       target-arch:
         required: true
         type: string
+    secrets:
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read
@@ -15,7 +18,8 @@ jobs:
     with:
       push-to-registry: yes
       stage: release
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   kata-deploy:
     needs: build-kata-static-tarball-arm64

@@ -30,7 +30,8 @@ jobs:
     uses: ./.github/workflows/release-amd64.yaml
     with:
       target-arch: amd64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-arm64:
     needs: release
@@ -42,7 +43,8 @@ jobs:
     uses: ./.github/workflows/release-arm64.yaml
     with:
       target-arch: arm64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-s390x:
     needs: release
@@ -54,7 +56,9 @@ jobs:
     uses: ./.github/workflows/release-s390x.yaml
     with:
       target-arch: s390x
-    secrets: inherit
+    secrets:
+      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-ppc64le:
     needs: release
@@ -64,7 +68,8 @@ jobs:
     uses: ./.github/workflows/release-ppc64le.yaml
     with:
       target-arch: ppc64le
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-multi-arch-images:
     runs-on: ubuntu-22.04

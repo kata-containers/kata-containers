@@ -21,6 +21,9 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: true
 
 permissions:
   contents: read

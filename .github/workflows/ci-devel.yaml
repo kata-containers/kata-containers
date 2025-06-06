@@ -18,7 +18,16 @@ jobs:
       pr-number: "dev"
       tag: ${{ github.sha }}-dev
       target-branch: ${{ github.ref_name }}
-    secrets: inherit
+
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+      ITA_KEY: ${{ secrets.ITA_KEY }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-checks:
     uses: ./.github/workflows/build-checks.yaml

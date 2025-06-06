@@ -24,6 +24,18 @@ on:
       tarball-suffix:
         required: false
         type: string
+    secrets:
+
+      AZ_APPID:
+        required: true
+      AZ_PASSWORD:
+        required: true
+      AZ_TENANT_ID:
+       required: true
+      AZ_SUBSCRIPTION_ID:
+        required: true
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: true
 
 permissions:
   contents: read

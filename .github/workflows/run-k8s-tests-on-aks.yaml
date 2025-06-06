@@ -24,6 +24,17 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+
+      AZ_APPID:
+        required: true
+      AZ_PASSWORD:
+        required: true
+      AZ_TENANT_ID:
+       required: true
+      AZ_SUBSCRIPTION_ID:
+        required: true
+
 
 permissions:
   contents: read
