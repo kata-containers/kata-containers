@@ -201,9 +201,7 @@ impl Endpoint {
         Ok(Some(features))
     }
 
-    // TODO: Remove this after enabling vhost-user-fs on the runtime-rs. Issue:
-    // https://github.com/kata-containers/kata-containers/issues/8691
-    #[allow(dead_code)]
+    #[cfg(feature = "vhost-user-fs")]
     pub fn update_memory<AS: GuestAddressSpace>(&mut self, vm_as: &AS) -> VirtioResult<()> {
         let master = match self.conn.as_mut() {
             Some(conn) => conn,
