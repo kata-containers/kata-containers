@@ -416,11 +416,86 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-tests-ppc64le:
+  run-cri-containerd-amd64:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-ppc64le
-    uses: ./.github/workflows/run-cri-containerd-tests-ppc64le.yaml
+    needs: build-kata-static-tarball-amd64
+    strategy:
+      matrix:
+        params: [
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: lts,    vmm: clh              },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: lts,    vmm: dragonball       },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: lts,    vmm: qemu             },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: lts,    vmm: stratovirt       },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: lts,    vmm: cloud-hypervisor },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: lts,    vmm: qemu-runtime-rs  },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: active, vmm: clh              },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: active, vmm: dragonball       },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: active, vmm: qemu             },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: active, vmm: stratovirt       },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: active, vmm: cloud-hypervisor },
+          { runner: ubuntu-22.04,  arch: amd64,   containerd_version: active, vmm: qemu-runtime-rs  },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      runner: ${{ matrix.params.runner }}
+      arch: ${{ matrix.params.arch }}
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
+
+  run-cri-containerd-s390x:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: build-kata-static-tarball-s390x
+    strategy:
+      matrix:
+        params: [
+          { runner: s390x-large,   arch: s390x,   containerd_version: active, vmm: qemu             },
+          { runner: s390x-large,   arch: s390x,   containerd_version: active, vmm: qemu-runtime-rs  },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ${{ matrix.params.runner }}
+      arch: ${{ matrix.params.arch }}
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
+
+  run-cri-containerd-tests-ppc64le:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: build-kata-static-tarball-ppc64le
+    strategy:
+      matrix:
+        params: [
+          { runner: ppc64le,       arch: ppc64le, containerd_version: active, vmm: qemu             },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ${{ matrix.params.runner }}
+      arch: ${{ matrix.params.arch }}
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
+
+  run-cri-containerd-tests-arm64:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: build-kata-static-tarball-arm64
+    strategy:
+      matrix:
+        params: [
+          { runner: arm64-non-k8s, arch: arm64,   containerd_version: active, vmm: qemu             },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ${{ matrix.params.runner }}
+      arch: ${{ matrix.params.arch }}
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
