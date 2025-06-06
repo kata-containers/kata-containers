@@ -625,13 +625,13 @@ impl<AS: GuestAddressSpace> Net<AS> {
             .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::SetVnetHdrSize(err))))?;
         info!("net tap set finished");
 
-        let mut avail_features = 1u64 << VIRTIO_NET_F_GUEST_CSUM
-            | 1u64 << VIRTIO_NET_F_CSUM
-            | 1u64 << VIRTIO_NET_F_GUEST_TSO4
-            | 1u64 << VIRTIO_NET_F_GUEST_UFO
-            | 1u64 << VIRTIO_NET_F_HOST_TSO4
-            | 1u64 << VIRTIO_NET_F_HOST_UFO
-            | 1u64 << VIRTIO_F_VERSION_1;
+        let mut avail_features = (1u64 << VIRTIO_NET_F_GUEST_CSUM)
+            | (1u64 << VIRTIO_NET_F_CSUM)
+            | (1u64 << VIRTIO_NET_F_GUEST_TSO4)
+            | (1u64 << VIRTIO_NET_F_GUEST_UFO)
+            | (1u64 << VIRTIO_NET_F_HOST_TSO4)
+            | (1u64 << VIRTIO_NET_F_HOST_UFO)
+            | (1u64 << VIRTIO_F_VERSION_1);
 
         let config_space = setup_config_space(
             NET_DRIVER_NAME,

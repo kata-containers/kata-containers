@@ -229,7 +229,7 @@ impl Interrupt {
 
     fn get_irq_pin(&self) -> u32 {
         if let Some(legacy_irq) = self.legacy_irq {
-            (PciInterruptPin::IntA as u32) << 8 | legacy_irq
+            ((PciInterruptPin::IntA as u32) << 8) | legacy_irq
         } else {
             0
         }

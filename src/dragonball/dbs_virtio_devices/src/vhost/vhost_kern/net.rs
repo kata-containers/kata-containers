@@ -148,20 +148,20 @@ where
             validate_and_configure_tap(tap, vq_pairs)?;
         }
 
-        let mut avail_features = 1u64 << VIRTIO_NET_F_GUEST_CSUM
-            | 1u64 << VIRTIO_NET_F_CSUM
-            | 1u64 << VIRTIO_NET_F_GUEST_TSO4
-            | 1u64 << VIRTIO_NET_F_GUEST_UFO
-            | 1u64 << VIRTIO_NET_F_HOST_TSO4
-            | 1u64 << VIRTIO_NET_F_HOST_UFO
-            | 1u64 << VIRTIO_NET_F_MRG_RXBUF
-            | 1u64 << VIRTIO_RING_F_INDIRECT_DESC
-            | 1u64 << VIRTIO_RING_F_EVENT_IDX
-            | 1u64 << VIRTIO_F_NOTIFY_ON_EMPTY
-            | 1u64 << VIRTIO_F_VERSION_1;
+        let mut avail_features = (1u64 << VIRTIO_NET_F_GUEST_CSUM)
+            | (1u64 << VIRTIO_NET_F_CSUM)
+            | (1u64 << VIRTIO_NET_F_GUEST_TSO4)
+            | (1u64 << VIRTIO_NET_F_GUEST_UFO)
+            | (1u64 << VIRTIO_NET_F_HOST_TSO4)
+            | (1u64 << VIRTIO_NET_F_HOST_UFO)
+            | (1u64 << VIRTIO_NET_F_MRG_RXBUF)
+            | (1u64 << VIRTIO_RING_F_INDIRECT_DESC)
+            | (1u64 << VIRTIO_RING_F_EVENT_IDX)
+            | (1u64 << VIRTIO_F_NOTIFY_ON_EMPTY)
+            | (1u64 << VIRTIO_F_VERSION_1);
 
         if vq_pairs > 1 {
-            avail_features |= (1 << VIRTIO_NET_F_MQ | 1 << VIRTIO_NET_F_CTRL_VQ) as u64;
+            avail_features |= ((1 << VIRTIO_NET_F_MQ) | (1 << VIRTIO_NET_F_CTRL_VQ)) as u64;
         }
 
         let config_space = setup_config_space(

@@ -166,7 +166,7 @@ fn hash_key(entry: &kvm_irq_routing_entry) -> u64 {
         kvm_bindings::KVM_IRQ_ROUTING_IRQCHIP => unsafe { entry.u.irqchip.irqchip },
         _ => 0u32,
     };
-    (u64::from(type1) << 48 | u64::from(entry.type_) << 32) | u64::from(entry.gsi)
+    (u64::from(type1) << 48) | (u64::from(entry.type_) << 32) | u64::from(entry.gsi)
 }
 
 pub(super) struct KvmIrqRouting {
