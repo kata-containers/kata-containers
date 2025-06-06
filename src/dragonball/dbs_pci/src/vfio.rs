@@ -680,7 +680,7 @@ impl Region {
 
             self.mmaps[i].mmap_host_addr = host_addr as u64;
             self.mmaps[i].prot_flags = prot;
-            self.set_user_memory_region(i, true, vm).map_err(|e| {
+            self.set_user_memory_region(i, true, vm).inspect_err(|_| {
                 for j in 0..i {
                     match self.set_user_memory_region(j, false, vm) {
                         Ok(_) => {}
@@ -702,7 +702,6 @@ impl Region {
                         );
                     }
                 }
-                e
             })?;
 
             // FIXME: add readonly flag into vfio_dma_map in future PR when it is needed.

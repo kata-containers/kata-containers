@@ -485,19 +485,17 @@ where
     fn read_config(&mut self, offset: u64, data: &mut [u8]) -> ConfigResult {
         trace!(target: "vhost-net", "{}: Net::read_config(0x{:x}, {:?})",
             self.id, offset, data);
-        self.device_info.read_config(offset, data).map_err(|e| {
-            self.metrics.cfg_fails.inc();
-            e
-        })
+        self.device_info
+            .read_config(offset, data)
+            .inspect_err(|_| self.metrics.cfg_fails.inc())
     }
 
     fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
         trace!(target: "vhost-net", "{}: Net::write_config(0x{:x}, {:?})",
                self.id, offset, data);
-        self.device_info.write_config(offset, data).map_err(|e| {
-            self.metrics.cfg_fails.inc();
-            e
-        })
+        self.device_info
+            .write_config(offset, data)
+            .inspect_err(|_| self.metrics.cfg_fails.inc())
     }
 
     fn activate(&mut self, config: crate::VirtioDeviceConfig<AS, Q, R>) -> crate::ActivateResult {
@@ -512,10 +510,7 @@ where
 
         self.device_info
             .check_queue_sizes(&config.queues)
-            .map_err(|err| {
-                self.metrics.activate_fails.inc();
-                err
-            })?;
+            .inspect_err(|_| self.metrics.activate_fails.inc())?;
 
         if let Err(err) = self.do_device_activate(&config, vq_pairs) {
             error!(target: "vhost-net", "device {:?} activate failed: {:?}", self.id, err);
