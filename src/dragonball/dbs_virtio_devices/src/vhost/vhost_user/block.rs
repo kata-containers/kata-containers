@@ -224,7 +224,7 @@ impl VhostUserBlockDevice {
         // config_path = "spdk://xxxxxxx.sock", remove the prefix "spdk://"
         let vhost_socket = config_path
             .strip_prefix("spdk://")
-            .ok_or_else(|| VirtIoError::InvalidInput)?
+            .ok_or(VirtIoError::InvalidInput)?
             .to_string();
 
         let init_queues = queue_sizes.len() as u32;
