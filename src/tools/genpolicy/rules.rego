@@ -84,7 +84,7 @@ CreateContainerRequest:= {"ops": ops, "allowed": true} {
     # check namespace
     p_namespace := p_oci.Annotations[S_NAMESPACE_KEY]
     i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
-    print ("CreateContainerRequest: p_namespace =", p_namespace, "i_namespace =", i_namespace)
+    print("CreateContainerRequest: p_namespace =", p_namespace, "i_namespace =", i_namespace)
     add_namespace_to_state := allow_namespace(p_namespace, i_namespace)
     ops_builder2 := concat_op_if_not_null(ops_builder1, add_namespace_to_state)
 
