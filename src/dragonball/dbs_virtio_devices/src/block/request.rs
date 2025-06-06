@@ -136,9 +136,8 @@ impl Request {
         let mut desc = desc_chain
             .next()
             .ok_or(Error::DescriptorChainTooShort)
-            .map_err(|e| {
+            .inspect_err(|_| {
                 error!("virtio-blk: Request {:?} has only head descriptor", req);
-                e
             })?;
         if !desc.has_next() {
             status_desc = desc;
@@ -157,9 +156,8 @@ impl Request {
                 desc = desc_chain
                     .next()
                     .ok_or(Error::DescriptorChainTooShort)
-                    .map_err(|e| {
+                    .inspect_err(|_| {
                         error!("virtio-blk: descriptor chain corrupted");
-                        e
                     })?;
             }
             status_desc = desc;

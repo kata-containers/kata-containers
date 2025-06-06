@@ -103,9 +103,9 @@ pub enum MasterReq {
     MAX_CMD = 33,
 }
 
-impl Into<u32> for MasterReq {
-    fn into(self) -> u32 {
-        self as u32
+impl From<MasterReq> for u32 {
+    fn from(val: MasterReq) -> Self {
+        val as u32
     }
 }
 
@@ -249,10 +249,7 @@ impl<R: Req> Endpoint<R> {
     /// * - SocketBroken: the underline socket is broken.
     /// * - SocketError: other socket related errors.
     pub fn send_iovec(&mut self, iovs: &[&[u8]], fds: Option<&[RawFd]>) -> Result<usize> {
-        let rfds = match fds {
-            Some(rfds) => rfds,
-            _ => &[],
-        };
+        let rfds = fds.unwrap_or_default();
         self.sock.send_with_fds(iovs, rfds).map_err(Into::into)
     }
 
@@ -360,6 +357,7 @@ impl<R: Req> Endpoint<R> {
     /// attached file descriptors, the receiver must obey following rules:
     ///   1) file descriptors are attached to a message.
     ///   2) message(packet) boundaries must be respected on the receive side.
+    /// 
     /// In other words, recvmsg() operations must not cross the packet boundary, otherwise the
     /// attached file descriptors will get lost.
     ///
@@ -392,6 +390,7 @@ impl<R: Req> Endpoint<R> {
     /// attached file descriptors, the receiver must obey following rules:
     ///   1) file descriptors are attached to a message.
     ///   2) message(packet) boundaries must be respected on the receive side.
+    /// 
     /// In other words, recvmsg() operations must not cross the packet boundary, otherwise the
     /// attached file descriptors will get lost.
     ///
@@ -526,7 +525,7 @@ impl<R: Req> Endpoint<R> {
         payload: &[P],
         fds: Option<&[RawFd]>,
     ) -> Result<()> {
-        let len = payload.len() * mem::size_of::<P>();
+        let len = std::mem::size_of_val(payload);
         if len > MAX_MSG_SIZE - mem::size_of::<T>() {
             return Err(Error::OversizedMsg);
         }
@@ -566,7 +565,7 @@ impl<R: Req> Endpoint<R> {
     /// * - SocketError: other socket related errors.
     /// * - PartialMessage: received a partial message.
     /// * - InvalidMessage: received a invalid message.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
+    #[allow(clippy::type_complexity)]
     pub fn recv_payload_into_buf<T: Sized + Default + VhostUserMsgValidator>(
         &mut self,
         buf: &mut [u8],

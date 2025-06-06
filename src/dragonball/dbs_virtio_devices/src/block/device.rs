@@ -874,7 +874,7 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_BLOCK
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev
@@ -1057,8 +1057,8 @@ mod tests {
         let disk_image: Box<dyn Ufile> = Box::new(file);
         let disk_image_id = build_device_id(disk_image.as_ref());
 
-        let data_desc_vec = vec![Vec::with_capacity(CONFIG_MAX_SEG as usize); 256];
-        let iovecs_vec = vec![Vec::with_capacity(CONFIG_MAX_SEG as usize); 256];
+        let data_desc_vec = (0..256).map(|_| Vec::with_capacity(CONFIG_MAX_SEG as usize)).collect::<Vec<_>>();
+        let iovecs_vec = (0..256).map(|_| Vec::with_capacity(CONFIG_MAX_SEG as usize)).collect::<Vec<_>>();
 
         let (_, evt_receiver) = mpsc::channel();
 

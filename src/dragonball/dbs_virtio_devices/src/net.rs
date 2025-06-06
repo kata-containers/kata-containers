@@ -625,13 +625,13 @@ impl<AS: GuestAddressSpace> Net<AS> {
             .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::SetVnetHdrSize(err))))?;
         info!("net tap set finished");
 
-        let mut avail_features = 1u64 << VIRTIO_NET_F_GUEST_CSUM
-            | 1u64 << VIRTIO_NET_F_CSUM
-            | 1u64 << VIRTIO_NET_F_GUEST_TSO4
-            | 1u64 << VIRTIO_NET_F_GUEST_UFO
-            | 1u64 << VIRTIO_NET_F_HOST_TSO4
-            | 1u64 << VIRTIO_NET_F_HOST_UFO
-            | 1u64 << VIRTIO_F_VERSION_1;
+        let mut avail_features = (1u64 << VIRTIO_NET_F_GUEST_CSUM)
+            | (1u64 << VIRTIO_NET_F_CSUM)
+            | (1u64 << VIRTIO_NET_F_GUEST_TSO4)
+            | (1u64 << VIRTIO_NET_F_GUEST_UFO)
+            | (1u64 << VIRTIO_NET_F_HOST_TSO4)
+            | (1u64 << VIRTIO_NET_F_HOST_UFO)
+            | (1u64 << VIRTIO_F_VERSION_1);
 
         let config_space = setup_config_space(
             NET_DRIVER_NAME,
@@ -750,19 +750,19 @@ where
     fn read_config(&mut self, offset: u64, data: &mut [u8]) -> ConfigResult {
         trace!(target: "virtio-net", "{}: VirtioDevice::read_config(0x{:x}, {:?})",
                self.id, offset, data);
-        self.device_info.read_config(offset, data).map_err(|e| {
+        self.device_info.read_config(offset, data).inspect_err(|_| {
             self.metrics.cfg_fails.inc();
-            e
         })
     }
 
     fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
         trace!(target: "virtio-net", "{}: VirtioDevice::write_config(0x{:x}, {:?})",
                self.id, offset, data);
-        self.device_info.write_config(offset, data).map_err(|e| {
-            self.metrics.cfg_fails.inc();
-            e
-        })
+        self.device_info
+            .write_config(offset, data)
+            .inspect_err(|_| {
+                self.metrics.cfg_fails.inc();
+            })
     }
 
     fn activate(&mut self, mut config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
@@ -775,9 +775,8 @@ where
 
         self.device_info
             .check_queue_sizes(&config.queues[..])
-            .map_err(|e| {
+            .inspect_err(|_| {
                 self.metrics.activate_fails.inc();
-                e
             })?;
         let tap = self.tap.take().ok_or_else(|| {
             self.metrics.activate_fails.inc();
@@ -843,7 +842,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
+
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
     use std::time::Duration;
@@ -923,7 +922,7 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_NET
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

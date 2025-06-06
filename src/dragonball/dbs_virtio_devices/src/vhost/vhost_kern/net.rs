@@ -148,20 +148,20 @@ where
             validate_and_configure_tap(tap, vq_pairs)?;
         }
 
-        let mut avail_features = 1u64 << VIRTIO_NET_F_GUEST_CSUM
-            | 1u64 << VIRTIO_NET_F_CSUM
-            | 1u64 << VIRTIO_NET_F_GUEST_TSO4
-            | 1u64 << VIRTIO_NET_F_GUEST_UFO
-            | 1u64 << VIRTIO_NET_F_HOST_TSO4
-            | 1u64 << VIRTIO_NET_F_HOST_UFO
-            | 1u64 << VIRTIO_NET_F_MRG_RXBUF
-            | 1u64 << VIRTIO_RING_F_INDIRECT_DESC
-            | 1u64 << VIRTIO_RING_F_EVENT_IDX
-            | 1u64 << VIRTIO_F_NOTIFY_ON_EMPTY
-            | 1u64 << VIRTIO_F_VERSION_1;
+        let mut avail_features = (1u64 << VIRTIO_NET_F_GUEST_CSUM)
+            | (1u64 << VIRTIO_NET_F_CSUM)
+            | (1u64 << VIRTIO_NET_F_GUEST_TSO4)
+            | (1u64 << VIRTIO_NET_F_GUEST_UFO)
+            | (1u64 << VIRTIO_NET_F_HOST_TSO4)
+            | (1u64 << VIRTIO_NET_F_HOST_UFO)
+            | (1u64 << VIRTIO_NET_F_MRG_RXBUF)
+            | (1u64 << VIRTIO_RING_F_INDIRECT_DESC)
+            | (1u64 << VIRTIO_RING_F_EVENT_IDX)
+            | (1u64 << VIRTIO_F_NOTIFY_ON_EMPTY)
+            | (1u64 << VIRTIO_F_VERSION_1);
 
         if vq_pairs > 1 {
-            avail_features |= (1 << VIRTIO_NET_F_MQ | 1 << VIRTIO_NET_F_CTRL_VQ) as u64;
+            avail_features |= ((1 << VIRTIO_NET_F_MQ) | (1 << VIRTIO_NET_F_CTRL_VQ)) as u64;
         }
 
         let config_space = setup_config_space(
@@ -485,19 +485,19 @@ where
     fn read_config(&mut self, offset: u64, data: &mut [u8]) -> ConfigResult {
         trace!(target: "vhost-net", "{}: Net::read_config(0x{:x}, {:?})",
             self.id, offset, data);
-        self.device_info.read_config(offset, data).map_err(|e| {
+        self.device_info.read_config(offset, data).inspect_err(|_| {
             self.metrics.cfg_fails.inc();
-            e
         })
     }
 
     fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
         trace!(target: "vhost-net", "{}: Net::write_config(0x{:x}, {:?})",
                self.id, offset, data);
-        self.device_info.write_config(offset, data).map_err(|e| {
-            self.metrics.cfg_fails.inc();
-            e
-        })
+        self.device_info
+            .write_config(offset, data)
+            .inspect_err(|_| {
+                self.metrics.cfg_fails.inc();
+            })
     }
 
     fn activate(&mut self, config: crate::VirtioDeviceConfig<AS, Q, R>) -> crate::ActivateResult {
@@ -512,9 +512,8 @@ where
 
         self.device_info
             .check_queue_sizes(&config.queues)
-            .map_err(|err| {
+            .inspect_err(|_| {
                 self.metrics.activate_fails.inc();
-                err
             })?;
 
         if let Err(err) = self.do_device_activate(&config, vq_pairs) {
@@ -737,7 +736,7 @@ mod tests {
 
         assert_eq!(dev.device_type(), TYPE_NET);
 
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(dev.queue_max_sizes(), &queue_size[..]);
         assert_eq!(
             dev.get_avail_features(0),

@@ -648,7 +648,7 @@ pub(crate) mod tests {
         );
 
         let desc = cfg.get_next_descriptor(mem.memory()).unwrap();
-        assert!(matches!(desc, None));
+        assert!(desc.is_none());
 
         cfg.notify().unwrap();
         assert_eq!(cfg.index(), 1);
@@ -679,12 +679,12 @@ pub(crate) mod tests {
         );
 
         let desc = cfg.get_next_descriptor(mem.memory()).unwrap();
-        assert!(matches!(desc, None));
+        assert!(desc.is_none());
 
         {
             let mut guard = cfg.queue_mut().lock();
             let mut iter = guard.iter(mem.memory()).unwrap();
-            assert!(matches!(iter.next(), None));
+            assert!(iter.next().is_none());
         }
 
         cfg.notify().unwrap();
@@ -785,7 +785,7 @@ pub(crate) mod tests {
     fn test_virtio_device() {
         let epoll_mgr = EpollManager::default();
 
-        let avail_features = 0x1234 << 32 | 0x4567;
+        let avail_features = (0x1234 << 32) | 0x4567;
         let config_space = vec![1; 16];
         let queue_size = Arc::new(vec![256; 1]);
         let device_info = VirtioDeviceInfo::new(
@@ -821,7 +821,7 @@ pub(crate) mod tests {
         device.set_acked_features(1, 0x0004 | 0x0002);
         assert_eq!(device.device_info.acked_features(), 0x0004 << 32);
         device.set_acked_features(0, 0x4567 | 0x0008);
-        assert_eq!(device.device_info.acked_features(), 0x4567 | 0x0004 << 32);
+        assert_eq!(device.device_info.acked_features(), 0x4567 | (0x0004 << 32));
 
         // test config space invalid read
         let mut data = vec![0u8; 16];
@@ -837,7 +837,7 @@ pub(crate) mod tests {
         assert_eq!(data, vec![1; 16]);
 
         // test config space invalid write
-        let write_data = vec![0xffu8; 16];
+        let write_data = [0xffu8; 16];
         let mut read_data = vec![0x0; 16];
         assert_eq!(
             device.write_config(4, &write_data[..13]).unwrap_err(),

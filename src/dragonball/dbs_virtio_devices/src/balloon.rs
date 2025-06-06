@@ -691,9 +691,8 @@ where
     fn activate(&mut self, mut config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
         self.device_info
             .check_queue_sizes(&config.queues)
-            .map_err(|e| {
+            .inspect_err(|_| {
                 self.metrics.activate_fails.inc();
-                e
             })?;
         self.device_change_notifier = config.device_change_notifier.clone();
 
@@ -819,7 +818,7 @@ pub(crate) mod tests {
             TYPE_BALLOON
         );
 
-        let queue_size = vec![128, 128, 128];
+        let queue_size = [128, 128, 128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

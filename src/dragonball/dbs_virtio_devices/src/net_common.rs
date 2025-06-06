@@ -92,7 +92,7 @@ mod tests {
         {
             afeatures = 0;
             vq_pairs = 2;
-            afeatures |= 1 << VIRTIO_NET_F_STATUS | 1 << VIRTIO_NET_F_MQ;
+            afeatures |= (1 << VIRTIO_NET_F_STATUS) | (1 << VIRTIO_NET_F_MQ);
 
             let cs = setup_config_space(
                 "virtio-net",

@@ -74,16 +74,16 @@ impl VhostUserNetDevice {
         avail_features |= (1 << VIRTIO_NET_F_MTU) as u64;
         // All these features depends on availability of control channel
         // (VIRTIO_NET_F_CTRL_VQ).
-        avail_features &= !(1 << VIRTIO_NET_F_CTRL_VQ
-            | 1 << VIRTIO_NET_F_CTRL_RX
-            | 1 << VIRTIO_NET_F_CTRL_VLAN
-            | 1 << VIRTIO_NET_F_GUEST_ANNOUNCE
-            | 1 << VIRTIO_NET_F_MQ
-            | 1 << VIRTIO_NET_F_CTRL_MAC_ADDR) as u64;
+        avail_features &= !((1 << VIRTIO_NET_F_CTRL_VQ)
+            | (1 << VIRTIO_NET_F_CTRL_RX)
+            | (1 << VIRTIO_NET_F_CTRL_VLAN)
+            | (1 << VIRTIO_NET_F_GUEST_ANNOUNCE)
+            | (1 << VIRTIO_NET_F_MQ)
+            | (1 << VIRTIO_NET_F_CTRL_MAC_ADDR)) as u64;
 
         // Multi-queue features
         if queue_sizes.len() > 2 {
-            avail_features |= (1 << VIRTIO_NET_F_MQ | 1 << VIRTIO_NET_F_CTRL_VQ) as u64;
+            avail_features |= ((1 << VIRTIO_NET_F_MQ) | (1 << VIRTIO_NET_F_CTRL_VQ)) as u64;
         }
 
         let config_space = setup_config_space(
@@ -660,7 +660,7 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_NET
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev
