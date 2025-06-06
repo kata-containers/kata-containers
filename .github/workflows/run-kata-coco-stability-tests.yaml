@@ -28,8 +28,6 @@ on:
 
       AZ_APPID:
         required: true
-      AZ_PASSWORD:
-        required: true
       AZ_TENANT_ID:
        required: true
       AZ_SUBSCRIPTION_ID:
@@ -39,6 +37,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   # Generate jobs for testing CoCo on non-TEE environments
@@ -53,6 +52,7 @@ jobs:
         pull-type:
           - guest-pull
     runs-on: ubuntu-22.04
+    environment: ci
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -94,12 +94,11 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
 
       - name: Log into the Azure account
-        run: bash tests/integration/kubernetes/gha-run.sh login-azure
-        env:
-          AZ_APPID: ${{ secrets.AZ_APPID }}
-          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
-          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZ_APPID }}
+          tenant-id: ${{ secrets.AZ_TENANT_ID }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
       - name: Create AKS cluster
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
