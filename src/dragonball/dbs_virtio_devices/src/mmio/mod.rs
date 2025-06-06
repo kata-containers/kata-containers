@@ -44,8 +44,7 @@ pub const MMIO_NOTIFY_REG_OFFSET: u32 = 0x50;
 /// Currently hardcoded to 4K
 pub const MMIO_DEFAULT_CFG_SIZE: u64 = 0x1000;
 
-///
-/// Control registers
+// Control registers
 
 // Magic value ("virt" string) - Read Only
 pub const REG_MMIO_MAGIC_VALUE: u64 = 0x000;
