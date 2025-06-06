@@ -30,7 +30,8 @@ jobs:
     uses: ./.github/workflows/release-amd64.yaml
     with:
       target-arch: amd64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-arm64:
     needs: release
@@ -42,7 +43,8 @@ jobs:
     uses: ./.github/workflows/release-arm64.yaml
     with:
       target-arch: arm64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-s390x:
     needs: release
@@ -54,7 +56,9 @@ jobs:
     uses: ./.github/workflows/release-s390x.yaml
     with:
       target-arch: s390x
-    secrets: inherit
+    secrets:
+      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-ppc64le:
     needs: release
@@ -64,7 +68,8 @@ jobs:
     uses: ./.github/workflows/release-ppc64le.yaml
     with:
       target-arch: ppc64le
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-multi-arch-images:
     runs-on: ubuntu-22.04
@@ -84,7 +89,7 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - name: Get the image tags
@@ -216,7 +221,7 @@ jobs:
 
       - name: Login to the OCI registries
         run: |
-          echo "${{ secrets.QUAY_DEPLOYER_PASSWORD }}" | helm registry login quay.io --username "${{ secrets.QUAY_DEPLOYER_USERNAME }}" --password-stdin
+          echo "${{ secrets.QUAY_DEPLOYER_PASSWORD }}" | helm registry login quay.io --username "${{ vars.QUAY_DEPLOYER_USERNAME }}" --password-stdin
           echo "${{ github.token }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
 
       - name: Push helm chart to the OCI registries

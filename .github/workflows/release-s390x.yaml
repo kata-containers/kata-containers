@@ -5,6 +5,11 @@ on:
       target-arch:
         required: true
         type: string
+    secrets:
+      CI_HKD_PATH:
+        required: true
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read
@@ -15,7 +20,10 @@ jobs:
     with:
       push-to-registry: yes
       stage: release
-    secrets: inherit
+    secrets:
+      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
 
   kata-deploy:
     needs: build-kata-static-tarball-s390x
@@ -35,7 +43,7 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - uses: actions/checkout@v4

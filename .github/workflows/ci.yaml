@@ -19,6 +19,24 @@ on:
         required: false
         type: string
         default: no
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: true
+
+      AZ_APPID:
+        required: true
+      AZ_PASSWORD:
+        required: true
+      AZ_TENANT_ID:
+       required: true
+      AZ_SUBSCRIPTION_ID:
+        required: true
+      CI_HKD_PATH:
+        required: true
+      ITA_KEY:
+        required: true
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read
@@ -51,7 +69,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-arm64:
     permissions:
@@ -80,7 +99,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04-arm
       arch: arm64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-s390x:
     permissions:
@@ -93,7 +113,9 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      CI_HKD_PATH: ${{ secrets.ci_hkd_path }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-ppc64le:
     permissions:
@@ -104,6 +126,8 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-riscv64:
     permissions:
@@ -116,7 +140,8 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
@@ -133,7 +158,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: s390x
       arch: s390x
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-ppc64le:
     needs: build-kata-static-tarball-ppc64le
@@ -150,7 +176,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ppc64le
       arch: ppc64le
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-publish-tee-confidential-unencrypted-image:
     permissions:
@@ -266,7 +293,11 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
   run-k8s-tests-on-amd64:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -279,7 +310,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
 
   run-k8s-tests-on-arm64:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -308,7 +338,13 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      ITA_KEY: ${{ secrets.ITA_KEY }}
 
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -321,7 +357,8 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-ppc64le:
     if: ${{ inputs.skip-test != 'yes' }}
