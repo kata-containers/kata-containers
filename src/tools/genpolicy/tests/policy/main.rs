@@ -234,6 +234,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_gid() {
+        runtests("createcontainer/gid").await;
+    }
+
+    #[tokio::test]
     async fn test_state_create_container() {
         runtests("state/createcontainer").await;
     }

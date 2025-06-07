@@ -736,7 +736,7 @@ allow_user(p_process, i_process) {
     p_user.GID == i_user.GID
 
     print("allow_user: input additionalGids =", i_user.AdditionalGids, "policy additionalGids =", p_user.AdditionalGids)
-    p_user.AdditionalGids == i_user.AdditionalGids
+    {e | some e in p_user.AdditionalGids} == {e | some e in i_user.AdditionalGids}
 }
 
 allow_args(p_process, i_process, s_name) {
