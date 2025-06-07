@@ -6,20 +6,21 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   cleanup-resources:
     runs-on: ubuntu-22.04
+    environment: ci
     steps:
       - uses: actions/checkout@v4
 
       - name: Log into Azure
-        env:
-          AZ_APPID: ${{ secrets.AZ_APPID }}
-          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
-          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-        run: bash tests/integration/kubernetes/gha-run.sh login-azure
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZ_APPID }}
+          tenant-id: ${{ secrets.AZ_TENANT_ID }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
       - name: Install Python dependencies
         run: |

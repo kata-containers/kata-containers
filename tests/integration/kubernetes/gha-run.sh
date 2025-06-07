@@ -567,7 +567,6 @@ function main() {
 
 	case "${action}" in
 		install-azure-cli) install_azure_cli ;;
-		login-azure) login_azure ;;
 		create-cluster) create_cluster "" ;;
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
