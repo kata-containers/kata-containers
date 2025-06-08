@@ -129,6 +129,18 @@ spec:
         - name: HOST_OS
           value: {{ . | quote }}
 {{- end }}
+{{- with .Values.env.shared_fs }}
+        - name: SHARED_FS
+          value: {{ . | quote }}
+{{- end }}
+{{- with .Values.env.virtio_fs_daemon }}
+        - name: VIRTIO_FS_DAEMON
+          value: {{ . | quote }}
+{{- end }}
+{{- with .Values.env.virtio_fs_extra_args }}
+        - name: VIRTIO_FS_EXTRA_ARGS
+          value: {{ . | quote }}
+{{- end }}
         securityContext:
           privileged: true
         volumeMounts:

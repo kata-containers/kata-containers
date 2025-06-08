@@ -19,3 +19,6 @@ env:
   installationPrefix: ""
   hostOS: ""
   multiInstallSuffix: ""
+  shared_fs: ""
+  virtio_fs_daemon: ""
+  virtio_fs_extra_args: ""
