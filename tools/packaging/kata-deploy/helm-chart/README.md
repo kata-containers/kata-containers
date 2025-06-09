@@ -131,7 +131,7 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
 | `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
-| `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim | `""` |
+| `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim, e.g. `fc:devmapper` to use the `devmapper` snapshotter for the `fc` shim (multiple pairs can be separated by comma) | `""` |
 | `evn.agentHttpsProxy` | HTTPS_PROXY=... | `""` |
 | `env.agentHttpProxy` |  specifies a list of addresses that should bypass a configured proxy server | `""` |
 | `env.pullTypeMapping` | Type of container image pulling, examples are guest-pull or default | `""` |
