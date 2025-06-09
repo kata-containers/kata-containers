@@ -1,0 +1,30 @@
+name: Validate ok-to-test label
+
+on:
+  pull_request_target:
+    types: [synchronize]
+
+jobs:
+  remove-label-if-needed:
+    runs-on: ubuntu-22.04
+    permissions:
+      # SAFETY: Only enough to modify labels.
+      issues: write
+    steps:
+      - name: Remove ok-to-test label on push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository.owner.login }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          permission="$(gh api "repos/${OWNER}/${REPO}/collaborators/${AUTHOR}/permission" --jq '.permission')"
+          echo "User ${AUTHOR} has permission '${permission}'"
+
+          if [[ "${permission}" != "write" && "${permission}" != "admin" ]]; then
+            echo "Removing 'ok-to-test' label"
+            gh pr edit "${PR_NUMBER}" --repo "${OWNER}/${REPO}" --remove-label "ok-to-test"
+          else
+            echo "User has label permission - skipping removal"
+          fi
