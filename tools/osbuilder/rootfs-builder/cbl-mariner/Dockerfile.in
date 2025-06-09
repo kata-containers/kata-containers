@@ -11,6 +11,9 @@ RUN tdnf -y install \
     dnf \
     git \
     tar \
-    xz
+    xz \
+    # TODO: Remove when this issue is fixed:
+    # https://github.com/microsoft/azurelinux/issues/13971
+    --exclude=aznfs
 
 @INSTALL_RUST@
