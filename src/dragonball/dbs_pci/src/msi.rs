@@ -463,7 +463,7 @@ impl PciCapability for MsiCap {
 }
 
 /// Struct to manage PCI Message Signalled Interrupt controller working state.
-#[repr(packed)]
+#[repr(Rust, packed)]
 #[derive(Clone, Copy, Default, PartialEq)]
 pub struct MsiState {
     msg_ctl: u16,

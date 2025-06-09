@@ -5,7 +5,7 @@
 // RSDP (Root System Description Pointer) is a data structure used in the ACPI programming interface.
 use vm_memory::ByteValued;
 
-#[repr(packed)]
+#[repr(Rust, packed)]
 #[derive(Clone, Copy, Default)]
 pub struct Rsdp {
     pub signature: [u8; 8],
