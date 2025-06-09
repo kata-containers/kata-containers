@@ -37,6 +37,11 @@ test:
 install:
 	@echo "PowerPC 64 LE is not currently supported"
 	exit 0
+else ifeq ($(ARCH), riscv64gc)
+default: runtime show-header
+test:
+	@echo "RISC-V 64 is not currently supported"
+	exit 0
 else
 ##TARGET default: build code
 default: runtime show-header
