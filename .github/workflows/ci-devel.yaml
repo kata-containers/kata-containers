@@ -22,7 +22,6 @@ jobs:
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
       CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}

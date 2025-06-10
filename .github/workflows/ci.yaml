@@ -25,8 +25,6 @@ on:
 
       AZ_APPID:
         required: true
-      AZ_PASSWORD:
-        required: true
       AZ_TENANT_ID:
        required: true
       AZ_SUBSCRIPTION_ID:
@@ -40,6 +38,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -295,7 +294,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets:
       AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
@@ -341,7 +339,6 @@ jobs:
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
