@@ -306,9 +306,7 @@ pflashes = []
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-#disable_image_nvdimm = true
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
