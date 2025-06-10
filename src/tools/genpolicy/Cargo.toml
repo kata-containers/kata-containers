@@ -16,7 +16,7 @@ env_logger = "0.10.0"
 log = "0.4.17"
 
 # Command line parsing.
-clap = { version = "4.1.8", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 
 # YAML file serialization/deserialization.
 base64 = "0.21.0"
