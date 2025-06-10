@@ -354,7 +354,7 @@ disable_nesting_checks = true
 # nvdimm is not supported when `confidential_guest = true`.
 #
 # Default is false
-disable_image_nvdimm = true
+#disable_image_nvdimm = true
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
