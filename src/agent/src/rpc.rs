@@ -69,7 +69,7 @@ use crate::features::get_build_features;
 use crate::image::KATA_IMAGE_WORK_DIR;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::baremount;
+use crate::mount::{baremount, resize_file_system};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::passfd_io;
@@ -834,7 +834,17 @@ impl agent_ttrpc::AgentService for AgentService {
 
         Ok(Empty::new())
     }
-
+    async fn resize_volume(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::ResizeVolumeRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "resize_volume", req);
+        is_allowed(&req).await?;
+        pci::rescan_pci_meta().await.map_ttrpc_err(same)?;
+        resize_file_system(&req.volume_guest_path, &sl()).await.map_ttrpc_err(same)?;
+        Ok(Empty::new())
+    }
     async fn stats_container(
         &self,
         ctx: &TtrpcContext,
