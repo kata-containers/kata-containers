@@ -407,6 +407,21 @@ function install_artifacts() {
 			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
 		fi
 
+		# Shared file system type
+		if [[ -n "${SHARED_FS}" ]]; then
+			sed -i -e 's|^shared_fs = "\(.*\)"|shared_fs = '${SHARED_FS}'|g' "${kata_config_file}"
+		fi
+
+		# Path to vhost-user-fs daemon
+		if [[ -n "${VIRTIO_FS_DAEMON}" ]]; then
+			sed -i -e 's|^virtio_fs_daemon = "\(.*\)"|virtio_fs_daemon = '${VIRTIO_FS_DAEMON}'|g' "${kata_config_file}"
+		fi
+
+		# Extra args for virtiofsd daemon
+		if [[ -n "${VIRTIO_FS_EXTRA_ARGS}" ]]; then
+			sed -i -e 's|^virtio_fs_extra_args = "\(.*\)"|virtio_fs_extra_args = '${VIRTIO_FS_EXTRA_ARGS}'|g' "${kata_config_file}"
+		fi
+
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
 			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
