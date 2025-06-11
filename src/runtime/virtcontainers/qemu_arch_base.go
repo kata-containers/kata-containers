@@ -866,20 +866,25 @@ func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
 	// we're going to use the GPU with the biggest BARs to initialize the
 	// root port, this should work for all other devices as well.
 	// defaults are 2MB for both, if no suitable devices found
-	max32bit := uint64(2 * 1024 * 1024)
-	max64bit := uint64(2 * 1024 * 1024)
+	max32bit := uint64(0)
+	max64bit := uint64(0)
+	default32bit := uint64(2 * 1024 * 1024)
+	default64bit := uint64(2 * 1024 * 1024)
 
 	for _, dev := range devs {
 		if !dev.IsGPU() {
 			continue
 		}
 		memSize32bit, memSize64bit := dev.Resources.GetTotalAddressableMemory(true)
-		if max32bit < memSize32bit {
-			max32bit = memSize32bit
-		}
-		if max64bit < memSize64bit {
-			max64bit = memSize64bit
-		}
+		max32bit += memSize32bit
+		max64bit += memSize64bit
+	}
+
+	if max32bit < default32bit {
+		max32bit = default32bit
+	}
+	if max64bit < default64bit {
+		max64bit = default64bit
 	}
 	// The actual 32bit is most of the time a power of 2 but we need some
 	// buffer so double that to leave space for other IO functions.
