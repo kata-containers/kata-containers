@@ -568,7 +568,7 @@ impl CloudHypervisorInner {
             if protection == GuestProtection::NoProtection {
                 // User wants protection, but none available.
                 return Err(anyhow!(GuestProtectionError::NoProtectionAvailable));
-            } else if let GuestProtection::Tdx(_) = protection {
+            } else if let GuestProtection::Tdx = protection {
                 info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
             } else {
                 return Err(anyhow!(GuestProtectionError::ExpectedTDXProtection(
@@ -577,7 +577,7 @@ impl CloudHypervisorInner {
             }
         } else if protection == GuestProtection::NoProtection {
             debug!(sl!(), "no guest protection available");
-        } else if let GuestProtection::Tdx(_) = protection {
+        } else if let GuestProtection::Tdx = protection {
             // CH requires TDX protection to be used.
             return Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH));
         } else {
@@ -956,15 +956,13 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
+    use kata_sys_util::protection::SevSnpDetails;
 
     #[cfg(target_arch = "x86_64")]
-    use kata_sys_util::protection::TDX_SYS_FIRMWARE_DIR;
+    use kata_sys_util::protection::TDX_KVM_PARAMETER_PATH;
 
     use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, SecurityInfo};
     use serial_test::serial;
-    #[cfg(target_arch = "x86_64")]
-    use std::path::PathBuf;
     use test_utils::{assert_result, skip_if_not_root};
 
     use std::fs::File;
@@ -984,11 +982,6 @@ mod tests {
     async fn test_get_guest_protection() {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
-
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
 
         let sev_snp_details = SevSnpDetails { cbitpos: 42 };
 
@@ -1020,8 +1013,8 @@ mod tests {
                 result: Ok(GuestProtection::Snp(sev_snp_details.clone())),
             },
             TestData {
-                value: Some(GuestProtection::Tdx(tdx_details.clone())),
-                result: Ok(GuestProtection::Tdx(tdx_details.clone())),
+                value: Some(GuestProtection::Tdx),
+                result: Ok(GuestProtection::Tdx),
             },
         ];
 
@@ -1055,26 +1048,11 @@ mod tests {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
 
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
-
         // Use the hosts protection, not a fake one.
         set_fake_guest_protection(None);
 
-        let tdx_fw_path = PathBuf::from(TDX_SYS_FIRMWARE_DIR);
-
-        // Simple test for Intel TDX
-        let have_tdx = if tdx_fw_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(tdx_fw_path.clone()) {
-                metadata.is_dir()
-            } else {
-                false
-            }
-        } else {
-            false
-        };
+        let have_tdx = fs::read(TDX_KVM_PARAMETER_PATH)
+            .map_or(false, |content| !content.is_empty() && content[0] == b'Y');
 
         let protection =
             task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })
@@ -1083,16 +1061,13 @@ mod tests {
                 .unwrap();
 
         if std::env::var("DEBUG").is_ok() {
-            let msg = format!(
-                "tdx_fw_path: {:?}, have_tdx: {:?}, protection: {:?}",
-                tdx_fw_path, have_tdx, protection
-            );
+            let msg = format!("have_tdx: {:?}, protection: {:?}", have_tdx, protection);
 
             eprintln!("DEBUG: {}", msg);
         }
 
         if have_tdx {
-            assert_eq!(protection, GuestProtection::Tdx(tdx_details));
+            assert_eq!(protection, GuestProtection::Tdx);
         } else {
             assert_eq!(protection, GuestProtection::NoProtection);
         }
@@ -1115,11 +1090,6 @@ mod tests {
             guest_protection_to_use: GuestProtection,
         }
 
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
-
         let tests = &[
             TestData {
                 confidential_guest: false,
@@ -1135,15 +1105,15 @@ mod tests {
             },
             TestData {
                 confidential_guest: false,
-                available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
+                available_protection: Some(GuestProtection::Tdx),
                 result: Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH)),
-                guest_protection_to_use: GuestProtection::Tdx(tdx_details.clone()),
+                guest_protection_to_use: GuestProtection::Tdx,
             },
             TestData {
                 confidential_guest: true,
-                available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
+                available_protection: Some(GuestProtection::Tdx),
                 result: Ok(()),
-                guest_protection_to_use: GuestProtection::Tdx(tdx_details),
+                guest_protection_to_use: GuestProtection::Tdx,
             },
             TestData {
                 confidential_guest: false,

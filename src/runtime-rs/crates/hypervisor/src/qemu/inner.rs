@@ -145,6 +145,13 @@ impl QemuInner {
                         }
                     }
                     ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),
+                    ProtectionDeviceConfig::Tdx(tdx_config) => cmdline.add_tdx_protection_device(
+                        &tdx_config.id,
+                        &tdx_config.firmware,
+                        tdx_config.qgs_port,
+                        &tdx_config.mrconfigid,
+                        tdx_config.debug,
+                    ),
                 },
                 DeviceType::PortDevice(port_device) => {
                     let port_type = port_device.config.port_type;

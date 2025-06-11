@@ -890,6 +890,17 @@ pub struct SecurityInfo {
     /// e.g. "path" for io.katacontainers.config.hypervisor.path"
     #[serde(default)]
     pub enable_annotations: Vec<String>,
+
+    /// qgs_port defines Intel Quote Generation Service port exposed from the host
+    #[serde(
+        default = "default_qgs_port",
+        rename = "tdx_quote_generation_service_socket_port"
+    )]
+    pub qgs_port: u32,
+}
+
+fn default_qgs_port() -> u32 {
+    4050
 }
 
 impl SecurityInfo {
