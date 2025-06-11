@@ -143,7 +143,7 @@ assets:
         version: "jammy"  # 22.04 lTS
         confidential:
           name: "ubuntu"
-          version: "oracular"  # 24.10
+          version: "noble"  # 24.04 LTS
         mariner:
           name: "cbl-mariner"
           version: "3.0"
@@ -185,7 +185,7 @@ assets:
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"  # 22.04 LTS
