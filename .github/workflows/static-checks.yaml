@@ -123,6 +123,10 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update && sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
+      - name: Install open-policy-agent
+        run: |
+          cd "${GOPATH}/src/github.com/${{ github.repository }}"
+          ./tests/install_opa.sh
       - name: Run check
         run: |
           export PATH="${PATH}:${GOPATH}/bin"
