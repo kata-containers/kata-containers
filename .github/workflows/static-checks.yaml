@@ -127,6 +127,9 @@ jobs:
         run: |
           cd "${GOPATH}/src/github.com/${{ github.repository }}"
           ./tests/install_opa.sh
+      - name: Install regorus
+        run: |
+          "${GOPATH}/src/github.com/${{ github.repository }}/tests/install_regorus.sh"
       - name: Run check
         run: |
           export PATH="${PATH}:${GOPATH}/bin"
