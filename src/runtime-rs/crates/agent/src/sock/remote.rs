@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use tokio::{io::Interest, net::UnixStream};
 
-use super::{ConnectConfig, Sock, Stream};
+use super::{ConnectConfig, Listener, Sock, Stream};
 
 #[derive(Debug, PartialEq)]
 pub struct Remote {
@@ -59,6 +59,10 @@ impl Sock for Remote {
             self,
             last_err.unwrap()
         ))
+    }
+
+    async fn listen(&self) -> Result<Listener> {
+        unimplemented!()
     }
 }
 
