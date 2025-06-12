@@ -285,6 +285,8 @@ impl TryFrom<(MemoryInfo, GuestProtection)> for MemoryConfig {
 
             hotplug_size,
 
+            prefault: mem.enable_mem_prealloc,
+
             ..Default::default()
         };
 
