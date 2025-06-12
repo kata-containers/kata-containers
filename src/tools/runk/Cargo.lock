@@ -2423,7 +2423,7 @@ dependencies = [
  "tabwriter",
  "tempfile",
  "tokio",
- "users",
+ "uzers",
 ]
 
 [[package]]
@@ -3163,10 +3163,11 @@ dependencies = [
 
 [[package]]
 name = "ttrpc-codegen"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94d7f7631d7a9ebed715a47cd4cb6072cbc7ae1d4ec01598971bbec0024340c2"
+checksum = "cdc0529f65223eca94fc5830e7d552d0d152ff42b74aff5c641edac39592f41f"
 dependencies = [
+ "home",
  "protobuf 2.28.0",
  "protobuf-codegen 3.7.1",
  "protobuf-support",
@@ -3175,11 +3176,12 @@ dependencies = [
 
 [[package]]
 name = "ttrpc-compiler"
-version = "0.6.2"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0672eb06e5663ad190c7b93b2973f5d730259859b62e4e3381301a12a7441107"
+checksum = "9be3fb2fe509cb9c0099b3b5551b759ae714f2dde56dfc713f2a5bda8c16064a"
 dependencies = [
  "derive-new",
+ "home",
  "prost",
  "prost-build",
  "prost-types",
@@ -3224,16 +3226,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0336d538f7abc86d282a4189614dfaa90810dfc2c6f6427eaf88e16311dd225d"
 
 [[package]]
-name = "users"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
-dependencies = [
- "libc",
- "log",
-]
-
-[[package]]
 name = "utf8-width"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3244,6 +3236,16 @@ name = "uuid"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5de17fd2f7da591098415cff336e12965a28061ddace43b59cb3c430179c9439"
+
+[[package]]
+name = "uzers"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4df81ff504e7d82ad53e95ed1ad5b72103c11253f39238bcc0235b90768a97dd"
+dependencies = [
+ "libc",
+ "log",
+]
 
 [[package]]
 name = "version_check"
