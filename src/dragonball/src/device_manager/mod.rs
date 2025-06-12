@@ -1296,6 +1296,7 @@ mod tests {
     }
 
     impl DeviceManager {
+        /// Helper function to create a dummy DeviceManager for testing purpose
         pub fn new_test_mgr() -> Self {
             let kvm = Kvm::new().unwrap();
             let vm = kvm.create_vm().unwrap();

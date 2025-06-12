@@ -214,10 +214,7 @@ impl DragonballInner {
         }
 
         std::fs::remove_dir_all(&self.vm_path)
-            .map_err(|err| {
-                error!(sl!(), "failed to remove dir all for {}", &self.vm_path);
-                err
-            })
+            .inspect_err(|_| error!(sl!(), "failed to remove dir all for {}", &self.vm_path))
             .ok();
     }
 

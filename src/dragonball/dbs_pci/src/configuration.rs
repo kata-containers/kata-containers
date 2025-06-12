@@ -285,12 +285,12 @@ pub trait PciCapability: Send + Sync {
 
     /// Read a 16bit value from the capability.
     fn read_u16(&mut self, offset: usize) -> u16 {
-        self.read_u8(offset) as u16 | (self.read_u8(offset + 1) as u16) << 8
+        (self.read_u8(offset) as u16) | ((self.read_u8(offset + 1) as u16) << 8)
     }
 
     /// Read a 32bit value from the capability.
     fn read_u32(&mut self, offset: usize) -> u32 {
-        self.read_u16(offset) as u32 | (self.read_u16(offset + 2) as u32) << 16
+        (self.read_u16(offset) as u32) | ((self.read_u16(offset + 2) as u32) << 16)
     }
 
     /// Write a 8bit value to the capability.
@@ -623,19 +623,19 @@ impl PciConfiguration {
 
         let mut registers = [0u32; NUM_CONFIGURATION_REGISTERS];
         let mut writable_bits = [0u32; NUM_CONFIGURATION_REGISTERS];
-        registers[0] = u32::from(device_id) << 16 | u32::from(vendor_id);
+        registers[0] = (u32::from(device_id) << 16) | u32::from(vendor_id);
         writable_bits[1] = 0x0000_ffff; // Status (r/o), command (r/w)
         let pi = if let Some(pi) = programming_interface {
             pi.get_register_value()
         } else {
             0
         };
-        registers[2] = u32::from(class_code.get_register_value()) << 24
-            | u32::from(subclass.get_register_value()) << 16
-            | u32::from(pi) << 8;
+        registers[2] = (u32::from(class_code.get_register_value()) << 24)
+            | (u32::from(subclass.get_register_value()) << 16)
+            | (u32::from(pi) << 8);
         writable_bits[3] = 0x0000_00ff; // Cacheline size (r/w)
         registers[3] = 0x0000_0000; // Header type 0 (device)
-        registers[11] = u32::from(subsystem_id) << 16 | u32::from(subsystem_vendor_id);
+        registers[11] = (u32::from(subsystem_id) << 16) | u32::from(subsystem_vendor_id);
         writable_bits[15] = 0x0000_00ff; // Interrupt line (r/w)
 
         let mut configuration = PciConfiguration {
@@ -1193,11 +1193,11 @@ impl PciConfiguration {
                         if (value & mask) != self.bar_addr(bar_idx)
                             || (self.registers[reg_idx - 1] & mask2) != self.bar_addr(bar_idx - 1)
                         {
-                            let old_base = u64::from(self.bar_addr(bar_idx)) << 32
+                            let old_base = (u64::from(self.bar_addr(bar_idx)) << 32)
                                 | u64::from(self.bar_addr(bar_idx - 1));
-                            let new_base = u64::from(value & mask) << 32
+                            let new_base = (u64::from(value & mask) << 32)
                                 | u64::from(self.registers[reg_idx - 1] & mask2);
-                            let len = u64::from(self.bar_size(bar_idx)) << 32
+                            let len = (u64::from(self.bar_size(bar_idx)) << 32)
                                 | u64::from(self.bar_size(bar_idx - 1));
                             let bar_type = PciBarRegionType::Memory64BitRegion;
 

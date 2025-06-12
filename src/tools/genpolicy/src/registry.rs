@@ -575,12 +575,8 @@ pub fn add_verity_and_users_to_store(
         .truncate(false)
         .open(cache_file)?;
 
-    let mut data: Vec<ImageLayer> = if let Ok(vec) = serde_json::from_reader(read_file) {
-        vec
-    } else {
-        // Delete the malformed file here if it's present
-        Vec::new()
-    };
+    // Return empty vector if the file is malformed
+    let mut data: Vec<ImageLayer> = serde_json::from_reader(read_file).unwrap_or_default();
 
     // Add new data to the deserialized JSON
     data.push(ImageLayer {
@@ -606,7 +602,7 @@ pub fn add_verity_and_users_to_store(
     let mut writer = BufWriter::new(&file);
     writeln!(writer, "{}", serialized)?;
     writer.flush()?;
-    file.unlock()?;
+    fs2::FileExt::unlock(&file)?;
     Ok(())
 }
 

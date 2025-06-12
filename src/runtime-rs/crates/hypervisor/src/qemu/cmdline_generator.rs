@@ -4,12 +4,15 @@
 //
 
 use crate::device::topology::{PCIePortBusPrefix, TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
-use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
+use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap, SocketAddress};
+
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::VIRTIO_SCSI;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
@@ -1825,6 +1828,87 @@ impl ToQemuParams for ObjectSevSnpGuest {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ObjectTdxGuest {
+    // QOM Object type
+    qom_type: String,
+
+    // unique ID
+    id: String,
+
+    // The sept-ve-disable option prevents EPT violation conversions to #VE on guest TD
+    // accesses of PENDING pages, which is essential for certain guest OS compatibility,
+    // like Linux TD guests.
+    sept_ve_disable: bool,
+
+    // Base64 encoded 48 bytes of data (e.g., a sha384 digest).
+    // ID for non-owner-defined configuration of the guest TD, which identifies the guest TD's run-time/OS configuration via a SHA384 digest.
+    // Defaults to zero if unspecified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mrconfigid: Option<String>,
+
+    // Base64 encoded 48 bytes of data (e.g., a sha384 digest). ID for the guest TD's owner.
+    // Defaults to all zeros.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mrowner: Option<String>,
+
+    // Base64 encoded 48 bytes of data (e.g., a sha384 digest).
+    // ID for owner-defined configuration of the guest TD, e.g., specific to the workload rather than the run-time or OS.
+    // Defaults to all zeros.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mrownerconfig: Option<String>,
+
+    // Quote generation socket.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quote_generation_socket: Option<SocketAddress>,
+
+    // Debug mode
+    #[serde(skip_serializing_if = "Option::is_none")]
+    debug: Option<bool>,
+}
+
+impl std::fmt::Display for ObjectTdxGuest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        serde_json::to_string(self)
+            .map_err(|_| std::fmt::Error)
+            .and_then(|s| write!(f, "{}", s))
+    }
+}
+
+#[allow(clippy::doc_lazy_continuation)]
+/// 1. Add property "quote-generation-socket" to tdx-guest
+/// https://lore.kernel.org/qemu-devel/Zv7dtghi20DZ9ozz@redhat.com/
+/// 2. Support user configurable mrconfigid/mrowner/mrownerconfig
+/// https://patchew.org/QEMU/20241105062408.3533704-1-xiaoyao.li@intel.com/20241105062408.3533704-15-xiaoyao.li@intel.com/
+/// 3. Add command line and validation for TDX type
+/// https://lists.libvirt.org/archives/list/devel@lists.libvirt.org/message/6N7KP5F5Z44NI3R5U7STSPWUYXK6QYUO/
+/// Example:
+/// -object { "qom-type": "tdx-guest","id": "tdx", "mrconfigid": "mrconfigid2", "debug":true,"sept-ve-disable":true, \
+/// "quote-generation-socket": { "type": "vsock","cid": "2","port": "4050" }}
+impl ObjectTdxGuest {
+    pub fn new(id: &str, mrconfigid: Option<String>, qgs_port: u32, debug: bool) -> Self {
+        let qgs_socket = SocketAddress::new(qgs_port);
+        Self {
+            qom_type: "tdx-guest".to_owned(),
+            id: id.to_owned(),
+            mrconfigid,
+            mrowner: None,
+            mrownerconfig: None,
+            sept_ve_disable: true,
+            quote_generation_socket: Some(qgs_socket),
+            debug: if debug { Some(debug) } else { None },
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectTdxGuest {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec!["-object".to_owned(), self.to_string()])
+    }
+}
+
 /// PCIeRootPortDevice directly attached onto the root bus
 /// -device pcie-root-port,id=rp0,bus=pcie.0,chassis=0,slot=0,multifunction=off,pref64-reserve=<X>B,mem-reserve=<Y>B
 #[derive(Debug, Default)]
@@ -2352,6 +2436,23 @@ impl<'a> QemuCmdLine<'a> {
             .set_nvdimm(false);
 
         self.cpu.set_type("EPYC-v4");
+    }
+
+    pub fn add_tdx_protection_device(
+        &mut self,
+        id: &str,
+        firmware: &str,
+        qgs_port: u32,
+        mrconfigid: &Option<String>,
+        debug: bool,
+    ) {
+        let tdx_object = ObjectTdxGuest::new(id, mrconfigid.clone(), qgs_port, debug);
+        self.devices.push(Box::new(tdx_object));
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        self.machine
+            .set_confidential_guest_support("tdx")
+            .set_nvdimm(false);
     }
 
     /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.

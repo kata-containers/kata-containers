@@ -166,7 +166,7 @@ fn hash_key(entry: &kvm_irq_routing_entry) -> u64 {
         kvm_bindings::KVM_IRQ_ROUTING_IRQCHIP => unsafe { entry.u.irqchip.irqchip },
         _ => 0u32,
     };
-    (u64::from(type1) << 48 | u64::from(entry.type_) << 32) | u64::from(entry.gsi)
+    (u64::from(type1) << 48) | (u64::from(entry.type_) << 32) | u64::from(entry.gsi)
 }
 
 pub(super) struct KvmIrqRouting {
@@ -199,7 +199,7 @@ impl KvmIrqRouting {
         // Allocate enough buffer memory.
         let elem_sz = std::mem::size_of::<kvm_irq_routing>();
         let total_sz = std::mem::size_of::<kvm_irq_routing_entry>() * routes.len() + elem_sz;
-        let elem_cnt = (total_sz + elem_sz - 1) / elem_sz;
+        let elem_cnt = total_sz.div_ceil(elem_sz);
         let mut irq_routings = Vec::<kvm_irq_routing>::with_capacity(elem_cnt);
         irq_routings.resize_with(elem_cnt, Default::default);
 
