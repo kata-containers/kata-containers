@@ -1052,7 +1052,7 @@ mod tests {
         set_fake_guest_protection(None);
 
         let have_tdx = fs::read(TDX_KVM_PARAMETER_PATH)
-            .map_or(false, |content| !content.is_empty() && content[0] == b'Y');
+            .is_ok_and(|content| !content.is_empty() && content[0] == b'Y');
 
         let protection =
             task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })

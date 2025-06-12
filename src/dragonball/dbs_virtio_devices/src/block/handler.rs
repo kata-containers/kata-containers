@@ -248,11 +248,9 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
             return Ok(false);
         }
 
-        req.check_capacity(disk_image, data_descs).map_err(|e| {
+        req.check_capacity(disk_image, data_descs).inspect_err(|_|
             // It's caused by invalid request from guest, simple...
-            debug!("Failed to get buffer address for request");
-            e
-        })?;
+            debug!("Failed to get buffer address for request"))?;
 
         for io in data_descs {
             let host_addr = mem

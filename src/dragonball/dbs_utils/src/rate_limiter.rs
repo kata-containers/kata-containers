@@ -556,7 +556,8 @@ mod tests {
             self.processed_refill_time
         }
 
-        // After a restore, we cannot be certain that the last_update field has the same value.
+        /// Helper function to help comparing `TokenBucket` after update.
+        /// After a restore, we cannot be certain that the last_update field has the same value.
         pub fn partial_eq(&self, other: &TokenBucket) -> bool {
             (other.capacity() == self.capacity())
                 && (other.one_time_burst() == self.one_time_burst())

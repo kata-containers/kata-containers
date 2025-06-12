@@ -110,7 +110,7 @@ impl Vm {
         cmdline: &'a str,
         initrd_config: Option<&'a InitrdConfig>,
         vcpu_manager: &'a MutexGuard<VcpuManager>,
-    ) -> FdtVmInfo {
+    ) -> FdtVmInfo<'a> {
         let guest_memory = vm_memory.memory();
         let vcpu_mpidr = vcpu_manager
             .vcpus()

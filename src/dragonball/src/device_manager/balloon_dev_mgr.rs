@@ -253,7 +253,7 @@ impl BalloonDeviceMgr {
         let device = self.info_list[index]
             .device
             .as_ref()
-            .ok_or_else(|| BalloonDeviceError::NotExist)?;
+            .ok_or(BalloonDeviceError::NotExist)?;
         if let Some(mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
             let guard = mmio_dev.state();
             let inner_dev = guard.get_inner_device();
