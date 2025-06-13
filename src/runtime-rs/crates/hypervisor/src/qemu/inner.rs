@@ -135,11 +135,13 @@ impl QemuInner {
                         if sev_snp_cfg.is_snp {
                             cmdline.add_sev_snp_protection_device(
                                 sev_snp_cfg.cbitpos,
+                                sev_snp_cfg.phys_addr_reduction,
                                 &sev_snp_cfg.firmware,
                             )
                         } else {
                             cmdline.add_sev_protection_device(
                                 sev_snp_cfg.cbitpos,
+                                sev_snp_cfg.phys_addr_reduction,
                                 &sev_snp_cfg.firmware,
                             )
                         }
