@@ -312,18 +312,13 @@ impl AgentService {
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
-        let p = if let Some(p) = oci.process() {
-            {
-                let new_p =
-                    confidential_data_hub::image::get_process(p, &oci, req.storages.clone())?;
-                Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?
-            }
-
-            Process::new(&sl(), p, cid.as_str(), true, pipe_size, proc_io)?
-        } else {
+        let Some(p) = oci.process() else {
             info!(sl(), "no process configurations!");
             return Err(anyhow!(nix::Error::EINVAL));
         };
+
+        let new_p = confidential_data_hub::image::get_process(p, &oci, req.storages.clone())?;
+        let p = Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?;
 
         // if starting container failed, we will do some rollback work
         // to ensure no resources are leaked.
