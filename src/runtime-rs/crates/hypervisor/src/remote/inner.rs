@@ -183,7 +183,13 @@ impl RemoteInner {
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping REMOTE VM");
 
-        let client = self.get_ttrpc_client()?;
+        let client = match self.get_ttrpc_client() {
+            Ok(client) => client,
+            Err(_) => {
+                info!(sl!(), "REMOTE VM: no running client to remove");
+                return Ok(());
+            }
+        };
 
         let ctx = context::with_timeout(time::Duration::from_secs(1).as_nanos() as i64);
         let req = StopVMRequest {
@@ -201,13 +207,13 @@ impl RemoteInner {
         todo!()
     }
 
-    pub(crate) async fn wait_vm(&self) -> Result<i32> {
+    pub(crate) async fn wait_vm(&mut self) -> Result<i32> {
         info!(sl!(), "Wait Remote VM");
         let mut waiter = self.exit_waiter.lock().await;
         if let Some(exitcode) = waiter.0.recv().await {
             waiter.1 = exitcode;
         }
-
+        self.client.take();
         Ok(waiter.1)
     }
 
@@ -348,6 +354,10 @@ impl RemoteInner {
                 ..Default::default()
             },
         ))
+    }
+
+    pub(crate) fn is_running(&self) -> bool {
+        self.client.is_some()
     }
 }
 
