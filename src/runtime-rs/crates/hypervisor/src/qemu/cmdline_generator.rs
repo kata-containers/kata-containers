@@ -625,6 +625,7 @@ struct MemoryBackendFile {
     size: u64,
     share: bool,
     readonly: bool,
+    prealloc: bool,
 }
 
 impl MemoryBackendFile {
@@ -635,6 +636,7 @@ impl MemoryBackendFile {
             size,
             share: false,
             readonly: false,
+            prealloc: false,
         }
     }
 
@@ -645,6 +647,11 @@ impl MemoryBackendFile {
 
     fn set_readonly(&mut self, readonly: bool) -> &mut Self {
         self.readonly = readonly;
+        self
+    }
+
+    fn set_prealloc(&mut self, prealloc: bool) -> &mut Self {
+        self.prealloc = prealloc;
         self
     }
 }
@@ -658,6 +665,10 @@ impl ToQemuParams for MemoryBackendFile {
         params.push(format!("mem-path={}", self.mem_path));
         params.push(format!("size={}", format_memory(self.size)));
         params.push(format!("share={}", if self.share { "on" } else { "off" }));
+        params.push(format!(
+            "prealloc={}",
+            if self.prealloc { "on" } else { "off" }
+        ));
         params.push(format!(
             "readonly={}",
             if self.readonly { "on" } else { "off" }
@@ -2260,6 +2271,10 @@ impl<'a> QemuCmdLine<'a> {
         let mut mem_file =
             MemoryBackendFile::new("entire-guest-memory-share", "/dev/shm", self.memory.size);
         mem_file.set_share(true);
+
+        if self.config.memory_info.enable_mem_prealloc {
+            mem_file.set_prealloc(true);
+        }
 
         // don't put the /dev/shm memory backend file into the anonymous container,
         // there has to be at most one of those so keep it by name in Memory instead
