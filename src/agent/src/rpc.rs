@@ -1328,10 +1328,6 @@ impl agent_ttrpc::AgentService for AgentService {
                 s.network.set_dns(dns);
             }
         }
-        #[cfg(feature = "guest-pull")]
-        confidential_data_hub::image::init_image_service()
-            .await
-            .map_ttrpc_err(same)?;
 
         Ok(Empty::new())
     }
