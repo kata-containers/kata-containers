@@ -38,7 +38,7 @@ use std::process::exit;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
-mod cdh;
+mod confidential_data_hub;
 mod config;
 mod console;
 mod device;
@@ -78,9 +78,6 @@ use tokio::{
     },
     task::JoinHandle,
 };
-
-#[cfg(feature = "guest-pull")]
-mod image;
 
 mod rpc;
 mod tracer;
@@ -395,7 +392,7 @@ async fn start_sandbox(
     }
 
     #[cfg(feature = "guest-pull")]
-    image::set_proxy_env_vars().await;
+    confidential_data_hub::image::set_proxy_env_vars().await;
 
     #[cfg(feature = "agent-policy")]
     if let Err(e) = initialize_policy().await {
@@ -580,7 +577,7 @@ async fn init_attestation_components(
     match tokio::fs::metadata(CDH_SOCKET).await {
         Ok(md) => {
             if md.file_type().is_socket() {
-                cdh::init_cdh_client(CDH_SOCKET_URI).await?;
+                confidential_data_hub::init_cdh_client(CDH_SOCKET_URI).await?;
                 fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
                 env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
             } else {

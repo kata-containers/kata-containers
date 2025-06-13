@@ -23,11 +23,7 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 use tokio::sync::OnceCell;
 
-// Nanoseconds
-lazy_static! {
-    static ref CDH_API_TIMEOUT: i64 = AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64;
-    pub static ref CDH_CLIENT: OnceCell<CDHClient> = OnceCell::new();
-}
+pub static CDH_CLIENT: OnceCell<CDHClient> = OnceCell::const_new();
 
 const SEALED_SECRET_PREFIX: &str = "sealed.";
 
@@ -69,7 +65,10 @@ impl CDHClient {
 
         let unsealed_secret = self
             .sealed_secret_client
-            .unseal_secret(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &input)
+            .unseal_secret(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &input,
+            )
             .await?;
         Ok(unsealed_secret.plaintext)
     }
@@ -90,7 +89,10 @@ impl CDHClient {
             ..Default::default()
         };
         self.secure_mount_client
-            .secure_mount(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
+            .secure_mount(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
             .await?;
         Ok(())
     }
@@ -102,7 +104,10 @@ impl CDHClient {
         };
         let res = self
             .get_resource_client
-            .get_resource(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
+            .get_resource(
+                ttrpc::context::with_timeout(AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64),
+                &req,
+            )
             .await?;
         Ok(res.Resource)
     }
@@ -118,7 +123,7 @@ pub async fn init_cdh_client(cdh_socket_uri: &str) -> Result<()> {
 }
 
 /// Check if the CDH client is initialized
-pub async fn is_cdh_client_initialized() -> bool {
+pub fn is_cdh_client_initialized() -> bool {
     CDH_CLIENT.get().is_some() // Returns true if CDH_CLIENT is initialized, false otherwise
 }
 
