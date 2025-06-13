@@ -26,6 +26,7 @@ pub mod share_fs;
 pub mod volume;
 pub use manager::ResourceManager;
 pub mod cdi_devices;
+pub mod coco_data;
 pub mod cpu_mem;
 
 use kata_types::config::hypervisor::SharedFsInfo;
