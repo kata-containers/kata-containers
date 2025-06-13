@@ -347,6 +347,11 @@ externals:
     url: "https://github.com/containerd/nydus-snapshotter"
     version: "v0.13.14"
 
+  opa:
+    description: "Open Policy Agent"
+    url: "https://github.com/open-policy-agent/opa"
+    version: "v1.5.1"
+
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
     url: "https://github.com/tianocore/edk2"
