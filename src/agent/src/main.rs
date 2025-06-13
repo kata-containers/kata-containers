@@ -22,7 +22,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine;
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
-use const_format::{concatcp, formatcp};
+use const_format::concatcp;
 use initdata::{InitdataReturnValue, AA_CONFIG_PATH, CDH_CONFIG_PATH};
 use nix::fcntl::OFlag;
 use nix::sys::reboot::{reboot, RebootMode};
@@ -107,19 +107,9 @@ const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
-/// Path of ocicrypt config file. This is used by image-rs when decrypting image.
-const OCICRYPT_CONFIG_PATH: &str = "/run/confidential-containers/ocicrypt_config.json";
-
-const OCICRYPT_CONFIG: &str = formatcp!(
-    r#"{{
-    "key-providers": {{
-        "attestation-agent": {{
-            "ttrpc": "{}"
-        }}
-    }}
-}}"#,
-    CDH_SOCKET_URI
-);
+/// Path of ocicrypt config file. This is used by CDH when decrypting image.
+/// TODO: remove this when we move the launch of CDH out of the kata-agent.
+const OCICRYPT_CONFIG_PATH: &str = "/etc/ocicrypt_config.json";
 
 const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
 
