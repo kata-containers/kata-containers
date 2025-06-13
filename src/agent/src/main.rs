@@ -391,9 +391,6 @@ async fn start_sandbox(
         s.rtnl.handle_localhost().await?;
     }
 
-    #[cfg(feature = "guest-pull")]
-    confidential_data_hub::image::set_proxy_env_vars().await;
-
     #[cfg(feature = "agent-policy")]
     if let Err(e) = initialize_policy().await {
         error!(logger, "Failed to initialize agent policy: {:?}", e);
@@ -513,6 +510,7 @@ async fn launch_guest_component_procs(
         Some(AA_CONFIG_PATH),
         AA_ATTESTATION_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+        &[],
     )
     .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
@@ -534,6 +532,7 @@ async fn launch_guest_component_procs(
         Some(CDH_CONFIG_PATH),
         CDH_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+        &[("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH)],
     )
     .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
@@ -555,6 +554,7 @@ async fn launch_guest_component_procs(
         None,
         "",
         0,
+        &[],
     )
     .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
@@ -578,8 +578,6 @@ async fn init_attestation_components(
         Ok(md) => {
             if md.file_type().is_socket() {
                 confidential_data_hub::init_cdh_client(CDH_SOCKET_URI).await?;
-                fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
-                env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
             } else {
                 debug!(logger, "File {} is not a socket", CDH_SOCKET);
             }
@@ -621,6 +619,7 @@ async fn launch_process(
     config: Option<&str>,
     unix_socket_path: &str,
     timeout_secs: i32,
+    envs: &[(&str, &str)],
 ) -> Result<()> {
     if !Path::new(path).exists() {
         bail!("path {} does not exist.", path);
@@ -637,7 +636,12 @@ async fn launch_process(
         tokio::fs::remove_file(unix_socket_path).await?;
     }
 
-    tokio::process::Command::new(path).args(args).spawn()?;
+    let mut process = tokio::process::Command::new(path);
+    process.args(args);
+    for (k, v) in envs {
+        process.env(k, v);
+    }
+    process.spawn()?;
     if !unix_socket_path.is_empty() && timeout_secs > 0 {
         wait_for_path_to_exist(logger, unix_socket_path, timeout_secs).await?;
     }
