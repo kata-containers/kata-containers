@@ -57,7 +57,6 @@ use rustjail::process::ProcessOperations;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
-#[cfg(feature = "guest-pull")]
 use crate::confidential_data_hub::image::KATA_IMAGE_WORK_DIR;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 #[cfg(target_arch = "s390x")]
@@ -108,7 +107,6 @@ use kata_types::k8s;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
-#[cfg(feature = "guest-pull")]
 const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
 /// the iptables seriers binaries could appear either in /sbin
 /// or /usr/sbin, we need to check both of them
@@ -238,7 +236,6 @@ impl AgentService {
         handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", AGENT_CONFIG.cdi_timeout).await?;
 
         // Handle trusted storage configuration before mounting any storage
-        #[cfg(feature = "guest-pull")]
         cdh_handler_trusted_storage(&mut oci)
             .await
             .map_err(|e| anyhow!("failed to handle trusted storage: {}", e))?;
@@ -316,14 +313,12 @@ impl AgentService {
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process() {
-            #[cfg(feature = "guest-pull")]
             {
                 let new_p =
                     confidential_data_hub::image::get_process(p, &oci, req.storages.clone())?;
                 Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?
             }
 
-            #[cfg(not(feature = "guest-pull"))]
             Process::new(&sl(), p, cid.as_str(), true, pipe_size, proc_io)?
         } else {
             info!(sl(), "no process configurations!");
