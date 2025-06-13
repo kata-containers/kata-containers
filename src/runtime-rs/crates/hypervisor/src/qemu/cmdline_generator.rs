@@ -547,6 +547,12 @@ impl ToQemuParams for Machine {
         if let Some(mem_backend) = &self.memory_backend {
             params.push(format!("memory-backend={}", mem_backend));
         }
+
+        #[cfg(target_arch = "aarch64")]
+        params.push(format!("usb=off"));
+        #[cfg(target_arch = "aarch64")]
+        params.push(format!("gic-version=3"));
+
         if !self.confidential_guest_support.is_empty() {
             params.push(format!(
                 "confidential-guest-support={}",
@@ -2593,6 +2599,11 @@ impl<'a> QemuCmdLine<'a> {
             }
         }
 
+        Ok(())
+    }
+
+    pub fn add_bios(&mut self, path: &str) -> Result<()> {
+        self.devices.push(Box::new(Bios::new(path.to_string())));
         Ok(())
     }
 
