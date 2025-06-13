@@ -204,6 +204,11 @@ impl ResourceManagerInner {
                     .await
                     .context("do handle port device failed.")?;
                 }
+                ResourceConfig::InitData(id) => {
+                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(id))
+                        .await
+                        .context("do handle initdata block device failed.")?;
+                }
             };
         }
 
