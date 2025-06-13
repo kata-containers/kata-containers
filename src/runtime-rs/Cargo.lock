@@ -2007,7 +2007,9 @@ dependencies = [
  "base64 0.13.1",
  "bitmask-enum",
  "byte-unit",
+ "flate2",
  "glob",
+ "hex",
  "lazy_static",
  "num_cpus",
  "oci-spec",
@@ -2016,6 +2018,7 @@ dependencies = [
  "serde",
  "serde-enum-str",
  "serde_json",
+ "sha2 0.10.9",
  "slog",
  "slog-scope",
  "sysinfo",
@@ -2596,7 +2599,7 @@ dependencies = [
  "openssl",
  "serde",
  "serde_json",
- "sha2 0.10.7",
+ "sha2 0.10.9",
  "tokio",
  "zstd",
 ]
@@ -4081,9 +4084,9 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.10.7"
+version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479fb9d862239e610720565ca91403019f2f00410f1864c5aa7479b950a76ed8"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if 1.0.0",
  "cpufeatures",
