@@ -57,7 +57,8 @@ use rustjail::process::ProcessOperations;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
-use crate::cdh;
+#[cfg(feature = "guest-pull")]
+use crate::confidential_data_hub::image::KATA_IMAGE_WORK_DIR;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 #[cfg(target_arch = "s390x")]
 use crate::device::network_device_handler::wait_for_ccw_net_interface;
@@ -65,9 +66,6 @@ use crate::device::network_device_handler::wait_for_ccw_net_interface;
 use crate::device::network_device_handler::wait_for_pci_net_interface;
 use crate::device::{add_devices, handle_cdi_devices, update_env_pci};
 use crate::features::get_build_features;
-#[cfg(feature = "guest-pull")]
-use crate::image::KATA_IMAGE_WORK_DIR;
-use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
@@ -80,15 +78,13 @@ use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
+use crate::{confidential_data_hub, linux_abi::*};
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
 use crate::policy::{do_set_policy, is_allowed};
-
-#[cfg(feature = "guest-pull")]
-use crate::image;
 
 use opentelemetry::global;
 use tracing::span;
@@ -322,7 +318,8 @@ impl AgentService {
         let p = if let Some(p) = oci.process() {
             #[cfg(feature = "guest-pull")]
             {
-                let new_p = image::get_process(p, &oci, req.storages.clone())?;
+                let new_p =
+                    confidential_data_hub::image::get_process(p, &oci, req.storages.clone())?;
                 Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?
             }
 
@@ -1331,9 +1328,10 @@ impl agent_ttrpc::AgentService for AgentService {
                 s.network.set_dns(dns);
             }
         }
-
         #[cfg(feature = "guest-pull")]
-        image::init_image_service().await.map_ttrpc_err(same)?;
+        confidential_data_hub::image::init_image_service()
+            .await
+            .map_ttrpc_err(same)?;
 
         Ok(Empty::new())
     }
@@ -2274,9 +2272,8 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
             .any(|suffix| source_path.ends_with(suffix))
 }
 
-#[cfg(feature = "guest-pull")]
 async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
-    if !cdh::is_cdh_client_initialized().await {
+    if !confidential_data_hub::is_cdh_client_initialized() {
         return Ok(());
     }
     let linux = oci
@@ -2301,7 +2298,13 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
                     ("encryptType".to_string(), "LUKS".to_string()),
                     ("dataIntegrity".to_string(), secure_storage_integrity),
                 ]);
-                cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
+                confidential_data_hub::secure_mount(
+                    "BlockDevice",
+                    &options,
+                    vec![],
+                    KATA_IMAGE_WORK_DIR,
+                )
+                .await?;
                 break;
             }
         }
@@ -2310,7 +2313,7 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
 }
 
 async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
-    if !cdh::is_cdh_client_initialized().await {
+    if !confidential_data_hub::is_cdh_client_initialized() {
         return Ok(());
     }
     let process = oci
@@ -2319,7 +2322,7 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
         .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
     if let Some(envs) = process.env_mut().as_mut() {
         for env in envs.iter_mut() {
-            match cdh::unseal_env(env).await {
+            match confidential_data_hub::unseal_env(env).await {
                 Ok(unsealed_env) => *env = unsealed_env.to_string(),
                 Err(e) => {
                     warn!(sl(), "Failed to unseal secret: {}", e)
@@ -2357,7 +2360,7 @@ async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
             // But currently there is no quick way to determine which volume-mount is referring
             // to a sealed secret without reading the file.
             // And relying on file naming heuristic is inflexible. So we are going with this approach.
-            if let Err(e) = cdh::unseal_file(source_path).await {
+            if let Err(e) = confidential_data_hub::unseal_file(source_path).await {
                 warn!(
                     sl(),
                     "Failed to unseal file: {:?}, Error: {:?}", source_path, e
