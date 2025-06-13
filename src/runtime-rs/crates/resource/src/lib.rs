@@ -40,6 +40,7 @@ pub enum ResourceConfig {
     Vsock(VsockConfig),
     Protection(ProtectionDeviceConfig),
     PortDevice(PortDeviceConfig),
+    InitData(BlockConfig),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
