@@ -3610,6 +3610,7 @@ dependencies = [
  "bitflags 2.9.0",
  "byte-unit",
  "cgroups-rs 0.3.5",
+ "flate2",
  "futures 0.3.28",
  "hypervisor",
  "inotify",
