@@ -7,6 +7,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net"
@@ -83,6 +84,20 @@ var kataExecCLICommand = cli.Command{
 			return err
 		}
 
+		// Command specified directly on the CLI
+		// Run the command only and return
+		if len(context.Args()) > 1 {
+			var cmd strings.Builder
+			for i := 1; i < len(context.Args()); i++ {
+				cmd.WriteString("\"" + context.Args().Get(i) + "\" ")
+			}
+			err = RunCommand(cmd.String(), conn)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
 		iostream := &iostream{
 			conn:   conn,
 			exitch: make(chan struct{}),
@@ -94,6 +109,35 @@ var kataExecCLICommand = cli.Command{
 		<-iostream.exitch
 		return nil
 	},
+}
+
+func RunCommand(cmd string, c net.Conn) (err error) {
+	// Write the cmd, add newlines and send an exit
+	// The exit is required
+	// The vsock client isn't set up to interrupt the read and send an EOF
+	// The scanner will block until EOF, so using an exit to send an EOF
+	_, err = c.Write([]byte(cmd + "\nexit\n"))
+	if err != nil {
+		return err
+	}
+
+	// Scan read the buffer
+	// Use the counter to disregard echoed user input at the beginning
+	// Disregard the required exit to send an EOF
+	scanner := bufio.NewScanner(c)
+	counter := 0
+	for scanner.Scan() {
+		output := scanner.Text()
+		if counter > 2 && !strings.Contains(output, "exit") {
+			fmt.Println(output)
+		}
+		counter++
+	}
+	if err = scanner.Err(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func ioCopy(stream *iostream, con console.Console) {
