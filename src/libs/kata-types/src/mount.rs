@@ -64,6 +64,9 @@ pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS: &str = "layer_nydus_fs";
 /// Download and extra container image inside guest vm.
 pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
 
+/// force_guest_pull enforces guest pull without remote snapshotter but the prerequsitive setting of `shared_fs = none` should be ensured.
+pub const KATA_IMAGE_FORCE_GUEST_PULL: &str = "force_guest_pull";
+
 /// Manager to manage registered storage device handlers.
 pub type StorageHandlerManager<H> = HandlerManager<H>;
 
@@ -510,6 +513,36 @@ pub fn split_bind_mounts(bindmount: &str) -> (&str, &str) {
     };
 
     (real_path, mode)
+}
+
+/// This function, adjust_rootfs_mounts, manages the root filesystem mounts based on whether a guest-pull mechanism is active.
+/// If guest_pull is explicitly false:
+/// - the function returns the rootfs_mounts list as is, indicating no special rootfs adjustment for guest pull, just return it.
+/// If guest_pull is explicitly true:
+/// - the function disregards any provided rootfs_mounts. Instead, it forcefully creates a single, default KataVirtualVolume specifically for guest-pull operations.
+/// This volume's representation is then base64-encoded and added as the only option to a new, singular Mount entry, which becomes the sole item in the returned Vec<Mount>.
+/// This ensures that when guest pull is active, the root filesystem is exclusively configured via this virtual volume.
+pub fn adjust_rootfs_mounts(rootfs_mounts: &[Mount], guest_pull: bool) -> Result<Vec<Mount>> {
+    if !guest_pull {
+        // If guest_pull is false, return the provided mounts without modification.
+        Ok(rootfs_mounts.to_vec())
+    } else {
+        // When guest_pull is true, we enforce a single, default KataVirtualVolume
+        // as the exclusive rootfs mount.
+        let volume = KataVirtualVolume::new(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL.to_string());
+
+        // Convert the virtual volume to a base64 string for the mount option.
+        let b64_vol = volume
+            .to_base64()
+            .context("failed to base64 encode KataVirtualVolume")?;
+
+        // Create a new Vec<Mount> with a single Mount entry.
+        // This Mount's options will contain the base64-encoded virtual volume.
+        Ok(vec![Mount {
+            options: vec![format!("{}={}", "io.katacontainers.volume=", b64_vol)],
+            ..Default::default() // Use default values for other Mount fields
+        }])
+    }
 }
 
 #[cfg(test)]
