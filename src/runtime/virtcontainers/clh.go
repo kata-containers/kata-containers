@@ -729,7 +729,11 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 	defer func() {
-		if err != nil {
+		if err == nil {
+			return
+		}
+
+		if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
 			if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
 				clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
 			}
@@ -1306,10 +1310,12 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		return err
 	}
 
-	clh.Logger().Debug("stop virtiofsDaemon")
+	if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
+		clh.Logger().Debug("stop virtiofsDaemon")
 
-	if err = clh.stopVirtiofsDaemon(ctx); err != nil {
-		clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		if err = clh.stopVirtiofsDaemon(ctx); err != nil {
+			clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		}
 	}
 
 	return
