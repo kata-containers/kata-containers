@@ -1,0 +1,44 @@
+on:
+  workflow_call:
+
+name: Govulncheck
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        binary: ["kata-runtime", "containerd-shim-kata-v2", "kata-monitor"]
+      fail-fast: false  # Continue running other binaries even if one fails
+    
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install golang
+        run: |
+          ./tests/install_go.sh -f -p
+          echo "/usr/local/go/bin" >> "${GITHUB_PATH}"
+
+      - name: Install govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
+
+      - name: Build runtime binaries
+        run: |
+          cd src/runtime
+          make all
+        env:
+          SKIP_GO_VERSION_CHECK: "1"
+
+      - name: Run govulncheck on ${{ matrix.binary }}
+        run: |
+          cd src/runtime
+          bash ../../tests/govulncheck-runner.sh "./${{ matrix.binary }}"
