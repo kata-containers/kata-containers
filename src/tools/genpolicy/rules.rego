@@ -1252,7 +1252,7 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) if {
     mount1 := p_storage.mount_point
     print("allow_mount_point 3: mount1 =", mount1)
 
-    mount2 := replace(mount1, "$(cpath)", policy_data.common.cpath)
+    mount2 := replace(mount1, "$(cpath)", policy_data.common.mount_source_cpath)
     print("allow_mount_point 3: mount2 =", mount2)
 
     mount3 := replace(mount2, "$(sandbox-id)", sandbox_id)
