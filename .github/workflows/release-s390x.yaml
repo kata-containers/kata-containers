@@ -47,6 +47,8 @@ jobs:
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: get-kata-tarball
         uses: actions/download-artifact@v4
         with:

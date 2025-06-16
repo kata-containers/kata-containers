@@ -32,6 +32,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
       - id: gatekeeper
         env:
           TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
