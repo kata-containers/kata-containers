@@ -5,6 +5,7 @@ on:
       - edited
       - reopened
       - synchronize
+  workflow_dispatch:
 
 permissions:
   contents: read
