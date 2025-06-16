@@ -30,6 +30,9 @@ on:
         description: The arch of the tarball.
         required: true
         type: string
+    secrets:
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read
@@ -45,6 +48,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -62,7 +66,7 @@ jobs:
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - name: Login to Kata Containers ghcr.io

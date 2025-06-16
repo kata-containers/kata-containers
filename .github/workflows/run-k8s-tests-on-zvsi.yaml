@@ -21,6 +21,9 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: true
 
 permissions:
   contents: read
@@ -75,13 +78,14 @@ jobs:
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: ${{ matrix.using-nfd }}
       TARGET_ARCH: "s390x"
-      AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
+      AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |

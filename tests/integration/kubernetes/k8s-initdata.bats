@@ -51,7 +51,7 @@ function setup_kbs_image_policy_for_initdata() {
 
     # TODO: Enable for more archs
     case "$KATA_HYPERVISOR" in
-        "qemu-tdx"|"qemu-coco-dev")
+        "qemu-tdx"|"qemu-coco-dev"|"qemu-snp")
             ;;
         *)
             skip "Test not supported for ${KATA_HYPERVISOR}."
@@ -98,10 +98,6 @@ algorithm = "sha256"
 [data]
 "aa.toml" = '''
 [token_configs]
-[token_configs.coco_as]
-# TODO: we should fix this on AA side to set this a default value if not set.
-url = "${CC_KBS_ADDRESS}"
-
 [token_configs.kbs]
 url = "${CC_KBS_ADDRESS}"
 '''
@@ -165,7 +161,7 @@ EOF
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull image"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Image policy rejected: Denied by policy"
 }
 
 @test "Test that creating a container from an rejected image not configured by initdata, fails according to CDH error" {

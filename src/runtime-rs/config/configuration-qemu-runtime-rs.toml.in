@@ -446,6 +446,18 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
+
+# Enable connection to Quote Generation Service (QGS)
+# The "tdx_quote_generation_service_socket_port" parameter configures how QEMU connects to the TDX Quote Generation Service (QGS).
+# This connection is essential for Trusted Domain (TD) attestation, as QGS signs the TDREPORT sent by QEMU via the GetQuote hypercall.
+# By default QGS runs on vsock port 4050, but can be modified by the host admin. For QEMU's tdx-guest object, this connection needs to
+# be specified in a JSON format, for example:
+# -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}'
+# It's important to note that setting "tdx_quote_generation_service_socket_port" to 0 enables communication via Unix Domain Sockets (UDS).
+# To activate UDS, the QGS service itself must be launched with the "-port=0" parameter and the UDS will always be located at /var/run/tdx-qgs/qgs.socket.
+# -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}}'
+# tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
+
 #
 # Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
 # In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) to discipline traffic.

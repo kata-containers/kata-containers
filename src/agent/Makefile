@@ -41,16 +41,6 @@ ifeq ($(AGENT_POLICY),yes)
     override EXTRA_RUSTFEATURES += agent-policy
 endif
 
-##VAR PULL_TYPE=default|guest-pull define if agent enables the guest pull image feature
-PULL_TYPE ?= default
-ifeq ($(PULL_TYPE),default)
-    override EXTRA_RUSTFEATURES += default-pull
-# Enable guest pull image feature of rust build
-else ifeq ($(PULL_TYPE),guest-pull)
-    override EXTRA_RUSTFEATURES += guest-pull
-endif
-
-
 include ../../utils.mk
 
 ##VAR STANDARD_OCI_RUNTIME=yes|no define if agent enables standard oci runtime feature

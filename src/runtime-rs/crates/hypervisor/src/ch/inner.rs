@@ -197,7 +197,6 @@ impl Persist for CloudHypervisorInner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::TDXDetails;
 
     #[actix_rt::test]
     async fn test_save_clh() {
@@ -209,12 +208,7 @@ mod tests {
         clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
         clh.run_dir = String::from("/var/run/kata-containers/") + &clh.id;
 
-        let details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
-
-        clh.guest_protection_to_use = GuestProtection::Tdx(details);
+        clh.guest_protection_to_use = GuestProtection::Tdx;
 
         let state = clh.save().await.unwrap();
         assert_eq!(state.id, clh.id);

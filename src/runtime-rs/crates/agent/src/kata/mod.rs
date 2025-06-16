@@ -111,6 +111,7 @@ impl KataAgent {
         );
         let sock =
             sock::new(&inner.socket_address, inner.config.server_port).context("new sock")?;
+        info!(sl!(), "try to connect agent server through {:?}", sock);
         let stream = sock.connect(&config).await.context("connect")?;
         let fd = stream.into_raw_fd();
         info!(

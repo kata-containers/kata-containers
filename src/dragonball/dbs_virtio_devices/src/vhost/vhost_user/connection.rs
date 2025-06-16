@@ -134,7 +134,7 @@ pub(super) struct EndpointParam<'a, AS: GuestAddressSpace, Q: QueueT, R: GuestMe
     pub slave_req_fd: Option<RawFd>,
 }
 
-impl<'a, AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'a, AS, Q, R> {
+impl<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'_, AS, Q, R> {
     fn get_host_address(&self, addr: GuestAddress, mem: &AS::M) -> VirtioResult<*mut u8> {
         mem.get_host_address(addr)
             .map_err(|_| VirtioError::InvalidGuestAddress(addr))
@@ -201,9 +201,7 @@ impl Endpoint {
         Ok(Some(features))
     }
 
-    // TODO: Remove this after enabling vhost-user-fs on the runtime-rs. Issue:
-    // https://github.com/kata-containers/kata-containers/issues/8691
-    #[allow(dead_code)]
+    #[cfg(feature = "vhost-user-fs")]
     pub fn update_memory<AS: GuestAddressSpace>(&mut self, vm_as: &AS) -> VirtioResult<()> {
         let master = match self.conn.as_mut() {
             Some(conn) => conn,

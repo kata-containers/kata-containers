@@ -19,6 +19,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Ensure the split out runtime classes match the all-in-one file
       run: |
         pushd tools/packaging/kata-deploy/runtimeclasses/

@@ -691,10 +691,7 @@ where
     fn activate(&mut self, mut config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
         self.device_info
             .check_queue_sizes(&config.queues)
-            .map_err(|e| {
-                self.metrics.activate_fails.inc();
-                e
-            })?;
+            .inspect_err(|_| self.metrics.activate_fails.inc())?;
         self.device_change_notifier = config.device_change_notifier.clone();
 
         trace!(

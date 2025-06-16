@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -44,4 +45,11 @@ jobs:
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
       target-branch: ${{ github.event.pull_request.base.ref }}
       skip-test: ${{ needs.skipper.outputs.skip_test }}
-    secrets: inherit
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+      ITA_KEY: ${{ secrets.ITA_KEY }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}

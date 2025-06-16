@@ -31,6 +31,7 @@ impl Vsock {
 #[async_trait]
 impl Sock for Vsock {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream> {
+        let mut last_err = None;
         let retry_times = config.reconnect_timeout_ms / config.dial_timeout_ms;
         let sock_addr = VsockAddr::new(self.vsock_cid, self.port);
         let connect_once = || {
@@ -61,23 +62,30 @@ impl Sock for Vsock {
         for i in 0..retry_times {
             match connect_once() {
                 Ok(stream) => {
-                    info!(
-                        sl!(),
-                        "connect vsock success on {} current client fd {}",
-                        i,
-                        stream.as_raw_fd()
-                    );
+                    info!(sl!(), "vsock: connected to {:?}", self);
                     return Ok(Stream::Vsock(stream));
                 }
                 Err(e) => {
-                    debug!(sl!(), "retry after {} ms: failed to connect to agent via vsock at {} attempts: {:?}", config.dial_timeout_ms, i, e);
+                    trace!(
+                        sl!(),
+                        "vsock: failed to connect to {:?}, err {:?}, attempts {}, will retry after {} ms",
+                        self,
+                        e,
+                        i,
+                        config.dial_timeout_ms,
+                    );
+                    last_err = Some(e);
                     tokio::time::sleep(Duration::from_millis(config.dial_timeout_ms)).await;
                 }
             }
         }
+
+        // Safe to unwrap the last_err, as this line will be unreachable if
+        // no errors occurred.
         Err(anyhow!(
-            "cannot connect vsock to agent ttrpc server {:?}",
-            config
+            "vsock: failed to connect to {:?}, err {:?}",
+            self,
+            last_err.unwrap()
         ))
     }
 }

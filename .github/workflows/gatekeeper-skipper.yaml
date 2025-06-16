@@ -46,6 +46,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
       - id: skipper
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}

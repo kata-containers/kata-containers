@@ -8,7 +8,7 @@
 
 use lazy_static::lazy_static;
 
-/// Magic addresses externally used to lay out x86_64 VMs.
+// Magic addresses externally used to lay out x86_64 VMs.
 
 /// Global Descriptor Table Offset
 pub const BOOT_GDT_OFFSET: u64 = 0x500;

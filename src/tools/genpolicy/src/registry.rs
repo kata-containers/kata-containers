@@ -104,6 +104,7 @@ struct PasswdRecord {
 /// A single record in a Unix group file.
 #[derive(Debug)]
 struct GroupRecord {
+    #[allow(dead_code)]
     pub name: String,
     #[allow(dead_code)]
     pub validate: bool,
@@ -257,48 +258,37 @@ impl Container {
         }
     }
 
+    fn get_user_from_passwd_uid(&self, uid: u32) -> Result<String> {
+        for record in parse_passwd_file(&self.passwd)? {
+            if record.uid == uid {
+                return Ok(record.user);
+            }
+        }
+        Err(anyhow!("No user found with uid {uid}"))
+    }
+
     pub fn get_additional_groups_from_uid(&self, uid: u32) -> Result<Vec<u32>> {
         if self.group.is_empty() || self.passwd.is_empty() {
             return Err(anyhow!(
                 "No /etc/group, /etc/passwd file is available, unable to parse additional group membership from uid"
             ));
         }
+
+        let user = self.get_user_from_passwd_uid(uid)?;
+
         match parse_group_file(&self.group) {
             Ok(records) => {
                 let mut groups = Vec::new();
                 for record in records.iter() {
                     record.user_list.iter().for_each(|u| {
-                        match self.get_uid_gid_from_passwd_user(u.to_string()) {
-                            Ok((record_uid, _)) => {
-                                if record_uid == uid {
-                                    groups.push(record.gid);
-                                }
-                            },
-                            Err(inner_e) => warn!(
-                                "/etc/group indicates a user {u} that is not in /etc/passwd - error {inner_e}"
-                            ),
-                        };
+                        if u == &user && &record.name != u {
+                            // The second condition works around containerd bug
+                            // https://github.com/containerd/containerd/issues/11937.
+                            groups.push(record.gid);
+                        }
                     });
                 }
                 Ok(groups)
-            }
-            Err(inner_e) => Err(anyhow!("Failed to parse /etc/group - error {inner_e}")),
-        }
-    }
-
-    fn get_gid_from_group_name(&self, name: &str) -> Result<u32> {
-        if self.group.is_empty() {
-            return Err(anyhow!(
-                "No /etc/group file is available, unable to parse gids from group name"
-            ));
-        }
-        match parse_group_file(&self.group) {
-            Ok(records) => {
-                if let Some(record) = records.iter().find(|&r| r.name == name) {
-                    Ok(record.gid)
-                } else {
-                    Err(anyhow!("Failed to find name {} in /etc/group", name))
-                }
             }
             Err(inner_e) => Err(anyhow!("Failed to parse /etc/group - error {inner_e}")),
         }
@@ -317,38 +307,16 @@ impl Container {
                     "Failed to parse {} as u32, using it as a user name - error {outer_e}",
                     user
                 );
-                let (uid, _) = self
-                    .get_uid_gid_from_passwd_user(user.to_string().clone())
-                    .unwrap_or((0, 0));
-                uid
-            }
-        }
-    }
-
-    fn parse_group_string(&self, group: &str) -> u32 {
-        if group.is_empty() {
-            return 0;
-        }
-
-        match group.parse::<u32>() {
-            Ok(id) => {
-                warn!(
-                    concat!(
-                        "Parsed gid {} from OCI container image config, but not using it. ",
-                        "GIDs are only picked up by the runtime from /etc/passwd."
-                    ),
-                    id
-                );
-                0
-            }
-            // If the group is not a number, interpret it as a group name.
-            Err(outer_e) => {
-                debug!(
-                    "Failed to parse {} as u32, using it as a group name - error {outer_e}",
-                    group
-                );
-
-                self.get_gid_from_group_name(group).unwrap_or(0)
+                match self.get_uid_gid_from_passwd_user(user.to_string().clone()) {
+                    Ok((uid, _)) => uid,
+                    Err(err) => {
+                        warn!(
+                            "could not resolve named user {}, defaulting to uid 0: {}",
+                            user, err
+                        );
+                        0
+                    }
+                }
             }
         }
     }
@@ -374,10 +342,6 @@ impl Container {
          * 6. Be erroneus, somehow
          */
         if let Some(image_user) = &docker_config.User {
-            if self.passwd.is_empty() {
-                warn!("No /etc/passwd file is available, unable to parse gids from user");
-            }
-
             if !image_user.is_empty() {
                 if image_user.contains(':') {
                     debug!("Splitting Docker config user = {:?}", image_user);
@@ -392,22 +356,17 @@ impl Container {
                         debug!("Parsing uid from user[0] = {}", &user[0]);
                         process.User.UID = self.parse_user_string(user[0]);
 
-                        debug!("Parsing gid from user[1] = {:?}", user[1]);
-                        process.User.GID = self.parse_group_string(user[1]);
-
                         debug!(
                             "Overriding OCI container GID with UID:GID mapping from /etc/passwd"
                         );
-                        process.User.GID =
-                            self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
                     }
                 } else {
                     debug!("Parsing uid from image_user = {}", image_user);
                     process.User.UID = self.parse_user_string(image_user);
 
                     debug!("Using UID:GID mapping from /etc/passwd");
-                    process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
                 }
+                process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
             }
         }
 
@@ -616,12 +575,8 @@ pub fn add_verity_and_users_to_store(
         .truncate(false)
         .open(cache_file)?;
 
-    let mut data: Vec<ImageLayer> = if let Ok(vec) = serde_json::from_reader(read_file) {
-        vec
-    } else {
-        // Delete the malformed file here if it's present
-        Vec::new()
-    };
+    // Return empty vector if the file is malformed
+    let mut data: Vec<ImageLayer> = serde_json::from_reader(read_file).unwrap_or_default();
 
     // Add new data to the deserialized JSON
     data.push(ImageLayer {
@@ -647,7 +602,7 @@ pub fn add_verity_and_users_to_store(
     let mut writer = BufWriter::new(&file);
     writeln!(writer, "{}", serialized)?;
     writer.flush()?;
-    file.unlock()?;
+    fs2::FileExt::unlock(&file)?;
     Ok(())
 }
 
