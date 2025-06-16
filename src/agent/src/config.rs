@@ -23,6 +23,7 @@ const SERVER_ADDR_OPTION: &str = "agent.server_addr";
 const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const CDH_API_TIMOUT_OPTION: &str = "agent.cdh_api_timeout";
+const CDH_IMAGE_PULL_TIMEOUT_OPTION: &str = "agent.image_pull_timeout";
 const CDI_TIMEOUT_OPTION: &str = "agent.cdi_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
@@ -32,15 +33,7 @@ const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy"
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
-#[cfg(feature = "guest-pull")]
-const IMAGE_REGISTRY_AUTH_OPTION: &str = "agent.image_registry_auth";
 const SECURE_STORAGE_INTEGRITY_OPTION: &str = "agent.secure_storage_integrity";
-
-#[cfg(feature = "guest-pull")]
-const ENABLE_SIGNATURE_VERIFICATION: &str = "agent.enable_signature_verification";
-
-#[cfg(feature = "guest-pull")]
-const IMAGE_POLICY_FILE: &str = "agent.image_policy_file";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -71,6 +64,7 @@ const MEM_AGENT_COMPACT_FORCE_TIMES: &str = "agent.mem_agent_compact_force_times
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CDH_API_TIMEOUT: time::Duration = time::Duration::from_secs(50);
+const DEFAULT_IMAGE_PULL_TIMEOUT: time::Duration = time::Duration::from_secs(1200);
 const DEFAULT_CDI_TIMEOUT: time::Duration = time::Duration::from_secs(100);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
@@ -134,6 +128,7 @@ pub struct AgentConfig {
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
     pub cdh_api_timeout: time::Duration,
+    pub image_pull_timeout: time::Duration,
     pub cdi_timeout: time::Duration,
     pub debug_console_vport: i32,
     pub log_vport: i32,
@@ -147,13 +142,7 @@ pub struct AgentConfig {
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
     pub guest_components_procs: GuestComponentsProcs,
-    #[cfg(feature = "guest-pull")]
-    pub image_registry_auth: String,
     pub secure_storage_integrity: bool,
-    #[cfg(feature = "guest-pull")]
-    pub enable_signature_verification: bool,
-    #[cfg(feature = "guest-pull")]
-    pub image_policy_file: String,
     #[cfg(feature = "agent-policy")]
     pub policy_file: String,
     pub mem_agent: Option<MemAgentConfig>,
@@ -172,6 +161,7 @@ pub struct AgentConfigBuilder {
     pub log_level: Option<String>,
     pub hotplug_timeout: Option<time::Duration>,
     pub cdh_api_timeout: Option<time::Duration>,
+    pub image_pull_timeout: Option<time::Duration>,
     pub cdi_timeout: Option<time::Duration>,
     pub debug_console_vport: Option<i32>,
     pub log_vport: Option<i32>,
@@ -184,13 +174,7 @@ pub struct AgentConfigBuilder {
     pub no_proxy: Option<String>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
     pub guest_components_procs: Option<GuestComponentsProcs>,
-    #[cfg(feature = "guest-pull")]
-    pub image_registry_auth: Option<String>,
     pub secure_storage_integrity: Option<bool>,
-    #[cfg(feature = "guest-pull")]
-    pub enable_signature_verification: Option<bool>,
-    #[cfg(feature = "guest-pull")]
-    pub image_policy_file: Option<String>,
     #[cfg(feature = "agent-policy")]
     pub policy_file: Option<String>,
     pub mem_agent_enable: Option<bool>,
@@ -271,6 +255,7 @@ impl Default for AgentConfig {
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             cdh_api_timeout: DEFAULT_CDH_API_TIMEOUT,
+            image_pull_timeout: DEFAULT_IMAGE_PULL_TIMEOUT,
             cdi_timeout: DEFAULT_CDI_TIMEOUT,
             debug_console_vport: 0,
             log_vport: 0,
@@ -284,13 +269,7 @@ impl Default for AgentConfig {
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
             guest_components_procs: GuestComponentsProcs::default(),
-            #[cfg(feature = "guest-pull")]
-            image_registry_auth: String::from(""),
             secure_storage_integrity: false,
-            #[cfg(feature = "guest-pull")]
-            enable_signature_verification: false,
-            #[cfg(feature = "guest-pull")]
-            image_policy_file: String::from(""),
             #[cfg(feature = "agent-policy")]
             policy_file: String::from(""),
             mem_agent: None,
@@ -317,6 +296,7 @@ impl FromStr for AgentConfig {
         );
         config_override!(agent_config_builder, agent_config, hotplug_timeout);
         config_override!(agent_config_builder, agent_config, cdh_api_timeout);
+        config_override!(agent_config_builder, agent_config, image_pull_timeout);
         config_override!(agent_config_builder, agent_config, cdi_timeout);
         config_override!(agent_config_builder, agent_config, debug_console_vport);
         config_override!(agent_config_builder, agent_config, log_vport);
@@ -333,16 +313,6 @@ impl FromStr for AgentConfig {
             guest_components_rest_api
         );
         config_override!(agent_config_builder, agent_config, guest_components_procs);
-        #[cfg(feature = "guest-pull")]
-        {
-            config_override!(agent_config_builder, agent_config, image_registry_auth);
-            config_override!(
-                agent_config_builder,
-                agent_config,
-                enable_signature_verification
-            );
-            config_override!(agent_config_builder, agent_config, image_policy_file);
-        }
         config_override!(agent_config_builder, agent_config, secure_storage_integrity);
 
         #[cfg(feature = "agent-policy")]
@@ -496,6 +466,15 @@ impl AgentConfig {
             // ensure the timeout is a positive value
             parse_cmdline_param!(
                 param,
+                CDH_IMAGE_PULL_TIMEOUT_OPTION,
+                config.image_pull_timeout,
+                get_timeout,
+                |image_pull_timeout: &time::Duration| image_pull_timeout.as_secs() > 0
+            );
+
+            // ensure the timeout is a positive value
+            parse_cmdline_param!(
+                param,
                 CDI_TIMEOUT_OPTION,
                 config.cdi_timeout,
                 get_timeout,
@@ -557,27 +536,6 @@ impl AgentConfig {
                 config.guest_components_procs,
                 get_guest_components_procs_value
             );
-            #[cfg(feature = "guest-pull")]
-            {
-                parse_cmdline_param!(
-                    param,
-                    IMAGE_REGISTRY_AUTH_OPTION,
-                    config.image_registry_auth,
-                    get_string_value
-                );
-                parse_cmdline_param!(
-                    param,
-                    ENABLE_SIGNATURE_VERIFICATION,
-                    config.enable_signature_verification,
-                    get_bool_value
-                );
-                parse_cmdline_param!(
-                    param,
-                    IMAGE_POLICY_FILE,
-                    config.image_policy_file,
-                    get_string_value
-                );
-            }
             parse_cmdline_param!(
                 param,
                 SECURE_STORAGE_INTEGRITY_OPTION,
@@ -780,7 +738,10 @@ fn get_timeout(param: &str) -> Result<time::Duration> {
     ensure!(
         matches!(
             fields[0],
-            HOTPLUG_TIMOUT_OPTION | CDH_API_TIMOUT_OPTION | CDI_TIMEOUT_OPTION
+            HOTPLUG_TIMOUT_OPTION
+                | CDH_API_TIMOUT_OPTION
+                | CDH_IMAGE_PULL_TIMEOUT_OPTION
+                | CDI_TIMEOUT_OPTION
         ),
         ERR_INVALID_TIMEOUT_KEY
     );
@@ -901,11 +862,6 @@ mod tests {
         assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
-        #[cfg(feature = "guest-pull")]
-        {
-            assert!(!config.enable_signature_verification);
-            assert_eq!(config.image_policy_file, "");
-        }
     }
 
     #[test]
@@ -931,13 +887,7 @@ mod tests {
             no_proxy: &'a str,
             guest_components_rest_api: GuestComponentsFeatures,
             guest_components_procs: GuestComponentsProcs,
-            #[cfg(feature = "guest-pull")]
-            image_registry_auth: &'a str,
             secure_storage_integrity: bool,
-            #[cfg(feature = "guest-pull")]
-            enable_signature_verification: bool,
-            #[cfg(feature = "guest-pull")]
-            image_policy_file: &'a str,
             #[cfg(feature = "agent-policy")]
             policy_file: &'a str,
             mem_agent: Option<MemAgentConfig>,
@@ -961,13 +911,7 @@ mod tests {
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
                     guest_components_procs: GuestComponentsProcs::default(),
-                    #[cfg(feature = "guest-pull")]
-                    image_registry_auth: "",
                     secure_storage_integrity: false,
-                    #[cfg(feature = "guest-pull")]
-                    enable_signature_verification: false,
-                    #[cfg(feature = "guest-pull")]
-                    image_policy_file: "",
                     #[cfg(feature = "agent-policy")]
                     policy_file: "",
                     mem_agent: None,
@@ -1418,18 +1362,6 @@ mod tests {
                 guest_components_procs: GuestComponentsProcs::None,
                 ..Default::default()
             },
-            #[cfg(feature = "guest-pull")]
-            TestData {
-                contents: "agent.image_registry_auth=file:///root/.docker/config.json",
-                image_registry_auth: "file:///root/.docker/config.json",
-                ..Default::default()
-            },
-            #[cfg(feature = "guest-pull")]
-            TestData {
-                contents: "agent.image_registry_auth=kbs:///default/credentials/test",
-                image_registry_auth: "kbs:///default/credentials/test",
-                ..Default::default()
-            },
             TestData {
                 contents: "",
                 secure_storage_integrity: false,
@@ -1453,24 +1385,6 @@ mod tests {
             TestData {
                 contents: "agent.secure_storage_integrity=0",
                 secure_storage_integrity: false,
-                ..Default::default()
-            },
-            #[cfg(feature = "guest-pull")]
-            TestData {
-                contents: "agent.enable_signature_verification=true",
-                enable_signature_verification: true,
-                ..Default::default()
-            },
-            #[cfg(feature = "guest-pull")]
-            TestData {
-                contents: "agent.image_policy_file=kbs:///default/image-policy/test",
-                image_policy_file: "kbs:///default/image-policy/test",
-                ..Default::default()
-            },
-            #[cfg(feature = "guest-pull")]
-            TestData {
-                contents: "agent.image_policy_file=file:///etc/image-policy.json",
-                image_policy_file: "file:///etc/image-policy.json",
                 ..Default::default()
             },
             #[cfg(feature = "agent-policy")]
@@ -1575,16 +1489,6 @@ mod tests {
                 "{}",
                 msg
             );
-            #[cfg(feature = "guest-pull")]
-            {
-                assert_eq!(d.image_registry_auth, config.image_registry_auth, "{}", msg);
-                assert_eq!(
-                    d.enable_signature_verification, config.enable_signature_verification,
-                    "{}",
-                    msg
-                );
-                assert_eq!(d.image_policy_file, config.image_policy_file, "{}", msg);
-            }
             assert_eq!(
                 d.secure_storage_integrity, config.secure_storage_integrity,
                 "{}",
@@ -1722,6 +1626,7 @@ Caused by:
     )))]
     #[case("agent.chd_api_timeout=1", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
     #[case("agent.cdh_api_timeout=600", Ok(time::Duration::from_secs(600)))]
+    #[case("agent.image_pull_timeout=1200", Ok(time::Duration::from_secs(1200)))]
     #[case("agent.cdi_timeout=320", Ok(time::Duration::from_secs(320)))]
     fn test_timeout(#[case] param: &str, #[case] expected: Result<time::Duration>) {
         let result = get_timeout(param);

@@ -24,7 +24,6 @@ use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
-#[cfg(feature = "guest-pull")]
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 use crate::mount::{baremount, is_mounted, remove_mounts};
@@ -36,7 +35,6 @@ mod bind_watcher_handler;
 mod block_handler;
 mod ephemeral_handler;
 mod fs_handler;
-#[cfg(feature = "guest-pull")]
 mod image_pull_handler;
 mod local_handler;
 
@@ -148,7 +146,6 @@ lazy_static! {
             Arc::new(BindWatcherHandler {}),
             #[cfg(target_arch = "s390x")]
             Arc::new(self::block_handler::VirtioBlkCcwHandler {}),
-            #[cfg(feature = "guest-pull")]
             Arc::new(ImagePullHandler {}),
         ];
 
