@@ -106,6 +106,9 @@ jobs:
           - "make static-checks"
     env:
       GOPATH: ${{ github.workspace }}
+    permissions:
+      contents: read  # for checkout
+      packages: write # for push to ghcr.io
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -132,6 +135,10 @@ jobs:
           cd "${GOPATH}/src/github.com/${{ github.repository }}"
           ./tests/install_opa.sh
       - name: Install regorus
+        env:
+          ARTEFACT_REPOSITORY: "${{ github.repository }}"
+          ARTEFACT_REGISTRY_USERNAME: "${{ github.actor }}"
+          ARTEFACT_REGISTRY_PASSWORD: "${{ secrets.GITHUB_TOKEN }}"
         run: |
           "${GOPATH}/src/github.com/${{ github.repository }}/tests/install_regorus.sh"
       - name: Run check
