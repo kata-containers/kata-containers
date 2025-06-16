@@ -1657,7 +1657,13 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 
 		queues := int(q.config.NumVCPUs())
 
-		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern, ""); err != nil {
+		// Make Independent IOThread 0 as the virtio-blk default.
+		var iothreadID string
+		if q.config.EnableIOThreads && q.config.IndepIOThreads > 0 {
+			iothreadID = fmt.Sprintf("%s_%d", indepIOThreadsPrefix, 0)
+		}
+
+		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern, iothreadID); err != nil {
 			return err
 		}
 	case q.config.BlockDeviceDriver == config.VirtioBlockCCW:
