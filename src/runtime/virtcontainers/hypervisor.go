@@ -609,7 +609,7 @@ type HypervisorConfig struct {
 	DisableBlockDeviceUse bool
 
 	// EnableIOThreads enables IO to be processed in a separate thread.
-	// Supported currently for virtio-scsi driver.
+	// Supported currently for virtio-scsi driver and virtio-blk(based on IndepIOThreads) driver.
 	EnableIOThreads bool
 
 	// Independent IOThreads enables IO to be processed in a separate thread.
