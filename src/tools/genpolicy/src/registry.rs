@@ -7,13 +7,13 @@
 #![allow(non_snake_case)]
 
 use crate::containerd;
+use crate::layers_cache::ImageLayersCache;
 use crate::policy;
 use crate::utils::Config;
 use crate::verity;
 
 use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
-use fs2::FileExt;
 use log::{debug, info, warn, LevelFilter};
 use oci_client::{
     client::{linux_amd64_resolver, ClientConfig, ClientProtocol},
@@ -23,10 +23,7 @@ use oci_client::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{
-    collections::BTreeMap, fs::OpenOptions, io, io::BufWriter, io::Read, io::Seek, io::Write,
-    path::Path,
-};
+use std::{collections::BTreeMap, io, io::Read, io::Seek, io::Write, path::Path};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
@@ -165,7 +162,7 @@ impl Container {
                 debug!("config_layer: {:?}", &config_layer);
 
                 let image_layers = get_image_layers(
-                    config.layers_cache_file_path.clone(),
+                    &config.layers_cache,
                     &mut client,
                     &reference,
                     &manifest,
@@ -439,7 +436,7 @@ impl Container {
 }
 
 async fn get_image_layers(
-    layers_cache_file_path: Option<String>,
+    layers_cache: &ImageLayersCache,
     client: &mut Client,
     reference: &Reference,
     manifest: &manifest::OciImageManifest,
@@ -455,20 +452,16 @@ async fn get_image_layers(
             || layer.media_type.eq(manifest::IMAGE_LAYER_GZIP_MEDIA_TYPE)
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let (verity_hash, passwd, group) = get_verity_and_users(
-                    layers_cache_file_path.clone(),
+                let mut imageLayer = get_verity_and_users(
+                    layers_cache,
                     client,
                     reference,
                     &layer.digest,
                     &config_layer.rootfs.diff_ids[layer_index].clone(),
                 )
                 .await?;
-                layers.push(ImageLayer {
-                    diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash: verity_hash.to_owned(),
-                    passwd: passwd.to_owned(),
-                    group: group.to_owned(),
-                });
+                imageLayer.diff_id = config_layer.rootfs.diff_ids[layer_index].clone();
+                layers.push(imageLayer);
             } else {
                 return Err(anyhow!("Too many Docker gzip layers"));
             }
@@ -481,12 +474,18 @@ async fn get_image_layers(
 }
 
 async fn get_verity_and_users(
-    layers_cache_file_path: Option<String>,
+    layers_cache: &ImageLayersCache,
     client: &mut Client,
     reference: &Reference,
     layer_digest: &str,
     diff_id: &str,
-) -> Result<(String, String, String)> {
+) -> Result<ImageLayer> {
+    if let Some(layer) = layers_cache.get_layer(diff_id) {
+        info!("Using cache file");
+        info!("dm-verity root hash: {}", layer.verity_hash);
+        return Ok(layer);
+    }
+
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
     // Use file names supported by both Linux and Windows.
@@ -497,140 +496,38 @@ async fn get_verity_and_users(
     let mut compressed_path = decompressed_path.clone();
     compressed_path.set_extension("gz");
 
-    let mut verity_hash = "".to_string();
-    let mut passwd = "".to_string();
-    let mut group = "".to_string();
-    let mut error_message = "".to_string();
-    let mut error = false;
+    if let Err(e) = create_decompressed_layer_file(
+        client,
+        reference,
+        layer_digest,
+        &decompressed_path,
+        &compressed_path,
+    )
+    .await
+    {
+        temp_dir.close()?;
+        bail!(format!(
+            "Failed to create verity hash for {layer_digest}, error {e}"
+        ));
+    };
 
-    // get value from store and return if it exists
-    if let Some(path) = layers_cache_file_path.as_ref() {
-        (verity_hash, passwd, group) = read_verity_and_users_from_store(path, diff_id)?;
-        info!("Using cache file");
-        info!("dm-verity root hash: {verity_hash}");
-    }
-
-    // create the layer files
-    if verity_hash.is_empty() {
-        if let Err(e) = create_decompressed_layer_file(
-            client,
-            reference,
-            layer_digest,
-            &decompressed_path,
-            &compressed_path,
-        )
-        .await
-        {
-            error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
-            error = true
-        };
-
-        if !error {
-            match get_verity_hash_and_users(&decompressed_path) {
-                Err(e) => {
-                    error_message = format!("Failed to get verity hash {e}");
-                    error = true;
-                }
-                Ok(res) => {
-                    (verity_hash, passwd, group) = res;
-                    if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_and_users_to_store(
-                            path,
-                            diff_id,
-                            &verity_hash,
-                            &passwd,
-                            &group,
-                        )?;
-                    }
-                    info!("dm-verity root hash: {verity_hash}");
-                }
-            }
-        }
-    }
-
-    temp_dir.close()?;
-    if error {
-        // remove the cache file if we're using it
-        if let Some(path) = layers_cache_file_path.as_ref() {
-            std::fs::remove_file(path)?;
-        }
-        bail!(error_message);
-    }
-    Ok((verity_hash, passwd, group))
-}
-
-// the store is a json file that matches layer hashes to verity hashes
-pub fn add_verity_and_users_to_store(
-    cache_file: &str,
-    diff_id: &str,
-    verity_hash: &str,
-    passwd: &str,
-    group: &str,
-) -> Result<()> {
-    // open the json file in read mode, create it if it doesn't exist
-    let read_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(cache_file)?;
-
-    // Return empty vector if the file is malformed
-    let mut data: Vec<ImageLayer> = serde_json::from_reader(read_file).unwrap_or_default();
-
-    // Add new data to the deserialized JSON
-    data.push(ImageLayer {
-        diff_id: diff_id.to_string(),
-        verity_hash: verity_hash.to_string(),
-        passwd: passwd.to_string(),
-        group: group.to_string(),
-    });
-
-    // Serialize in pretty format
-    let serialized = serde_json::to_string_pretty(&data)?;
-
-    // Open the JSON file to write
-    let file = OpenOptions::new().write(true).open(cache_file)?;
-
-    // try to lock the file, if it fails, get the error
-    let result = file.try_lock_exclusive();
-    if result.is_err() {
-        warn!("Waiting to lock file: {cache_file}");
-        file.lock_exclusive()?;
-    }
-    // Write the serialized JSON to the file
-    let mut writer = BufWriter::new(&file);
-    writeln!(writer, "{}", serialized)?;
-    writer.flush()?;
-    fs2::FileExt::unlock(&file)?;
-    Ok(())
-}
-
-// helper function to read the verity hash from the store
-// returns empty string if not found or file does not exist
-pub fn read_verity_and_users_from_store(
-    cache_file: &str,
-    diff_id: &str,
-) -> Result<(String, String, String)> {
-    match OpenOptions::new().read(true).open(cache_file) {
-        Ok(file) => match serde_json::from_reader(file) {
-            Result::<Vec<ImageLayer>, _>::Ok(layers) => {
-                for layer in layers {
-                    if layer.diff_id == diff_id {
-                        return Ok((layer.verity_hash, layer.passwd, layer.group));
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("read_verity_and_users_from_store: failed to read cached image layers: {e}");
-            }
-        },
+    match get_verity_hash_and_users(&decompressed_path) {
         Err(e) => {
-            info!("read_verity_and_users_from_store: failed to open cache file: {e}");
+            temp_dir.close()?;
+            bail!(format!("Failed to get verity hash {e}"));
+        }
+        Ok((verity_hash, passwd, group)) => {
+            info!("dm-verity root hash: {verity_hash}");
+            let layer = ImageLayer {
+                diff_id: diff_id.to_string(),
+                verity_hash,
+                passwd,
+                group,
+            };
+            layers_cache.insert_layer(&layer);
+            Ok(layer)
         }
     }
-
-    Ok((String::new(), String::new(), String::new()))
 }
 
 async fn create_decompressed_layer_file(
