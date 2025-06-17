@@ -1,0 +1,110 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+        "env": {
+            "properties": {
+                "agentHttpsProxy": {
+                    "type": "string"
+                },
+                "agentNoProxy": {
+                    "type": "string"
+                },
+                "allowedHypervisorAnnotations": {
+                    "type": "string"
+                },
+                "createDefaultRuntimeClass": {
+                    "description": "whether to create a default runtime class for kata",
+                    "type": "string"
+                },
+                "createRuntimeClasses": {
+                    "description": "whether to create runtime class objects by default",
+                    "type": "string"
+                },
+                "debug": {
+                    "description": "whether to enable debug mode",
+                    "enum": [
+                        "false",
+                        "true"
+                    ],
+                    "type": "string"
+                },
+                "defaultShim": {
+                    "description": "default shim to utilize",
+                    "type": "string"
+                },
+                "hostOS": {
+                    "type": "string"
+                },
+                "installationPrefix": {
+                    "type": "string"
+                },
+                "multiInstallSuffix": {
+                    "type": "string"
+                },
+                "pullTypeMapping": {
+                    "type": "string"
+                },
+                "shims": {
+                    "description": "space separated string containing supported shims",
+                    "type": "string"
+                },
+                "snapshotterHandlerMapping": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "debug",
+                "shims",
+                "defaultShim",
+                "createRuntimeClasses",
+                "createDefaultRuntimeClass"
+            ],
+            "type": "object"
+        },
+        "image": {
+            "properties": {
+                "reference": {
+                    "description": "image reference where kata-deploy is stored",
+                    "type": "string"
+                },
+                "tag": {
+                    "description": "tag to use for the kata-deploy image",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "reference"
+            ],
+            "type": "object"
+        },
+        "imagePullPolicy": {
+            "description": "sets deployment imagePullPolicy to determine when the image should be pulled",
+            "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+            ],
+            "type": "string"
+        },
+        "imagePullSecrets": {
+            "description": "a list of imagePullSecrets to utilize when pulling an image",
+            "type": "array"
+        },
+        "k8sDistribution": {
+            "description": "type of underlying kubernetes platform",
+            "enum": [
+                "k8s",
+                "k3s",
+                "rke2",
+                "k0s",
+                "microk8s"
+            ],
+            "type": "string"
+        }
+    },
+    "required": [
+        "imagePullPolicy",
+        "k8sDistribution"
+    ],
+    "type": "object"
+}
