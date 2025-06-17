@@ -218,7 +218,7 @@ const (
 	DisableBlockDeviceUse = kataAnnotHypervisorPrefix + "disable_block_device_use"
 
 	// EnableIOThreads is a sandbox annotation to enable IO to be processed in a separate thread.
-	// Supported currently for virtio-scsi driver.
+	// Supported currently for virtio-scsi and virtio-blk(based on IndepIOThreads) driver.
 	EnableIOThreads = kataAnnotHypervisorPrefix + "enable_iothreads"
 
 	// Independent IOThreads enables IO to be processed in a separate thread, it is
