@@ -681,8 +681,50 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
-        Ok((old_vcpu, new_vcpu))
+    pub(crate) async fn resize_vcpu(
+        &self,
+        old_vcpus: u32,
+        mut new_vcpus: u32,
+    ) -> Result<(u32, u32)> {
+        info!(
+            sl!(),
+            "cloud hypervisor resize_vcpu(): {} -> {}", old_vcpus, new_vcpus
+        );
+
+        if new_vcpus == 0 {
+            return Err(anyhow!("resize to 0 vcpus requested"));
+        }
+
+        if new_vcpus > self.config.cpu_info.default_maxvcpus {
+            warn!(
+                sl!(),
+                "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
+            new_vcpus = self.config.cpu_info.default_maxvcpus;
+        }
+
+        if new_vcpus == old_vcpus {
+            return Ok((old_vcpus, new_vcpus));
+        }
+
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let vmresize = VmResize {
+            desired_vcpus: Some(new_vcpus as u8),
+            ..Default::default()
+        };
+
+        cloud_hypervisor_vm_resize(
+            socket.try_clone().context("failed to clone socket")?,
+            vmresize,
+        )
+        .await
+        .context("resize vcpus")?;
+
+        Ok((old_vcpus, new_vcpus))
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
