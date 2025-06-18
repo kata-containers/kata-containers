@@ -419,6 +419,7 @@ jobs:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
     strategy:
+      fail-fast: false
       matrix:
         params: [
           { containerd_version: lts,    vmm: clh              },
@@ -448,6 +449,7 @@ jobs:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-s390x
     strategy:
+      fail-fast: false
       matrix:
         params: [
           { containerd_version: active, vmm: qemu            },
@@ -467,6 +469,7 @@ jobs:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-ppc64le
     strategy:
+      fail-fast: false
       matrix:
         params: [
           { containerd_version: active, vmm: qemu },
@@ -485,6 +488,7 @@ jobs:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-arm64
     strategy:
+      fail-fast: false
       matrix:
         params: [
           { containerd_version: active, vmm: qemu },
