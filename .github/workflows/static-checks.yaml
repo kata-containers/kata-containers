@@ -137,3 +137,8 @@ jobs:
         run: |
           export PATH="${PATH}:${GOPATH}/bin"
           cd "${GOPATH}/src/github.com/${{ github.repository }}" && ${{ matrix.cmd }}
+
+  govulncheck:
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    uses: ./.github/workflows/govulncheck.yaml
