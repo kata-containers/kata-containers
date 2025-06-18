@@ -122,25 +122,25 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       ppc64le:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "jammy"  # 22.04 lTS
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -149,10 +149,10 @@ assets:
           version: "3.0"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
 
   initrd:
     description: |
@@ -165,21 +165,21 @@ assets:
         version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       x86_64:
         name: "alpine"
         version: "3.18"
@@ -188,10 +188,10 @@ assets:
           version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
