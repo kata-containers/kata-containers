@@ -7,15 +7,18 @@ use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
-use crate::utils::{get_jailer_root, get_sandbox_path};
+use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
 use crate::VM_ROOTFS_DRIVER_BLK;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
-use ch_config::ch_api::{
-    cloud_hypervisor_vm_create, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
-    cloud_hypervisor_vmm_shutdown,
+use ch_config::{
+    ch_api::{
+        cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_resize,
+        cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping, cloud_hypervisor_vmm_shutdown,
+    },
+    VmResize,
 };
 use ch_config::{guest_protection_is_tdx, NamedHypervisorConfig, VmConfig};
 use core::future::poll_fn;
@@ -748,17 +751,99 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
-        self._guest_memory_block_size_mb = size;
+        self.guest_memory_block_size_mb = bytes_to_megs(size as u64);
     }
 
     pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
-        self._guest_memory_block_size_mb
+        self.guest_memory_block_size_mb
     }
 
-    pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        warn!(sl!(), "CH memory resize not implemented - see https://github.com/kata-containers/kata-containers/issues/8801");
+    pub(crate) async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
 
-        Ok((0, MemoryConfig::default()))
+        let vminfo =
+            cloud_hypervisor_vm_info(socket.try_clone().context("failed to clone socket")?)
+                .await
+                .context("get vminfo")?;
+
+        let current_mem_size = vminfo.config.memory.size;
+        let new_total_mem = megs_to_bytes(new_mem_mb);
+
+        info!(
+            sl!(),
+            "cloud-hypervisor::resize_memory(): asked to resize memory to {} MB, current memory is {} MB", new_mem_mb, bytes_to_megs(current_mem_size)
+        );
+
+        // Early Check to verify if boot memory is the same as requested
+        if current_mem_size == new_total_mem {
+            info!(sl!(), "VM alreay has requested memory");
+            return Ok((new_mem_mb, MemoryConfig::default()));
+        }
+
+        if current_mem_size > new_total_mem {
+            info!(sl!(), "Remove memory is not supported, nothing to do");
+            return Ok((new_mem_mb, MemoryConfig::default()));
+        }
+
+        let guest_mem_block_size = megs_to_bytes(self.guest_memory_block_size_mb);
+
+        let mut new_hotplugged_mem = new_total_mem - current_mem_size;
+
+        info!(
+            sl!(),
+            "new hotplugged mem before alignment: {} B ({} MB), guest_mem_block_size: {} MB",
+            new_hotplugged_mem,
+            bytes_to_megs(new_hotplugged_mem),
+            bytes_to_megs(guest_mem_block_size)
+        );
+
+        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        if is_unaligned {
+            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
+                new_hotplugged_mem,
+                guest_mem_block_size,
+            )
+            .ok_or(anyhow!(format!(
+                "alignment of {} B to the block size of {} B failed",
+                new_hotplugged_mem, guest_mem_block_size
+            )))?
+        }
+
+        let new_total_mem_aligned = new_hotplugged_mem + current_mem_size;
+
+        let max_total_mem = megs_to_bytes(self.config.memory_info.default_maxmemory);
+        if new_total_mem_aligned > max_total_mem {
+            return Err(anyhow!(
+                "requested memory ({} MB) is greater than maximum allowed ({} MB)",
+                bytes_to_megs(new_total_mem_aligned),
+                self.config.memory_info.default_maxmemory
+            ));
+        }
+
+        info!(
+            sl!(),
+            "hotplugged mem from {} MB to {} MB)",
+            bytes_to_megs(current_mem_size),
+            bytes_to_megs(new_total_mem_aligned)
+        );
+
+        let vmresize = VmResize {
+            desired_ram: Some(new_total_mem_aligned),
+            ..Default::default()
+        };
+
+        cloud_hypervisor_vm_resize(
+            socket.try_clone().context("failed to clone socket")?,
+            vmresize,
+        )
+        .await
+        .context("resize memory")?;
+
+        Ok((new_mem_mb, MemoryConfig::default()))
     }
 }
 
