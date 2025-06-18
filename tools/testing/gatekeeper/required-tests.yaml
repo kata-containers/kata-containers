@@ -17,7 +17,6 @@ paths:
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
   - "^\\.github/workflows/": []
-  - "^tools/testing/gatekeeper/required-tests.yaml": []
   - "\\.md$": ["static"]
   # TODO: Expand filters
   # Sources
