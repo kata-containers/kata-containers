@@ -66,6 +66,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/release-ppc64le.yaml
     with:
       target-arch: ppc64le
