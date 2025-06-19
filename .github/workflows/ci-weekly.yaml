@@ -119,3 +119,6 @@ jobs:
       AZ_APPID: ${{ secrets.AZ_APPID }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+    permissions:
+      contents: read
+      id-token: write

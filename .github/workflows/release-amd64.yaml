@@ -20,6 +20,11 @@ jobs:
       stage: release
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
 
   kata-deploy:
     needs: build-kata-static-tarball-amd64
