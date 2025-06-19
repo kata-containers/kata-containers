@@ -258,7 +258,7 @@ jobs:
         run: |
           release_version=$(./tools/packaging/release/release.sh release-version)
           helm push "kata-deploy-${release_version}.tgz" oci://quay.io/kata-containers/kata-deploy-charts
-          helm push "kata-deploy-${release-version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
+          helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
 
   publish-release:
     needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
