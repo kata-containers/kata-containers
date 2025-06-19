@@ -425,7 +425,7 @@ impl VirtSandbox {
                     id: "tdx".to_owned(),
                     firmware: hypervisor_config.boot_info.firmware.clone(),
                     qgs_port: hypervisor_config.security_info.qgs_port,
-                    mrconfigid: None,
+                    mrconfigid: init_data,
                     debug: false,
                 })))
             },
