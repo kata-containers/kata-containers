@@ -60,6 +60,11 @@ impl InitData {
         }
     }
 
+    /// get coco data
+    pub fn get_coco_data(&self, key: &str) -> Option<&String> {
+        self.data.get(key)
+    }
+
     /// insert data items
     pub fn insert_data(&mut self, key: impl Into<String>, value: impl Into<String>) {
         self.data.insert(key.into(), value.into());
