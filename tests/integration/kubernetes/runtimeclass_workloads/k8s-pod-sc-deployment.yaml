@@ -30,7 +30,7 @@ spec:
         runAsGroup: 2000
       containers:
       - name: master
-        image: quay.io/opstree/redis@sha256:2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48
+        image: quay.io/opstree/redis:v7.2.7
         resources:
           requests:
             cpu: 100m
