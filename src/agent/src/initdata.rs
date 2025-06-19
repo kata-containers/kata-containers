@@ -15,13 +15,17 @@ use anyhow::{bail, Context, Result};
 use async_compression::tokio::bufread::GzipDecoder;
 use base64::{engine::general_purpose::STANDARD, Engine};
 use const_format::concatcp;
-use serde::Deserialize;
+use kata_types::initdata::InitData;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use slog::Logger;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 /// This is the target directory to store the extracted initdata.
 pub const INITDATA_PATH: &str = "/run/confidential-containers/initdata";
+
+const AA_CONFIG_KEY: &str = "aa.toml";
+const CDH_CONFIG_KEY: &str = "cdh.toml";
+const POLICY_KEY: &str = "policy.rego";
 
 /// The path of AA's config file
 pub const AA_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/aa.toml");
@@ -31,30 +35,6 @@ pub const CDH_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/cdh.toml");
 
 /// Magic number of initdata device
 pub const INITDATA_MAGIC_NUMBER: &[u8] = b"initdata";
-
-/// Now only initdata `0.1.0` is defined.
-const INITDATA_VERSION: &str = "0.1.0";
-
-/// Initdata defined in
-/// <https://github.com/confidential-containers/trustee/blob/47d7a2338e0be76308ac19be5c0c172c592780aa/kbs/docs/initdata.md>
-#[derive(Deserialize)]
-pub struct Initdata {
-    version: String,
-    algorithm: String,
-    data: DefinedFields,
-}
-
-/// Well-defined keys for initdata of kata/CoCo
-#[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
-pub struct DefinedFields {
-    #[serde(rename = "aa.toml")]
-    aa_config: Option<String>,
-    #[serde(rename = "cdh.toml")]
-    cdh_config: Option<String>,
-    #[serde(rename = "policy.rego")]
-    policy: Option<String>,
-}
 
 async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
     let dev_dir = Path::new("/dev");
@@ -137,29 +117,26 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
         .await
         .inspect_err(|e| error!(logger, "Failed to read initdata: {e:?}"))?;
 
-    let initdata: Initdata =
+    let initdata: InitData =
         toml::from_slice(&initdata_content).context("parse initdata failed")?;
-    info!(logger, "Initdata version: {}", initdata.version);
+    info!(logger, "Initdata version: {}", initdata.version());
+    initdata.validate()?;
 
-    if initdata.version != INITDATA_VERSION {
-        bail!("Unsupported initdata version");
-    }
-
-    let digest = match &initdata.algorithm[..] {
+    let digest = match initdata.algorithm() {
         "sha256" => Sha256::digest(&initdata_content).to_vec(),
         "sha384" => Sha384::digest(&initdata_content).to_vec(),
         "sha512" => Sha512::digest(&initdata_content).to_vec(),
         others => bail!("Unsupported hash algorithm {others}"),
     };
 
-    if let Some(config) = initdata.data.aa_config {
+    if let Some(config) = initdata.get_coco_data(AA_CONFIG_KEY) {
         tokio::fs::write(AA_CONFIG_PATH, config)
             .await
             .context("write aa config failed")?;
         info!(logger, "write AA config from initdata");
     }
 
-    if let Some(config) = initdata.data.cdh_config {
+    if let Some(config) = initdata.get_coco_data(CDH_CONFIG_KEY) {
         tokio::fs::write(CDH_CONFIG_PATH, config)
             .await
             .context("write cdh config failed")?;
@@ -170,7 +147,7 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
 
     let res = InitdataReturnValue {
         digest,
-        _policy: initdata.data.policy,
+        _policy: initdata.get_coco_data(POLICY_KEY).cloned(),
     };
 
     Ok(Some(res))
