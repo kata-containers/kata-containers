@@ -42,7 +42,9 @@ fn cap_vec2hashset(caps: Vec<String>) -> HashSet<oci::Capability> {
         .map(|cap: &String| {
             // cap might be JSON-encoded
             let decoded: &str = serde_json::from_str(cap).unwrap_or(cap);
-            decoded.strip_prefix("CAP_").unwrap_or(decoded)
+            decoded
+                .strip_prefix("CAP_")
+                .unwrap_or(decoded)
                 .parse::<oci::Capability>()
                 .unwrap_or_else(|_| panic!("Failed to parse {:?} to Enum Capability", cap))
         })
@@ -1318,8 +1320,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_cap_vec2hashset_bad() {
-        cap_vec2hashset(vec![
-            "CAP_DOES_NOT_EXIST".to_string(),
-        ]);
+        cap_vec2hashset(vec!["CAP_DOES_NOT_EXIST".to_string()]);
     }
 }

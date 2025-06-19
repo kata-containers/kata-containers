@@ -1,4 +1,4 @@
-name: CI | Run cri-containerd tests on ppc64le
+name: CI | Run cri-containerd tests
 
 permissions:
   contents: read
@@ -16,27 +16,39 @@ on:
         required: false
         type: string
         default: ""
+      runner:
+        description: The runner to execute the workflow on.
+        required: true
+        type: string
+      arch:
+        description: The arch of the tarball.
+        required: true
+        type: string
+      containerd_version:
+        description: The version of containerd for testing.
+        required: true
+        type: string
+      vmm:
+        description: The kata hypervisor for testing.
+        required: true
+        type: string
 
 jobs:
   run-cri-containerd:
+    name: run-cri-containerd-${{ inputs.arch }} (${{ inputs.containerd_version }}, ${{ inputs.vmm }})
     strategy:
-      # We can set this to true whenever we're 100% sure that
-      # the all the tests are not flaky, otherwise we'll fail
-      # all the tests due to a single flaky instance
       fail-fast: false
-      matrix:
-        containerd_version: ['active']
-        vmm: ['qemu']
-    runs-on: ppc64le
+    runs-on: ${{ inputs.runner }}
     env:
-      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      CONTAINERD_VERSION: ${{ inputs.containerd_version }}
       GOPATH: ${{ github.workspace }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KATA_HYPERVISOR: ${{ inputs.vmm }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -48,14 +60,15 @@ jobs:
         timeout-minutes: 15
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
-      - name: get-kata-tarball
+      - name: get-kata-tarball for ${{ inputs.arch }}
         uses: actions/download-artifact@v4
         with:
-          name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
+          name: kata-static-tarball-${{ inputs.arch }}${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
         run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
 
-      - name: Run cri-containerd tests
+      - name: Run cri-containerd tests for ${{ inputs.arch }}
+        timeout-minutes: 10
         run: bash tests/integration/cri-containerd/gha-run.sh run

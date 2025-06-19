@@ -14,6 +14,7 @@ use async_trait::async_trait;
 pub enum ProtectionDeviceConfig {
     SevSnp(SevSnpConfig),
     Se,
+    Tdx(TdxConfig),
 }
 
 #[derive(Debug, Clone)]
@@ -21,6 +22,20 @@ pub struct SevSnpConfig {
     pub is_snp: bool,
     pub cbitpos: u32,
     pub firmware: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct TdxConfig {
+    // Object ID
+    pub id: String,
+    // Firmware path
+    pub firmware: String,
+    // Quote Qeneration Socket port
+    pub qgs_port: u32,
+    // mrconfigid
+    pub mrconfigid: Option<String>,
+    // Debug mode
+    pub debug: bool,
 }
 
 #[derive(Debug, Clone)]

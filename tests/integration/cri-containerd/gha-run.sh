@@ -16,8 +16,16 @@ source "${cri_containerd_dir}/../../common.bash"
 function install_dependencies() {
 	info "Installing the dependencies needed for running the cri-containerd tests"
 
+	# Remove go if it's installed as it conflicts with another version of go
+	sudo apt-get remove -y golang-* || true
+	sudo rm -rf /usr/local/go
+
 	# Remove Docker if it's installed as it conflicts with podman-docker
 	sudo apt-get remove -y docker-ce-cli || true
+
+	# Remove containerd if it's installed as it conflicts with another version of containerd
+	sudo apt-get remove -y containerd containerd.io || true
+	sudo rm -rf /etc/systemd/system/containerd.service
 
 	# Dependency list of projects that we can rely on the system packages
 	# - build-essential

@@ -21,8 +21,10 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.23.7
+        go-version: 1.23.10
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        persist-credentials: false
     - name: Build utils
       run: ./ci/darwin-test.sh

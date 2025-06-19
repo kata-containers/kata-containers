@@ -37,6 +37,11 @@ test:
 install:
 	@echo "PowerPC 64 LE is not currently supported"
 	exit 0
+else ifeq ($(ARCH), riscv64gc)
+default: runtime show-header
+test:
+	@echo "RISC-V 64 is not currently supported"
+	exit 0
 else
 ##TARGET default: build code
 default: runtime show-header
@@ -176,6 +181,7 @@ DEFVFIOMODE := guest-kernel
 DEFBINDMOUNTS := []
 DEFDANCONF := /run/kata-containers/dans
 DEFFORCEGUESTPULL := false
+QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT := 4050
 SED = sed
 CLI_DIR = cmd
 SHIMV2 = containerd-shim-kata-v2
@@ -505,6 +511,7 @@ USER_VARS += KATA_INSTALL_OWNER
 USER_VARS += KATA_INSTALL_CFG_PERMS
 USER_VARS += DEFDANCONF
 USER_VARS += DEFFORCEGUESTPULL
+USER_VARS += QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \

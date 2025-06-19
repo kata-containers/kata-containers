@@ -16,7 +16,7 @@ mod virtio_net;
 mod virtio_vsock;
 
 pub use port_device::{PCIePortDevice, PortDeviceConfig};
-pub use protection_device::{ProtectionDevice, ProtectionDeviceConfig, SevSnpConfig};
+pub use protection_device::{ProtectionDevice, ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 pub use vfio::{
     bind_device_to_host, bind_device_to_vfio, get_vfio_device, HostDevice, VfioBusMode, VfioConfig,
     VfioDevice,

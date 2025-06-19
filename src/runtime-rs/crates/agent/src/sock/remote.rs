@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{os::unix::prelude::AsRawFd, path::Path};
+use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -26,27 +26,39 @@ impl Remote {
 #[async_trait]
 impl Sock for Remote {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream> {
+        let mut last_err = None;
         let retry_times = config.reconnect_timeout_ms / config.dial_timeout_ms;
+
         for i in 0..retry_times {
             match connect_helper(&self.path).await {
                 Ok(stream) => {
-                    info!(
-                        sl!(),
-                        "remote connect success on {} current client fd {}",
-                        i,
-                        stream.as_raw_fd()
-                    );
+                    info!(sl!(), "remote sock: connected to {:?}", self);
                     return Ok(Stream::Unix(stream));
                 }
                 Err(err) => {
-                    debug!(sl!(), "remote connect on {} err : {:?}", i, err);
+                    trace!(
+                        sl!(),
+                        "remote sock: failed to connect to {:?}, err {:?}, attempts {}, will retry after {} ms",
+                        self,
+                        err,
+                        i,
+                        config.dial_timeout_ms
+                    );
+                    last_err = Some(err);
                     tokio::time::sleep(std::time::Duration::from_millis(config.dial_timeout_ms))
                         .await;
                     continue;
                 }
             }
         }
-        Err(anyhow!("cannot connect to agent ttrpc server {:?}", config))
+
+        // Safe to unwrap the last_err, as this line will be unreachable if
+        // no errors occurred.
+        Err(anyhow!(
+            "remote sock: failed to connect to {:?}, err {:?}",
+            self,
+            last_err.unwrap()
+        ))
     }
 }
 

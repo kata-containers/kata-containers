@@ -51,7 +51,7 @@ impl SlotFn {
             }
         };
 
-        Ok(SlotFn(ss8 << FUNCTION_BITS | f8))
+        Ok(SlotFn((ss8 << FUNCTION_BITS) | f8))
     }
 
     pub fn slot(self) -> u8 {

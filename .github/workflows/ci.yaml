@@ -19,9 +19,26 @@ on:
         required: false
         type: string
         default: no
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: true
+
+      AZ_APPID:
+        required: true
+      AZ_TENANT_ID:
+       required: true
+      AZ_SUBSCRIPTION_ID:
+        required: true
+      CI_HKD_PATH:
+        required: true
+      ITA_KEY:
+        required: true
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -51,7 +68,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-arm64:
     permissions:
@@ -80,7 +98,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04-arm
       arch: arm64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-s390x:
     permissions:
@@ -93,7 +112,9 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      CI_HKD_PATH: ${{ secrets.ci_hkd_path }}
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-ppc64le:
     permissions:
@@ -104,6 +125,8 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-riscv64:
     permissions:
@@ -116,7 +139,8 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
@@ -133,7 +157,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: s390x
       arch: s390x
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-kata-deploy-payload-ppc64le:
     needs: build-kata-static-tarball-ppc64le
@@ -150,7 +175,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ppc64le
       arch: ppc64le
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-publish-tee-confidential-unencrypted-image:
     permissions:
@@ -163,6 +189,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -204,6 +231,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -266,7 +294,10 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
   run-k8s-tests-on-amd64:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -279,7 +310,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
 
   run-k8s-tests-on-arm64:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -308,7 +338,12 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      ITA_KEY: ${{ secrets.ITA_KEY }}
 
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -321,7 +356,8 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-ppc64le:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -379,11 +415,90 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-tests-ppc64le:
+  run-cri-containerd-amd64:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-ppc64le
-    uses: ./.github/workflows/run-cri-containerd-tests-ppc64le.yaml
+    needs: build-kata-static-tarball-amd64
+    strategy:
+      fail-fast: false
+      matrix:
+        params: [
+          { containerd_version: lts,    vmm: clh              },
+          { containerd_version: lts,    vmm: dragonball       },
+          { containerd_version: lts,    vmm: qemu             },
+          { containerd_version: lts,    vmm: stratovirt       },
+          { containerd_version: lts,    vmm: cloud-hypervisor },
+          { containerd_version: lts,    vmm: qemu-runtime-rs  },
+          { containerd_version: active, vmm: clh              },
+          { containerd_version: active, vmm: dragonball       },
+          { containerd_version: active, vmm: qemu             },
+          { containerd_version: active, vmm: stratovirt       },
+          { containerd_version: active, vmm: cloud-hypervisor },
+          { containerd_version: active, vmm: qemu-runtime-rs  },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+      runner: ubuntu-22.04
+      arch: amd64
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
+
+  run-cri-containerd-s390x:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: build-kata-static-tarball-s390x
+    strategy:
+      fail-fast: false
+      matrix:
+        params: [
+          { containerd_version: active, vmm: qemu            },
+          { containerd_version: active, vmm: qemu-runtime-rs },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: s390x-large
+      arch: s390x
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
+
+  run-cri-containerd-tests-ppc64le:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: build-kata-static-tarball-ppc64le
+    strategy:
+      fail-fast: false
+      matrix:
+        params: [
+          { containerd_version: active, vmm: qemu },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: ppc64le
+      arch: ppc64le
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}
+
+  run-cri-containerd-tests-arm64:
+    if: ${{ inputs.skip-test != 'yes' }}
+    needs: build-kata-static-tarball-arm64
+    strategy:
+      fail-fast: false
+      matrix:
+        params: [
+          { containerd_version: active, vmm: qemu },
+         ]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+      runner: arm64-non-k8s
+      arch: arm64
+      containerd_version: ${{ matrix.params.containerd_version }}
+      vmm: ${{ matrix.params.vmm }}

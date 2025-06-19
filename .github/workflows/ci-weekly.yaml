@@ -15,6 +15,18 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD:
+        required: true
+
+      AZ_APPID:
+        required: true
+      AZ_TENANT_ID:
+       required: true
+      AZ_SUBSCRIPTION_ID:
+        required: true
+      QUAY_DEPLOYER_PASSWORD:
+        required: true
 
 permissions:
   contents: read
@@ -47,7 +59,8 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
-    secrets: inherit
+    secrets:
+      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-publish-tee-confidential-unencrypted-image:
     permissions:
@@ -60,6 +73,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -100,4 +114,11 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
       tarball-suffix: -${{ inputs.tag }}
-    secrets: inherit
+    secrets:
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AZ_APPID: ${{ secrets.AZ_APPID }}
+      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+    permissions:
+      contents: read
+      id-token: write

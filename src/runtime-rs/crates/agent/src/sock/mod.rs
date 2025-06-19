@@ -105,7 +105,7 @@ enum SockType {
 }
 
 #[async_trait]
-pub trait Sock: Send + Sync {
+pub trait Sock: Send + Sync + std::fmt::Debug {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream>;
 }
 

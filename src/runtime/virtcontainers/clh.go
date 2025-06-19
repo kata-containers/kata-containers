@@ -570,7 +570,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
-	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, !clh.config.ConfidentialGuest, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
+	disableNvdimm := (clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest)
+	enableDax := !disableNvdimm
+
+	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
 	if err != nil {
 		return err
 	}
@@ -590,7 +593,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 
 	if assetType == types.ImageAsset {
-		if clh.config.ConfidentialGuest {
+		if clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest {
 			disk := chclient.NewDiskConfig(assetPath)
 			disk.SetReadonly(true)
 
@@ -726,7 +729,11 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 	defer func() {
-		if err != nil {
+		if err == nil {
+			return
+		}
+
+		if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
 			if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
 				clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
 			}
@@ -1303,10 +1310,12 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		return err
 	}
 
-	clh.Logger().Debug("stop virtiofsDaemon")
+	if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
+		clh.Logger().Debug("stop virtiofsDaemon")
 
-	if err = clh.stopVirtiofsDaemon(ctx); err != nil {
-		clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		if err = clh.stopVirtiofsDaemon(ctx); err != nil {
+			clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		}
 	}
 
 	return

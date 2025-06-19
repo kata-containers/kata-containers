@@ -15,6 +15,7 @@ readonly SCRIPT_DIR="${script_dir}/nvidia"
 # This will control how much output the inird/image will produce
 DEBUG=""
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
+AGENT_POLICY="${AGENT_POLICY:-no}"
 
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:?NVIDIA_GPU_STACK must be set}
 VARIANT=${VARIANT:?VARIANT must be set}
@@ -281,7 +282,9 @@ chisseled_init() {
 	ln -sf  /bin/NVRC sbin/init
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
-	cp -a "${stage_one}"/etc/kata-opa         etc/.
+	if [[ "${AGENT_POLICY}" == "yes" ]]; then
+		cp -a "${stage_one}"/etc/kata-opa etc/.
+	fi
 	cp -a "${stage_one}"/etc/resolv.conf      etc/.
 	cp -a "${stage_one}"/supported-gpu.devids .
 

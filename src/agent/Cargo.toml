@@ -5,7 +5,7 @@ members = ["rustjail", "policy", "vsock-exporter"]
 authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2018"
 license = "Apache-2.0"
-rust-version = "1.80.0"
+rust-version = "1.85.1"
 
 [workspace.dependencies]
 oci-spec = { version = "0.6.8", features = ["runtime"] }
@@ -57,7 +57,7 @@ anyhow = "1"
 cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
 
 # Tracing
-tracing = "0.1.26"
+tracing = "0.1.41"
 tracing-subscriber = "0.2.18"
 tracing-opentelemetry = "0.13.0"
 opentelemetry = { version = "0.14.0", features = ["rt-tokio-current-thread"] }
@@ -162,9 +162,6 @@ clap.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 
-# Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "0a06ef241190780840fbb0542e51b198f1f72b0b", default-features = false, optional = true }
-
 # Agent Policy
 cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
 
@@ -202,12 +199,9 @@ test-utils.workspace = true
 lto = true
 
 [features]
-# The default-pull feature supports all sharing images by virtio-fs, for guest-pull build with the guest-pull feature
-default-pull = []
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["kata-agent-policy"]
-guest-pull = ["image-rs/kata-cc-rustls-tls"]
 
 [[bin]]
 name = "kata-agent"

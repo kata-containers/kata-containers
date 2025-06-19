@@ -35,6 +35,7 @@ build_coco_guest_components_from_source() {
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make install
 
 	install -D -m0755 "confidential-data-hub/hub/src/storage/scripts/luks-encrypt-storage" "${DESTDIR}/usr/local/bin/luks-encrypt-storage"
+	install -D -m0644 "confidential-data-hub/hub/src/image/ocicrypt_config.json" "${DESTDIR}/etc/ocicrypt_config.json"
 	popd
 }
 
