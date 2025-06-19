@@ -23,6 +23,11 @@ jobs:
     secrets:
       CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
 
 
   kata-deploy:
