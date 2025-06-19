@@ -626,7 +626,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		return f.shareRootFilesystemWithNydus(ctx, c)
 	}
 
-	if HasErofsOptions(c.rootFs.Options) {
+	if IsErofsRootFS(c.rootFs) {
 		return f.shareRootFilesystemWithErofs(ctx, c)
 	}
 

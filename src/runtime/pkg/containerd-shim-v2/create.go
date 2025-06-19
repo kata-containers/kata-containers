@@ -315,7 +315,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 			return false, nil
 		}
 
-		if virtcontainers.HasErofsOptions(m.Options) {
+		if virtcontainers.IsErofsRootFS(virtcontainers.RootFs{Options: m.Options, Type: m.Type}) {
 			return false, nil
 		}
 
