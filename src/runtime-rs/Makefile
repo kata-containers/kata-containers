@@ -293,12 +293,28 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_SE)
 
+    CONFIG_FILE_QEMU_COCO_DEV = configuration-qemu-runtime-rs-coco-dev.toml
+    CONFIG_QEMU_COCO_DEV = config/$(CONFIG_FILE_QEMU_COCO_DEV)
+    CONFIG_QEMU_COCO_DEV_IN = $(CONFIG_QEMU_COCO_DEV).in
+
+    CONFIG_PATH_QEMU_COCO_DEV = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_COCO_DEV))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_COCO_DEV)
+
+    SYSCONFIG_QEMU_COCO_DEV = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_COCO_DEV))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_COCO_DEV)
+
+    CONFIGS += $(CONFIG_QEMU_COCO_DEV)
+
     KERNELTYPE_QEMU = uncompressed
     KERNEL_NAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_QEMU))
     KERNELPATH_QEMU = $(KERNELDIR)/$(KERNEL_NAME_QEMU)
 
     KERNEL_NAME_QEMU_SE = kata-containers-se.img
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
+
+    KERNEL_TYPE_COCO = compressed
+    KERNEL_NAME_COCO = $(call MAKE_KERNEL_NAME_COCO,$(KERNELCONFIDENTIALTYPE))
+    KERNELPATH_COCO = $(KERNELDIR)/$(KERNEL_NAME_COCO)
 
     # overriding options
     DEFSTATICRESOURCEMGMT_QEMU := true
@@ -314,6 +330,7 @@ endif
     DEFMAXVCPUS_QEMU := 0
     DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    DEFSHAREDFS_QEMU_COCO_DEV_VIRTIOFS := none
     DEFBLOCKDEVICEAIO_QEMU := io_uring
     DEFNETWORKMODEL_QEMU := tcfilter
     DEFDISABLEGUESTSELINUX := true
@@ -380,6 +397,7 @@ USER_VARS += CONFIG_PATH
 USER_VARS += CONFIG_QEMU_IN
 USER_VARS += CONFIG_QEMU_SE_IN
 USER_VARS += CONFIG_REMOTE_IN
+USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILDIN_DB
@@ -598,6 +616,10 @@ endef
 #   # $1 : KERNELTYPE (compressed or uncompressed)
 define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
+endef
+
+define MAKE_KERNEL_NAME_COCO
+$(if $(findstring uncompressed,$1),vmlinux-confidential.container,vmlinuz-confidential.container)
 endef
 
 .DEFAULT_GOAL := default
