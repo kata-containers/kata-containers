@@ -81,6 +81,7 @@ jobs:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: write # needed for the `gh release` commands
+      packages: write # needed to push the multi-arch manifest to ghcr.io
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
