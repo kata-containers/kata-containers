@@ -661,6 +661,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 					c.Logger().Warnf("Ignoring unsupported direct-assignd volume metadata key: %s, value: %s", key, value)
 				}
 			}
+			// In case of rawfile, it's just a Regular file, we also make it work in the process
+			isBlockFile = true
 		}
 
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
