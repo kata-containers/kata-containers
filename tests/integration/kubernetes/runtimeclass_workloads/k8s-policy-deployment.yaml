@@ -29,7 +29,7 @@ spec:
         runAsUser: 1000
       containers:
       - name: master
-        image: quay.io/opstree/redis
+        image: quay.io/kata-containers/test-images/opstree/redis:sha256-2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48
         resources:
           requests:
             cpu: 100m
