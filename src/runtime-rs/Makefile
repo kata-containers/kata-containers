@@ -303,7 +303,7 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_SE)
 
-    CONFIG_FILE_QEMU_COCO_DEV = configuration-qemu-runtime-rs-coco-dev.toml
+    CONFIG_FILE_QEMU_COCO_DEV = configuration-qemu-coco-dev-runtime-rs.toml
     CONFIG_QEMU_COCO_DEV = config/$(CONFIG_FILE_QEMU_COCO_DEV)
     CONFIG_QEMU_COCO_DEV_IN = $(CONFIG_QEMU_COCO_DEV).in
 
