@@ -9,12 +9,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-    case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-coco-dev|qemu-snp)
-			skip "this test is not working for these platforms. See https://github.com/kata-containers/kata-containers/issues/11445"
-			;;
-	esac
-    
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     get_pod_config_dir
@@ -65,12 +59,6 @@ test_deployment_policy_error() {
 }
 
 teardown() {
-    case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-coco-dev|qemu-snp)
-			skip "this test is not working for these platforms. See https://github.com/kata-containers/kata-containers/issues/11445"
-			;;
-	esac
-
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     # Pod debugging information. Don't print the "Message:" line because it contains a truncated policy log.
