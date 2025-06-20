@@ -71,7 +71,7 @@ DEBUG="${DEBUG:-"false"}"
 
 ARCH=$(uname -m)
 
-SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"}"
+SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"}"
 SHIMS_X86_64="${SHIMS_X86_64:-${SHIMS}}"
 SHIMS_AARCH64="${SHIMS_AARCH64:-${SHIMS}}"
 SHIMS_S390X="${SHIMS_S390X:-${SHIMS}}"
@@ -285,7 +285,7 @@ function delete_runtimeclasses() {
 			shim_name+="-${MULTI_INSTALL_SUFFIX}"
 			sed -i -e "s|${canonical_shim_name}|${shim_name}|g" /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
 		fi
-		
+
 		kubectl delete --ignore-not-found -f /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
 	done
 
@@ -359,7 +359,7 @@ function is_containerd_capable_of_using_drop_in_files() {
 		echo "false"
 		return
 	fi
- 
+
 	local version_major=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | cut -d'.' -f1)
 	if [ $version_major -lt 2 ]; then
 		# Only containerd 2.0 does the merge of the plugins section from different snippets,
@@ -404,7 +404,7 @@ function get_kata_containers_config_path() {
 	# Map the runtime shim name to the appropriate configuration
 	# file directory.
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
 		*) config_path="$golang_config_path" ;;
 	esac
 
@@ -416,7 +416,7 @@ function get_kata_containers_runtime_path() {
 
 	local runtime_path
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs)
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs)
 			runtime_path="${dest_dir}/runtime-rs/bin/containerd-shim-kata-v2"
 			;;
 		*)
@@ -972,7 +972,7 @@ function remove_artifacts() {
 		arch="$(uname -m)"
 		if [[ ${arch} == "x86_64" ]]; then
 			node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
-				
+
 			kubectl delete  --ignore-not-found -f "${node_feature_rule_file}"
 
 			info "As NFD is deployed on the node, rules for ${arch} TEEs have been deleted"
@@ -1191,7 +1191,7 @@ function install_nydus_snapshotter() {
 
 	local config_guest_pulling="/opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml"
 	local nydus_snapshotter_service="/opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service"
-	
+
 	# Adjust the paths for the config-guest-pulling.toml and nydus-snapshotter.service
 	sed -i -e "s|@SNAPSHOTTER_ROOT_DIR@|/var/lib/${nydus_snapshotter}|g" "${config_guest_pulling}"
 	sed -i -e "s|@SNAPSHOTTER_GRPC_SOCKET_ADDRESS@|/run/${nydus_snapshotter}/containerd-nydus-grpc.sock|g" "${config_guest_pulling}"
@@ -1218,7 +1218,7 @@ function uninstall_nydus_snapshotter() {
 	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
 		nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
 	fi
-	
+
 	host_systemctl disable --now "${nydus_snapshotter}.service"
 
 	rm -f "/host/etc/systemd/system/${nydus_snapshotter}.service"

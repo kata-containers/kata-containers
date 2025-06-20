@@ -130,7 +130,7 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `runtimeClasses.createDefault` | Create a default `runtimeClass` alias for the default shim | `false` |
 | `runtimeClasses.defaultName` | Name for the default `runtimeClass` | `kata` |
 | `env.debug` | Enable debugging in the `configuration.toml` | `false` |
-| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca` |
+| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca` |
 | `env.shims_x86_64` | List of shims to deploy for x86_64 (if set, overrides `shims`) | `""` |
 | `env.shims_aarch64` | List of shims to deploy for aarch64 (if set, overrides `shims`) | `""` |
 | `env.shims_s390x` | List of shims to deploy for s390x (if set, overrides `shims`) | `""` |
