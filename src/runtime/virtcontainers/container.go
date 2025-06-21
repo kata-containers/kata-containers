@@ -821,12 +821,48 @@ func (c *Container) createMounts(ctx context.Context) error {
 	return c.createBlockDevices(ctx)
 }
 
+func findMountSource(mnt string) (string, error) {
+	output, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return "", err
+	}
+
+	// /proc/mounts has 6 fields per line, one mount per line, e.g.
+	// /dev/loop0 /var/lib/containerd/io.containerd.snapshotter.v1.erofs/snapshots/1/fs erofs ro,relatime,user_xattr,acl,cache_strategy=readaround 0 0
+	for _, line := range strings.Split(string(output), "\n") {
+		parts := strings.Split(line, " ")
+		if len(parts) == 6 {
+			switch parts[2] {
+			case "erofs":
+				if parts[1] == mnt {
+					return parts[0], nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("erofs mount not found for %s", mnt)
+}
+
 func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
 	var deviceInfos []config.DeviceInfo
-	if HasErofsOptions(c.rootFs.Options) {
-		parsedOptions := parseRootFsOptions(c.rootFs.Options)
-		for _, path := range parsedOptions {
-			di, err := c.createDeviceInfo(path+"/layer.erofs", path+"/layer.erofs", true, true)
+	if IsErofsRootFS(c.rootFs) {
+		lowerdirs := parseErofsRootFsOptions(c.rootFs.Options)
+		for _, path := range lowerdirs {
+			s, err := findMountSource(path)
+			if err != nil {
+				return nil, err
+			}
+			if strings.HasPrefix(s, "/dev/loop") {
+				b, err := os.ReadFile(fmt.Sprintf("/sys/block/loop%s/loop/backing_file", strings.TrimPrefix(s, "/dev/loop")))
+				if err != nil {
+					return nil, err
+				}
+				s = strings.TrimSuffix(string(b), "\n")
+			}
+			if filepath.Base(s) != "layer.erofs" {
+				return nil, fmt.Errorf("unsupported mount source %s for %s", s, path)
+			}
+			di, err := c.createDeviceInfo(s, s, true, true)
 			if err != nil {
 				return nil, err
 			}
@@ -1076,7 +1112,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !HasErofsOptions(c.rootFs.Options) {
+	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !IsErofsRootFS(c.rootFs) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
