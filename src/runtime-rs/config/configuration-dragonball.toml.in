@@ -285,6 +285,22 @@ container_pipe_size=@PIPESIZE@
 # (default: 3000)
 #reconnect_timeout_ms = 3000
 
+# Agent request timeout value in millisecond
+
+# This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
+# It's also used to ensure that workloads, especially those involving large image pulls within the guest,
+# have sufficient time to complete.
+
+# Effective Timeout Determination:
+# The effective timeout for a CreateContainerRequest is determined by taking the minimum of the following two values:
+# - request_timeout_ms: The timeout value configured for the agent (default: 30,000 milliseconds).
+# - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
+
+# default timeout: 30_000 ms
+
+# request_timeout_ms = 30000
+
 [agent.@PROJECT_TYPE@.mem_agent]
 # Control the mem-agent function enable or disable.
 # Default to false

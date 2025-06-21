@@ -77,6 +77,9 @@ pub const KATA_ANNO_CFG_AGENT_TRACE: &str = "io.katacontainers.config.agent.enab
 /// An annotation to specify the size of the pipes created for containers.
 pub const KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE: &str =
     "io.katacontainers.config.agent.container_pipe_size";
+/// agent request timeout value in millisecond
+pub const KATA_ANNO_CFG_AGENT_REQUEST_TIMEOUT_MS: &str =
+    "io.katacontainers.config.agent.request_timeout_ms";
 /// An annotation key to specify the size of the pipes created for containers.
 pub const CONTAINER_PIPE_SIZE_KERNEL_PARAM: &str = "agent.container_pipe_size";
 
@@ -957,6 +960,14 @@ impl Annotation {
                     KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             ag.container_pipe_size = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_AGENT_REQUEST_TIMEOUT_MS => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            ag.request_timeout_ms = v.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(u32_err);
