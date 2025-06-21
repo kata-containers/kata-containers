@@ -126,7 +126,6 @@ jobs:
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
-  # AMD has deprecated SEV support on Kata and henceforth SNP will be the only feature supported for Kata Containers.
   run-k8s-tests-sev-snp:
     strategy:
       fail-fast: false
