@@ -49,7 +49,7 @@ openssl = { version = "0.10.72", features = ["vendored"] }
 serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
-tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.45.1", features = ["rt-multi-thread"] }
 
 # OCI container specs.
 oci-spec = { version = "0.6.8", features = ["runtime"] }
