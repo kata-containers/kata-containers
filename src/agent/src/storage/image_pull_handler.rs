@@ -4,12 +4,15 @@
 //
 
 use super::new_device;
-use crate::image;
+use crate::confidential_data_hub;
+use crate::confidential_data_hub::image::{is_sandbox, unpack_pause_image};
+use crate::rpc::CONTAINER_BASE;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Result};
 use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
 use kata_types::mount::{ImagePullVolume, StorageDevice};
 use protocols::agent::Storage;
+use safe_path::scoped_join;
 use std::sync::Arc;
 use tracing::instrument;
 
@@ -53,7 +56,35 @@ impl StorageHandler for ImagePullHandler {
             .cid
             .clone()
             .ok_or_else(|| anyhow!("failed to get container id"))?;
-        let bundle_path = image::pull_image(image_name, &cid, &image_pull_volume.metadata).await?;
+
+        info!(
+            ctx.logger,
+            "image metadata: {:?}", image_pull_volume.metadata
+        );
+        if is_sandbox(&image_pull_volume.metadata) {
+            let mount_path = unpack_pause_image(&cid)?;
+            return new_device(mount_path);
+        }
+
+        // generated bundles with rootfs and config.json will store under CONTAINER_BASE/cid/images.
+        let bundle_path = scoped_join(CONTAINER_BASE, &cid)?;
+        let bundle_path = match confidential_data_hub::pull_image(image_name, bundle_path).await {
+            Ok(path) => {
+                info!(
+                    ctx.logger,
+                    "pull and unpack image {image_name}, cid: {cid} succeeded."
+                );
+                path
+            }
+            Err(e) => {
+                error!(
+                    ctx.logger,
+                    "pull and unpack image {image_name}, cid: {cid} failed with {:?}.",
+                    e.to_string()
+                );
+                return Err(e);
+            }
+        };
 
         new_device(bundle_path)
     }

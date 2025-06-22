@@ -2,7 +2,7 @@
 // Copyright (c) 2023 Alibaba Cloud
 //
 // SPDX-License-Identifier: Apache-2.0
-#[repr(packed)]
+#[repr(Rust, packed)]
 pub struct GenericAddress {
     pub address_space_id: u8,
     pub register_bit_width: u8,

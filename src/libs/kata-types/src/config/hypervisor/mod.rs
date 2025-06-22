@@ -65,6 +65,7 @@ pub const VIRTIO_PMEM: &str = "virtio-pmem";
 mod firecracker;
 pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
 
+const NO_VIRTIO_FS: &str = "none";
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
@@ -943,6 +944,7 @@ pub struct SharedFsInfo {
     /// Shared file system type:
     /// - virtio-fs (default)
     /// - virtio-9p`
+    /// - none
     pub shared_fs: Option<String>,
 
     /// Path to vhost-user-fs daemon.
@@ -992,6 +994,11 @@ pub struct SharedFsInfo {
 impl SharedFsInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
+        if self.shared_fs.as_deref() == Some(NO_VIRTIO_FS) {
+            self.shared_fs = None;
+            return Ok(());
+        }
+
         if self.shared_fs.as_deref() == Some("") {
             self.shared_fs = Some(default::DEFAULT_SHARED_FS_TYPE.to_string());
         }

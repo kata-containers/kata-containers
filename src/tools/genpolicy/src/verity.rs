@@ -70,7 +70,7 @@ impl<T: Digest + Clone> Verity<T> {
         for (i, l) in levels.iter_mut().enumerate() {
             let entry_size = (data_block_size as u64)
                 * ((hash_block_size / Self::HASH_SIZE) as u64).pow(level_count as u32 - i as u32);
-            let count = (data_size + entry_size - 1) / entry_size;
+            let count = data_size.div_ceil(entry_size);
             l.file_offset = write_file_offset;
             write_file_offset += hash_block_size as u64 * count;
         }

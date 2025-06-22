@@ -53,6 +53,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |

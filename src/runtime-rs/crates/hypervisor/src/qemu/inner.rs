@@ -108,7 +108,7 @@ impl QemuInner {
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "ccw" => cmdline.add_block_device(
+                        "ccw" | "blk" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
                             block_dev
@@ -386,7 +386,17 @@ impl QemuInner {
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
-        caps.set(CapabilityBits::FsSharingSupport);
+
+        // Confidential Guest doesn't permit virtio-fs.
+        let flags = if self.hypervisor_config().security_info.confidential_guest {
+            CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
+        } else {
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::FsSharingSupport
+        };
+        caps.set(flags);
+
         Ok(caps)
     }
 

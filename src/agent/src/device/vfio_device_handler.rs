@@ -29,7 +29,7 @@ use tracing::instrument;
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
         use crate::ap;
-        use crate::cdh::get_cdh_resource;
+        use crate::confidential_data_hub::get_cdh_resource;
         use std::convert::TryFrom;
         use pv_core::ap::{
             Apqn,

@@ -307,7 +307,7 @@ function get_tdx_distro_instructions() {
 
 	case ${distro} in
 		ubuntu)
-			echo "https://github.com/canonical/tdx/tree/noble-24.04"
+			echo "https://github.com/canonical/tdx/tree/3.3"
 			;;
 		centos)
 			echo "https://sigs.centos.org/virt/tdx"
@@ -424,7 +424,7 @@ function install_artifacts() {
 			case ${ID} in
 				ubuntu)
 					case ${VERSION_ID} in
-						24.04)
+						24.04|25.04)
 							tdx_supported ${ID} ${VERSION_ID} ${kata_config_file}
 							;;
 						*)

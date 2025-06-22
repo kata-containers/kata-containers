@@ -14,6 +14,8 @@ jobs:
     environment: ci
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Log into Azure
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0

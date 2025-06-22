@@ -5,7 +5,7 @@
 
 use cfg_if::cfg_if;
 
-/// Linux ABI related constants.
+// Linux ABI related constants.
 
 #[cfg(target_arch = "aarch64")]
 use std::fs;

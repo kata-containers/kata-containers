@@ -177,6 +177,15 @@ block_device_driver = "virtio-blk-pci"
 # Default false
 #block_device_cache_direct = true
 
+# Enable pre allocation of VM RAM, default false
+# Enabling this will result in lower container density
+# as all of the memory will be allocated and locked
+# This is useful when you want to reserve all the memory
+# upfront or in the cases where you want memory latencies
+# to be very predictable
+# Default false
+#enable_mem_prealloc = true
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.

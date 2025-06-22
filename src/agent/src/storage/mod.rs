@@ -24,7 +24,6 @@ use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
-#[cfg(feature = "guest-pull")]
 use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 use crate::mount::{baremount, is_mounted, remove_mounts};
@@ -36,7 +35,6 @@ mod bind_watcher_handler;
 mod block_handler;
 mod ephemeral_handler;
 mod fs_handler;
-#[cfg(feature = "guest-pull")]
 mod image_pull_handler;
 mod local_handler;
 
@@ -148,7 +146,6 @@ lazy_static! {
             Arc::new(BindWatcherHandler {}),
             #[cfg(target_arch = "s390x")]
             Arc::new(self::block_handler::VirtioBlkCcwHandler {}),
-            #[cfg(feature = "guest-pull")]
             Arc::new(ImagePullHandler {}),
         ];
 
@@ -321,12 +318,11 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
     let fs_group = storage.fs_group();
     let read_only = storage.options.contains(&String::from("ro"));
     let mount_path = Path::new(&storage.mount_point);
-    let metadata = mount_path.metadata().map_err(|err| {
+    let metadata = mount_path.metadata().inspect_err(|err| {
         error!(logger, "failed to obtain metadata for mount path";
             "mount-path" => mount_path.to_str(),
             "error" => err.to_string(),
-        );
-        err
+        )
     })?;
 
     if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch.into()

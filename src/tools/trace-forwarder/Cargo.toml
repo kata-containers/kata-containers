@@ -24,7 +24,7 @@ anyhow = "1.0.31"
 opentelemetry = { version = "0.14.0", features=["serialize"] }
 opentelemetry-jaeger = "0.13.0"
 tracing-opentelemetry = "0.16.0"
-tracing = "0.1.29"
+tracing = "0.1.41"
 tracing-subscriber = "0.3.3"
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
