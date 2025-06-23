@@ -54,7 +54,7 @@ function setup_kbs_image_policy_for_initdata() {
     esac
 
     case "$KATA_HYPERVISOR" in
-        "qemu-tdx"|"qemu-coco-dev"|"qemu-snp"|"qemu-se"|"qemu-se-runtime-rs")
+        "qemu-tdx"|"qemu-coco-dev"|"qemu-coco-dev-runtime-rs"|"qemu-snp"|"qemu-se"|"qemu-se-runtime-rs")
             ;;
         *)
             skip "Test not supported for ${KATA_HYPERVISOR}."
