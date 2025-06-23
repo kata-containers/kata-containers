@@ -191,27 +191,6 @@ func newCommand(ctx context.Context, id, containerdBinary, containerdAddress str
 	return cmd, nil
 }
 
-func setupMntNs() error {
-	err := unix.Unshare(unix.CLONE_NEWNS)
-	if err != nil {
-		return err
-	}
-
-	err = unix.Mount("", "/", "", unix.MS_REC|unix.MS_SLAVE, "")
-	if err != nil {
-		err = fmt.Errorf("failed to mount with slave: %v", err)
-		return err
-	}
-
-	err = unix.Mount("", "/", "", unix.MS_REC|unix.MS_SHARED, "")
-	if err != nil {
-		err = fmt.Errorf("failed to mount with shared: %v", err)
-		return err
-	}
-
-	return nil
-}
-
 // StartShim is a binary call that starts a kata shimv2 service which will
 // implement the ShimV2 APIs such as create/start/update etc containers.
 func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ string, retErr error) {
@@ -274,10 +253,6 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 		if err := utils.Create(utils.ProcessGroup); err != nil {
 			return "", errors.Wrap(err, "enable sched core support")
 		}
-	}
-
-	if err := setupMntNs(); err != nil {
-		return "", err
 	}
 
 	if err := cmd.Start(); err != nil {
