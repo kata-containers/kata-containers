@@ -30,6 +30,7 @@ use tokio::{
 };
 use walkdir::WalkDir;
 
+use super::utils;
 use super::Volume;
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use crate::share_fs::PASSTHROUGH_FS_DIR;
@@ -428,6 +429,11 @@ impl ShareFsVolume {
                 let share_fs_mount = share_fs.get_share_fs_mount();
                 let mounted_info_set = share_fs.mounted_info_set();
                 let mut mounted_info_set = mounted_info_set.lock().await;
+                let is_uds_volume = utils::is_unix_socket(source_path.as_str());
+
+                // share uds between host and container
+                let sock_addr = agent.agent_sock().await?;
+
                 if let Some(mut mounted_info) = mounted_info_set.get(&source_path).cloned() {
                     // Mounted at least once
                     let guest_path = mounted_info
@@ -437,50 +443,73 @@ impl ShareFsVolume {
                         .to_str()
                         .unwrap()
                         .to_owned();
-                    if !readonly && mounted_info.readonly() {
-                        // The current mount should be upgraded to readwrite permission
-                        info!(
-                            sl!(),
-                            "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
-                        );
-                        share_fs_mount
-                            .upgrade_to_rw(
-                                &mounted_info
-                                    .file_name()
-                                    .context("get name of mounted info")?,
-                            )
+
+                    let mut guest_source = Some(PathBuf::from(&guest_path));
+                    if !is_uds_volume {
+                        if !readonly && mounted_info.readonly() {
+                            // The current mount should be upgraded to readwrite permission
+                            info!(
+                                sl!(),
+                                "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
+                            );
+                            share_fs_mount
+                                .upgrade_to_rw(
+                                    &mounted_info
+                                        .file_name()
+                                        .context("get name of mounted info")?,
+                                )
+                                .await
+                                .context("upgrade mount")?;
+                        }
+                    } else {
+                        let mount_result = share_fs_mount
+                            .share_uds(source_path.as_str(), file_name.as_str(), sock_addr.as_str())
                             .await
-                            .context("upgrade mount")?;
+                            .context("share uds")?;
+                        //the guest needs the storages to count the uds shared number, so that
+                        //it can destroy the uds forwarder in the guest when the uds reference
+                        //was 0;
+                        volume.storages = mount_result.storages;
+                        guest_source = Some(PathBuf::from(&mount_result.guest_path));
                     }
+
                     if readonly {
                         mounted_info.ro_ref_count += 1;
                     } else {
                         mounted_info.rw_ref_count += 1;
                     }
+
                     mounted_info_set.insert(source_path.clone(), mounted_info);
 
                     let mut oci_mount = oci::Mount::default();
                     oci_mount.set_destination(m.destination().clone());
                     oci_mount.set_typ(Some("bind".to_string()));
-                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
+                    oci_mount.set_source(guest_source);
                     oci_mount.set_options(m.options().clone());
 
                     volume.mounts.push(oci_mount);
                 } else {
                     // Not mounted ever
-                    let mount_result = share_fs_mount
-                        .share_volume(&ShareFsVolumeConfig {
-                            // The scope of shared volume is sandbox
-                            cid: String::from(""),
-                            source: source_path.clone(),
-                            target: file_name.clone(),
-                            readonly,
-                            mount_options: get_mount_options(m.options()).clone(),
-                            mount: m.clone(),
-                            is_rafs: false,
-                        })
-                        .await
-                        .context("mount shared volume")?;
+                    let mount_result = if is_uds_volume {
+                        share_fs_mount
+                            .share_uds(source_path.as_str(), file_name.as_str(), sock_addr.as_str())
+                            .await
+                            .context("share uds")?
+                    } else {
+                        share_fs_mount
+                            .share_volume(&ShareFsVolumeConfig {
+                                // The scope of shared volume is sandbox
+                                cid: String::from(""),
+                                source: source_path.clone(),
+                                target: file_name.clone(),
+                                readonly,
+                                mount_options: get_mount_options(m.options()).clone(),
+                                mount: m.clone(),
+                                is_rafs: false,
+                            })
+                            .await
+                            .context("mount shared volume")?
+                    };
                     let mounted_info = MountedInfo::new(
                         PathBuf::from_str(&mount_result.guest_path)
                             .context("convert guest path")?,
@@ -542,6 +571,8 @@ impl Volume for ShareFsVolume {
                 }
             };
 
+            let is_uds_share = utils::is_unix_socket(&host_source.as_str());
+
             let old_readonly = mounted_info.readonly();
             if get_mount_options(m.options()).contains(&"ro".to_owned()) {
                 mounted_info.ro_ref_count -= 1;
@@ -560,7 +591,7 @@ impl Volume for ShareFsVolume {
 
             if mounted_info.ref_count() > 0 {
                 // Downgrade to readonly if no container needs readwrite permission
-                if !old_readonly && mounted_info.readonly() {
+                if !old_readonly && mounted_info.readonly() && !is_uds_share {
                     info!(sl!(), "Downgrade {} to readonly due to no container that needs readwrite permission", host_source);
                     share_fs_mount
                         .downgrade_to_ro(&file_name)
@@ -574,11 +605,15 @@ impl Volume for ShareFsVolume {
                     "The path will be umounted due to no references, host_source = {}", host_source
                 );
                 mounted_info_set.remove(&host_source);
-                // Umount the volume
-                share_fs_mount
-                    .umount_volume(&file_name)
-                    .await
-                    .context("Umount volume")?
+                if is_uds_share {
+                    share_fs_mount.unshare_uds(&host_source).await?
+                } else {
+                    // Umount the volume
+                    share_fs_mount
+                        .umount_volume(&file_name)
+                        .await
+                        .context("Umount volume")?
+                }
             }
         }
 

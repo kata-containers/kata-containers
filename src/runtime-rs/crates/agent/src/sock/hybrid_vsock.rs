@@ -11,7 +11,7 @@ use tokio::{
     net::UnixStream,
 };
 
-use super::{ConnectConfig, Sock, Stream};
+use super::{ConnectConfig, Listener, Sock, Stream};
 
 #[derive(Debug, PartialEq)]
 pub struct HybridVsock {
@@ -64,6 +64,14 @@ impl Sock for HybridVsock {
             self,
             last_err.unwrap()
         ))
+    }
+
+    async fn listen(&self) -> Result<Listener> {
+        let uds_path = format!("{}_{}", self.uds, self.port);
+        let listener = tokio::net::UnixListener::bind(uds_path.as_str())
+            .with_context(|| format!("connect to {}", uds_path))?;
+
+        Ok(Listener::Unix(listener))
     }
 }
 
