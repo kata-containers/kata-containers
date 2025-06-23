@@ -34,8 +34,10 @@ setup() {
 	kubectl expose deployment/${deployment}
 
 	busybox_pod="test-nginx"
-	kubectl run $busybox_pod --restart=Never -it --image="$busybox_image" \
+	kubectl run $busybox_pod --restart=Never --image="$busybox_image" \
 		-- sh -c 'i=1; while [ $i -le '"$wait_time"' ]; do wget --timeout=5 '"$deployment"' && break; sleep 1; i=$(expr $i + 1); done'
+	# `kubectl run` without -i flag doesn't wait for the pod to be ready, so we need to wait for it manually
+	kubectl wait --for=condition=Ready pod/$busybox_pod --timeout=30s
 
 	# check pod's status, it should be Succeeded.
 	# or {.status.containerStatuses[0].state.terminated.reason} = "Completed"
