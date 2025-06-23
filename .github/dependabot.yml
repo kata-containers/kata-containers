@@ -19,7 +19,6 @@ updates:
     ignore:
     # rust-vmm repos might cause incompatibilities on patch versions, so
     # lets handle them manually for now.
-      - dependency-name: "vmm-sys-util"
       - dependency-name: "event-manager"
       - dependency-name: "kvm-bindings"
       - dependency-name: "kvm-ioctls"
