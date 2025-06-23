@@ -216,6 +216,7 @@ jobs:
       matrix:
         vmm:
           - qemu-coco-dev
+          - qemu-runtime-rs-coco-dev
         snapshotter:
           - nydus
         pull-type:
