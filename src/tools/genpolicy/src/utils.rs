@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::layers_cache;
 use crate::settings;
 use clap::Parser;
 
@@ -123,7 +124,7 @@ pub struct Config {
     pub raw_out: bool,
     pub base64_out: bool,
     pub containerd_socket_path: Option<String>,
-    pub layers_cache_file_path: Option<String>,
+    pub layers_cache: layers_cache::ImageLayersCache,
     pub version: bool,
 }
 
@@ -161,7 +162,7 @@ impl Config {
             raw_out: args.raw_out,
             base64_out: args.base64_out,
             containerd_socket_path: args.containerd_socket_path,
-            layers_cache_file_path,
+            layers_cache: layers_cache::ImageLayersCache::new(&layers_cache_file_path),
             version: args.version,
         }
     }

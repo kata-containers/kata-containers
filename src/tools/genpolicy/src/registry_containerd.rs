@@ -5,9 +5,9 @@
 
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
+use crate::layers_cache::ImageLayersCache;
 use crate::registry::{
-    add_verity_and_users_to_store, get_verity_hash_and_users, read_verity_and_users_from_store,
-    Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
+    get_verity_hash_and_users, Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
 };
 use crate::utils::Config;
 
@@ -60,13 +60,8 @@ impl Container {
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        let image_layers = get_image_layers(
-            config.layers_cache_file_path.clone(),
-            &manifest,
-            &config_layer,
-            &ctrd_client,
-        )
-        .await?;
+        let image_layers =
+            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client).await?;
 
         // Find the last layer with an /etc/* file, respecting whiteouts.
         let mut passwd = String::new();
@@ -275,7 +270,7 @@ pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {
 }
 
 pub async fn get_image_layers(
-    layers_cache_file_path: Option<String>,
+    layers_cache: &ImageLayersCache,
     manifest: &serde_json::Value,
     config_layer: &DockerConfigLayer,
     client: &containerd_client::Client,
@@ -291,19 +286,14 @@ pub async fn get_image_layers(
             || layer_media_type.eq("application/vnd.oci.image.layer.v1.tar+gzip")
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let (verity_hash, passwd, group) = get_verity_and_users(
-                    layers_cache_file_path.clone(),
+                let mut imageLayer = get_verity_and_users(
+                    layers_cache,
                     layer["digest"].as_str().unwrap(),
                     client,
                     &config_layer.rootfs.diff_ids[layer_index].clone(),
                 )
                 .await?;
-                let imageLayer = ImageLayer {
-                    diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash,
-                    passwd,
-                    group,
-                };
+                imageLayer.diff_id = config_layer.rootfs.diff_ids[layer_index].clone();
                 layersVec.push(imageLayer);
             } else {
                 return Err(anyhow!("Too many Docker gzip layers"));
@@ -316,11 +306,17 @@ pub async fn get_image_layers(
 }
 
 async fn get_verity_and_users(
-    layers_cache_file_path: Option<String>,
+    layers_cache: &ImageLayersCache,
     layer_digest: &str,
     client: &containerd_client::Client,
     diff_id: &str,
-) -> Result<(String, String, String)> {
+) -> Result<ImageLayer> {
+    if let Some(layer) = layers_cache.get_layer(diff_id) {
+        info!("Using cache file");
+        info!("dm-verity root hash: {}", layer.verity_hash);
+        return Ok(layer);
+    }
+
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
     // Use file names supported by both Linux and Windows.
@@ -331,63 +327,34 @@ async fn get_verity_and_users(
     let mut compressed_path = decompressed_path.clone();
     compressed_path.set_extension("gz");
 
-    let mut verity_hash = "".to_string();
-    let mut passwd = "".to_string();
-    let mut group = "".to_string();
-    let mut error_message = "".to_string();
-    let mut error = false;
-
-    if let Some(path) = layers_cache_file_path.as_ref() {
-        (verity_hash, passwd, group) = read_verity_and_users_from_store(path, diff_id)?;
-        info!("Using cache file");
-        info!("dm-verity root hash: {verity_hash}");
+    // go find verity hash if not found in cache
+    if let Err(e) =
+        create_decompressed_layer_file(client, layer_digest, &decompressed_path, &compressed_path)
+            .await
+    {
+        temp_dir.close()?;
+        bail!(format!(
+            "Failed to create verity hash for {layer_digest}, error {e}"
+        ));
     }
 
-    if verity_hash.is_empty() {
-        // go find verity hash if not found in cache
-        if let Err(e) = create_decompressed_layer_file(
-            client,
-            layer_digest,
-            &decompressed_path,
-            &compressed_path,
-        )
-        .await
-        {
-            error = true;
-            error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
+    match get_verity_hash_and_users(&decompressed_path) {
+        Err(e) => {
+            temp_dir.close()?;
+            bail!(format!("Failed to get verity hash {e}"));
         }
-
-        if !error {
-            match get_verity_hash_and_users(&decompressed_path) {
-                Err(e) => {
-                    error_message = format!("Failed to get verity hash {e}");
-                    error = true;
-                }
-                Ok(res) => {
-                    (verity_hash, passwd, group) = res;
-                    if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_and_users_to_store(
-                            path,
-                            diff_id,
-                            &verity_hash,
-                            &passwd,
-                            &group,
-                        )?;
-                    }
-                    info!("dm-verity root hash: {verity_hash}");
-                }
-            }
+        Ok((verity_hash, passwd, group)) => {
+            info!("dm-verity root hash: {verity_hash}");
+            let layer = ImageLayer {
+                diff_id: diff_id.to_string(),
+                verity_hash,
+                passwd,
+                group,
+            };
+            layers_cache.insert_layer(&layer);
+            Ok(layer)
         }
     }
-    temp_dir.close()?;
-    if error {
-        // remove the cache file if we're using it
-        if let Some(path) = layers_cache_file_path.as_ref() {
-            std::fs::remove_file(path)?;
-        }
-        bail!(error_message);
-    }
-    Ok((verity_hash, passwd, group))
 }
 
 async fn create_decompressed_layer_file(
