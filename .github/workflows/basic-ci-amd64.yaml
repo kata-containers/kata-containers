@@ -35,7 +35,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       SANDBOXER: "shim"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -51,7 +51,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -76,7 +76,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       SANDBOXER: "podsandbox"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -91,7 +91,7 @@ jobs:
         run: bash tests/stability/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -118,7 +118,7 @@ jobs:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -134,7 +134,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -153,7 +153,7 @@ jobs:
     env:
       CONTAINERD_VERSION: lts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -169,7 +169,7 @@ jobs:
         run: bash tests/integration/runk/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -195,7 +195,7 @@ jobs:
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -211,7 +211,7 @@ jobs:
         run: bash tests/functional/tracing/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -239,7 +239,7 @@ jobs:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -255,7 +255,7 @@ jobs:
         run: bash tests/functional/vfio/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -280,7 +280,7 @@ jobs:
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -296,7 +296,7 @@ jobs:
         run: bash tests/integration/docker/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -324,7 +324,7 @@ jobs:
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -342,7 +342,7 @@ jobs:
         run: bash tests/integration/nerdctl/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -360,7 +360,7 @@ jobs:
         continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.vmm }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: nerdctl-tests-garm-${{ matrix.vmm }}
           path: /tmp/artifacts
@@ -369,7 +369,7 @@ jobs:
   run-kata-agent-apis:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -385,7 +385,7 @@ jobs:
         run: bash tests/functional/kata-agent-apis/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
