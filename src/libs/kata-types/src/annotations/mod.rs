@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
 
 use crate::config::TomlConfig;
+use crate::initdata::add_hypervisor_initdata_overrides;
 use crate::sl;
 
 use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
@@ -271,6 +272,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_extra_args";
 /// A sandbox annotation to specify as the msize for 9p shares.
 pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
+/// The initdata annotation passed in when CVM launchs
+pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
+    "io.katacontainers.config.hypervisor.cc_init_data";
 
 // Runtime related annotations
 /// Prefix for Runtime configurations.
@@ -879,6 +883,10 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH => {
                         hv.security_info.validate_path(value)?;
                         hv.security_info.guest_hook_path = value.to_string();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_INIT_DATA => {
+                        hv.security_info.initdata =
+                            add_hypervisor_initdata_overrides(value).unwrap();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR => {
                         match self.get_value::<bool>(key) {

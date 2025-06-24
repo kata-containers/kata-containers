@@ -885,6 +885,12 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub guest_hook_path: String,
 
+    /// Initdata is dynamic configuration (like policies, configs, and identity files) with encoded format that users inject
+    /// into the TEE Guest upon CVM launch. And it's implemented based on the `InitData Specification`:
+    /// https://github.com/confidential-containers/trustee/blob/61c1dc60ee1f926c2eb95d69666c2430c3fea808/kbs/docs/initdata.md
+    #[serde(default)]
+    pub initdata: String,
+
     /// List of valid annotation names for the hypervisor.
     ///
     /// Each member of the list is a regular expression, which is the base name of the annotation,
