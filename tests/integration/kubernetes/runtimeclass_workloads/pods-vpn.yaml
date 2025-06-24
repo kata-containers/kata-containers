@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mesh-sender
+  annotations:
+    io.katacontainers.config.pre_attestation.enabled: "false"
+spec:
+  runtimeClassName: kata-qemu-coco-dev
+  restartPolicy: Always
+  containers:
+  - name: app
+    image: ubuntu:latest
+    securityContext:
+      privileged: true
+    command:
+    - "/bin/sh"
+    - "-c"
+    - "apt-get update && apt-get install -y iproute2 dnsutils iputils-ping && echo no | apt-get install -y iperf3 && for i in {1..1000}; do echo 'coco traffic' >> /data.txt; done && while (true); do sleep 10000; done"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mesh-receiver
+  annotations:
+    io.katacontainers.config.pre_attestation.enabled: "false"
+spec:
+  runtimeClassName: kata-qemu-coco-dev
+  restartPolicy: Always
+  containers:
+  - name: app
+    image: ubuntu:latest
+    securityContext:
+      privileged: true
+    command:
+    - "/bin/sh"
+    - "-c"
+    - "apt-get update && apt-get install -y iproute2 dnsutils iputils-ping && echo no | apt-get install -y iperf3 && while (true); do sleep 10000; done"
