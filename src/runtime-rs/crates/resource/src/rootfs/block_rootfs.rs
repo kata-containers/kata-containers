@@ -150,7 +150,7 @@ pub(crate) fn is_block_rootfs(m: &Mount) -> Option<(u64, Mount)> {
                 //clear the volume resource thus the block device will use the dev_id
                 //to find the device's host path;
                 volume.source = String::new();
-                return Some((dev_id, m.clone()));
+                return Some((dev_id, volume));
             }
 
             if SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFREG
