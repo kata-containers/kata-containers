@@ -18,7 +18,7 @@ ttrpc = { version = "0.8", features = ["async"] }
 tokio = { version = "1.44.2", features = ["full"] }
 async-trait = "0.1"
 byteorder = "1.5"
-protobuf = "3.1"
+protobuf = "3.7.2"
 lazy_static = "1.4"
 # Rust 1.68 doesn't support 0.5.9
 home = "=0.5.5"
