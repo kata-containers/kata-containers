@@ -105,11 +105,11 @@ impl RootFsResource {
                     return Ok(virtual_volume);
                 }
 
-                let rootfs = if let Some((dev_id, layer)) = is_block_rootfs(layer) {
+                let rootfs = if let Some(dev_id) = is_block_rootfs(&layer.source) {
                     // handle block rootfs
                     info!(sl!(), "block device: {}", dev_id);
                     let block_rootfs: Arc<dyn Rootfs> = Arc::new(
-                        block_rootfs::BlockRootfs::new(device_manager, sid, cid, dev_id, &layer)
+                        block_rootfs::BlockRootfs::new(device_manager, sid, cid, dev_id, layer)
                             .await
                             .context("new block rootfs")?,
                     );

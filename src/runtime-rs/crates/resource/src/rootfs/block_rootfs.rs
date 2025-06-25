@@ -25,8 +25,6 @@ use oci_spec::runtime as oci;
 use std::fs;
 use tokio::sync::RwLock;
 
-const BLOCKFILE_ROOTFS_FLAG: &str = "loop";
-
 pub(crate) struct BlockRootfs {
     guest_path: String,
     device_id: String,
@@ -55,7 +53,6 @@ impl BlockRootfs {
             major: stat::major(dev_id) as i64,
             minor: stat::minor(dev_id) as i64,
             driver_option: block_driver.clone(),
-            path_on_host: rootfs.source.clone(),
             ..Default::default()
         };
 
@@ -136,40 +133,15 @@ impl Rootfs for BlockRootfs {
     }
 }
 
-pub(crate) fn is_block_rootfs(m: &Mount) -> Option<(u64, Mount)> {
-    if m.source.is_empty() {
+pub(crate) fn is_block_rootfs(file: &str) -> Option<u64> {
+    if file.is_empty() {
         return None;
     }
-
-    match stat::stat(m.source.as_str()) {
+    match stat::stat(file) {
         Ok(fstat) => {
             if SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFBLK {
                 let dev_id = fstat.st_rdev;
-                let mut volume = m.clone();
-
-                //clear the volume resource thus the block device will use the dev_id
-                //to find the device's host path;
-                volume.source = String::new();
-                return Some((dev_id, m.clone()));
-            }
-
-            if SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFREG
-                && m.options.contains(&BLOCKFILE_ROOTFS_FLAG.to_string())
-            {
-                //use the block file's inode as the device id, which can make sure it's unique.
-                let dev_id = fstat.st_ino;
-                let options = m
-                    .options
-                    .clone()
-                    .into_iter()
-                    .filter(|o| !o.eq(BLOCKFILE_ROOTFS_FLAG))
-                    .collect();
-
-                //discard the blockfile rootfs's mount option "loop"
-                let mut volume = m.clone();
-                volume.options = options;
-
-                return Some((dev_id, volume));
+                return Some(dev_id);
             }
         }
         Err(_) => return None,
