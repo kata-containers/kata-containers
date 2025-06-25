@@ -389,7 +389,9 @@ impl QemuInner {
         let mut caps = Capabilities::default();
 
         // Confidential Guest doesn't permit virtio-fs.
-        let flags = if self.hypervisor_config().security_info.confidential_guest {
+        let flags = if self.hypervisor_config().security_info.confidential_guest
+            || self.hypervisor_config().shared_fs.shared_fs.is_none()
+        {
             CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
         } else {
             CapabilityBits::BlockDeviceSupport
