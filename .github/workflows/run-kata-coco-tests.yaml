@@ -2,6 +2,11 @@ name: CI | Run kata coco tests
 on:
   workflow_call:
     inputs:
+      artifact-run-id:
+        description: "The run id where the artifact was uploaded"
+        required: false
+        type: string
+        default: ${{ github.run_id }}
       tarball-suffix:
         required: false
         type: string
@@ -37,6 +42,10 @@ on:
         required: true
   workflow_dispatch:
     inputs:
+      artifact-run-id:
+        description: "The run id where the artifact was uploaded"
+        required: true
+        type: string
       tarball-suffix:
         required: false
         type: string
@@ -287,6 +296,9 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          run-id: ${{ inputs.artifact-run-id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository}}
           path: kata-artifacts
 
       - name: Install kata
