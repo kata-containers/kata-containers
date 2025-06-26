@@ -221,7 +221,7 @@ ifneq (,$(DBCMD))
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
     VMROOTFSDRIVER_DB := virtio-blk-pci
-    DEFMAXVCPUS_DB := 1
+    DEFMAXVCPUS_DB := 0
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
