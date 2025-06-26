@@ -9,6 +9,7 @@ use std::convert::TryFrom;
 use std::{collections::HashMap, fs, path::PathBuf};
 
 use crate::handler::HandlerManager;
+use crate::sl;
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -353,7 +354,7 @@ impl KataVirtualVolume {
             }
             KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL => {
                 if self.source.is_empty() {
-                    return Err(anyhow!("missing image reference for guest pulling volume"));
+                    warn!(sl!(), "missing image reference for guest pulling volume");
                 }
             }
             _ => {}
