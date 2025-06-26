@@ -21,7 +21,7 @@ extern crate slog;
 use anyhow::{anyhow, bail, Context, Result};
 use base64::Engine;
 use cfg_if::cfg_if;
-use clap::{AppSettings, Parser};
+use clap::Parser;
 use const_format::concatcp;
 use initdata::{InitdataReturnValue, AA_CONFIG_PATH, CDH_CONFIG_PATH};
 use nix::fcntl::OFlag;
@@ -128,7 +128,7 @@ lazy_static! {
 
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it
-#[clap(global_setting(AppSettings::DisableVersionFlag))]
+#[clap(disable_version_flag = true)]
 struct AgentOpts {
     /// Print the version information
     #[clap(short, long)]

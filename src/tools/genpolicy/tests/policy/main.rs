@@ -73,7 +73,7 @@ mod tests {
             config_files: None,
             containerd_socket_path: None, // Some(String::from("/var/run/containerd/containerd.sock")),
             insecure_registries: Vec::new(),
-            layers_cache_file_path: None,
+            layers_cache: genpolicy::layers_cache::ImageLayersCache::new(&None),
             raw_out: false,
             rego_rules_path: workdir.join("rules.rego").to_str().unwrap().to_string(),
             runtime_class_names: Vec::new(),

@@ -17,7 +17,6 @@ paths:
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
   - "^\\.github/workflows/": []
-  - "^tools/testing/gatekeeper/required-tests.yaml": []
   - "\\.md$": ["static"]
   # TODO: Expand filters
   # Sources
@@ -52,18 +51,6 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, stratovirt)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, clh)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, cloud-hypervisor)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, dragonball)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, qemu-runtime-rs)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, qemu)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (active, stratovirt)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, clh)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, cloud-hypervisor)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, dragonball)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, qemu-runtime-rs)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, qemu)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-cri-containerd (lts, stratovirt)
       # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (clh)
       # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (cloud-hypervisor)
       # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (dragonball)
@@ -80,7 +67,19 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, stratovirt)
-      - Kata Containers CI / kata-containers-ci-on-push / run-basic-s390x-tests / run-cri-containerd (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, cloud-hypervisor) / run-cri-containerd-amd64 (active, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, clh) / run-cri-containerd-amd64 (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, dragonball) / run-cri-containerd-amd64 (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, qemu-runtime-rs) / run-cri-containerd-amd64 (active, qemu-runtime-rs)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, qemu) / run-cri-containerd-amd64 (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, stratovirt) / run-cri-containerd-amd64 (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, clh) / run-cri-containerd-amd64 (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, cloud-hypervisor) / run-cri-containerd-amd64 (lts, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, dragonball) / run-cri-containerd-amd64 (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, qemu-runtime-rs) / run-cri-containerd-amd64 (lts, qemu-runtime-rs)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, qemu) / run-cri-containerd-amd64 (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, stratovirt) / run-cri-containerd-amd64 (lts, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-s390x (active, qemu) / run-cri-containerd-s390x (active, qemu)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-arm64 / run-k8s-tests-on-arm64 (qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, normal, yes)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, containerd, yes)

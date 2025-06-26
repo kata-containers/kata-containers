@@ -19,12 +19,18 @@ updates:
     ignore:
     # rust-vmm repos might cause incompatibilities on patch versions, so
     # lets handle them manually for now.
-      - dependency-name: "vhost"
-      - dependency-name: "vhost-user-backend"
+      - dependency-name: "event-manager"
+      - dependency-name: "kvm-bindings"
+      - dependency-name: "kvm-ioctls"
+      - dependency-name: "linux-loader"
+      - dependency-name: "seccompiler"
+      - dependency-name: "vfio-bindings"
+      - dependency-name: "vfio-ioctls"
       - dependency-name: "virtio-bindings"
       - dependency-name: "virtio-queue"
-      - dependency-name: "virtio-vsock"
+      - dependency-name: "vm-fdt"
       - dependency-name: "vm-memory"
+      - dependency-name: "vm-superio"
       - dependency-name: "vmm-sys-util"
     # As we often have up to 8/9 components that need the same versions bumps
     # create groups for common dependencies, so they can all go in a single PR
