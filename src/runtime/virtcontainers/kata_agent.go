@@ -2703,9 +2703,13 @@ func IsNydusRootFSType(s string) bool {
 	return strings.HasPrefix(path.Base(s), "nydus-overlayfs")
 }
 
-// HasErofsOptions checks if any of the options contain io.containerd.snapshotter.v1.erofs path
-func HasErofsOptions(options []string) bool {
-	for _, opt := range options {
+// IsErofsRootFS checks if any of the options contain io.containerd.snapshotter.v1.erofs path
+func IsErofsRootFS(root RootFs) bool {
+	// TODO: support containerd mount manager: https://github.com/containerd/containerd/issues/11303
+	if root.Type != "overlay" {
+		return false
+	}
+	for _, opt := range root.Options {
 		if strings.Contains(opt, "io.containerd.snapshotter.v1.erofs") {
 			return true
 		}
@@ -2713,21 +2717,15 @@ func HasErofsOptions(options []string) bool {
 	return false
 }
 
-func parseRootFsOptions(options []string) []string {
+func parseErofsRootFsOptions(options []string) []string {
 	lowerdirs := []string{}
 
 	for _, opt := range options {
 		if strings.HasPrefix(opt, "lowerdir=") {
 			lowerdirValue := strings.TrimPrefix(opt, "lowerdir=")
 
-			paths := strings.Split(lowerdirValue, ":")
-
-			for _, path := range paths {
-				path = strings.TrimSuffix(path, "/fs")
-				lowerdirs = append(lowerdirs, path)
-			}
+			lowerdirs = append(lowerdirs, strings.Split(lowerdirValue, ":")...)
 		}
 	}
-
 	return lowerdirs
 }
