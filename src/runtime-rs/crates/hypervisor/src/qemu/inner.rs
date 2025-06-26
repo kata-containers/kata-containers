@@ -7,10 +7,12 @@ use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE}
 use super::qmp::Qmp;
 use crate::device::topology::PCIePort;
 use crate::{
-    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState,
-    utils::enter_netns, HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice,
-    HYPERVISOR_QEMU,
+    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, HypervisorConfig,
+    MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
+
+use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
+
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
@@ -455,15 +457,6 @@ impl QemuInner {
             sl!(),
             "QemuInner::resize_memory(): asked to resize memory to {} MB", new_total_mem_mb
         );
-
-        // stick to the apparent de facto convention and represent megabytes
-        // as u32 and bytes as u64
-        fn bytes_to_megs(bytes: u64) -> u32 {
-            (bytes / (1 << 20)) as u32
-        }
-        fn megs_to_bytes(bytes: u32) -> u64 {
-            bytes as u64 * (1 << 20)
-        }
 
         let qmp = match self.qmp {
             Some(ref mut qmp) => qmp,

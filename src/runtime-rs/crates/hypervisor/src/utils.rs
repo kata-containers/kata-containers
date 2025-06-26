@@ -192,6 +192,14 @@ impl std::fmt::Display for SocketAddress {
     }
 }
 
+pub fn bytes_to_megs(bytes: u64) -> u32 {
+    (bytes / (1 << 20)) as u32
+}
+
+pub fn megs_to_bytes(bytes: u32) -> u64 {
+    bytes as u64 * (1 << 20)
+}
+
 #[cfg(test)]
 mod tests {
     use super::create_fds;
