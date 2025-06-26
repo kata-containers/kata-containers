@@ -136,10 +136,7 @@ impl Request {
         let mut desc = desc_chain
             .next()
             .ok_or(Error::DescriptorChainTooShort)
-            .map_err(|e| {
-                error!("virtio-blk: Request {:?} has only head descriptor", req);
-                e
-            })?;
+            .inspect_err(|_| error!("virtio-blk: Request {:?} has only head descriptor", req))?;
         if !desc.has_next() {
             status_desc = desc;
             // Only flush requests are allowed to skip the data descriptor.
@@ -157,10 +154,7 @@ impl Request {
                 desc = desc_chain
                     .next()
                     .ok_or(Error::DescriptorChainTooShort)
-                    .map_err(|e| {
-                        error!("virtio-blk: descriptor chain corrupted");
-                        e
-                    })?;
+                    .inspect_err(|_| error!("virtio-blk: descriptor chain corrupted"))?;
             }
             status_desc = desc;
         }

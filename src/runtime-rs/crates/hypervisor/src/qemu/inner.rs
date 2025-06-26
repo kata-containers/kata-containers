@@ -7,10 +7,12 @@ use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE}
 use super::qmp::Qmp;
 use crate::device::topology::PCIePort;
 use crate::{
-    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState,
-    utils::enter_netns, HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice,
-    HYPERVISOR_QEMU,
+    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, HypervisorConfig,
+    MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
+
+use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
+
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
@@ -108,7 +110,7 @@ impl QemuInner {
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "ccw" => cmdline.add_block_device(
+                        "ccw" | "blk" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
                             block_dev
@@ -136,6 +138,7 @@ impl QemuInner {
                             cmdline.add_sev_snp_protection_device(
                                 sev_snp_cfg.cbitpos,
                                 &sev_snp_cfg.firmware,
+                                &sev_snp_cfg.host_data,
                             )
                         } else {
                             cmdline.add_sev_protection_device(
@@ -145,6 +148,13 @@ impl QemuInner {
                         }
                     }
                     ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),
+                    ProtectionDeviceConfig::Tdx(tdx_config) => cmdline.add_tdx_protection_device(
+                        &tdx_config.id,
+                        &tdx_config.firmware,
+                        tdx_config.qgs_port,
+                        &tdx_config.mrconfigid,
+                        tdx_config.debug,
+                    ),
                 },
                 DeviceType::PortDevice(port_device) => {
                     let port_type = port_device.config.port_type;
@@ -379,7 +389,19 @@ impl QemuInner {
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
-        caps.set(CapabilityBits::FsSharingSupport);
+
+        // Confidential Guest doesn't permit virtio-fs.
+        let flags = if self.hypervisor_config().security_info.confidential_guest
+            || self.hypervisor_config().shared_fs.shared_fs.is_none()
+        {
+            CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
+        } else {
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::FsSharingSupport
+        };
+        caps.set(flags);
+
         Ok(caps)
     }
 
@@ -435,15 +457,6 @@ impl QemuInner {
             sl!(),
             "QemuInner::resize_memory(): asked to resize memory to {} MB", new_total_mem_mb
         );
-
-        // stick to the apparent de facto convention and represent megabytes
-        // as u32 and bytes as u64
-        fn bytes_to_megs(bytes: u64) -> u32 {
-            (bytes / (1 << 20)) as u32
-        }
-        fn megs_to_bytes(bytes: u32) -> u64 {
-            bytes as u64 * (1 << 20)
-        }
 
         let qmp = match self.qmp {
             Some(ref mut qmp) => qmp,

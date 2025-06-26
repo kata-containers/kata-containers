@@ -1,0 +1,12 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gid-experiment
+  labels:
+    app: gid-experiment
+spec:
+  runtimeClassName: kata-cc-isolation
+  containers:
+    - name: gid
+      image: "ghcr.io/burgerdev/weird-images/gid:latest@sha256:bdbb485bb9e3baf381a2957b9369b6051c6113097a5f8dcee27faff17624a2c0"

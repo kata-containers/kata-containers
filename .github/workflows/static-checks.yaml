@@ -5,6 +5,7 @@ on:
       - edited
       - reopened
       - synchronize
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,9 +28,10 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Ensure the kernel config version has been updated
         run: |
           kernel_dir="tools/packaging/kernel/"
@@ -68,9 +70,10 @@ jobs:
             component-path: src/dragonball
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Install system deps
         run: |
           sudo apt-get update && sudo apt-get install -y build-essential musl-tools
@@ -103,11 +106,15 @@ jobs:
           - "make static-checks"
     env:
       GOPATH: ${{ github.workspace }}
+    permissions:
+      contents: read  # for checkout
+      packages: write # for push to ghcr.io
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
           path: ./src/github.com/${{ github.repository }}
       - name: Install yq
         run: |
@@ -123,7 +130,23 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update && sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
+      - name: Install open-policy-agent
+        run: |
+          cd "${GOPATH}/src/github.com/${{ github.repository }}"
+          ./tests/install_opa.sh
+      - name: Install regorus
+        env:
+          ARTEFACT_REPOSITORY: "${{ github.repository }}"
+          ARTEFACT_REGISTRY_USERNAME: "${{ github.actor }}"
+          ARTEFACT_REGISTRY_PASSWORD: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          "${GOPATH}/src/github.com/${{ github.repository }}/tests/install_regorus.sh"
       - name: Run check
         run: |
           export PATH="${PATH}:${GOPATH}/bin"
           cd "${GOPATH}/src/github.com/${{ github.repository }}" && ${{ matrix.cmd }}
+
+  govulncheck:
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    uses: ./.github/workflows/govulncheck.yaml

@@ -44,42 +44,41 @@ impl LogForwarder {
         let logger = sl!().clone();
         let address = address.to_string();
         let task_handler = tokio::spawn(async move {
-            loop {
-                info!(logger, "try to connect to get agent log");
-                let sock = match sock::new(&address, port) {
-                    Ok(sock) => sock,
-                    Err(err) => {
-                        error!(
-                            sl!(),
-                            "failed to new sock for address {:?} port {} error {:?}",
-                            address,
-                            port,
-                            err
-                        );
-                        return;
-                    }
-                };
+            let sock = match sock::new(&address, port) {
+                Ok(sock) => sock,
+                Err(err) => {
+                    error!(
+                        sl!(),
+                        "failed to new sock for address {:?} port {} error {:?}",
+                        address,
+                        port,
+                        err
+                    );
+                    return;
+                }
+            };
+            info!(logger, "try to connect to agent-log");
 
-                match sock.connect(&config).await {
-                    Ok(stream) => {
-                        let stream = BufReader::new(stream);
-                        let mut lines = stream.lines();
-                        while let Ok(Some(l)) = lines.next_line().await {
-                            match parse_agent_log_level(&l) {
-                                LOG_LEVEL_TRACE => trace!(sl!(), "{}", l),
-                                LOG_LEVEL_DEBUG => debug!(sl!(), "{}", l),
-                                LOG_LEVEL_WARNING => warn!(sl!(), "{}", l),
-                                LOG_LEVEL_ERROR => error!(sl!(), "{}", l),
-                                LOG_LEVEL_CRITICAL => crit!(sl!(), "{}", l),
-                                _ => info!(sl!(), "{}", l),
-                            }
+            match sock.connect(&config).await {
+                Ok(stream) => {
+                    info!(logger, "connected to agent-log successfully");
+                    let stream = BufReader::new(stream);
+                    let mut lines = stream.lines();
+                    while let Ok(Some(l)) = lines.next_line().await {
+                        match parse_agent_log_level(&l) {
+                            LOG_LEVEL_TRACE => trace!(sl!(), "{}", l),
+                            LOG_LEVEL_DEBUG => debug!(sl!(), "{}", l),
+                            LOG_LEVEL_WARNING => warn!(sl!(), "{}", l),
+                            LOG_LEVEL_ERROR => error!(sl!(), "{}", l),
+                            LOG_LEVEL_CRITICAL => crit!(sl!(), "{}", l),
+                            _ => info!(sl!(), "{}", l),
                         }
                     }
-                    Err(err) => {
-                        warn!(logger, "connect agent vsock failed: {:?}", err);
-                    }
                 }
-            }
+                Err(err) => {
+                    warn!(logger, "failed to connect agent-log, err: {:?}", err);
+                }
+            };
         });
         self.task_handler = Some(task_handler);
         Ok(())

@@ -258,7 +258,7 @@
                     "io.katacontainers.pkg.oci.container_type": "pod_container",
                     "io.kubernetes.cri.container-name": "dummy",
                     "io.kubernetes.cri.container-type": "container",
-                    "io.kubernetes.cri.image-name": "quay.io/opstree/redis@sha256:2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48",
+                    "io.kubernetes.cri.image-name": "quay.io/kata-containers/test-images/opstree/redis:sha256-2642c7b07713df6897fa88cbe6db85170690cf3650018ceb2ab16cfa0b4f8d48",
                     "io.kubernetes.cri.sandbox-id": "5cd5b1a9a4ccc5c9fcf9fcc66fb72bf01e0920a1f34ef505f744119db6679c41",
                     "io.kubernetes.cri.sandbox-name": "dummy",
                     "io.kubernetes.cri.sandbox-namespace": "kata-containers-k8s-tests",

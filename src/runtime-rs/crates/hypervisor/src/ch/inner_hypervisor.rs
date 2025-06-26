@@ -7,15 +7,18 @@ use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
-use crate::utils::{get_jailer_root, get_sandbox_path};
+use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
 use crate::VM_ROOTFS_DRIVER_BLK;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
-use ch_config::ch_api::{
-    cloud_hypervisor_vm_create, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
-    cloud_hypervisor_vmm_shutdown,
+use ch_config::{
+    ch_api::{
+        cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_resize,
+        cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping, cloud_hypervisor_vmm_shutdown,
+    },
+    VmResize,
 };
 use ch_config::{guest_protection_is_tdx, NamedHypervisorConfig, VmConfig};
 use core::future::poll_fn;
@@ -568,7 +571,7 @@ impl CloudHypervisorInner {
             if protection == GuestProtection::NoProtection {
                 // User wants protection, but none available.
                 return Err(anyhow!(GuestProtectionError::NoProtectionAvailable));
-            } else if let GuestProtection::Tdx(_) = protection {
+            } else if let GuestProtection::Tdx = protection {
                 info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
             } else {
                 return Err(anyhow!(GuestProtectionError::ExpectedTDXProtection(
@@ -577,7 +580,7 @@ impl CloudHypervisorInner {
             }
         } else if protection == GuestProtection::NoProtection {
             debug!(sl!(), "no guest protection available");
-        } else if let GuestProtection::Tdx(_) = protection {
+        } else if let GuestProtection::Tdx = protection {
             // CH requires TDX protection to be used.
             return Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH));
         } else {
@@ -678,8 +681,50 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
-        Ok((old_vcpu, new_vcpu))
+    pub(crate) async fn resize_vcpu(
+        &self,
+        old_vcpus: u32,
+        mut new_vcpus: u32,
+    ) -> Result<(u32, u32)> {
+        info!(
+            sl!(),
+            "cloud hypervisor resize_vcpu(): {} -> {}", old_vcpus, new_vcpus
+        );
+
+        if new_vcpus == 0 {
+            return Err(anyhow!("resize to 0 vcpus requested"));
+        }
+
+        if new_vcpus > self.config.cpu_info.default_maxvcpus {
+            warn!(
+                sl!(),
+                "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
+            new_vcpus = self.config.cpu_info.default_maxvcpus;
+        }
+
+        if new_vcpus == old_vcpus {
+            return Ok((old_vcpus, new_vcpus));
+        }
+
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let vmresize = VmResize {
+            desired_vcpus: Some(new_vcpus as u8),
+            ..Default::default()
+        };
+
+        cloud_hypervisor_vm_resize(
+            socket.try_clone().context("failed to clone socket")?,
+            vmresize,
+        )
+        .await
+        .context("resize vcpus")?;
+
+        Ok((old_vcpus, new_vcpus))
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
@@ -748,17 +793,99 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
-        self._guest_memory_block_size_mb = size;
+        self.guest_memory_block_size_mb = bytes_to_megs(size as u64);
     }
 
     pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
-        self._guest_memory_block_size_mb
+        self.guest_memory_block_size_mb
     }
 
-    pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        warn!(sl!(), "CH memory resize not implemented - see https://github.com/kata-containers/kata-containers/issues/8801");
+    pub(crate) async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
 
-        Ok((0, MemoryConfig::default()))
+        let vminfo =
+            cloud_hypervisor_vm_info(socket.try_clone().context("failed to clone socket")?)
+                .await
+                .context("get vminfo")?;
+
+        let current_mem_size = vminfo.config.memory.size;
+        let new_total_mem = megs_to_bytes(new_mem_mb);
+
+        info!(
+            sl!(),
+            "cloud-hypervisor::resize_memory(): asked to resize memory to {} MB, current memory is {} MB", new_mem_mb, bytes_to_megs(current_mem_size)
+        );
+
+        // Early Check to verify if boot memory is the same as requested
+        if current_mem_size == new_total_mem {
+            info!(sl!(), "VM alreay has requested memory");
+            return Ok((new_mem_mb, MemoryConfig::default()));
+        }
+
+        if current_mem_size > new_total_mem {
+            info!(sl!(), "Remove memory is not supported, nothing to do");
+            return Ok((new_mem_mb, MemoryConfig::default()));
+        }
+
+        let guest_mem_block_size = megs_to_bytes(self.guest_memory_block_size_mb);
+
+        let mut new_hotplugged_mem = new_total_mem - current_mem_size;
+
+        info!(
+            sl!(),
+            "new hotplugged mem before alignment: {} B ({} MB), guest_mem_block_size: {} MB",
+            new_hotplugged_mem,
+            bytes_to_megs(new_hotplugged_mem),
+            bytes_to_megs(guest_mem_block_size)
+        );
+
+        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        if is_unaligned {
+            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
+                new_hotplugged_mem,
+                guest_mem_block_size,
+            )
+            .ok_or(anyhow!(format!(
+                "alignment of {} B to the block size of {} B failed",
+                new_hotplugged_mem, guest_mem_block_size
+            )))?
+        }
+
+        let new_total_mem_aligned = new_hotplugged_mem + current_mem_size;
+
+        let max_total_mem = megs_to_bytes(self.config.memory_info.default_maxmemory);
+        if new_total_mem_aligned > max_total_mem {
+            return Err(anyhow!(
+                "requested memory ({} MB) is greater than maximum allowed ({} MB)",
+                bytes_to_megs(new_total_mem_aligned),
+                self.config.memory_info.default_maxmemory
+            ));
+        }
+
+        info!(
+            sl!(),
+            "hotplugged mem from {} MB to {} MB)",
+            bytes_to_megs(current_mem_size),
+            bytes_to_megs(new_total_mem_aligned)
+        );
+
+        let vmresize = VmResize {
+            desired_ram: Some(new_total_mem_aligned),
+            ..Default::default()
+        };
+
+        cloud_hypervisor_vm_resize(
+            socket.try_clone().context("failed to clone socket")?,
+            vmresize,
+        )
+        .await
+        .context("resize memory")?;
+
+        Ok((new_mem_mb, MemoryConfig::default()))
     }
 }
 
@@ -956,15 +1083,13 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
+    use kata_sys_util::protection::SevSnpDetails;
 
     #[cfg(target_arch = "x86_64")]
-    use kata_sys_util::protection::TDX_SYS_FIRMWARE_DIR;
+    use kata_sys_util::protection::TDX_KVM_PARAMETER_PATH;
 
     use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, SecurityInfo};
     use serial_test::serial;
-    #[cfg(target_arch = "x86_64")]
-    use std::path::PathBuf;
     use test_utils::{assert_result, skip_if_not_root};
 
     use std::fs::File;
@@ -984,11 +1109,6 @@ mod tests {
     async fn test_get_guest_protection() {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
-
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
 
         let sev_snp_details = SevSnpDetails { cbitpos: 42 };
 
@@ -1020,8 +1140,8 @@ mod tests {
                 result: Ok(GuestProtection::Snp(sev_snp_details.clone())),
             },
             TestData {
-                value: Some(GuestProtection::Tdx(tdx_details.clone())),
-                result: Ok(GuestProtection::Tdx(tdx_details.clone())),
+                value: Some(GuestProtection::Tdx),
+                result: Ok(GuestProtection::Tdx),
             },
         ];
 
@@ -1055,26 +1175,11 @@ mod tests {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
 
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
-
         // Use the hosts protection, not a fake one.
         set_fake_guest_protection(None);
 
-        let tdx_fw_path = PathBuf::from(TDX_SYS_FIRMWARE_DIR);
-
-        // Simple test for Intel TDX
-        let have_tdx = if tdx_fw_path.exists() {
-            if let Ok(metadata) = std::fs::metadata(tdx_fw_path.clone()) {
-                metadata.is_dir()
-            } else {
-                false
-            }
-        } else {
-            false
-        };
+        let have_tdx = fs::read(TDX_KVM_PARAMETER_PATH)
+            .is_ok_and(|content| !content.is_empty() && content[0] == b'Y');
 
         let protection =
             task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })
@@ -1083,16 +1188,13 @@ mod tests {
                 .unwrap();
 
         if std::env::var("DEBUG").is_ok() {
-            let msg = format!(
-                "tdx_fw_path: {:?}, have_tdx: {:?}, protection: {:?}",
-                tdx_fw_path, have_tdx, protection
-            );
+            let msg = format!("have_tdx: {:?}, protection: {:?}", have_tdx, protection);
 
             eprintln!("DEBUG: {}", msg);
         }
 
         if have_tdx {
-            assert_eq!(protection, GuestProtection::Tdx(tdx_details));
+            assert_eq!(protection, GuestProtection::Tdx);
         } else {
             assert_eq!(protection, GuestProtection::NoProtection);
         }
@@ -1115,11 +1217,6 @@ mod tests {
             guest_protection_to_use: GuestProtection,
         }
 
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
-
         let tests = &[
             TestData {
                 confidential_guest: false,
@@ -1135,15 +1232,15 @@ mod tests {
             },
             TestData {
                 confidential_guest: false,
-                available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
+                available_protection: Some(GuestProtection::Tdx),
                 result: Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH)),
-                guest_protection_to_use: GuestProtection::Tdx(tdx_details.clone()),
+                guest_protection_to_use: GuestProtection::Tdx,
             },
             TestData {
                 confidential_guest: true,
-                available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
+                available_protection: Some(GuestProtection::Tdx),
                 result: Ok(()),
-                guest_protection_to_use: GuestProtection::Tdx(tdx_details),
+                guest_protection_to_use: GuestProtection::Tdx,
             },
             TestData {
                 confidential_guest: false,

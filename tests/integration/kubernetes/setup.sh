@@ -106,9 +106,13 @@ add_cbl_mariner_specific_annotations() {
 		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
 		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
 
+		local mariner_annotation_disable_image_nvdimm="io.katacontainers.config.hypervisor.disable_image_nvdimm"
+		local mariner_disable_image_nvdimm=true
+
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_disable_image_nvdimm}" "${mariner_disable_image_nvdimm}"
 		done
 	fi
 }
