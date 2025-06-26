@@ -1110,6 +1110,14 @@ pub struct RemoteInfo {
     /// Remote hyperisor timeout of creating (in seconds)
     #[serde(default)]
     pub hypervisor_timeout: i32,
+
+    /// GPU specific annotations (currently only applicable for Remote Hypervisor)
+    /// default_gpus specifies the number of GPUs required for the Kata VM
+    #[serde(default)]
+    pub default_gpus: u32,
+    /// default_gpu_model specifies GPU model like tesla, h100, a100, readeon etc.
+    #[serde(default)]
+    pub default_gpu_model: String,
 }
 
 /// Common configuration information for hypervisors.
