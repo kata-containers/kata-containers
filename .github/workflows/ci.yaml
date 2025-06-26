@@ -345,6 +345,35 @@ jobs:
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
 
+  run-kata-coco-tests-workflow:
+    if: ${{ (inputs.skip-test != 'yes') && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'test-coco')) }}
+    runs-on: ubuntu-22.04
+    needs:
+    - publish-kata-deploy-payload-amd64
+    - build-and-publish-tee-confidential-unencrypted-image
+    - publish-csi-driver-amd64
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Trigger kata-coco-tests for amd64 arch if applicable
+        run: |
+          gh workflow run run-kata-coco-tests.yaml \
+            -f tarball-suffix="-${{ inputs.tag }}" \
+            -f registry=ghcr.io \
+            -f repo=${{ github.repository_owner }}/kata-deploy-ci \
+            -f tag=${{ inputs.tag }}-amd64 \
+            -f commit-hash=${{ inputs.commit-hash }} \
+            -f pr-number=${{ inputs.pr-number }} \
+            -f target-branch=${{ inputs.target-branch }}
+
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
