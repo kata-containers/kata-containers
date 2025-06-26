@@ -114,7 +114,7 @@ pub struct MsiCap {
 impl MsiCap {
     /// Create a new PCI MSI capability structure.
     pub fn new(next: u8, mut msg_ctl: u16) -> Self {
-        let cap_id_next = (next as u16) << 8 | PciCapabilityId::MessageSignalledInterrupts as u16;
+        let cap_id_next = ((next as u16) << 8) | PciCapabilityId::MessageSignalledInterrupts as u16;
 
         // By default MSI capability is disabled, and driver needs to explicitly turn it on.
         msg_ctl &= !MSI_CTL_ENABLE;
@@ -279,13 +279,13 @@ impl MsiCap {
                     self.mask_bits = data[0] as u32 | (self.mask_bits & 0xffff_ff00);
                 }
                 x if mask_bits_offset.is_some() && x == mask_bits_offset.unwrap() + 1 => {
-                    self.mask_bits = (data[0] as u32) << 8 | (self.mask_bits & 0xffff_00ff);
+                    self.mask_bits = ((data[0] as u32) << 8) | (self.mask_bits & 0xffff_00ff);
                 }
                 x if mask_bits_offset.is_some() && x == mask_bits_offset.unwrap() + 2 => {
-                    self.mask_bits = (data[0] as u32) << 16 | (self.mask_bits & 0xff00_ffff);
+                    self.mask_bits = ((data[0] as u32) << 16) | (self.mask_bits & 0xff00_ffff);
                 }
                 x if mask_bits_offset.is_some() && x == mask_bits_offset.unwrap() + 3 => {
-                    self.mask_bits = (data[0] as u32) << 24 | (self.mask_bits & 0x00ff_ffff);
+                    self.mask_bits = ((data[0] as u32) << 24) | (self.mask_bits & 0x00ff_ffff);
                 }
                 _ => debug!("invalid offset {} (data length {})", offset, data.len()),
             },
@@ -304,7 +304,7 @@ impl MsiCap {
                         self.mask_bits = value as u32 | (self.mask_bits & 0xffff_0000);
                     }
                     x if mask_bits_offset.is_some() && x == mask_bits_offset.unwrap() + 2 => {
-                        self.mask_bits = (value as u32) << 16 | (self.mask_bits & 0x0000_ffff);
+                        self.mask_bits = ((value as u32) << 16) | (self.mask_bits & 0x0000_ffff);
                     }
                     _ => debug!("invalid offset {} (data length {})", offset, data.len()),
                 }
@@ -463,7 +463,7 @@ impl PciCapability for MsiCap {
 }
 
 /// Struct to manage PCI Message Signalled Interrupt controller working state.
-#[repr(packed)]
+#[repr(Rust, packed)]
 #[derive(Clone, Copy, Default, PartialEq)]
 pub struct MsiState {
     msg_ctl: u16,

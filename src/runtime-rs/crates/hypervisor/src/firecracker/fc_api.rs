@@ -302,12 +302,11 @@ impl FcInner {
             self.umount_jail_resource("").ok();
         }
         std::fs::remove_dir_all(self.vm_path.as_str())
-            .map_err(|err| {
+            .inspect_err(|err| {
                 error!(
                     sl(),
                     "failed to remove dir all for {} with error: {:?}", &self.vm_path, &err
-                );
-                err
+                )
             })
             .ok();
     }

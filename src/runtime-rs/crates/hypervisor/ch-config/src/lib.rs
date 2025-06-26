@@ -500,23 +500,44 @@ pub struct NamedHypervisorConfig {
     pub guest_protection_to_use: GuestProtection,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct VmResize {
+    pub desired_vcpus: Option<u8>,
+    pub desired_ram: Option<u64>,
+    pub desired_balloon: Option<u64>,
+}
+
+/// VmInfo : Virtual Machine information
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+pub struct VmInfo {
+    pub config: VmConfig,
+    pub state: State,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_actual_size: Option<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub enum State {
+    #[default]
+    Created,
+    Running,
+    Shutdown,
+    Paused,
+}
+
 // Returns true if the enabled guest protection is Intel TDX.
 pub fn guest_protection_is_tdx(guest_protection_to_use: GuestProtection) -> bool {
-    matches!(guest_protection_to_use, GuestProtection::Tdx(_))
+    matches!(guest_protection_to_use, GuestProtection::Tdx)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_sys_util::protection::{SevSnpDetails, TDXDetails};
+    use kata_sys_util::protection::SevSnpDetails;
 
     #[test]
     fn test_guest_protection_is_tdx() {
-        let tdx_details = TDXDetails {
-            major_version: 1,
-            minor_version: 0,
-        };
-
         let sev_snp_details = SevSnpDetails { cbitpos: 42 };
 
         #[derive(Debug)]
@@ -547,7 +568,7 @@ mod tests {
                 result: false,
             },
             TestData {
-                protection: GuestProtection::Tdx(tdx_details),
+                protection: GuestProtection::Tdx,
                 result: true,
             },
         ];

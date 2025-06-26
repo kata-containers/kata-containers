@@ -220,6 +220,12 @@ block_device_driver = "virtio-blk"
 # Default 1
 #hypervisor_loglevel = 1
 
+# If false and nvdimm is supported, use nvdimm device to plug guest image.
+# Otherwise virtio-block device is used.
+#
+# nvdimm is not supported when `confidential_guest = true`.
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
+
 # Enable hot-plugging of VFIO devices to a root-port.
 # The default setting is  "no-port"
 #hot_plug_vfio = "root-port"

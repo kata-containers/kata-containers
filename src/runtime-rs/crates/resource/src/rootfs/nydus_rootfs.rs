@@ -196,7 +196,7 @@ async fn get_nydus_prefetch_files(nydus_prefetch_path: String) -> Option<String>
         return None;
     }
 
-    return Some(prefetch_list_path.display().to_string());
+    Some(prefetch_list_path.display().to_string())
 }
 
 #[cfg(test)]

@@ -9,10 +9,6 @@ source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
-AZ_APPID="${AZ_APPID:-}"
-AZ_PASSWORD="${AZ_PASSWORD:-}"
-AZ_SUBSCRIPTION_ID="${AZ_SUBSCRIPTION_ID:-}"
-AZ_TENANT_ID="${AZ_TENANT_ID:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
@@ -92,17 +88,6 @@ function enable_cluster_approuting() {
 function install_azure_cli() {
 	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 	az extension add --name aks-preview
-}
-
-function login_azure() {
-	az login \
-		--service-principal \
-		-u "${AZ_APPID}" \
-		-p "${AZ_PASSWORD}" \
-		--tenant "${AZ_TENANT_ID}"
-
-	# Switch to the Kata Containers subscription
-	az account set --subscription "${AZ_SUBSCRIPTION_ID}"
 }
 
 function create_cluster() {

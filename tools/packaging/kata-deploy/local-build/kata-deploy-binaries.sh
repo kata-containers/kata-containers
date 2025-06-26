@@ -43,7 +43,6 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 ARCH=${ARCH:-$(uname -m)}
 BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
-PULL_TYPE=${PULL_TYPE:-guest-pull}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
@@ -430,12 +429,12 @@ install_image_confidential() {
 	else
 		export MEASURED_ROOTFS=yes
 	fi
-	export PULL_TYPE=default
 	install_image "confidential"
 }
 
 #Install cbl-mariner guest image
 install_image_mariner() {
+	export IMAGE_SIZE_ALIGNMENT_MB=2
 	install_image "mariner"
 }
 
@@ -528,7 +527,6 @@ install_initrd() {
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
 	export MEASURED_ROOTFS=no
-	export PULL_TYPE=default
 	install_initrd "confidential"
 }
 
@@ -996,7 +994,7 @@ install_agent() {
 	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY="${AGENT_POLICY}" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
+	DESTDIR="${destdir}" AGENT_POLICY="${AGENT_POLICY}" "${agent_builder}"
 }
 
 install_coco_guest_components() {

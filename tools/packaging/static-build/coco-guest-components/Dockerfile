@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ARG RUST_TOOLCHAIN
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -28,6 +28,7 @@ RUN apt-get update && \
 	libssl-dev \
 	libtss2-dev \
 	make \
+	cmake \
 	musl-tools \
 	openssl \
 	perl \

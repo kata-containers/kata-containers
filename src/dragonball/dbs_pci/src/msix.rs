@@ -32,7 +32,7 @@ pub const MSIX_TABLE_ENTRIES_MODULO: u64 = 16;
 /// This struct is the shadow copy of the PCI MSI-x capability. Guest device drivers read from/write
 /// to this struct. There's another struct MsixState, which maintains the working state about the
 /// PCI MSI-x controller.
-#[repr(packed)]
+#[repr(Rust, packed)]
 #[derive(Clone, Copy, Default, PartialEq)]
 pub struct MsixCap {
     // Capability ID

@@ -46,10 +46,7 @@ fn get_builtin_check_func(name: CheckType) -> Result<BuiltinCmdFp> {
 
 // This function is called from each 'kata-ctl check' argument section
 fn handle_builtin_check(check: CheckType, args: &str) -> Result<()> {
-    let f = match get_builtin_check_func(check) {
-        Ok(fp) => fp,
-        Err(e) => return Err(e),
-    };
+    let f = get_builtin_check_func(check)?;
 
     f(args)
 }
