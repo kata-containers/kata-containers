@@ -41,7 +41,7 @@ remote_hypervisor_timeout = 600
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
 # Note: Remote hypervisor is only handling the following annotations
-enable_annotations = ["machine_type", "default_memory", "default_vcpus"]
+enable_annotations = ["machine_type", "default_memory", "default_vcpus", "default_gpus", "default_gpu_model"]
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
