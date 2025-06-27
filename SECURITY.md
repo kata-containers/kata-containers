@@ -64,7 +64,7 @@ Kata Containers is a **rolling-release** project: every monthly release replaces
 A: No. Upgrade to the latest monthly release.
 
 **Q: Can I get early access to embargoed fixes?**  
-A: Only project members under the disclosure agreement (see [SECURITY_CONTACTS](https://kata-containers/kata-containers/SECURITY_CONTACTS)) receive advance patches.
+A: Only project members under the disclosure agreement (see [SECURITY_CONTACTS](SECURITY_CONTACTS)) receive advance patches.
 
 **Q: Where can I discuss the vulnerability once it is public?**  
 A: Open/continue a GitHub issue **after** the advisory is published, or use `#kata-containers` on Slack with a link to the advisory.
