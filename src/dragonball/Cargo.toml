@@ -85,7 +85,7 @@ lazy_static = "1.2"
 libc = "0.2.39"
 linux-loader = {workspace = true}
 log = "0.4.14"
-nix = "0.24.2"
+nix = "0.24.3"
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
 seccompiler = {workspace = true}

@@ -276,7 +276,7 @@ dependencies = [
  "arc-swap",
  "lazy_static",
  "libc",
- "nix 0.23.2",
+ "nix",
  "thiserror",
  "vm-memory",
  "vmm-sys-util",
@@ -426,7 +426,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.24.3",
+ "nix",
  "nydus-api",
  "nydus-rafs",
  "nydus-storage",
@@ -535,7 +535,7 @@ dependencies = [
  "libc",
  "linux-loader",
  "log",
- "nix 0.24.3",
+ "nix",
  "procfs 0.12.0",
  "prometheus",
  "seccompiler",
@@ -685,7 +685,7 @@ dependencies = [
  "libc",
  "log",
  "mio 0.8.11",
- "nix 0.24.3",
+ "nix",
  "virtio-queue",
  "vm-memory",
  "vmm-sys-util",
@@ -1180,19 +1180,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.23.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3790c00a0150112de0f4cd161e3d7fc4b2d8a5542ffc35f099a2562aecb35c"
-dependencies = [
- "bitflags 1.3.2",
- "cc",
- "cfg-if",
- "libc",
- "memoffset",
-]
-
-[[package]]
-name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
@@ -1263,7 +1250,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "nix 0.24.3",
+ "nix",
  "nydus-api",
  "nydus-storage",
  "nydus-utils",
@@ -1288,7 +1275,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "nix 0.24.3",
+ "nix",
  "nydus-api",
  "nydus-utils",
  "reqwest",
@@ -1316,7 +1303,7 @@ dependencies = [
  "log",
  "lz4",
  "lz4-sys",
- "nix 0.24.3",
+ "nix",
  "nydus-api",
  "openssl",
  "serde",
@@ -1924,7 +1911,7 @@ dependencies = [
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "nix 0.24.3",
+ "nix",
 ]
 
 [[package]]
