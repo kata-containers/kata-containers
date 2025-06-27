@@ -57,6 +57,8 @@ jobs:
 
       - name: build-and-push-kata-deploy-ci-amd64
         id: build-and-push-kata-deploy-ci-amd64
+        env:
+          TARGET_ARCH: ${{ inputs.target-arch }}
         run: |
           # We need to do such trick here as the format of the $GITHUB_REF
           # is "refs/tags/<tag>"
@@ -70,8 +72,8 @@ jobs:
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
                   "$(pwd)"/kata-static.tar.xz "ghcr.io/kata-containers/kata-deploy" \
-                  "${tag}-${{ inputs.target-arch }}"
+                  "${tag}-${TARGET_ARCH}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
                   "$(pwd)"/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
-                  "${tag}-${{ inputs.target-arch }}"
+                  "${tag}-${TARGET_ARCH}"
           done

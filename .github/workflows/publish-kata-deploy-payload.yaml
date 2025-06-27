@@ -79,7 +79,12 @@ jobs:
 
       - name: build-and-push-kata-payload for ${{ inputs.arch }}
         id: build-and-push-kata-payload
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          REPO: ${{ inputs.repo }}
+          TAG: ${{ inputs.tag }}
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          "$(pwd)"/kata-static.tar.xz \
-          ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}
+          "$(pwd)/kata-static.tar.xz" \
+          "${REGISTRY}/${REPO}" \
+          "${TAG}"
