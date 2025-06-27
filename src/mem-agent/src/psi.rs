@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cgroup::CGROUP_PATH;
 use crate::info;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
@@ -11,7 +12,6 @@ use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
-const CGROUP_PATH: &str = "/sys/fs/cgroup/";
 const MEM_PSI: &str = "memory.pressure";
 const IO_PSI: &str = "io.pressure";
 

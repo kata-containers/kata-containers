@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cgroup::CGROUP_PATH;
 use crate::proc;
 use crate::psi;
 use crate::timer::Timeout;
@@ -59,7 +60,7 @@ impl Default for Config {
             period_secs: 10 * 60,
             period_psi_percent_limit: 1,
             compact_psi_percent_limit: 5,
-            compact_sec_max: 30 * 60,
+            compact_sec_max: 5 * 60,
             compact_order: PAGE_REPORTING_MIN_ORDER,
             compact_threshold: 2 << PAGE_REPORTING_MIN_ORDER,
             compact_force_times: std::u64::MAX,
@@ -238,7 +239,11 @@ pub struct Compact {
 }
 
 impl Compact {
-    pub fn new(mut config: Config) -> Result<Self> {
+    pub fn new(is_cg_v2: bool, mut config: Config) -> Result<Self> {
+        if is_cg_v2 {
+            config.psi_path = PathBuf::from(CGROUP_PATH);
+        }
+
         config.psi_path =
             psi::check(&config.psi_path).map_err(|e| anyhow!("psi::check failed: {}", e))?;
 
@@ -440,7 +445,8 @@ mod tests {
 
     #[test]
     fn test_compact() {
-        let mut c = Compact::new(Config::default()).unwrap();
+        let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
+        let mut c = Compact::new(is_cg_v2, Config::default()).unwrap();
         assert!(c.work().is_ok());
     }
 }
