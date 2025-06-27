@@ -1,0 +1,9 @@
+# Defined below are the security contacts for this repo.
+#
+# They are the contact point for the Product Security Committee to reach out
+# to for triaging and handling of incoming issues.
+#
+# DO NOT REPORT SECURITY VULNERABILITIES DIRECTLY TO THESE NAMES, FOLLOW THE
+# INSTRUCTIONS AT hhttps://github.com/kata-containers/kata-containers/security
+
+@kata-containers/architecture-committee
