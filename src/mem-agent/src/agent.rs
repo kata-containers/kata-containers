@@ -4,8 +4,9 @@
 
 use crate::compact;
 use crate::memcg::{self, MemCgroup};
-use crate::{error, info};
+use crate::{debug, error, info};
 use anyhow::{anyhow, Result};
+use std::collections::HashMap;
 use std::thread;
 use tokio::runtime::{Builder, Runtime};
 use tokio::select;
@@ -27,7 +28,7 @@ enum AgentCmd {
 enum AgentReturn {
     Ok,
     Err(anyhow::Error),
-    MemcgStatus(Vec<memcg::MemCgroup>),
+    MemcgStatus(HashMap<String, memcg::MemCgroup>),
 }
 
 async fn handle_agent_cmd(
@@ -44,7 +45,16 @@ async fn handle_agent_cmd(
             ret_msg = AgentReturn::MemcgStatus(memcg.get_status().await);
             false
         }
-        AgentCmd::MemcgSet(opt) => memcg.set_config(opt).await,
+        AgentCmd::MemcgSet(opt) => match memcg.set_config(opt).await {
+            Ok(reset) => {
+                ret_msg = AgentReturn::Ok;
+                reset
+            }
+            Err(e) => {
+                ret_msg = AgentReturn::Err(e);
+                false
+            }
+        },
         AgentCmd::CompactSet(opt) => comp.set_config(opt).await,
     };
 
@@ -58,6 +68,11 @@ async fn handle_agent_cmd(
 fn get_remaining_tokio_duration(memcg: &memcg::MemCG, comp: &compact::Compact) -> Duration {
     let memcg_d = memcg.get_remaining_tokio_duration();
     let comp_d = comp.get_remaining_tokio_duration();
+
+    debug!(
+        "get_remaining_tokio_duration: memcg_d={:?}, comp_d={:?}",
+        memcg_d, comp_d
+    );
 
     if memcg_d > comp_d {
         comp_d
@@ -76,6 +91,11 @@ async fn async_get_remaining_tokio_duration(
     let memcg_d = memcg_f.await;
     let comp_d = comp_f.await;
 
+    debug!(
+        "async_get_remaining_tokio_duration: memcg_d={:?}, comp_d={:?}",
+        memcg_d, comp_d
+    );
+
     if memcg_d > comp_d {
         comp_d
     } else {
@@ -84,16 +104,14 @@ async fn async_get_remaining_tokio_duration(
 }
 
 fn agent_work(mut memcg: memcg::MemCG, mut comp: compact::Compact) -> Result<Duration> {
-    let memcg_need_reset = if memcg.need_work() {
+    let memcg_work_list = memcg.get_timeout_list();
+    if memcg_work_list.len() > 0 {
         info!("memcg.work start");
         memcg
-            .work()
+            .work(&memcg_work_list)
             .map_err(|e| anyhow!("memcg.work failed: {}", e))?;
         info!("memcg.work stop");
-        true
-    } else {
-        false
-    };
+    }
 
     let compact_need_reset = if comp.need_work() {
         info!("compact.work start");
@@ -105,9 +123,8 @@ fn agent_work(mut memcg: memcg::MemCG, mut comp: compact::Compact) -> Result<Dur
         false
     };
 
-    if memcg_need_reset {
-        memcg.reset_timer();
-    }
+    memcg.reset_timers(&memcg_work_list);
+
     if compact_need_reset {
         comp.reset_timer();
     }
@@ -136,6 +153,8 @@ impl MemAgentSleep {
     }
 
     fn set_sleep(&mut self, d: Duration) {
+        info!("MemAgentSleep::set_sleep: {:?}", d);
+
         self.duration = d;
         self.start_wait_time = Instant::now();
     }
@@ -219,10 +238,17 @@ impl MemAgent {
         memcg_config: memcg::Config,
         compact_config: compact::Config,
     ) -> Result<(Self, Runtime)> {
-        let mg = memcg::MemCG::new(memcg_config)
+        let is_cg_v2 = crate::cgroup::is_cgroup_v2()?;
+        if is_cg_v2 {
+            info!("current host use cgroup v2");
+        } else {
+            info!("current host use cgroup v1");
+        }
+
+        let mg = memcg::MemCG::new(is_cg_v2, memcg_config)
             .map_err(|e| anyhow!("memcg::MemCG::new fail: {}", e))?;
 
-        let comp = compact::Compact::new(compact_config)
+        let comp = compact::Compact::new(is_cg_v2, compact_config)
             .map_err(|e| anyhow!("compact::Compact::new fail: {}", e))?;
 
         let (cmd_tx, cmd_rx) = mpsc::channel(10);
@@ -295,7 +321,7 @@ impl MemAgent {
         }
     }
 
-    pub async fn memcg_status_async(&self) -> Result<Vec<MemCgroup>> {
+    pub async fn memcg_status_async(&self) -> Result<HashMap<String, MemCgroup>> {
         let ret = self
             .send_cmd_async(AgentCmd::MemcgStatus)
             .await
@@ -323,10 +349,8 @@ mod tests {
 
     #[test]
     fn test_agent() {
-        let memcg_config = memcg::Config {
-            disabled: true,
-            ..Default::default()
-        };
+        let mut memcg_config = memcg::Config::default();
+        memcg_config.default.disabled = true;
         let compact_config = compact::Config {
             disabled: true,
             ..Default::default()
@@ -337,10 +361,8 @@ mod tests {
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on({
-                let memcg_config = memcg::OptionConfig {
-                    period_secs: Some(120),
-                    ..Default::default()
-                };
+                let mut memcg_config = memcg::OptionConfig::default();
+                memcg_config.default.period_secs = Some(120);
                 ma.memcg_set_config_async(memcg_config)
             })
             .unwrap();
@@ -359,10 +381,8 @@ mod tests {
 
     #[test]
     fn test_agent_memcg_status() {
-        let memcg_config = memcg::Config {
-            disabled: true,
-            ..Default::default()
-        };
+        let mut memcg_config = memcg::Config::default();
+        memcg_config.default.disabled = true;
         let compact_config = compact::Config {
             disabled: true,
             ..Default::default()
