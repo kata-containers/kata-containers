@@ -989,7 +989,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "mockall",
- "nix 0.24.2",
+ "nix 0.26.4",
  "num_cpus",
  "oci-spec",
  "once_cell",
@@ -1020,7 +1020,7 @@ dependencies = [
  "glob",
  "hex",
  "lazy_static",
- "nix 0.24.2",
+ "nix 0.26.4",
  "num_cpus",
  "oci-spec",
  "regex",
@@ -1194,9 +1194,9 @@ checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
 name = "nix"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "195cdbc1741b8134346d515b3a56a1c94b0912758009cfd53f99ea0f57b065fc"
+checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
 dependencies = [
  "bitflags 1.2.1",
  "cfg-if",
@@ -1982,7 +1982,7 @@ dependencies = [
  "hyperlocal",
  "kata-sys-util",
  "kata-types",
- "nix 0.24.2",
+ "nix 0.26.4",
  "tempfile",
  "test-utils",
  "tokio",
@@ -2192,7 +2192,7 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "nix 0.24.2",
+ "nix 0.26.4",
 ]
 
 [[package]]
@@ -2475,7 +2475,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c8e1df0bf1e1b28095c24564d1b90acae64ca69b097ed73896e342fa6649c57"
 dependencies = [
  "libc",
- "nix 0.24.2",
+ "nix 0.24.3",
 ]
 
 [[package]]
