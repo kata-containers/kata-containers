@@ -105,7 +105,7 @@ Please raise an issue
 [in this repository](https://github.com/kata-containers/kata-containers/issues).
 
 > **Note:**
-> If you are reporting a security issue, please follow the [vulnerability reporting process](https://github.com/kata-containers/community#vulnerability-handling)
+> If you are reporting a security issue, please follow the [vulnerability reporting process](SECURITY.md)
 
 ## Developers
 
