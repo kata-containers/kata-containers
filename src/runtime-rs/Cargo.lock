@@ -50,7 +50,7 @@ dependencies = [
  "logging",
  "nix 0.24.3",
  "oci-spec",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "protocols",
  "serde",
  "serde_json",
@@ -585,7 +585,7 @@ dependencies = [
  "nix 0.24.3",
  "oci-spec",
  "persist",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "protocols",
  "resource",
  "runtime-spec",
@@ -657,7 +657,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "967dbd2804aceb398bd7d867410342d68b9d74c1fead823ad8353b3ab5f23eb7"
 dependencies = [
  "async-trait",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "ttrpc",
  "ttrpc-codegen 0.4.2",
 ]
@@ -1787,7 +1787,7 @@ dependencies = [
  "oci-spec",
  "path-clean",
  "persist",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "protocols",
  "qapi",
  "qapi-qmp",
@@ -3238,9 +3238,9 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "protobuf"
-version = "3.7.1"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3a7c64d9bf75b1b8d981124c14c179074e8caa7dfe7b6a12e6222ddcd0c8f72"
+checksum = "d65a1d4ddae7d8b5de68153b48f6aa3bba8cb002b243dbdbc55a5afbc98f99f4"
 dependencies = [
  "once_cell",
  "protobuf-support",
@@ -3258,13 +3258,13 @@ dependencies = [
 
 [[package]]
 name = "protobuf-codegen"
-version = "3.7.1"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e26b833f144769a30e04b1db0146b2aaa53fd2fd83acf10a6b5f996606c18144"
+checksum = "5d3976825c0014bbd2f3b34f0001876604fe87e0c86cd8fa54251530f1544ace"
 dependencies = [
  "anyhow",
  "once_cell",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "protobuf-parse",
  "regex",
  "tempfile",
@@ -3273,14 +3273,14 @@ dependencies = [
 
 [[package]]
 name = "protobuf-parse"
-version = "3.7.1"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "322330e133eab455718444b4e033ebfac7c6528972c784fcde28d2cc783c6257"
+checksum = "b4aeaa1f2460f1d348eeaeed86aea999ce98c1bded6f089ff8514c9d9dbdc973"
 dependencies = [
  "anyhow",
  "indexmap 2.8.0",
  "log",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "protobuf-support",
  "tempfile",
  "thiserror 1.0.69",
@@ -3289,9 +3289,9 @@ dependencies = [
 
 [[package]]
 name = "protobuf-support"
-version = "3.7.1"
+version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b088fd20b938a875ea00843b6faf48579462630015c3788d397ad6a786663252"
+checksum = "3e36c2f31e0a47f9280fb347ef5e461ffcd2c52dd520d8e216b52f93b0b0d7d6"
 dependencies = [
  "thiserror 1.0.69",
 ]
@@ -3302,7 +3302,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "oci-spec",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "serde",
  "serde_json",
  "ttrpc",
@@ -4118,7 +4118,7 @@ dependencies = [
  "logging",
  "nix 0.24.3",
  "oci-spec",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "rand 0.8.5",
  "runtime-spec",
  "runtimes",
@@ -4636,9 +4636,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.44.2"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "bytes",
@@ -4843,8 +4843,8 @@ dependencies = [
  "libc",
  "log",
  "nix 0.26.2",
- "protobuf 3.7.1",
- "protobuf-codegen 3.7.1",
+ "protobuf 3.7.2",
+ "protobuf-codegen 3.7.2",
  "thiserror 1.0.69",
  "tokio",
  "tokio-vsock",
@@ -4858,7 +4858,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94d7f7631d7a9ebed715a47cd4cb6072cbc7ae1d4ec01598971bbec0024340c2"
 dependencies = [
  "protobuf 2.28.0",
- "protobuf-codegen 3.7.1",
+ "protobuf-codegen 3.7.2",
  "protobuf-support",
  "ttrpc-compiler 0.6.1",
 ]
@@ -4871,7 +4871,7 @@ checksum = "cdc0529f65223eca94fc5830e7d552d0d152ff42b74aff5c641edac39592f41f"
 dependencies = [
  "home",
  "protobuf 2.28.0",
- "protobuf-codegen 3.7.1",
+ "protobuf-codegen 3.7.2",
  "protobuf-support",
  "ttrpc-compiler 0.7.0",
 ]
@@ -5061,7 +5061,7 @@ dependencies = [
  "nix 0.24.3",
  "oci-spec",
  "persist",
- "protobuf 3.7.1",
+ "protobuf 3.7.2",
  "resource",
  "runtime-spec",
  "sendfd",
