@@ -11,7 +11,7 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
-SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
+SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-runtime-rs-coco-dev")
 
 function setup_unencrypted_confidential_pod() {
 	get_pod_config_dir
