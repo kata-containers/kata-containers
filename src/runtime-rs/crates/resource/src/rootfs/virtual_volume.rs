@@ -17,13 +17,12 @@ use hypervisor::device::device_manager::DeviceManager;
 use kata_types::{
     annotations,
     container::ContainerType,
-    mount::{KataVirtualVolume, KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL},
+    mount::{KataVirtualVolume, KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL, KATA_VIRTUAL_VOLUME_PREFIX},
 };
 
 /// Image guest-pull related consts
 const KUBERNETES_CRI_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const KUBERNETES_CRIO_IMAGE_NAME: &str = "io.kubernetes.cri-o.ImageName";
-const KATA_VIRTUAL_VOLUME_PREFIX: &str = "io.katacontainers.volume=";
 const KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS: &str = "overlayfs";
 const KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
 
