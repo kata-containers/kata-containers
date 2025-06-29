@@ -301,11 +301,6 @@ externals:
     url: "https://github.com/lvmteam/lvm2"
     version: "v2_03_16"
 
-  k0s:
-    description: "K0s Kubernetes distribution, used in cri-o testing"
-    url: "https://get.k0s.sh"
-    version: "v1.31.5+k0s.0"
-
   kubernetes:
     description: "Kubernetes project container manager"
     url: "https://github.com/kubernetes/kubernetes"
