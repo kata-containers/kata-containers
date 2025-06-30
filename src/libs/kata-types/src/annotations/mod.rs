@@ -276,6 +276,14 @@ pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hy
 pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
     "io.katacontainers.config.hypervisor.cc_init_data";
 
+/// GPU specific annotations for remote hypervisor to help with instance selection
+/// It's for minimum number of GPUs required for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS: &str =
+    "io.katacontainers.config.hypervisor.default_gpus";
+/// It's for the GPU model(tesla, h100, a100, radeon etc.) required for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL: &str =
+    "io.katacontainers.config.hypervisor.default_gpu_model";
+
 // Runtime related annotations
 /// Prefix for Runtime configurations.
 pub const KATA_ANNO_CFG_RUNTIME_PREFIX: &str = "io.katacontainers.config.runtime.";
@@ -887,6 +895,17 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_INIT_DATA => {
                         hv.security_info.initdata =
                             add_hypervisor_initdata_overrides(value).unwrap();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            hv.remote_info.default_gpus = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL => {
+                        hv.remote_info.default_gpu_model = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR => {
                         match self.get_value::<bool>(key) {
