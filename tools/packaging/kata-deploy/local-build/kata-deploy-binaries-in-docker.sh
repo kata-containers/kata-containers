@@ -150,6 +150,7 @@ docker run \
 	--env REPO_COMPONENTS="${REPO_COMPONENTS}" \
 	--env AGENT_POLICY="${AGENT_POLICY}" \
 	--env RUNTIME_CHOICE="${RUNTIME_CHOICE}" \
+	--env IMAGE_SIZE_ALIGNMENT_MB="${IMAGE_SIZE_ALIGNMENT_MB}" \
 	--env AA_KBC="${AA_KBC:-}" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
