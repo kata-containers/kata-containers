@@ -1051,10 +1051,10 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
 
 # Currently, Image Layer Integrity Verification through Policy is only required for Guest VMs
 # that use container image layers provided as dm-verity-protected block device images created on the Host.
-allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } {
+allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } if {
     policy_data.common.image_layer_verification != "host-tarfs-dm-verity"
 }
-allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hashes": root_hashes } {
+allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hashes": root_hashes } if {
     policy_data.common.image_layer_verification == "host-tarfs-dm-verity"
 
     some overlay_storage in p_storages
@@ -1082,7 +1082,7 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
 
     print("allow_storage: true")
 }
-allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) if {
     i_storage.driver == "image_guest_pull"
     print("allow_storage with image_guest_pull: start")
     i_storage.fstype == "overlay"
@@ -1092,14 +1092,14 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
     print("allow_storage with image_guest_pull: true")
 }
 
-allow_storage_source(p_storage, i_storage, bundle_id) {
+allow_storage_source(p_storage, i_storage, bundle_id) if {
     print("allow_storage_source 1: start")
 
     p_storage.source == i_storage.source
 
     print("allow_storage_source 1: true")
 }
-allow_storage_source(p_storage, i_storage, bundle_id) {
+allow_storage_source(p_storage, i_storage, bundle_id) if {
     print("allow_storage_source 2: start")
 
     source1 := p_storage.source
@@ -1112,7 +1112,7 @@ allow_storage_source(p_storage, i_storage, bundle_id) {
 
     print("allow_storage_source 2: true")
 }
-allow_storage_source(p_storage, i_storage, bundle_id) {
+allow_storage_source(p_storage, i_storage, bundle_id) if {
     print("allow_storage_source 3: start")
 
     p_storage.driver == "overlayfs"
