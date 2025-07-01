@@ -163,7 +163,53 @@
             ]
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   },
   {
@@ -310,7 +356,53 @@
             ]
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   },
   {
@@ -467,7 +559,53 @@
             ]
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   },
   {
@@ -608,7 +746,53 @@
             "source": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume"
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   },
   {
@@ -1109,7 +1293,53 @@
             ]
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   },
   {
@@ -1256,7 +1486,53 @@
             ]
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   },
   {
@@ -1403,7 +1679,53 @@
             ]
           }
         ]
-      }
+      },
+      "storages": [
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        },
+        {
+          "driver": "local",
+          "driver_options": [],
+          "fs_group": null,
+          "fstype": "local",
+          "mount_point": "/run/kata-containers/shared/containers/0000000000000000000000000000000000000000000000000000000000000000/rootfs/local/test-volume2",
+          "options": [
+            "mode=0777"
+          ],
+          "source": "local"
+        }
+      ]
     }
   }
 ]

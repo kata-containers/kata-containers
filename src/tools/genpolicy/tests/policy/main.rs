@@ -63,14 +63,36 @@ mod tests {
     /// a JSON list of [TestCase] instances. Each instance will be of type enum TestRequest,
     /// with the tag `type` listing the exact type of request.
     async fn runtests(test_case_dir: &str) {
-        // Prepare temp dir for running genpolicy.
-        let (workdir, testdata_dir) = prepare_workdir(test_case_dir, &["pod.yaml"]);
+        // Check if config_map.yaml exists.
+        // If it does, we need to copy it to the workdir.
+        let is_config_map_file_present = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/policy/testdata")
+            .join(test_case_dir)
+            .join("config_map.yaml")
+            .exists();
 
-        // Run the command and return the generated policy.
+        let files_to_copy = if is_config_map_file_present {
+            vec!["pod.yaml", "config_map.yaml"]
+        } else {
+            vec!["pod.yaml"]
+        };
+
+        // Prepare temp dir for running genpolicy.
+        let (workdir, testdata_dir) = prepare_workdir(test_case_dir, &files_to_copy);
+
+        let config_files = if is_config_map_file_present {
+            Some(vec![workdir
+                .join("config_map.yaml")
+                .to_str()
+                .unwrap()
+                .to_string()])
+        } else {
+            None
+        };
 
         let config = genpolicy::utils::Config {
             base64_out: false,
-            config_files: None,
+            config_files,
             containerd_socket_path: None, // Some(String::from("/var/run/containerd/containerd.sock")),
             insecure_registries: Vec::new(),
             layers_cache: genpolicy::layers_cache::ImageLayersCache::new(&None),
@@ -259,7 +281,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_container_mounts() {
+    async fn test_create_container_volumes_empty_dir() {
         runtests("createcontainer/volumes/emptydir").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_volumes_config_map() {
+        runtests("createcontainer/volumes/config_map").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_volumes_container_image() {
+        runtests("createcontainer/volumes/container_image").await;
     }
 }
