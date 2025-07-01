@@ -354,13 +354,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     lazy_static::initialize(&NAMESPACES);
     lazy_static::initialize(&DEFAULT_DEVICES);
 
-    let init = std::env::var(INIT)?.eq(format!("{}", true).as_str());
+    let init = std::env::var(INIT)?.eq("true");
 
-    let no_pivot = std::env::var(NO_PIVOT)?.eq(format!("{}", true).as_str());
+    let no_pivot = std::env::var(NO_PIVOT)?.eq("true");
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
 
-    if std::env::var(PIDNS_ENABLED)?.eq(format!("{}", true).as_str()) {
+    if std::env::var(PIDNS_ENABLED)?.eq("true") {
         // get the pidns fd from parent, if parent had passed the pidns fd,
         // then get it and join in this pidns; otherwise, create a new pidns
         // by unshare from the parent pidns.
@@ -1474,15 +1474,6 @@ fn get_namespaces(linux: &Linux) -> Vec<LinuxNamespace> {
         .namespaces()
         .clone()
         .unwrap_or_default()
-        .iter()
-        .map(|ns| {
-            let mut namespace = LinuxNamespace::default();
-            namespace.set_typ(ns.typ());
-            namespace.set_path(ns.path().clone());
-
-            namespace
-        })
-        .collect()
 }
 
 pub fn setup_child_logger(fd: RawFd, child_logger: Logger) -> tokio::task::JoinHandle<()> {
