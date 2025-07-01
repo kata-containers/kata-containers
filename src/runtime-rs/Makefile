@@ -311,14 +311,15 @@ ifneq (,$(QEMUCMD))
     DEFSANDBOXCGROUPONLY_QEMU := false
 ifeq ($(ARCH), s390x)
     VMROOTFSDRIVER_QEMU := virtio-blk-ccw
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-ccw
 else
     VMROOTFSDRIVER_QEMU := virtio-pmem
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-pci
 endif
     DEFVCPUS_QEMU := 1
     DEFMAXVCPUS_QEMU := 0
     DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
     DEFSHAREDFS_QEMU_SEL_VIRTIOFS := none
-    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
     DEFBLOCKDEVICEAIO_QEMU := io_uring
     DEFNETWORKMODEL_QEMU := tcfilter
     DEFDISABLEGUESTSELINUX := true
