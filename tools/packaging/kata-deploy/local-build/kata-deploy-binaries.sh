@@ -1117,6 +1117,7 @@ install_tools_helper() {
 	fi
 
 	if [[ "${tool}" == "agent-ctl" ]]; then
+		artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
 		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers/agent-ctl"
 		mkdir -p "${defaults_path}"
 		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/template/oci_config.json "${defaults_path}/oci_config.json"
