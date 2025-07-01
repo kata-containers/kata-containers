@@ -315,6 +315,9 @@ pub const KATA_ANNO_CFG_DISABLE_NEW_NETNS: &str =
 pub const KATA_ANNO_CFG_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio_mode";
 /// An annotation to declare shared mount points, which is a set of mount points that directly share mounted objects between containers.
 pub const KATA_ANNO_CFG_SHARED_MOUNTS: &str = "io.katacontainers.config.runtime.shared_mounts";
+/// An annotation to set timeout value in second when do create container
+pub const KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT: &str =
+    "io.katacontainers.config.runtime.create_container_timeout";
 
 /// A sandbox annotation used to specify prefetch_files.list host path container image
 /// being used,
@@ -984,6 +987,14 @@ impl Annotation {
                     KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             ag.container_pipe_size = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            ag.request_timeout_ms = v.unwrap_or_default() * 1000;
                         }
                         Err(_e) => {
                             return Err(u32_err);
