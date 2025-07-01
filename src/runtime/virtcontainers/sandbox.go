@@ -1415,6 +1415,13 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		if err != nil {
 			return err
 		}
+		// If we want the network, scan the netns again to update the network
+		// configuration after the prestart hooks have run.
+		if !s.config.NetworkConfig.DisableNewNetwork {
+			if _, err := s.network.AddEndpoints(ctx, s, nil, false); err != nil {
+				return err
+			}
+		}
 	}
 
 	if err := s.network.Run(ctx, func() error {
