@@ -6,16 +6,19 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
+	setup_common
 	get_pod_config_dir
 
 	# Add policy to pod-secret.yaml.
 	pod_yaml_file="${pod_config_dir}/pod-secret.yaml"
+	set_node "$pod_yaml_file" "$node"
 	pod_cmd="ls /tmp/secret-volume"
 	pod_exec_command=(sh -c "${pod_cmd}")
 	pod_policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -28,6 +31,7 @@ setup() {
 	# TODO: auto-generate policy for this pod YAML after solving
 	# https://github.com/kata-containers/kata-containers/issues/10033
 	pod_env_yaml_file="${pod_config_dir}/pod-secret-env.yaml"
+	set_node "$pod_env_yaml_file" "$node"
 	pod_env_cmd="printenv"
 	pod_env_exec_command=(sh -c "${pod_env_cmd}")
 	add_allow_all_policy_to_yaml "${pod_env_yaml_file}"
@@ -69,12 +73,9 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
-	# Debugging information
-	kubectl describe "pod/$pod_name"
-	kubectl describe "pod/$second_pod_name"
-
-	kubectl delete pod "$pod_name" "$second_pod_name"
 	kubectl delete secret "$secret_name"
 
 	delete_tmp_policy_settings_dir "${pod_policy_settings_dir}"
+
+	teardown_common "${node}" "${node_start_time:-}"
 }
