@@ -12,7 +12,7 @@ use crate::{
 };
 
 use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
-
+use crate::selinux;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
@@ -201,6 +201,14 @@ impl QemuInner {
 
                 Ok(())
             });
+        }
+
+        // Set SELinux process label if configured
+        if let Some(label) = self.hypervisor_config().security_info.selinux_process_label.as_ref() {
+            if !label.is_empty() && selinux::is_selinux_enforcing().unwrap_or(false) {
+                selinux::set_process_label(label)
+                    .context("failed to set SELinux process label for qemu")?;
+            }
         }
 
         let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
