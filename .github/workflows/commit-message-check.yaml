@@ -54,7 +54,7 @@ jobs:
 
     - name: Check Subject Line Length
       if: ${{ (env.PR_AUTHOR != 'dependabot[bot]') && ( success() || failure() ) }}
-      uses: tim-actions/commit-message-checker-with-regex@d6d9770051dd6460679d1cab1dcaa8cffc5c2bbd # v0.3.1
+      uses: tim-actions/commit-message-checker-with-regex@094fc16ff83d04e2ec73edb5eaf6aa267db33791 # v0.3.2
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
         pattern: '^.{0,75}(\n.*)*$'
@@ -63,7 +63,7 @@ jobs:
 
     - name: Check Body Line Length
       if: ${{ (env.PR_AUTHOR != 'dependabot[bot]') && ( success() || failure() ) }}
-      uses: tim-actions/commit-message-checker-with-regex@d6d9770051dd6460679d1cab1dcaa8cffc5c2bbd # v0.3.1
+      uses: tim-actions/commit-message-checker-with-regex@094fc16ff83d04e2ec73edb5eaf6aa267db33791 # v0.3.2
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
         # Notes:
@@ -94,7 +94,7 @@ jobs:
 
     - name: Check Subsystem
       if: ${{ (env.PR_AUTHOR != 'dependabot[bot]') && ( success() || failure() ) }}
-      uses: tim-actions/commit-message-checker-with-regex@d6d9770051dd6460679d1cab1dcaa8cffc5c2bbd # v0.3.1
+      uses: tim-actions/commit-message-checker-with-regex@094fc16ff83d04e2ec73edb5eaf6aa267db33791 # v0.3.2
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
         pattern: '^[\s\t]*[^:\s\t]+[\s\t]*:'
