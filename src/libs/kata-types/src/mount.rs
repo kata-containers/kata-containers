@@ -47,6 +47,9 @@ pub const SANDBOX_BIND_MOUNTS_RO: &str = ":ro";
 /// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readwrite
 pub const SANDBOX_BIND_MOUNTS_RW: &str = ":rw";
 
+/// KATA_VIRTUAL_VOLUME_PREFIX is for container image guest pull
+pub const KATA_VIRTUAL_VOLUME_PREFIX: &str = "io.katacontainers.volume=";
+
 /// Directly assign a block volume to vm and mount it inside guest.
 pub const KATA_VIRTUAL_VOLUME_DIRECT_BLOCK: &str = "direct_block";
 /// Present a container image as a generic block device.
@@ -532,7 +535,7 @@ pub fn adjust_rootfs_mounts() -> Result<Vec<Mount>> {
     // Create a new Vec<Mount> with a single Mount entry.
     // This Mount's options will contain the base64-encoded virtual volume.
     Ok(vec![Mount {
-        options: vec![format!("{}={}", "io.katacontainers.volume", b64_vol)],
+        options: vec![format!("{}{}", KATA_VIRTUAL_VOLUME_PREFIX, b64_vol)],
         ..Default::default() // Use default values for other Mount fields
     }])
 }
