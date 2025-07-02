@@ -340,10 +340,19 @@ set_container_command() {
 set_node() {
 	local yaml="$1"
 	local node="$2"
+	local kind
+	local spec
 	[ -n "$node" ] || return 1
 
+	kind="$(yq -r '.kind' "${yaml}")"
+	if [[ "${kind}" = "Job" ]]; then
+		spec=".spec.template.spec.nodeName"
+	else
+		spec=".spec.nodeName"
+	fi
+
   yq -i \
-    ".spec.nodeName = \"$node\"" \
+    "${spec} = \"$node\"" \
     "${yaml}"
 }
 
