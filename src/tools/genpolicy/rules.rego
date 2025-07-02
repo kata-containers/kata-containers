@@ -671,8 +671,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
 
     count(p_matches) == count(input.OCI.Mounts)
 
-    # TODO: enable allow_storages() after fixing https://github.com/kata-containers/kata-containers/issues/8833
-    # allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
+    allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
 
     print("allow_by_bundle_or_sandbox_id: true")
 }
@@ -1034,27 +1033,36 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
     p_count := count(p_storages)
     i_count := count(i_storages)
-    print("allow_storages: p_count =", p_count, "i_count =", i_count)
+    img_pull_count := count([s | s := i_storages[_]; s.driver == "image_guest_pull"])
+    print("allow_storages: p_count =", p_count, "i_count =", i_count, "img_pull_count =", img_pull_count)
 
-    p_count == i_count
+    p_count == i_count - img_pull_count
 
-    # Get the container image layer IDs and verity root hashes, from the "overlayfs" storage.
-    some overlay_storage in p_storages
-    overlay_storage.driver == "overlayfs"
-    print("allow_storages: overlay_storage =", overlay_storage)
-    count(overlay_storage.options) == 2
-
-    layer_ids := split(overlay_storage.options[0], ":")
-    print("allow_storages: layer_ids =", layer_ids)
-
-    root_hashes := split(overlay_storage.options[1], ":")
-    print("allow_storages: root_hashes =", root_hashes)
+    image_info := allow_container_image_storage(p_storages)
+    layer_ids := image_info.layer_ids
+    root_hashes := image_info.root_hashes
 
     every i_storage in i_storages {
         allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes)
     }
 
     print("allow_storages: true")
+}
+
+# Currently, Image Layer Integrity Verification through Policy is only required for Guest VMs
+# that use container image layers provided as dm-verity-protected block device images created on the Host.
+allow_container_image_storage(p_storages) = { "layer_ids": [], "root_hashes": [] } if {
+    policy_data.common.image_layer_verification != "host-tarfs-dm-verity"
+}
+allow_container_image_storage(p_storages) = { "layer_ids": layer_ids, "root_hashes": root_hashes } if {
+    policy_data.common.image_layer_verification == "host-tarfs-dm-verity"
+
+    some overlay_storage in p_storages
+    overlay_storage.driver == "overlayfs"
+    count(overlay_storage.options) == 2
+
+    layer_ids := split(overlay_storage.options[0], ":")
+    root_hashes := split(overlay_storage.options[1], ":")
 }
 
 allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) if {
@@ -1066,13 +1074,51 @@ allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hash
     p_storage.driver           == i_storage.driver
     p_storage.driver_options   == i_storage.driver_options
     p_storage.fs_group         == i_storage.fs_group
+    p_storage.fstype           == i_storage.fstype
 
+    allow_storage_source(p_storage, i_storage, bundle_id)
     allow_storage_options(p_storage, i_storage, layer_ids, root_hashes)
     allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids)
 
-    # TODO: validate the source field too.
-
     print("allow_storage: true")
+}
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) if {
+    i_storage.driver == "image_guest_pull"
+    print("allow_storage with image_guest_pull: start")
+    i_storage.fstype == "overlay"
+    i_storage.fs_group == null
+    count(i_storage.options) == 0
+    # TODO: Check Mount Point, Source, Driver Options, etc.
+    print("allow_storage with image_guest_pull: true")
+}
+
+allow_storage_source(p_storage, i_storage, bundle_id) if {
+    print("allow_storage_source 1: start")
+
+    p_storage.source == i_storage.source
+
+    print("allow_storage_source 1: true")
+}
+allow_storage_source(p_storage, i_storage, bundle_id) if {
+    print("allow_storage_source 2: start")
+
+    source1 := p_storage.source
+    source2 := replace(source1, "$(sfprefix)", policy_data.common.sfprefix)
+    source3 := replace(source2, "$(cpath)", policy_data.common.cpath)
+    source4 := replace(source3, "$(bundle-id)", bundle_id)
+    
+    print("allow_storage_source 2: source =", source4)
+    regex.match(source4, i_storage.source)
+
+    print("allow_storage_source 2: true")
+}
+allow_storage_source(p_storage, i_storage, bundle_id) if {
+    print("allow_storage_source 3: start")
+
+    p_storage.driver == "overlayfs"
+    i_storage.source == "none"
+
+    print("allow_storage_source 3: true")
 }
 
 allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) if {
@@ -1206,7 +1252,7 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) if {
     mount1 := p_storage.mount_point
     print("allow_mount_point 3: mount1 =", mount1)
 
-    mount2 := replace(mount1, "$(cpath)", policy_data.common.cpath)
+    mount2 := replace(mount1, "$(cpath)", policy_data.common.mount_source_cpath)
     print("allow_mount_point 3: mount2 =", mount2)
 
     mount3 := replace(mount2, "$(sandbox-id)", sandbox_id)
