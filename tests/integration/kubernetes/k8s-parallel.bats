@@ -6,9 +6,11 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common
 	get_pod_config_dir
 	job_name="jobtest"
 	names=( "test1" "test2" "test3" )
@@ -21,6 +23,7 @@ setup() {
 	for i in "${names[@]}"; do
 		yaml_file="${pod_config_dir}/job-$i.yaml"
 		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > ${yaml_file}
+		set_node "$yaml_file" "$node"
 		auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 	done
 }
@@ -44,13 +47,15 @@ setup() {
 }
 
 teardown() {
-	# Delete jobs
-	kubectl delete jobs -l jobgroup=${job_name}
-
 	# Remove generated yaml files
 	for i in "${names[@]}"; do
 		rm -f ${pod_config_dir}/job-$i.yaml
 	done
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+
+	teardown_common
+
+	# Delete jobs
+	kubectl delete jobs -l jobgroup=${job_name}
 }
