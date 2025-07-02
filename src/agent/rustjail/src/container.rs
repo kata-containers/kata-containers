@@ -2081,8 +2081,8 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_linuxcontainer_get_process() {
+    #[tokio::test]
+    async fn test_linuxcontainer_get_process() {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.processes.insert(
                 1,
