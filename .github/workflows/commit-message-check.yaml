@@ -42,7 +42,7 @@ jobs:
         filter_out_pattern: '^Revert "|^Reapply "'
 
     - name: DCO Check
-      uses: tim-actions/dco@2fd0504dc0d27b33f542867c300c60840c6dcb20 # master (2020-04-28)
+      uses: tim-actions/dco@f2279e6e62d5a7d9115b0cb8e837b777b1b02e21 # master (2020-04-28)
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
 
