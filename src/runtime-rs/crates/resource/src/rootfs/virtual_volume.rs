@@ -9,6 +9,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_types::mount::ImagePullVolume;
 use oci_spec::runtime as oci;
 use serde_json;
 use tokio::sync::RwLock;
@@ -84,11 +85,16 @@ fn handle_virtual_volume_storage(
 
         let mut virtual_volume_info = virt_volume.clone();
         // Merge metadata
-        for (k, v) in annotations.iter() {
-            if let Some(ref mut image_pull) = virtual_volume_info.image_pull {
+        if let Some(ref mut image_pull) = virtual_volume_info.image_pull {
+            for (k, v) in annotations.iter() {
                 image_pull.metadata.insert(k.to_owned(), v.to_owned());
             }
+        } else {
+            virtual_volume_info.image_pull = Some(ImagePullVolume {
+                metadata: annotations.clone(),
+            });
         }
+
         // Serialize ImagePull as JSON
         let image_pull_info = serde_json::to_string(&virtual_volume_info.image_pull)
             .map_err(|e| anyhow!(e.to_string()))?;
