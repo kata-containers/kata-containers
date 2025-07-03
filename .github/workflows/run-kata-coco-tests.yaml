@@ -292,7 +292,9 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Install `kubectl`
-        run: bash tests/integration/kubernetes/gha-run.sh install-kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
