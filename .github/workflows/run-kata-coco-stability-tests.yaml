@@ -52,7 +52,6 @@ jobs:
         pull-type:
           - guest-pull
     runs-on: ubuntu-22.04
-    environment: ci
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}

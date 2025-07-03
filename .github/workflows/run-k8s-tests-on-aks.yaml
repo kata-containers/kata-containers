@@ -71,7 +71,6 @@ jobs:
             instance-type: normal
             auto-generate-policy: yes
     runs-on: ubuntu-22.04
-    environment: ci
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
