@@ -832,7 +832,7 @@ impl Vm {
     pub fn resize_vcpu(
         &mut self,
         config: VcpuResizeInfo,
-        sync_tx: Option<Sender<bool>>,
+        sync_tx: Option<Sender<Option<i32>>>,
     ) -> std::result::Result<(), VcpuResizeError> {
         if self.upcall_client().is_none() {
             Err(VcpuResizeError::UpcallClientMissing)
