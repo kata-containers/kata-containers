@@ -225,7 +225,7 @@ mod tests {
 
         let actual = arch_guest_protection("/xyz/tmp", path.to_str().unwrap());
         assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), GuestProtection::Snp);
+        assert!(matches!(actual.unwrap(), GuestProtection::Snp(_)));
 
         writeln!(snp_file, "N").unwrap();
         let actual = arch_guest_protection("/xyz/tmp", path.to_str().unwrap());
@@ -244,7 +244,7 @@ mod tests {
 
         let actual = arch_guest_protection(sev_path.to_str().unwrap(), "/xyz/tmp");
         assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), GuestProtection::Sev);
+        assert!(matches!(actual.unwrap(), GuestProtection::Sev(_)));
 
         writeln!(sev_file, "N").unwrap();
         let actual = arch_guest_protection(sev_path.to_str().unwrap(), "/xyz/tmp");
