@@ -135,10 +135,6 @@ function install_bats() {
 	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
 }
 
-function install_kubectl() {
-	sudo az aks install-cli
-}
-
 # Install the kustomize tool in /usr/local/bin if it doesn't exist on
 # the system yet.
 #

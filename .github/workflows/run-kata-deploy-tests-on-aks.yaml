@@ -95,7 +95,9 @@ jobs:
         run: bash tests/functional/kata-deploy/gha-run.sh install-bats
 
       - name: Install `kubectl`
-        run: bash tests/functional/kata-deploy/gha-run.sh install-kubectl
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1
+        with:
+          version: 'latest'
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: bash tests/functional/kata-deploy/gha-run.sh get-cluster-credentials
