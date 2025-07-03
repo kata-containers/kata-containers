@@ -387,7 +387,15 @@ impl KataVirtualVolume {
     pub fn from_base64(value: &str) -> Result<Self> {
         let json = base64::decode(value)?;
         let volume: KataVirtualVolume = serde_json::from_slice(&json)?;
+
+        Ok(volume)
+    }
+
+    /// Decode and deserialize a virtual volume object from base64 encoded json string and validate it.
+    pub fn from_base64_and_validate(value: &str) -> Result<Self> {
+        let volume = Self::from_base64(value)?;
         volume.validate()?;
+
         Ok(volume)
     }
 }
@@ -650,7 +658,8 @@ mod tests {
         volume.direct_volume = Some(DirectAssignedVolume { metadata });
 
         let value = volume.to_base64().unwrap();
-        let volume2: KataVirtualVolume = KataVirtualVolume::from_base64(value.as_str()).unwrap();
+        let volume2: KataVirtualVolume =
+            KataVirtualVolume::from_base64_and_validate(value.as_str()).unwrap();
         assert_eq!(volume.volume_type, volume2.volume_type);
         assert_eq!(volume.source, volume2.source);
         assert_eq!(volume.fs_type, volume2.fs_type);
