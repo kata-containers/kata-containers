@@ -1774,9 +1774,10 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 	if vol.Fstype == "" {
 		vol.Fstype = m.Type
 	}
-	if len(vol.Options) == 0 {
-		vol.Options = m.Options
-	}
+
+	// if len(vol.Options) == 0 {
+	// 	vol.Options = m.Options
+	// }
 
 	if m.FSGroup != nil {
 		var safeFsgroup uint32
