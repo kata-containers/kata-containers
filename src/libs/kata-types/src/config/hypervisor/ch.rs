@@ -109,7 +109,7 @@ impl ConfigPlugin for CloudHypervisorConfig {
                 return Err(eother!("Both guest boot image and initrd for CH are empty"));
             }
 
-            if (ch.cpu_info.default_vcpus > 0
+            if (ch.cpu_info.default_vcpus > 0.0
                 && ch.cpu_info.default_vcpus as u32 > default::MAX_CH_VCPUS)
                 || ch.cpu_info.default_maxvcpus > default::MAX_CH_VCPUS
             {
