@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: xuejun-xj <jiyunxue@linux.alibaba.com>
+Date: Wed, 10 May 2023 14:51:40 +0800
+Subject: [PATCH] msi: control msi irq number activated
+
+When passthroughing pci device, kernel will initialize and activate
+(max_cpu_count+1) msi irq. However, in vcpu hotplugging situation,
+because of vgic, max_cpu_count may be greater than online_cpu_count.
+Those offline cpus will also be activated by kernel, which cause failure
+of passthroughing pci device.
+
+To solve this problem, this patch add a function
+"check_affinity_mask_online" to check if msi_desc->affinity contains
+online cpus. If current cpu is offline, it will continue the for loop to
+skip activating related irq.
+
+Signed-off-by: xuejun-xj <jiyunxue@linux.alibaba.com>
+Reviewed-by: Shuo Tan <shuo.tan@linux.alibaba.com>
+Reviewed-by: Baolin Wang <baolin.wang@linux.alibaba.com>
+---
+ kernel/irq/msi.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index 7682c36cbccc63e707c8bd2c94c583dd64abc25a..868ccb36da7a01e24826af96d90fe59ffc6d9736 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -1219,6 +1219,23 @@ static int msi_init_virq(struct irq_domain *domain, int virq, unsigned int vflag
+ 	return 0;
+ }
+ 
++/* This function is used for check whether the cpu affinity belongs to the
++ * online cpus. When we passthrough the nvme devices, the kernel will allocate
++ * maxcpus+1 MSI irqs and then activate them. In vcpu hotplug situations, it
++ * may happen that kernel activates the offline cpus when bootcpus < maxcpus.
++ * To avoid this conflict, this function check the affinities.
++ */
++static inline bool check_affinity_mask_online(struct irq_affinity_desc *affinity)
++{
++       int cpu;
++
++       for_each_cpu(cpu, &affinity->mask)
++               if (cpu_online(cpu))
++                       return true;
++
++       return false;
++}
++
+ static int __msi_domain_alloc_irqs(struct device *dev, struct irq_domain *domain,
+ 				   struct msi_ctrl *ctrl)
+ {
+@@ -1270,6 +1287,9 @@ static int __msi_domain_alloc_irqs(struct device *dev, struct irq_domain *domain
+ 			return msi_handle_pci_fail(domain, desc, allocated);
+ 
+ 		for (i = 0; i < desc->nvec_used; i++) {
++                        if (desc->affinity
++                        	&& !check_affinity_mask_online(desc->affinity))
++                        	continue;
+ 			irq_set_msi_desc_off(virq, i, desc);
+ 			irq_debugfs_copy_devname(virq + i, dev);
+ 			ret = msi_init_virq(domain, virq + i, vflags);
