@@ -69,7 +69,7 @@ slog-scope = "4.4.0"
 strum = { version = "0.24.0", features = ["derive"] }
 tempfile = "3.19.1"
 thiserror = "1.0"
-tokio = "1.38.2"
+tokio = "1.46.0"
 tracing = "0.1.41"
 tracing-opentelemetry = "0.18.0"
 ttrpc = "0.8.4"

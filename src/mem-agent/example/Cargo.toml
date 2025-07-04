@@ -15,7 +15,7 @@ page_size = "0.6"
 chrono = "0.4"
 maplit = "1.0"
 ttrpc = { version = "0.8", features = ["async"] }
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { version = "1.46.0", features = ["full"] }
 async-trait = "0.1"
 byteorder = "1.5"
 protobuf = "3.7.2"
