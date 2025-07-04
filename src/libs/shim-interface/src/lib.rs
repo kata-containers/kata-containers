@@ -90,7 +90,7 @@ pub fn mgmt_socket_addr(sid: &str) -> Result<String> {
         ));
     }
 
-    get_uds_with_sid(sid, &sb_storage_path()?)
+    get_uds_with_sid(sid, sb_storage_path()?)
 }
 
 #[cfg(test)]
