@@ -355,6 +355,7 @@ mod tests {
             .read(false)
             .write(true)
             .create(true)
+            .truncate(true)
             .mode(0o200)
             .open(&path)
             .unwrap();
@@ -376,6 +377,7 @@ mod tests {
             .read(false)
             .write(true)
             .create(true)
+            .truncate(true)
             .mode(0o200)
             .open(&path)
             .unwrap();
