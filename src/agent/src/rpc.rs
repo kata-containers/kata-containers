@@ -708,13 +708,15 @@ fn mem_agent_memcgconfig_to_memcg_optionconfig(
     mc: &protocols::agent::MemAgentMemcgConfig,
 ) -> mem_agent::memcg::OptionConfig {
     mem_agent::memcg::OptionConfig {
-        disabled: mc.disabled,
-        swap: mc.swap,
-        swappiness_max: mc.swappiness_max.map(|x| x as u8),
-        period_secs: mc.period_secs,
-        period_psi_percent_limit: mc.period_psi_percent_limit.map(|x| x as u8),
-        eviction_psi_percent_limit: mc.eviction_psi_percent_limit.map(|x| x as u8),
-        eviction_run_aging_count_min: mc.eviction_run_aging_count_min,
+        default: mem_agent::memcg::SingleOptionConfig {
+            disabled: mc.disabled,
+            swap: mc.swap,
+            swappiness_max: mc.swappiness_max.map(|x| x as u8),
+            period_secs: mc.period_secs,
+            period_psi_percent_limit: mc.period_psi_percent_limit.map(|x| x as u8),
+            eviction_psi_percent_limit: mc.eviction_psi_percent_limit.map(|x| x as u8),
+            eviction_run_aging_count_min: mc.eviction_run_aging_count_min,
+        },
         ..Default::default()
     }
 }
