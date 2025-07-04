@@ -28,7 +28,7 @@ tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
 hyper = { workspace = true, features = ["stream", "server", "http1"] }
 hyperlocal = { workspace = true }
 serde_json = { workspace = true }
-nix = "0.25.0"
+nix = "0.29.0"
 url = { workspace = true }
 procfs = "0.12.0"
 prometheus = { version = "0.13.0", features = ["process"] }
