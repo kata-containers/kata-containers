@@ -146,10 +146,7 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
     }
 
     let facilities = crate::cpu::retrieve_cpu_facilities().map_err(|err| {
-        ProtectionError::CheckFailed(format!(
-            "Error retrieving cpu facilities file : {}",
-            err.to_string()
-        ))
+        ProtectionError::CheckFailed(format!("Error retrieving cpu facilities file : {}", err))
     })?;
 
     // Secure Execution

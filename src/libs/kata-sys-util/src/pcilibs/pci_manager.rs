@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use mockall::automock;
 use pci_ids::{Classes, Vendors};
@@ -61,24 +61,22 @@ pub(crate) trait MemoryResourceTrait {
 
 impl MemoryResourceTrait for MemoryResources {
     fn get_total_addressable_memory(&self, round_up: bool) -> (u64, u64) {
-        let mut num_bar = 0;
         let mut mem_size_32bit = 0u64;
         let mut mem_size_64bit = 0u64;
 
         let mut keys: Vec<_> = self.keys().cloned().collect();
         keys.sort();
 
-        for key in keys {
-            if key as usize >= PCI_IOV_NUM_BAR || num_bar == PCI_IOV_NUM_BAR {
+        for (num_bar, key) in keys.into_iter().enumerate() {
+            if key >= PCI_IOV_NUM_BAR || num_bar == PCI_IOV_NUM_BAR {
                 break;
             }
-            num_bar += 1;
 
             if let Some(region) = self.get(&key) {
                 let flags = region.flags & PCI_BASE_ADDRESS_MEM_TYPE_MASK;
                 let mem_type_32bit = flags == PCI_BASE_ADDRESS_MEM_TYPE32;
                 let mem_type_64bit = flags == PCI_BASE_ADDRESS_MEM_TYPE64;
-                let mem_size = (region.end - region.start + 1) as u64;
+                let mem_size = region.end - region.start + 1;
 
                 if mem_type_32bit {
                     mem_size_32bit += mem_size;
@@ -138,10 +136,10 @@ impl PCIDeviceManager {
         for entry in device_dirs {
             let device_dir = entry?;
             let device_address = device_dir.file_name().to_string_lossy().to_string();
-            if let Ok(device) = self.get_device_by_pci_bus_id(&device_address, vendor, &mut cache) {
-                if let Some(dev) = device {
-                    pci_devices.push(dev);
-                }
+            if let Ok(Some(dev)) =
+                self.get_device_by_pci_bus_id(&device_address, vendor, &mut cache)
+            {
+                pci_devices.push(dev);
             }
         }
 
@@ -238,7 +236,7 @@ impl PCIDeviceManager {
         Ok(Some(pci_device))
     }
 
-    fn parse_resources(&self, device_path: &PathBuf) -> io::Result<MemoryResources> {
+    fn parse_resources(&self, device_path: &Path) -> io::Result<MemoryResources> {
         let content = fs::read_to_string(device_path.join("resource"))?;
         let mut resources: MemoryResources = MemoryResources::new();
         for (i, line) in content.lines().enumerate() {
@@ -405,6 +403,8 @@ mod tests {
 
     #[test]
     fn test_parse_resources() {
+        setup_mock_device_files();
+
         let manager = PCIDeviceManager::new(MOCK_PCI_DEVICES_ROOT);
         let device_path = PathBuf::from(MOCK_PCI_DEVICES_ROOT).join("0000:ff:1f.0");
 
@@ -418,6 +418,8 @@ mod tests {
         assert_eq!(resource.start, 0x00000000);
         assert_eq!(resource.end, 0x0000ffff);
         assert_eq!(resource.flags, 0x00000404);
+
+        cleanup_mock_device_files();
     }
 
     #[test]
@@ -435,10 +437,7 @@ mod tests {
         file.write_all(&vec![0; 512]).unwrap();
 
         // It should be true
-        assert!(is_pcie_device(
-            &format!("ff:00.0"),
-            MOCK_SYS_BUS_PCI_DEVICES
-        ));
+        assert!(is_pcie_device("ff:00.0", MOCK_SYS_BUS_PCI_DEVICES));
 
         // Clean up
         let _ = fs::remove_file(config_path);

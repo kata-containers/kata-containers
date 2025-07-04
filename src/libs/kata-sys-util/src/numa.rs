@@ -168,7 +168,7 @@ pub fn is_valid_numa_cpu(cpus: &[u32]) -> Result<bool> {
     let numa_nodes = get_numa_nodes()?;
 
     for cpu in cpus {
-        if numa_nodes.get(cpu).is_none() {
+        if !numa_nodes.contains_key(cpu) {
             return Ok(false);
         }
     }
