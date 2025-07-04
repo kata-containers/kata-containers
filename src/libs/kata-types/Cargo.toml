@@ -37,7 +37,7 @@ safe-path = { path = "../safe-path" }
 [dev-dependencies]
 tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
-nix = "0.24.2"
+nix = "0.26.4"
 
 [features]
 default = []
