@@ -66,7 +66,7 @@ impl PCIDevices for NvidiaPCIDevice {
             }
         }
 
-        return nvidia_devices;
+        nvidia_devices
     }
 }
 
