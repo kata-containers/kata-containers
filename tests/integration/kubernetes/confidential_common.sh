@@ -10,7 +10,7 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
-SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
+SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
 
 function setup_unencrypted_confidential_pod() {
@@ -32,7 +32,6 @@ function setup_unencrypted_confidential_pod() {
 # in order to identify whether the workload is running on a TEE environment
 function get_remote_command_per_hypervisor() {
 	declare -A REMOTE_COMMAND_PER_HYPERVISOR
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-sev]="dmesg | grep \"Memory Encryption Features active:.*\(SEV$\|SEV \)\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-tdx]="cpuid | grep TDX_GUEST"
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"

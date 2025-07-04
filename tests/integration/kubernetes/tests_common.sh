@@ -93,14 +93,6 @@ adapt_common_policy_settings_for_tdx() {
 	jq '.kata_config.confidential_guest = true | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
-# adapt common policy settings for qemu-sev
-adapt_common_policy_settings_for_sev() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for SEV"
-	jq '.kata_config.oci_version = "1.1.0-rc.1" | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
 # adapt common policy settings for pod VMs using "shared_fs = virtio-fs" (https://github.com/kata-containers/kata-containers/issues/10189)
 adapt_common_policy_settings_for_virtio_fs() {
 	local settings_dir=$1
@@ -133,12 +125,9 @@ adapt_common_policy_settings() {
   		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
 			adapt_common_policy_settings_for_tdx "${settings_dir}"
 			;;
-  		"qemu-sev")
-			adapt_common_policy_settings_for_sev "${settings_dir}"
-			;;
 		*)
 			# AUTO_GENERATE_POLICY=yes is currently supported by this script when testing:
-			# - The SEV, SNP, or TDX platforms above, that are using "shared_fs = none".
+			# - The SNP or TDX platforms above, that are using "shared_fs = none".
 			# - Other platforms that are using "shared_fs = virtio-fs".
 			# Attempting to test using AUTO_GENERATE_POLICY=yes on platforms that are not
 			# supported yet is likely to result in test failures due to incorrectly auto-
@@ -300,7 +289,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-sev" "qemu-snp" "qemu-tdx")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-tdx")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
