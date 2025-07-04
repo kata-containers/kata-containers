@@ -6,7 +6,6 @@
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
-use std::u32;
 
 use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DRAGONBALL_VCPUS;
