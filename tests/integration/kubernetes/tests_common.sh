@@ -130,7 +130,7 @@ adapt_common_policy_settings() {
 	local settings_dir=$1
 
 	case "${KATA_HYPERVISOR}" in
-  		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
+  		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev"|"qemu-runtime-rs-coco-dev")
 			adapt_common_policy_settings_for_tdx "${settings_dir}"
 			;;
   		"qemu-sev")
@@ -300,7 +300,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-sev" "qemu-snp" "qemu-tdx")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-sev" "qemu-snp" "qemu-tdx" "qemu-runtime-rs-coco-dev")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
