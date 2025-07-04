@@ -36,9 +36,6 @@ updates:
     # create groups for common dependencies, so they can all go in a single PR
     # We can extend this as we see more frequent groups
     groups:
-      atty:
-        patterns:
-          - atty
       bit-vec:
         patterns:
           - bit-vec

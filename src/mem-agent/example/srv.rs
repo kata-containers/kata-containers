@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use share::option::{CompactSetOption, MemcgSetOption};
 use slog::{Drain, Level, Logger};
 use slog_async;
@@ -11,23 +12,22 @@ use slog_scope::{error, info};
 use slog_term;
 use std::fs::OpenOptions;
 use std::io::BufWriter;
-use structopt::StructOpt;
 
 mod protocols;
 mod share;
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "mem-agent", about = "Memory agent")]
+#[derive(Parser, Debug)]
+#[clap(name = "mem-agent", about = "Memory agent")]
 struct Opt {
-    #[structopt(long, default_value = "unix:///var/run/mem-agent.sock")]
+    #[clap(long, default_value = "unix:///var/run/mem-agent.sock")]
     addr: String,
-    #[structopt(long)]
+    #[clap(long)]
     log_file: Option<String>,
-    #[structopt(long, default_value = "trace", parse(try_from_str = parse_slog_level))]
+    #[arg(long, default_value = "trace", value_parser = parse_slog_level)]
     log_level: Level,
-    #[structopt(flatten)]
+    #[clap(flatten)]
     memcg: MemcgSetOption,
-    #[structopt(flatten)]
+    #[clap(flatten)]
     compact: CompactSetOption,
 }
 
@@ -73,7 +73,7 @@ fn setup_logging(opt: &Opt) -> Result<slog_scope::GlobalLoggerGuard> {
 
 fn main() -> Result<()> {
     // Check opt
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     let _ = setup_logging(&opt).map_err(|e| anyhow!("setup_logging fail: {}", e))?;
 
