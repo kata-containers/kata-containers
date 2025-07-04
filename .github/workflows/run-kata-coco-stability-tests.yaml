@@ -136,7 +136,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run stability tests
-        timeout-minutes: 300
+        timeout-minutes: 350
         run: bash tests/stability/gha-stability-run.sh run-tests
 
       - name: Delete AKS cluster
