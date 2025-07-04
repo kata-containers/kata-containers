@@ -25,6 +25,7 @@ RUN apt-get update && \
 	    gettext \
 	    rsync \
 	    cpio \
+	    python3 \
 	    patch && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${ARCH}"-linux-gnu binutils-"${ARCH}"-linux-gnu; fi && \
     apt-get clean && apt-get autoclean && rm -rf /var/lib/apt/lists/*
