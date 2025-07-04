@@ -33,6 +33,7 @@ use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
+use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -519,6 +520,25 @@ impl Sandbox for VirtSandbox {
             )
             .await
             .context("prepare vm")?;
+
+        let selinux_label = if let Ok(spec) = load_oci_spec() {
+            spec.process()
+                .clone()
+                .and_then(|process| process.selinux_label().clone())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        if !selinux_label.is_empty() {
+            info!(sl!(), "SELinux label: {}", selinux_label);
+            self.hypervisor
+                .hypervisor_config()
+                .await
+                .security_info
+                .selinux_process_label = Some(selinux_label);
+        }
+
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm

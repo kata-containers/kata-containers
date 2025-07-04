@@ -904,6 +904,12 @@ pub struct SecurityInfo {
         rename = "tdx_quote_generation_service_socket_port"
     )]
     pub qgs_port: u32,
+
+    /// SELinux process label to be applied to the hypervisor and related processes.
+    /// This label will be used before launching virtiofsd processes to ensure they
+    /// run with the correct SELinux context.
+    #[serde(default)]
+    pub selinux_process_label: Option<String>,
 }
 
 fn default_qgs_port() -> u32 {
@@ -1221,10 +1227,18 @@ pub struct Hypervisor {
     /// Disable applying SELinux on the container process.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
+
+    /// Disable applying SELinux on the VMM process.
+    #[serde(default = "no")]
+    pub disable_selinux: bool,
 }
 
 fn yes() -> bool {
     true
+}
+
+fn no() -> bool {
+    false
 }
 
 impl Hypervisor {
