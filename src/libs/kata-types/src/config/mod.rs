@@ -9,7 +9,6 @@ use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::u32;
 
 use lazy_static::lazy_static;
 
