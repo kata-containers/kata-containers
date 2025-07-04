@@ -1,21 +1,20 @@
-imagePullPolicy: Always
-imagePullSecrets: []
+imagePullPolicy: Always # @schema required:true ;enum:[Always,IfNotPresent,Never];description: sets deployment imagePullPolicy to determine when the image should be pulled
+imagePullSecrets: [] # @schema required:false;description: a list of imagePullSecrets to utilize when pulling an image
 image:
-  reference: quay.io/kata-containers/kata-deploy
-  tag: ""
-# k8s-dist can be k8s, k3s, rke2, k0s, microk8s
-k8sDistribution: "k8s"
+  reference: quay.io/kata-containers/kata-deploy # @schema required:true;description: image reference where kata-deploy is stored
+  tag: "" # @schema required:false; description: tag to use for the kata-deploy image
+k8sDistribution: "k8s" # @schema enum:[k8s,k3s,rke2,k0s,microk8s]; required:true; description: type of underlying kubernetes platform
 env:
-  debug: "false"
-  shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
-  defaultShim: "qemu"
-  createRuntimeClasses: "true"
-  createDefaultRuntimeClass: "false"
-  allowedHypervisorAnnotations: ""
-  snapshotterHandlerMapping: ""
-  agentHttpsProxy: ""
-  agentNoProxy: ""
-  pullTypeMapping: ""
-  installationPrefix: ""
-  hostOS: ""
-  multiInstallSuffix: ""
+  debug: "false" # @schema required:true;enum:[false,true]; description: whether to enable debug mode
+  shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx" # @schema required:true; description: space separated string containing supported shims
+  defaultShim: "qemu" # @schema required:true; description: default shim to utilize
+  createRuntimeClasses: "true" # @schema required:true;description: whether to create runtime class objects by default
+  createDefaultRuntimeClass: "false" # @schema required:true;description: whether to create a default runtime class for kata
+  allowedHypervisorAnnotations: "" # @schema required:false;
+  snapshotterHandlerMapping: "" # @schema required:false;
+  agentHttpsProxy: "" # @schema required:false;
+  agentNoProxy: "" # @schema required:false;
+  pullTypeMapping: "" # @schema required:false;
+  installationPrefix: "" # @schema required:false;
+  hostOS: "" # @schema required:false;
+  multiInstallSuffix: "" # @schema required:false;
