@@ -934,6 +934,14 @@ pub struct SecurityInfo {
         rename = "tdx_quote_generation_service_socket_port"
     )]
     pub qgs_port: u32,
+
+    /// Qemu seccomp sandbox feature
+    /// comma-separated list of seccomp sandbox features to control the syscall access.
+    /// For example, `seccompsandbox= "on,obsolete=deny,spawn=deny,resourcecontrol=deny"`
+    /// Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
+    /// Another note: enabling this feature may reduce performance, you may enable
+    /// /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
+    pub seccomp_sandbox: Option<String>,
 }
 
 fn default_qgs_port() -> u32 {

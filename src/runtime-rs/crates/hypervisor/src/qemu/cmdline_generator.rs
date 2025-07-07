@@ -2182,6 +2182,14 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_virtio_balloon();
         }
 
+        if let Some(seccomp_sandbox) = &config
+            .security_info
+            .seccomp_sandbox
+            .as_ref()
+            .filter(|s| !s.is_empty())
+        {
+            qemu_cmd_line.add_seccomp_sandbox(seccomp_sandbox);
+        }
         Ok(qemu_cmd_line)
     }
 
@@ -2620,6 +2628,11 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
+    pub fn add_seccomp_sandbox(&mut self, param: &str) {
+        let seccomp_sandbox = SeccompSandbox::new(param);
+        self.devices.push(Box::new(seccomp_sandbox));
+    }
+
     pub async fn build(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
 
@@ -2704,5 +2717,25 @@ impl ToQemuParams for DeviceVirtioBalloon {
             "-device".to_owned(),
             "virtio-balloon,free-page-reporting=on".to_owned(),
         ])
+    }
+}
+
+#[derive(Debug)]
+struct SeccompSandbox {
+    param: String,
+}
+
+impl SeccompSandbox {
+    fn new(param: &str) -> Self {
+        SeccompSandbox {
+            param: param.to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for SeccompSandbox {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec!["-sandbox".to_owned(), self.param.clone()])
     }
 }
