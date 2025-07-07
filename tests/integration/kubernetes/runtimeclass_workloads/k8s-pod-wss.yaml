@@ -1,0 +1,23 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wss-exec-pod
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  shareProcessNamespace: true
+  containers:
+  - name: container
+    image: quay.io/prometheus/busybox:latest
+    command: ["/bin/sh"]
+    args:
+    - -c
+    - |
+      echo 'echo error1 1>&2 && sleep 1 && echo error2 1>&2  && sleep 1 && echo out1 && sleep 1 && echo out2 && sleep 1 && echo out3 && sleep 1 && echo error3 1>&2' > test.sh
+      chmod +x test.sh
+      sleep infinity
