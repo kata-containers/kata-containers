@@ -9,8 +9,9 @@
 use std::fs::File;
 use std::sync::{Arc, Mutex};
 
-use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use log::{debug, error, info, warn};
+use std::sync::mpsc;
 use tracing::instrument;
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
@@ -284,7 +285,7 @@ pub enum VmmData {
     /// Return vfio device's slot number in guest.
     VfioDeviceData(Option<u8>),
     /// Sync Hotplug
-    SyncHotplug((Sender<Option<i32>>, Receiver<Option<i32>>)),
+    SyncHotplug((mpsc::Sender<Option<i32>>, mpsc::Receiver<Option<i32>>)),
 }
 
 /// Request data type used to communicate between the API and the VMM.
@@ -900,7 +901,7 @@ impl VmmService {
             }
         })?;
 
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = mpsc::channel();
 
         // It is safe because we don't expect poison lock.
         let vfio_manager = vm.device_manager.vfio_manager.lock().unwrap();
@@ -965,15 +966,17 @@ impl VmmService {
             ));
         }
 
+        let (sender, revceiver) = mpsc::channel();
+
         #[cfg(feature = "dbs-upcall")]
-        vm.resize_vcpu(config, None).map_err(|e| {
+        vm.resize_vcpu(config, Some(sender.clone())).map_err(|e| {
             if let VcpuResizeError::UpcallServerNotReady = e {
                 return VmmActionError::UpcallServerNotReady;
             }
             VmmActionError::ResizeVcpu(e)
         })?;
 
-        Ok(VmmData::Empty)
+        Ok(VmmData::SyncHotplug((sender, revceiver)))
     }
 
     #[cfg(feature = "virtio-mem")]

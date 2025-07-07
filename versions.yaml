@@ -122,37 +122,37 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       ppc64le:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       x86_64:
         name: "ubuntu"
-        version: "jammy"  # 22.04 lTS
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
-          version: "oracular"  # 24.10
+          version: "noble"  # 24.04 LTS
         mariner:
           name: "cbl-mariner"
           version: "3.0"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
 
   initrd:
     description: |
@@ -165,42 +165,42 @@ assets:
         version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
       s390x:
         name: "ubuntu"
-        version: "jammy"  # 22.04 LTS
+        version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
       x86_64:
         name: "alpine"
         version: "3.18"
         confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"  # 22.04 LTS
+          version: "noble"  # 24.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.28"
+    version: "v6.12.36"
     confidential:
       description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.12.28"
+      version: "v6.12.36"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -210,7 +210,7 @@ assets:
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.1.140"
+    version: "v6.12.36"
 
 externals:
   description: "Third-party projects used by the system"
@@ -233,19 +233,19 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "0a06ef241190780840fbb0542e51b198f1f72b0b"
-    toolchain: "1.80.0"
+    version: "4cd62c3f8a6475a556eceb5f4538e523e9491400"
+    toolchain: "1.85.1"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "d9eb5e0cb0aca97abe35b58908e061850ff60a51"
+    version: "8462025ed2d2a94281344e63405bbe7500bd4484"
     # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "d9eb5e0cb0aca97abe35b58908e061850ff60a51"
+    image_tag: "8462025ed2d2a94281344e63405bbe7500bd4484"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "d9eb5e0cb0aca97abe35b58908e061850ff60a51-x86_64"
-    toolchain: "1.80.0"
+    ita_image_tag: "8462025ed2d2a94281344e63405bbe7500bd4484-x86_64"
+    toolchain: "1.85.1"
 
   crio:
     description: |
@@ -345,7 +345,12 @@ externals:
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.13.14"
+    version: "v0.15.2"
+
+  opa:
+    description: "Open Policy Agent"
+    url: "https://github.com/open-policy-agent/opa"
+    version: "v1.5.1"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
@@ -392,12 +397,12 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.23.7"
+    version: "1.23.10"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.23.7"
+      newest-version: "1.23.10"
 
   rust:
     description: "Rust language"

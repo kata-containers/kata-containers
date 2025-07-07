@@ -22,6 +22,8 @@ struct InitialSize {
     orig_toml_default_mem: u32,
 }
 
+const MIB: i64 = 1024 * 1024;
+
 // generate initial resource(vcpu and memory in MiB) from annotations
 impl TryFrom<&HashMap<String, String>> for InitialSize {
     type Error = anyhow::Error;
@@ -168,10 +170,15 @@ fn get_nr_vcpu(resource: &LinuxContainerCpuResources) -> u32 {
 
 fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
     if memory_in_byte < 0 {
-        0
-    } else {
-        (memory_in_byte / 1024 / 1024) as u32
+        return 0;
     }
+    let mem_size = (memory_in_byte / MIB) as u32;
+    // memory size must be 2MB aligned for hugepage support
+    if mem_size % 2 != 0 {
+        return mem_size + 1;
+    }
+
+    mem_size
 }
 
 // from the upper layer runtime's annotation (e.g. crio, k8s), get the *cpu quota,
@@ -227,11 +234,24 @@ mod tests {
                 input: InputData {
                     period: Some(100_000),
                     quota: Some(220_000),
-                    memory: Some(1024 * 1024 * 512),
+                    memory: Some(512 * MIB),
                 },
                 result: InitialSize {
                     vcpu: 3,
                     mem_mb: 512,
+                    orig_toml_default_mem: 0,
+                },
+            },
+            TestData {
+                desc: "Odd memory in resource limits",
+                input: InputData {
+                    period: None,
+                    quota: None,
+                    memory: Some(513 * MIB),
+                },
+                result: InitialSize {
+                    vcpu: 0,
+                    mem_mb: 514,
                     orig_toml_default_mem: 0,
                 },
             },

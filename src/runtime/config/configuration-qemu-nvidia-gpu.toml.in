@@ -356,9 +356,7 @@ pflashes = []
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-#disable_image_nvdimm = true
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 
 # Enable hot-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 

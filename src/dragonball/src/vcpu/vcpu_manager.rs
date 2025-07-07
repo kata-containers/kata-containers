@@ -225,7 +225,7 @@ pub struct VcpuManager {
     vm_as: GuestAddressSpaceImpl,
     pub(crate) vm_fd: Arc<VmFd>,
 
-    action_sycn_tx: Option<Sender<bool>>,
+    action_sycn_tx: Option<Sender<Option<i32>>>,
     vcpus_in_action: (VcpuAction, Vec<u8>),
     pub(crate) reset_event_fd: Option<EventFd>,
 
@@ -756,7 +756,9 @@ impl VcpuManager {
 
     fn sync_action_finish(&mut self, got_error: bool) {
         if let Some(tx) = self.action_sycn_tx.take() {
-            if let Err(e) = tx.send(got_error) {
+            let result = if got_error { 0 } else { -1 };
+
+            if let Err(e) = tx.send(Some(result)) {
                 debug!("cpu sync action send to closed channel {}", e);
             }
         }
@@ -856,7 +858,7 @@ mod hotplug {
         pub fn resize_vcpu(
             &mut self,
             vcpu_count: u8,
-            sync_tx: Option<Sender<bool>>,
+            sync_tx: Option<Sender<Option<i32>>>,
         ) -> std::result::Result<(), VcpuResizeError> {
             if self.get_vcpus_action() != VcpuAction::None {
                 return Err(VcpuResizeError::VcpuIsHotplugging);

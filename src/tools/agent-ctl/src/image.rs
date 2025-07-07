@@ -5,12 +5,11 @@
 // Description: Image client to manage container images for testing container creation
 
 use anyhow::{anyhow, Context, Result};
-use image_rs::image::ImageClient;
+use image_rs::builder::ClientBuilder;
 use nix::mount::umount;
 use safe_path::scoped_join;
 use slog::{debug, warn};
 use std::fs;
-use std::path::PathBuf;
 
 const IMAGE_WORK_DIR: &str = "/run/kata-containers/test_image/";
 const CONTAINER_BASE_TEST: &str = "/run/kata-containers/testing/";
@@ -28,9 +27,12 @@ pub fn pull_image(image: &str, cid: &str) -> Result<String> {
     }
 
     debug!(sl!(), "pull_image: creating image client");
-    let mut image_client = ImageClient::new(PathBuf::from(IMAGE_WORK_DIR));
-    image_client.config.auth = false;
-    image_client.config.security_validate = false;
+    let image_client_builder = ClientBuilder::default().work_dir(IMAGE_WORK_DIR.into());
+    let mut image_client = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(image_client_builder.build())
+        .context("Build the image client")?;
 
     // setup the container test base path
     fs::create_dir_all(CONTAINER_BASE_TEST)?;

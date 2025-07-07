@@ -47,6 +47,9 @@ pub const SANDBOX_BIND_MOUNTS_RO: &str = ":ro";
 /// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readwrite
 pub const SANDBOX_BIND_MOUNTS_RW: &str = ":rw";
 
+/// KATA_VIRTUAL_VOLUME_PREFIX is for container image guest pull
+pub const KATA_VIRTUAL_VOLUME_PREFIX: &str = "io.katacontainers.volume=";
+
 /// Directly assign a block volume to vm and mount it inside guest.
 pub const KATA_VIRTUAL_VOLUME_DIRECT_BLOCK: &str = "direct_block";
 /// Present a container image as a generic block device.
@@ -63,6 +66,8 @@ pub const KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS: &str = "image_nydus_fs";
 pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS: &str = "layer_nydus_fs";
 /// Download and extra container image inside guest vm.
 pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
+/// In CoCo scenario, we support force_guest_pull to enforce container image guest pull without remote snapshotter.
+pub const KATA_IMAGE_FORCE_GUEST_PULL: &str = "force_guest_pull";
 
 /// Manager to manage registered storage device handlers.
 pub type StorageHandlerManager<H> = HandlerManager<H>;
@@ -382,7 +387,15 @@ impl KataVirtualVolume {
     pub fn from_base64(value: &str) -> Result<Self> {
         let json = base64::decode(value)?;
         let volume: KataVirtualVolume = serde_json::from_slice(&json)?;
+
+        Ok(volume)
+    }
+
+    /// Decode and deserialize a virtual volume object from base64 encoded json string and validate it.
+    pub fn from_base64_and_validate(value: &str) -> Result<Self> {
+        let volume = Self::from_base64(value)?;
         volume.validate()?;
+
         Ok(volume)
     }
 }
@@ -512,6 +525,29 @@ pub fn split_bind_mounts(bindmount: &str) -> (&str, &str) {
     (real_path, mode)
 }
 
+/// This function, adjust_rootfs_mounts, manages the root filesystem mounts based on guest-pull mechanism.
+/// - the function disregards any provided rootfs_mounts.
+/// Instead, it forcefully creates a single, default KataVirtualVolume specifically for guest-pull operations.
+/// This volume's representation is then base64-encoded and added as the only option to a new, singular Mount entry,
+/// which becomes the sole item in the returned Vec<Mount>.
+/// This ensures that when guest pull is active, the root filesystem is exclusively configured via this virtual volume.
+pub fn adjust_rootfs_mounts() -> Result<Vec<Mount>> {
+    // We enforce a single, default KataVirtualVolume as the exclusive rootfs mount.
+    let volume = KataVirtualVolume::new(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL.to_string());
+
+    // Convert the virtual volume to a base64 string for the mount option.
+    let b64_vol = volume
+        .to_base64()
+        .context("failed to base64 encode KataVirtualVolume")?;
+
+    // Create a new Vec<Mount> with a single Mount entry.
+    // This Mount's options will contain the base64-encoded virtual volume.
+    Ok(vec![Mount {
+        options: vec![format!("{}{}", KATA_VIRTUAL_VOLUME_PREFIX, b64_vol)],
+        ..Default::default() // Use default values for other Mount fields
+    }])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -622,7 +658,8 @@ mod tests {
         volume.direct_volume = Some(DirectAssignedVolume { metadata });
 
         let value = volume.to_base64().unwrap();
-        let volume2: KataVirtualVolume = KataVirtualVolume::from_base64(value.as_str()).unwrap();
+        let volume2: KataVirtualVolume =
+            KataVirtualVolume::from_base64_and_validate(value.as_str()).unwrap();
         assert_eq!(volume.volume_type, volume2.volume_type);
         assert_eq!(volume.source, volume2.source);
         assert_eq!(volume.fs_type, volume2.fs_type);
@@ -680,5 +717,37 @@ mod tests {
             nydus.snapshot_dir
         );
         assert_eq!(volume.fs_type.as_str(), "rafsv6")
+    }
+
+    #[test]
+    fn test_adjust_rootfs_mounts_basic_success() {
+        let result = adjust_rootfs_mounts();
+        assert!(result.is_ok());
+        let mounts = result.unwrap();
+
+        // 1. Mount length is 1
+        assert_eq!(mounts.len(), 1);
+        let returned_mount = &mounts[0];
+
+        // 2. Verify Mount's fields and ensure source, destination, typ with default value
+        let expected_default_mount = Mount::default();
+        assert_eq!(returned_mount.source, expected_default_mount.source);
+        assert_eq!(
+            returned_mount.destination,
+            expected_default_mount.destination
+        );
+        assert_eq!(returned_mount.fs_type, expected_default_mount.fs_type);
+
+        // 3. Mount's options
+        assert_eq!(returned_mount.options.len(), 1);
+        let option_str = &returned_mount.options[0];
+        assert!(option_str.starts_with("io.katacontainers.volume="));
+
+        let expected_volume_obj =
+            KataVirtualVolume::new(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL.to_string());
+        let expected_b64_vol = expected_volume_obj.to_base64().unwrap();
+        let (_prefix, encoded_vol) = option_str.split_once("io.katacontainers.volume=").unwrap();
+
+        assert_eq!(encoded_vol, expected_b64_vol);
     }
 }

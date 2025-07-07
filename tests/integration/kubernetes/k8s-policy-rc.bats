@@ -67,7 +67,7 @@ test_rc_policy() {
     # Wait for all the expected pods to be created.
     local pod_creation_sleep="10"
     local count=0
-    local launched_pods=()
+    launched_pods=()
     while [ $count -lt 6 ] && [ "${#launched_pods[@]}" -ne "${number_of_replicas}" ]; do
         bats_unbuffered_info "sleep count=${count}, launched ${#launched_pods[@]} pods, sleeping ${pod_creation_sleep}..."
         sleep "${pod_creation_sleep}"

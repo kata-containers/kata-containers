@@ -1144,7 +1144,6 @@ mod tests {
     use std::fs::remove_dir_all;
     use std::fs::remove_file;
     use std::io;
-    use std::os::unix::fs;
     use std::os::unix::io::AsRawFd;
     use tempfile::tempdir;
     use test_utils::assert_result;

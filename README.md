@@ -1,6 +1,7 @@
 <img src="https://object-storage-ca-ymq-1.vexxhost.net/swift/v1/6e4619c416ff4bd19e1c087f27a43eea/www-images-prod/openstack-logo/kata/SVG/kata-1.svg" width="900">
 
 [![CI | Publish Kata Containers payload](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml/badge.svg)](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml) [![Kata Containers Nightly CI](https://github.com/kata-containers/kata-containers/actions/workflows/ci-nightly.yaml/badge.svg)](https://github.com/kata-containers/kata-containers/actions/workflows/ci-nightly.yaml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/kata-containers/kata-containers/badge)](https://scorecard.dev/viewer/?uri=github.com/kata-containers/kata-containers)
 
 # Kata Containers
 

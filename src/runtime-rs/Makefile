@@ -182,6 +182,10 @@ DEFBINDMOUNTS := []
 DEFDANCONF := /run/kata-containers/dans
 DEFFORCEGUESTPULL := false
 QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT := 4050
+
+# Create Container Timeout in seconds
+DEFCREATECONTAINERTIMEOUT ?= 30
+
 SED = sed
 CLI_DIR = cmd
 SHIMV2 = containerd-shim-kata-v2
@@ -221,7 +225,7 @@ ifneq (,$(DBCMD))
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
     VMROOTFSDRIVER_DB := virtio-blk-pci
-    DEFMAXVCPUS_DB := 1
+    DEFMAXVCPUS_DB := 0
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
@@ -512,6 +516,7 @@ USER_VARS += KATA_INSTALL_CFG_PERMS
 USER_VARS += DEFDANCONF
 USER_VARS += DEFFORCEGUESTPULL
 USER_VARS += QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT
+USER_VARS += DEFCREATECONTAINERTIMEOUT
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \

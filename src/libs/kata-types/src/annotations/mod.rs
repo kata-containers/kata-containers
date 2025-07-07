@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
 
 use crate::config::TomlConfig;
+use crate::initdata::add_hypervisor_initdata_overrides;
 use crate::sl;
 
 use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
@@ -271,6 +272,17 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_extra_args";
 /// A sandbox annotation to specify as the msize for 9p shares.
 pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
+/// The initdata annotation passed in when CVM launchs
+pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
+    "io.katacontainers.config.hypervisor.cc_init_data";
+
+/// GPU specific annotations for remote hypervisor to help with instance selection
+/// It's for minimum number of GPUs required for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS: &str =
+    "io.katacontainers.config.hypervisor.default_gpus";
+/// It's for the GPU model(tesla, h100, a100, radeon etc.) required for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL: &str =
+    "io.katacontainers.config.hypervisor.default_gpu_model";
 
 // Runtime related annotations
 /// Prefix for Runtime configurations.
@@ -303,6 +315,9 @@ pub const KATA_ANNO_CFG_DISABLE_NEW_NETNS: &str =
 pub const KATA_ANNO_CFG_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio_mode";
 /// An annotation to declare shared mount points, which is a set of mount points that directly share mounted objects between containers.
 pub const KATA_ANNO_CFG_SHARED_MOUNTS: &str = "io.katacontainers.config.runtime.shared_mounts";
+/// An annotation to set timeout value in second when do create container
+pub const KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT: &str =
+    "io.katacontainers.config.runtime.create_container_timeout";
 
 /// A sandbox annotation used to specify prefetch_files.list host path container image
 /// being used,
@@ -880,6 +895,21 @@ impl Annotation {
                         hv.security_info.validate_path(value)?;
                         hv.security_info.guest_hook_path = value.to_string();
                     }
+                    KATA_ANNO_CFG_HYPERVISOR_INIT_DATA => {
+                        hv.security_info.initdata =
+                            add_hypervisor_initdata_overrides(value).unwrap();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            hv.remote_info.default_gpus = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL => {
+                        hv.remote_info.default_gpu_model = value.to_string();
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR => {
                         match self.get_value::<bool>(key) {
                             Ok(r) => {
@@ -957,6 +987,14 @@ impl Annotation {
                     KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             ag.container_pipe_size = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            ag.request_timeout_ms = v.unwrap_or_default() * 1000;
                         }
                         Err(_e) => {
                             return Err(u32_err);

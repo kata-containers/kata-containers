@@ -9,34 +9,34 @@ use anyhow::{anyhow, Result};
 use protocols::empty;
 use protocols::mem_agent_ttrpc;
 use share::option::{CompactSetOption, MemcgSetOption};
-use structopt::StructOpt;
+use clap::Parser;
 use ttrpc::r#async::Client;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum Command {
-    #[structopt(name = "memcgstatus", about = "get memory cgroup status")]
+    #[clap(name = "memcgstatus", about = "get memory cgroup status")]
     MemcgStatus,
 
-    #[structopt(name = "memcgset", about = "set memory cgroup")]
+    #[clap(name = "memcgset", about = "set memory cgroup")]
     MemcgSet(MemcgSetOption),
 
-    #[structopt(name = "compactset", about = "set compact")]
+    #[clap(name = "compactset", about = "set compact")]
     CompactSet(CompactSetOption),
 }
 
-#[derive(StructOpt, Debug)]
-#[structopt(name = "mem-agent-ctl", about = "Memory agent controler")]
+#[derive(Parser, Debug)]
+#[clap(name = "mem-agent-ctl", about = "Memory agent controler")]
 struct Opt {
-    #[structopt(long, default_value = "unix:///var/run/mem-agent.sock")]
+    #[clap(long, default_value = "unix:///var/run/mem-agent.sock")]
     addr: String,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     // setup client
     let c = Client::connect(&opt.addr).unwrap();

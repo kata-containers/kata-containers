@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::os::fd::RawFd;
 use std::path::Path;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Weak};
 
-use crossbeam_channel::Sender;
 use dbs_device::resources::Resource::LegacyIrq;
 use dbs_device::resources::{DeviceResources, Resource, ResourceConstraint};
 use dbs_device::DeviceIo;

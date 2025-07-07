@@ -9,6 +9,7 @@ use std::{
     os::unix::{io::IntoRawFd, prelude::AsRawFd},
     sync::{Arc, Mutex, RwLock},
     thread,
+    time::Duration,
 };
 
 use anyhow::{anyhow, Context, Result};
@@ -292,9 +293,17 @@ impl VmmInstance {
         Ok(())
     }
 
-    pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo) -> Result<()> {
-        self.handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
+    pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo, timeout: Option<Duration>) -> Result<()> {
+        let vmmdata = self
+            .handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
             .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {:?}", cfg))?;
+
+        if let Some(timeout) = timeout {
+            if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
+                let _ = receiver.recv_timeout(timeout)?;
+            }
+        }
+
         Ok(())
     }
 

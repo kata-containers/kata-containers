@@ -3,23 +3,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::protocols::mem_agent as rpc;
-use structopt::StructOpt;
+use clap::Parser;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct MemcgSetOption {
-    #[structopt(long)]
+    #[clap(long)]
     memcg_disabled: Option<bool>,
-    #[structopt(long)]
+    #[clap(long)]
     memcg_swap: Option<bool>,
-    #[structopt(long)]
+    #[clap(long)]
     memcg_swappiness_max: Option<u8>,
-    #[structopt(long)]
+    #[clap(long)]
     memcg_period_secs: Option<u64>,
-    #[structopt(long)]
+    #[clap(long)]
     memcg_period_psi_percent_limit: Option<u8>,
-    #[structopt(long)]
+    #[clap(long)]
     memcg_eviction_psi_percent_limit: Option<u8>,
-    #[structopt(long)]
+    #[clap(long)]
     memcg_eviction_run_aging_count_min: Option<u64>,
 }
 
@@ -72,23 +72,23 @@ impl MemcgSetOption {
     }
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct CompactSetOption {
-    #[structopt(long)]
+    #[clap(long)]
     compact_disabled: Option<bool>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_period_secs: Option<u64>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_period_psi_percent_limit: Option<u8>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_psi_percent_limit: Option<u8>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_sec_max: Option<i64>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_order: Option<u8>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_threshold: Option<u64>,
-    #[structopt(long)]
+    #[clap(long)]
     compact_force_times: Option<u64>,
 }
 

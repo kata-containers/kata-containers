@@ -22,7 +22,6 @@ jobs:
     name: WIP Check
     steps:
     - name: WIP Check
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: tim-actions/wip-check@1c2a1ca6c110026b3e2297bb2ef39e1747b5a755 # master (2021-06-10)
       with:
         labels: '["do-not-merge", "wip", "rfc"]'

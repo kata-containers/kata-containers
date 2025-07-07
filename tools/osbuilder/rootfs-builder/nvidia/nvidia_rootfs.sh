@@ -49,8 +49,8 @@ setup_nvidia-nvrc() {
 
 	pushd "${PROJECT}" > /dev/null || exit 1
 
-	cargo build --release --target="${machine_arch}"-unknown-linux-gnu
-	cp target/"${machine_arch}"-unknown-linux-gnu/release/NVRC ../../destdir/bin/.
+	cargo build --release --target="${machine_arch}"-unknown-linux-musl
+	cp target/"${machine_arch}"-unknown-linux-musl/release/NVRC ../../destdir/bin/.
 
 	popd > /dev/null || exit 1
 
