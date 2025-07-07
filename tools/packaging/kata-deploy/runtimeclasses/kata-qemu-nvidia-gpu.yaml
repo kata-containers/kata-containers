@@ -6,8 +6,8 @@ metadata:
 handler: kata-qemu-nvidia-gpu
 overhead:
     podFixed:
-        memory: "160Mi"
-        cpu: "250m"
+        memory: "4096Mi"
+        cpu: "1"
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
