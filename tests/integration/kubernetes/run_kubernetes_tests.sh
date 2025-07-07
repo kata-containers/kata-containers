@@ -58,6 +58,7 @@ else
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
+		"k8s-exec-websocket.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-hostname.bats" \
 		"k8s-inotify.bats" \
