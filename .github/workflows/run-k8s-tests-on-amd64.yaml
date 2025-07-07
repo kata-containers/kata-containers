@@ -79,6 +79,8 @@ jobs:
 
       - name: Deploy ${{ matrix.k8s }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+        env:
+          CONTAINER_RUNTIME: ${{ matrix.container_runtime }}
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
         if: matrix.snapshotter != ''
