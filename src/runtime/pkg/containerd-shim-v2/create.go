@@ -31,6 +31,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	// only register the proto type
 	crioption "github.com/containerd/containerd/pkg/runtimeoptions/v1"
@@ -69,6 +70,27 @@ func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
 			Source:      fields[0],
 			Options:     fields[2:],
 		})
+	}
+
+	return nil
+}
+
+func setupMntNs() error {
+	err := unix.Unshare(unix.CLONE_NEWNS)
+	if err != nil {
+		return err
+	}
+
+	err = unix.Mount("", "/", "", unix.MS_REC|unix.MS_SLAVE, "")
+	if err != nil {
+		err = fmt.Errorf("failed to mount with slave: %v", err)
+		return err
+	}
+
+	err = unix.Mount("", "/", "", unix.MS_REC|unix.MS_SHARED, "")
+	if err != nil {
+		err = fmt.Errorf("failed to mount with shared: %v", err)
+		return err
 	}
 
 	return nil
@@ -162,6 +184,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateSandboxSizing(ociSpec)
 		} else {
 			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateContainerSizing(ociSpec)
+		}
+
+		if !runtimeConfig.FactoryConfig.Template && runtimeConfig.FactoryConfig.VMCacheNumber == 0 {
+			if err := setupMntNs(); err != nil {
+				return nil, err
+			}
 		}
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
