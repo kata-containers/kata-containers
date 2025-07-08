@@ -195,6 +195,9 @@ block_device_driver = "virtio-blk-pci"
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Disable the 'seccomp' feature from Cloud Hypervisor or firecracker, default false
+# disable_seccomp = true
+
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
 #
