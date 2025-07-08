@@ -317,12 +317,12 @@ impl TryFrom<(CpuInfo, GuestProtection)> for CpusConfig {
         let guest_protection_to_use = args.1;
 
         // This can only happen if runtime-rs fails to set default values.
-        if cpu.default_vcpus <= 0 {
+        if cpu.default_vcpus <= 0.0 {
             return Err(CpusConfigError::BootVCPUsTooSmall);
         }
 
-        let default_vcpus =
-            u8::try_from(cpu.default_vcpus).map_err(CpusConfigError::BootVCPUsTooBig)?;
+        let default_vcpus = u8::try_from(cpu.default_vcpus.ceil() as u32)
+            .map_err(CpusConfigError::BootVCPUsTooBig)?;
 
         // This can only happen if runtime-rs fails to set default values.
         if cpu.default_maxvcpus == 0 {
@@ -609,7 +609,7 @@ mod tests {
         };
 
         let cpu_info = CpuInfo {
-            default_vcpus: cpu_default as i32,
+            default_vcpus: cpu_default as f32,
             default_maxvcpus,
 
             ..Default::default()
@@ -1157,7 +1157,7 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: -1,
+                    default_vcpus: -1.0,
 
                     ..Default::default()
                 },
@@ -1166,7 +1166,7 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: 1,
+                    default_vcpus: 1.0,
                     default_maxvcpus: 0,
 
                     ..Default::default()
@@ -1176,7 +1176,7 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: 9,
+                    default_vcpus: 9.0,
                     default_maxvcpus: 7,
 
                     ..Default::default()
@@ -1186,7 +1186,7 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: 1,
+                    default_vcpus: 1.0,
                     default_maxvcpus: 1,
                     ..Default::default()
                 },
@@ -1206,7 +1206,7 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: 1,
+                    default_vcpus: 1.0,
                     default_maxvcpus: 3,
                     ..Default::default()
                 },
@@ -1226,7 +1226,7 @@ mod tests {
             },
             TestData {
                 cpu_info: CpuInfo {
-                    default_vcpus: 1,
+                    default_vcpus: 1.0,
                     default_maxvcpus: 13,
                     ..Default::default()
                 },
@@ -1821,7 +1821,7 @@ mod tests {
 
             cfg: HypervisorConfig {
                 cpu_info: CpuInfo {
-                    default_vcpus: 0,
+                    default_vcpus: 0.0,
 
                     ..cpu_info.clone()
                 },
@@ -1937,7 +1937,7 @@ mod tests {
                     vsock_socket_path: "vsock_socket_path".into(),
                     cfg: HypervisorConfig {
                         cpu_info: CpuInfo {
-                            default_vcpus: 1,
+                            default_vcpus: 1.0,
                             default_maxvcpus: 1,
 
                             ..Default::default()
@@ -1961,7 +1961,7 @@ mod tests {
                             ..Default::default()
                         },
                         cpu_info: CpuInfo {
-                            default_vcpus: 1,
+                            default_vcpus: 1.0,
                             default_maxvcpus: 1,
 
                             ..Default::default()
