@@ -24,32 +24,29 @@ dbs-boot = { workspace = true }
 epoll = ">=4.3.1, <4.3.2"
 io-uring = "0.5.2"
 fuse-backend-rs = { version = "0.10.5", optional = true }
-kvm-bindings = { workspace = true}
-kvm-ioctls = {workspace = true}
+kvm-bindings = { workspace = true }
+kvm-ioctls = { workspace = true }
 libc = "0.2.119"
 log = "0.4.14"
 nix = "0.24.3"
 nydus-api = "0.3.1"
 nydus-rafs = "0.3.2"
-nydus-storage = "0.6.4"
+nydus-storage = "0.7.0"
 rlimit = "0.7.0"
 serde = "1.0.27"
 serde_json = "1.0.9"
 thiserror = "1"
 threadpool = "1"
-virtio-bindings = {workspace = true}
-virtio-queue = {workspace = true}
-vmm-sys-util = {workspace = true}
+virtio-bindings = { workspace = true }
+virtio-queue = { workspace = true }
+vmm-sys-util = { workspace = true }
 vm-memory = { workspace = true, features = ["backend-mmap"] }
 sendfd = "0.4.3"
 vhost-rs = { version = "0.6.1", package = "vhost", optional = true }
 timerfd = "1.0"
 
 [dev-dependencies]
-vm-memory = { workspace = true, features = [
-    "backend-mmap",
-    "backend-atomic",
-] }
+vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }
 
 [features]
 virtio-mmio = []
