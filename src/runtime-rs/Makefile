@@ -291,6 +291,18 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU)
 
+    CONFIG_FILE_QEMU_TDX = configuration-qemu-tdx-runtime-rs.toml
+    CONFIG_QEMU_TDX = config/$(CONFIG_FILE_QEMU_TDX)
+    CONFIG_QEMU_TDX_IN = $(CONFIG_QEMU_TDX).in
+
+    CONFIG_PATH_QEMU_TDX = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_TDX))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_TDX)
+
+    SYSCONFIG_QEMU_TDX = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_TDX))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_TDX)
+
+    CONFIGS += $(CONFIG_QEMU_TDX)
+
     CONFIG_FILE_QEMU_SE = configuration-qemu-se-runtime-rs.toml
     CONFIG_QEMU_SE = config/$(CONFIG_FILE_QEMU_SE)
     CONFIG_QEMU_SE_IN = $(CONFIG_QEMU_SE).in
@@ -319,6 +331,10 @@ ifneq (,$(QEMUCMD))
     KERNELTYPE_QEMU = uncompressed
     KERNEL_NAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_QEMU))
     KERNELPATH_QEMU = $(KERNELDIR)/$(KERNEL_NAME_QEMU)
+
+    KERNEL_CONFIDENTIAL_TYPE = compressed
+    KERNEL_CONFIDENTIAL_NAME = $(call MAKE_KERNEL_CONFIDENTIAL_NAME,$(KERNEL_CONFIDENTIAL_TYPE))
+    KERNELCONFIDENTIALPATH = $(KERNELDIR)/$(KERNEL_CONFIDENTIAL_NAME)
 
     KERNEL_NAME_QEMU_SE = kata-containers-se.img
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
@@ -452,6 +468,7 @@ USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
 USER_VARS += KERNELPATH_DB
 USER_VARS += KERNELPATH_QEMU
+USER_VARS += KERNELCONFIDENTIALPATH
 USER_VARS += KERNELPATH_QEMU_SE
 USER_VARS += KERNELPATH_FC
 USER_VARS += KERNELPATH_COCO
@@ -644,6 +661,10 @@ $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
 define MAKE_KERNEL_NAME_COCO
+$(if $(findstring uncompressed,$1),vmlinux-confidential.container,vmlinuz-confidential.container)
+endef
+
+define MAKE_KERNEL_CONFIDENTIAL_NAME
 $(if $(findstring uncompressed,$1),vmlinux-confidential.container,vmlinuz-confidential.container)
 endef
 
