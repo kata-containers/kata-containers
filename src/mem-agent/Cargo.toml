@@ -9,7 +9,7 @@ slog-scope = "4.1.2"
 anyhow = "1.0"
 page_size = "0.6"
 chrono = "0.4"
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { version = "1.46.1", features = ["full"] }
 async-trait = "0.1"
 lazy_static = "1.4"
 nix = "0.23.2"
