@@ -31,6 +31,7 @@ KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
+CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
@@ -192,15 +193,19 @@ function get_nodes_and_pods_info() {
 }
 
 function deploy_k0s() {
-	url=$(get_from_kata_deps ".externals.k0s.url")
-
-	k0s_version_param=""
-	version=$(get_from_kata_deps ".externals.k0s.version")
-	if [[ -n "${version}" ]]; then
-		k0s_version_param="K0S_VERSION=${version}"
+	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
+		url=$(get_from_kata_deps ".externals.k0s.url")
+	
+		k0s_version_param=""
+		version=$(get_from_kata_deps ".externals.k0s.version")
+		if [[ -n "${version}" ]]; then
+			k0s_version_param="K0S_VERSION=${version}"
+		fi
+	
+		curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
+	else
+		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
 	fi
-
-	curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
 
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters.

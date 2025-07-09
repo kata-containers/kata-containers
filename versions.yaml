@@ -301,6 +301,8 @@ externals:
     url: "https://github.com/lvmteam/lvm2"
     version: "v2_03_16"
 
+  # This is only used for CRI-O.
+  # kata-deploy tests rely on the latest version of k0s.
   k0s:
     description: "K0s Kubernetes distribution, used in cri-o testing"
     url: "https://get.k0s.sh"
