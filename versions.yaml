@@ -198,7 +198,7 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
     version: "v6.12.36"
     confidential:
-      description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
+      description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
       version: "v6.12.36"
 
