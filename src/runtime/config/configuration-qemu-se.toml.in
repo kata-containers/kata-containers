@@ -164,7 +164,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
-shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
+shared_fs = "@DEFSHAREDFS_QEMU_SEL_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
