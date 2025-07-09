@@ -185,7 +185,7 @@ impl CloudHypervisorInner {
     }
 
     async fn boot_vm(&mut self) -> Result<()> {
-        let (shared_fs_devices, network_devices) = self.get_shared_devices().await?;
+        let (shared_fs_devices, network_devices, _) = self.get_shared_devices().await?;
 
         let socket = self
             .api_socket
