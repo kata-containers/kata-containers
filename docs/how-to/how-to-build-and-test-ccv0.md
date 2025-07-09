@@ -1,12 +1,12 @@
-# How to build, run and test Kata CCv0
+# How to build, run and test Kata CCv0 (archived)
 
 ## Introduction and Background
 
 In order to try and make building (locally) and demoing the Kata Containers `CCv0` code base as simple as possible I've
-shared a script [`ccv0.sh`](./ccv0.sh). This script was originally my attempt to automate the steps of the 
+shared a script [`ccv0.sh`](./ccv0.sh). This script was originally my attempt to automate the steps of the
 [Developer Guide](https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md) so that I could do
-different sections of them repeatedly and reliably as I was playing around with make changes to different parts of the 
-Kata code base. I then tried to weave in some of the [`tests/.ci`](https://github.com/kata-containers/tests/tree/main/.ci) 
+different sections of them repeatedly and reliably as I was playing around with make changes to different parts of the
+Kata code base. I then tried to weave in some of the [`tests/.ci`](https://github.com/kata-containers/tests/tree/main/.ci)
 scripts in order to have less duplicated code.
 As we're progress on the confidential containers journey I hope to add more features to demonstrate the functionality
 we have working.
@@ -21,13 +21,13 @@ In order to build, configure and demo the CCv0 functionality, these are the set-
 - Provision a new VM
     - *I choose a Ubuntu 20.04 8GB VM for this as I had one available. There are some dependences on apt-get installed*
     *packages, so these will need re-working to be compatible with other platforms.*
-- Copy the script over to your VM *(I put it in the home directory)* and ensure it has execute permission by running 
+- Copy the script over to your VM *(I put it in the home directory)* and ensure it has execute permission by running
 ```bash
 $ chmod u+x ccv0.sh
 ```
 - Optionally set up some environment variables
-    - By default the script checks out the `CCv0` branches of the `kata-containers/kata-containers` and 
-      `kata-containers/tests` repositories, but it is designed to be used to test of personal forks and branches as well. 
+    - By default the script checks out the `CCv0` branches of the `kata-containers/kata-containers` and
+      `kata-containers/tests` repositories, but it is designed to be used to test of personal forks and branches as well.
       If you want to build and run these you can export the `katacontainers_repo`, `katacontainers_branch`, `tests_repo`
       and `tests_branch` variables e.g.
       ```bash
@@ -47,7 +47,7 @@ $ chmod u+x ccv0.sh
 - At this point you can provision a Kata confidential containers pod and container with either
   [`crictl`](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image),
   or [Kubernetes](#using-kubernetes-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
-  and then test and use it. 
+  and then test and use it.
 
 ### Using crictl for end-to-end provisioning of a Kata confidential containers pod with an unencrypted image
 
@@ -81,14 +81,14 @@ $ chmod u+x ccv0.sh
   >  ```
   >  then re-run the command.
     - The first time this runs it may take a while, but subsequent runs will be quicker as more things are already
-      installed and they can be further cut down by not running all the above steps 
+      installed and they can be further cut down by not running all the above steps
       [see "Additional script usage" below](#additional-script-usage)
-   
+
 - Create a new Kata sandbox pod using `crictl` with:
   ```bash
   $ ~/ccv0.sh crictl_create_cc_pod
   ```
-    - This creates a pod configuration file, creates the pod from this using 
+    - This creates a pod configuration file, creates the pod from this using
     `sudo crictl runp -r kata ~/pod-config.yaml` and runs `sudo crictl pods` to show the pod
 - Create a new Kata confidential container with:
   ```bash
@@ -110,7 +110,7 @@ or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#usin
 
 - Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is
   configured and created using the VM
-  as a single node cluster: 
+  as a single node cluster:
   ```bash
   $ export KUBERNETES="yes"
   $ ~/ccv0.sh build_and_install_all
@@ -124,7 +124,7 @@ or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#usin
   >  $ sudo docker pull ubuntu:20.04
   >  ```
   >  then re-run the command.
-- Check that your Kubernetes cluster has been correctly set-up by running : 
+- Check that your Kubernetes cluster has been correctly set-up by running :
   ```bash
   $ kubectl get nodes
   ```
@@ -137,7 +137,7 @@ or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#usin
   ```bash
   $ ~/ccv0.sh kubernetes_create_cc_pod
   ```
-- Wait a few seconds for pod to start then check that the pod's status is `Running` with 
+- Wait a few seconds for pod to start then check that the pod's status is `Running` with
   ```bash
   $ kubectl get pods
   ```
@@ -147,7 +147,7 @@ or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#usin
   busybox-cc   1/1     Running   0          54s
   ```
 
-- As this point you should have a Kubernetes pod and container running, that is using the Kata 
+- As this point you should have a Kubernetes pod and container running, that is using the Kata
 confidential containers runtime.
 You can [validate that the container image was pulled on the guest](#validate-that-the-container-image-was-pulled-on-the-guest)
 or [using the Kata pod sandbox for testing with `agent-ctl` or `ctr shim`](#using-a-kata-pod-sandbox-for-testing-with-agent-ctl-or-ctr-shim)
@@ -209,7 +209,7 @@ there.
 
 ### Using a Kata pod sandbox for testing with `agent-ctl` or `ctr shim`
 
-Once you have a kata pod sandbox created as described above, either using 
+Once you have a kata pod sandbox created as described above, either using
 [`crictl`](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image), or [Kubernetes](#using-kubernetes-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
 , you can use this to test specific components of the Kata confidential
 containers architecture. This can be useful for development and debugging to isolate and test features
@@ -223,12 +223,12 @@ the `ccv0.sh` script to automatically fill in the variables:
   - Optionally, set up some environment variables to set the image and credentials used:
     - By default the shim pull image test in `ccv0.sh` will use the `busybox:1.33.1` based test image
      `quay.io/kata-containers/confidential-containers:signed` which requires no authentication. To use a different
-      image, set the `PULL_IMAGE` environment variable e.g. 
+      image, set the `PULL_IMAGE` environment variable e.g.
       ```bash
       $ export PULL_IMAGE="docker.io/library/busybox:latest"
       ```
       Currently the containerd shim pull image
-      code doesn't support using a container registry that requires authentication, so if this is required, see the 
+      code doesn't support using a container registry that requires authentication, so if this is required, see the
       below steps to run the pull image command against the agent directly.
   - Run the pull image agent endpoint with:
     ```bash
@@ -241,7 +241,7 @@ the `ccv0.sh` script to automatically fill in the variables:
         - Set the `PULL_IMAGE` environment variable e.g. `export PULL_IMAGE="docker.io/library/busybox:latest"`
           if a specific container image is required.
         - If the container registry for the image requires authentication then this can be set with an environment
-          variable `SOURCE_CREDS`. For example to use Docker Hub (`docker.io`) as an authenticated user first run 
+          variable `SOURCE_CREDS`. For example to use Docker Hub (`docker.io`) as an authenticated user first run
           `export SOURCE_CREDS="<dockerhub username>:<dockerhub api key>"`
             > **Note**: the credentials support on the agent request is a tactical solution for the short-term
               proof of concept to allow more images to be pulled and tested. Once we have support for getting
@@ -307,19 +307,19 @@ test a few scenarios.
 In this sample, with local attestation, we pass in the the public GPG key and signature files, and the [`offline_fs_kbc`
 configuration](https://github.com/confidential-containers/attestation-agent/blob/main/src/kbc_modules/offline_fs_kbc/README.md)
 into the guest image which specifies that any container image from `quay.io/kata-containers`
-must be signed with the embedded GPG key and the agent configuration needs updating to enable this. 
+must be signed with the embedded GPG key and the agent configuration needs updating to enable this.
 With this policy set a few tests of image verification can be done to test different scenarios by attempting
 to create containers from these images using `crictl`:
 
-- If you don't already have the Kata Containers CC code built and configured for `crictl`, then follow the 
+- If you don't already have the Kata Containers CC code built and configured for `crictl`, then follow the
 [instructions above](#using-crictl-for-end-to-end-provisioning-of-a-kata-confidential-containers-pod-with-an-unencrypted-image)
 up to the `~/ccv0.sh crictl_create_cc_pod` command.
 
 - In order to enable the guest image, you will need to setup the required configuration, policy and signature files
-needed by running 
-`~/ccv0.sh copy_signature_files_to_guest` and then run `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate 
+needed by running
+`~/ccv0.sh copy_signature_files_to_guest` and then run `~/ccv0.sh crictl_create_cc_pod` which will delete and recreate
 your pod - adding in the new files.
- 
+
 - To test the fallback behaviour works using an unsigned image from an *unprotected* registry we can pull the `busybox`
 image by running:
   ```bash
@@ -350,7 +350,7 @@ image by running:
   ...
   ```
 - Finally to check the image with a valid signature, but invalid GPG key (the real trusted piece of information we really
-want to protect with the attestation agent in future) fails we can run: 
+want to protect with the attestation agent in future) fails we can run:
   ```bash
   $ export CONTAINER_CONFIG_FILE=container-config_signed-protected-other.yaml
   $ ~/ccv0.sh crictl_create_cc_container
@@ -370,13 +370,13 @@ If you wish to build the Kata confidential containers runtime to do this yoursel
 steps:
 
 - Run the full build process with the Kubernetes environment variable set to `"yes"`, so the Kubernetes cluster is
-  configured and created using the VM as a single node cluster and with `AA_KBC` set to `offline_fs_kbc`. 
+  configured and created using the VM as a single node cluster and with `AA_KBC` set to `offline_fs_kbc`.
   ```bash
   $ export KUBERNETES="yes"
   $ export AA_KBC=offline_fs_kbc
   $ ~/ccv0.sh build_and_install_all
   ```
-    - The `AA_KBC=offline_fs_kbc` mode will ensure that, when creating the rootfs of the Kata guest, the 
+    - The `AA_KBC=offline_fs_kbc` mode will ensure that, when creating the rootfs of the Kata guest, the
       [attestation-agent](https://github.com/confidential-containers/attestation-agent) will be added along with the
       [sample offline KBC](https://github.com/confidential-containers/documentation/blob/main/demos/ssh-demo/aa-offline_fs_kbc-keys.json)
       and an agent configuration file
@@ -389,7 +389,7 @@ steps:
   >  $ sudo docker pull ubuntu:20.04
   >  ```
   >  then re-run the command.
-- Check that your Kubernetes cluster has been correctly set-up by running : 
+- Check that your Kubernetes cluster has been correctly set-up by running :
   ```bash
   $ kubectl get nodes
   ```
@@ -418,7 +418,7 @@ it ever being available to the host.
     ```bash
     $ exit
     ```
-  
+
 - To delete the sample SSH demo pod run:
   ```bash
   $ ~/ccv0.sh kubernetes_delete_ssh_demo_pod
@@ -430,7 +430,7 @@ As well as being able to use the script as above to build all of `kata-container
 re-build bits of it by running the script with different parameters. For example after the first build you will often
 not need to re-install the dependencies, the hypervisor or the Guest kernel, but just test code changes made to the
 runtime and agent. This can be done by running `~/ccv0.sh rebuild_and_install_kata`. (*Note this does a hard checkout*
-*from git, so if your changes are only made locally it is better to do the individual steps e.g.* 
+*from git, so if your changes are only made locally it is better to do the individual steps e.g.*
 `~/ccv0.sh build_kata_runtime && ~/ccv0.sh build_and_add_agent_to_rootfs && ~/ccv0.sh build_and_install_rootfs`).
 There are commands for a lot of steps in building, setting up and testing and the full list can be seen by running
 `~/ccv0.sh help`:
