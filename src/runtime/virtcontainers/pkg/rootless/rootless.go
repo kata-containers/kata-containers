@@ -38,7 +38,10 @@ var (
 
 	// XDG_RUNTIME_DIR defines the base directory relative to
 	// which user-specific non-essential runtime files are stored.
-	rootlessDir = os.Getenv("XDG_RUNTIME_DIR")
+	rootlessDir string
+
+	// Used for lazy initialization of rootlessDir
+	rootlessDirOnce sync.Once
 
 	rootlessLog = logrus.WithFields(logrus.Fields{
 		"source": "rootless",
@@ -82,5 +85,9 @@ func isRootlessFunc() bool {
 // GetRootlessDir returns the path to the location for rootless
 // container and sandbox storage
 func GetRootlessDir() string {
+	rootlessDirOnce.Do(func() {
+		rootlessDir = os.Getenv("XDG_RUNTIME_DIR")
+		rootlessLog.WithField("rootlessDir", rootlessDir).Debug("initialized rootlessDir")
+	})
 	return rootlessDir
 }
