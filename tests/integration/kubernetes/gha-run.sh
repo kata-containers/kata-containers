@@ -576,7 +576,6 @@ function main() {
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools ;;
 		install-kbs-client) install_kbs_client ;;
-		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials "" ;;
 		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;

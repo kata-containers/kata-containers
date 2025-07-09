@@ -107,7 +107,9 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
 
       - name: Download Azure CLI
-        run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1
+        with:
+          version: 'latest'
 
       - name: Log into the Azure account
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
@@ -129,7 +131,9 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Install `kubectl`
-        run: bash tests/integration/kubernetes/gha-run.sh install-kubectl
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1
+        with:
+          version: 'latest'
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
