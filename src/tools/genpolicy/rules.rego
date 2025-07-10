@@ -669,6 +669,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
     # Reject possible attempts to match multiple input mounts with a single Policy mount.
     p_matches := { p_index | some i_index; p_index = allow_mount(p_oci, input.OCI.Mounts[i_index], bundle_id, sandbox_id) }
 
+    print("allow_by_bundle_or_sandbox_id: p_matches =", p_matches)
     count(p_matches) == count(input.OCI.Mounts)
 
     allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
@@ -967,7 +968,7 @@ allow_root_path(p_oci, i_oci, bundle_id) if {
     p_path1 := p_oci.Root.Path
     print("allow_root_path: i_path =", i_path, "p_path1 =", p_path1)
 
-    p_path2 := replace(p_path1, "$(cpath)", policy_data.common.cpath)
+    p_path2 := replace(p_path1, "$(root_path)", policy_data.common.root_path)
     print("allow_root_path: p_path2 =", p_path2)
 
     p_path3 := replace(p_path2, "$(bundle-id)", bundle_id)
@@ -983,8 +984,8 @@ allow_root_path(p_oci, i_oci, bundle_id) if {
 allow_mount(p_oci, i_mount, bundle_id, sandbox_id):= p_index if {
     print("allow_mount: i_mount =", i_mount)
 
-    p_mount := p_oci.Mounts[p_index]
-    print("allow_mount: p_mount =", p_mount)
+    some p_index, p_mount in p_oci.Mounts
+    print("allow_mount: p_index =", p_index, "p_mount =", p_mount)
     check_mount(p_mount, i_mount, bundle_id, sandbox_id)
 
     print("allow_mount: true, p_index =", p_index)
@@ -1007,7 +1008,7 @@ check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
     regex4 := replace(regex3, "$(bundle-id)", bundle_id)
 
     print("mount_source_allows 1: regex4 =", regex4)
@@ -1018,7 +1019,7 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
     regex4 := replace(regex3, "$(sandbox-id)", sandbox_id)
 
     print("mount_source_allows 2: regex4 =", regex4)
@@ -1117,7 +1118,7 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
     mount1 := p_storage.mount_point
     print("allow_mount_point 3: mount1 =", mount1)
 
-    mount2 := replace(mount1, "$(cpath)", policy_data.common.mount_source_cpath)
+    mount2 := replace(mount1, "$(cpath)", policy_data.common.cpath)
     print("allow_mount_point 1: mount2 =", mount2)
 
     mount3 := replace(mount2, "$(sandbox-id)", sandbox_id)
@@ -1250,7 +1251,7 @@ CopyFileRequest if {
 
     some regex1 in policy_data.request_defaults.CopyFileRequest
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
     regex4 := replace(regex3, "$(bundle-id)", "[a-z0-9]{64}")
     print("CopyFileRequest: regex4 =", regex4)
 

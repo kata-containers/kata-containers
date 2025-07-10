@@ -324,7 +324,7 @@
                     }
                 },
                 "Root": {
-                    "Path": "/run/kata-containers/shared/containers/dummy/rootfs",
+                    "Path": "/run/kata-containers/dummy/rootfs",
                     "Readonly": false
                 },
                 "Solaris": null,
@@ -659,7 +659,7 @@
                     }
                 },
                 "Root": {
-                    "Path": "/run/kata-containers/shared/containers/dummy/rootfs",
+                    "Path": "/run/kata-containers/dummy/rootfs",
                     "Readonly": false
                 },
                 "Solaris": null,

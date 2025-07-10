@@ -1,7 +1,7 @@
 {
     "pause_container": {
         "Root": {
-            "Path": "$(cpath)/$(bundle-id)/rootfs",
+            "Path": "$(root_path)",
             "Readonly": true
         },
         "Mounts": [
@@ -73,7 +73,7 @@
     },
     "other_container": {
         "Root": {
-            "Path": "$(cpath)/$(bundle-id)/rootfs"
+            "Path": "$(root_path)"
         },
         "Mounts": [
             {
@@ -163,17 +163,6 @@
                 "mode=0777"
             ]
         },
-        "confidential_emptyDir": {
-            "mount_type": "local",
-            "mount_source": "^$(cpath)/$(sandbox-id)/rootfs/local/",
-            "mount_point": "^$(cpath)/$(sandbox-id)/rootfs/local/",
-            "driver": "local",
-            "source": "local",
-            "fstype": "local",
-            "options": [
-                "mode=0777"
-            ]
-        },
         "emptyDir_memory": {
             "mount_type": "bind",
             "mount_source": "^/run/kata-containers/sandbox/ephemeral/",
@@ -184,18 +173,6 @@
             "options": []
         },
         "configMap": {
-            "mount_type": "bind",
-            "mount_source": "$(sfprefix)",
-            "mount_point": "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-",
-            "driver": "watchable-bind",
-            "fstype": "bind",
-            "options": [
-                "rbind",
-                "rprivate",
-                "ro"
-            ]
-        },
-        "confidential_configMap": {
             "mount_type": "bind",
             "mount_source": "$(sfprefix)",
             "mount_point": "$(sfprefix)",
@@ -251,7 +228,7 @@
     },
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
-        "mount_source_cpath": "/run/kata-containers/shared/containers",
+        "root_path": "/run/kata-containers/$(bundle-id)/rootfs",
         "sfprefix": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
         "ip_p": "[0-9]{1,5}",
         "ipv4_a": "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])",
@@ -319,12 +296,12 @@
         "image_layer_verification" : "none"
     },
     "kata_config": {
-        "confidential_guest": false,
-        "oci_version": "1.1.0"
+        "oci_version": "1.1.0",
+        "enable_configmap_secret_storages": false
     },
     "cluster_config": {
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
-        "guest_pull": false
+        "guest_pull": true
     },
     "request_defaults": {
         "CreateContainerRequest": {
