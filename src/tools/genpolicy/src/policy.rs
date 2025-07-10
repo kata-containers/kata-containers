@@ -393,8 +393,8 @@ pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
     pub cpath: String,
 
-    /// Path to the shared container files for mount sources - e.g., "/run/kata-containers/shared/containers".
-    pub mount_source_cpath: String,
+    /// Path to the container root - e.g., "/run/kata-containers/$(bundle-id)/rootfs".
+    pub root_path: String,
 
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,

@@ -238,7 +238,7 @@
                     }
                 },
                 "Root": {
-                    "Path": "/run/kata-containers/shared/containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
+                    "Path": "/run/kata-containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
                     "Readonly": true
                 },
                 "Solaris": null,
@@ -570,7 +570,7 @@
                     }
                 },
                 "Root": {
-                    "Path": "/run/kata-containers/shared/containers/dummy/rootfs",
+                    "Path": "/run/kata-containers/dummy/rootfs",
                     "Readonly": false
                 },
                 "Solaris": null,
@@ -819,7 +819,7 @@
                     }
                 },
                 "Root": {
-                    "Path": "/run/kata-containers/shared/containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
+                    "Path": "/run/kata-containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
                     "Readonly": true
                 },
                 "Solaris": null,
@@ -1067,7 +1067,7 @@
                     }
                 },
                 "Root": {
-                    "Path": "/run/kata-containers/shared/containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
+                    "Path": "/run/kata-containers/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4/rootfs",
                     "Readonly": true
                 },
                 "Solaris": null,
