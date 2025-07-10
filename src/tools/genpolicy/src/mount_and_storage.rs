@@ -122,11 +122,7 @@ pub fn get_mount_and_storage(
         }
 
         if volume.is_none() {
-            volume = if settings.kata_config.confidential_guest {
-                Some(&settings_volumes.confidential_emptyDir)
-            } else {
-                Some(&settings_volumes.emptyDir)
-            }
+            volume = Some(&settings_volumes.emptyDir);
         }
 
         get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
@@ -270,14 +266,10 @@ fn get_config_map_mount_and_storage(
     yaml_mount: &pod::VolumeMount,
 ) {
     let settings_volumes = &settings.volumes;
-    let settings_config_map = if settings.kata_config.confidential_guest {
-        &settings_volumes.confidential_configMap
-    } else {
-        &settings_volumes.configMap
-    };
+    let settings_config_map = &settings_volumes.configMap;
     debug!("Settings configMap: {:?}", settings_config_map);
 
-    if !settings.kata_config.confidential_guest {
+    if settings.kata_config.enable_configmap_secret_storages {
         let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let mount_path_str = OsString::from(mount_path).into_string().unwrap();
 

@@ -293,15 +293,15 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              1
+              0
             ],
-            "GID": 1,
-            "UID": 2,
+            "GID": 0,
+            "UID": 0,
             "Username": ""
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/shared/containers/gid/rootfs",
+          "Path": "/run/kata-containers/gid/rootfs",
           "Readonly": false
         },
         "Solaris": null,
@@ -626,11 +626,10 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              1, 
-              123
+              0
             ],
-            "GID": 1,
-            "UID": 2,
+            "GID": 0,
+            "UID": 0,
             "Username": ""
           }
         },

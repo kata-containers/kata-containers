@@ -87,16 +87,16 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              1000
+              0
             ],
-            "GID": 1000,
+            "GID": 0,
             "UID": 1000,
             "Username": ""
           }
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
