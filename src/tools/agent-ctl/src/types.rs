@@ -19,6 +19,7 @@ pub struct Config {
     pub hybrid_vsock: bool,
     pub ignore_errors: bool,
     pub no_auto_values: bool,
+    pub hypervisor_name: String,
 }
 
 // CopyFile input struct
