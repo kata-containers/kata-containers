@@ -107,6 +107,21 @@ pub struct BlockDeviceInfo {
     #[serde(default)]
     pub block_device_driver: String,
 
+    /// aio is the I/O mechanism Sepcially for Qemu
+    /// Options:
+    ///
+    ///   - threads
+    ///     Pthread based disk I/O.
+    ///
+    ///   - native
+    ///     Native Linux I/O.
+    ///
+    ///   - io_uring
+    ///     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel>5.1 and
+    ///     qemu >=5.0.
+    #[serde(default)]
+    pub block_device_aio: String,
+
     /// Specifies cache-related options will be set to block devices or not.
     #[serde(default)]
     pub block_device_cache_set: bool,
@@ -167,6 +182,9 @@ impl BlockDeviceInfo {
 
         if self.block_device_driver.is_empty() {
             self.block_device_driver = default::DEFAULT_BLOCK_DEVICE_TYPE.to_string();
+        }
+        if self.block_device_aio.is_empty() {
+            self.block_device_aio = default::DEFAULT_BLOCK_DEVEICE_AIO.to_string();
         }
         if self.memory_offset == 0 {
             self.memory_offset = default::DEFAULT_BLOCK_NVDIMM_MEM_OFFSET;
