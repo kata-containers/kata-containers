@@ -382,6 +382,7 @@ impl Qmp {
         &mut self,
         netdev: &Netdev,
         virtio_net_device: &DeviceVirtioNet,
+        machine_type: &String,
     ) -> Result<()> {
         debug!(
             sl!(),
@@ -389,8 +390,6 @@ impl Qmp {
             virtio_net_device.get_netdev_id(),
             self.qmp.execute(&qapi_qmp::query_pci {})?
         );
-
-        let (bus, slot) = self.find_free_slot()?;
 
         let mut fd_names = vec![];
         for (idx, fd) in netdev.get_fds().iter().enumerate() {
@@ -443,6 +442,37 @@ impl Qmp {
             "netdev".to_owned(),
             virtio_net_device.get_netdev_id().clone().into(),
         );
+
+        if machine_type == "virt" {
+            let addr = 0;
+            let bus = String::from("rp0");
+            netdev_frontend_args.insert("addr".to_owned(), format!("{:02}", addr).into());
+            netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
+            if virtio_net_device.get_disable_modern() {
+                netdev_frontend_args.insert("disable-modern".to_owned(), true.into());
+            }
+            netdev_frontend_args.insert(
+                "vectors".to_owned(),
+                (2 * virtio_net_device.get_num_queues() + 2).into(),
+            );
+            netdev_frontend_args.insert("mq".to_owned(), "on".into());
+            netdev_frontend_args.insert("romfile".to_owned(), "".into());
+            self.qmp.execute(&qmp::device_add {
+                bus: Some(bus),
+                id: Some(format!("virtio-{}", virtio_net_device.get_netdev_id())),
+                driver: "virtio-net-pci".to_owned(),
+                arguments: netdev_frontend_args,
+            })?;
+            debug!(
+                sl!(),
+                "hotplug_network_device(): PCI after {}: {:#?}",
+                virtio_net_device.get_netdev_id(),
+                self.qmp.execute(&qapi_qmp::query_pci {})?
+            );
+            return Ok(());
+        }
+
+        let (bus, slot) = self.find_free_slot()?;
         netdev_frontend_args.insert("addr".to_owned(), format!("{:02}", slot).into());
         netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
         netdev_frontend_args.insert("mq".to_owned(), "on".into());
