@@ -52,7 +52,7 @@ serde-transcode = "1.1.1"
 tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
 
 # OCI container specs.
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+oci-spec = { version = "0.8.1", features = ["runtime"] }
 
 # Kata Agent protocol.
 protocols = { path = "../../libs/protocols", features = ["with-serde"] }
