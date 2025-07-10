@@ -30,7 +30,7 @@ rand = "0.8.4"
 protobuf = "3.2.0"
 log = "0.4.22"
 
-nix = "0.23.0"
+nix = "0.24.2"
 libc = "0.2.112"
 # XXX: Must be the same as the version used by the agent
 ttrpc = "0.8.4"
@@ -48,6 +48,11 @@ image-rs = { git = "https://github.com/confidential-containers/guest-components"
     "oci-client-rustls",
     "signature-cosign-rustls",
 ] }
+
+kata-types = { path = "../../libs/kata-types" }
+
+# hypervisor crate from runtime-rs
+hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = ["cloud-hypervisor"]}
 
 safe-path = { path = "../../libs/safe-path" }
 
