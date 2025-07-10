@@ -870,8 +870,8 @@ dependencies = [
 name = "dbs-arch"
 version = "0.2.3"
 dependencies = [
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.19.1",
  "libc",
  "memoffset 0.6.5",
  "thiserror 1.0.69",
@@ -884,8 +884,8 @@ name = "dbs-boot"
 version = "0.4.0"
 dependencies = [
  "dbs-arch",
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.19.1",
  "lazy_static",
  "libc",
  "thiserror 1.0.69",
@@ -906,8 +906,8 @@ version = "0.2.2"
 dependencies = [
  "dbs-arch",
  "dbs-device",
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.19.1",
  "libc",
  "vmm-sys-util 0.11.1",
 ]
@@ -935,8 +935,8 @@ dependencies = [
  "dbs-device",
  "dbs-interrupt",
  "downcast-rs",
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.19.1",
  "libc",
  "log",
  "thiserror 1.0.69",
@@ -985,8 +985,8 @@ dependencies = [
  "epoll",
  "fuse-backend-rs",
  "io-uring",
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.19.1",
  "libc",
  "log",
  "nix 0.24.3",
@@ -1150,8 +1150,8 @@ dependencies = [
  "dbs-virtio-devices",
  "derivative",
  "fuse-backend-rs",
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.19.1",
  "lazy_static",
  "libc",
  "linux-loader",
@@ -1228,7 +1228,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "377fa591135fbe23396a18e2655a6d5481bf7c5823cdfa3cc81b01a229cbe640"
 dependencies = [
  "libc",
- "vmm-sys-util 0.11.1",
+ "vmm-sys-util 0.10.0",
 ]
 
 [[package]]
@@ -2034,22 +2034,44 @@ dependencies = [
 
 [[package]]
 name = "kvm-bindings"
-version = "0.6.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efe70e65a5b092161d17f5005b66e5eefe7a94a70c332e755036fc4af78c4e79"
+checksum = "fa4933174d0cc4b77b958578cd45784071cc5ae212c2d78fbd755aaaa6dfa71a"
 dependencies = [
- "vmm-sys-util 0.11.1",
+ "vmm-sys-util 0.12.1",
+]
+
+[[package]]
+name = "kvm-bindings"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf3432d9f609fbede9f624d1dbefcce77985a9322de1d0e6d460ec05502b7fd0"
+dependencies = [
+ "vmm-sys-util 0.14.0",
 ]
 
 [[package]]
 name = "kvm-ioctls"
-version = "0.12.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3a321cabd827642499c77e27314f388dd83a717a5ca716b86476fb947f73ae4"
+checksum = "e013ae7fcd2c6a8f384104d16afe7ea02969301ea2bb2a56e44b011ebc907cab"
 dependencies = [
- "kvm-bindings",
+ "bitflags 2.9.0",
+ "kvm-bindings 0.10.0",
  "libc",
- "vmm-sys-util 0.11.1",
+ "vmm-sys-util 0.12.1",
+]
+
+[[package]]
+name = "kvm-ioctls"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e00243d27a20feb05cf001ae52ddc79831ac70c020f215ba1153ff9270b650a"
+dependencies = [
+ "bitflags 2.9.0",
+ "kvm-bindings 0.13.0",
+ "libc",
+ "vmm-sys-util 0.14.0",
 ]
 
 [[package]]
@@ -5004,14 +5026,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "068bac78842164a8ecc1d1a84a8d8a9168ab29fa3c96942689e286a30ae22ac4"
 dependencies = [
  "byteorder",
- "kvm-bindings",
- "kvm-ioctls",
+ "kvm-bindings 0.10.0",
+ "kvm-ioctls 0.23.0",
  "libc",
  "log",
  "thiserror 2.0.11",
  "vfio-bindings",
  "vm-memory",
- "vmm-sys-util 0.11.1",
+ "vmm-sys-util 0.10.0",
 ]
 
 [[package]]
@@ -5118,6 +5140,26 @@ name = "vmm-sys-util"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd64fe09d8e880e600c324e7d664760a17f56e9672b7495a86381b49e4f72f46"
+dependencies = [
+ "bitflags 1.3.2",
+ "libc",
+]
+
+[[package]]
+name = "vmm-sys-util"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d1435039746e20da4f8d507a72ee1b916f7b4b05af7a91c093d2c6561934ede"
+dependencies = [
+ "bitflags 1.3.2",
+ "libc",
+]
+
+[[package]]
+name = "vmm-sys-util"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d21f366bf22bfba3e868349978766a965cbe628c323d58e026be80b8357ab789"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
