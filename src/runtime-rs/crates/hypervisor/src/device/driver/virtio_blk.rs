@@ -23,6 +23,7 @@ pub const KATA_MMIO_BLK_DEV_TYPE: &str = "mmioblk";
 pub const KATA_BLK_DEV_TYPE: &str = "blk";
 pub const KATA_CCW_DEV_TYPE: &str = "ccw";
 pub const KATA_NVDIMM_DEV_TYPE: &str = "nvdimm";
+pub const KATA_SCSI_DEV_TYPE: &str = "scsi";
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfig {
@@ -52,6 +53,10 @@ pub struct BlockConfig {
 
     /// pci path is the slot at which the drive is attached
     pub pci_path: Option<PciPath>,
+
+    /// scsi_addr of the block device, in case the device is attached using SCSI driver
+    /// scsi_addr is of the format SCSI-Id:LUN
+    pub scsi_addr: Option<String>,
 
     /// device attach count
     pub attach_count: u64,
