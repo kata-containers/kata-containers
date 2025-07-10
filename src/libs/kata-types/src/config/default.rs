@@ -37,6 +37,9 @@ pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 pub const DEFAULT_BLOCK_DEVICE_TYPE: &str = "virtio-blk-pci";
 pub const DEFAULT_VHOST_USER_STORE_PATH: &str = "/var/run/vhost-user";
 pub const DEFAULT_BLOCK_NVDIMM_MEM_OFFSET: u64 = 0;
+pub const DEFAULT_BLOCK_DEVICE_AIO_THREADS: &str = "threads";
+pub const DEFAULT_BLOCK_DEVICE_AIO_NATIVE: &str = "native";
+pub const DEFAULT_BLOCK_DEVICE_AIO: &str = "io_uring";
 
 pub const DEFAULT_SHARED_FS_TYPE: &str = "virtio-fs";
 pub const DEFAULT_VIRTIO_FS_CACHE_MODE: &str = "never";
