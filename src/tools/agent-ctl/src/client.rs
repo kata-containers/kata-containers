@@ -7,14 +7,15 @@
 
 use crate::types::*;
 use crate::utils;
+use crate::vm;
 use anyhow::{anyhow, Result};
 use byteorder::ByteOrder;
-use nix::sys::socket::{connect, socket, AddressFamily, SockAddr, SockFlag, SockType, UnixAddr};
+use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, UnixAddr, VsockAddr};
 use protocols::agent::*;
 use protocols::agent_ttrpc::*;
 use protocols::health::*;
 use protocols::health_ttrpc::*;
-use slog::{debug, info};
+use slog::{debug, info, warn};
 use std::convert::TryFrom;
 use std::fs;
 use std::io::Write; // XXX: for flush()
@@ -106,6 +107,12 @@ const METADATA_CFG_NS: &str = "agent-ctl-cfg";
 // Special value which if found means generate any values
 // automatically.
 const AUTO_VALUES_CFG_NAME: &str = "auto-values";
+
+// Retry count and dial timeout to try connecting to the agent
+// Static value taken from runtime-rs configuration calculation
+// # Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
+const RETRY_AGENT_CONNECT: u64 = 300;
+const DIAL_TIMEOUT: u64 = 10;
 
 static AGENT_CMDS: &[AgentCmd] = &[
     AgentCmd {
@@ -403,25 +410,43 @@ fn get_builtin_cmd_func(name: &str) -> Result<BuiltinCmdFp> {
 }
 
 fn client_create_vsock_fd(cid: libc::c_uint, port: u32) -> Result<RawFd> {
-    let fd = socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::SOCK_CLOEXEC,
-        None,
-    )
-    .map_err(|e| anyhow!(e))?;
+    let sock_addr = VsockAddr::new(cid, port);
 
-    let sock_addr = SockAddr::new_vsock(cid, port);
+    for i in 0..RETRY_AGENT_CONNECT {
+        let fd = socket(
+            AddressFamily::Vsock,
+            SockType::Stream,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )
+        .map_err(|e| anyhow!(e))?;
 
-    connect(fd, &sock_addr).map_err(|e| anyhow!(e))?;
+        // Connect the socket to vsock server.
+        match connect(fd, &sock_addr) {
+            Ok(_) => return Ok(fd),
+            Err(e) => {
+                debug!(
+                    sl!(),
+                    "Failed to connect to vsock in attempt:{} error:{:?}", i, e
+                );
+                sleep(Duration::from_millis(DIAL_TIMEOUT));
+                continue;
+            }
+        }
+    }
 
-    Ok(fd)
+    Err(anyhow!("Failed to establish vsock connection with agent"))
 }
 
 // Setup the existing stream by making a Hybrid VSOCK host-initiated
 // connection request to the Hybrid VSOCK-capable hypervisor (CLH or FC),
 // asking it to route the connection to the Kata Agent running inside the VM.
-fn setup_hybrid_vsock(mut stream: &UnixStream, hybrid_vsock_port: u64) -> Result<()> {
+fn setup_hybrid_vsock(path: &str, hybrid_vsock_port: u64) -> Result<UnixStream> {
+    debug!(
+        sl!(),
+        "setup_hybrid_vsock path:{} port: {}", path, hybrid_vsock_port
+    );
+
     // Challenge message sent to the Hybrid VSOCK capable hypervisor asking
     // for a connection to a real VSOCK server running in the VM on the
     // port specified as part of this message.
@@ -431,39 +456,39 @@ fn setup_hybrid_vsock(mut stream: &UnixStream, hybrid_vsock_port: u64) -> Result
     // hypervisor informing the client that the CONNECT_CMD was successful.
     const OK_CMD: &str = "OK";
 
-    // Contact the agent by dialing it's port number and
-    // waiting for the hybrid vsock hypervisor to route the call for us ;)
-    //
-    // See: https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md#host-initiated-connections
-    let msg = format!("{} {}\n", CONNECT_CMD, hybrid_vsock_port);
+    for i in 0..RETRY_AGENT_CONNECT {
+        let mut stream = UnixStream::connect(path)?;
+        // Contact the agent by dialing it's port number and
+        // waiting for the hybrid vsock hypervisor to route the call for us ;)
+        //
+        // See: https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md#host-initiated-connections
+        let msg = format!("{} {}\n", CONNECT_CMD, hybrid_vsock_port);
+        stream.write_all(msg.as_bytes())?;
 
-    stream.write_all(msg.as_bytes())?;
+        // Now, see if we get the expected response
+        let mut reader = BufReader::new(&mut stream);
 
-    // Now, see if we get the expected response
-    let stream_reader = stream.try_clone()?;
-    let mut reader = BufReader::new(&stream_reader);
+        let mut msg = String::new();
+        reader.read_line(&mut msg)?;
 
-    let mut msg = String::new();
-    reader.read_line(&mut msg)?;
+        if msg.starts_with(OK_CMD) {
+            let response = msg
+                .strip_prefix(OK_CMD)
+                .ok_or(format!("invalid response: {:?}", msg))
+                .map_err(|e| anyhow!(e))?
+                .trim();
 
-    if msg.starts_with(OK_CMD) {
-        let response = msg
-            .strip_prefix(OK_CMD)
-            .ok_or(format!("invalid response: {:?}", msg))
-            .map_err(|e| anyhow!(e))?
-            .trim();
-
-        debug!(sl!(), "Hybrid VSOCK host-side port: {:?}", response);
-    } else {
-        return Err(anyhow!(
-            "failed to setup Hybrid VSOCK connection: response was: {:?}",
-            msg
-        ));
+            // The Unix stream is now connected directly to the VSOCK socket
+            // the Kata agent is listening to in the VM.
+            debug!(sl!(), "Hybrid VSOCK host-side port: {:?}", response);
+            return Ok(stream);
+        } else {
+            debug!(sl!(), "attempt:{} message: {:?}", i, msg);
+            sleep(Duration::from_millis(DIAL_TIMEOUT));
+            continue;
+        }
     }
-
-    // The Unix stream is now connected directly to the VSOCK socket
-    // the Kata agent is listening to in the VM.
-    Ok(())
+    Err(anyhow!("Failed to establish hvsock connection with agent"))
 }
 
 fn create_ttrpc_client(
@@ -524,27 +549,21 @@ fn create_ttrpc_client(
                     }
                 };
 
-                let sock_addr = SockAddr::Unix(unix_addr);
-
-                connect(socket_fd, &sock_addr).map_err(|e| {
+                connect(socket_fd, &unix_addr).map_err(|e| {
                     anyhow!(e).context("Failed to connect to Unix Domain abstract socket")
                 })?;
 
                 socket_fd
+            } else if hybrid_vsock {
+                let stream = setup_hybrid_vsock(&path, hybrid_vsock_port)?;
+                stream.into_raw_fd()
             } else {
                 let stream = match UnixStream::connect(path) {
                     Ok(s) => s,
-                    Err(e) => {
-                        return Err(
-                            anyhow!(e).context("failed to create named UNIX Domain stream socket")
-                        )
+                    Err(err) => {
+                        return Err(anyhow!("failed to setup unix stream: {:?}", err));
                     }
                 };
-
-                if hybrid_vsock {
-                    setup_hybrid_vsock(&stream, hybrid_vsock_port)?
-                }
-
                 stream.into_raw_fd()
             }
         }
@@ -605,7 +624,7 @@ fn announce(cfg: &Config) {
     info!(sl!(), "announce"; "config" => format!("{:?}", cfg));
 }
 
-pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
+pub fn client(cfg: &mut Config, commands: Vec<&str>) -> Result<()> {
     if commands.len() == 1 && commands[0].eq("list") {
         println!("Built-in commands:\n");
 
@@ -628,6 +647,68 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
 
     announce(cfg);
 
+    let vm_ref = handle_vm(cfg)?;
+
+    info!(sl!(), "run commands");
+    let result = run_commands(cfg, commands);
+
+    // stop the vm if booted
+    if vm_ref.is_some() {
+        info!(sl!(), "stopping test vm");
+        // TODO: The error handling here is for cloud-hypervisor.
+        // We use tokio::runtime to call the async operations of
+        // runtime-rs::crates::hypervisor::_vm
+        // These methods can spawn some additional functions, ex
+        // `clh::inner_hypervisor::cloud_hypervisor_log_output`
+        // But since we return from the tokio::runtime block
+        // the runtime is dropped. During stop_vm call, cloud hypervisor
+        // waits for the logger task which is in cancelled state as a result.
+        match vm::remove_vm(vm_ref.unwrap()) {
+            Ok(_) => info!(sl!(), "Successfully shut down test vm"),
+            Err(e) => warn!(sl!(), "Error shutting down vm:{:?}", e),
+        }
+    }
+
+    result.map_err(|e| anyhow!(e))
+}
+
+fn handle_vm(cfg: &mut Config) -> Result<Option<vm::TestVm>> {
+    info!(sl!(), "handle vm request");
+
+    // Return if no vm requested
+    if cfg.hypervisor_name.is_empty() {
+        return Ok(None);
+    }
+
+    // Boot the test vm
+    let vm_instance = vm::setup_vm(&cfg.hypervisor_name)?;
+    info!(
+        sl!(),
+        "booted test vm with hypervisor: {:?}", vm_instance.hypervisor_name
+    );
+
+    // set the vsock server address for connecting with ttrpc server
+    if !vm_instance.socket_addr.is_empty() {
+        match vm_instance.hybrid_vsock {
+            true => {
+                // hybrid vsock URI expects unix prefix
+                let addr_fields: Vec<&str> = vm_instance.socket_addr.split("://").collect();
+                cfg.server_address = format!("{}://{}", "unix", addr_fields[1]);
+                cfg.hybrid_vsock = true;
+            }
+            false => {
+                let addr = vm_instance.socket_addr.clone();
+                cfg.server_address = format!("{}:{}", addr, 1024);
+                cfg.hybrid_vsock = false;
+            }
+        }
+    }
+
+    info!(sl!(), "socket server addr: {}", cfg.server_address);
+    Ok(Some(vm_instance))
+}
+
+fn run_commands(cfg: &Config, commands: Vec<&str>) -> Result<()> {
     // Create separate connections for each of the services provided
     // by the agent.
     let client = kata_service_agent(
