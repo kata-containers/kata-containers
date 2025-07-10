@@ -16,6 +16,7 @@ use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
+use kata_types::config::hypervisor::VIRTIO_SCSI;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
@@ -632,16 +633,34 @@ impl QemuInner {
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?
             }
             DeviceType::Block(mut block_device) => {
-                block_device.config.pci_path = qmp
-                    .hotplug_block_device(
-                        &self.config.blockdev_info.block_device_driver,
-                        &block_device.device_id,
-                        &block_device.config.path_on_host,
-                        block_device.config.is_direct,
-                        block_device.config.is_readonly,
-                        block_device.config.no_drop,
-                    )
-                    .context("hotplug block device")?;
+                let block_driver = &self.config.blockdev_info.block_device_driver;
+                if block_driver == VIRTIO_SCSI {
+                    block_device.config.scsi_addr = Some(
+                        qmp.hotplug_scsi_block_device(
+                            &block_device.config.path_on_host,
+                            "scsi0",
+                            "scsi-hd",
+                            &block_device.device_id,
+                            block_device.config.index as u32,
+                            &self.config.blockdev_info.block_device_aio,
+                            block_device.config.is_direct,
+                            block_device.config.is_readonly,
+                            block_device.config.no_drop,
+                        )
+                        .context("hotplug scsi block device")?,
+                    );
+                } else {
+                    block_device.config.pci_path = qmp
+                        .hotplug_block_device(
+                            &self.config.blockdev_info.block_device_driver,
+                            &block_device.device_id,
+                            &block_device.config.path_on_host,
+                            block_device.config.is_direct,
+                            block_device.config.is_readonly,
+                            block_device.config.no_drop,
+                        )
+                        .context("hotplug block device")?;
+                }
 
                 return Ok(DeviceType::Block(block_device));
             }
