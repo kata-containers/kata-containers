@@ -16,7 +16,7 @@ setup() {
 	get_pod_config_dir
 
 	pod_yaml="${pod_config_dir}"/inotify-configmap-pod.yaml
-	add_allow_all_policy_to_yaml "${pod_yaml}"
+	auto_generate_policy "${pod_config_dir}" "${pod_yaml}"
 }
 
 @test "configmap update works, and preserves symlinks" {
