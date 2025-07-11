@@ -33,7 +33,6 @@ oci-spec = { workspace = true }
 futures = "0.3.25"
 safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
-tempdir = "0.3.7"
 qapi = { version = "0.14", features = ["qmp", "async-tokio-all"] }
 qapi-spec = "0.3.1"
 qapi-qmp = "0.14.0"
@@ -77,6 +76,7 @@ cloud-hypervisor = ["ch-config"]
 
 [dev-dependencies]
 serial_test = "2.0.0"
+tempfile = { workspace = true }
 
 # Local dev-dependencies
 # Force the CH tests to run, even when the feature is not enabled for

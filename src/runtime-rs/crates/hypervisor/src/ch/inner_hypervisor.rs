@@ -1093,7 +1093,7 @@ mod tests {
     use test_utils::{assert_result, skip_if_not_root};
 
     use std::fs::File;
-    use tempdir::TempDir;
+    use tempfile::Builder;
 
     fn set_fake_guest_protection(protection: Option<GuestProtection>) {
         let existing_ref = FAKE_GUEST_PROTECTION.clone();
@@ -1486,7 +1486,7 @@ mod tests {
         let path_dir = "/tmp/proc";
         let file_name = "1";
 
-        let tmp_dir = TempDir::new(path_dir).unwrap();
+        let tmp_dir = Builder::new().prefix("proc").tempdir().unwrap();
         let file_path = tmp_dir.path().join(file_name);
         let _tmp_file = File::create(file_path.as_os_str()).unwrap();
         let file_path_name = file_path.as_path().to_str().map(|s| s.to_string());
