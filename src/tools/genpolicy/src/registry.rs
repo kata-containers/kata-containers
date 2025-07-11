@@ -138,65 +138,11 @@ impl Container {
             ..Default::default()
         });
 
-        match client.pull_manifest_and_config(&reference, &auth).await {
-            Ok((manifest, digest_hash, config_layer_str)) => {
-                debug!("digest_hash: {:?}", digest_hash);
-                debug!(
-                    "manifest: {}",
-                    serde_json::to_string_pretty(&manifest).unwrap()
-                );
-
-                // Log the contents of the config layer.
-                if log::max_level() >= LevelFilter::Debug {
-                    let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
-                    let mut serializer = serde_json::Serializer::pretty(io::stderr());
-                    serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
-                }
-
-                let config_layer: DockerConfigLayer =
-                    serde_json::from_str(&config_layer_str).unwrap();
-                debug!("config_layer: {:?}", &config_layer);
-
-                let image_layers = get_image_layers(
-                    &config.layers_cache,
-                    &mut client,
-                    &reference,
-                    &manifest,
-                    &config_layer,
-                )
-                .await
-                .unwrap();
-
-                // Find the last layer with an /etc/* file, respecting whiteouts.
-                let mut passwd = String::new();
-                let mut group = String::new();
-                // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
-                // See issue https://github.com/kata-containers/kata-containers/issues/11162
-                if !config.settings.cluster_config.guest_pull {
-                    for layer in &image_layers {
-                        if layer.passwd == WHITEOUT_MARKER {
-                            passwd = String::new();
-                        } else if !layer.passwd.is_empty() {
-                            passwd = layer.passwd.clone();
-                        }
-
-                        if layer.group == WHITEOUT_MARKER {
-                            group = String::new();
-                        } else if !layer.group.is_empty() {
-                            group = layer.group.clone();
-                        }
-                    }
-                } else {
-                    info!("Guest pull is enabled, skipping passwd/group file parsing");
-                }
-
-                Ok(Container {
-                    image: image_string,
-                    config_layer,
-                    passwd,
-                    group,
-                })
-            }
+        let (manifest, digest_hash, config_layer_str) = match client
+            .pull_manifest_and_config(&reference, &auth)
+            .await
+        {
+            Ok((m, d, c)) => (m, d, c),
             Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
                 panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
             }
@@ -206,7 +152,70 @@ impl Container {
                     &e
                 );
             }
+        };
+
+        debug!("digest_hash: {:?}", digest_hash);
+        debug!(
+            "manifest: {}",
+            serde_json::to_string_pretty(&manifest).unwrap()
+        );
+
+        if log::max_level() >= LevelFilter::Debug {
+            let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
+            let mut serializer = serde_json::Serializer::pretty(io::stderr());
+            serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
         }
+
+        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
+        debug!("config_layer: {:?}", &config_layer);
+
+        let mut passwd = String::new();
+        let mut group = String::new();
+
+        // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
+        // See issue https://github.com/kata-containers/kata-containers/issues/11162
+        if config.settings.cluster_config.guest_pull {
+            info!("Guest pull is enabled, skipping passwd/group file parsing");
+            return Ok(Container {
+                image: image_string,
+                config_layer,
+                passwd,
+                group,
+            });
+        }
+
+        let image_layers = get_image_layers(
+            &config.layers_cache,
+            &mut client,
+            &reference,
+            &manifest,
+            &config_layer,
+        )
+        .await
+        .unwrap();
+
+        // Find the last layer with an /etc/* file, respecting whiteouts.
+        info!("Parsing users and groups in image layers");
+        for layer in &image_layers {
+            if layer.passwd == WHITEOUT_MARKER {
+                passwd = String::new();
+            } else if !layer.passwd.is_empty() {
+                passwd = layer.passwd.clone();
+            }
+
+            if layer.group == WHITEOUT_MARKER {
+                group = String::new();
+            } else if !layer.group.is_empty() {
+                group = layer.group.clone();
+            }
+        }
+
+        Ok(Container {
+            image: image_string,
+            config_layer,
+            passwd,
+            group,
+        })
     }
 
     pub fn get_gid_from_passwd_uid(&self, uid: u32) -> Result<u32> {

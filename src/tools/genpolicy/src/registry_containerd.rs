@@ -51,39 +51,54 @@ impl Container {
         let image_ref: Reference = image_str.parse().unwrap();
 
         info!("Pulling image: {:?}", image_ref);
-
         pull_image(&image_ref, k8_cri_image_client.clone()).await?;
 
         let image_ref_str = &image_ref.to_string();
-
         let manifest = get_image_manifest(image_ref_str, &ctrd_client).await?;
+        debug!(
+            "manifest: {}",
+            serde_json::to_string_pretty(&manifest).unwrap()
+        );
+
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        let image_layers =
-            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client).await?;
+        debug!("config_layer: {:?}", &config_layer);
 
-        // Find the last layer with an /etc/* file, respecting whiteouts.
         let mut passwd = String::new();
         let mut group = String::new();
+
         // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
         // See issue https://github.com/kata-containers/kata-containers/issues/11162
-        if !config.settings.cluster_config.guest_pull {
-            for layer in &image_layers {
-                if layer.passwd == WHITEOUT_MARKER {
-                    passwd = String::new();
-                } else if !layer.passwd.is_empty() {
-                    passwd = layer.passwd.clone();
-                }
-
-                if layer.group == WHITEOUT_MARKER {
-                    group = String::new();
-                } else if !layer.group.is_empty() {
-                    group = layer.group.clone();
-                }
-            }
-        } else {
+        if config.settings.cluster_config.guest_pull {
             info!("Guest pull is enabled, skipping passwd/group file parsing");
+            return Ok(Container {
+                image: image_str,
+                config_layer,
+                passwd,
+                group,
+            });
+        }
+
+        let image_layers =
+            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client)
+                .await
+                .unwrap();
+
+        // Find the last layer with an /etc/* file, respecting whiteouts.
+        info!("Parsing users and groups in image layers");
+        for layer in &image_layers {
+            if layer.passwd == WHITEOUT_MARKER {
+                passwd = String::new();
+            } else if !layer.passwd.is_empty() {
+                passwd = layer.passwd.clone();
+            }
+
+            if layer.group == WHITEOUT_MARKER {
+                group = String::new();
+            } else if !layer.group.is_empty() {
+                group = layer.group.clone();
+            }
         }
 
         Ok(Container {
@@ -94,6 +109,7 @@ impl Container {
         })
     }
 }
+
 pub async fn get_content(
     digest: &str,
     client: &containerd_client::Client,
