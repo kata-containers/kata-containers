@@ -8,14 +8,14 @@ use super::qmp::Qmp;
 use crate::device::topology::PCIePort;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, HypervisorConfig,
-    MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU, selinux,
 };
 
 use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
-
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
+use kata_sys_util::spec::load_oci_spec;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
@@ -77,6 +77,16 @@ impl QemuInner {
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
+
+        // Get SELinux label before creating command
+        let selinux_label = if let Ok(spec) = load_oci_spec() {
+            spec.process()
+                .clone()
+                .and_then(|process| process.selinux_label().clone())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
 
         // CAUTION: since 'cmdline' contains file descriptors that have to stay
         // open until spawn() is called to launch qemu later in this function,
@@ -194,10 +204,23 @@ impl QemuInner {
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
-        // we need move the qemu process into Network Namespace.
+        // we need move the qemu process into Network Namespace and set SELinux label.
         unsafe {
+            let selinux_label_clone = selinux_label.clone();
+            let disable_selinux = self.config.disable_selinux;
             let _pre_exec = command.pre_exec(move || {
                 let _ = enter_netns(&netns);
+
+                // Set SELinux label in child process before execve()
+                if !selinux_label_clone.is_empty() && !disable_selinux {
+                    if let Err(e) = selinux::set_exec_label(&selinux_label_clone) {
+                        error!(sl!(), "Failed to set SELinux label in child process: {}", e);
+                        // Don't return error here to avoid breaking the process startup
+                        // Log the error and continue
+                    } else {
+                        info!(sl!(), "Successfully set SELinux label in child process: {}", selinux_label_clone);
+                    }
+                }
 
                 Ok(())
             });
