@@ -50,7 +50,7 @@ make -C BaseTools/
 info "Calling edksetup script"
 source edksetup.sh
 
-if [ "${ovmf_build}" == "sev" ]; then
+if [ "${ovmf_build}" == "snp" ]; then
 	info "Creating dummy grub file"
 	#required for building AmdSev package without grub
 	touch OvmfPkg/AmdSev/Grub/grub.efi
@@ -87,7 +87,7 @@ info "Install fd to destdir"
 install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
 
 mkdir -p "${install_dir}"
-if [ "${ovmf_build}" == "sev" ]; then
+if [ "${ovmf_build}" == "snp" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}/AMDSEV.fd"
 elif [ "${ovmf_build}" == "tdx" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}"
