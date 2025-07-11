@@ -30,7 +30,7 @@ async-recursion = "0.3.2"
 futures = "0.3.30"
 
 # Async runtime
-tokio = { version = "1.44.2", features = ["full"] }
+tokio = { version = "1.46.1", features = ["full"] }
 tokio-vsock = "0.3.4"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
