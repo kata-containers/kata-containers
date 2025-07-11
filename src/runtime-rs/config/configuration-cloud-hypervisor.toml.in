@@ -168,8 +168,9 @@ default_bridges = @DEFBRIDGES@
 # Default false
 #reclaim_guest_freed_memory = true
 
-# Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device.
+# Block device driver to be used by the hypervisor when a container's storage
+# is backed by a block device or a file. This driver facilitates attaching the
+# storage directly to the guest VM.
 block_device_driver = "virtio-blk-pci"
 
 # Specifies cache-related options for block devices.

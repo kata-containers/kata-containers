@@ -235,9 +235,15 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 #    Metadata, data, and pathname lookup are cached in guest and never expire.
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
-# Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
-# or nvdimm.
+# Block device driver to be used by the hypervisor when a container's
+# storage is backed by a block device or a file. This driver facilitates attaching
+# the storage directly to the guest VM.
+#
+# Examples include:
+# - virtio-blk-pci
+# - virtio-blk-ccw
+# - virtio-scsi
+# - nvidmm
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # aio is the I/O mechanism used by qemu
