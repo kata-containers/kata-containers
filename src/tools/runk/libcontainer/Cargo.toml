@@ -14,7 +14,7 @@ kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 derive_builder = "0.10.2"
 libc = "0.2.108"
-nix = "0.23.0"
+nix = "0.26.4"
 anyhow = "1.0.52"
 slog = "2.7.0"
 chrono = { version = "0.4.19", features = ["serde"] }

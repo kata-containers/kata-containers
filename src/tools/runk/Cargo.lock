@@ -1082,6 +1082,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f54427cfd1c7829e2a139fcefea601bf088ebca651d2bf53ebc600eac295dae"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -1518,7 +1519,9 @@ dependencies = [
  "base64",
  "bitmask-enum",
  "byte-unit",
+ "flate2",
  "glob",
+ "hex",
  "lazy_static",
  "num_cpus",
  "oci-spec",
@@ -1527,6 +1530,7 @@ dependencies = [
  "serde",
  "serde-enum-str",
  "serde_json",
+ "sha2",
  "slog",
  "slog-scope",
  "sysinfo",
@@ -1557,7 +1561,7 @@ dependencies = [
  "kata-sys-util",
  "libc",
  "logging",
- "nix 0.23.2",
+ "nix 0.26.4",
  "oci-spec",
  "procfs",
  "protocols",
@@ -1607,6 +1611,17 @@ name = "libseccomp-sys"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a7cbbd4ad467251987c6e5b47d53b11a5a05add08f2447a9e2d70aef1e0d138"
+
+[[package]]
+name = "libz-sys"
+version = "1.1.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b70e7a7df205e92a1a4cd9aaae7898dac0aa555503cc0a649494d0d60e7651d"
+dependencies = [
+ "cc",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "linux-raw-sys"
@@ -2485,7 +2500,7 @@ dependencies = [
  "libcontainer",
  "liboci-cli",
  "logging",
- "nix 0.23.2",
+ "nix 0.26.4",
  "oci-spec",
  "runtime-spec",
  "rustjail",
@@ -2603,7 +2618,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libseccomp",
- "nix 0.24.3",
+ "nix 0.26.4",
  "oci-spec",
  "path-absolutize",
  "protobuf 3.7.2",
@@ -2741,6 +2756,17 @@ name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3bf829a2d51ab4a5ddf1352d8470c140cadc8301b2ae1789db023f01cedd6ba"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "digest",
+]
+
+[[package]]
+name = "sha2"
+version = "0.10.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
 dependencies = [
  "cfg-if",
  "cpufeatures",
@@ -3316,6 +3342,12 @@ dependencies = [
  "libc",
  "log",
 ]
+
+[[package]]
+name = "vcpkg"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "version_check"
