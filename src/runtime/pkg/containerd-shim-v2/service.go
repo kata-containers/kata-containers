@@ -889,15 +889,21 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *em
 	}()
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	isServiceMutexLocked := true
+	defer func() {
+		if isServiceMutexLocked {
+			s.mu.Unlock()
+		}
+	}()
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	stdin := c.stdinPipe
-	stdinCloser := c.stdinCloser
+	var stdin io.WriteCloser
+	var stdinCloser <-chan struct{}
+	var stdioCloser <-chan struct{}
 
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
@@ -906,7 +912,17 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *em
 		}
 		stdin = execs.stdinPipe
 		stdinCloser = execs.stdinCloser
+		stdioCloser = execs.stdioCloser
+	} else {
+		stdin = c.stdinPipe
+		stdinCloser = c.stdinCloser
+		stdioCloser = c.stdioCloser
 	}
+
+	// Unlocking before the end as this is preventing
+	// the service to run other execs until it has answer the current call
+	s.mu.Unlock()
+	isServiceMutexLocked = false
 
 	// wait until the stdin io copy terminated, otherwise
 	// some contents would not be forwarded to the process.
@@ -914,6 +930,10 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *em
 	if err := stdin.Close(); err != nil {
 		return nil, errors.Wrap(err, "close stdin")
 	}
+
+	// wait until the whole iocopy process to be over
+	// to return the response
+	<-stdioCloser
 
 	return empty, nil
 }
