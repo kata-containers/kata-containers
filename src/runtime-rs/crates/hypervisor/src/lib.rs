@@ -18,6 +18,7 @@ pub mod dragonball;
 pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
+pub mod selinux;
 pub mod remote;
 pub use kernel_param::Param;
 pub mod utils;
