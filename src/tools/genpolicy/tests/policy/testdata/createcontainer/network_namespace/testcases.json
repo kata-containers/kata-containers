@@ -130,7 +130,7 @@
         },
         "Root": {
           "Readonly": true,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
     }
@@ -266,7 +266,7 @@
         },
         "Root": {
           "Readonly": true,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
     }
@@ -398,7 +398,7 @@
         },
         "Root": {
           "Readonly": true,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
     }
@@ -534,7 +534,7 @@
         },
         "Root": {
           "Readonly": true,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
     }

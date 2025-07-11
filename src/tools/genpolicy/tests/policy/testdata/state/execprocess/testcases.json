@@ -278,8 +278,7 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0,
-              10
+              0
             ],
             "GID": 0,
             "UID": 0,
@@ -287,7 +286,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
+          "Path": "/run/kata-containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
           "Readonly": false
         },
         "Solaris": null,
@@ -582,8 +581,7 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0,
-              10
+              0
             ],
             "GID": 0,
             "UID": 0,
@@ -591,7 +589,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
+          "Path": "/run/kata-containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
           "Readonly": false
         },
         "Solaris": null,
@@ -622,8 +620,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -658,8 +655,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -694,8 +690,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -730,8 +725,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -774,8 +768,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -810,8 +803,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -879,8 +871,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -916,11 +907,18 @@
         "User": {
           "UID": 0,
           "GID": 0,
-          "AdditionalGids": [0, 10],
+          "AdditionalGids": [
+            0
+          ],
           "Username": ""
         },
-        "Args": ["test1", "--flag"],
-        "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+        "Args": [
+          "test1",
+          "--flag"
+        ],
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
         "Cwd": "/",
         "Capabilities": null,
         "Rlimits": [],
@@ -1033,8 +1031,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -1069,8 +1066,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
@@ -1114,8 +1110,7 @@
           "UID": 0,
           "GID": 0,
           "AdditionalGids": [
-            0,
-            10
+            0
           ],
           "Username": ""
         },
