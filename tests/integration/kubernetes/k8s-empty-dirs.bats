@@ -23,7 +23,18 @@ setup() {
 	pod_logs_file=""
 
 	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+
+	# Add policy to yaml
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
+	mount_command=(sh -c "mount | grep cache")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${mount_command[@]}"
+
+	dd_command=(sh -c "dd if=/dev/zero of=/tmp/cache/file1 bs=1M count=50; echo $?")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${dd_command[@]}"
+
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
 @test "Empty dir volumes" {
@@ -34,12 +45,10 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Check volume mounts
-	cmd="mount | grep cache"
-	kubectl exec $pod_name -- sh -c "$cmd" | grep "/tmp/cache type tmpfs"
+	kubectl exec $pod_name -- "${mount_command[@]}" | grep "/tmp/cache type tmpfs"
 
 	# Check it can write up to the volume limit (50M)
-	cmd="dd if=/dev/zero of=/tmp/cache/file1 bs=1M count=50; echo $?"
-	kubectl exec $pod_name -- sh -c "$cmd" | tail -1 | grep 0
+	kubectl exec $pod_name -- "${dd_command[@]}" | tail -1 | grep 0
 }
 
 @test "Empty dir volume when FSGroup is specified with non-root container" {
@@ -89,4 +98,6 @@ teardown() {
 	kubectl delete pod "$pod_name"
 
 	[ ! -f "$pod_logs_file" ] || rm -f "$pod_logs_file"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
