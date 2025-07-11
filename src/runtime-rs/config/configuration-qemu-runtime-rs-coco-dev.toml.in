@@ -1,6 +1,6 @@
 # Copyright (c) 2017-2019 Intel Corporation
 # Copyright (c) 2021 Adobe Inc.
-# Copyright (c) 2024 IBM Corp.
+# Copyright (c) 2024-2025 IBM Corp.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,9 +14,9 @@
 
 [hypervisor.qemu]
 path = "@QEMUPATH@"
-kernel = "@KERNELPATH_QEMU@"
-image = "@IMAGEPATH@"
-# initrd = "@INITRDPATH@"
+kernel = "@KERNELPATH_COCO@"
+image = "@IMAGECONFIDENTIALPATH@"
+# initrd = "@INITRDCONFIDENTIALPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
@@ -38,7 +38,7 @@ vm_rootfs_driver = "@VMROOTFSDRIVER_QEMU@"
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
@@ -194,7 +194,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-9p
 #   - virtio-fs-nydus
 #   - none
-shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
+shared_fs = "@DEFSHAREDFS_QEMU_COCO_DEV_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
@@ -235,15 +235,9 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 #    Metadata, data, and pathname lookup are cached in guest and never expire.
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
-# Block device driver to be used by the hypervisor when a container's
-# storage is backed by a block device or a file. This driver facilitates attaching
-# the storage directly to the guest VM.
-#
-# Examples include:
-# - virtio-blk-pci
-# - virtio-blk-ccw
-# - virtio-scsi
-# - nvidmm
+# Block storage driver to be used for the hypervisor in case the container
+# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
+# or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # aio is the I/O mechanism used by qemu
@@ -389,17 +383,17 @@ pflashes = []
 # Default false
 #hotplug_vfio_on_root_bus = true
 
-# Enable hot-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
+# Enable hot-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
 # The default setting is  "no-port"
-#hot_plug_vfio = "root-port" 
+#hot_plug_vfio = "root-port"
 
 # In a confidential compute environment hot-plugging can compromise
-# security. 
-# Enable cold-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
-# The default setting is  "no-port", which means disabled. 
-#cold_plug_vfio = "root-port" 
+# security.
+# Enable cold-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
+# The default setting is  "no-port", which means disabled.
+#cold_plug_vfio = "root-port"
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
@@ -699,19 +693,6 @@ kernel_modules=[]
 # If compact_force_times is set to 18446744073709551615, will never do force compaction.
 # Default to 18446744073709551615
 #compact_force_times = 18446744073709551615
-
-# Create Container Request Timeout
-# This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
-# It's also used to ensure that workloads, especially those involving large image pulls within the guest,
-# have sufficient time to complete.
-#
-# Effective Timeout Determination:
-# The effective timeout for a CreateContainerRequest is determined by taking the minimum of the following two values:
-# - create_container_timeout: The timeout value configured for creating containers (default: 30,000 milliseconds).
-# - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
-# create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

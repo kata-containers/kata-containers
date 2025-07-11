@@ -10,7 +10,7 @@
 # 3. Pull an image from a banned registry
 # 4. Check if the pulling fails with log `image security validation failed`,
 # the initdata works.
-# 
+#
 # Note that if initdata does not work, the pod still fails to launch (hang at
 # CreatingContainer status). The error information is
 # `[CDH] [ERROR]: Get Resource failed` which internally means that the KBS URL
@@ -35,7 +35,7 @@ setup() {
     setup_common || die "setup_common failed"
 
     FAIL_TEST_IMAGE="quay.io/prometheus/busybox:latest"
-    
+
     SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
 }
 
@@ -51,7 +51,7 @@ function setup_kbs_image_policy_for_initdata() {
 
     # TODO: Enable for more archs
     case "$KATA_HYPERVISOR" in
-        "qemu-tdx"|"qemu-coco-dev"|"qemu-snp")
+        "qemu-tdx"|"qemu-coco-dev"|"qemu-runtime-rs-coco-dev"|"qemu-snp")
             ;;
         *)
             skip "Test not supported for ${KATA_HYPERVISOR}."
@@ -88,7 +88,7 @@ EOF
 
 @test "Test that creating a container from an rejected image configured by initdata, fails according to policy reject" {
     setup_kbs_image_policy_for_initdata
-    
+
     CC_KBS_ADDRESS=$(kbs_k8s_svc_http_addr)
 
     kernel_parameter="agent.image_policy_file=${SECURITY_POLICY_KBS_URI} agent.enable_signature_verification=true"
