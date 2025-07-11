@@ -21,18 +21,19 @@ use common::{
 };
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
-use hypervisor::PortDeviceConfig;
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_FIRECRACKER;
 use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
+use hypervisor::{selinux, PortDeviceConfig};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
+use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -519,6 +520,22 @@ impl Sandbox for VirtSandbox {
             )
             .await
             .context("prepare vm")?;
+
+        let selinux_label = if let Ok(spec) = load_oci_spec() {
+            spec.process()
+                .clone()
+                .and_then(|process| process.selinux_label().clone())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        if !selinux_label.is_empty()
+            && !self.hypervisor.hypervisor_config().await.disable_selinux
+        {
+            selinux::set_exec_label(&selinux_label)
+                .context("failed to set SELinux process label ")?;
+        }
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
