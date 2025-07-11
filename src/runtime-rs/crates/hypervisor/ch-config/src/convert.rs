@@ -109,6 +109,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let fs = n.shared_fs_devices;
         let net = n.network_devices;
+        let host_devices = n.host_devices;
 
         let cpus = CpusConfig::try_from((cfg.cpu_info, guest_protection_to_use.clone()))
             .map_err(VmConfigError::CPUError)?;
@@ -197,6 +198,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             payload,
             fs,
             net,
+            devices: host_devices,
             pmem,
             disks,
             vsock: Some(vsock),
