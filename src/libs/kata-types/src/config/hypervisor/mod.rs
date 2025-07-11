@@ -1221,10 +1221,18 @@ pub struct Hypervisor {
     /// Disable applying SELinux on the container process.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
+
+    /// Disable applying SELinux on the VMM process.
+    #[serde(default = "no")]
+    pub disable_selinux: bool,
 }
 
 fn yes() -> bool {
     true
+}
+
+fn no() -> bool {
+    false
 }
 
 impl Hypervisor {
