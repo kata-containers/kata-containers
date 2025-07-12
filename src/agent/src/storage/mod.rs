@@ -19,6 +19,7 @@ use protocols::types::FSGroupChangePolicy;
 use slog::Logger;
 use tokio::sync::Mutex;
 use tracing::instrument;
+use uds_handler::UdsHandler;
 
 use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
@@ -37,6 +38,7 @@ mod ephemeral_handler;
 mod fs_handler;
 mod image_pull_handler;
 mod local_handler;
+mod uds_handler;
 
 const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
@@ -147,6 +149,7 @@ lazy_static! {
             #[cfg(target_arch = "s390x")]
             Arc::new(self::block_handler::VirtioBlkCcwHandler {}),
             Arc::new(ImagePullHandler {}),
+            Arc::new(UdsHandler {}),
         ];
 
         for handler in handlers {
