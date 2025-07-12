@@ -33,6 +33,10 @@ spec:
 {{- else }}
       serviceAccountName: {{ .Chart.Name }}-sa
 {{- end }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{- toYaml . | nindent 8 }}
+{{- end }}
       hostPID: true
       containers:
       - name: kube-kata
