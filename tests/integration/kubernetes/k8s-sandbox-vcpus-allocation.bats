@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
@@ -14,11 +15,13 @@ setup() {
 	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[ "$(uname -m)" == "aarch64" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10928"
 
+	setup_common
 	get_pod_config_dir
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
 	expected_vcpus=( 1 1 2 )
 
 	yaml_file="${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+	set_node "$yaml_file" "$node"
 	add_allow_all_policy_to_yaml "${yaml_file}"
 }
 
@@ -45,5 +48,5 @@ teardown() {
 		kubectl logs ${pod}
 	done
 
-	kubectl delete -f "${yaml_file}"
+	teardown_common "${node}" "${node_start_time:-}"
 }
