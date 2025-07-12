@@ -32,7 +32,7 @@ pci-ids = "0.2.5"
 mockall = "0.13.1"
 
 kata-types = { path = "../kata-types" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+oci-spec = { version = "0.8.1", features = ["runtime"] }
 runtime-spec = { path = "../runtime-spec" }
 safe-path = { path = "../safe-path" }
 
