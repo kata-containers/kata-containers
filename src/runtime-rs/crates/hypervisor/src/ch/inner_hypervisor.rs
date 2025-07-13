@@ -215,6 +215,7 @@ impl CloudHypervisorInner {
             shared_fs_devices,
             network_devices,
             host_devices,
+            protection_device: None,
         };
 
         let cfg = VmConfig::try_from(named_cfg)?;

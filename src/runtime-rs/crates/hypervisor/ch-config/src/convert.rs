@@ -435,6 +435,7 @@ impl TryFrom<(BootInfo, Option<String>, GuestProtection)> for PayloadConfig {
             initramfs,
             cmdline,
             firmware,
+            mrconfigid: None,
         };
 
         Ok(payload)
