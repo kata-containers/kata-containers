@@ -217,6 +217,7 @@ impl CloudHypervisorInner {
             guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
             host_devices,
+            protection_device: None,
             ..Default::default()
         };
 
