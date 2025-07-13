@@ -185,7 +185,9 @@ impl CloudHypervisorInner {
     }
 
     async fn boot_vm(&mut self) -> Result<()> {
-        let (shared_fs_devices, network_devices, host_devices, _) = self.get_shared_devices().await?;
+        let (shared_fs_devices, network_devices, host_devices, protection_device) =
+            self.get_shared_devices().await?;
+
         let socket = self
             .api_socket
             .as_ref()
@@ -215,7 +217,7 @@ impl CloudHypervisorInner {
             shared_fs_devices,
             network_devices,
             host_devices,
-            protection_device: None,
+            protection_device,
         };
 
         let cfg = VmConfig::try_from(named_cfg)?;
