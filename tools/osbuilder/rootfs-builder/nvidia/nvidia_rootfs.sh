@@ -60,34 +60,6 @@ setup_nvidia-nvrc() {
 	popd > /dev/null || exit 1
 }
 
-setup_nvidia-gpu-admin-tools() {
-	local TARGET="nvidia-gpu-admin-tools"
-	local TARGET_VERSION="v2024.12.06"
-	local TARGET_GIT="https://github.com/NVIDIA/gpu-admin-tools"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
-
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/sbin"
-
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
-
-	rm -rf "$(basename "${TARGET_GIT}")"
-	git clone "${TARGET_GIT}"
-
-	rm -rf dist
-	# Installed via pipx local python environment
-	/usr/local/bin/pyinstaller -s -F gpu-admin-tools/nvidia_gpu_tools.py
-
-	cp dist/nvidia_gpu_tools ../destdir/sbin/.
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
-}
-
 setup_nvidia-dcgm-exporter() {
 	local TARGET="nvidia-dcgm-exporter"
 	local TARGET_VERSION="3.3.9-3.6.1"
@@ -131,7 +103,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
 
-	for component in "nvidia-gpu-admin-tools" "nvidia-dcgm-exporter" "nvidia-nvrc"; do
+	for component in "nvidia-dcgm-exporter" "nvidia-nvrc"; do
 		if [[ ! -e "${BUILD_DIR}/kata-static-${component}.tar.zst" ]]; then
 			setup_"${component}"
 		fi
@@ -228,9 +200,6 @@ chisseled_compute() {
 	echo "nvidia: chisseling GPU"
 
 	cp -a "${stage_one}"/nvidia_driver_version .
-
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-gpu-admin-tools.tar.zst -C .
-
 	cp -a "${stage_one}"/lib/modules/* lib/modules/.
 
 	libdir="lib/${machine_arch}-linux-gnu"
