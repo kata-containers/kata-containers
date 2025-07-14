@@ -2,6 +2,11 @@ name: CI | Run kubernetes tests on AKS
 on:
   workflow_call:
     inputs:
+      artifact-run-id:
+        description: "The run id where the artifact was uploaded"
+        required: false
+        type: string
+        default: ${{ github.run_id }}
       tarball-suffix:
         required: false
         type: string
@@ -32,6 +37,41 @@ on:
        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
+  workflow_dispatch:
+    inputs:
+      artifact-run-id:
+        description: "The workflow run id where the artifact was uploaded"
+        required: true
+        type: string
+      tarball-suffix:
+        description: "The suffix of the kata tarball to use"
+        required: false
+        type: string
+      registry:
+        description: "The oci container registry to install kata-deploy from"
+        required: true
+        type: string
+      repo:
+        description: "The oci container repository/image to install kata-deploy from"
+        required: true
+        type: string
+      tag:
+        description: "The oci container image tag to install kata-deploy using"
+        required: true
+        type: string
+      pr-number:
+        description: "Identifier used to distinguish between PRs/dev/nightly tests"
+        required: true
+        type: string
+      commit-hash:
+        description: "The code to checkout for testing"
+        required: false
+        type: string
+      target-branch:
+        description: "The target branch to rebase on and ensure the tests are up-to-date"
+        required: false
+        type: string
+        default: ""
 
 
 permissions:
@@ -101,6 +141,9 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          run-id: ${{ inputs.artifact-run-id }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository}}
           path: kata-artifacts
 
       - name: Install kata

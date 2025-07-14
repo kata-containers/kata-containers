@@ -13,10 +13,11 @@ permissions:
 jobs:
   kata-containers-ci-on-push:
     permissions:
-      contents: read
-      packages: write
-      id-token: write
+      actions: write
       attestations: write
+      contents: read
+      id-token: write
+      packages: write
     uses: ./.github/workflows/ci.yaml
     with:
       commit-hash: ${{ github.sha }}

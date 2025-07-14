@@ -275,30 +275,61 @@ jobs:
 
   run-kata-monitor-tests:
     if: ${{ inputs.skip-test != 'yes' }}
+    runs-on: ubuntu-22.04
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-kata-monitor-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      actions: write # Permission to trigger the gh workflows
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Trigger kata monitor tests
+        run: |
+          ./tests/gha-helper.sh trigger-and-check-workflow \
+            run-kata-monitor-tests.yaml \
+            ${{ github.ref }} \
+            ${{ github.sha }} \
+            '{
+              "artifact-run-id":"${{ github.run_id }}",
+              "tarball-suffix":"-${{ inputs.tag }}",
+              "commit-hash":"${{ inputs.commit-hash }}",
+              "target-branch":"${{ inputs.target-branch }}"
+            }'
 
   run-k8s-tests-on-aks:
     if: ${{ inputs.skip-test != 'yes' }}
+    runs-on: ubuntu-22.04
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets:
-      AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      actions: write # Permission to trigger the gh workflows
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Trigger run-k8s-tests-on-aks workflow
+        run: |
+          ./tests/gha-helper.sh trigger-and-check-workflow \
+            run-k8s-tests-on-aks.yaml \
+            ${{ github.ref }} \
+            ${{ github.sha }} \
+            '{
+              "artifact-run-id":"${{ github.run_id }}",
+              "tarball-suffix":"-${{ inputs.tag }}",
+              "registry":"ghcr.io",
+              "repo":"${{ github.repository_owner }}/kata-deploy-ci",
+              "tag":"${{ inputs.tag }}-amd64",
+              "commit-hash":"${{ inputs.commit-hash }}",
+              "pr-number":"${{ inputs.pr-number }}",
+              "target-branch":"${{ inputs.target-branch }}"
+            }'
   run-k8s-tests-on-amd64:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
@@ -325,25 +356,37 @@ jobs:
 
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
+    runs-on: ubuntu-22.04
     needs:
-     - publish-kata-deploy-payload-amd64
-     - build-and-publish-tee-confidential-unencrypted-image
-     - publish-csi-driver-amd64
-    uses: ./.github/workflows/run-kata-coco-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-      AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-      ITA_KEY: ${{ secrets.ITA_KEY }}
+    - publish-kata-deploy-payload-amd64
+    - build-and-publish-tee-confidential-unencrypted-image
+    - publish-csi-driver-amd64
+    env:
+      GH_TOKEN: ${{ github.token }}
+    permissions:
+      actions: write # Permission to trigger the gh workflows
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Trigger kata-coco-tests for amd64 arch
+        run: |
+          ./tests/gha-helper.sh trigger-and-check-workflow \
+            run-kata-coco-tests.yaml \
+            ${{ github.ref }} \
+            ${{ github.sha }} \
+            '{
+              "artifact-run-id":"${{ github.run_id }}",
+              "tarball-suffix":"-${{ inputs.tag }}",
+              "registry":"ghcr.io",
+              "repo":"${{ github.repository_owner }}/kata-deploy-ci",
+              "tag":"${{ inputs.tag }}-amd64",
+              "commit-hash":"${{ inputs.commit-hash }}",
+              "pr-number":"${{ inputs.pr-number }}",
+              "target-branch":"${{ inputs.target-branch }}"
+            }'
 
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}
