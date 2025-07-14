@@ -470,7 +470,7 @@ mod tests {
             },
             TestData {
                 test_url: "http://localhost :80",
-                expected: "builder error: invalid domain character",
+                expected: "builder error: invalid international domain name",
             },
         ];
 
