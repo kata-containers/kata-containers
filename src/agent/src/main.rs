@@ -19,7 +19,6 @@ extern crate scopeguard;
 extern crate slog;
 
 use anyhow::{anyhow, bail, Context, Result};
-use base64::Engine;
 use cfg_if::cfg_if;
 use clap::Parser;
 use const_format::concatcp;
@@ -485,12 +484,9 @@ async fn launch_guest_component_procs(
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
     let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
-    let initdata_parameter;
-    if let Some(initdata_return_value) = initdata_return_value {
-        initdata_parameter =
-            base64::engine::general_purpose::STANDARD.encode(&initdata_return_value.digest);
-        aa_args.push("--initdata");
-        aa_args.push(&initdata_parameter);
+    if initdata_return_value.is_some() {
+        aa_args.push("--initdata-toml");
+        aa_args.push(initdata::INITDATA_TOML_PATH);
     }
 
     launch_process(
