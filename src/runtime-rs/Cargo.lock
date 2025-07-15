@@ -49,7 +49,7 @@ dependencies = [
  "log",
  "logging",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "protobuf 3.7.2",
  "protocols",
  "serde",
@@ -571,7 +571,7 @@ dependencies = [
  "kata-types",
  "lazy_static",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "persist",
  "protobuf 3.7.2",
  "protocols",
@@ -602,6 +602,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_format"
+version = "0.2.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "126f97965c8ad46d6d9163268ff28432e8f6a1196a55578867832e3049df63dd"
+dependencies = [
+ "const_format_proc_macros",
+]
+
+[[package]]
+name = "const_format_proc_macros"
+version = "0.2.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d57c2eccfb16dbac1f4e61e206105db5820c9d26c3c472bc17c774259ef7744"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-xid",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -624,7 +644,7 @@ dependencies = [
  "log",
  "mio 0.8.11",
  "nix 0.27.1",
- "oci-spec",
+ "oci-spec 0.6.8",
  "os_pipe",
  "page_size",
  "prctl",
@@ -1509,14 +1529,14 @@ dependencies = [
 
 [[package]]
 name = "getset"
-version = "0.1.2"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e45727250e75cc04ff2846a66397da8ef2b3db8e40e0cef4df67950a07621eb9"
+checksum = "9cf0fc11e47561d47397154977bc219f4cf809b2974facc3ccb3b89e2436f912"
 dependencies = [
- "proc-macro-error",
+ "proc-macro-error2",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -1780,7 +1800,7 @@ dependencies = [
  "libc",
  "logging",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "path-clean",
  "persist",
  "protobuf 3.7.2",
@@ -2088,7 +2108,7 @@ dependencies = [
  "libc",
  "mockall",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "once_cell",
  "pci-ids",
  "rand 0.8.5",
@@ -2115,7 +2135,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "num_cpus",
- "oci-spec",
+ "oci-spec 0.8.1",
  "regex",
  "safe-path 0.1.0",
  "serde",
@@ -2740,6 +2760,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "oci-spec"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57e9beda9d92fac7bf4904c34c83340ef1024159faee67179a04e0277523da33"
+dependencies = [
+ "const_format",
+ "derive_builder",
+ "getset",
+ "regex",
+ "serde",
+ "serde_json",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
+ "thiserror 2.0.11",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3211,27 +3248,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error"
-version = "1.0.4"
+name = "proc-macro-error-attr2"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
 dependencies = [
- "proc-macro-error-attr",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
- "version_check",
 ]
 
 [[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
+name = "proc-macro-error2"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
 dependencies = [
+ "proc-macro-error-attr2",
  "proc-macro2",
  "quote",
- "version_check",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -3410,7 +3445,7 @@ name = "protocols"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "oci-spec",
+ "oci-spec 0.8.1",
  "protobuf 3.7.2",
  "serde",
  "serde_json",
@@ -3723,7 +3758,7 @@ dependencies = [
  "netlink-sys",
  "netns-rs",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "persist",
  "rand 0.8.5",
  "rtnetlink",
@@ -3824,7 +3859,7 @@ dependencies = [
  "logging",
  "netns-rs",
  "nix 0.25.1",
- "oci-spec",
+ "oci-spec 0.8.1",
  "opentelemetry",
  "opentelemetry-jaeger",
  "persist",
@@ -4217,7 +4252,7 @@ dependencies = [
  "log",
  "logging",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "protobuf 3.7.2",
  "rand 0.8.5",
  "runtime-spec",
@@ -4445,6 +4480,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 
 [[package]]
+name = "strum"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+
+[[package]]
 name = "strum_macros"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4462,6 +4503,19 @@ name = "strum_macros"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.96",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -5030,6 +5084,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dd624098567895118886609431a7c3b8f516e41d30e0643f03d94592a147e36"
 
 [[package]]
+name = "unicode-xid"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
 name = "unix_socket2"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5154,7 +5214,7 @@ dependencies = [
  "libc",
  "logging",
  "nix 0.24.3",
- "oci-spec",
+ "oci-spec 0.8.1",
  "persist",
  "protobuf 3.7.2",
  "resource",

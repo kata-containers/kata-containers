@@ -8,7 +8,7 @@ license = "Apache-2.0"
 rust-version = "1.85.1"
 
 [workspace.dependencies]
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+oci-spec = { version = "0.8.1", features = ["runtime"] }
 lazy_static = "1.3.0"
 ttrpc = { version = "0.8.4", features = ["async"], default-features = false }
 protobuf = "3.7.2"
@@ -163,7 +163,7 @@ strum.workspace = true
 strum_macros.workspace = true
 
 # Agent Policy
-cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
+cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "3b1e83dda5efcc83c7a4f134466ec006b37109c9" }
 
 # Local dependencies
 kata-agent-policy = { workspace = true, optional = true }
