@@ -815,7 +815,6 @@ dependencies = [
  "env_logger",
  "flate2",
  "fs2",
- "generic-array",
  "k8s-cri",
  "kata-agent-policy",
  "libz-ng-sys",
@@ -831,15 +830,12 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "serde_yaml",
- "sha2",
  "slog",
  "tar",
- "tarindex",
  "tempfile",
  "tokio",
  "tonic",
  "tower 0.4.13",
- "zerocopy",
 ]
 
 [[package]]
@@ -2568,24 +2564,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tarfs-defs"
-version = "0.1.0"
-source = "git+https://github.com/kata-containers/tardev-snapshotter?rev=06183a5#06183a5e2a83c3261740f4f0f6ce4aa16b14e436"
-dependencies = [
- "zerocopy",
-]
-
-[[package]]
-name = "tarindex"
-version = "0.1.0"
-source = "git+https://github.com/kata-containers/tardev-snapshotter?rev=06183a5#06183a5e2a83c3261740f4f0f6ce4aa16b14e436"
-dependencies = [
- "tar",
- "tarfs-defs",
- "zerocopy",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3498,27 +3476,6 @@ dependencies = [
  "quote",
  "syn 2.0.104",
  "synstructure",
-]
-
-[[package]]
-name = "zerocopy"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "854e949ac82d619ee9a14c66a1b674ac730422372ccb759ce0c39cabcf2bf8e6"
-dependencies = [
- "byteorder",
- "zerocopy-derive",
-]
-
-[[package]]
-name = "zerocopy-derive"
-version = "0.6.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "125139de3f6b9d625c39e2efdd73d41bdac468ccd556556440e322be0e1bbd91"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
 ]
 
 [[package]]
