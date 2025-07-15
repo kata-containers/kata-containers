@@ -33,6 +33,7 @@ readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
 readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
+readonly KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 #Path to kernel directory
 kernel_path=""
@@ -313,6 +314,12 @@ get_kernel_frag_path() {
 		local sign_configs
 		sign_configs="$(ls ${common_path}/signing/module_signing.conf)"
 		all_configs="${all_configs} ${sign_configs}"
+	fi
+
+	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
+		info "Enable kernel debug"
+		local debug_configs="$(ls ${common_path}/common/debug.conf)"
+		all_configs="${all_configs} ${debug_configs}"
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
