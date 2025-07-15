@@ -1265,13 +1265,13 @@ handle_build() {
 
 	rootfs-initrd-confidential) install_initrd_confidential ;;
 
-	rootfs-nvidia-gpu-image) install_image_nvidia_gpu ;;
+	rootfs-image-nvidia-gpu) install_image_nvidia_gpu ;;
 
-	rootfs-nvidia-gpu-initrd) install_initrd_nvidia_gpu ;;
+	rootfs-initrd-nvidia-gpu) install_initrd_nvidia_gpu ;;
 
-	rootfs-nvidia-gpu-confidential-image) install_image_nvidia_gpu_confidential ;;
+	rootfs-image-nvidia-gpu-confidential) install_image_nvidia_gpu_confidential ;;
 
-	rootfs-nvidia-gpu-confidential-initrd) install_initrd_nvidia_gpu_confidential ;;
+	rootfs-initrd-nvidia-gpu-confidential) install_initrd_nvidia_gpu_confidential ;;
 
 	runk) install_runk ;;
 

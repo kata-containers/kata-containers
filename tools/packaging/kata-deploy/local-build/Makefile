@@ -176,16 +176,16 @@ rootfs-initrd-tarball: agent-tarball
 
 runk-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
-rootfs-nvidia-gpu-image-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+rootfs-image-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
-rootfs-nvidia-gpu-initrd-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+rootfs-initrd-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
-rootfs-nvidia-gpu-confidential-image-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
 	${MAKE} $@-build
 
-rootfs-nvidia-gpu-confidential-initrd-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+rootfs-initrd-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
 	${MAKE} $@-build
 
 shim-v2-tarball:
