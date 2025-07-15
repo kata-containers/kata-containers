@@ -67,7 +67,7 @@ install_nvidia_ctk() {
 	echo "chroot: Installing NVIDIA GPU container runtime"
 	apt list nvidia-container-toolkit-base -a
 	# Base  gives a nvidia-ctk and the nvidia-container-runtime
-	eval "${APT_INSTALL}" nvidia-container-toolkit-base
+	eval "${APT_INSTALL}" nvidia-container-toolkit-base=1.17.6-1
 }
 
 install_nvidia_fabricmanager() {
