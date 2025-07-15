@@ -13,7 +13,7 @@ use crate::utils::Config;
 
 use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
-use log::{debug, info, warn, LevelFilter};
+use log::{debug, info, warn};
 use oci_client::{
     client::{linux_amd64_resolver, ClientConfig, ClientProtocol},
     manifest,
@@ -21,7 +21,7 @@ use oci_client::{
     Client, Reference,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, io, io::Read, io::Write, path::Path};
+use std::{collections::BTreeMap, io::Read, io::Write, path::Path};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
@@ -159,13 +159,7 @@ impl Container {
             "manifest: {}",
             serde_json::to_string_pretty(&manifest).unwrap()
         );
-
-        if log::max_level() >= LevelFilter::Debug {
-            let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
-            let mut serializer = serde_json::Serializer::pretty(io::stderr());
-            serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
-        }
-
+        debug!("config_layer string: {config_layer_str}");
         let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
         debug!("config_layer: {:?}", &config_layer);
 
