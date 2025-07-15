@@ -27,6 +27,9 @@ const AA_CONFIG_KEY: &str = "aa.toml";
 const CDH_CONFIG_KEY: &str = "cdh.toml";
 const POLICY_KEY: &str = "policy.rego";
 
+/// The path of initdata toml
+pub const INITDATA_TOML_PATH: &str = concatcp!(INITDATA_PATH, "/initdata.toml");
+
 /// The path of AA's config file
 pub const AA_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/aa.toml");
 
@@ -95,7 +98,7 @@ pub async fn read_initdata(device_path: &str) -> Result<Vec<u8>> {
 }
 
 pub struct InitdataReturnValue {
-    pub digest: Vec<u8>,
+    pub _digest: Vec<u8>,
     pub _policy: Option<String>,
 }
 
@@ -122,7 +125,11 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
     info!(logger, "Initdata version: {}", initdata.version());
     initdata.validate()?;
 
-    let digest = match initdata.algorithm() {
+    tokio::fs::write(INITDATA_TOML_PATH, &initdata_content)
+        .await
+        .context("write initdata toml failed")?;
+
+    let _digest = match initdata.algorithm() {
         "sha256" => Sha256::digest(&initdata_content).to_vec(),
         "sha384" => Sha384::digest(&initdata_content).to_vec(),
         "sha512" => Sha512::digest(&initdata_content).to_vec(),
@@ -143,10 +150,10 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
         info!(logger, "write CDH config from initdata");
     }
 
-    debug!(logger, "Initdata digest: {}", STANDARD.encode(&digest));
+    debug!(logger, "Initdata digest: {}", STANDARD.encode(&_digest));
 
     let res = InitdataReturnValue {
-        digest,
+        _digest,
         _policy: initdata.get_coco_data(POLICY_KEY).cloned(),
     };
 
