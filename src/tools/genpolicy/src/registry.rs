@@ -10,7 +10,6 @@ use crate::containerd;
 use crate::layers_cache::ImageLayersCache;
 use crate::policy;
 use crate::utils::Config;
-use crate::verity;
 
 use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
@@ -22,8 +21,7 @@ use oci_client::{
     Client, Reference,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{collections::BTreeMap, io, io::Read, io::Seek, io::Write, path::Path};
+use std::{collections::BTreeMap, io, io::Read, io::Write, path::Path};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
@@ -32,7 +30,6 @@ pub struct Container {
     #[allow(dead_code)]
     pub image: String,
     pub config_layer: DockerConfigLayer,
-    pub image_layers: Vec<ImageLayer>,
     pub passwd: String,
     pub group: String,
 }
@@ -68,7 +65,6 @@ pub struct DockerRootfs {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ImageLayer {
     pub diff_id: String,
-    pub verity_hash: String,
     pub passwd: String,
     pub group: String,
 }
@@ -197,7 +193,6 @@ impl Container {
                 Ok(Container {
                     image: image_string,
                     config_layer,
-                    image_layers,
                     passwd,
                     group,
                 })
@@ -429,10 +424,6 @@ impl Container {
 
         debug!("get_process succeeded.");
     }
-
-    pub fn get_image_layers(&self) -> Vec<ImageLayer> {
-        self.image_layers.clone()
-    }
 }
 
 async fn get_image_layers(
@@ -452,7 +443,7 @@ async fn get_image_layers(
             || layer.media_type.eq(manifest::IMAGE_LAYER_GZIP_MEDIA_TYPE)
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let mut imageLayer = get_verity_and_users(
+                let mut imageLayer = get_users_from_layer(
                     layers_cache,
                     client,
                     reference,
@@ -473,7 +464,7 @@ async fn get_image_layers(
     Ok(layers)
 }
 
-async fn get_verity_and_users(
+async fn get_users_from_layer(
     layers_cache: &ImageLayersCache,
     client: &mut Client,
     reference: &Reference,
@@ -482,7 +473,6 @@ async fn get_verity_and_users(
 ) -> Result<ImageLayer> {
     if let Some(layer) = layers_cache.get_layer(diff_id) {
         info!("Using cache file");
-        info!("dm-verity root hash: {}", layer.verity_hash);
         return Ok(layer);
     }
 
@@ -505,22 +495,17 @@ async fn get_verity_and_users(
     )
     .await
     {
-        temp_dir.close()?;
-        bail!(format!(
-            "Failed to create verity hash for {layer_digest}, error {e}"
-        ));
+        bail!(format!("Failed to decompress image layer, error {e}"));
     };
 
-    match get_verity_hash_and_users(&decompressed_path) {
+    match get_users_from_decompressed_layer(&decompressed_path) {
         Err(e) => {
             temp_dir.close()?;
-            bail!(format!("Failed to get verity hash {e}"));
+            bail!(format!("Failed to get users from image layer, error {e}"));
         }
-        Ok((verity_hash, passwd, group)) => {
-            info!("dm-verity root hash: {verity_hash}");
+        Ok((passwd, group)) => {
             let layer = ImageLayer {
                 diff_id: diff_id.to_string(),
-                verity_hash,
                 passwd,
                 group,
             };
@@ -558,29 +543,12 @@ async fn create_decompressed_layer_file(
     let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
     std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
-    info!("Adding tarfs index to layer");
-    decompressed_file.seek(std::io::SeekFrom::Start(0))?;
-    tarindex::append_index(&mut decompressed_file).map_err(|e| anyhow!(e))?;
     decompressed_file.flush().map_err(|e| anyhow!(e))?;
-
     Ok(())
 }
 
-pub fn get_verity_hash_and_users(path: &Path) -> Result<(String, String, String)> {
-    info!("Calculating dm-verity root hash");
-    let mut file = std::fs::File::open(path)?;
-    let size = file.seek(std::io::SeekFrom::End(0))?;
-    if size < 4096 {
-        return Err(anyhow!("Block device {:?} is too small: {size}", &path));
-    }
-
-    let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, 0)?;
-    let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
-    let result = format!("{:x}", hash);
-
-    file.seek(std::io::SeekFrom::Start(0))?;
-
+pub fn get_users_from_decompressed_layer(path: &Path) -> Result<(String, String)> {
+    let file = std::fs::File::open(path)?;
     let mut passwd = String::new();
     let mut group = String::new();
     let (mut found_passwd, mut found_group) = (false, false);
@@ -615,7 +583,7 @@ pub fn get_verity_hash_and_users(path: &Path) -> Result<(String, String, String)
         }
     }
 
-    Ok((result, passwd, group))
+    Ok((passwd, group))
 }
 
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
