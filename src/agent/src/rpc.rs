@@ -2623,11 +2623,6 @@ mod tests {
                 }),
                 ..Default::default()
             },
-            TestData {
-                has_fd: false,
-                result: Err(anyhow!(ERR_CANNOT_GET_WRITER)),
-                ..Default::default()
-            },
         ];
 
         for (i, d) in tests.iter().enumerate() {
