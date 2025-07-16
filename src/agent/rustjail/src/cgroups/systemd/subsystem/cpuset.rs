@@ -48,12 +48,12 @@ impl CpuSet {
 
         if let Some(cpus) = cpuset_resources.cpus().as_ref() {
             let cpus_vec: BitMask = cpus.as_str().try_into()?;
-            properties.push(("AllowedCPUs", Value::Array(cpus_vec.0.into())));
+            properties.push(&("AllowedCPUs", &Value::Array(cpus_vec.0.into())));
         }
 
         if let Some(mems) = cpuset_resources.mems().as_ref() {
             let mems_vec: BitMask = mems.as_str().try_into()?;
-            properties.push(("AllowedMemoryNodes", Value::Array(mems_vec.0.into())));
+            properties.push(&("AllowedMemoryNodes", &Value::Array(mems_vec.0.into())));
         }
 
         Ok(())

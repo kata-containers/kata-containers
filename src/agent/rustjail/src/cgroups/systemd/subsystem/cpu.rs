@@ -58,12 +58,12 @@ impl Cpu {
                 2..=CGROUP_CPU_SHARES_MAX => shares,
                 _ => bail!("Invalid CpuShares"),
             };
-            properties.push(("CPUShares", Value::U64(shares)));
+            properties.push(&("CPUShares", &Value::U64(shares)));
         }
 
         if let Some(period) = cpu_resources.period() {
             if period != 0 && systemd_version >= BASIC_SYSTEMD_VERSION {
-                properties.push(("CPUQuotaPeriodUSec", Value::U64(period)));
+                properties.push(&("CPUQuotaPeriodUSec", &Value::U64(period)));
             }
         }
 
@@ -71,7 +71,7 @@ impl Cpu {
             let period = cpu_resources.period().unwrap_or(DEFAULT_CPUQUOTAPERIOD);
             if period != 0 {
                 let cpu_quota_per_sec_usec = resolve_cpuquota(quota, period);
-                properties.push(("CPUQuotaPerSecUSec", Value::U64(cpu_quota_per_sec_usec)));
+                properties.push(&("CPUQuotaPerSecUSec", &Value::U64(cpu_quota_per_sec_usec)));
             }
         }
 
@@ -89,12 +89,12 @@ impl Cpu {
     ) -> Result<()> {
         if let Some(shares) = cpu_resources.shares() {
             let weight = shares_to_weight(shares).unwrap();
-            properties.push(("CPUWeight", Value::U64(weight)));
+            properties.push(&("CPUWeight", &Value::U64(weight)));
         }
 
         if let Some(period) = cpu_resources.period() {
             if period != 0 && systemd_version >= BASIC_SYSTEMD_VERSION {
-                properties.push(("CPUQuotaPeriodUSec", Value::U64(period)));
+                properties.push(&("CPUQuotaPeriodUSec", &Value::U64(period)));
             }
         }
 
@@ -102,7 +102,7 @@ impl Cpu {
             let period = cpu_resources.period().unwrap_or(DEFAULT_CPUQUOTAPERIOD);
             if period != 0 {
                 let cpu_quota_per_sec_usec = resolve_cpuquota(quota, period);
-                properties.push(("CPUQuotaPerSecUSec", Value::U64(cpu_quota_per_sec_usec)));
+                properties.push(&("CPUQuotaPerSecUSec", &Value::U64(cpu_quota_per_sec_usec)));
             }
         }
 

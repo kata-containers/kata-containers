@@ -42,7 +42,7 @@ impl Memory {
                 0 => u64::MAX,
                 _ => bail!("invalid memory.limit"),
             };
-            properties.push(("MemoryLimit", Value::U64(limit)));
+            properties.push(&("MemoryLimit", &Value::U64(limit)));
         }
 
         Ok(())
@@ -59,7 +59,7 @@ impl Memory {
                 0 => u64::MAX,
                 _ => bail!("invalid memory.limit: {}", limit),
             };
-            properties.push(("MemoryMax", Value::U64(limit)));
+            properties.push(&("MemoryMax", &Value::U64(limit)));
         }
 
         if let Some(reservation) = memory_resources.reservation() {
@@ -68,7 +68,7 @@ impl Memory {
                 0 => u64::MAX,
                 _ => bail!("invalid memory.reservation: {}", reservation),
             };
-            properties.push(("MemoryLow", Value::U64(reservation)));
+            properties.push(&("MemoryLow", &Value::U64(reservation)));
         }
 
         let swap = match memory_resources.swap() {
@@ -83,7 +83,7 @@ impl Memory {
             _ => bail!("invalid memory.swap"),
         };
 
-        properties.push(("MemorySwapMax", Value::U64(swap)));
+        properties.push(&("MemorySwapMax", &Value::U64(swap)));
 
         Ok(())
     }
