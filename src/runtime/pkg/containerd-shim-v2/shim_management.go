@@ -37,6 +37,7 @@ const (
 	AgentUrl              = "/agent-url"
 	DirectVolumeStatUrl   = "/direct-volume/stats"
 	DirectVolumeResizeUrl = "/direct-volume/resize"
+	BlockDeviceResizeUrl  = "/block-device/resize"
 	IPTablesUrl           = "/iptables"
 	PolicyUrl             = "/policy"
 	IP6TablesUrl          = "/ip6tables"
@@ -51,6 +52,10 @@ var (
 type ResizeRequest struct {
 	VolumePath string
 	Size       uint64
+}
+type BlockResizeRequest struct {
+	BlockDevice string
+	Size        uint64
 }
 
 // agentURL returns URL for agent
@@ -199,7 +204,32 @@ func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write([]byte(""))
 }
+func (s *service) serveBlockDeviceResize(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		shimMgtLog.WithError(err).Error("failed to read request body")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	var resizeReq BlockResizeRequest
+	err = json.Unmarshal(body, &resizeReq)
+	if err != nil {
+		shimMgtLog.WithError(err).Error("failed to unmarshal the http request body")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
 
+	err = s.sandbox.ResizeBlockDevice(context.Background(), resizeReq.BlockDevice, resizeReq.Size)
+	if err != nil {
+		shimMgtLog.WithError(err).WithField("block-device", resizeReq.BlockDevice).Error("failed to resize raw block device")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.Write([]byte(""))
+}
 func (s *service) policyHandler(w http.ResponseWriter, r *http.Request) {
 	logger := shimMgtLog.WithFields(logrus.Fields{"handler": "policy"})
 
@@ -292,6 +322,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m.Handle(AgentUrl, http.HandlerFunc(s.agentURL))
 	m.Handle(DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
 	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
+	m.Handle(BlockDeviceResizeUrl, http.HandlerFunc(s.serveBlockDeviceResize))
 	m.Handle(IPTablesUrl, http.HandlerFunc(s.ipTablesHandler))
 	m.Handle(PolicyUrl, http.HandlerFunc(s.policyHandler))
 	m.Handle(IP6TablesUrl, http.HandlerFunc(s.ip6TablesHandler))
