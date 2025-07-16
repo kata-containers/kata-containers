@@ -218,6 +218,11 @@ pub struct MemoryZoneConfig {
     pub prefault: bool,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct ProtectionDevConfig {
+    pub mrconfigid: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct NetConfig {
     //#[serde(default = "default_netconfig_tap")]
@@ -319,6 +324,8 @@ pub struct PayloadConfig {
     pub cmdline: Option<String>,
     #[serde(default)]
     pub initramfs: Option<PathBuf>,
+    #[serde(default)]
+    pub mrconfigid: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
@@ -499,6 +506,7 @@ pub struct NamedHypervisorConfig {
     // - The hardware supports guest protection.
     // - The user has requested that guest protection be used.
     pub guest_protection_to_use: GuestProtection,
+    pub protection_device: Option<ProtectionDevConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
