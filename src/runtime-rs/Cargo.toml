@@ -59,7 +59,7 @@ libc = "0.2"
 log = "0.4.14"
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
-nix = "0.26.4"
+nix = "0.29.0"
 oci-spec = { version = "0.8.1", features = ["runtime"] }
 protobuf = "3.7.2"
 rand = "0.8.4"
