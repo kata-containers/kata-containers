@@ -18,23 +18,24 @@ on:
 jobs:
   scan-scheduled:
     permissions:
+      actions: read # # Required to upload SARIF file to CodeQL
+      contents: read  # Read commit contents
       security-events: write  # Require writing security events to upload SARIF file to security tab
     if: ${{ github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
-    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@1f1242919d8a60496dd1874b24b62b2370ed4c78" # v1.7.1
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b00f71e051ddddc6e46a193c31c8c0bf283bf9e6" # v2.1.0
     with:
-      # Example of specifying custom arguments
       scan-args: |-
         -r
-        --skip-git
         ./
   scan-pr:
     permissions:
+      actions: read # Required to upload SARIF file to CodeQL
+      contents: read  # Read commit contents
       security-events: write  # Require writing security events to upload SARIF file to security tab
     if: ${{ github.event_name == 'pull_request' }}
-    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@1f1242919d8a60496dd1874b24b62b2370ed4c78" # v1.7.1
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@b00f71e051ddddc6e46a193c31c8c0bf283bf9e6" # v2.1.0
     with:
       # Example of specifying custom arguments
       scan-args: |-
         -r
-        --skip-git
         ./
