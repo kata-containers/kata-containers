@@ -101,8 +101,6 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	id := uuid.Generate().String()
 
-	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
-
 	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
@@ -116,6 +114,14 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
+	if config.HypervisorConfig.VMStorePath == "" {
+		config.HypervisorConfig.VMStorePath = store.RunVMStoragePath()
+	}
+	if config.HypervisorConfig.RunStorePath == "" {
+		config.HypervisorConfig.RunStorePath = store.RunStoragePath()
+	}
+
+	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 	if err = hypervisor.CreateVM(ctx, id, network, &config.HypervisorConfig); err != nil {
 		return nil, err
 	}
@@ -168,8 +174,6 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 // NewVMFromGrpc creates a new VM based on provided pb.GrpcVM and VMConfig.
 func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, error) {
-	virtLog.WithField("GrpcVM", v).WithField("config", config).Info("create new vm from Grpc")
-
 	hypervisor, err := NewHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
@@ -188,6 +192,14 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		}
 	}()
 
+	if config.HypervisorConfig.VMStorePath == "" {
+		config.HypervisorConfig.VMStorePath = store.RunVMStoragePath()
+	}
+	if config.HypervisorConfig.RunStorePath == "" {
+		config.HypervisorConfig.RunStorePath = store.RunStoragePath()
+	}
+
+	virtLog.WithField("GrpcVM", v).WithField("config", config).Info("create new vm from Grpc")
 	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, v.Hypervisor)
 	if err != nil {
 		return nil, err
@@ -197,6 +209,10 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
 	agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
+
+	if err := agent.setAgentURL(); err != nil {
+		return nil, err
+	}
 
 	return &VM{
 		id:         v.Id,
