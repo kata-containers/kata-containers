@@ -55,6 +55,15 @@ impl Sock for Vsock {
             connect(socket.as_raw_fd(), &sock_addr)
                 .with_context(|| format!("failed to connect to {}", sock_addr))?;
 
+            // Started from tokio v1.44.0+, it would panic when giving
+            // `from_std()` a blocking socket. A workaround is to set the
+            // socket to non-blocking, see [1].
+            //
+            // https://github.com/tokio-rs/tokio/issues/7172
+            socket
+                .set_nonblocking(true)
+                .context("failed to set non-blocking")?;
+
             // Finally, convert the std UnixSocket to tokio's UnixSocket.
             UnixStream::from_std(socket).context("from_std")
         };
