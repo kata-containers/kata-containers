@@ -2000,7 +2000,7 @@ dependencies = [
  "netlink-packet-core",
  "netlink-packet-route",
  "netlink-sys 0.7.0",
- "nix 0.24.3",
+ "nix 0.26.4",
  "oci-spec",
  "opentelemetry",
  "procfs 0.12.0",
@@ -2069,7 +2069,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "mockall",
- "nix 0.24.3",
+ "nix 0.26.4",
  "oci-spec",
  "once_cell",
  "pci-ids",
@@ -3669,7 +3669,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "libseccomp",
- "nix 0.24.3",
+ "nix 0.26.4",
  "oci-spec",
  "path-absolutize",
  "protobuf 3.7.2",
@@ -4233,7 +4233,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "nix 0.24.3",
+ "nix 0.26.4",
 ]
 
 [[package]]
