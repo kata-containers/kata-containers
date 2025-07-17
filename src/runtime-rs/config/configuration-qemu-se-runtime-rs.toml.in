@@ -541,7 +541,7 @@ kernel_modules=[]
 
 # Agent dial timeout in millisecond.
 # (default: 10)
-dial_timeout_ms = 30
+dial_timeout_ms = 90
 
 # Agent reconnect timeout in millisecond.
 # Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
@@ -550,7 +550,7 @@ dial_timeout_ms = 30
 # You'd better not change the value of dial_timeout_ms, unless you have an
 # idea of what you are doing.
 # (default: 3000)
-#reconnect_timeout_ms = 3000
+reconnect_timeout_ms = 5000
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
