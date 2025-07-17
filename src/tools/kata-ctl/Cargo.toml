@@ -33,7 +33,7 @@ kata-types = { path = "../../libs/kata-types" }
 kata-sys-util = { path = "../../../src/libs/kata-sys-util/" }
 safe-path = { path = "../../libs/safe-path" }
 agent = { path = "../../runtime-rs/crates/agent" }
-serial_test = "0.5.1"
+serial_test = "0.10.0"
 vmm-sys-util = "0.11.0"
 epoll = "4.0.1"
 libc = "0.2.138"
