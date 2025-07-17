@@ -22,7 +22,6 @@ use kata_types::{
 };
 use persist::sandbox_persist::Persist;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
@@ -288,13 +287,14 @@ impl QemuInner {
         todo!()
     }
 
-    pub(crate) async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
+    pub(crate) async fn get_thread_ids(&mut self) -> Result<VcpuThreadIds> {
         info!(sl!(), "QemuInner::get_thread_ids()");
-        //todo!()
-        let vcpu_thread_ids: VcpuThreadIds = VcpuThreadIds {
-            vcpus: HashMap::new(),
-        };
-        Ok(vcpu_thread_ids)
+
+        Ok(self
+            .qmp
+            .as_mut()
+            .and_then(|qmp| qmp.get_vcpu_thread_ids().ok())
+            .unwrap_or_default())
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {

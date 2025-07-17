@@ -135,7 +135,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.get_thread_ids().await
     }
 
