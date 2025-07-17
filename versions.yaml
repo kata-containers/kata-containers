@@ -363,6 +363,7 @@ externals:
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
     sev:
+      # Used by AMD SEV-SNP for measured direct boot
       description: "AmdSev build needed for SEV measured direct boot."
       version: "edk2-stable202411"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
