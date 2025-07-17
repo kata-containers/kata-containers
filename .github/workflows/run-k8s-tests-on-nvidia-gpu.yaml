@@ -21,6 +21,9 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      NGC_API_KEY:
+        required: true
 
 jobs:
   run-nvidia-gpu-tests-on-amd64:
@@ -32,7 +35,6 @@ jobs:
         k8s:
           - kubeadm
     runs-on: amd64-nvidia-a100
-    environment: nvidia
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
