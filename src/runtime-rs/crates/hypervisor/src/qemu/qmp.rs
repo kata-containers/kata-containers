@@ -527,8 +527,51 @@ impl Qmp {
 
         // `blockdev-add`
         let node_name = format!("drive-{}", device_id);
+
+        let create_base_options = || qapi_qmp::BlockdevOptionsBase {
+            auto_read_only: None,
+            cache: if is_direct.is_none() {
+                None
+            } else {
+                Some(qapi_qmp::BlockdevCacheOptions {
+                    direct: is_direct,
+                    no_flush: None,
+                })
+            },
+            detect_zeroes: None,
+            discard: None,
+            force_share: None,
+            node_name: None,
+            read_only: Some(is_readonly),
+        };
+
+        let create_backend_options = || qapi_qmp::BlockdevOptionsFile {
+            aio: None,
+            aio_max_batch: None,
+            drop_cache: if !no_drop { None } else { Some(no_drop) },
+            locking: None,
+            pr_manager: None,
+            x_check_cache_dropped: None,
+            filename: path_on_host.to_owned(),
+        };
+
+        // Add block device backend and check if the file is a regular file or device
+        let blockdev_file = if std::fs::metadata(path_on_host)?.is_file() {
+            // Regular file
+            qmp::BlockdevOptions::file {
+                base: create_base_options(),
+                file: create_backend_options(),
+            }
+        } else {
+            // Host device (e.g., /dev/sdx, /dev/loopX)
+            qmp::BlockdevOptions::host_device {
+                base: create_base_options(),
+                host_device: create_backend_options(),
+            }
+        };
+
         self.qmp
-            .execute(&qmp::blockdev_add(qmp::BlockdevOptions::raw {
+            .execute(&qapi_qmp::blockdev_add(qmp::BlockdevOptions::raw {
                 base: qmp::BlockdevOptionsBase {
                     detect_zeroes: None,
                     cache: None,
@@ -540,39 +583,13 @@ impl Qmp {
                 },
                 raw: qmp::BlockdevOptionsRaw {
                     base: qmp::BlockdevOptionsGenericFormat {
-                        file: qmp::BlockdevRef::definition(Box::new(qmp::BlockdevOptions::file {
-                            base: qapi_qmp::BlockdevOptionsBase {
-                                auto_read_only: None,
-                                cache: if is_direct.is_none() {
-                                    None
-                                } else {
-                                    Some(qapi_qmp::BlockdevCacheOptions {
-                                        direct: is_direct,
-                                        no_flush: None,
-                                    })
-                                },
-                                detect_zeroes: None,
-                                discard: None,
-                                force_share: None,
-                                node_name: None,
-                                read_only: Some(is_readonly),
-                            },
-                            file: qapi_qmp::BlockdevOptionsFile {
-                                aio: None,
-                                aio_max_batch: None,
-                                drop_cache: if !no_drop { None } else { Some(no_drop) },
-                                locking: None,
-                                pr_manager: None,
-                                x_check_cache_dropped: None,
-                                filename: path_on_host.to_owned(),
-                            },
-                        })),
+                        file: qmp::BlockdevRef::definition(Box::new(blockdev_file)),
                     },
                     offset: None,
                     size: None,
                 },
             }))
-            .map_err(|e| anyhow!("blockdev_add {:?}", e))
+            .map_err(|e| anyhow!("blockdev_add backend {:?}", e))
             .map(|_| ())?;
 
         // `device_add`
