@@ -12,7 +12,8 @@ MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
 QEMUCMD := qemu-system-x86_64
-QEMUTDXCMD := qemu-system-x86_64-tdx-experimental
+#QEMUTDXCMD := qemu-system-x86_64
+QEMUTDXEXPERIMENTALCMD := qemu-system-x86_64-tdx-experimental
 QEMUSNPCMD := qemu-system-x86_64-snp-experimental
 TDXCPUFEATURES := pmu=off
 
