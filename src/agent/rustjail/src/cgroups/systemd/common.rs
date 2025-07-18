@@ -13,7 +13,7 @@ pub const SIGNAL_KILL: i32 = nix::sys::signal::SIGKILL as i32;
 pub const UNIT_MODE_REPLACE: &str = "replace";
 pub const NO_SUCH_UNIT_ERROR: &str = "org.freedesktop.systemd1.NoSuchUnit";
 
-pub type Properties<'a> = Vec<(&'a str, zbus::zvariant::Value<'a>)>;
+pub type Properties<'a> = Vec<&'a (&'a str, &'a zbus::zvariant::Value<'a>)>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum CgroupHierarchy {
