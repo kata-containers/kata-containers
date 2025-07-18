@@ -125,8 +125,9 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `image.reference` | Fully qualified image reference | `quay.io/kata-containers/kata-deploy` |
 | `image.tag` | Tag of the image reference | `""` |
 | `k8sDistribution` | Set the k8s distribution to use: `k8s`, `k0s`, `k3s`, `rke2`, `microk8s` | `k8s` |
+| `nodeSelector` | Node labels for pod assignment. Allows restricting deployment to specific nodes | `{}` |
 | `env.debug` | Enable debugging in the `configuration.toml` | `false` |
-| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx` |
+| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx` |
 | `env.defaultShim` | The default shim to use if none specified | `qemu` |
 | `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
 | `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
@@ -146,6 +147,32 @@ $ helm install kata-deploy \
   --set env.shims="qemu" \
   --set env.debug=true \
   "${CHART}" --version  "${VERSION}"
+```
+
+## Example: Deploy only to specific nodes using `nodeSelector`
+
+```sh
+# First, label the nodes where you want kata-containers to be installed
+$ kubectl label nodes worker-node-1 kata-containers=enabled
+$ kubectl label nodes worker-node-2 kata-containers=enabled
+
+# Then install the chart with `nodeSelector`
+$ helm install kata-deploy \
+  --set nodeSelector.kata-containers="enabled" \
+  "${CHART}" --version  "${VERSION}"
+```
+
+You can also use a values file:
+
+```yaml
+# values.yaml
+nodeSelector:
+  kata-containers: "enabled"
+  node-type: "worker"
+```
+
+```sh
+$ helm install kata-deploy -f values.yaml "${CHART}" --version "${VERSION}"
 ```
 
 ## Example: Multiple Kata installations on the same node
@@ -181,7 +208,6 @@ kata-qemu-nvidia-gpu-snp-cicd   kata-qemu-nvidia-gpu-snp-cicd   77s
 kata-qemu-nvidia-gpu-tdx-cicd   kata-qemu-nvidia-gpu-tdx-cicd   76s
 kata-qemu-runtime-rs-cicd       kata-qemu-runtime-rs-cicd       77s
 kata-qemu-se-runtime-rs-cicd    kata-qemu-se-runtime-rs-cicd    77s
-kata-qemu-sev-cicd              kata-qemu-sev-cicd              77s
 kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s

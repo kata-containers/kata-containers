@@ -5,6 +5,12 @@ image:
   tag: ""
 # k8s-dist can be k8s, k3s, rke2, k0s, microk8s
 k8sDistribution: "k8s"
+# Node selector to control which nodes the kata-deploy daemonset runs on
+# Example:
+# nodeSelector:
+#   kata-containers: "enabled"
+#   node-type: "worker"
+nodeSelector: {}
 env:
   debug: "false"
   shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
