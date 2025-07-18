@@ -13,10 +13,15 @@ use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
+use std::str::FromStr;
 use std::time::Duration;
 
 use qapi::qmp;
-use qapi_qmp::{self, PciDeviceInfo};
+use qapi_qmp::{
+    self, BlockdevAioOptions, BlockdevCacheOptions, BlockdevOptions, BlockdevOptionsBase,
+    BlockdevOptionsFile, BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef,
+    PciDeviceInfo,
+};
 use qapi_spec::Dictionary;
 
 /// default qmp connection read timeout
@@ -600,6 +605,151 @@ impl Qmp {
         Ok(Some(pci_path))
     }
 
+    /// Hot plug a SCSI block device (combines blockdev-add and device_add)
+    /// # virtio-scsi0
+    /// {"execute":"device_add","arguments":{"driver":"virtio-scsi-pci","id":"virtio-scsi0","bus":"bus1"}}
+    /// {"return": {}}
+    ///
+    /// {"execute":"blockdev_add", "arguments": {"file":"/path/to/block.image","format":"qcow2","id":"virtio-scsi0"}}
+    /// {"return": {}}
+    /// {"execute":"device_add","arguments":{"driver":"scsi-hd","drive":"virtio-scsi0","id":"scsi_device_0","bus":"virtio-scsi1.0"}}
+    /// {"return": {}}
+    ///
+    pub fn hotplug_scsi_block_device(
+        &mut self,
+        block_device_file: &str,
+        scsi_controller: &str,
+        scsi_driver: &str,
+        device_id: &str,
+        index: u32,
+        aio: &str,
+        is_direct: Option<bool>,
+        is_readonly: bool,
+        no_drop: bool,
+    ) -> Result<String> {
+        let node_name = format!("scsi-drive-{}", device_id);
+        // Step 1: add block device backend
+        // Check if a file is a regular file or device
+        let blockdev_options_file = if std::fs::metadata(block_device_file)?.is_file() {
+            // Regular file
+            BlockdevOptions::file {
+                base: qapi_qmp::BlockdevOptionsBase {
+                    auto_read_only: None,
+                    cache: if is_direct.is_none() {
+                        None
+                    } else {
+                        Some(BlockdevCacheOptions {
+                            direct: is_direct,
+                            no_flush: None,
+                        })
+                    },
+                    detect_zeroes: None,
+                    discard: None,
+                    force_share: None,
+                    node_name: None,
+                    read_only: Some(is_readonly),
+                },
+                file: BlockdevOptionsFile {
+                    aio: Some(
+                        BlockdevAioOptions::from_str(aio).unwrap_or(BlockdevAioOptions::native),
+                    ),
+                    aio_max_batch: None,
+                    drop_cache: if !no_drop { None } else { Some(no_drop) },
+                    locking: None,
+                    pr_manager: None,
+                    x_check_cache_dropped: None,
+                    filename: block_device_file.to_string(),
+                },
+            }
+        } else {
+            // Host device (e.g., /dev/sdx)
+            BlockdevOptions::host_device {
+                base: qapi_qmp::BlockdevOptionsBase {
+                    auto_read_only: None,
+                    cache: if is_direct.is_none() {
+                        None
+                    } else {
+                        Some(BlockdevCacheOptions {
+                            direct: is_direct,
+                            no_flush: None,
+                        })
+                    },
+                    detect_zeroes: None,
+                    discard: None,
+                    force_share: None,
+                    node_name: None,
+                    read_only: Some(is_readonly),
+                },
+                host_device: BlockdevOptionsFile {
+                    aio: Some(
+                        BlockdevAioOptions::from_str(aio).unwrap_or(BlockdevAioOptions::native),
+                    ),
+                    aio_max_batch: None,
+                    drop_cache: if !no_drop { None } else { Some(no_drop) },
+                    locking: None,
+                    pr_manager: None,
+                    x_check_cache_dropped: None,
+                    filename: block_device_file.to_string(),
+                },
+            }
+        };
+
+        let blockdev_options_raw = BlockdevOptions::raw {
+            base: BlockdevOptionsBase {
+                detect_zeroes: None,
+                cache: None,
+                discard: None,
+                force_share: None,
+                auto_read_only: None,
+                node_name: Some(node_name.clone()),
+                read_only: None,
+            },
+            raw: BlockdevOptionsRaw {
+                base: BlockdevOptionsGenericFormat {
+                    file: BlockdevRef::definition(Box::new(blockdev_options_file)),
+                },
+                offset: None,
+                size: None,
+            },
+        };
+
+        self.qmp
+            .execute(&qapi_qmp::blockdev_add(blockdev_options_raw))
+            .map_err(|e| anyhow!("blockdev-add backend {:?}", e))
+            .map(|_| ())?;
+
+        // Step 2: calculate SCSI address
+        let (scsi_id, lun) = get_scsi_id_lun(index)?;
+        let scsi_addr = format!("{}:{}", scsi_id, lun);
+
+        // Step 3: add SCSI frontend device
+        // Validate SCSI driver
+        let valid_drivers = ["scsi-hd", "scsi-cd", "scsi-disk"];
+        if !valid_drivers.contains(&scsi_driver) {
+            return Err(anyhow!("invalid SCSI driver: {}", scsi_driver));
+        }
+
+        let mut device_props = Dictionary::new();
+        device_props.insert("drive".to_string(), node_name.into());
+        device_props.insert("scsi-id".to_string(), scsi_id.into());
+        device_props.insert("lun".to_string(), lun.into());
+        // default share-rw=true
+        device_props.insert("share-rw".to_string(), format!("{}", true).into());
+
+        let scsi_id = format!("scsi-{}", device_id);
+        self.qmp
+            .execute(&qapi_qmp::device_add {
+                bus: Some(scsi_controller.to_string()), // default scsi0
+                id: Some(scsi_id),
+                driver: scsi_driver.to_string(),
+                arguments: device_props,
+            })
+            .map_err(|e| anyhow!("device_add scsi device {:?}", e))
+            .map(|_| ())?;
+
+        Ok(scsi_addr)
+    }
+
     pub fn hotplug_vfio_device(
         &mut self,
         hostdev_id: &str,
@@ -691,4 +841,23 @@ pub fn get_pci_path_by_qdev_id(
         path.pop();
     }
     None
+}
+
+/// Maximum number of SCSI devices supported
+const MAX_SCSI_DEVICES: u32 = 65535;
+
+/// Get SCSI ID and LUN from index
+pub fn get_scsi_id_lun(index: u32) -> Result<(u32, u32)> {
+    if index > MAX_SCSI_DEVICES {
+        return Err(anyhow!(
+            "Index {} exceeds maximum supported devices {}",
+            index,
+            MAX_SCSI_DEVICES
+        ));
+    }
+
+    let scsi_id = index / 256;
+    let lun = index % 256;
+
+    Ok((scsi_id, lun))
 }

@@ -8,14 +8,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
-use kata_types::config::hypervisor::TopologyConfigInfo;
+use kata_types::config::hypervisor::{TopologyConfigInfo, VIRTIO_SCSI};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
     NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
     VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
-    KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
+    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -470,6 +471,9 @@ impl DeviceManager {
             VIRTIO_PMEM => {
                 block_config.driver_option = KATA_NVDIMM_DEV_TYPE.to_string();
                 is_pmem = true;
+            }
+            VIRTIO_SCSI => {
+                block_config.driver_option = KATA_SCSI_DEV_TYPE.to_string();
             }
             _ => {
                 return Err(anyhow!(
