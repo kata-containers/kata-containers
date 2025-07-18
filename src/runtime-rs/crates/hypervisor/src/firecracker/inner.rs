@@ -103,6 +103,9 @@ impl FcInner {
                 cmd.args(["--api-sock", &self.asock_path]);
             }
         }
+        if self.config.security_info.disable_seccomp {
+            cmd.arg("--no-seccomp");
+        }
         debug!(sl(), "Exec: {:?}", cmd);
 
         // Make sure we're in the correct Network Namespace
