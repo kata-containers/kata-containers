@@ -272,8 +272,10 @@ impl Sandbox {
 
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
-            if let Some(p) = c.processes.get_mut(&pid) {
-                return Some(p);
+            for p in c.processes.values_mut() {
+                if p.pid == pid {
+                    return Some(p);
+                }
             }
         }
 
@@ -286,9 +288,11 @@ impl Sandbox {
             .ok_or_else(|| anyhow!(ERR_INVALID_CONTAINER_ID))?;
 
         if eid.is_empty() {
+            let init_pid = ctr.init_process_pid;
             return ctr
                 .processes
-                .get_mut(&ctr.init_process_pid)
+                .values_mut()
+                .find(|p| p.pid == init_pid)
                 .ok_or_else(|| anyhow!("cannot find init process!"));
         }
 
@@ -1014,23 +1018,26 @@ mod tests {
         linux_container.init_process_pid = 1;
         linux_container.id = cid.to_string();
         // add init process
-        linux_container.processes.insert(
-            1,
-            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap(),
-        );
+        let mut init_process =
+            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap();
+        init_process.pid = 1;
+        linux_container
+            .processes
+            .insert("1".to_string(), init_process);
         // add exec process
-        linux_container.processes.insert(
-            123,
-            Process::new(
-                &logger,
-                &oci::Process::default(),
-                "exec-123",
-                false,
-                1,
-                None,
-            )
-            .unwrap(),
-        );
+        let mut exec_process = Process::new(
+            &logger,
+            &oci::Process::default(),
+            "exec-123",
+            false,
+            1,
+            None,
+        )
+        .unwrap();
+        exec_process.pid = 123;
+        linux_container
+            .processes
+            .insert("exec-123".to_string(), exec_process);
 
         s.add_container(linux_container);
 
@@ -1081,8 +1088,8 @@ mod tests {
             .unwrap();
             // processes interally only have pids when manually set
             test_process.pid = test_pid;
-
-            linux_container.processes.insert(test_pid, test_process);
+            let test_exec_id = test_process.exec_id.clone();
+            linux_container.processes.insert(test_exec_id, test_process);
 
             s.add_container(linux_container);
 

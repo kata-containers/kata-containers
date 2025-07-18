@@ -32,6 +32,7 @@ use crate::cgroups::{DevicesCgroupInfo, Manager};
 use crate::console;
 use crate::log_child;
 use crate::process::Process;
+use crate::process::ProcessOperations;
 #[cfg(feature = "seccomp")]
 use crate::seccomp;
 use crate::selinux;
@@ -261,7 +262,7 @@ pub struct LinuxContainer {
     pub init_process_start_time: u64,
     pub uid_map_path: String,
     pub gid_map_path: String,
-    pub processes: HashMap<pid_t, Process>,
+    pub processes: HashMap<String, Process>,
     pub status: ContainerStatus,
     pub created: SystemTime,
     pub logger: Logger,
@@ -933,17 +934,13 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn processes(&self) -> Result<Vec<i32>> {
-        Ok(self.processes.keys().cloned().collect())
+        Ok(self.processes.values().map(|p| p.pid).collect())
     }
 
     fn get_process(&mut self, eid: &str) -> Result<&mut Process> {
-        for (_, v) in self.processes.iter_mut() {
-            if eid == v.exec_id.as_str() {
-                return Ok(v);
-            }
-        }
-
-        Err(anyhow!("invalid eid {}", eid))
+        self.processes
+            .get_mut(eid)
+            .ok_or_else(|| anyhow!("invalid eid {}", eid))
     }
 
     fn stats(&self) -> Result<StatsContainerResponse> {
@@ -967,6 +964,12 @@ impl BaseContainer for LinuxContainer {
 
     async fn start(&mut self, mut p: Process) -> Result<()> {
         let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
+
+        // Check if exec_id is already in use to prevent collisions
+        if self.processes.contains_key(p.exec_id.as_str()) {
+            return Err(anyhow!("exec_id '{}' already exists", p.exec_id));
+        }
+
         let tty = p.tty;
         let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         info!(logger, "enter container.start!");
@@ -1235,7 +1238,7 @@ impl BaseContainer for LinuxContainer {
             let spec = self.config.spec.as_mut().unwrap();
             update_namespaces(&self.logger, spec, p.pid)?;
         }
-        self.processes.insert(p.pid, p);
+        self.processes.insert(p.exec_id.clone(), p);
 
         info!(logger, "wait on child log handler");
         let _ = log_handler
@@ -1261,13 +1264,13 @@ impl BaseContainer for LinuxContainer {
         let spec = self.config.spec.as_ref().unwrap();
         let st = self.oci_state()?;
 
-        for pid in self.processes.keys() {
-            match signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL)) {
+        for process in self.processes.values() {
+            match signal::kill(process.pid(), Some(Signal::SIGKILL)) {
                 Err(Errno::ESRCH) => {
                     info!(
                         self.logger,
                         "kill encounters ESRCH, pid: {}, container: {}",
-                        pid,
+                        process.pid(),
                         self.id.clone()
                     );
                     continue;
@@ -2084,10 +2087,11 @@ mod tests {
     #[tokio::test]
     async fn test_linuxcontainer_get_process() {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.processes.insert(
-                1,
-                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap(),
-            );
+            let process =
+                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap();
+            let exec_id = process.exec_id.clone();
+            c.processes.insert(exec_id, process);
+
             let p = c.get_process("123");
             assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
             Ok(())
