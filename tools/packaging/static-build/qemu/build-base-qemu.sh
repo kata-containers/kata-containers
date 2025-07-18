@@ -9,31 +9,37 @@ set -o nounset
 set -o pipefail
 
 NUMA_ENABLED="${NUMA_ENABLED:-}"
+CROSS_BUILD="${CROSS_BUILD:-false}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly qemu_builder="${script_dir}/build-qemu.sh"
 
+# shellcheck source=/dev/null
 source "${script_dir}/../../scripts/lib.sh"
+# shellcheck source=/dev/null
 source "${script_dir}/../qemu.blacklist"
+
+# Ensure repo_root_dir is available
+repo_root_dir="${repo_root_dir:-$(git rev-parse --show-toplevel 2>/dev/null || echo "${script_dir}/../../../..")}"
 
 ARCH=${ARCH:-$(uname -m)}
 dpkg_arch=":${ARCH}"
-[ ${dpkg_arch} == ":aarch64" ] && dpkg_arch=":arm64"
-[ ${dpkg_arch} == ":x86_64" ] && dpkg_arch=""
-[ "${dpkg_arch}" == ":ppc64le" ] && dpkg_arch=":ppc64el"
+[[ "${dpkg_arch}" == ":aarch64" ]] && dpkg_arch=":arm64"
+[[ "${dpkg_arch}" == ":x86_64" ]] && dpkg_arch=""
+[[ "${dpkg_arch}" == ":ppc64le" ]] && dpkg_arch=":ppc64el"
 
 packaging_dir="${script_dir}/../.."
 qemu_destdir="/tmp/qemu-static/"
 container_engine="${USE_PODMAN:+podman}"
 container_engine="${container_engine:-docker}"
 
-qemu_repo="${qemu_repo:-$1}"
-qemu_version="${qemu_version:-$2}"
+qemu_repo="${qemu_repo:-${1:-}}"
+qemu_version="${qemu_version:-${2:-}}"
 build_suffix="${3:-}"
 qemu_tar="${4:-}"
 
-[ -n "$qemu_repo" ] || die "qemu repo not provided"
-[ -n "$qemu_version" ] || die "qemu version not provided"
+[[ -n "${qemu_repo}" ]] || die "qemu repo not provided"
+[[ -n "${qemu_version}" ]] || die "qemu version not provided"
 
 info "Build ${qemu_repo} version: ${qemu_version}"
 
@@ -43,13 +49,13 @@ prefix="${prefix:-"/opt/kata"}"
 
 CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 
-[ -n "${build_suffix}" ] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
-[ -n "${build_suffix}" ] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
+[[ -n "${build_suffix}" ]] && HYPERVISOR_NAME="kata-qemu-${build_suffix}" || HYPERVISOR_NAME="kata-qemu"
+[[ -n "${build_suffix}" ]] && PKGVERSION="kata-static-${build_suffix}" || PKGVERSION="kata-static"
 
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
-[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
+[[ "${CROSS_BUILD}" == "true" ]] && container_image="${container_image}-cross-build"
 
-${container_engine} pull ${container_image} || ("${container_engine}" build \
+"${container_engine}" pull "${container_image}" || ("${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
