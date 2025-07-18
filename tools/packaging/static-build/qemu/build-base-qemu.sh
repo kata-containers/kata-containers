@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+NUMA_ENABLED="${NUMA_ENABLED:-}"
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly qemu_builder="${script_dir}/build-qemu.sh"
 
@@ -69,6 +71,7 @@ ${container_engine} pull ${container_image} || ("${container_engine}" build \
 	--env HYPERVISOR_NAME="${HYPERVISOR_NAME}" \
 	--env QEMU_VERSION_NUM="${qemu_version}" \
 	--env ARCH="${ARCH}" \
+	--env NUMA_ENABLED="${NUMA_ENABLED}" \
 	--user "$(id -u)":"$(id -g)" \
 	-w "${PWD}" \
 	-v "${repo_root_dir}:${repo_root_dir}" \

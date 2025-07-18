@@ -41,6 +41,9 @@ prefix=${PREFIX:-/usr}
 # The QEMU version on "major.minor" format.
 qemu_version=""
 
+# NUMA support configuration
+NUMA_ENABLED=${NUMA_ENABLED:-no}
+
 recognised_tags=(
 	[arch]="architecture-specific"
 	[functionality]="required functionality"
@@ -434,6 +437,9 @@ generate_qemu_options() {
 
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
+
+	# Support NUMA topology
+	[[ "${NUMA_ENABLED}" = "yes" ]] && qemu_options+=(functionality:--enable-numa)
 
 	# In "passthrough" security mode
 	# (-fsdev "...,security_model=passthrough,..."), qemu uses a helper
