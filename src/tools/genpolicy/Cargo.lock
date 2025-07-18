@@ -823,7 +823,7 @@ dependencies = [
  "oci-client",
  "oci-spec",
  "openssl",
- "protobuf 3.7.2",
+ "protobuf",
  "protocols",
  "regex",
  "serde",
@@ -1301,6 +1301,17 @@ checksum = "1abeb7a0dd0f8181267ff8adc397075586500b81b28a73e8a0208b00fc170fb3"
 dependencies = [
  "libc",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "io-uring"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b86e202f00093dcba4275d4636b93ef9dd75d025ae560d2521b45ea28ab49013"
+dependencies = [
+ "bitflags 2.4.1",
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -1992,12 +2003,6 @@ dependencies = [
 
 [[package]]
 name = "protobuf"
-version = "2.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
-
-[[package]]
-name = "protobuf"
 version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d65a1d4ddae7d8b5de68153b48f6aa3bba8cb002b243dbdbc55a5afbc98f99f4"
@@ -2009,22 +2014,13 @@ dependencies = [
 
 [[package]]
 name = "protobuf-codegen"
-version = "2.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "033460afb75cf755fcfc16dfaed20b86468082a2ea24e05ac35ab4a099a017d6"
-dependencies = [
- "protobuf 2.28.0",
-]
-
-[[package]]
-name = "protobuf-codegen"
 version = "3.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d3976825c0014bbd2f3b34f0001876604fe87e0c86cd8fa54251530f1544ace"
 dependencies = [
  "anyhow",
  "once_cell",
- "protobuf 3.7.2",
+ "protobuf",
  "protobuf-parse",
  "regex",
  "tempfile",
@@ -2040,7 +2036,7 @@ dependencies = [
  "anyhow",
  "indexmap 2.2.3",
  "log",
- "protobuf 3.7.2",
+ "protobuf",
  "protobuf-support",
  "tempfile",
  "thiserror 1.0.40",
@@ -2061,7 +2057,7 @@ name = "protocols"
 version = "0.1.0"
 dependencies = [
  "oci-spec",
- "protobuf 3.7.2",
+ "protobuf",
  "serde",
  "serde_json",
  "ttrpc",
@@ -2438,12 +2434,9 @@ dependencies = [
 
 [[package]]
 name = "slab"
-version = "0.4.8"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
-dependencies = [
- "autocfg",
-]
+checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
 
 [[package]]
 name = "slog"
@@ -2687,17 +2680,19 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.44.2"
+version = "1.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
+checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
 dependencies = [
  "backtrace",
  "bytes",
+ "io-uring",
  "libc",
  "mio",
  "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
+ "slab",
  "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",
@@ -2927,38 +2922,36 @@ dependencies = [
  "libc",
  "log",
  "nix",
- "protobuf 3.7.2",
- "protobuf-codegen 3.7.2",
+ "protobuf",
+ "protobuf-codegen",
  "thiserror 1.0.40",
  "windows-sys 0.48.0",
 ]
 
 [[package]]
 name = "ttrpc-codegen"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc0529f65223eca94fc5830e7d552d0d152ff42b74aff5c641edac39592f41f"
+checksum = "0e5c657ef5cea6f6c6073c1be0787ba4482f42a569d4821e467daec795271f86"
 dependencies = [
- "home",
- "protobuf 2.28.0",
- "protobuf-codegen 3.7.2",
+ "protobuf",
+ "protobuf-codegen",
  "protobuf-support",
  "ttrpc-compiler",
 ]
 
 [[package]]
 name = "ttrpc-compiler"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9be3fb2fe509cb9c0099b3b5551b759ae714f2dde56dfc713f2a5bda8c16064a"
+checksum = "3aa71f4a44711b3b9cc10ed0c7e239ff0fe4b8e6c900a142fb3bb26401385718"
 dependencies = [
  "derive-new",
- "home",
  "prost 0.8.0",
  "prost-build 0.8.0",
  "prost-types 0.8.0",
- "protobuf 2.28.0",
- "protobuf-codegen 2.28.0",
+ "protobuf",
+ "protobuf-codegen",
  "tempfile",
 ]
 
