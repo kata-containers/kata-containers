@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 use crate::layers_cache::ImageLayersCache;
 use crate::registry::{
-    get_verity_hash_and_users, Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
+    get_users_from_decompressed_layer, Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
 };
 use crate::utils::Config;
 
@@ -17,7 +17,7 @@ use docker_credential::{CredentialRetrievalError, DockerCredential};
 use k8s_cri::v1::{image_service_client::ImageServiceClient, AuthConfig};
 use log::{debug, info, warn};
 use oci_client::Reference;
-use std::{collections::HashMap, convert::TryFrom, io::Seek, io::Write, path::Path};
+use std::{collections::HashMap, convert::TryFrom, io::Write, path::Path};
 use tokio::{
     io,
     io::{AsyncSeekExt, AsyncWriteExt},
@@ -51,50 +51,65 @@ impl Container {
         let image_ref: Reference = image_str.parse().unwrap();
 
         info!("Pulling image: {:?}", image_ref);
-
         pull_image(&image_ref, k8_cri_image_client.clone()).await?;
 
         let image_ref_str = &image_ref.to_string();
-
         let manifest = get_image_manifest(image_ref_str, &ctrd_client).await?;
+        debug!(
+            "manifest: {}",
+            serde_json::to_string_pretty(&manifest).unwrap()
+        );
+
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        let image_layers =
-            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client).await?;
+        debug!("config_layer: {:?}", &config_layer);
 
-        // Find the last layer with an /etc/* file, respecting whiteouts.
         let mut passwd = String::new();
         let mut group = String::new();
+
         // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
         // See issue https://github.com/kata-containers/kata-containers/issues/11162
-        if !config.settings.cluster_config.guest_pull {
-            for layer in &image_layers {
-                if layer.passwd == WHITEOUT_MARKER {
-                    passwd = String::new();
-                } else if !layer.passwd.is_empty() {
-                    passwd = layer.passwd.clone();
-                }
-
-                if layer.group == WHITEOUT_MARKER {
-                    group = String::new();
-                } else if !layer.group.is_empty() {
-                    group = layer.group.clone();
-                }
-            }
-        } else {
+        if config.settings.cluster_config.guest_pull {
             info!("Guest pull is enabled, skipping passwd/group file parsing");
+            return Ok(Container {
+                image: image_str,
+                config_layer,
+                passwd,
+                group,
+            });
+        }
+
+        let image_layers =
+            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client)
+                .await
+                .unwrap();
+
+        // Find the last layer with an /etc/* file, respecting whiteouts.
+        info!("Parsing users and groups in image layers");
+        for layer in &image_layers {
+            if layer.passwd == WHITEOUT_MARKER {
+                passwd = String::new();
+            } else if !layer.passwd.is_empty() {
+                passwd = layer.passwd.clone();
+            }
+
+            if layer.group == WHITEOUT_MARKER {
+                group = String::new();
+            } else if !layer.group.is_empty() {
+                group = layer.group.clone();
+            }
         }
 
         Ok(Container {
             image: image_str,
             config_layer,
-            image_layers,
             passwd,
             group,
         })
     }
 }
+
 pub async fn get_content(
     digest: &str,
     client: &containerd_client::Client,
@@ -286,7 +301,7 @@ pub async fn get_image_layers(
             || layer_media_type.eq("application/vnd.oci.image.layer.v1.tar+gzip")
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let mut imageLayer = get_verity_and_users(
+                let mut imageLayer = get_users_from_layer(
                     layers_cache,
                     layer["digest"].as_str().unwrap(),
                     client,
@@ -305,7 +320,7 @@ pub async fn get_image_layers(
     Ok(layersVec)
 }
 
-async fn get_verity_and_users(
+async fn get_users_from_layer(
     layers_cache: &ImageLayersCache,
     layer_digest: &str,
     client: &containerd_client::Client,
@@ -313,7 +328,6 @@ async fn get_verity_and_users(
 ) -> Result<ImageLayer> {
     if let Some(layer) = layers_cache.get_layer(diff_id) {
         info!("Using cache file");
-        info!("dm-verity root hash: {}", layer.verity_hash);
         return Ok(layer);
     }
 
@@ -338,16 +352,14 @@ async fn get_verity_and_users(
         ));
     }
 
-    match get_verity_hash_and_users(&decompressed_path) {
+    match get_users_from_decompressed_layer(&decompressed_path) {
         Err(e) => {
             temp_dir.close()?;
             bail!(format!("Failed to get verity hash {e}"));
         }
-        Ok((verity_hash, passwd, group)) => {
-            info!("dm-verity root hash: {verity_hash}");
+        Ok((passwd, group)) => {
             let layer = ImageLayer {
                 diff_id: diff_id.to_string(),
-                verity_hash,
                 passwd,
                 group,
             };
@@ -402,10 +414,6 @@ async fn create_decompressed_layer_file(
     let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
     std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
-    info!("Adding tarfs index to layer");
-    decompressed_file.seek(std::io::SeekFrom::Start(0))?;
-    tarindex::append_index(&mut decompressed_file).map_err(|e| anyhow!(e))?;
     decompressed_file.flush().map_err(|e| anyhow!(e))?;
-
     Ok(())
 }

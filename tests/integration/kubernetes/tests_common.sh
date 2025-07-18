@@ -85,68 +85,53 @@ auto_generate_policy_enabled() {
 	[[ "${AUTO_GENERATE_POLICY}" == "yes" ]]
 }
 
-# adapt common policy settings for tdx or snp
-adapt_common_policy_settings_for_tdx() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for TDX, SNP, or the non-TEE development environment"
-	jq '.kata_config.confidential_guest = true | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+is_coco_platform() {
+	case "${KATA_HYPERVISOR}" in
+		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
+			return 0
+			;;
+		*)
+			return 1
+	esac
 }
 
-# adapt common policy settings for pod VMs using "shared_fs = virtio-fs" (https://github.com/kata-containers/kata-containers/issues/10189)
-adapt_common_policy_settings_for_virtio_fs() {
+adapt_common_policy_settings_for_non_coco() {
 	local settings_dir=$1
 
-	info "Adapting common policy settings for shared_fs=virtio-fs"
-	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	info "Adapting common policy settings from ${settings_dir} for non-CoCo guest"
+
+	# Using UpdateEphemeralMountsRequest - instead of CopyFileRequest.
+	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using a different path to container container root.
+	jq '.common.root_path = "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using CreateContainer Storage input structs for configMap & secret volumes - instead of using CopyFile like CoCo.
+	jq '.kata_config.enable_configmap_secret_storages = true' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using watchable binds for configMap volumes - instead of CopyFileRequest.
+	jq '.volumes.configMap.mount_point = "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-" | .volumes.configMap.driver = "watchable-bind"' \
+		"${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using a Storage input struct for paths shared with the Host using virtio-fs.
 	jq '.sandbox.storages += [{"driver":"virtio-fs","driver_options":[],"fs_group":null,"fstype":"virtiofs","mount_point":"/run/kata-containers/shared/containers/","options":[],"source":"kataShared"}]' \
-	"${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
+		"${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 
-# adapt common policy settings for CBL-Mariner Hosts
-adapt_common_policy_settings_for_cbl_mariner() {
-	true
-}
-
-# adapt common policy settings for guest-pull Hosts
-# see issue https://github.com/kata-containers/kata-containers/issues/11162
-adapt_common_policy_settings_for_guest_pull() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for guest-pull environment"
-	jq '.cluster_config.guest_pull = true' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	# Disable guest pull.
+	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
 
-	case "${KATA_HYPERVISOR}" in
-  		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
-			adapt_common_policy_settings_for_tdx "${settings_dir}"
-			;;
-		*)
-			# AUTO_GENERATE_POLICY=yes is currently supported by this script when testing:
-			# - The SNP or TDX platforms above, that are using "shared_fs = none".
-			# - Other platforms that are using "shared_fs = virtio-fs".
-			# Attempting to test using AUTO_GENERATE_POLICY=yes on platforms that are not
-			# supported yet is likely to result in test failures due to incorrectly auto-
-			# generated policies.
-			adapt_common_policy_settings_for_virtio_fs "${settings_dir}"
-			;;
-	esac
-
-	case "${KATA_HOST_OS}" in
-		"cbl-mariner")
-			adapt_common_policy_settings_for_cbl_mariner "${settings_dir}"
-			;;
-	esac
-
-	case "${PULL_TYPE}" in
-		"guest-pull")
-			adapt_common_policy_settings_for_guest_pull "${settings_dir}"
-			;;
-	esac
+	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings,

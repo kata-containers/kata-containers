@@ -129,7 +129,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -342,7 +342,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -535,7 +535,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -738,7 +738,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -925,7 +925,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -1082,7 +1082,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -1239,7 +1239,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -1472,7 +1472,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
@@ -1665,7 +1665,7 @@
         },
         "Root": {
           "Readonly": false,
-          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+          "Path": "/run/kata-containers/bundle-id/rootfs"
         },
         "Mounts": [
           {
