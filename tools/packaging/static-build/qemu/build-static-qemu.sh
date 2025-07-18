@@ -8,6 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+NUMA_ENABLED="${NUMA_ENABLED:-}"
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"

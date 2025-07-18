@@ -435,6 +435,9 @@ generate_qemu_options() {
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
 
+	# Support NUMA topology
+	[ "${NUMA_ENABLED}" = "yes" ] && qemu_options+=(functionality:--enable-numa)
+
 	# In "passthrough" security mode
 	# (-fsdev "...,security_model=passthrough,..."), qemu uses a helper
 	# application called virtfs-proxy-helper(1) to make certain 9p
