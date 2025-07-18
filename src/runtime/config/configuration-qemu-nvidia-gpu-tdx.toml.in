@@ -12,7 +12,7 @@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUTDXPATH@"
+path = "@QEMUTDXEXPERIMENTALPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
 initrd = "@INITRDPATH_CONFIDENTIAL_NV@"
 
@@ -54,7 +54,7 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUTDXVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUTDXEXPERIMENTALVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
