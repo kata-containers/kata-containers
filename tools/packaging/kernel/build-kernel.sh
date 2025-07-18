@@ -34,6 +34,7 @@ readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
 readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 readonly KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
+readonly NUMA_ENABLED=${NUMA_ENABLED:-"no"}
 
 #Path to kernel directory
 kernel_path=""
@@ -320,6 +321,13 @@ get_kernel_frag_path() {
 		info "Enable kernel debug"
 		local debug_configs="$(ls ${common_path}/common/debug.conf)"
 		all_configs="${all_configs} ${debug_configs}"
+	fi
+
+	if [[ ${NUMA_ENABLED} == "yes" ]]; then
+		info "Enable NUMA support"
+		local numa_configs
+		numa_configs="$(ls "${arch_path}"/numa.conf)"
+		all_configs="${all_configs} ${numa_configs}"
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
