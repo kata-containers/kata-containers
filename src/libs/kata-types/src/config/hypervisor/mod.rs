@@ -904,6 +904,10 @@ pub struct SecurityInfo {
         rename = "tdx_quote_generation_service_socket_port"
     )]
     pub qgs_port: u32,
+
+    /// selinux_label defines SELinux label for the guest
+    #[serde(default)]
+    pub selinux_label: Option<String>,
 }
 
 fn default_qgs_port() -> u32 {
@@ -1221,10 +1225,18 @@ pub struct Hypervisor {
     /// Disable applying SELinux on the container process.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
+
+    /// Disable applying SELinux on the VMM process.
+    #[serde(default = "no")]
+    pub disable_selinux: bool,
 }
 
 fn yes() -> bool {
     true
+}
+
+fn no() -> bool {
+    false
 }
 
 impl Hypervisor {
