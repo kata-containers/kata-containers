@@ -47,7 +47,7 @@ hyper = "0.14.20"
 tokio = { version = "1.44.2", features = ["signal"] }
 ttrpc = "0.8.4"
 
-prometheus = { version = "0.13.0", features = ["process"] }
+prometheus = { version = "0.14.0", features = ["process"] }
 procfs = "0.12.0"
 lazy_static = "1.2"
 

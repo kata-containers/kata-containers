@@ -139,12 +139,12 @@ impl ServiceManager {
 
     fn registry_service(&mut self) -> Result<()> {
         if let Some(s) = self.server.take() {
-            let sandbox_service = Arc::new(Box::new(SandboxService::new(self.handler.clone()))
-                as Box<dyn sandbox_async::Sandbox + Send + Sync>);
+            let sandbox_service: Arc<dyn sandbox_async::Sandbox + Send + Sync> =
+                Arc::new(SandboxService::new(self.handler.clone()));
             let s = s.register_service(sandbox_async::create_sandbox(sandbox_service));
 
-            let task_service = Arc::new(Box::new(TaskService::new(self.handler.clone()))
-                as Box<dyn shim_async::Task + Send + Sync>);
+            let task_service: Arc<dyn shim_async::Task + Send + Sync> =
+                Arc::new(TaskService::new(self.handler.clone()));
             let s = s.register_service(shim_async::create_task(task_service));
             self.server = Some(s);
         }
