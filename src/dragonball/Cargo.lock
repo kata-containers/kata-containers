@@ -265,7 +265,7 @@ dependencies = [
  "arc-swap",
  "lazy_static",
  "libc",
- "nix 0.23.2",
+ "nix 0.26.4",
  "thiserror 1.0.48",
  "vm-memory",
  "vmm-sys-util",
@@ -285,7 +285,7 @@ dependencies = [
  "kvm-bindings",
  "kvm-ioctls",
  "libc",
- "memoffset",
+ "memoffset 0.6.5",
  "thiserror 1.0.48",
  "vm-memory",
  "vmm-sys-util",
@@ -415,7 +415,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.24.3",
+ "nix 0.26.4",
  "nydus-api",
  "nydus-rafs",
  "nydus-storage",
@@ -524,7 +524,7 @@ dependencies = [
  "libc",
  "linux-loader",
  "log",
- "nix 0.24.3",
+ "nix 0.26.4",
  "procfs 0.12.0",
  "prometheus",
  "seccompiler",
@@ -1114,6 +1114,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "memoffset"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1171,19 +1180,6 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.23.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3790c00a0150112de0f4cd161e3d7fc4b2d8a5542ffc35f099a2562aecb35c"
-dependencies = [
- "bitflags 1.3.2",
- "cc",
- "cfg-if",
- "libc",
- "memoffset",
-]
-
-[[package]]
-name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
@@ -1191,7 +1187,20 @@ dependencies = [
  "bitflags 1.3.2",
  "cfg-if",
  "libc",
- "memoffset",
+ "memoffset 0.6.5",
+]
+
+[[package]]
+name = "nix"
+version = "0.26.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "598beaf3cc6fdd9a5dfb1630c2800c7acd31df7aaf0f565796fba2b53ca1af1b"
+dependencies = [
+ "bitflags 1.3.2",
+ "cfg-if",
+ "libc",
+ "memoffset 0.7.1",
+ "pin-utils",
 ]
 
 [[package]]
@@ -1915,7 +1924,7 @@ dependencies = [
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "nix 0.24.3",
+ "nix 0.26.4",
 ]
 
 [[package]]
@@ -2202,7 +2211,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "thiserror 1.0.48",
+ "thiserror 2.0.12",
  "vfio-bindings",
  "vm-memory",
  "vmm-sys-util",
