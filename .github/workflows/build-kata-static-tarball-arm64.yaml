@@ -45,6 +45,7 @@ jobs:
           - kernel
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
+          - kernel-cca-confidential
           - nydus
           - ovmf
           - qemu
@@ -126,7 +127,7 @@ jobs:
           if-no-files-found: error
 
       - name: store-extratarballs-artifact ${{ matrix.asset }}
-        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
+        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') || startsWith(matrix.asset, 'kernel-cca-confidential') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-arm64-${{ matrix.asset }}-headers${{ inputs.tarball-suffix }}
