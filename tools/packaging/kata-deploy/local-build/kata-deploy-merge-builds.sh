@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -z "${DEBUG}" ] || set -x
+[[ -z "${DEBUG}" ]] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -26,13 +26,13 @@ mkdir "${tarball_content_dir}"
 
 for c in kata-static-*.tar.xz
 do
-	echo "untarring tarball "${c}" into ${tarball_content_dir}"
+	echo "untarring tarball \"${c}\" into ${tarball_content_dir}"
 	tar -xvf "${c}" -C "${tarball_content_dir}"
 done
 
-pushd ${tarball_content_dir}
+pushd "${tarball_content_dir}"
 	shim="containerd-shim-kata-v2"
-	shim_path=$(find . -name ${shim} | sort | head -1)
+	shim_path=$(find . -name "${shim}" | sort | head -1)
 	prefix=${shim_path%"bin/${shim}"}
 
 	if [[ "${RELEASE:-no}" == "yes" ]] && [[ -f "${repo_root_dir}/VERSION" ]]; then
@@ -40,9 +40,9 @@ pushd ${tarball_content_dir}
 		# thus we need to rely on the VERSION file.
 		cp "${repo_root_dir}/VERSION" "${prefix}/"
 	else
-		echo "$(git describe --tags)" > "${prefix}/VERSION"
+		git describe --tags > "${prefix}/VERSION"
 	fi
-	[[ -n "${kata_versions_yaml_file}" ]] && cp ${kata_versions_yaml_file_path} ${prefix}/
+	[[ -n "${kata_versions_yaml_file}" ]] && cp "${kata_versions_yaml_file_path}" "${prefix}/"
 popd
 
 echo "create ${tar_path}"
