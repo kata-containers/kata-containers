@@ -10,6 +10,9 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root_dir="$(cd "${this_script_dir}/../../../../" && pwd)"
+
 kata_build_dir=${1:-build}
 kata_versions_yaml_file=${2:-""}
 
@@ -32,7 +35,13 @@ pushd ${tarball_content_dir}
 	shim_path=$(find . -name ${shim} | sort | head -1)
 	prefix=${shim_path%"bin/${shim}"}
 
-	echo "$(git describe --tags)" > ${prefix}/VERSION
+	if [[ "${RELEASE:-no}" == "yes" ]] && [[ -f "${repo_root_dir}/VERSION" ]]; then
+		# In this case the tag was not published yet,
+		# thus we need to rely on the VERSION file.
+		cp "${repo_root_dir}/VERSION" "${prefix}/"
+	else
+		echo "$(git describe --tags)" > "${prefix}/VERSION"
+	fi
 	[[ -n "${kata_versions_yaml_file}" ]] && cp ${kata_versions_yaml_file_path} ${prefix}/
 popd
 
