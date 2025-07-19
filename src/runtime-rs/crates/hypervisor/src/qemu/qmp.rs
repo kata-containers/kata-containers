@@ -8,19 +8,24 @@ use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
 
 use anyhow::{anyhow, Context, Result};
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
-use std::convert::TryFrom;
-use std::fmt::{Debug, Error, Formatter};
-use std::io::BufReader;
-use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::net::UnixStream;
-use std::time::Duration;
-
 use qapi::qmp;
 use qapi_qmp::{self, PciDeviceInfo};
 use qapi_spec::Dictionary;
+use std::convert::TryFrom;
+use std::fmt::{Debug, Error, Formatter};
+use std::io::BufReader;
+use std::io::ErrorKind;
+use std::os::fd::{AsRawFd, RawFd};
+use std::os::unix::net::UnixStream;
+use std::thread;
+use std::time::Duration;
+use tokio::time::Instant;
 
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
+const DEFAULT_QMP_CONNECT_TIMEOUT: u64 = 5000;
+const MAX_RETRIES: u32 = 10;
+const RETRY_DELAY: Duration = Duration::from_millis(100);
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -49,8 +54,37 @@ impl Debug for Qmp {
 
 impl Qmp {
     pub fn new(qmp_sock_path: &str) -> Result<Self> {
-        let stream = UnixStream::connect(qmp_sock_path)?;
-
+        let start = Instant::now();
+        let mut retries = 0;
+        let stream = loop {
+            match UnixStream::connect(qmp_sock_path) {
+                Ok(stream) => break stream,
+                Err(e) if retries < MAX_RETRIES => {
+                    match e.kind() {
+                        // retry
+                        ErrorKind::NotFound
+                        | ErrorKind::ConnectionRefused
+                        | ErrorKind::WouldBlock => {
+                            retries += 1;
+                            let elapsed = start.elapsed();
+                            // If it reachs the max timeout just quit
+                            if elapsed >= Duration::from_secs(DEFAULT_QMP_CONNECT_TIMEOUT) {
+                                return Err(e).context("Timeout connecting to QMP socket");
+                            }
+                            thread::sleep(RETRY_DELAY);
+                            continue;
+                        }
+                        _ => return Err(e).context("Failed to connect to QMP socket"),
+                    }
+                }
+                Err(e) => {
+                    return Err(e).context(format!(
+                        "Failed to connect to QMP socket after retries {}",
+                        retries
+                    ))
+                }
+            }
+        };
         // Set the read timeout to protect runtime-rs from blocking forever
         // trying to set up QMP connection if qemu fails to launch.  The exact
         // value is a matter of judegement.  Setting it too long would risk
