@@ -818,7 +818,7 @@ function arch_to_golang() {
 	local arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "arm64";;
+		aarch64|arm64) echo "arm64";;
 		ppc64le) echo "${arch}";;
 		riscv64) echo "${arch}";;
 		x86_64) echo "amd64";;
