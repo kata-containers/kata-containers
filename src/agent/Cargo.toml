@@ -50,7 +50,7 @@ slog-stdlog = "4.0.0"
 log = "0.4.11"
 
 cfg-if = "1.0.0"
-prometheus = { version = "0.13.0", features = ["process"] }
+prometheus = { version = "0.14.0", features = ["process"] }
 procfs = "0.12.0"
 
 anyhow = "1"

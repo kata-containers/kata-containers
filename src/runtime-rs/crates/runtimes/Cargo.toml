@@ -31,7 +31,7 @@ serde_json = { workspace = true }
 nix = "0.25.0"
 url = { workspace = true }
 procfs = "0.12.0"
-prometheus = { version = "0.13.0", features = ["process"] }
+prometheus = { version = "0.14.0", features = ["process"] }
 oci-spec = { workspace = true }
 
 # Local dependencies
