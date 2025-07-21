@@ -23,6 +23,9 @@ use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
 };
+use qapi_qmp::{migrate_set_capabilities, MigrationCapability,MigrationCapabilityStatus};
+use qapi_qmp::migrate_incoming;
+use qapi_qmp::{query_migrate, MigrationInfo};
 use qapi_spec::Dictionary;
 
 /// default qmp connection read timeout
@@ -78,6 +81,34 @@ impl Qmp {
         info!(sl!(), "QMP initialized: {:#?}", info);
 
         Ok(qmp)
+    }
+
+    pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
+        let cap = migrate_set_capabilities {
+            capabilities: vec![
+                MigrationCapabilityStatus {
+                    capability: MigrationCapability::x_ignore_shared,
+                    state: true,
+                }
+            ],
+        };
+
+        self.qmp.execute(&cap)?;
+        Ok(())
+    }
+
+    pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
+        let cmd = migrate_incoming {
+            uri: uri.to_string(),
+        };
+        self.qmp.execute(&cmd)?;
+        Ok(())
+    }   
+
+    pub fn query_migration(&mut self) -> Result<MigrationInfo> {
+        let cmd = query_migrate {};
+        let result = self.qmp.execute(&cmd)?;
+        Ok(result)
     }
 
     pub fn hotplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {

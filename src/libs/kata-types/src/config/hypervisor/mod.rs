@@ -1281,6 +1281,23 @@ pub struct Hypervisor {
     /// Disables applying SELinux on the container process within the guest.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
+
+    /// Indicate whether the VM is being created as a template VM.
+    #[serde(default)]
+    pub boot_to_be_template: bool,
+
+    /// Indicate whether the VM should be created from an existing template VM.
+    #[serde(default = "yes")]
+    pub boot_from_template: bool,
+
+    /// Path to the device state file used for VM template migration.
+    /// Used when either `boot_to_be_template` or `boot_from_template` is true.
+    #[serde(default = "default_device_state_path")]
+    pub device_state_path: String,
+}
+
+fn default_device_state_path() -> String {
+    "/run/vc/vm/template/memory".to_string()
 }
 
 fn yes() -> bool {
