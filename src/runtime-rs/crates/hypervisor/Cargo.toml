@@ -85,7 +85,7 @@ hypervisor = { workspace = true, features = ["cloud-hypervisor"] }
 test-utils = { workspace = true }
 
 [build-dependencies]
-ttrpc-codegen = "0.4.2"
+ttrpc-codegen = "0.6.0"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
