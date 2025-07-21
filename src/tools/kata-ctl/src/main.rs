@@ -27,20 +27,20 @@ use std::io;
 use std::process::exit;
 
 use ops::check_ops::{
-    handle_check, handle_factory, handle_iptables, handle_metrics, handle_monitor, handle_version,
+    handle_check, handle_iptables, handle_metrics, handle_monitor, handle_version,
 };
 use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
 use ops::volume_ops::handle_direct_volume;
+use ops::factory_ops::handle_factory;
 use slog::{error, o};
-
 macro_rules! sl {
     () => {
         slog_scope::logger().new(o!("subsystem" => "kata-ctl_main"))
     };
 }
 
-fn real_main() -> Result<()> {
+async fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
 
     if args.show_default_config_paths {
@@ -67,7 +67,7 @@ fn real_main() -> Result<()> {
             Commands::DirectVolume(args) => handle_direct_volume(args),
             Commands::Exec(args) => handle_exec(args),
             Commands::Env(args) => handle_env(args),
-            Commands::Factory => handle_factory(),
+            Commands::Factory(args) => handle_factory(args).await,
             Commands::Iptables(args) => handle_iptables(args),
             Commands::Metrics(args) => handle_metrics(args),
             Commands::Monitor(args) => handle_monitor(args),
@@ -102,7 +102,10 @@ fn real_main() -> Result<()> {
 }
 
 fn main() {
-    if let Err(_e) = real_main() {
-        exit(1);
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    if let Err(e) = rt.block_on(real_main()) {
+        eprintln!("error: {:?}", e);
+        std::process::exit(1);
     }
 }

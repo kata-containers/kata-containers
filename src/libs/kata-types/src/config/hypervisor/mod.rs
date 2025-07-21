@@ -1281,6 +1281,34 @@ pub struct Hypervisor {
     /// Disables applying SELinux on the container process within the guest.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
+
+    /// Indicate whether the VM is being created as a template VM.
+    #[serde(default)]
+    pub boot_to_be_template: bool,
+
+    /// Indicate whether the VM should be created from an existing template VM.
+    #[serde(default)]
+    pub boot_from_template: bool,
+
+	/// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or BootFromTemplate is true.
+    #[serde(default)]
+    pub memory_path: String,
+
+    /// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or BootFromTemplate is true.
+    #[serde(default)]
+    pub device_state_path: String,
+    
+    /// Path for filesystem sharing
+    #[serde(default)]
+	pub shared_path: String,
+
+    /// VMStorePath is the location on disk where VM information will persist
+    #[serde(default)]
+	pub vm_store_path: String,
+
+    /// VMStorePath is the location on disk where runtime information will persist
+    #[serde(default)]
+	pub run_store_path: String,
 }
 
 fn yes() -> bool {

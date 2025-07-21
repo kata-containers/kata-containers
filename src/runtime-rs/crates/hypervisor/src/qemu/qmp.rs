@@ -10,6 +10,13 @@ use crate::VcpuThreadIds;
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::VIRTIO_SCSI;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+use qapi_qmp::{
+    self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
+    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
+};
+use qapi_qmp::{migrate, migrate_incoming, MigrationInfo};
+use qapi_qmp::{migrate_set_capabilities, MigrationCapability, MigrationCapabilityStatus};
+use qapi_qmp::{query_migrate};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
@@ -19,17 +26,12 @@ use std::os::unix::net::UnixStream;
 use std::str::FromStr;
 use std::time::Duration;
 
-use qapi_qmp::{
-    self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
-    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
-};
 use qapi_spec::Dictionary;
-
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
 
 pub struct Qmp {
-    qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
+    pub qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
 
     // This is basically the output of
     // `cat /sys/devices/system/memory/block_size_bytes`
@@ -78,6 +80,54 @@ impl Qmp {
         info!(sl!(), "QMP initialized: {:#?}", info);
 
         Ok(qmp)
+    }
+
+    pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
+        let cap = migrate_set_capabilities {
+            capabilities: vec![MigrationCapabilityStatus {
+                capability: MigrationCapability::x_ignore_shared,
+                state: true,
+            }],
+        };
+
+        self.qmp.execute(&cap)?;
+        Ok(())
+    }
+
+    pub fn execute_migration(&mut self, uri: &str) -> Result<()> {
+        let cmd = migrate {
+            detach: None,
+            resume: None,
+            // channels: None,
+            blk: None,
+            inc: None,
+            uri: uri.to_string(),
+        };
+        self.qmp.execute(&cmd)?;
+        Ok(())
+    }
+
+    pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
+        let cmd = migrate_incoming {
+            uri: uri.to_string(),
+            // exit_on_error: None,
+            // channels:None,W
+        };
+        self.qmp.execute(&cmd)?;
+        Ok(())
+    }
+    #[allow(dead_code)]
+    pub fn query_migration(&mut self) -> Result<MigrationInfo> {
+
+        let cmd = query_migrate {};
+        info!(sl!(), "Qmp::query_migration(): will do execute");
+        let result = self.qmp.execute(&cmd)?;
+
+        info!(
+            sl!(),
+            "Qmp::query_migration(): query_migrate_result: {:#?}", result
+        );
+        Ok(result)
     }
 
     pub fn hotplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {
@@ -227,6 +277,7 @@ impl Qmp {
                     x_use_canonical_path_for_ramblock_id: None,
                     size,
                 },
+                // rom:None,
                 align: None,
                 discard_data: None,
                 offset: None,
@@ -735,6 +786,19 @@ impl Qmp {
             .context("get device by qdev_id failed")?;
 
         Ok(Some(pci_path))
+    }
+
+    pub fn qmp_stop(&mut self) -> Result<()> {
+        let cmd = qmp::stop {};
+        self.qmp.execute(&cmd)?;
+        Ok(())
+    }
+
+    pub fn qmp_cont(&mut self) -> Result<()> {
+        let cmd = qmp::cont {};
+        let resp = self.qmp.execute(&cmd)?;
+        info!(sl!(), "qmp::qmp_cont(): qmp_cont resp = {:?}", resp);
+        Ok(())
     }
 
     /// Get vCPU thread IDs through QMP query_cpus_fast.

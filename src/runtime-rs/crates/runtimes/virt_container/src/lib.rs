@@ -1,19 +1,15 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
-//
-// SPDX-License-Identifier: Apache-2.0
-//
-
 #[macro_use]
 extern crate slog;
 
 logging::logger_with_subsystem!(sl, "virt-container");
 
 mod container_manager;
+pub mod factory;
 pub mod health_check;
 pub mod sandbox;
 pub mod sandbox_persist;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use agent::{kata::KataAgent, AGENT_KATA};
@@ -42,13 +38,17 @@ use hypervisor::ch::CloudHypervisor;
     any(target_arch = "x86_64", target_arch = "aarch64")
 ))]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
+#[allow(unused_imports)]
+use std::thread;
+#[allow(unused_imports)]
+use std::time::Duration;
 
+use crate::factory::vm::VMConfig;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
 use tokio::sync::mpsc::Sender;
 use tracing::instrument;
-
 unsafe impl Send for VirtContainer {}
 unsafe impl Sync for VirtContainer {}
 #[derive(Debug)]
@@ -104,10 +104,49 @@ impl RuntimeHandler for VirtContainer {
         init_size_manager: InitialSizeManager,
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
-        let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
+        let factory = config.factory.clone();
+        let (hypervisor, agent);
+        // VMTemplate Mechanism
+        if factory.template {
+            let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
+            //Build VMConfig
+            let mut vm_config = VMConfig {
+                hypervisor_name: toml_config.runtime.hypervisor_name.clone(),
+                agent_name: toml_config.runtime.agent_name.clone(),
+                hypervisor_config: toml_config
+                    .hypervisor
+                    .get(&toml_config.runtime.hypervisor_name)
+                    .cloned()
+                    .unwrap_or_default(),
+                agent_config: toml_config
+                    .agent
+                    .get(&toml_config.runtime.agent_name)
+                    .cloned()
+                    .unwrap_or_default(),
+            };
+            let template_path = toml_config.factory.template_path.clone();
+            info!(
+                sl!(),
+                "lib::new_instance(): build VMConfig. VMConfig:{:?}", vm_config
+            );
+            let vm = factory::get_vm(&mut vm_config, PathBuf::from(template_path)).await?;
+
+            hypervisor = vm.hypervisor.clone();
+            
+            agent = vm.agent.clone();
+            
+            let addr = vm.hypervisor.get_agent_socket().await?;
+            info!(
+                sl!(),
+                "lib::new_instance(): template vm agent socket addr = {:?}", addr
+            );
+        } else {
+            hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
+            agent = new_agent(&config).context("new agent")?;
+        }
 
         // get uds from hypervisor and get config from toml_config
-        let agent = new_agent(&config).context("new agent")?;
+        // let agent = new_agent(&config).context("new agent")?;
         let resource_manager = Arc::new(
             ResourceManager::new(
                 sid,
@@ -119,7 +158,7 @@ impl RuntimeHandler for VirtContainer {
             .await?,
         );
         let pid = std::process::id();
-
+        info!(sl!(), "lib::new_instance(): sid={}", sid);
         let sandbox = sandbox::VirtSandbox::new(
             sid,
             msg_sender,
@@ -127,6 +166,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor.clone(),
             resource_manager.clone(),
             sandbox_config,
+            factory,
         )
         .await
         .context("new virt sandbox")?;
@@ -149,7 +189,11 @@ impl RuntimeHandler for VirtContainer {
     }
 }
 
-async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
+// pub async fn p_new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
+//     new_hypervisor(toml_config).await
+// }
+
+pub async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
     let hypervisor_name = &toml_config.runtime.hypervisor_name;
     let hypervisor_config = toml_config
         .hypervisor
@@ -209,7 +253,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     }
 }
 
-fn new_agent(toml_config: &TomlConfig) -> Result<Arc<KataAgent>> {
+pub fn new_agent(toml_config: &TomlConfig) -> Result<Arc<KataAgent>> {
     let agent_name = &toml_config.runtime.agent_name;
     let agent_config = toml_config
         .agent
