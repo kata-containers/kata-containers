@@ -9,6 +9,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+[[ -n "${DEBUG:-}" ]] && set -x
+
 tmp_dir=$(mktemp -d -t install-go-tmp.XXXXXXXXXX)
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 script_name="$(basename "${BASH_SOURCE[0]}")"
@@ -90,9 +92,9 @@ fi
 goarch=$(arch_to_golang)
 
 info "Download go version ${go_version}"
-kernel_name=$(uname -s)
-curl -OL "https://storage.googleapis.com/golang/go${go_version}.${kernel_name,,}-${goarch}.tar.gz"
+kernel_name=$(uname -s | tr '[:upper:]' '[:lower:]')
+curl -OL "https://storage.googleapis.com/golang/go${go_version}.${kernel_name}-${goarch}.tar.gz"
 info "Install go"
 mkdir -p "${install_dest}"
-sudo tar -C "${install_dest}" -xzf "go${go_version}.${kernel_name,,}-${goarch}.tar.gz"
+sudo tar -C "${install_dest}" -xzf "go${go_version}.${kernel_name}-${goarch}.tar.gz"
 popd
