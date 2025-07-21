@@ -63,7 +63,7 @@ generic-array = "0.14.6"
 sha2 = "0.10.6"
 tarindex = { git = "https://github.com/kata-containers/tardev-snapshotter", rev = "06183a5" }
 tempfile = "3.19.1"
-zerocopy = "0.6.1"
+zerocopy = "0.6.6"
 fs2 = "0.4.3"
 
 # containerd image pull support
