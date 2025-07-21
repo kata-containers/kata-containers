@@ -28,6 +28,8 @@ function rebase_atop_of_the_latest_target_branch() {
 function main() {
     action="${1:-}"
 
+	echo "Adding in sneaking code to be executed"
+
     add_kata_bot_info
 
     case "${action}" in
