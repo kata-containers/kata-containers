@@ -19,7 +19,7 @@ pub const ROOT: &str = "root";
 const HYBRID_VSOCK_SCHEME: &str = "hvsock";
 
 impl FcInner {
-    pub(crate) async fn prepare_vm(&mut self, id: &str, _netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(&mut self, id: &str, _netns: Option<String>, _selinux_label: Option<String>) -> Result<()> {
         debug!(sl(), "Preparing Firecracker");
 
         self.id = id.to_string();
