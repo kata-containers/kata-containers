@@ -8,3 +8,4 @@ pub mod env_ops;
 pub mod exec_ops;
 pub mod version;
 pub mod volume_ops;
+pub mod factory_ops;
