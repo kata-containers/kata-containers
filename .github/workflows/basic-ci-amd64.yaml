@@ -49,6 +49,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -89,6 +91,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/stability/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -132,6 +136,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/integration/nydus/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -209,6 +215,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/functional/tracing/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -253,6 +261,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/functional/vfio/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -294,6 +304,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/integration/docker/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -339,6 +351,7 @@ jobs:
       - name: Install dependencies
         env:
           GITHUB_API_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: bash tests/integration/nerdctl/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
@@ -383,6 +396,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/functional/kata-agent-apis/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
