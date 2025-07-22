@@ -12,8 +12,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+permissions: {}
 
 name: Build checks preview riscv64
 jobs:

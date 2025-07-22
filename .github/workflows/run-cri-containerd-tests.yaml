@@ -1,7 +1,6 @@
 name: CI | Run cri-containerd tests
 
-permissions:
-  contents: read
+permissions: {}
 
 on:
   workflow_call:
