@@ -7,6 +7,7 @@ use crate::device::pci_path::PciPath;
 use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::config::hypervisor::VIRTIO_SCSI;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
@@ -16,8 +17,10 @@ use std::os::unix::net::UnixStream;
 use std::str::FromStr;
 use std::time::Duration;
 
-use qapi::qmp;
-use qapi_qmp::{self, BlockdevAioOptions, PciDeviceInfo};
+use qapi_qmp::{
+    self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
+    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
+};
 use qapi_spec::Dictionary;
 
 /// default qmp connection read timeout
@@ -494,7 +497,7 @@ impl Qmp {
         Err(anyhow!("no target device found"))
     }
 
-    /// hotplug block device:
+    /// Hotplug block device:
     /// {
     ///     "execute": "blockdev-add",
     ///     "arguments": {
@@ -515,21 +518,29 @@ impl Qmp {
     ///         "bus": "pcie.1"
     ///     }
     /// }
+    /// Hotplug SCSI block device
+    /// # virtio-scsi0
+    /// {"execute":"device_add","arguments":{"driver":"virtio-scsi-pci","id":"virtio-scsi0","bus":"bus1"}}
+    /// {"return": {}}
+    ///
+    /// {"execute":"blockdev_add", "arguments": {"file":"/path/to/block.image","format":"qcow2","id":"virtio-scsi0"}}
+    /// {"return": {}}
+    /// {"execute":"device_add","arguments":{"driver":"scsi-hd","drive":"virtio-scsi0","id":"scsi_device_0","bus":"virtio-scsi1.0"}}
+    /// {"return": {}}
+    ///
     #[allow(clippy::too_many_arguments)]
     pub fn hotplug_block_device(
         &mut self,
         block_driver: &str,
-        device_id: u64,
+        index: u64,
         path_on_host: &str,
         blkdev_aio: &str,
         is_direct: Option<bool>,
         is_readonly: bool,
         no_drop: bool,
-    ) -> Result<Option<PciPath>> {
-        let (bus, slot) = self.find_free_slot()?;
-
+    ) -> Result<(Option<PciPath>, Option<String>)> {
         // `blockdev-add`
-        let node_name = format!("drive-{}", device_id);
+        let node_name = format!("drive-{index}");
 
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
             auto_read_only: None,
@@ -575,51 +586,93 @@ impl Qmp {
             }
         };
 
+        let blockdev_options_raw = BlockdevOptions::raw {
+            base: BlockdevOptionsBase {
+                detect_zeroes: None,
+                cache: None,
+                discard: None,
+                force_share: None,
+                auto_read_only: None,
+                node_name: Some(node_name.clone()),
+                read_only: None,
+            },
+            raw: BlockdevOptionsRaw {
+                base: BlockdevOptionsGenericFormat {
+                    file: BlockdevRef::definition(Box::new(blockdev_file)),
+                },
+                offset: None,
+                size: None,
+            },
+        };
+
         self.qmp
-            .execute(&qapi_qmp::blockdev_add(qmp::BlockdevOptions::raw {
-                base: qmp::BlockdevOptionsBase {
-                    detect_zeroes: None,
-                    cache: None,
-                    discard: None,
-                    force_share: None,
-                    auto_read_only: None,
-                    node_name: Some(node_name.clone()),
-                    read_only: None,
-                },
-                raw: qmp::BlockdevOptionsRaw {
-                    base: qmp::BlockdevOptionsGenericFormat {
-                        file: qmp::BlockdevRef::definition(Box::new(blockdev_file)),
-                    },
-                    offset: None,
-                    size: None,
-                },
-            }))
-            .map_err(|e| anyhow!("blockdev_add backend {:?}", e))
+            .execute(&qapi_qmp::blockdev_add(blockdev_options_raw))
+            .map_err(|e| anyhow!("blockdev-add backend {:?}", e))
             .map(|_| ())?;
 
+        // block device
         // `device_add`
         let mut blkdev_add_args = Dictionary::new();
-        blkdev_add_args.insert("addr".to_owned(), format!("{:02}", slot).into());
         blkdev_add_args.insert("drive".to_owned(), node_name.clone().into());
-        self.qmp
-            .execute(&qmp::device_add {
-                bus: Some(bus),
-                id: Some(node_name.clone()),
-                driver: block_driver.to_string(),
-                arguments: blkdev_add_args,
-            })
-            .map_err(|e| anyhow!("device_add {:?}", e))
-            .map(|_| ())?;
 
-        let pci_path = self
-            .get_device_by_qdev_id(&node_name)
-            .context("get device by qdev_id failed")?;
-        info!(
-            sl!(),
-            "hotplug_block_device return pci path: {:?}", &pci_path
-        );
+        if block_driver == VIRTIO_SCSI {
+            // Helper closure to decode a flattened u16 SCSI index into an (ID, LUN) pair.
+            let get_scsi_id_lun = |index_u16: u16| -> Result<(u8, u8)> {
+                // Uses bitwise operations for efficient and clear conversion.
+                let scsi_id = (index_u16 >> 8) as u8; // Equivalent to index_u16 / 256
+                let lun = (index_u16 & 0xFF) as u8; // Equivalent to index_u16 % 256
 
-        Ok(Some(pci_path))
+                Ok((scsi_id, lun))
+            };
+
+            // Safely convert the u64 index to u16, ensuring it does not exceed `u16::MAX` (65535).
+            let (scsi_id, lun) = get_scsi_id_lun(u16::try_from(index)?)?;
+            let scsi_addr = format!("{}:{}", scsi_id, lun);
+
+            // add SCSI frontend device
+            blkdev_add_args.insert("scsi-id".to_string(), scsi_id.into());
+            blkdev_add_args.insert("lun".to_string(), lun.into());
+
+            self.qmp
+                .execute(&qmp::device_add {
+                    bus: Some("scsi0.0".to_string()),
+                    id: Some(node_name.clone()),
+                    driver: "scsi-hd".to_string(),
+                    arguments: blkdev_add_args,
+                })
+                .map_err(|e| anyhow!("device_add {:?}", e))
+                .map(|_| ())?;
+
+            info!(
+                sl!(),
+                "hotplug scsi block device return scsi address: {:?}", &scsi_addr
+            );
+
+            Ok((None, Some(scsi_addr)))
+        } else {
+            let (bus, slot) = self.find_free_slot()?;
+            blkdev_add_args.insert("addr".to_owned(), format!("{:02}", slot).into());
+
+            self.qmp
+                .execute(&qmp::device_add {
+                    bus: Some(bus),
+                    id: Some(node_name.clone()),
+                    driver: block_driver.to_string(),
+                    arguments: blkdev_add_args,
+                })
+                .map_err(|e| anyhow!("device_add {:?}", e))
+                .map(|_| ())?;
+
+            let pci_path = self
+                .get_device_by_qdev_id(&node_name)
+                .context("get device by qdev_id failed")?;
+            info!(
+                sl!(),
+                "hotplug block device return pci path: {:?}", &pci_path
+            );
+
+            Ok((Some(pci_path), None))
+        }
     }
 
     pub fn hotplug_vfio_device(
