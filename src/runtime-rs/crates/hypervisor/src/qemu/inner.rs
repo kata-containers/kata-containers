@@ -635,7 +635,7 @@ impl QemuInner {
                 block_device.config.pci_path = qmp
                     .hotplug_block_device(
                         &self.config.blockdev_info.block_device_driver,
-                        &block_device.device_id,
+                        block_device.config.index,
                         &block_device.config.path_on_host,
                         &block_device.config.blkdev_aio.to_string(),
                         block_device.config.is_direct,

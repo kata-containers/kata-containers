@@ -519,7 +519,7 @@ impl Qmp {
     pub fn hotplug_block_device(
         &mut self,
         block_driver: &str,
-        device_id: &str,
+        device_id: u64,
         path_on_host: &str,
         blkdev_aio: &str,
         is_direct: Option<bool>,
