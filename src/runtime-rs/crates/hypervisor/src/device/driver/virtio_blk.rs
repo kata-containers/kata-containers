@@ -25,6 +25,40 @@ pub const KATA_CCW_DEV_TYPE: &str = "ccw";
 pub const KATA_NVDIMM_DEV_TYPE: &str = "nvdimm";
 pub const KATA_SCSI_DEV_TYPE: &str = "scsi";
 
+#[derive(Clone, Copy, Debug, Default)]
+pub enum BlockDeviceAio {
+    // IoUring is the Linux io_uring I/O implementation.
+    #[default]
+    IoUring,
+
+    // Native is the native Linux AIO implementation.
+    Native,
+
+    // Threads is the pthread asynchronous I/O implementation.
+    Threads,
+}
+
+impl BlockDeviceAio {
+    pub fn new(aio: &str) -> Self {
+        match aio {
+            "native" => BlockDeviceAio::Native,
+            "threads" => BlockDeviceAio::Threads,
+            _ => BlockDeviceAio::IoUring,
+        }
+    }
+}
+
+impl std::fmt::Display for BlockDeviceAio {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_string = match *self {
+            BlockDeviceAio::Native => "native".to_string(),
+            BlockDeviceAio::Threads => "threads".to_string(),
+            _ => "iouring".to_string(),
+        };
+        write!(f, "{}", to_string)
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfig {
     /// Path of the drive.
@@ -44,6 +78,9 @@ pub struct BlockConfig {
 
     /// device index
     pub index: u64,
+
+    /// blkdev_aio defines the type of asynchronous I/O the block device should use.
+    pub blkdev_aio: BlockDeviceAio,
 
     /// driver type for block device
     pub driver_option: String,
