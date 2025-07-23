@@ -13,10 +13,11 @@ use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
+use std::str::FromStr;
 use std::time::Duration;
 
 use qapi::qmp;
-use qapi_qmp::{self, PciDeviceInfo};
+use qapi_qmp::{self, BlockdevAioOptions, PciDeviceInfo};
 use qapi_spec::Dictionary;
 
 /// default qmp connection read timeout
@@ -514,11 +515,13 @@ impl Qmp {
     ///         "bus": "pcie.1"
     ///     }
     /// }
+    #[allow(clippy::too_many_arguments)]
     pub fn hotplug_block_device(
         &mut self,
         block_driver: &str,
         device_id: &str,
         path_on_host: &str,
+        blkdev_aio: &str,
         is_direct: Option<bool>,
         is_readonly: bool,
         no_drop: bool,
@@ -546,7 +549,9 @@ impl Qmp {
         };
 
         let create_backend_options = || qapi_qmp::BlockdevOptionsFile {
-            aio: None,
+            aio: Some(
+                BlockdevAioOptions::from_str(blkdev_aio).unwrap_or(BlockdevAioOptions::io_uring),
+            ),
             aio_max_batch: None,
             drop_cache: if !no_drop { None } else { Some(no_drop) },
             locking: None,

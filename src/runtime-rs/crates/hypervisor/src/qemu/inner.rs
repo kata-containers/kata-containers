@@ -637,6 +637,7 @@ impl QemuInner {
                         &self.config.blockdev_info.block_device_driver,
                         &block_device.device_id,
                         &block_device.config.path_on_host,
+                        &block_device.config.blkdev_aio.to_string(),
                         block_device.config.is_direct,
                         block_device.config.is_readonly,
                         block_device.config.no_drop,
