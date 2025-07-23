@@ -26,11 +26,15 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
+use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, Command},
 };
+
+use tokio::time::{sleep, timeout};
+use qapi_qmp::{MigrationStatus};
 
 const VSOCK_SCHEME: &str = "vsock";
 
@@ -224,7 +228,78 @@ impl QemuInner {
             }
         }
 
+        //Start the virtual machine by restoring it from a VM template if enabled.
+        if self.config.boot_from_template {
+            self.boot_from_template().await?;
+        }
+
         Ok(())
+    }
+
+    pub(crate) async fn boot_from_template(&mut self) -> Result<()> {
+        if let Some(ref mut qmp) = self.qmp {
+            info!(sl!(), "QemuInner::boot_from_template(): start");
+
+            // Set the migration capability to ignore shared memory regions during state restoration
+            if let Err(err) = qmp.set_ignore_shared_memory_capability() {
+                error!(sl!(), "QemuInner::set_ignore_shared_memory_capability(): {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
+            }
+
+            // Step 2: Build migration URI and execute migration
+            let uri = format!("exec:cat {}", self.config.device_state_path);
+            info!(sl!(), "QemuInner::device_state_path() = {}", uri);
+            
+            if let Err(err) = qmp.execute_migration_incoming(&uri) {
+                error!(sl!(), "QemuInner::execute_migration_incoming(): {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::execute_migration_incoming() OK");
+            }
+
+            // Step 3: Wait for migration and check status
+            if let Err(err) = self.wait_for_migration().await {
+                error!(sl!(), "QemuInner::wait_for_migration() failed: {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::wait_for_migration() OK");
+            }
+
+            Ok(())
+        } else {
+            warn!(sl!(), "QMP not initialized, skip boot_from_template()");
+            Ok(()) 
+        }
+    }
+
+    pub async fn wait_for_migration(&mut self) -> Result<()> {
+        let qmp = self.qmp.as_mut().ok_or_else(|| anyhow!("QMP not connected"))?;
+
+        let timeout_duration = Duration::from_secs(5);
+
+        let result = timeout(timeout_duration, async {
+            loop {
+                let status = qmp.query_migration()?;
+
+                if let Some(MigrationStatus::completed) = status.status {
+                    info!(sl!(), "QEMU migration completed");
+                    return Ok(());
+                } else if let Some(s) = status.status {
+                    info!(sl!(), "QEMU migration status: {:?}", s);
+                } else {
+                    info!(sl!(), "QEMU migration status: <unknown>");
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+
+        match result {
+            Ok(inner_result) => inner_result,
+            Err(_) => Err(anyhow!("Timed out waiting for QEMU migration")),
+        }
     }
 
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
