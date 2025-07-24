@@ -2669,6 +2669,36 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	return memory
 }
 
+func genericNUMAMemoryModules(memoryMb, memoryAlign uint64, numaNodes []types.NUMANode) []govmmQemu.MemoryModule {
+	if len(numaNodes) == 0 {
+		return nil
+	}
+
+	memoryModules := make([]govmmQemu.MemoryModule, 0, len(numaNodes))
+
+	// Divide memory among NUMA nodes.
+	memoryPerNode := memoryMb / uint64(len(numaNodes))
+	memoryPerNode -= memoryPerNode % memoryAlign
+
+	// First NUMA node gets more if memory is not divide evenly.
+	moduleSize := memoryMb - memoryPerNode*uint64(len(numaNodes)-1)
+
+	for nodeId, numaNode := range numaNodes {
+		memoryModules = append(memoryModules, govmmQemu.MemoryModule{
+			Size:         fmt.Sprintf("%dM", moduleSize),
+			NodeId:       uint32(nodeId),
+			HostNodes:    numaNode.HostNodes,
+			MemoryPolicy: "interleave",
+		})
+		moduleSize = memoryPerNode
+		if moduleSize == 0 {
+			break
+		}
+	}
+
+	return memoryModules
+}
+
 // genericAppendPCIeRootPort appends to devices the given pcie-root-port
 func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
 	var (
@@ -2793,9 +2823,11 @@ func (q *qemu) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	}
 
 	tid.vcpus = make(map[int]int, len(cpuInfos))
+	tid.vcpuToNodeId = make(map[int]uint32, len(cpuInfos))
 	for _, i := range cpuInfos {
 		if i.ThreadID > 0 {
 			tid.vcpus[i.CPUIndex] = i.ThreadID
+			tid.vcpuToNodeId[i.CPUIndex] = uint32(i.Props.Node)
 		}
 	}
 	return tid, nil

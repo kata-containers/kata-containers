@@ -687,7 +687,7 @@ func TestAppendMemory(t *testing.T) {
 	testAppend(memory, memoryString, t)
 }
 
-var cpusString = "-smp 2,cores=1,threads=2,sockets=2,maxcpus=6"
+var cpusString = "-smp 2,cores=1,threads=2,sockets=2,maxcpus=4"
 
 func TestAppendCPUs(t *testing.T) {
 	smp := SMP{
@@ -695,7 +695,7 @@ func TestAppendCPUs(t *testing.T) {
 		Sockets: 2,
 		Cores:   1,
 		Threads: 2,
-		MaxCPUs: 6,
+		MaxCPUs: 4,
 	}
 
 	testAppend(smp, cpusString, t)
@@ -709,6 +709,22 @@ func TestFailToAppendCPUs(t *testing.T) {
 			Cores:   1,
 			Threads: 2,
 			MaxCPUs: 1,
+		},
+	}
+
+	if err := config.appendCPUs(); err == nil {
+		t.Fatalf("Expected appendCPUs to fail")
+	}
+}
+
+func TestFailToAppendCPUsWrongTopology(t *testing.T) {
+	config := Config{
+		SMP: SMP{
+			CPUs:    2,
+			Sockets: 2,
+			Cores:   1,
+			Threads: 2,
+			MaxCPUs: 6,
 		},
 	}
 
