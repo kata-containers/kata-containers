@@ -12,6 +12,7 @@ extern crate slog;
 mod arch;
 mod args;
 mod check;
+mod factory;
 mod log_parser;
 mod monitor;
 mod ops;
