@@ -42,6 +42,10 @@ jobs:
             path: src/runtime-rs
             needs:
               - rust
+          - name: libs
+            path: src/libs
+            needs:
+              - rust
           - name: agent-ctl
             path: src/tools/agent-ctl
             needs:
