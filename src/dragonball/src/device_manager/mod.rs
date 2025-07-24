@@ -879,7 +879,7 @@ impl DeviceManager {
     /// Start all registered devices when booting the associated virtual machine.
     pub fn start_devices(
         &mut self,
-        vm_as: &GuestAddressSpaceImpl,
+        #[allow(unused)] vm_as: &GuestAddressSpaceImpl,
     ) -> std::result::Result<(), StartMicroVmError> {
         // It is safe because we don't expect poison lock.
         #[cfg(feature = "host-device")]
@@ -899,6 +899,7 @@ impl DeviceManager {
         address_space: Option<&AddressSpace>,
     ) -> Result<()> {
         // create context for removing devices
+        #[allow(unused)]
         let mut ctx = DeviceOpContext::new(
             Some(epoll_mgr),
             self,
