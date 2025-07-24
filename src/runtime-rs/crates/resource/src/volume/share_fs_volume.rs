@@ -341,11 +341,8 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&dest)));
                     oci_mount.set_options(m.options().clone());
                     volume.mounts.push(oci_mount);
-                } else if is_allowlisted_copy_volume(&src) {
-                    // For security reasons, we have restricted directory copying. Currently, only directories under
-                    // the path `/var/lib/kubelet/pods/<uid>/volumes/{kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api, kubernetes.io~projected}`
-                    // are allowed to be copied into the guest. Copying of other directories will be prohibited.
-
+                } else if src.is_dir() {
+                    // We allow directory copying wildly
                     // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
                     info!(sl!(), "copying directory {:?} to guest", &source_path);
 
@@ -411,11 +408,13 @@ impl ShareFsVolume {
                     volume.mounts.push(oci_mount);
 
                     // start monitoring
-                    let watcher = FsWatcher::new(Path::new(&source_path)).await?;
-                    let monitor_task = watcher
-                        .start_monitor(agent.clone(), src.clone(), dest_dir.into())
-                        .await;
-                    volume.monitor_task = Some(monitor_task);
+                    if is_watchable_volume(&src) {
+                        let watcher = FsWatcher::new(Path::new(&source_path)).await?;
+                        let monitor_task = watcher
+                            .start_monitor(agent.clone(), src.clone(), dest_dir.into())
+                            .await;
+                        volume.monitor_task = Some(monitor_task);
+                    }
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
@@ -770,14 +769,14 @@ pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     format!("{}-{}-{}", nid, uid, file_name)
 }
 
-/// This function is used to check whether a given volume is in the allowed copy allowlist.
-/// More specifically, it determines whether the volume's path is located under a predefined
-/// list of allowed copy directories.
-pub(crate) fn is_allowlisted_copy_volume(source_path: &PathBuf) -> bool {
+/// This function is used to check whether a given volume is a watchable volume.
+/// More specifically, it determines whether the volume's path is located under
+/// a predefined list of allowed copy directories.
+pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
     if !source_path.is_dir() {
         return false;
     }
-    // allowlist: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
+    // watchable list: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
     is_projected(source_path)
         || is_downward_api(source_path)
         || is_secret(source_path)
@@ -804,7 +803,7 @@ mod test {
     }
 
     #[test]
-    fn test_is_allowlisted_copy_volume() {
+    fn test_is_watchable_volume() {
         // The configmap is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~configmap/kube-configmap-0s2no/{..data, key1, key2,...}
         // The secret is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~secret/kube-secret-2s2np/{..data, key1, key2,...}
         // The projected is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~projected/kube-api-access-8s2nl/{..data, key1, key2,...}
@@ -827,9 +826,9 @@ mod test {
         let downward_api_path = temp_dir.path().join(downward_api);
         std::fs::create_dir_all(&downward_api_path).unwrap();
 
-        assert!(is_allowlisted_copy_volume(&cm_path));
-        assert!(is_allowlisted_copy_volume(&secret_path));
-        assert!(is_allowlisted_copy_volume(&projected_path));
-        assert!(is_allowlisted_copy_volume(&downward_api_path));
+        assert!(is_watchable_volume(&cm_path));
+        assert!(is_watchable_volume(&secret_path));
+        assert!(is_watchable_volume(&projected_path));
+        assert!(is_watchable_volume(&downward_api_path));
     }
 }
