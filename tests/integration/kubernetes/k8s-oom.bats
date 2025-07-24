@@ -24,7 +24,12 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Check if OOMKilled
-	cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' | grep OOMKilled"
+    container_name=$(kubectl get pod "$pod_name" -o jsonpath='{.status.containerStatuses[0].name}')
+    if [[ $container_name == "oom-test" ]]; then
+        cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' | grep OOMKilled"
+    else
+        cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[1].state.terminated.reason}' | grep OOMKilled"
+    fi
 
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
