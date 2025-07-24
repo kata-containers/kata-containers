@@ -1276,7 +1276,9 @@ mod tests {
     use dbs_address_space::{AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType};
     use kvm_ioctls::Kvm;
     use test_utils::skip_if_not_root;
-    use vm_memory::{GuestAddress, GuestUsize, MmapRegion};
+    #[cfg(feature = "virtio-fs")]
+    use vm_memory::MmapRegion;
+    use vm_memory::{GuestAddress, GuestUsize};
 
     use super::*;
     #[cfg(target_arch = "x86_64")]
