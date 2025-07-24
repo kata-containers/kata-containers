@@ -45,7 +45,7 @@ flate2 = { version = "1.0.26", features = [
 ], default-features = false }
 libz-ng-sys = "1.1.15" # force newer version that compiles on ppc64le
 oci-client = { version = "0.12.0" }
-openssl = { version = "0.10.72", features = ["vendored"] }
+openssl = { version = "0.10.73", features = ["vendored"] }
 serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
