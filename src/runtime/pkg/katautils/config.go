@@ -155,6 +155,7 @@ type hypervisor struct {
 	Debug                          bool                      `toml:"enable_debug"`
 	DisableNestingChecks           bool                      `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool                      `toml:"enable_iothreads"`
+	IndepIOThreads                 uint32                    `toml:"indep_iothreads"`
 	DisableImageNvdimm             bool                      `toml:"disable_image_nvdimm"`
 	HotPlugVFIO                    config.PCIePort           `toml:"hot_plug_vfio"`
 	ColdPlugVFIO                   config.PCIePort           `toml:"cold_plug_vfio"`
@@ -614,6 +615,14 @@ func (h hypervisor) msize9p() uint32 {
 	return h.Msize9p
 }
 
+func (h hypervisor) indepiothreads() uint32 {
+	if h.IndepIOThreads == 0 {
+		return defaultIndepIOThreads
+	}
+
+	return h.IndepIOThreads
+}
+
 func (h hypervisor) guestHookPath() string {
 	if h.GuestHookPath == "" {
 		return defaultGuestHookPath
@@ -810,6 +819,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
+		IndepIOThreads:        h.indepiothreads(),
 		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
 		GuestHookPath:         h.guestHookPath(),
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
@@ -964,6 +974,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheDirect:   h.BlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush:  h.BlockDeviceCacheNoflush,
 		EnableIOThreads:          h.EnableIOThreads,
+		IndepIOThreads:           h.indepiothreads(),
 		Msize9p:                  h.msize9p(),
 		DisableImageNvdimm:       h.DisableImageNvdimm,
 		HotPlugVFIO:              h.hotPlugVFIO(),
@@ -1094,6 +1105,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheSet:            h.BlockDeviceCacheSet,
 		BlockDeviceCacheDirect:         h.BlockDeviceCacheDirect,
 		EnableIOThreads:                h.EnableIOThreads,
+		IndepIOThreads:                 h.indepiothreads(),
 		Msize9p:                        h.msize9p(),
 		DisableImageNvdimm:             h.DisableImageNvdimm,
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
@@ -1452,6 +1464,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		BlockDeviceCacheDirect:   defaultBlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush:  defaultBlockDeviceCacheNoflush,
 		EnableIOThreads:          defaultEnableIOThreads,
+		IndepIOThreads:           defaultIndepIOThreads,
 		Msize9p:                  defaultMsize9p,
 		ColdPlugVFIO:             defaultColdPlugVFIO,
 		HotPlugVFIO:              defaultHotPlugVFIO,
