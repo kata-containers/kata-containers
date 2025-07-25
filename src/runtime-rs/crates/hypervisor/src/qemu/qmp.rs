@@ -5,10 +5,12 @@
 
 use crate::device::pci_path::PciPath;
 use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
+use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::VIRTIO_SCSI;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
@@ -733,6 +735,61 @@ impl Qmp {
             .context("get device by qdev_id failed")?;
 
         Ok(Some(pci_path))
+    }
+
+    /// Get vCPU thread IDs through QMP query_cpus_fast.
+    pub fn get_vcpu_thread_ids(&mut self) -> Result<VcpuThreadIds> {
+        let vcpu_info = self
+            .qmp
+            .execute(&qmp::query_cpus_fast {})
+            .map_err(|e| anyhow!("query_cpus_fast failed: {:?}", e))?;
+
+        let vcpus: HashMap<u32, u32> = vcpu_info
+            .iter()
+            .map(|info| match info {
+                qmp::CpuInfoFast::aarch64(cpu_info)
+                | qmp::CpuInfoFast::alpha(cpu_info)
+                | qmp::CpuInfoFast::arm(cpu_info)
+                | qmp::CpuInfoFast::avr(cpu_info)
+                | qmp::CpuInfoFast::cris(cpu_info)
+                | qmp::CpuInfoFast::hppa(cpu_info)
+                | qmp::CpuInfoFast::i386(cpu_info)
+                | qmp::CpuInfoFast::loongarch64(cpu_info)
+                | qmp::CpuInfoFast::m68k(cpu_info)
+                | qmp::CpuInfoFast::microblaze(cpu_info)
+                | qmp::CpuInfoFast::microblazeel(cpu_info)
+                | qmp::CpuInfoFast::mips(cpu_info)
+                | qmp::CpuInfoFast::mips64(cpu_info)
+                | qmp::CpuInfoFast::mips64el(cpu_info)
+                | qmp::CpuInfoFast::mipsel(cpu_info)
+                | qmp::CpuInfoFast::nios2(cpu_info)
+                | qmp::CpuInfoFast::or1k(cpu_info)
+                | qmp::CpuInfoFast::ppc(cpu_info)
+                | qmp::CpuInfoFast::ppc64(cpu_info)
+                | qmp::CpuInfoFast::riscv32(cpu_info)
+                | qmp::CpuInfoFast::riscv64(cpu_info)
+                | qmp::CpuInfoFast::rx(cpu_info)
+                | qmp::CpuInfoFast::sh4(cpu_info)
+                | qmp::CpuInfoFast::sh4eb(cpu_info)
+                | qmp::CpuInfoFast::sparc(cpu_info)
+                | qmp::CpuInfoFast::sparc64(cpu_info)
+                | qmp::CpuInfoFast::tricore(cpu_info)
+                | qmp::CpuInfoFast::x86_64(cpu_info)
+                | qmp::CpuInfoFast::xtensa(cpu_info)
+                | qmp::CpuInfoFast::xtensaeb(cpu_info) => {
+                    let vcpu_id = cpu_info.cpu_index as u32;
+                    let thread_id = cpu_info.thread_id as u32;
+                    (vcpu_id, thread_id)
+                }
+                qmp::CpuInfoFast::s390x { base, .. } => {
+                    let vcpu_id = base.cpu_index as u32;
+                    let thread_id = base.thread_id as u32;
+                    (vcpu_id, thread_id)
+                }
+            })
+            .collect();
+
+        Ok(VcpuThreadIds { vcpus })
     }
 }
 

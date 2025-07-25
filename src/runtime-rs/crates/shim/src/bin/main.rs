@@ -13,6 +13,7 @@ use anyhow::{anyhow, Context, Result};
 use nix::{
     mount::{mount, MsFlags},
     sched::{self, CloneFlags},
+    sys::signal::{signal, SigHandler, Signal},
 };
 use shim::{config, Args, Error, ShimExecutor};
 
@@ -159,6 +160,17 @@ fn real_main() -> Result<()> {
     Ok(())
 }
 fn main() {
+    // When enabling systemd cgroup driver and sandbox cgroup only, the
+    // shim is under a systemd unit. When the unit is stopping, systemd
+    // sends SIGTERM to the shim. The shim can't exit immediately, as there
+    // are some cleanups to do. Therefore, ignoring SIGTERM is required
+    // here. The shim should complete the work within a period (Kata sets
+    // it to 300s by default). Once a timeout occurs, systemd will send
+    // SIGKILL.
+    unsafe {
+        signal(Signal::SIGTERM, SigHandler::SigIgn).unwrap();
+    }
+
     if let Err(err) = real_main() {
         show_version(Some(err));
     }

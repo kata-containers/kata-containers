@@ -17,7 +17,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitflags = "2.9.0"
 byte-unit = "5.1.6"
-cgroups-rs = { git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
+cgroups-rs = { version = "0.4.0", features = ["oci"] }
 futures = "0.3.11"
 lazy_static = { workspace = true }
 libc = { workspace = true }
