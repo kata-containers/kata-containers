@@ -149,6 +149,9 @@ paths:
           description: The VM instance was successfully resized.
         "404":
           description: The VM instance could not be resized because it is not created.
+        "429":
+          description: The VM instance could not be resized because a cpu removal
+            is still pending.
       summary: Resize the VM
   /vm.resize-zone:
     put:
@@ -1762,8 +1765,6 @@ components:
           items:
             $ref: '#/components/schemas/VirtQueueAffinity'
           type: array
-      required:
-      - path
       type: object
     NetConfig:
       example:
@@ -1795,9 +1796,12 @@ components:
           type: string
         ip:
           default: 192.168.249.1
+          description: IPv4 or IPv6 address
           type: string
         mask:
           default: 255.255.255.0
+          description: Must be a valid IPv4 netmask if ip is an IPv4 address or a
+            valid IPv6 netmask if ip is an IPv6 address.
           type: string
         mac:
           type: string
