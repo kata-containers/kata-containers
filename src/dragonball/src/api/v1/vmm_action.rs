@@ -17,7 +17,6 @@ use tracing::instrument;
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
-use crate::vcpu::VcpuManagerError;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
@@ -55,6 +54,8 @@ pub use crate::device_manager::virtio_net_dev_mgr::{
 };
 #[cfg(feature = "virtio-vsock")]
 pub use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
+#[cfg(feature = "host-device")]
+use crate::vcpu::VcpuManagerError;
 #[cfg(feature = "hotplug")]
 pub use crate::vcpu::{VcpuResizeError, VcpuResizeInfo};
 

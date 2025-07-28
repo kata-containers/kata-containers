@@ -146,7 +146,6 @@ mod tests {
         assert!(MacAddr::from_bytes(&src3[..]).is_err());
     }
 
-    #[cfg(feature = "with-serde")]
     #[test]
     fn test_mac_addr_serialization_and_deserialization() {
         let mac: MacAddr =
