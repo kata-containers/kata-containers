@@ -594,7 +594,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	if assetType == types.ImageAsset {
 		if clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest {
-			disk := chclient.NewDiskConfig(assetPath)
+			disk := chclient.NewDiskConfig()
+			disk.Path = &assetPath
 			disk.SetReadonly(true)
 
 			diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
@@ -886,7 +887,8 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	}
 
 	// Create the clh disk config via the constructor to ensure default values are properly assigned
-	clhDisk := *chclient.NewDiskConfig(drive.File)
+	clhDisk := *chclient.NewDiskConfig()
+	clhDisk.Path = &drive.File
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 	if clh.config.BlockDeviceCacheSet {
