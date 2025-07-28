@@ -38,7 +38,7 @@ if [[ "$(uname -m)" != "${ARCH}" ]] && [[ "${ARCH}" == "s390x" ]]; then
 else
        PREFIX="${PREFIX}" "${kata_packaging_scripts}/configure-hypervisor.sh" -s "${HYPERVISOR_NAME}" "${ARCH}" | xargs ./configure  --with-pkgversion="${PKGVERSION}"
 fi
-make -j"$(nproc +--ignore 1)"
+make -j"$(nproc --ignore=1)"
 make install DESTDIR="${QEMU_DESTDIR}"
 popd
 "${kata_static_build_scripts}/qemu-build-post.sh"
