@@ -91,9 +91,6 @@ setup() {
 
 teardown() {
 	pushd "${repo_root_dir}"
-
-	helm uninstall --namespace=kube-system kata-deploy
-	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
 	popd
 }
