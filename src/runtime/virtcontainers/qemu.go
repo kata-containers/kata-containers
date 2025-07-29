@@ -141,6 +141,8 @@ const (
 	qemuStopSandboxTimeoutSecs = 15
 
 	qomPathPrefix = "/machine/peripheral/"
+
+	indepIOThreadsPrefix = "indep_iothread"
 )
 
 // agnostic list of kernel parameters
@@ -497,6 +499,26 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	memory.Path = target
 }
 
+func (q *qemu) setupIoThread(ioThread *govmmQemu.IOThread) []govmmQemu.IOThread {
+
+	var tmp_threads []govmmQemu.IOThread
+
+	// Add virtio-scsi IOThreads for QEMU
+	if ioThread != nil {
+		tmp_threads = append(tmp_threads, *ioThread)
+	}
+
+	// Add Independent IOThreads for QEMU
+	if q.config.IndepIOThreads > 0 {
+		for i := uint32(0); i < q.config.IndepIOThreads; i++ {
+			id := fmt.Sprintf("%s_%d", indepIOThreadsPrefix, i)
+			tmp_threads = append(tmp_threads, govmmQemu.IOThread{ID: id})
+		}
+	}
+
+	return tmp_threads
+}
+
 func (q *qemu) setConfig(config *HypervisorConfig) error {
 	q.config = *config
 
@@ -702,9 +724,9 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	if ioThread != nil {
-		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
-	}
+	// Setup iothread for devices.
+	qemuConfig.IOThreads = q.setupIoThread(ioThread)
+
 	// Add RNG device to hypervisor
 	// Skip for s390x (as CPACF is used) or when Confidential Guest is enabled
 	if machine.Type != QemuCCWVirtio && !q.config.ConfidentialGuest {
