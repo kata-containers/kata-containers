@@ -94,6 +94,10 @@ spec:
 {{- else }}
       serviceAccountName: {{ .Chart.Name }}-sa-cleanup
 {{- end }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{- toYaml . | nindent 8 }}
+{{- end }}
       hostPID: true
       containers:
       - name: kube-kata-cleanup
