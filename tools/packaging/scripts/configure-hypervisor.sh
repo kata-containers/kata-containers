@@ -123,13 +123,13 @@ check_tag() {
 	local tag="$1"
 	local entry="$2"
 
-	[ -z "$tag" ] && die "no tag for entry '$entry'"
-	[ -z "$entry" ] && die "no entry for tag '$tag'"
+	[[ -z "$tag" ]] && die "no tag for entry '$entry'"
+	[[ -z "$entry" ]] && die "no entry for tag '$tag'"
 
 	value="${recognised_tags[$tag]}"
 
 	# each tag MUST have a description
-	[ -n "$value" ] && return
+	[[ -n "$value" ]] && return
 
 	die "invalid tag '$tag' found for entry '$entry'"
 }
@@ -138,8 +138,8 @@ check_tags() {
 	local tags="$1"
 	local entry="$2"
 
-	[ -z "$tags" ] && die "entry '$entry' doesn't have any tags"
-	[ -z "$entry" ] && die "no entry for tags '$tags'"
+	[[ -z "$tags" ]] && die "entry '$entry' doesn't have any tags"
+	[[ -z "$entry" ]] && die "no entry for tags '$tags'"
 
 	tags=$(echo "$tags" | tr ',' '\n')
 
@@ -173,22 +173,22 @@ show_array() {
 	local suffix
 	local one_line="no"
 
-	[ "$action" = "dump" ] && show_tags_header
+	[[ "$action" = "dump" ]] && show_tags_header
 
 	for entry in "${_array[@]}"; do
-		[ -z "$entry" ] && die "found empty entry"
+		[[ -z "$entry" ]] && die "found empty entry"
 
 		tags=$(echo "$entry" | cut -s -d: -f1)
 		elem=$(echo "$entry" | cut -s -d: -f2-)
 
-		[ -z "$elem" ] && die "no option for entry '$entry'"
+		[[ -z "$elem" ]] && die "no option for entry '$entry'"
 
 		check_tags "$tags" "$entry"
 
-		if [ "$action" = "dump" ]; then
+		if [[ "$action" = "dump" ]]; then
 			printf "%s\t\t%s\n" "$tags" "$elem"
-		elif [ "$action" = "multi" ]; then
-			if [ $i -eq $size ]; then
+		elif [[ "$action" = "multi" ]]; then
+			if [[ $i -eq $size ]]; then
 				suffix=""
 			else
 				suffix=' \'
@@ -203,14 +203,14 @@ show_array() {
 		i+=1
 	done
 
-	[ "$one_line" = yes ] && echo
+	[[ "$one_line" = yes ]] && echo
 }
 
 generate_qemu_options() {
 	#---------------------------------------------------------------------
 	#check if cross-compile is needed
 	host=$(uname -m)
-	if [ $arch != $host ];then
+	if [[ "$arch" != "$host" ]]; then
 		case $arch in
 			aarch64) qemu_options+=(size:--cross-prefix=aarch64-linux-gnu-);;
 			ppc64le) qemu_options+=(size:--cross-prefix=powerpc64le-linux-gnu-);;
@@ -279,7 +279,7 @@ generate_qemu_options() {
 	s390x) qemu_options+=(size:--disable-tcg) ;;
 	esac
 
-	if [ "${static}" == "true" ]; then
+	if [[ "${static}" == "true" ]]; then
 		qemu_options+=(misc:--static)
 	fi
 
@@ -416,7 +416,7 @@ generate_qemu_options() {
 	# Building static binaries for aarch64 requires disabling PIE
 	# We get an GOT overflow and the OS libraries are only build with fpic
 	# and not with fPIC which enables unlimited sized GOT tables.
-	if [ "${static}" == "true" ] && [ "${arch}" == "aarch64" ]; then
+	if [[ "${static}" == "true" ]] && [[ "${arch}" == "aarch64" ]]; then
 		qemu_options+=(arch:"--disable-pie")
 	fi
 
@@ -435,7 +435,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--enable-linux-io-uring)
 
 	# Support Ceph RADOS Block Device (RBD)
-	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
+	[[ -z "${static}" ]] && qemu_options+=(functionality:--enable-rbd)
 
 	# Support NUMA topology
 	qemu_options+=(functionality:--enable-numa)
@@ -478,7 +478,7 @@ generate_qemu_options() {
 	# Other options
 
 	# 64-bit only
-	if [ "${arch}" = "ppc64le" ]; then
+	if [[ "${arch}" = "ppc64le" ]]; then
 		qemu_options+=(arch:"--target-list=ppc64-softmmu")
 	else
 		qemu_options+=(arch:"--target-list=${arch}-softmmu")
@@ -487,7 +487,7 @@ generate_qemu_options() {
 	# SECURITY: Create binary as a Position Independant Executable,
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
-	[ -z "${static}" ] && qemu_options+=(arch:"--enable-pie")
+	[[ -z "${static}" ]] && qemu_options+=(arch:"--enable-pie")
 
 	_qemu_cflags=""
 
@@ -571,17 +571,17 @@ main() {
 
 	shift $((OPTIND - 1))
 
-	[ -z "$1" ] && die "need hypervisor name"
+	[[ -z "$1" ]] && die "need hypervisor name"
 	hypervisor="$1"
 
 	local qemu_version_file="VERSION"
-	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
+	[[ -f ${qemu_version_file} ]] || die "QEMU version file '$qemu_version_file' not found"
 
 	# Remove any pre-release identifier so that it returns the version on
 	# major.minor.patch format (e.g 5.2.0-rc4 becomes 5.2.0)
 	qemu_version="$(awk 'BEGIN {FS = "-"} {print $1}' ${qemu_version_file})"
 
-	[ -n "${qemu_version}" ] ||
+	[[ -n "${qemu_version}" ]] ||
 		die "cannot determine qemu version from file $qemu_version_file"
 
 	if ! gt_eq "${qemu_version}" "6.1.0" ; then
@@ -589,7 +589,7 @@ main() {
 	fi
 
 	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
-	[ -n "${gcc_version_major}" ] ||
+	[[ -n "${gcc_version_major}" ]] ||
 		die "cannot determine gcc major version, please ensure it is installed"
 	# -dumpversion only returns the major version since GCC 7.0
 	if gt_eq "${gcc_version_major}" "7.0.0" ; then
@@ -597,7 +597,7 @@ main() {
 	else
 		local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
 	fi
-	[ -n "${gcc_version_minor}" ] ||
+	[[ -n "${gcc_version_minor}" ]] ||
 		die "cannot determine gcc minor version, please ensure it is installed"
 	local gcc_version="${gcc_version_major}.${gcc_version_minor}"
 
