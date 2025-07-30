@@ -245,6 +245,10 @@ chisseled_init() {
 
 	ln -sf ../run var/run
 
+	# Needed for various RUST static builds with LIBC=gnu
+	libdir=lib/"${machine_arch}"-linux-gnu
+	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
+
 	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
 	# make sure NVRC is the init process for the initrd and image case
 	ln -sf  /bin/NVRC init
