@@ -88,7 +88,7 @@ pub fn baremount(
 
     let destination_str = destination.to_string_lossy();
     if let Ok(m) = get_linux_mount_info(destination_str.deref()) {
-        if m.fs_type == fs_type {
+        if m.fs_type == fs_type && !flags.contains(MsFlags::MS_REMOUNT) {
             slog_info!(logger, "{source:?} is already mounted at {destination:?}");
             return Ok(());
         }
