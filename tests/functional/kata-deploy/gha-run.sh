@@ -53,7 +53,6 @@ function main() {
     action="${1:-}"
 
     case "${action}" in
-        install-azure-cli) install_azure_cli ;;
         create-cluster) create_cluster "kata-deploy" ;;
         deploy-k8s) deploy_k8s ;;
         install-bats) install_bats ;;

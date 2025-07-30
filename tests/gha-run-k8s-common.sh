@@ -86,11 +86,6 @@ function enable_cluster_approuting() {
 	az aks approuting enable -g "${rg}" -n "${cluster_name}"
 }
 
-function install_azure_cli() {
-	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-	az extension add --name aks-preview
-}
-
 function create_cluster() {
 	test_type="${1:-k8s}"
 	local short_sha
@@ -113,6 +108,8 @@ function create_cluster() {
 	az group create \
 		-l eastus \
 		-n "${rg}"
+
+	az extension add --name aks-preview
 
 	# Adding a double quote on the last line ends up causing issues
 	# ine the cbl-mariner installation.  Because of that, let's just
