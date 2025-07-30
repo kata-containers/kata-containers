@@ -124,11 +124,13 @@ if [[ -z "${CAA_TAG}" ]]; then
 fi
 
 # Get latest PP image
-SUCCESS_TIME=$(curl -s \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/confidential-containers/cloud-api-adaptor/actions/workflows/azure-nightly-build.yml/runs?status=success" \
-  | jq -r '.workflow_runs[0].updated_at')
-PP_IMAGE_ID="/CommunityGalleries/cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85/Images/podvm_image0/Versions/$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${SUCCESS_TIME}" "+%Y.%m.%d" 2>/dev/null || date -d "${SUCCESS_TIME}" +%Y.%m.%d)"
+if [[ -z "${PP_IMAGE_ID}" ]]; then
+	SUCCESS_TIME=$(curl -s \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/confidential-containers/cloud-api-adaptor/actions/workflows/azure-nightly-build.yml/runs?status=success" \
+	  | jq -r '.workflow_runs[0].updated_at')
+	PP_IMAGE_ID="/CommunityGalleries/cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85/Images/podvm_image0/Versions/$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${SUCCESS_TIME}" "+%Y.%m.%d" 2>/dev/null || date -d "${SUCCESS_TIME}" +%Y.%m.%d)"
+fi
 
 echo "AZURE_REGION=\"${AZURE_REGION}\""
 echo "PP_REGION=\"${PP_REGION}\""
