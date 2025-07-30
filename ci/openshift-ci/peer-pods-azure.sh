@@ -128,13 +128,13 @@ SUCCESS_TIME=$(curl -s \
   | jq -r '.workflow_runs[0].updated_at')
 PP_IMAGE_ID="/CommunityGalleries/cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85/Images/podvm_image0/Versions/$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${SUCCESS_TIME}" "+%Y.%m.%d" 2>/dev/null || date -d "${SUCCESS_TIME}" +%Y.%m.%d)"
 
-echo "AZURE_REGION: \"${AZURE_REGION}\""
-echo "PP_REGION: \"${PP_REGION}\""
-echo "AZURE_RESOURCE_GROUP: \"${AZURE_RESOURCE_GROUP}\""
-echo "PP_RESOURCE_GROUP: \"${PP_RESOURCE_GROUP}\""
-echo "PP_SUBNET_ID: \"${PP_SUBNET_ID}\""
-echo "CAA_TAG: \"${CAA_TAG}\""
-echo "PP_IMAGE_ID: \"${PP_IMAGE_ID}\""
+echo "AZURE_REGION=\"${AZURE_REGION}\""
+echo "PP_REGION=\"${PP_REGION}\""
+echo "AZURE_RESOURCE_GROUP=\"${AZURE_RESOURCE_GROUP}\""
+echo "PP_RESOURCE_GROUP=\"${PP_RESOURCE_GROUP}\""
+echo "PP_SUBNET_ID=\"${PP_SUBNET_ID}\""
+echo "CAA_TAG=\"${CAA_TAG}\""
+echo "PP_IMAGE_ID=\"${PP_IMAGE_ID}\""
 
 # Clone and configure caa
 git clone --revision "${CAA_GIT_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/cloud-api-adaptor.git
@@ -142,7 +142,7 @@ pushd cloud-api-adaptor
 git sparse-checkout init --cone
 git sparse-checkout set src/cloud-api-adaptor/install/
 git checkout
-echo "CAA_GIT_SHA: \"$(git rev-parse HEAD)\""
+echo "CAA_GIT_SHA=\"$(git rev-parse HEAD)\""
 pushd src/cloud-api-adaptor
 cat <<EOF > install/overlays/azure/workload-identity.yaml
 apiVersion: apps/v1
@@ -213,7 +213,7 @@ pushd operator
 git sparse-checkout init --cone
 git sparse-checkout set "config/"
 git checkout
-echo "OPERATOR_SHA: \"$(git rev-parse HEAD)\""
+echo "OPERATOR_SHA=\"$(git rev-parse HEAD)\""
 oc apply -k "config/release"
 oc apply -k "config/samples/ccruntime/peer-pods"
 popd
