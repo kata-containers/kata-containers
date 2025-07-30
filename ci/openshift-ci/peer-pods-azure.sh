@@ -117,9 +117,11 @@ for NODE_NAME in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); d
 
 # CAA artifacts
 CAA_IMAGE="quay.io/confidential-containers/cloud-api-adaptor"
-TAGS="$(curl https://quay.io/api/v1/repository/confidential-containers/cloud-api-adaptor/tag/?onlyActiveTags=true)"
-DIGEST=$(echo "${TAGS}" | jq -r '.tags[] | select(.name | contains("latest-amd64")) | .manifest_digest')
-CAA_TAG="$(echo "${TAGS}" | jq -r '.tags[] | select(.manifest_digest | contains("'"${DIGEST}"'")) | .name' | grep -v "latest")"
+if [[ -z "${CAA_TAG}" ]]; then
+	TAGS="$(curl https://quay.io/api/v1/repository/confidential-containers/cloud-api-adaptor/tag/?onlyActiveTags=true)"
+	DIGEST=$(echo "${TAGS}" | jq -r '.tags[] | select(.name | contains("latest-amd64")) | .manifest_digest')
+	CAA_TAG="$(echo "${TAGS}" | jq -r '.tags[] | select(.manifest_digest | contains("'"${DIGEST}"'")) | .name' | grep -v "latest")"
+fi
 
 # Get latest PP image
 SUCCESS_TIME=$(curl -s \
