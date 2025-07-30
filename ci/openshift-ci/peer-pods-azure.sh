@@ -137,7 +137,7 @@ echo "CAA_TAG: \"${CAA_TAG}\""
 echo "PP_IMAGE_ID: \"${PP_IMAGE_ID}\""
 
 # Clone and configure caa
-git clone --depth 1 --no-checkout https://github.com/confidential-containers/cloud-api-adaptor.git
+git clone --revision "${CAA_GIT_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/cloud-api-adaptor.git
 pushd cloud-api-adaptor
 git sparse-checkout init --cone
 git sparse-checkout set src/cloud-api-adaptor/install/
@@ -208,7 +208,7 @@ echo "AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}" >> install/overlays/azure/serv
 echo "AZURE_TENANT_ID=${AZURE_TENANT_ID}" >> install/overlays/azure/service-principal.env
 
 # Deploy Operator
-git clone --depth 1 --no-checkout https://github.com/confidential-containers/operator
+git clone --revision "${OPERATOR_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/operator
 pushd operator
 git sparse-checkout init --cone
 git sparse-checkout set "config/"
