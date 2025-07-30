@@ -116,10 +116,12 @@ az network vnet subnet update \
 for NODE_NAME in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do [[ "${NODE_NAME}" =~ 'worker' ]] && kubectl label node "${NODE_NAME}" node.kubernetes.io/worker=; done
 
 # CAA artifacts
-CAA_IMAGE="quay.io/confidential-containers/cloud-api-adaptor"
-TAGS="$(curl https://quay.io/api/v1/repository/confidential-containers/cloud-api-adaptor/tag/?onlyActiveTags=true)"
-DIGEST=$(echo "${TAGS}" | jq -r '.tags[] | select(.name | contains("latest-amd64")) | .manifest_digest')
-CAA_TAG="$(echo "${TAGS}" | jq -r '.tags[] | select(.manifest_digest | contains("'"${DIGEST}"'")) | .name' | grep -v "latest")"
+if [[ -z "${CAA_TAG}" ]]; then
+	CAA_IMAGE="quay.io/confidential-containers/cloud-api-adaptor"
+	TAGS="$(curl https://quay.io/api/v1/repository/confidential-containers/cloud-api-adaptor/tag/?onlyActiveTags=true)"
+	DIGEST=$(echo "${TAGS}" | jq -r '.tags[] | select(.name | contains("latest-amd64")) | .manifest_digest')
+	CAA_TAG="$(echo "${TAGS}" | jq -r '.tags[] | select(.manifest_digest | contains("'"${DIGEST}"'")) | .name' | grep -v "latest")"
+fi
 
 # Get latest PP image
 SUCCESS_TIME=$(curl -s \
