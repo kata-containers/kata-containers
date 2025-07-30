@@ -106,4 +106,4 @@ if __name__ == "__main__":
         _TESTS = sys.argv[1] == '-t'
     else:
         _TESTS = False
-    sys.exit(Checks().run(_TESTS, os.getenv("TARGET_BRANCH", "main")))
+    sys.exit(Checks().run(_TESTS, os.getenv("TARGET_BRANCH", "msft-preview")))

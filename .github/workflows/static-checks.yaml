@@ -137,6 +137,7 @@ jobs:
           - "make static-checks"
     env:
       GOPATH: ${{ github.workspace }}
+      target_branch: msft-preview
     permissions:
       contents: read  # for checkout
       packages: write # for push to ghcr.io

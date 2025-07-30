@@ -1,11 +1,11 @@
 # Push gperf and busybox tarballs to the ORAS cache (ghcr.io) so that
 # download-with-oras-cache.sh can pull them instead of hitting upstream.
-# Runs when versions.yaml changes on main (e.g. after a PR merge) or manually.
+# Runs when versions.yaml changes on msft-preview (e.g. after a PR merge) or manually.
 name: CI | Push ORAS tarball cache
 on:
   push:
     branches:
-      - main
+      - msft-preview
     paths:
       - 'versions.yaml'
   workflow_dispatch:

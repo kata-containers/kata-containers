@@ -8,7 +8,7 @@ on:
     # Allow manual triggering
   push:
     branches:
-      - main
+      - msft-preview
     paths:
       - 'tools/packaging/kubectl/Dockerfile'
       - '.github/workflows/build-kubectl-image.yaml'

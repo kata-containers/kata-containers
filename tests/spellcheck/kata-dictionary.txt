@@ -12,6 +12,13 @@ shimv2
 SPDK
 upcall
 virtcontainers
+confpods
+ConfPods
+igvm
+IGVM
+crictl
+MSRC
+msrc
 
 # Open source projects
 bootc

@@ -1,74 +1,41 @@
-# Security Policy
+<!-- BEGIN MICROSOFT SECURITY.MD V0.0.9 BLOCK -->
 
-Kata Containers is a **rolling-release** project: every monthly release replaces the previous one, and only the _current_ release series receives security fixes. There are **no long-term-support branches**.
+## Security
 
----
+Microsoft takes the security of our software products and services seriously, which includes all source code repositories managed through our GitHub organizations, which include [Microsoft](https://github.com/Microsoft), [Azure](https://github.com/Azure), [DotNet](https://github.com/dotnet), [AspNet](https://github.com/aspnet) and [Xamarin](https://github.com/xamarin).
 
-## Reporting a Vulnerability
+If you believe you have found a security vulnerability in any Microsoft-owned repository that meets [Microsoft's definition of a security vulnerability](https://aka.ms/security.md/definition), please report it to us as described below.
 
-### How to report
+## Reporting Security Issues
 
-- **Keep it private first.**
-  Please **do not** open a public GitHub issue or pull request for security problems.
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-- **Use GitHub’s security advisory workflow**
-  Follow the official GitHub guide:
-  [Report a vulnerability privately](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/report-privately)
+Instead, please report them to the Microsoft Security Response Center (MSRC) at [https://msrc.microsoft.com/create-report](https://aka.ms/security.md/msrc/create-report).
 
-### What happens after you submit
+If you prefer to submit without logging in, send email to [secure@microsoft.com](mailto:secure@microsoft.com).  If possible, encrypt your message with our PGP key; please download it from the [Microsoft Security Response Center PGP Key page](https://aka.ms/security.md/msrc/pgp).
 
-We follow the OpenSSF vulnerability-handling guidelines.
-The table below shows the target timelines we aim for once we receive your report.
-These are independent objectives, not sequential steps.
+You should receive a response within 24 hours. If for some reason you do not, please follow up via email to ensure we received your original message. Additional information can be found at [microsoft.com/msrc](https://www.microsoft.com/msrc).
 
-| Objective | Target time | Notes |
-|-----------|-------------|-------|
-| **Initial acknowledgement** | ≤ 14 calendar days | Maintainers confirm receipt and start triage. |
-| **Triage & CVSS-v3.1 scoring** | ≤ 30 days | We assign severity and plan remediation. |
-| **Fix availability** | Next scheduled monthly release<br />(or an out-of-band patch for Critical/High issues) | We may cut a `vX.Y.Z` patch if waiting a month poses undue risk. |
-| **CVE assignment** | Before public disclosure | GitHub automatically requests a CVE ID when we publish the security advisory. |
+Please include the requested information listed below (as much as you can provide) to help us better understand the nature and scope of the possible issue:
 
----
+  * Type of issue (e.g. buffer overflow, SQL injection, cross-site scripting, etc.)
+  * Full paths of source file(s) related to the manifestation of the issue
+  * The location of the affected source code (tag/branch/commit or direct URL)
+  * Any special configuration required to reproduce the issue
+  * Step-by-step instructions to reproduce the issue
+  * Proof-of-concept or exploit code (if possible)
+  * Impact of the issue, including how an attacker might exploit the issue
 
-## Supported Versions
+This information will help us triage your report more quickly.
 
-| Release | First published | Security-fix window |
-|---------|-----------------|---------------------|
-| **Latest monthly release** | see `git tag --sort=-creatordate \| head -1` | Actively maintained |
-| Any prior release | — | **Unsupported** – please upgrade |
+If you are reporting for a bug bounty, more complete reports can contribute to a higher bounty award. Please visit our [Microsoft Bug Bounty Program](https://aka.ms/security.md/msrc/bounty) page for more details about our active programs.
 
-> **Why no backports?**
-> Kata’s architecture evolves quickly; back-porting patches would re-introduce the very maintenance burden we avoid by using a rolling model.
+## Preferred Languages
 
-### For Downstream Distributions & Vendors
+We prefer all communications to be in English.
 
-If you maintain a downstream distribution or integration of Kata Containers:
+## Policy
 
-- **Embargo process**: Please be aware that security vulnerabilities are fixed in private as part of an embargo period. During this period only the Kata Containers Vulnerability Management Team (VMT) and very limited number of trusted contributors have access to the vulnerability report and participate in fixing the issue.
-- **Early notification**: The Kata Containers VMT sends embargo notifications to the private embargo-notice mailing list a few days in advance of public announcements, to allow downstream stakeholders time to test the fix and prepare to move to the new release that contains the public fix.
+Microsoft follows the principle of [Coordinated Vulnerability Disclosure](https://aka.ms/security.md/cvd).
 
----
-
-## Security Advisories & Release Notes
-
-- Where applicable, each release includes a **Security** section in its GitHub _Release Notes_ which contains the list of CVEs we have addressed in that release:
-
-- We do **not** publish separate “stable-branch” advisories because unsupported branches receive no fixes.
-
-- To see the list of published security advisories please visit the [security tab](https://github.com/kata-containers/kata-containers/security) in the kata-containers repository.
-
----
-
-## Frequently Asked Questions
-
-#### Q: I run `v3.24` – will you patch it?
-
-A: No. Upgrade to the latest monthly release. Only the current monthly release receives security fixes.
-
-#### Q: Where can I discuss a vulnerability once it is public?
-
-A: Open/continue a GitHub issue **after** the advisory is published, or use the `#general` channel in the [Kata Containers Slack workspace](https://join.slack.com/t/katacontainers/shared_invite/zt-16w1u6usn-sK871qbMxVN8KsCP5Gr56A) with a link to the official security advisory.
-
----
-
-_Last updated:_ 2026-06-12
+<!-- END MICROSOFT SECURITY.MD BLOCK -->

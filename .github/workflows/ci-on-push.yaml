@@ -1,13 +1,19 @@
 name: Kata Containers CI
 on:
-  pull_request_target: # zizmor: ignore[dangerous-triggers] See #11332.
+  # Upstream uses `pull_request_target` to have access to secrets for
+  # PRs from forks but:
+  # (1) `pull_request_target` only runs on the default branch and we
+  #     have multiple leading branches, so we need to use `pull_request`.
+  # (2) We can use `pull_request` practically since we don't expect PRs
+  #     from external contributors.
+  pull_request:
     branches:
-      - 'main'
+      - 'msft-preview'
     types:
       # Adding 'labeled' to the list of activity types that trigger this event
       # (default: opened, synchronize, reopened) so that we can run this
       # workflow when the 'ok-to-test' label is added.
-      # Reference: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target
+      # Reference: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request
       - opened
       - synchronize
       - reopened
