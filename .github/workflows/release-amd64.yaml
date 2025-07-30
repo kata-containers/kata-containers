@@ -8,6 +8,8 @@ on:
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: true
+      KBUILD_SIGN_PIN:
+        required: true
 
 permissions:
   contents: read
@@ -20,6 +22,7 @@ jobs:
       stage: release
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
     permissions:
       contents: read
       packages: write
