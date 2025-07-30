@@ -28,7 +28,6 @@ function run_tests() {
 function main() {
 	action="${1:-}"
 	case "${action}" in
-		install-azure-cli) install_azure_cli ;;
 		create-cluster) create_cluster ;;
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools ;;
