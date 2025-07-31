@@ -42,7 +42,7 @@ generate-protocols:
 
 # Some static checks rely on generated source files of components.
 static-checks: static-checks-build
-	bash tests/static-checks.sh github.com/kata-containers/kata-containers
+	bash tests/static-checks.sh
 
 docs-url-alive-check:
 	bash ci/docs-url-alive-check.sh
