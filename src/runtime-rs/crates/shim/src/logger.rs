@@ -14,7 +14,7 @@ pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_a
     //it's better to open the log pipe file with read & write option,
     //otherwise, once the containerd reboot and closed the read endpoint,
     //kata shim would write the log pipe with broken pipe error.
-    let fifo = std::fs::OpenOptions::new()
+    let _fifo = std::fs::OpenOptions::new()
         .custom_flags(libc::O_NONBLOCK)
         .create(true)
         .read(true)
@@ -28,7 +28,13 @@ pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_a
         slog::Level::Info
     };
 
-    let (logger, async_guard) = logging::create_logger("kata-runtime", sid, level, fifo);
+    // Use journal logger to send logs to systemd journal with "kata" identifier
+    let (logger, async_guard) = logging::create_logger_with_destination(
+        "kata-runtime",
+        sid,
+        level,
+        logging::LogDestination::Journal,
+    );
 
     // not reset global logger when drop
     slog_scope::set_global_logger(logger).cancel_reset();
