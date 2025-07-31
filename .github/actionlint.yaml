@@ -23,3 +23,4 @@ self-hosted-runner:
     - s390x
     - s390x-large
     - tdx
+    - amd64-nvidia-a100

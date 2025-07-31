@@ -25,6 +25,7 @@ jobs:
       target-branch: ${{ github.ref_name }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-assets-arm64:
     permissions:
