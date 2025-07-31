@@ -35,8 +35,6 @@ type AgentServiceService interface {
 	GetIPTables(context.Context, *GetIPTablesRequest) (*GetIPTablesResponse, error)
 	SetIPTables(context.Context, *SetIPTablesRequest) (*SetIPTablesResponse, error)
 	GetMetrics(context.Context, *GetMetricsRequest) (*Metrics, error)
-	MemAgentMemcgSet(context.Context, *MemAgentMemcgConfig) (*emptypb.Empty, error)
-	MemAgentCompactSet(context.Context, *MemAgentCompactConfig) (*emptypb.Empty, error)
 	CreateSandbox(context.Context, *CreateSandboxRequest) (*emptypb.Empty, error)
 	DestroySandbox(context.Context, *DestroySandboxRequest) (*emptypb.Empty, error)
 	OnlineCPUMem(context.Context, *OnlineCPUMemRequest) (*emptypb.Empty, error)
@@ -47,7 +45,6 @@ type AgentServiceService interface {
 	CopyFile(context.Context, *CopyFileRequest) (*emptypb.Empty, error)
 	GetOOMEvent(context.Context, *GetOOMEventRequest) (*OOMEvent, error)
 	AddSwap(context.Context, *AddSwapRequest) (*emptypb.Empty, error)
-	AddSwapPath(context.Context, *AddSwapPathRequest) (*emptypb.Empty, error)
 	GetVolumeStats(context.Context, *VolumeStatsRequest) (*VolumeStatsResponse, error)
 	ResizeVolume(context.Context, *ResizeVolumeRequest) (*emptypb.Empty, error)
 	SetPolicy(context.Context, *SetPolicyRequest) (*emptypb.Empty, error)
@@ -231,20 +228,6 @@ func RegisterAgentServiceService(srv *ttrpc.Server, svc AgentServiceService) {
 				}
 				return svc.GetMetrics(ctx, &req)
 			},
-			"MemAgentMemcgSet": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
-				var req MemAgentMemcgConfig
-				if err := unmarshal(&req); err != nil {
-					return nil, err
-				}
-				return svc.MemAgentMemcgSet(ctx, &req)
-			},
-			"MemAgentCompactSet": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
-				var req MemAgentCompactConfig
-				if err := unmarshal(&req); err != nil {
-					return nil, err
-				}
-				return svc.MemAgentCompactSet(ctx, &req)
-			},
 			"CreateSandbox": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 				var req CreateSandboxRequest
 				if err := unmarshal(&req); err != nil {
@@ -314,13 +297,6 @@ func RegisterAgentServiceService(srv *ttrpc.Server, svc AgentServiceService) {
 					return nil, err
 				}
 				return svc.AddSwap(ctx, &req)
-			},
-			"AddSwapPath": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
-				var req AddSwapPathRequest
-				if err := unmarshal(&req); err != nil {
-					return nil, err
-				}
-				return svc.AddSwapPath(ctx, &req)
 			},
 			"GetVolumeStats": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {
 				var req VolumeStatsRequest
@@ -557,22 +533,6 @@ func (c *agentserviceClient) GetMetrics(ctx context.Context, req *GetMetricsRequ
 	return &resp, nil
 }
 
-func (c *agentserviceClient) MemAgentMemcgSet(ctx context.Context, req *MemAgentMemcgConfig) (*emptypb.Empty, error) {
-	var resp emptypb.Empty
-	if err := c.client.Call(ctx, "grpc.AgentService", "MemAgentMemcgSet", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *agentserviceClient) MemAgentCompactSet(ctx context.Context, req *MemAgentCompactConfig) (*emptypb.Empty, error) {
-	var resp emptypb.Empty
-	if err := c.client.Call(ctx, "grpc.AgentService", "MemAgentCompactSet", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
 func (c *agentserviceClient) CreateSandbox(ctx context.Context, req *CreateSandboxRequest) (*emptypb.Empty, error) {
 	var resp emptypb.Empty
 	if err := c.client.Call(ctx, "grpc.AgentService", "CreateSandbox", req, &resp); err != nil {
@@ -648,14 +608,6 @@ func (c *agentserviceClient) GetOOMEvent(ctx context.Context, req *GetOOMEventRe
 func (c *agentserviceClient) AddSwap(ctx context.Context, req *AddSwapRequest) (*emptypb.Empty, error) {
 	var resp emptypb.Empty
 	if err := c.client.Call(ctx, "grpc.AgentService", "AddSwap", req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *agentserviceClient) AddSwapPath(ctx context.Context, req *AddSwapPathRequest) (*emptypb.Empty, error) {
-	var resp emptypb.Empty
-	if err := c.client.Call(ctx, "grpc.AgentService", "AddSwapPath", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
