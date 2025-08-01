@@ -146,6 +146,7 @@ impl RemoteInner {
         id: &str,
         netns: Option<String>,
         annotations: &HashMap<String, String>,
+        _selinux_label: Option<String>,
     ) -> Result<()> {
         info!(sl!(), "Preparing REMOTE VM");
         self.id = id.to_string();

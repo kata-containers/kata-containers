@@ -531,7 +531,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>, _selinux_label: Option<String>) -> Result<()> {
         self.id = id.to_string();
         self.state = VmmState::NotReady;
 
