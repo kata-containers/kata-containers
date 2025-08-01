@@ -22,8 +22,7 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   run-metrics:
