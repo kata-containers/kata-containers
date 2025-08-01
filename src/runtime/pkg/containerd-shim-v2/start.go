@@ -82,7 +82,7 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 		}
 		c.ttyio = tty
 
-		go ioCopy(shimLog.WithField("container", c.id), c.exitIOch, c.stdinCloser, tty, stdin, stdout, stderr)
+		go ioCopy(shimLog.WithField("container", c.id), c.exitIOch, c.stdinCloser, c.stdioCloser, tty, stdin, stdout, stderr)
 	} else {
 		// close the io exit channel, since there is no io for this container,
 		// otherwise the following wait goroutine will hang on this channel.
@@ -151,7 +151,7 @@ func startExec(ctx context.Context, s *service, containerID, execID string) (e *
 	go ioCopy(shimLog.WithFields(logrus.Fields{
 		"container": c.id,
 		"exec":      execID,
-	}), execs.exitIOch, execs.stdinCloser, tty, stdin, stdout, stderr)
+	}), execs.exitIOch, execs.stdinCloser, execs.stdioCloser, tty, stdin, stdout, stderr)
 
 	go wait(ctx, s, c, execID)
 

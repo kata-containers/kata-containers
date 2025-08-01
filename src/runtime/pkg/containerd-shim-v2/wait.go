@@ -62,13 +62,13 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 
 	timeStamp := time.Now()
 
-	s.mu.Lock()
 	if execID == "" {
+		s.mu.Lock()
+
 		// Take care of the use case where it is a sandbox.
 		// Right after the container representing the sandbox has
 		// been deleted, let's make sure we stop and delete the
 		// sandbox.
-
 		if c.cType.IsSandbox() {
 			// cancel watcher
 			if s.monitor != nil {
@@ -93,6 +93,7 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 
 		c.exitCh <- uint32(ret)
 		shimLog.WithField("container", c.id).Debug("The container status is StatusStopped")
+		s.mu.Unlock()
 	} else {
 		execs.status = task.Status_STOPPED
 		execs.exitCode = ret
@@ -104,7 +105,6 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 			"exec":      execID,
 		}).Debug("The container exec status is StatusStopped")
 	}
-	s.mu.Unlock()
 
 	go cReap(s, int(ret), c.id, execID, timeStamp)
 

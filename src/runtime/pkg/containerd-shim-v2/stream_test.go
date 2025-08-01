@@ -130,6 +130,7 @@ func TestIoCopy(t *testing.T) {
 
 		exitioch := make(chan struct{})
 		stdinCloser := make(chan struct{})
+		stdioCloser := make(chan struct{})
 
 		createFifo := func(f string) (io.ReadCloser, io.WriteCloser) {
 			reader, err := fifo.OpenFifo(ctx, f, syscall.O_RDONLY|syscall.O_CREAT|syscall.O_NONBLOCK, 0700)
@@ -182,7 +183,7 @@ func TestIoCopy(t *testing.T) {
 		defer tty.close()
 
 		// start the ioCopy threads : copy from src to dst
-		go ioCopy(logrus.WithContext(context.Background()), exitioch, stdinCloser, tty, dstInW, srcOutR, srcErrR)
+		go ioCopy(logrus.WithContext(context.Background()), exitioch, stdinCloser, stdioCloser, tty, dstInW, srcOutR, srcErrR)
 
 		var firstW, secondW, thirdW io.WriteCloser
 		var firstR, secondR, thirdR io.Reader
