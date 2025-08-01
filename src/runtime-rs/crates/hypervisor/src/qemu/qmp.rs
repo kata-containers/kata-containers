@@ -553,6 +553,55 @@ impl Qmp {
         // `blockdev-add`
         let node_name = format!("drive-{index}");
 
+        // Pre-check block drive and block device with qapi
+        {
+            let node_exists = self
+                .qmp
+                .execute(&qapi_qmp::query_named_block_nodes { flat: Some(true) })?
+                .into_iter()
+                .any(|d| d.node_name == Some(node_name.clone()));
+            let device_exists = self
+                .qmp
+                .execute(&qapi_qmp::query_block {})?
+                .into_iter()
+                .any(|d| match d.inserted {
+                    Some(node) => node.node_name == Some(node_name.clone()),
+                    None => false,
+                });
+
+            if node_exists && device_exists {
+                if block_driver == VIRTIO_SCSI {
+                    // Safely convert the u64 index to u16, ensuring it does not exceed `u16::MAX` (65535).
+                    let (scsi_id, lun) = get_scsi_id_lun(u16::try_from(index)?)?;
+                    let scsi_addr = format!("{}:{}", scsi_id, lun);
+
+                    return Ok((None, Some(scsi_addr)));
+                } else {
+                    let pci_path = self
+                        .get_device_by_qdev_id(&node_name)
+                        .context("get device by qdev_id failed")?;
+                    info!(
+                        sl!(),
+                        "hotplug block device return pci path: {:?}", &pci_path
+                    );
+
+                    return Ok((Some(pci_path), None));
+                }
+            }
+
+            if node_exists && !device_exists {
+                warn!(
+                    sl!(),
+                    "Found orphaned backend node {:?}, do cleanup before retry.", &node_name
+                );
+                self.qmp
+                    .execute(&qapi_qmp::blockdev_del {
+                        node_name: node_name.clone(),
+                    })
+                    .ok();
+            }
+        }
+
         let create_base_options = || qapi_qmp::BlockdevOptionsBase {
             auto_read_only: None,
             cache: if is_direct.is_none() {
