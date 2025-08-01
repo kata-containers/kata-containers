@@ -174,13 +174,13 @@ wait_for_app_pods_message() {
 	local namespace="$5"
 	[[ -z "${pod_count}" ]] && pod_count=1
 	[[ -z "${timeout}" ]] && timeout=60
-	[[ -n "${namespace}" ]] && namespace=" -n ${namespace} "
+	[[ -n "${namespace}" ]] && namespace=("-n" "${namespace}")
 	local pod
 	local pods
 	local i
 	SECONDS=0
 	while :; do
-		mapfile -t pods < <(oc get pods -l app="${app}" --no-headers=true "${namespace}" | awk '{print $1}')
+		mapfile -t pods < <(oc get pods -l app="${app}" --no-headers=true "${namespace[@]}" | awk '{print $1}')
 		[[ "${#pods}" -ge "${pod_count}" ]] && break
 		if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 			printf "Unable to find ${pod_count} pods for '-l app=\"${app}\"' in ${SECONDS}s (%s)" "${pods[@]}"
