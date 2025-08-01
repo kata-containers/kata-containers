@@ -1066,7 +1066,7 @@ func TestQMPPCIDeviceAdd(t *testing.T) {
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecutePCIDeviceAdd(context.Background(), blockdevID, devID,
-		"virtio-blk-pci", "0x1", "", "", 1, true, false)
+		"virtio-blk-pci", "0x1", "", "", 1, true, false, "")
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
