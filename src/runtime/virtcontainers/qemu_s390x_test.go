@@ -144,14 +144,15 @@ func TestQemuS390xAppendProtectionDevice(t *testing.T) {
 	// Secure Execution protection
 	s390x.(*qemuS390x).protection = seProtection
 
-	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "", []byte(nil))
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.NoError(err)
 	assert.Empty(bios)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
-			Type: govmmQemu.SecExecGuest,
-			ID:   secExecID,
+			Type:           govmmQemu.SecExecGuest,
+			ID:             secExecID,
+			InitdataDigest: []byte(""),
 		},
 	}
 	assert.Equal(expectedOut, devices)

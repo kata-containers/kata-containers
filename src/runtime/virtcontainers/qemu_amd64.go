@@ -268,6 +268,24 @@ func (q *qemuAmd64) enableProtection() error {
 	}
 }
 
+// build initdata device
+func (q *qemu) buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
+	device := govmmQemu.BlockDevice{
+		Driver:    govmmQemu.VirtioBlock,
+		Transport: govmmQemu.TransportPCI,
+		ID:        "initdata",
+		File:      InitdataImage,
+		SCSI:      false,
+		WCE:       false,
+		AIO:       govmmQemu.Threads,
+		Interface: "none",
+		Format:    "raw",
+	}
+
+	devices = append(devices, device)
+	return devices
+}
+
 // append protection device
 func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, initdataDigest []byte) ([]govmmQemu.Device, string, error) {
 	if q.sgxEPCSize != 0 {
