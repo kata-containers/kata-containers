@@ -65,6 +65,8 @@ PREFIX="${PREFIX:-/usr}"
 kernel_url=""
 #Linux headers for GPU guest fs module building
 linux_headers=""
+# Kernel Reference to download using git
+kernel_ref=""
 # Enable measurement of the guest rootfs at boot.
 measured_rootfs="false"
 
@@ -109,6 +111,7 @@ Options:
 	-m              : Enable measured rootfs.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
+	-r <ref>        : Enable git mode to download kernel using ref.
 	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
 	-u <url>	: Kernel URL to be used to download the kernel tarball.
@@ -136,6 +139,26 @@ arch_to_kernel() {
 check_initramfs_or_die() {
 	[ -f "${default_initramfs}" ] || \
 		die "Initramfs for measured rootfs not found at ${default_initramfs}"
+}
+
+get_git_kernel() {
+	local kernel_path="${2:-}"
+
+	if [ ! -d "${kernel_path}" ] ; then
+		mkdir -p "${kernel_path}"
+		pushd "${kernel_path}"
+		local kernel_git_url="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git"
+		if [ -n "${kernel_url}" ]; then
+			kernel_git_url="${kernel_url}"
+		fi
+		git init
+		git remote add origin "${kernel_git_url}"
+		popd
+	fi
+	pushd "${kernel_path}"
+	git fetch --depth 1 origin "${kernel_ref}"
+	git checkout "${kernel_ref}"
+	popd
 }
 
 get_kernel() {
@@ -341,6 +364,10 @@ get_kernel_frag_path() {
 	results=$(grep "${not_in_string}" <<< "$results")
 	# Do not care about options that are in whitelist
 	results=$(grep -v -f ${default_config_whitelist} <<< "$results")
+	local version_config_whitelist="${default_config_whitelist%.*}-${kernel_version}.conf"
+	if [ -f ${version_config_whitelist} ]; then
+		results=$(grep -v -f ${version_config_whitelist} <<< "$results")
+	fi
 
 	[[ "${skip_config_checks}" == "true" ]] && echo "${config_path}" && return
 
@@ -441,7 +468,11 @@ setup_kernel() {
 		[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
 
 		if [[ ${download_kernel} == "true" ]]; then
-			get_kernel "${kernel_version}" "${kernel_path}"
+			if [ -z "${kernel_ref}" ]; then
+				get_kernel "${kernel_version}" "${kernel_path}"
+			else
+				get_git_kernel "${kernel_version}" "${kernel_path}"
+			fi
 		fi
 
 		[ -n "$kernel_path" ] || die "failed to find kernel source path"
@@ -591,7 +622,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:r:st:u:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -637,6 +668,9 @@ main() {
 				;;
 			p)
 				patches_path="${OPTARG}"
+				;;
+			r)
+				kernel_ref="${OPTARG}"
 				;;
 			s)
 				skip_config_checks="true"
