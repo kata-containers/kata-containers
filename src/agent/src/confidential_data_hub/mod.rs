@@ -22,8 +22,10 @@ use protocols::{
 };
 use safe_path::scoped_join;
 use std::fs;
+use std::fs::File;
 use std::path::Path;
 use std::{os::unix::fs::symlink, path::PathBuf};
+use std::io::{BufReader, Read};
 use tokio::sync::OnceCell;
 
 pub mod image;
@@ -235,8 +237,8 @@ pub async fn unseal_file(path: &str) -> Result<()> {
         }
 
         let secret_name = entry.file_name();
-        let contents = fs::read_to_string(&target_path)?;
-        if contents.starts_with(SEALED_SECRET_PREFIX) {
+        if content_starts_with_prefix(&target_path, SEALED_SECRET_PREFIX)? {
+            let contents = fs::read_to_string(&target_path)?;
             // Get the directory name of the sealed secret file
             let dir_name = target_path
                 .parent()
@@ -260,6 +262,14 @@ pub async fn unseal_file(path: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn content_starts_with_prefix(path: &Path, prefix: &str) -> std::io::Result<bool> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut buffer = vec![0u8; prefix.len()];
+    let n = reader.read(&mut buffer)?;
+    Ok(n == prefix.len() && buffer == prefix.as_bytes())
 }
 
 pub async fn secure_mount(
@@ -294,7 +304,7 @@ mod tests {
     use std::fs::File;
     use std::io::{Read, Write};
     use std::sync::Arc;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, NamedTempFile};
     use test_utils::skip_if_not_root;
     use tokio::signal::unix::{signal, SignalKind};
     struct TestService;
@@ -415,5 +425,27 @@ mod tests {
 
         rt.shutdown_background();
         std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    fn test_content_starts_with_prefix() {
+        // Normal case: content matches the prefix
+        let mut f = NamedTempFile::new().unwrap();
+        write!(f, "sealed.hello_world").unwrap();
+        assert!(content_starts_with_prefix(f.path(), "sealed.").unwrap());
+
+        // Does not match the prefix
+        let mut f2 = NamedTempFile::new().unwrap();
+        write!(f2, "notsealed.hello_world").unwrap();
+        assert!(!content_starts_with_prefix(f2.path(), "sealed.").unwrap());
+
+        // File length < prefix.len()
+        let mut f3 = NamedTempFile::new().unwrap();
+        write!(f3, "seal").unwrap();
+        assert!(!content_starts_with_prefix(f3.path(), "sealed.").unwrap());
+
+        // Empty file
+        let f4 = NamedTempFile::new().unwrap();
+        assert!(!content_starts_with_prefix(f4.path(), "sealed.").unwrap());
     }
 }
