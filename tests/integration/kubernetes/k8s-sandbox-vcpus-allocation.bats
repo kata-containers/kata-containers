@@ -26,6 +26,9 @@ setup() {
 }
 
 @test "Check the number vcpus are correctly allocated to the sandbox" {
+	local pod
+	local log
+
 	# Create the pods
 	kubectl create -f "${yaml_file}"
 
@@ -34,7 +37,13 @@ setup() {
 
 	# Check the pods
 	for i in {0..2}; do
-		[ `kubectl logs ${pods[$i]}` -eq ${expected_vcpus[$i]} ]
+		pod="${pods[$i]}"
+		bats_unbuffered_info "Getting log for pod: ${pod}"
+
+		log=$(kubectl logs "${pod}")
+		bats_unbuffered_info "Log: ${log}"
+
+		[ "${log}" -eq "${expected_vcpus[$i]}" ]
 	done
 }
 
