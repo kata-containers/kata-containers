@@ -541,6 +541,15 @@ impl Qmp {
         is_readonly: bool,
         no_drop: bool,
     ) -> Result<(Option<PciPath>, Option<String>)> {
+        // Helper closure to decode a flattened u16 SCSI index into an (ID, LUN) pair.
+        let get_scsi_id_lun = |index_u16: u16| -> Result<(u8, u8)> {
+            // Uses bitwise operations for efficient and clear conversion.
+            let scsi_id = (index_u16 >> 8) as u8; // Equivalent to index_u16 / 256
+            let lun = (index_u16 & 0xFF) as u8; // Equivalent to index_u16 % 256
+
+            Ok((scsi_id, lun))
+        };
+
         // `blockdev-add`
         let node_name = format!("drive-{index}");
 
@@ -618,15 +627,6 @@ impl Qmp {
         blkdev_add_args.insert("drive".to_owned(), node_name.clone().into());
 
         if block_driver == VIRTIO_SCSI {
-            // Helper closure to decode a flattened u16 SCSI index into an (ID, LUN) pair.
-            let get_scsi_id_lun = |index_u16: u16| -> Result<(u8, u8)> {
-                // Uses bitwise operations for efficient and clear conversion.
-                let scsi_id = (index_u16 >> 8) as u8; // Equivalent to index_u16 / 256
-                let lun = (index_u16 & 0xFF) as u8; // Equivalent to index_u16 % 256
-
-                Ok((scsi_id, lun))
-            };
-
             // Safely convert the u64 index to u16, ensuring it does not exceed `u16::MAX` (65535).
             let (scsi_id, lun) = get_scsi_id_lun(u16::try_from(index)?)?;
             let scsi_addr = format!("{}:{}", scsi_id, lun);
