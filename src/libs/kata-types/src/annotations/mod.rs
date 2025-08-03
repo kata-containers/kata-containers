@@ -273,8 +273,7 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
 /// A sandbox annotation to specify as the msize for 9p shares.
 pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
 /// The initdata annotation passed in when CVM launchs
-pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
-    "io.katacontainers.config.runtime.cc_init_data";
+pub const KATA_ANNO_CFG_RUNTIME_INIT_DATA: &str = "io.katacontainers.config.runtime.cc_init_data";
 
 /// GPU specific annotations for remote hypervisor to help with instance selection
 /// It's for minimum number of GPUs required for the VM.
@@ -895,7 +894,7 @@ impl Annotation {
                         hv.security_info.validate_path(value)?;
                         hv.security_info.guest_hook_path = value.to_string();
                     }
-                    KATA_ANNO_CFG_HYPERVISOR_INIT_DATA => {
+                    KATA_ANNO_CFG_RUNTIME_INIT_DATA => {
                         hv.security_info.initdata =
                             add_hypervisor_initdata_overrides(value).unwrap();
                     }
