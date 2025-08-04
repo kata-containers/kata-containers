@@ -903,7 +903,7 @@ pub struct SecurityInfo {
     /// https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder
     ///
     /// Hooks must be stored in a subdirectory of guest_hook_path according to their hook type,
-    /// i.e. "guest_hook_path/{prestart,poststart,poststop}". The agent will scan these directories
+    /// i.e. "guest_hook_path/{prestart,create_container,poststart,poststop}". The agent will scan these directories
     /// for executable files and add them, in lexicographical order, to the lifecycle of the guest
     /// container.
     ///
