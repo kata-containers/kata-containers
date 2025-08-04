@@ -269,7 +269,7 @@ func (q *qemuAmd64) enableProtection() error {
 }
 
 // build initdata device
-func (q *qemu) buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
+func (q *qemuAmd64) buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
 	device := govmmQemu.BlockDevice{
 		Driver:    govmmQemu.VirtioBlock,
 		Transport: govmmQemu.TransportPCI,
