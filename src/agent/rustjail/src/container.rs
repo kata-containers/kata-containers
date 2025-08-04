@@ -1216,7 +1216,7 @@ impl BaseContainer for LinuxContainer {
             &logger,
             spec,
             &p,
-            self.cgroup_manager.as_ref(),
+            self.cgroup_manager.as_mut(),
             self.config.use_systemd_cgroup,
             &st,
             &mut pipe_w,
@@ -1517,7 +1517,7 @@ async fn join_namespaces(
     logger: &Logger,
     spec: &Spec,
     p: &Process,
-    cm: &(dyn Manager + Send + Sync),
+    cm: &mut (dyn Manager + Send + Sync),
     use_systemd_cgroup: bool,
     st: &OCIState,
     pipe_w: &mut PipeStream,
@@ -1583,6 +1583,8 @@ async fn join_namespaces(
     }
 
     if p.init && res.is_some() {
+        info!(logger, "set init pid {} for {:p}", p.pid, cm);
+        cm.set_init_pid(p.pid)?;
         info!(logger, "set properties to cgroups!");
         cm.set(res.unwrap(), false)?;
     }
