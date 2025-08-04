@@ -14,7 +14,7 @@ ttrpc = { version = "0.8.4", features = ["async"], default-features = false }
 protobuf = "3.7.2"
 libc = "0.2.94"
 # Notes: nix needs to stay in sync with libs
-nix = "0.26.4"
+nix = "0.30.1"
 capctl = "0.2.0"
 scan_fmt = "0.2.6"
 scopeguard = "1.0.0"
