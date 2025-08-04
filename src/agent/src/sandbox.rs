@@ -12,7 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{thread, time};
 
@@ -27,7 +27,8 @@ use oci::{Hook, Hooks};
 use oci_spec::runtime as oci;
 use protocols::agent::{OnlineCPUMemRequest, SharedMount};
 use regex::Regex;
-use rustjail::cgroups::{self as rustjail_cgroups, DevicesCgroupInfo};
+use rustjail::cgroups as rustjail_cgroups;
+use rustjail::cgroups::SandboxCgroupManager;
 use rustjail::container::BaseContainer;
 use rustjail::container::LinuxContainer;
 use rustjail::process::Process;
@@ -121,7 +122,7 @@ pub struct Sandbox {
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
     pub pcimap: HashMap<String, PciHostGuestMapping>,
-    pub devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+    pub cgroup_manager: Arc<SandboxCgroupManager>,
 }
 
 impl Sandbox {
@@ -155,7 +156,7 @@ impl Sandbox {
             event_tx: Some(tx),
             bind_watcher: BindWatcher::new(),
             pcimap: HashMap::new(),
-            devcg_info: Arc::new(RwLock::new(DevicesCgroupInfo::default())),
+            cgroup_manager: Arc::new(SandboxCgroupManager::default()),
         })
     }
 
@@ -323,7 +324,7 @@ impl Sandbox {
             return Ok(());
         }
 
-        let guest_cpuset = rustjail_cgroups::fs::get_guest_cpuset()?;
+        let guest_cpuset = rustjail_cgroups::utils::read_guest_online_cpus()?;
 
         for (_, ctr) in self.containers.iter() {
             match ctr
@@ -337,8 +338,20 @@ impl Sandbox {
             {
                 Some(cpu_set) => {
                     info!(self.logger, "updating {}", ctr.id.as_str());
+
                     ctr.cgroup_manager
-                        .update_cpuset_path(guest_cpuset.as_str(), cpu_set)?;
+                        .enable_cpus_topdown(&guest_cpuset)
+                        .context("enable guest cpuset")?;
+
+                    let linux_cpu = oci::LinuxCpuBuilder::default()
+                        .cpus(cpu_set.to_string())
+                        .build()?;
+                    let linux_resources = oci::LinuxResourcesBuilder::default()
+                        .cpu(linux_cpu)
+                        .build()?;
+                    ctr.cgroup_manager
+                        .set(&linux_resources)
+                        .context("set cgroup resources")?;
                 }
                 None => continue,
             }
@@ -894,7 +907,7 @@ mod tests {
         let container = LinuxContainer::new(
             "some_id",
             dir.path().join("rootfs").to_str().unwrap(),
-            None,
+            Arc::new(SandboxCgroupManager::default()),
             create_dummy_opts(),
             &slog_scope::logger(),
         )

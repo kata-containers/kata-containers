@@ -23,7 +23,7 @@ fn sl() -> slog::Logger {
 }
 
 pub async fn notify_oom(cid: &str, cg_dir: String) -> Result<Receiver<String>> {
-    if cgroups::hierarchies::is_cgroup2_unified_mode() {
+    if cgroups::fs::hierarchies::is_cgroup2_unified_mode() {
         return notify_on_oom_v2(cid, cg_dir).await;
     }
     notify_on_oom(cid, cg_dir).await

@@ -23,7 +23,7 @@ use ttrpc::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use cgroups::freezer::FreezerState;
+use cgroups::FreezerState;
 use oci::{Hooks, LinuxNamespace, Spec};
 use oci_spec::runtime as oci;
 use protobuf::MessageField;
@@ -305,10 +305,11 @@ impl AgentService {
         let mut ctr: LinuxContainer = LinuxContainer::new(
             cid.as_str(),
             CONTAINER_BASE,
-            Some(s.devcg_info.clone()),
+            s.cgroup_manager.clone(),
             opts,
             &sl(),
-        )?;
+        )
+        .context("new linux container")?;
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
@@ -353,7 +354,7 @@ impl AgentService {
 
         if sid != cid {
             // start oom event loop
-            if let Ok(cg_path) = ctr.cgroup_manager.as_ref().get_cgroup_path("memory") {
+            if let Ok(cg_path) = ctr.cgroup_manager.cgroup_path(Some("memory")) {
                 let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
                 s.run_oom_event_monitor(rx, cid.clone()).await;
             }
@@ -537,7 +538,10 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        ctr.cgroup_manager.as_ref().freeze(state)
+        ctr.cgroup_manager
+            .as_ref()
+            .freeze(state)
+            .context("freeze cgroup")
     }
 
     async fn get_pids(&self, cid: &str) -> Result<Vec<i32>> {
@@ -545,7 +549,15 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        ctr.cgroup_manager.as_ref().get_pids()
+        let pids = ctr
+            .cgroup_manager
+            .as_ref()
+            .pids()
+            .context("get pids")?
+            .iter()
+            .map(|pid| pid.as_raw() as i32)
+            .collect();
+        Ok(pids)
     }
 
     #[instrument]
@@ -2376,6 +2388,7 @@ mod tests {
         LinuxNamespaceBuilder, LinuxResourcesBuilder, SpecBuilder,
     };
     use oci_spec::runtime::{LinuxNamespaceType, Root};
+    use rustjail::cgroups::SandboxCgroupManager;
     use tempfile::{tempdir, TempDir};
     use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
@@ -2451,7 +2464,7 @@ mod tests {
             LinuxContainer::new(
                 "some_id",
                 dir.path().join("rootfs").to_str().unwrap(),
-                None,
+                Arc::new(SandboxCgroupManager::default()),
                 create_dummy_opts(),
                 &slog_scope::logger(),
             )

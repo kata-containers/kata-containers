@@ -418,7 +418,7 @@ fn mount_cgroups(
     cpath: &HashMap<String, String>,
     mounts: &HashMap<String, String>,
 ) -> Result<()> {
-    if cgroups::hierarchies::is_cgroup2_unified_mode() {
+    if cgroups::fs::hierarchies::is_cgroup2_unified_mode() {
         return mount_cgroups_v2(cfd_log, m, rootfs, flags);
     }
 
