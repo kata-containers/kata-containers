@@ -30,6 +30,7 @@ MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 kernel_builder_args="-a ${ARCH:-} $*"
 KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
+NUMA_ENABLED=${NUMA_ENABLED:-"no"}
 
 if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 	info "build initramfs for cc kernel"
@@ -74,6 +75,7 @@ container_build+=" --build-arg ARCH=${ARCH:-}"
 "${container_engine}" run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env KERNEL_DEBUG_ENABLED="${KERNEL_DEBUG_ENABLED}" \
+	--env NUMA_ENABLED="${NUMA_ENABLED}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} setup"
