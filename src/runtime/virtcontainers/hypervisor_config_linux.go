@@ -58,6 +58,15 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		conf.DefaultMaxVCPUs = defaultMaxVCPUs
 	}
 
+	if numNUMA := conf.NumNUMA(); numNUMA > 1 {
+		conf.DefaultMaxVCPUs -= conf.DefaultMaxVCPUs % numNUMA
+	}
+
+	if conf.ConfidentialGuest && conf.NumVCPUs() != conf.DefaultMaxVCPUs {
+		hvLogger.Warnf("Confidential guests do not support hotplugging of vCPUs. Setting DefaultMaxVCPUs to NumVCPUs (%d)", conf.NumVCPUs())
+		conf.DefaultMaxVCPUs = conf.NumVCPUs()
+	}
+
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
 		conf.Msize9p = defaultMsize9p
 	}
