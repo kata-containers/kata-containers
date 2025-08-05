@@ -780,6 +780,7 @@ static_check_docs()
 
 	exclude_doc_regexs+=(^CODE_OF_CONDUCT\.md$)
 	exclude_doc_regexs+=(^CONTRIBUTING\.md$)
+	exclude_doc_regexs+=(^SECURITY\.md$)
 
 	# Magic github template files
 	exclude_doc_regexs+=(^\.github/.*\.md$)
