@@ -18,11 +18,12 @@ RUN mkdir -p /kata-build/opt/kata/bin \
 
 # Download and extract kata package
 # Extract version from tag and construct URL
+ARG TARGETARCH
 RUN KATA_VERSION=${CI_COMMIT_TAG%-dd.*} && \
     echo "Downloading kata ${KATA_VERSION} from tag ${CI_COMMIT_TAG}" && \
-    wget -q "https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}/kata-static-${KATA_VERSION}-amd64.tar.xz" -O /tmp/kata.tar.xz && \
-    tar -xJf /tmp/kata.tar.xz -C /kata-build \
-        './opt/kata/bin/qemu-system-x86_64' \
+    wget -q "https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}/kata-static-${KATA_VERSION}-${TARGETARCH}.tar.xz" -O /tmp/kata.tar.xz && \
+    tar -xJf /tmp/kata.tar.xz -C /kata-build --wildcards \
+        './opt/kata/bin/qemu-system-*' \
         './opt/kata/libexec/virtiofsd' \
         './opt/kata/lib/kata-qemu/libfdt.a' \
         './opt/kata/lib/kata-qemu/pkgconfig/libfdt.pc' \
@@ -56,12 +57,11 @@ RUN KATA_VERSION=${CI_COMMIT_TAG%-dd.*} && \
     rm -f /tmp/kata.tar.xz
 
 # Copy CI-built kernel for the target architecture and rename to datadog convention
-ARG TARGETARCH
 COPY tools/packaging/kernel/vmlinux-${TARGETARCH} /kata-build/opt/kata/share/kata-containers/vmlinux-datadog
 
 # Copy CI-built shim binary
 # This should be built by the CI pipeline and placed in the expected location
-COPY src/runtime/containerd-shim-kata-v2 /kata-build/opt/kata/bin/containerd-shim-kata-v2
+COPY src/runtime/containerd-shim-kata-v2-${TARGETARCH} /kata-build/opt/kata/bin/containerd-shim-kata-v2
 RUN chmod +x /kata-build/opt/kata/bin/containerd-shim-kata-v2
 
 # Create symlinks for kata-containers.img and vmlinux.container
@@ -72,10 +72,10 @@ RUN ln -s /opt/kata/share/kata-containers/kata-containers-datadog.img /kata-buil
 RUN ln /kata-build/opt/kata/share/defaults/kata-containers/configuration-qemu.toml /kata-build/opt/kata/conf/qemu/configuration-qemu.toml
 
 # Copy override configuration
-COPY docker/10-override.toml /kata-build/opt/kata/conf/qemu/config.d/10-override.toml
+COPY docker/containerd/config.d/10-override.toml /kata-build/opt/kata/conf/qemu/config.d/10-override.toml
 
 # Copy containerd runtime dropin
-COPY docker/20-kata-runtime.toml /kata-build/etc/containerd/config.d/20-kata-runtime.toml
+COPY docker/containerd/config.d/20-kata-runtime.toml /kata-build/etc/containerd/config.d/20-kata-runtime.toml
 
 # Final scratch-based data volume
 FROM scratch

@@ -57,9 +57,23 @@ build-shim-amd64:
   script:
     - cd src/runtime
     - make containerd-shim-v2
+    - mv containerd-shim-kata-v2 containerd-shim-kata-v2-amd64
   artifacts:
     paths:
-      - src/runtime/containerd-shim-kata-v2
+      - src/runtime/containerd-shim-kata-v2-amd64
+    expire_in: 1 week
+
+build-shim-arm64:
+  image: registry.ddbuild.io/images/mirror/library/golang:1.23.10
+  stage: build
+  tags: [ "arch:arm64" ]
+  script:
+    - cd src/runtime
+    - make containerd-shim-v2
+    - mv containerd-shim-kata-v2 containerd-shim-kata-v2-arm64
+  artifacts:
+    paths:
+      - src/runtime/containerd-shim-kata-v2-arm64
     expire_in: 1 week
 
 publish-artifacts:
@@ -85,6 +99,7 @@ publish-oci-image:
     - "build-kernel-amd64"
     - "build-kernel-arm64"
     - "build-shim-amd64"
+    - "build-shim-arm64"
   variables:
     EXTRA_ARGS: "-f docker/Dockerfile --build-arg CI_COMMIT_TAG=$CI_COMMIT_TAG"
     IMAGE_TAG: "$CI_COMMIT_REF_SLUG"
