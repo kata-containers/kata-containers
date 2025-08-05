@@ -158,7 +158,7 @@ func (q *qemuPPC64le) enableProtection() error {
 }
 
 func (q *qemuPPC64le) buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, initdataImage string) []govmmQemu.Device {
-	hvLogger.Warnf("buildInitdataDevice not implemented for arm64; ignoring initdata image: %s", initdataImage)
+	hvLogger.Warnf("buildInitdataDevice not implemented for PPC64le; ignoring initdata image: %s", initdataImage)
 	return devices
 }
 

@@ -405,7 +405,7 @@ func (q *qemuS390x) buildInitdataDevice(ctx context.Context, devices []govmmQemu
 	device := govmmQemu.BlockDevice{
 		Driver:    govmmQemu.VirtioBlock,
 		Transport: transport,
-		ID:        "initdata",
+		ID:        id,
 		File:      InitdataImage,
 		SCSI:      false,
 		WCE:       false,
