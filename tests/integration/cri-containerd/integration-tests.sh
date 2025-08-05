@@ -23,6 +23,10 @@ export PATH="$PATH:/usr/local/go/bin"
 #the latest containerd from 2.0 need to set the CGROUP_DRIVER for e2e testing
 export CGROUP_DRIVER=""
 
+# newver versions of crictl (v1.29.0+?) require these exported.
+export CONTAINER_RUNTIME_ENDPOINT="unix:///run/containerd/containerd.sock"
+export IMAGE_SERVICE_ENDPOINT="unix:///run/containerd/containerd.sock"
+
 # Runtime to be used for testing
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
