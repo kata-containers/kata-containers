@@ -1,0 +1,25 @@
+[package]
+name = "initdata-processor"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-compression = { version = "0.4.22", features = ["tokio", "gzip"] }
+slog = { workspace = true }
+slog-term = { workspace = true }
+slog-async = "2.8.0"
+toml = { workspace = true }
+
+kata-types = { path = "../../libs/kata-types" }
+
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
