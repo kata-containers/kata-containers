@@ -30,7 +30,7 @@ build-kernel-amd64:
     - cd tools/packaging/kernel
     - ./build-kernel.sh -v $KERNEL_VERSION setup
     - ./build-kernel.sh -v $KERNEL_VERSION build
-    - cp kata-linux-*/vmlinux ./vmlinux-amd64
+    - cp kata-linux-*/arch/x86_64/boot/bzImage ./vmlinux-amd64
   artifacts:
     paths:
       - tools/packaging/kernel/vmlinux-amd64
@@ -44,10 +44,22 @@ build-kernel-arm64:
     - cd tools/packaging/kernel
     - ./build-kernel.sh -v $KERNEL_VERSION setup
     - ./build-kernel.sh -v $KERNEL_VERSION build
-    - cp kata-linux-*/vmlinux ./vmlinux-arm64
+    - cp kata-linux-*/arch/arm64/boot/Image.gz ./vmlinux-arm64
   artifacts:
     paths:
       - tools/packaging/kernel/vmlinux-arm64
+    expire_in: 1 week
+
+build-shim-amd64:
+  image: registry.ddbuild.io/images/mirror/library/golang:1.23.10
+  stage: build
+  tags: [ "arch:amd64" ]
+  script:
+    - cd src/runtime
+    - make containerd-shim-v2
+  artifacts:
+    paths:
+      - src/runtime/containerd-shim-kata-v2
     expire_in: 1 week
 
 publish-artifacts:
@@ -65,3 +77,17 @@ publish-artifacts:
     - aws s3 cp tools/packaging/kernel/vmlinux-amd64 s3://kata-containers-ci-artifacts/$CI_COMMIT_REF_NAME/amd64/vmlinux
     - aws s3 cp tools/packaging/kernel/vmlinux-arm64 s3://kata-containers-ci-artifacts/$CI_COMMIT_REF_NAME/arm64/vmlinux
     - echo $CI_COMMIT_REF_NAME > LATEST && aws s3 cp LATEST s3://kata-containers-ci-artifacts/LATEST
+
+publish-oci-image:
+  stage: publish
+  extends: .build-docker-image
+  dependencies:
+    - "build-kernel-amd64"
+    - "build-kernel-arm64"
+    - "build-shim-amd64"
+  variables:
+    EXTRA_ARGS: "-f docker/Dockerfile --build-arg CI_COMMIT_TAG=$CI_COMMIT_TAG"
+    IMAGE_TAG: "$CI_COMMIT_REF_SLUG"
+  only:
+    - tags
+    

@@ -1,0 +1,9 @@
+[hypervisor.qemu]
+kernel_params = "systemd.unified_cgroup_hierarchy=1"
+enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params", "default_memory"]
+
+[agent.kata]
+debug_console_enabled = false
+
+[runtime]
+static_sandbox_resource_mgmt=true
