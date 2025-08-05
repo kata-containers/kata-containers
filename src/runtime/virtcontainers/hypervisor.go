@@ -332,7 +332,6 @@ type HypervisorConfig struct {
 	ImagePath string
 
 	// InitrdPath is the guest initrd image host path.
-	// ImagePath and InitrdPath cannot be set at the same time.
 	InitrdPath string
 
 	// RootfsType is filesystem type of rootfs.
@@ -760,50 +759,44 @@ func (conf *HypervisorConfig) AddCustomAsset(a *types.Asset) error {
 	return nil
 }
 
-// ImageOrInitrdAssetPath returns an image or an initrd path, along with the corresponding asset type
-// Annotation path is preferred to config path.
-func (conf *HypervisorConfig) ImageOrInitrdAssetPath() (string, types.AssetType, error) {
-	var image, initrd string
-
-	checkAndReturn := func(image string, initrd string) (string, types.AssetType, error) {
-		if image != "" && initrd != "" {
-			return "", types.UnkownAsset, conflictingAssets
-		}
-
-		if image != "" {
-			return image, types.ImageAsset, nil
-		}
-
-		if initrd != "" {
-			return initrd, types.InitrdAsset, nil
-		}
-
-		// Even if neither image nor initrd are set, we still need to return
-		// if we are running a confidential guest on QemuCCWVirtio. (IBM Z Secure Execution)
-		if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
-			return "", types.SecureBootAsset, nil
-		}
-
-		return "", types.UnkownAsset, fmt.Errorf("one of image and initrd must be set")
+func (conf *HypervisorConfig) ImageOrInitrdAssetPath() (string, error) {
+	imagePath, err := conf.ImageAssetPath()
+	if err != nil {
+		return "", err
+	}
+	initrdPath, err := conf.InitrdAssetPath()
+	if err != nil {
+		return "", err
 	}
 
-	if a, ok := conf.customAssets[types.ImageAsset]; ok {
-		image = a.Path()
+	if imagePath == "" && initrdPath == "" {
+		return "", fmt.Errorf("one of image and initrd must be set")
+	}
+	if imagePath != "" && initrdPath != "" {
+		return "", conflictingAssets
 	}
 
-	if a, ok := conf.customAssets[types.InitrdAsset]; ok {
-		initrd = a.Path()
+	if imagePath != "" {
+		return imagePath, nil
+	} else {
+		return initrdPath, nil
+	}
+}
+
+func (conf *HypervisorConfig) UseSecureBootAssets() bool {
+	imagePath, _ := conf.ImageAssetPath()
+	initrdPath, _ := conf.InitrdAssetPath()
+	if imagePath != "" || initrdPath != "" {
+		return false
 	}
 
-	path, assetType, err := checkAndReturn(image, initrd)
-	if assetType != types.UnkownAsset {
-		return path, assetType, nil
-	}
-	if err == conflictingAssets {
-		return "", types.UnkownAsset, errors.Wrapf(err, "conflicting annotations")
+	// Even if neither image nor initrd are set, we still need to return
+	// if we are running a confidential guest on QemuCCWVirtio. (IBM Z Secure Execution)
+	if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
+		return true
 	}
 
-	return checkAndReturn(conf.ImagePath, conf.InitrdPath)
+	return false
 }
 
 func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
