@@ -280,7 +280,7 @@ function PrepareContainerMemoryUpdate() {
 	test_virtio_mem=$1
 
 	if [ $test_virtio_mem -eq 1 ]; then
-		if [[ "$ARCH" != "x86_64" ]] && [[ "$ARCH" != "aarch64" ]]; then
+		if [[ "$ARCH" != "x86_64" ]]; then
 			return
 		fi
 		info "Test container memory update with virtio-mem"
