@@ -1832,6 +1832,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "initdata-processor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-compression",
+ "futures",
+ "kata-types",
+ "slog",
+ "slog-async",
+ "slog-term",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "inotify"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
