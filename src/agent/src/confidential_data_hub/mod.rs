@@ -287,6 +287,31 @@ pub async fn get_cdh_resource(resource_path: &str) -> Result<Vec<u8>> {
     cdh_client.get_resource(resource_path).await
 }
 
+// ==============GUEST SERVICE MANAGER===============
+
+mod guest_clients;
+
+use guest_clients::GuestServiceManager;
+
+pub static GUEST_SERVICE_MANAGER: OnceCell<GuestServiceManager> = OnceCell::const_new();
+
+pub async fn init_guest_service_manager() -> Result<()> {
+    GUEST_SERVICE_MANAGER
+        .get_or_try_init(|| async {
+            GuestServiceManager::new()
+                .await
+                .context("Failed to setup guest service manager")
+        })
+        .await?;
+
+    Ok(())
+}
+
+/// Check if the GUEST_SERVICE_MANAGER client is initialized
+pub fn is_guest_service_manager_ready() -> bool {
+    GUEST_SERVICE_MANAGER.get().is_some() // Returns true if GUEST_SERVICE_MANAGER is initialized, false otherwise
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
