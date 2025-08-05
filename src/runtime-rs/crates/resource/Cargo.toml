@@ -17,7 +17,8 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitflags = "2.9.0"
 byte-unit = "5.1.6"
-cgroups-rs = { version = "0.4.0", features = ["oci"] }
+# cgroups-rs = { version = "0.4.0", features = ["oci"] }
+cgroups-rs = { git = "https://github.com/justxuewei/cgroups-rs.git", branch = "cgroups-agent", features = ["oci"] }
 futures = "0.3.11"
 lazy_static = { workspace = true }
 libc = { workspace = true }

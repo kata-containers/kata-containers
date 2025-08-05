@@ -577,14 +577,15 @@ dependencies = [
 [[package]]
 name = "cgroups-rs"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879433e90a9bf3c38e4e854ad36bd14507751dbd3a0df15429283ff5c10ff0e4"
+source = "git+https://github.com/justxuewei/cgroups-rs.git?branch=cgroups-agent#eec38528d9d1cdb415ecc613a0f21523dacf3f73"
 dependencies = [
  "bit-vec",
  "libc",
  "log",
  "nix 0.25.1",
  "oci-spec 0.8.1",
+ "serde",
+ "serde_json",
  "thiserror 1.0.69",
  "zbus",
 ]
@@ -3346,7 +3347,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "059a34f111a9dee2ce1ac2826a68b24601c4298cfeb1a587c3cb493d5ab46f52"
 dependencies = [
  "libc",
- "nix 0.30.1",
+ "nix 0.23.2",
 ]
 
 [[package]]
@@ -5591,7 +5592,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
