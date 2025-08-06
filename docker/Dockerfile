@@ -72,7 +72,7 @@ RUN ln -s /opt/kata/share/kata-containers/kata-containers-datadog.img /kata-buil
 RUN ln /kata-build/opt/kata/share/defaults/kata-containers/configuration-qemu.toml /kata-build/opt/kata/conf/qemu/configuration-qemu.toml
 
 # Copy override configuration
-COPY docker/containerd/config.d/10-override.toml /kata-build/opt/kata/conf/qemu/config.d/10-override.toml
+COPY docker/qemu/config.d/10-override.toml /kata-build/opt/kata/conf/qemu/config.d/10-override.toml
 
 # Copy containerd runtime dropin
 COPY docker/containerd/config.d/20-kata-runtime.toml /kata-build/etc/containerd/config.d/20-kata-runtime.toml

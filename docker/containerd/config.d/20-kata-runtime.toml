@@ -1,15 +1,7 @@
 # Kata Containers runtime configuration dropin for containerd
-[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata]
-  runtime_type = 'io.containerd.kata.v2'
-  pod_annotations = ['io.katacontainers.*']
-  privileged_without_host_devices = true
-  sandboxer = ''
-
-  [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata.options]
-    ConfigPath = '/opt/kata/conf/qemu/configuration-qemu.toml'
-
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata-qemu]
-  runtime_type = 'io.containerd.kata-qemu.v2'
+  runtime_type = 'io.containerd.kata.v2'
+  runtime_path = '/opt/kata/bin/containerd-shim-kata-v2'
   pod_annotations = ['io.katacontainers.*']
   privileged_without_host_devices = true
   sandboxer = ''

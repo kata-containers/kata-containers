@@ -102,7 +102,7 @@ publish-oci-image:
     - "build-shim-arm64"
   variables:
     EXTRA_ARGS: "-f docker/Dockerfile --build-arg CI_COMMIT_TAG=$CI_COMMIT_TAG"
-    IMAGE_TAG: "$CI_COMMIT_REF_SLUG"
+    IMAGE_TAG: "$CI_COMMIT_TAG"
   only:
     - tags
     
