@@ -13,9 +13,9 @@ license = "Apache-2.0"
 [dependencies]
 protocols = { path = "../../libs/protocols", features = ["with-serde"] }
 rustjail = { path = "../../agent/rustjail" }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+oci-spec = { version = "0.8.1", features = ["runtime"] }
 
-clap = "2.33.0"
+clap = { version = "4.5.40", features = ["derive", "cargo"] }
 lazy_static = "1.4.0"
 anyhow = "1.0.31"
 hex = "0.4.2"
@@ -28,11 +28,12 @@ slog = "2.7.0"
 slog-scope = "4.4.0"
 rand = "0.8.4"
 protobuf = "3.2.0"
+log = "0.4.22"
 
 nix = "0.23.0"
 libc = "0.2.112"
 # XXX: Must be the same as the version used by the agent
-ttrpc = "0.8"
+ttrpc = "0.8.4"
 
 # For parsing timeouts
 humantime = "2.1.0"
@@ -40,5 +41,16 @@ humantime = "2.1.0"
 # For Options (state passing)
 serde = { version = "1.0.131", features = ["derive"] }
 serde_json = "1.0.73"
+
+# Image pull/unpack
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "4cd62c3f8a6475a556eceb5f4538e523e9491400", features = [
+    "snapshot-overlayfs",
+    "oci-client-rustls",
+    "signature-cosign-rustls",
+] }
+
+safe-path = { path = "../../libs/safe-path" }
+
+tokio = { version = "1.44.2", features = ["signal"] }
 
 [workspace]

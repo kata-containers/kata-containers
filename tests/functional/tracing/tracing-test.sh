@@ -297,7 +297,7 @@ check_spans()
 
 	# Check for existence of spans in output so we do not do the more
 	# time consuming test of checking span ordering if it will fail
-	info "Checking spans: ${span_ordering_data[@]}"
+	info "Checking spans:" "${span_ordering_data[@]}"
 	local missing_spans=()
 	for span_ordering in "${span_ordering_data[@]}"; do
 		local test_spans=(`echo $span_ordering | tr ':' ' '`)
@@ -306,7 +306,7 @@ check_spans()
 		done
 	done
 	if [ "${#missing_spans[@]}" -gt 0 ]; then
-	       die "Fail: Missing spans: ${missing_spans[@]}"
+	       die "Fail: Missing spans:" "${missing_spans[@]}"
 	fi
 
 	# Check relative ordering of spans. We are not checking full trace, just
@@ -360,10 +360,10 @@ check_spans()
 
 			local last_initial_span_index=${#initial_span_ids[@]}-1
 			if [ $matches -eq ${#span_ids[@]} ]; then
-				info "Pass: spans \"${test_spans[@]}\" found in jaeger output"
+				info "Pass: spans \"" "${test_spans[@]}" "\" found in jaeger output"
 				break
 			elif [ $matches -lt ${#span_ids[@]} ] && [ "$initial" = "${initial_span_ids[$last_initial_span_index]}" ]; then
-				die "Fail: spans \"${test_spans[@]}\" NOT in jaeger output"
+				die "Fail: spans \"" "${test_spans[@]}" "\" NOT in jaeger output"
 			fi
 			# else repeat test for next initial span ID
 		done

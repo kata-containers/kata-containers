@@ -17,8 +17,6 @@ RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
-# The kata agent enables guest-pull feature.
-PULL_TYPE=${PULL_TYPE:-default}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
@@ -32,14 +30,39 @@ SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
+GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL:-}"
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
 PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
+DNF_CONF=${DNF_CONF:-""}
+DISTRO_REPO=${DISTRO_REPO:-""}
+PKG_MANAGER=${PKG_MANAGER:-""}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
-agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
+if [[ "${AGENT_POLICY}" == "yes" ]]; then
+	agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
+fi
+
+INSIDE_CONTAINER=${INSIDE_CONTAINER:-""}
+IMAGE_REGISTRY=${IMAGE_REGISTRY:-""}
+http_proxy=${http_proxy:-""}
+https_proxy=${https_proxy:-""}
+AGENT_POLICY_FILE=${AGENT_POLICY_FILE:-""}
+GRACEFUL_EXIT=${GRACEFUL_EXIT:-""}
+USE_DOCKER=${USE_DOCKER:-""}
+USE_PODMAN=${USE_PODMAN:-""}
+EXTRA_PKGS=${EXTRA_PKGS:-""}
+REPO_URL=${REPO_URL:-""}
+REPO_URL_X86_64=${REPO_URL_X86_64:-""}
+REPO_COMPONENTS=${REPO_COMPONENTS:-""}
+
+KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
+NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
+VARIANT=${VARIANT:-""}
+
+[[ "${VARIANT}" == "nvidia-gpu"* ]] && source "${script_dir}/nvidia/nvidia_rootfs.sh"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -60,6 +83,31 @@ if [ "${CROSS_BUILD}" == "true" ]; then
 	fi
 fi
 
+# The list of systemd units and files that are not needed in Kata Containers
+readonly -a systemd_units=(
+	"systemd-coredump@"
+	"systemd-journald"
+	"systemd-journald-dev-log"
+	"systemd-journal-flush"
+	"systemd-random-seed"
+	"systemd-timesyncd"
+	"systemd-tmpfiles-setup"
+	"systemd-udevd"
+	"systemd-udevd-control"
+	"systemd-udevd-kernel"
+	"systemd-udev-trigger"
+	"systemd-update-utmp"
+)
+
+readonly -a systemd_files=(
+	"systemd-bless-boot-generator"
+	"systemd-fstab-generator"
+	"systemd-getty-generator"
+	"systemd-gpt-auto-generator"
+	"systemd-tmpfiles-cleanup.timer"
+)
+
+typeset should_delete_unnecessary_files="no"
 
 handle_error() {
 	local exit_code="${?}"
@@ -71,7 +119,6 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 # Default architecture
-export ARCH=${ARCH:-$(uname -m)}
 if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
 	LIBC=gnu
 	echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
@@ -114,6 +161,7 @@ $(get_distros | tr "\n" " ")
 Options:
   -a <version>      Specify the agent version. Overrides the AGENT_VERSION
                     environment variable.
+  -d                Delete unnecessary systemd units and files
   -h                Show this help message.
   -l                List the supported Linux distributions and exit immediately.
   -o <version>      Specify the version of osbuilder to embed in the rootfs
@@ -233,8 +281,8 @@ get_test_config() {
 	local config="${script_dir}/${distro}/config.sh"
 	source ${config}
 
-	echo -e "INIT_PROCESS:\t\t$INIT_PROCESS"
-	echo -e "ARCH_EXCLUDE_LIST:\t\t${ARCH_EXCLUDE_LIST[@]}"
+	printf "INIT_PROCESS:\t\t%s\n" "${INIT_PROCESS:-}"
+	printf "ARCH_EXCLUDE_LIST:\t\t%s\n" "${ARCH_EXCLUDE_LIST[@]:-}"
 }
 
 check_function_exist()
@@ -362,7 +410,9 @@ check_env_variables()
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
-	[ ! -f "${agent_policy_file}" ] && die "agent policy file not found in '${agent_policy_file}'"
+	if [[ "${AGENT_POLICY}" == "yes" ]]; then
+		[ ! -f "${agent_policy_file}" ] && die "agent policy file not found in '${agent_policy_file}'"
+	fi
 
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
 }
@@ -475,6 +525,11 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname ${PAUSE_IMAGE_TARBALL}):$(dirname ${PAUSE_IMAGE_TARBALL})"
 		fi
 
+		if [[ -n "${GUEST_HOOKS_TARBALL}" ]]; then
+			engine_run_args+=" --env GUEST_HOOKS_TARBALL=${GUEST_HOOKS_TARBALL}"
+			engine_run_args+=" -v $(dirname ${GUEST_HOOKS_TARBALL}):$(dirname ${GUEST_HOOKS_TARBALL})"
+		fi
+
 		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 
 		engine_run_args+=" $(docker_extra_args $distro)"
@@ -511,8 +566,12 @@ build_rootfs_distro()
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
+			--env REPO_URL="${REPO_URL}" \
+			--env REPO_URL_X86_64="${REPO_URL_X86_64}" \
+			--env REPO_COMPONENTS="${REPO_COMPONENTS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
+			--env VARIANT="${VARIANT}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
@@ -522,6 +581,8 @@ build_rootfs_distro()
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
 			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \
+			--env NVIDIA_GPU_STACK="${NVIDIA_GPU_STACK}" \
+			--env KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN}" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
@@ -643,6 +704,10 @@ EOF
 		       -e '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' \
 		       -e 's/^ReadWritePaths=\(.\+\) \/var\/lib\/chrony \(.\+\)$/ReadWritePaths=\1 -\/var\/lib\/chrony \2/m' \
 		       ${chrony_systemd_service}
+		# Disable automatic directory creation
+		sed -i -e 's/^\(StateDirectory=\)/#\1/g' \
+		       -e 's/^\(LogsDirectory=\)/#\1/g' \
+		       ${chrony_systemd_service}
 	fi
 
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
@@ -650,7 +715,7 @@ EOF
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] && [ -z "${AGENT_TARBALL}" ] ; then
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
-		# rust agent needs ${arch}-unknown-linux-${LIBC}
+		# rust agent needs ${ARCH}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
 			if [ "$RUST_VERSION" == "null" ]; then
 				detect_rust_version || \
@@ -680,7 +745,7 @@ EOF
 			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
 		fi
 		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY} PULL_TYPE=${PULL_TYPE}
+		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
@@ -725,7 +790,7 @@ EOF
 		fi
 	fi
 
-	if [ "${AGENT_POLICY}" == "yes" ]; then
+	if [[ "${AGENT_POLICY}" == "yes" ]]; then
 		info "Install the default policy"
 		# Install default settings for the kata-opa service.
 		local opa_settings_dir="/etc/kata-opa"
@@ -734,6 +799,11 @@ EOF
 		mkdir -p "${policy_dir}"
 		install -D -o root -g root -m 0644 "${agent_policy_file}" -T "${policy_dir}/${policy_file_name}"
 		ln -sf "${policy_file_name}" "${policy_dir}/default-policy.rego"
+	fi
+
+	if [[ -n "${GUEST_HOOKS_TARBALL}" ]]; then
+		info "Install the ${GUEST_HOOKS_TARBALL} guest hooks"
+		tar xvJpf "${GUEST_HOOKS_TARBALL}" -C "${ROOTFS_DIR}"
 	fi
 
 	info "Check init is installed"
@@ -759,6 +829,10 @@ EOF
 	info "Create /etc/resolv.conf file in rootfs if not exist"
 	touch "$dns_file"
 
+	if [[ "${should_delete_unnecessary_files}" == "yes" ]]; then
+	    delete_unnecessary_files
+	fi
+
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
 }
@@ -767,10 +841,11 @@ parse_arguments()
 {
 	[ "$#" -eq 0 ] && usage && return 0
 
-	while getopts a:hlo:r:t: opt
+	while getopts a:dhlo:r:t: opt
 	do
 		case $opt in
 			a)	AGENT_VERSION="${OPTARG}" ;;
+			d)	should_delete_unnecessary_files="yes" ;;
 			h)	usage ;;
 			l)	get_distros | sort && exit 0;;
 			o)	OSBUILDER_VERSION="${OPTARG}" ;;
@@ -782,7 +857,6 @@ parse_arguments()
 
 	shift $(($OPTIND - 1))
 	distro="$1"
-	arch=$(uname -m)
 }
 
 detect_host_distro()
@@ -793,13 +867,31 @@ detect_host_distro()
 		"*suse*")
 			distro="suse"
 			;;
-		"clear-linux-os")
-			distro="clearlinux"
-			;;
 		*)
 			distro="$ID"
 			;;
 	esac
+}
+
+delete_unnecessary_files()
+{
+	info "Removing unneeded systemd services and sockets"
+	for u in "${systemd_units[@]}"; do
+		find "${ROOTFS_DIR}" \
+			\( -type f -o -type l \) \
+			\( -name "${u}.service" -o -name "${u}.socket" \) \
+			-exec echo "deleting {}" \; \
+			-exec rm -f {} \;
+	done
+
+	info "Removing unneeded systemd files"
+	for u in "${systemd_files[@]}"; do
+		find "${ROOTFS_DIR}" \
+			\( -type f -o -type l \) \
+			-name "${u}" \
+			-exec echo "deleting {}" \; \
+			-exec rm -f {} \;
+	done
 }
 
 main()
@@ -820,6 +912,18 @@ main()
 
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
+
+	if [ "${VARIANT}" = "nvidia-gpu" ]; then
+		setup_nvidia_gpu_rootfs_stage_one
+		setup_nvidia_gpu_rootfs_stage_two
+		return $?
+	fi
+
+	if [ "${VARIANT}" = "nvidia-gpu-confidential" ]; then
+		setup_nvidia_gpu_rootfs_stage_one "confidential"
+		setup_nvidia_gpu_rootfs_stage_two "confidential"
+		return $?
+	fi
 }
 
 main $*

@@ -9,4 +9,4 @@ spec:
       volumes:
         - name: containerd-conf
           hostPath:
-            path: /etc/k0s/containerd.d/
+            path: /etc/k0s/

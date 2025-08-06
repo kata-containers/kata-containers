@@ -10,7 +10,7 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
-SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
+SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
 
 function setup_unencrypted_confidential_pod() {
@@ -18,9 +18,9 @@ function setup_unencrypted_confidential_pod() {
 
 	export SSH_KEY_FILE="${pod_config_dir}/confidential/unencrypted/ssh/unencrypted"
 
-	if [ -n "${PR_NUMBER}" ]; then
+	if [ -n "${GH_PR_NUMBER}" ]; then
 		# Use correct address in pod yaml
-		sed -i "s/-nightly/-${PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
+		sed -i "s/-nightly/-${GH_PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
 	fi
 
 	# Set permissions on private key file
@@ -32,7 +32,6 @@ function setup_unencrypted_confidential_pod() {
 # in order to identify whether the workload is running on a TEE environment
 function get_remote_command_per_hypervisor() {
 	declare -A REMOTE_COMMAND_PER_HYPERVISOR
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-sev]="dmesg | grep \"Memory Encryption Features active:.*\(SEV$\|SEV \)\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-tdx]="cpuid | grep TDX_GUEST"
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
@@ -169,5 +168,54 @@ function create_coco_pod_yaml() {
 
 	if [ -n "$node" ]; then
 		set_node "${kata_pod}" "$node"
+	fi
+}
+
+# This function creates pod yaml. Parameters
+# - $1: image reference
+# - $2: annotation `io.katacontainers.config.hypervisor.kernel_params`
+# - $3: anootation `io.katacontainers.config.runtime.cc_init_data`
+# - $4: node
+function create_coco_pod_yaml_with_annotations() {
+	image=$1
+	kernel_params_annotation_value=${2:-}
+	cc_initdata_annotation_value=${3:-}
+	node=${4:-}
+
+	kernel_params_annotation_key="io.katacontainers.config.hypervisor.kernel_params"
+	cc_initdata_annotation_key="io.katacontainers.config.runtime.cc_init_data"
+
+	# Note: this is not local as we use it in the caller test
+	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
+	set_container_command "${kata_pod}" "0" "sleep" "30"
+
+	# Set annotations
+	set_metadata_annotation "${kata_pod}" \
+		"io.containerd.cri.runtime-handler" \
+		"kata-${KATA_HYPERVISOR}"
+	set_metadata_annotation "${kata_pod}" \
+		"${kernel_params_annotation_key}" \
+		"${kernel_params_annotation_value}"
+	set_metadata_annotation "${kata_pod}" \
+		"${cc_initdata_annotation_key}" \
+		"${cc_initdata_annotation_value}"
+
+	add_allow_all_policy_to_yaml "${kata_pod}"
+
+	if [ -n "$node" ]; then
+		set_node "${kata_pod}" "$node"
+	fi
+}
+
+confidential_teardown_common() {
+	local node="$1"
+	local node_start_time="$2"
+
+	# Run common teardown
+	teardown_common "${node}" ${node_start_time}
+
+	# Also try and print the kbs logs on failure
+	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
+		kbs_k8s_print_logs "${node_start_time}"
 	fi
 }

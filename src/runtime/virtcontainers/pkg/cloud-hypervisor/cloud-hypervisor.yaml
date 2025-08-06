@@ -160,6 +160,8 @@ paths:
           description: The VM instance was successfully resized.
         404:
           description: The VM instance could not be resized because it is not created.
+        429:
+          description: The VM instance could not be resized because a cpu removal is still pending.
 
   /vm.resize-zone:
     put:
@@ -548,6 +550,10 @@ components:
           type: string
         initramfs:
           type: string
+        igvm:
+          type: string
+        host_data:
+          type: string
       description: Payloads to boot in guest
 
     VmConfig:
@@ -718,6 +724,9 @@ components:
           items:
             type: integer
             format: int16
+        iommu_address_width:
+          type: integer
+          format: uint8
         serial_number:
           type: string
         uuid:
@@ -727,6 +736,9 @@ components:
           items:
             type: string
         tdx:
+          type: boolean
+          default: false
+        sev_snp:
           type: boolean
           default: false
 
@@ -875,8 +887,6 @@ components:
             type: integer
 
     DiskConfig:
-      required:
-        - path
       type: object
       properties:
         path:
@@ -925,9 +935,11 @@ components:
         ip:
           type: string
           default: "192.168.249.1"
+          description: IPv4 or IPv6 address
         mask:
           type: string
           default: "255.255.255.0"
+          description: Must be a valid IPv4 netmask if ip is an IPv4 address or a valid IPv6 netmask if ip is an IPv6 address.
         mac:
           type: string
         host_mac:

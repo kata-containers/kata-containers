@@ -3,11 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
+use crate::device::topology::{PCIePortBusPrefix, TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
+use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap, SocketAddress};
+
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_types::config::hypervisor::VIRTIO_SCSI;
+use serde::{Deserialize, Serialize};
+use serde_json;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
@@ -49,7 +54,7 @@ trait ToQemuParams: Send + Sync {
     async fn qemu_params(&self) -> Result<Vec<String>>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum VirtioBusType {
     Pci,
     Ccw,
@@ -67,6 +72,14 @@ impl VirtioBusType {
 impl Display for VirtioBusType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+fn bus_type(config: &HypervisorConfig) -> VirtioBusType {
+    if config.machine_info.machine_type.contains("-ccw-") {
+        VirtioBusType::Ccw
+    } else {
+        VirtioBusType::Pci
     }
 }
 
@@ -339,24 +352,114 @@ impl ToQemuParams for Smp {
 
 #[derive(Debug)]
 struct Cpu {
+    r#type: String,
     cpu_features: String,
 }
 
 impl Cpu {
     fn new(config: &HypervisorConfig) -> Cpu {
         Cpu {
+            // '-cpu host' has always to be used when using KVM
+            r#type: "host".to_owned(),
             cpu_features: config.cpu_info.cpu_features.clone(),
         }
+    }
+
+    fn set_type(&mut self, cpu_type: &str) -> &mut Self {
+        self.r#type = cpu_type.to_owned();
+        self
     }
 }
 
 #[async_trait]
 impl ToQemuParams for Cpu {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        // '-cpu host' has always to be used when using KVM
-        let mut params = vec!["host".to_owned()];
+        let mut params = vec![self.r#type.clone()];
         params.push(self.cpu_features.clone());
         Ok(vec!["-cpu".to_owned(), params.join(",")])
+    }
+}
+
+/// Error type for CCW Subchannel operations
+#[derive(Debug)]
+#[allow(dead_code)]
+enum CcwError {
+    DeviceAlreadyExists(String), // Error when trying to add an existing device
+    #[allow(dead_code)]
+    DeviceNotFound(String), // Error when trying to remove a nonexistent device
+}
+
+/// Represents a CCW subchannel for managing devices
+#[derive(Debug)]
+pub struct CcwSubChannel {
+    devices: HashMap<String, u32>, // Maps device IDs to slot indices
+    addr: u32,                     // Subchannel address
+    next_slot: u32,                // Next available slot index
+}
+
+impl CcwSubChannel {
+    fn new() -> Self {
+        Self {
+            devices: HashMap::new(),
+            addr: 0,
+            next_slot: 0,
+        }
+    }
+
+    /// Adds a device to the subchannel.
+    ///
+    /// # Arguments
+    /// - `dev_id`: device ID to add
+    ///
+    /// # Returns
+    /// - `Result<u32, CcwError>`: slot index of the added device
+    ///   or an error if the device already exists
+    fn add_device(&mut self, dev_id: &str) -> Result<u32, CcwError> {
+        if self.devices.contains_key(dev_id) {
+            Err(CcwError::DeviceAlreadyExists(dev_id.to_owned()))
+        } else {
+            let slot = self.next_slot;
+            self.devices.insert(dev_id.to_owned(), slot);
+            self.next_slot += 1;
+            Ok(slot)
+        }
+    }
+
+    /// Removes a device from the subchannel by its ID.
+    ///
+    /// # Arguments
+    /// - `dev_id`: device ID to remove
+    ///
+    /// # Returns
+    /// - `Result<(), CcwError>`: Ok(()) if the device was removed
+    ///   or an error if the device was not found
+    #[allow(dead_code)]
+    fn remove_device(&mut self, dev_id: &str) -> Result<(), CcwError> {
+        if self.devices.remove(dev_id).is_some() {
+            Ok(())
+        } else {
+            Err(CcwError::DeviceNotFound(dev_id.to_owned()))
+        }
+    }
+
+    /// Formats the CCW address for a given slot
+    ///
+    /// # Arguments
+    /// - `slot`: slot index
+    ///
+    /// # Returns
+    /// - `String`: formatted CCW address (e.g. `fe.0.0000`)
+    fn address_format_ccw(&self, slot: u32) -> String {
+        format!("fe.{:x}.{:04x}", self.addr, slot)
+    }
+
+    /// Sets the address of the subchannel.
+    /// # Arguments
+    /// - `addr`: subchannel address to set
+    #[allow(dead_code)]
+    fn set_addr(&mut self, addr: u32) -> &mut Self {
+        self.addr = addr;
+        self
     }
 }
 
@@ -367,6 +470,7 @@ struct Machine {
     options: String,
     nvdimm: bool,
     kernel_irqchip: Option<String>,
+    confidential_guest_support: String,
 
     is_nvdimm_supported: bool,
     memory_backend: Option<String>,
@@ -376,14 +480,14 @@ impl Machine {
     fn new(config: &HypervisorConfig) -> Machine {
         #[cfg(any(
             target_arch = "aarch64",
-            target_arch = "powerpc64",
+            all(target_arch = "powerpc64", target_endian = "little"),
             target_arch = "x86",
             target_arch = "x86_64",
         ))]
         let is_nvdimm_supported = config.machine_info.machine_type != "microvm";
         #[cfg(not(any(
             target_arch = "aarch64",
-            target_arch = "powerpc64",
+            all(target_arch = "powerpc64", target_endian = "little"),
             target_arch = "x86",
             target_arch = "x86_64",
         )))]
@@ -395,6 +499,7 @@ impl Machine {
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
             kernel_irqchip: None,
+            confidential_guest_support: "".to_owned(),
             is_nvdimm_supported,
             memory_backend: None,
         }
@@ -417,6 +522,11 @@ impl Machine {
         self.kernel_irqchip = Some(kernel_irqchip.to_owned());
         self
     }
+
+    fn set_confidential_guest_support(&mut self, scheme: &str) -> &mut Self {
+        self.confidential_guest_support = scheme.to_owned();
+        self
+    }
 }
 
 #[async_trait]
@@ -437,7 +547,31 @@ impl ToQemuParams for Machine {
         if let Some(mem_backend) = &self.memory_backend {
             params.push(format!("memory-backend={}", mem_backend));
         }
+        if !self.confidential_guest_support.is_empty() {
+            params.push(format!(
+                "confidential-guest-support={}",
+                self.confidential_guest_support
+            ));
+        }
         Ok(vec!["-machine".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct Bios {
+    filepath: String,
+}
+
+impl Bios {
+    fn new(filepath: String) -> Self {
+        Bios { filepath }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Bios {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec!["-bios".to_owned(), self.filepath.clone()])
     }
 }
 
@@ -491,6 +625,7 @@ struct MemoryBackendFile {
     size: u64,
     share: bool,
     readonly: bool,
+    prealloc: bool,
 }
 
 impl MemoryBackendFile {
@@ -501,6 +636,7 @@ impl MemoryBackendFile {
             size,
             share: false,
             readonly: false,
+            prealloc: false,
         }
     }
 
@@ -511,6 +647,11 @@ impl MemoryBackendFile {
 
     fn set_readonly(&mut self, readonly: bool) -> &mut Self {
         self.readonly = readonly;
+        self
+    }
+
+    fn set_prealloc(&mut self, prealloc: bool) -> &mut Self {
+        self.prealloc = prealloc;
         self
     }
 }
@@ -524,6 +665,10 @@ impl ToQemuParams for MemoryBackendFile {
         params.push(format!("mem-path={}", self.mem_path));
         params.push(format!("size={}", format_memory(self.size)));
         params.push(format!("share={}", if self.share { "on" } else { "off" }));
+        params.push(format!(
+            "prealloc={}",
+            if self.prealloc { "on" } else { "off" }
+        ));
         params.push(format!(
             "readonly={}",
             if self.readonly { "on" } else { "off" }
@@ -648,10 +793,16 @@ struct DeviceVhostUserFs {
     queue_size: u64,
     romfile: String,
     iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVhostUserFs {
-    fn new(chardev: &str, tag: &str, bus_type: VirtioBusType) -> DeviceVhostUserFs {
+    fn new(
+        chardev: &str,
+        tag: &str,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> DeviceVhostUserFs {
         DeviceVhostUserFs {
             bus_type,
             chardev: chardev.to_owned(),
@@ -659,6 +810,7 @@ impl DeviceVhostUserFs {
             queue_size: 0,
             romfile: String::new(),
             iommu_platform: false,
+            devno,
         }
     }
 
@@ -706,6 +858,9 @@ impl ToQemuParams for DeviceVhostUserFs {
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
         }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
@@ -750,13 +905,13 @@ struct BlockBackend {
 }
 
 impl BlockBackend {
-    fn new(id: &str, path: &str) -> BlockBackend {
+    fn new(id: &str, path: &str, cache_direct: bool) -> BlockBackend {
         BlockBackend {
             driver: "file".to_owned(),
             id: id.to_owned(),
             path: path.to_owned(),
             aio: "threads".to_owned(),
-            cache_direct: true,
+            cache_direct,
             cache_no_flush: false,
             read_only: true,
         }
@@ -826,15 +981,17 @@ struct DeviceVirtioBlk {
     id: String,
     config_wce: bool,
     share_rw: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioBlk {
-    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioBlk {
+    fn new(id: &str, bus_type: VirtioBusType, devno: Option<String>) -> DeviceVirtioBlk {
         DeviceVirtioBlk {
             bus_type,
             id: id.to_owned(),
             config_wce: false,
             share_rw: true,
+            devno,
         }
     }
 
@@ -868,7 +1025,9 @@ impl ToQemuParams for DeviceVirtioBlk {
             params.push("share-rw=off".to_owned());
         }
         params.push(format!("serial=image-{}", self.id));
-
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
@@ -879,16 +1038,23 @@ struct VhostVsock {
     guest_cid: u32,
     disable_modern: bool,
     iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl VhostVsock {
-    fn new(vhostfd: tokio::fs::File, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
+    fn new(
+        vhostfd: tokio::fs::File,
+        guest_cid: u32,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> VhostVsock {
         VhostVsock {
             bus_type,
             vhostfd,
             guest_cid,
             disable_modern: false,
             iommu_platform: false,
+            devno,
         }
     }
 
@@ -913,6 +1079,9 @@ impl ToQemuParams for VhostVsock {
         }
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
         }
         params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
@@ -975,7 +1144,7 @@ fn format_fds(files: &[File]) -> String {
 }
 
 #[derive(Debug)]
-struct Netdev {
+pub struct Netdev {
     id: String,
 
     // File descriptors for vhost multi-queue support.
@@ -1012,6 +1181,18 @@ impl Netdev {
     fn set_disable_vhost_net(&mut self, disable_vhost_net: bool) -> &mut Self {
         self.disable_vhost_net = disable_vhost_net;
         self
+    }
+
+    pub fn get_id(&self) -> &String {
+        &self.id
+    }
+
+    pub fn get_fds(&self) -> &Vec<File> {
+        &self.fds["fds"]
+    }
+
+    pub fn get_vhostfds(&self) -> &Vec<File> {
+        &self.fds["vhostfds"]
     }
 }
 
@@ -1053,17 +1234,26 @@ pub struct DeviceVirtioNet {
 
     num_queues: u32,
     iommu_platform: bool,
+    bus_type: VirtioBusType,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioNet {
-    fn new(netdev_id: &str, mac_address: Address) -> DeviceVirtioNet {
+    fn new(
+        netdev_id: &str,
+        mac_address: Address,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> DeviceVirtioNet {
         DeviceVirtioNet {
-            device_driver: "virtio-net-pci".to_owned(),
+            device_driver: format!("virtio-net-{}", bus_type),
             netdev_id: netdev_id.to_owned(),
             mac_address,
             disable_modern: false,
             num_queues: 1,
             iommu_platform: false,
+            bus_type,
+            devno,
         }
     }
 
@@ -1080,6 +1270,26 @@ impl DeviceVirtioNet {
     fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
         self.iommu_platform = iommu_platform;
         self
+    }
+
+    pub fn get_netdev_id(&self) -> &String {
+        &self.netdev_id
+    }
+
+    pub fn get_device_driver(&self) -> &String {
+        &self.device_driver
+    }
+
+    pub fn get_mac_addr(&self) -> String {
+        format!("{:?}", self.mac_address)
+    }
+
+    pub fn get_num_queues(&self) -> u32 {
+        self.num_queues
+    }
+
+    pub fn get_disable_modern(&self) -> bool {
+        self.disable_modern
     }
 }
 
@@ -1101,8 +1311,14 @@ impl ToQemuParams for DeviceVirtioNet {
             params.push("iommu_platform=on".to_owned());
         }
 
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
+
         params.push("mq=on".to_owned());
-        params.push(format!("vectors={}", 2 * self.num_queues + 2));
+        if self.bus_type == VirtioBusType::Pci {
+            params.push(format!("vectors={}", 2 * self.num_queues + 2));
+        }
 
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1113,14 +1329,16 @@ struct DeviceVirtioSerial {
     id: String,
     bus_type: VirtioBusType,
     iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioSerial {
-    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioSerial {
+    fn new(id: &str, bus_type: VirtioBusType, devno: Option<String>) -> DeviceVirtioSerial {
         DeviceVirtioSerial {
             id: id.to_owned(),
             bus_type,
             iommu_platform: false,
+            devno,
         }
     }
 
@@ -1138,6 +1356,9 @@ impl ToQemuParams for DeviceVirtioSerial {
         params.push(format!("id={}", self.id));
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1290,6 +1511,74 @@ impl ToQemuParams for DeviceIntelIommu {
     }
 }
 
+#[derive(Debug)]
+struct DevicePciBridge {
+    driver: String,
+    bus: String,
+    id: String,
+    chassis_nr: u32,
+    shpc: bool,
+    addr: u32,
+    io_reserve: String,
+    mem_reserve: String,
+    pref64_reserve: String,
+}
+
+impl DevicePciBridge {
+    fn new(config: &HypervisorConfig, bridge_idx: u32) -> DevicePciBridge {
+        DevicePciBridge {
+            // The go runtime doesn't support bridges other than PCI although
+            // PCIe should also be available.  Stick with the legacy behaviour
+            // of ignoring PCIe since it's not clear to me how to decide
+            // between the two.
+            driver: "pci-bridge".to_owned(),
+            bus: match config.machine_info.machine_type.as_str() {
+                "q35" | "virt" => "pcie.0",
+                _ => "pci.0",
+            }
+            .to_owned(),
+            id: format!("pci-bridge-{}", bridge_idx),
+            // Each bridge is required to be assigned a unique chassis id > 0.
+            chassis_nr: bridge_idx + 1,
+            shpc: false,
+            // 2 is documented by the go runtime as the first slot available
+            // for a bridge (on x86_64)
+            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu_arch_base.go#L212)
+            addr: 2 + bridge_idx,
+            // Values taken from the go runtime implementation which comments
+            // the choices as follows:
+            // Certain guest BIOS versions think !SHPC means no hotplug, and
+            // won't reserve the IO and memory windows that will be needed for
+            // devices added underneath this bridge.  This will only break for
+            // certain combinations of exact qemu, BIOS and guest kernel
+            // versions, but for consistency, just hint the usual default
+            // windows for a bridge (as the BIOS would use with SHPC) so that
+            // we can do ACPI hotplug.
+            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu.go#L2474)
+            io_reserve: "4k".to_owned(),
+            mem_reserve: "1m".to_owned(),
+            pref64_reserve: "1m".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DevicePciBridge {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(self.driver.clone());
+        params.push(format!("bus={}", self.bus));
+        params.push(format!("id={}", self.id));
+        params.push(format!("chassis_nr={}", self.chassis_nr));
+        params.push(format!("shpc={}", if self.shpc { "on" } else { "off" }));
+        params.push(format!("addr={}", self.addr));
+        params.push(format!("io-reserve={}", self.io_reserve));
+        params.push(format!("mem-reserve={}", self.mem_reserve));
+        params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 // Qemu provides methods and types for managing QEMU instances.
 // To manage a qemu instance after it has been launched you need
 // to pass the -qmp option during launch requesting the qemu instance
@@ -1319,13 +1608,14 @@ impl MonitorProtocol {
     }
 }
 
-impl ToString for MonitorProtocol {
-    fn to_string(&self) -> String {
-        match *self {
+impl std::fmt::Display for MonitorProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let to_string = match *self {
             MonitorProtocol::Hmp => "monitor".to_string(),
             MonitorProtocol::QmpPretty => "qmp-pretty".to_string(),
             _ => "qmp".to_string(),
-        }
+        };
+        write!(f, "{}", to_string)
     }
 }
 
@@ -1383,7 +1673,7 @@ impl QmpSocket {
 #[async_trait]
 impl ToQemuParams for QmpSocket {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        let param_qmp = format!("-{}", self.protocol.to_string());
+        let param_qmp = format!("-{}", self.protocol);
 
         let mut params: Vec<String> = Vec::new();
 
@@ -1402,6 +1692,396 @@ impl ToQemuParams for QmpSocket {
         }
 
         Ok(vec![param_qmp, params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct DeviceVirtioScsi {
+    bus_type: VirtioBusType,
+    id: String,
+    disable_modern: bool,
+    iothread: String,
+    iommu_platform: bool,
+    devno: Option<String>,
+}
+
+impl DeviceVirtioScsi {
+    fn new(id: &str, disable_modern: bool, bus_type: VirtioBusType, devno: Option<String>) -> Self {
+        DeviceVirtioScsi {
+            bus_type,
+            id: id.to_owned(),
+            disable_modern,
+            iothread: "".to_owned(),
+            iommu_platform: false,
+            devno,
+        }
+    }
+
+    fn set_iothread(&mut self, iothread: &str) {
+        self.iothread = iothread.to_owned();
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioScsi {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("virtio-scsi-{}", self.bus_type));
+        params.push(format!("id={}", self.id));
+        if self.disable_modern {
+            params.push("disable-modern=true".to_owned());
+        }
+        if !self.iothread.is_empty() {
+            params.push(format!("iothread={}", self.iothread));
+        }
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct ObjectIoThread {
+    id: String,
+}
+
+impl ObjectIoThread {
+    fn new(id: &str) -> Self {
+        ObjectIoThread { id: id.to_owned() }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectIoThread {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("iothread".to_owned());
+        params.push(format!("id={}", self.id));
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct ObjectSeGuest {
+    id: String,
+}
+
+impl ObjectSeGuest {
+    fn new(id: &str) -> Self {
+        ObjectSeGuest { id: id.to_owned() }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectSeGuest {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("s390-pv-guest".to_owned());
+        params.push(format!("id={}", self.id));
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct ObjectSevSnpGuest {
+    id: String,
+    cbitpos: u32,
+    reduced_phys_bits: u32,
+    kernel_hashes: bool,
+    host_data: Option<String>,
+    is_snp: bool,
+}
+
+impl ObjectSevSnpGuest {
+    fn new(is_snp: bool, cbitpos: u32, host_data: Option<String>) -> Self {
+        ObjectSevSnpGuest {
+            id: (if is_snp { "snp" } else { "sev" }).to_owned(),
+            cbitpos,
+            reduced_phys_bits: 1,
+            kernel_hashes: true,
+            host_data,
+            is_snp,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectSevSnpGuest {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(
+            (if self.is_snp {
+                "sev-snp-guest"
+            } else {
+                "sev-guest"
+            })
+            .to_owned(),
+        );
+        params.push(format!("id={}", self.id));
+        params.push(format!("cbitpos={}", self.cbitpos));
+        params.push(format!("reduced-phys-bits={}", self.reduced_phys_bits));
+        if self.is_snp {
+            params.push(format!(
+                "kernel-hashes={}",
+                if self.kernel_hashes { "on" } else { "off" }
+            ));
+            if let Some(host_data) = &self.host_data {
+                params.push(format!("host-data={}", host_data))
+            }
+        }
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ObjectTdxGuest {
+    // QOM Object type
+    qom_type: String,
+
+    // unique ID
+    id: String,
+
+    // The sept-ve-disable option prevents EPT violation conversions to #VE on guest TD
+    // accesses of PENDING pages, which is essential for certain guest OS compatibility,
+    // like Linux TD guests.
+    sept_ve_disable: bool,
+
+    // Base64 encoded 48 bytes of data (e.g., a sha384 digest).
+    // ID for non-owner-defined configuration of the guest TD, which identifies the guest TD's run-time/OS configuration via a SHA384 digest.
+    // Defaults to zero if unspecified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mrconfigid: Option<String>,
+
+    // Base64 encoded 48 bytes of data (e.g., a sha384 digest). ID for the guest TD's owner.
+    // Defaults to all zeros.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mrowner: Option<String>,
+
+    // Base64 encoded 48 bytes of data (e.g., a sha384 digest).
+    // ID for owner-defined configuration of the guest TD, e.g., specific to the workload rather than the run-time or OS.
+    // Defaults to all zeros.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mrownerconfig: Option<String>,
+
+    // Quote generation socket.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    quote_generation_socket: Option<SocketAddress>,
+
+    // Debug mode
+    #[serde(skip_serializing_if = "Option::is_none")]
+    debug: Option<bool>,
+}
+
+impl std::fmt::Display for ObjectTdxGuest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        serde_json::to_string(self)
+            .map_err(|_| std::fmt::Error)
+            .and_then(|s| write!(f, "{}", s))
+    }
+}
+
+#[allow(clippy::doc_lazy_continuation)]
+/// 1. Add property "quote-generation-socket" to tdx-guest
+/// https://lore.kernel.org/qemu-devel/Zv7dtghi20DZ9ozz@redhat.com/
+/// 2. Support user configurable mrconfigid/mrowner/mrownerconfig
+/// https://patchew.org/QEMU/20241105062408.3533704-1-xiaoyao.li@intel.com/20241105062408.3533704-15-xiaoyao.li@intel.com/
+/// 3. Add command line and validation for TDX type
+/// https://lists.libvirt.org/archives/list/devel@lists.libvirt.org/message/6N7KP5F5Z44NI3R5U7STSPWUYXK6QYUO/
+/// Example:
+/// -object { "qom-type": "tdx-guest","id": "tdx", "mrconfigid": "mrconfigid2", "debug":true,"sept-ve-disable":true, \
+/// "quote-generation-socket": { "type": "vsock","cid": "2","port": "4050" }}
+impl ObjectTdxGuest {
+    pub fn new(id: &str, mrconfigid: Option<String>, qgs_port: u32, debug: bool) -> Self {
+        let qgs_socket = SocketAddress::new(qgs_port);
+        Self {
+            qom_type: "tdx-guest".to_owned(),
+            id: id.to_owned(),
+            mrconfigid,
+            mrowner: None,
+            mrownerconfig: None,
+            sept_ve_disable: true,
+            quote_generation_socket: Some(qgs_socket),
+            debug: if debug { Some(debug) } else { None },
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectTdxGuest {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec!["-object".to_owned(), self.to_string()])
+    }
+}
+
+/// PCIeRootPortDevice directly attached onto the root bus
+/// -device pcie-root-port,id=rp0,bus=pcie.0,chassis=0,slot=0,multifunction=off,pref64-reserve=<X>B,mem-reserve=<Y>B
+#[derive(Debug, Default)]
+pub struct PCIeRootPortDevice {
+    id: String,
+    bus: String,
+    chassis: String,
+    slot: String,
+    multifunction: String,
+    addr: String,
+
+    mem_reserve: String,
+    pref64_reserve: String,
+}
+
+impl PCIeRootPortDevice {
+    fn new(id: &str, bus: &str, chassis: &str, slot: &str, multifunc: bool, addr: &str) -> Self {
+        PCIeRootPortDevice {
+            id: id.to_string(),
+            bus: if bus.is_empty() {
+                DEFAULT_PCIE_ROOT_BUS.to_owned()
+            } else {
+                bus.to_string()
+            },
+            chassis: if chassis.is_empty() {
+                "0x00".to_owned()
+            } else {
+                chassis.to_owned()
+            },
+            slot: if slot.is_empty() {
+                "0x00".to_owned()
+            } else {
+                slot.to_owned()
+            },
+            multifunction: if multifunc {
+                "on".to_owned()
+            } else {
+                "off".to_owned()
+            },
+            addr: if addr.is_empty() {
+                "0x00".to_owned()
+            } else {
+                addr.to_owned()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn set_mem_reserve(&mut self, mem_reserve: u64) -> &mut Self {
+        if mem_reserve > 0 {
+            self.mem_reserve = format!("{}B", mem_reserve);
+        }
+
+        self
+    }
+
+    fn set_pref64_reserve(&mut self, pref64_reserve: u64) -> &mut Self {
+        if pref64_reserve > 0 {
+            self.pref64_reserve = format!("{}B", pref64_reserve);
+        }
+
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeRootPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        // -device pcie-root-port,id=rp0
+        device_params.push(format!("{},id={}", "pcie-root-port", self.id));
+        device_params.push(format!("bus={}", self.bus));
+        device_params.push(format!("chassis={}", self.chassis));
+        device_params.push(format!("slot={}", self.slot));
+        device_params.push(format!("multifunction={}", self.multifunction));
+        if self.multifunction.as_str() == "on" {
+            device_params.push(format!("addr={}", self.addr));
+        }
+        if !self.mem_reserve.is_empty() {
+            device_params.push(format!("mem-reserve={}", self.mem_reserve));
+        }
+        if !self.pref64_reserve.is_empty() {
+            device_params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        }
+
+        Ok(vec!["-device".to_string(), device_params.join(",")])
+    }
+}
+
+/// PCIeSwitchUpstreamPortDevice is the port attached to the root port.
+#[derive(Debug, Default)]
+pub struct PCIeSwitchUpstreamPortDevice {
+    id: String,
+    bus: String,
+}
+
+impl PCIeSwitchUpstreamPortDevice {
+    fn new(id: &str, bus: &str) -> Self {
+        PCIeSwitchUpstreamPortDevice {
+            id: id.to_string(),
+            bus: bus.to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeSwitchUpstreamPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        device_params.push(format!("{},id={}", "x3130-upstream", self.id));
+        device_params.push(format!("bus={}", self.bus));
+
+        Ok(vec!["-device".to_string(), device_params.join(",")])
+    }
+}
+
+/// PCIeSwitchDownstreamPortDevice is the port attached to the root port.
+#[derive(Debug, Default)]
+pub struct PCIeSwitchDownstreamPortDevice {
+    // format: sup{n}, n>=0
+    pub id: String,
+
+    // default is rp0
+    pub bus: String,
+
+    // (slot, chassis) pair is mandatory and must be unique for each downstream port, >=0, default is 0x00
+    pub chassis: String,
+
+    // >=0, default is 0x00
+    pub slot: String,
+}
+
+impl PCIeSwitchDownstreamPortDevice {
+    fn new(bus: &str, chassis: u32, index: u32) -> Self {
+        PCIeSwitchDownstreamPortDevice {
+            // "swdp{i}"
+            id: format!("{}{}", PCIePortBusPrefix::SwitchDownstreamPort, index),
+            // "swup0"
+            bus: bus.to_string(),
+            chassis: chassis.to_string(),
+            slot: index.to_string(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeSwitchDownstreamPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        device_params.push(format!("{},id={}", "xio3130-downstream", self.id));
+        device_params.push(format!("bus={}", self.bus));
+        device_params.push(format!("chassis={}", self.chassis));
+        device_params.push(format!("slot={}", self.slot));
+
+        Ok(vec!["-device".to_string(), device_params.join(",")])
     }
 }
 
@@ -1453,10 +2133,15 @@ pub struct QemuCmdLine<'a> {
     knobs: Knobs,
 
     devices: Vec<Box<dyn ToQemuParams>>,
+    ccw_subchannel: Option<CcwSubChannel>,
 }
 
 impl<'a> QemuCmdLine<'a> {
     pub fn new(id: &str, config: &'a HypervisorConfig) -> Result<QemuCmdLine<'a>> {
+        let ccw_subchannel = match bus_type(config) {
+            VirtioBusType::Ccw => Some(CcwSubChannel::new()),
+            _ => None,
+        };
         let mut qemu_cmd_line = QemuCmdLine {
             id: id.to_string(),
             config,
@@ -1468,6 +2153,7 @@ impl<'a> QemuCmdLine<'a> {
             qmp_socket: QmpSocket::new(MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
             devices: Vec::new(),
+            ccw_subchannel,
         };
 
         if config.device_info.enable_iommu {
@@ -1480,8 +2166,20 @@ impl<'a> QemuCmdLine<'a> {
 
         qemu_cmd_line.add_rtc();
 
-        if qemu_cmd_line.bus_type() != VirtioBusType::Ccw {
+        if bus_type(config) != VirtioBusType::Ccw {
             qemu_cmd_line.add_rng();
+        }
+
+        if bus_type(config) != VirtioBusType::Ccw && config.device_info.default_bridges > 0 {
+            qemu_cmd_line.add_bridges(config.device_info.default_bridges);
+        }
+
+        if config.blockdev_info.block_device_driver == VIRTIO_SCSI {
+            qemu_cmd_line.add_scsi_controller();
+        }
+
+        if config.device_info.reclaim_guest_freed_memory {
+            qemu_cmd_line.add_virtio_balloon();
         }
 
         Ok(qemu_cmd_line)
@@ -1507,14 +2205,6 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(rng_device));
     }
 
-    fn bus_type(&self) -> VirtioBusType {
-        if self.config.machine_info.machine_type.contains("-ccw-") {
-            VirtioBusType::Ccw
-        } else {
-            VirtioBusType::Pci
-        }
-    }
-
     fn add_iommu(&mut self) {
         let dev_iommu = DeviceIntelIommu::new();
         self.devices.push(Box::new(dev_iommu));
@@ -1524,6 +2214,37 @@ impl<'a> QemuCmdLine<'a> {
             .append(&mut KernelParams::from_string("intel_iommu=on iommu=pt"));
 
         self.machine.set_kernel_irqchip("split");
+    }
+
+    fn add_bridges(&mut self, count: u32) {
+        for idx in 0..count {
+            let bridge = DevicePciBridge::new(self.config, idx);
+            self.devices.push(Box::new(bridge));
+        }
+    }
+
+    fn add_scsi_controller(&mut self) {
+        let devno = get_devno_ccw(&mut self.ccw_subchannel, "scsi0");
+        let mut virtio_scsi = DeviceVirtioScsi::new(
+            "scsi0",
+            should_disable_modern(),
+            bus_type(self.config),
+            devno,
+        );
+
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
+            virtio_scsi.set_iommu_platform(true);
+        }
+
+        if self.config.enable_iothreads {
+            let iothread_id = "scsi-io-thread";
+            let iothread = ObjectIoThread::new(iothread_id);
+            virtio_scsi.set_iothread(iothread_id);
+            self.devices.push(Box::new(iothread));
+        }
+        self.devices.push(Box::new(virtio_scsi));
     }
 
     pub fn add_virtiofs_share(
@@ -1542,9 +2263,11 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
-        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
+        let bus_type = bus_type(self.config);
+        let devno = get_devno_ccw(&mut self.ccw_subchannel, chardev_name);
+        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, bus_type, devno);
         virtiofs_device.set_queue_size(queue_size);
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        if self.config.device_info.enable_iommu_platform && bus_type == VirtioBusType::Ccw {
             virtiofs_device.set_iommu_platform(true);
         }
         self.devices.push(Box::new(virtiofs_device));
@@ -1553,12 +2276,16 @@ impl<'a> QemuCmdLine<'a> {
             MemoryBackendFile::new("entire-guest-memory-share", "/dev/shm", self.memory.size);
         mem_file.set_share(true);
 
+        if self.config.memory_info.enable_mem_prealloc {
+            mem_file.set_prealloc(true);
+        }
+
         // don't put the /dev/shm memory backend file into the anonymous container,
         // there has to be at most one of those so keep it by name in Memory instead
         //self.devices.push(Box::new(mem_file));
         self.memory.set_memory_backend_file(&mem_file);
 
-        match self.bus_type() {
+        match bus_type {
             VirtioBusType::Pci => {
                 self.machine.set_nvdimm(true);
                 self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
@@ -1572,13 +2299,16 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
         clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
-        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
+        let devno = get_devno_ccw(&mut self.ccw_subchannel, "vsock-0");
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(self.config), devno);
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
         }
 
-        if self.config.device_info.enable_iommu_platform {
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
             vhost_vsock_pci.set_iommu_platform(true);
         }
 
@@ -1616,11 +2346,15 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
-    pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
+    pub fn add_block_device(&mut self, device_id: &str, path: &str, is_direct: bool) -> Result<()> {
         self.devices
-            .push(Box::new(BlockBackend::new(device_id, path)));
-        self.devices
-            .push(Box::new(DeviceVirtioBlk::new(device_id, self.bus_type())));
+            .push(Box::new(BlockBackend::new(device_id, path, is_direct)));
+        let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
+        self.devices.push(Box::new(DeviceVirtioBlk::new(
+            device_id,
+            bus_type(self.config),
+            devno,
+        )));
         Ok(())
     }
 
@@ -1634,32 +2368,13 @@ impl<'a> QemuCmdLine<'a> {
         ));
     }
 
-    pub fn add_network_device(
-        &mut self,
-        dev_index: u64,
-        host_dev_name: &str,
-        guest_mac: Address,
-    ) -> Result<()> {
-        let mut netdev = Netdev::new(
-            &format!("network-{}", dev_index),
+    pub fn add_network_device(&mut self, host_dev_name: &str, guest_mac: Address) -> Result<()> {
+        let (netdev, virtio_net_device) = get_network_device(
+            self.config,
             host_dev_name,
-            self.config.network_info.network_queues,
+            guest_mac,
+            &mut self.ccw_subchannel,
         )?;
-        if self.config.network_info.disable_vhost_net {
-            netdev.set_disable_vhost_net(true);
-        }
-
-        let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
-
-        if should_disable_modern() {
-            virtio_net_device.set_disable_modern(true);
-        }
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
-            virtio_net_device.set_iommu_platform(true);
-        }
-        if self.config.network_info.network_queues > 1 {
-            virtio_net_device.set_num_queues(self.config.network_info.network_queues);
-        }
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
@@ -1667,8 +2382,11 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
-        let mut serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        let devno = get_devno_ccw(&mut self.ccw_subchannel, "serial0");
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(self.config), devno);
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
             serial_dev.set_iommu_platform(true);
         }
         self.devices.push(Box::new(serial_dev));
@@ -1684,6 +2402,222 @@ impl<'a> QemuCmdLine<'a> {
         console_socket_chardev.set_server(true);
         console_socket_chardev.set_wait(false);
         self.devices.push(Box::new(console_socket_chardev));
+    }
+
+    pub fn add_virtio_balloon(&mut self) {
+        let balloon_device = DeviceVirtioBalloon::new();
+        self.devices.push(Box::new(balloon_device));
+    }
+
+    pub fn add_se_protection_device(&mut self) {
+        let se_object = ObjectSeGuest::new("pv0");
+        self.devices.push(Box::new(se_object));
+
+        self.machine
+            .set_confidential_guest_support("pv0")
+            .set_nvdimm(false);
+
+        self.kernel.params.remove_all_by_key("reboot".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("systemd.unit".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("systemd.mask".to_string());
+        self.kernel.params.remove_all_by_key("root".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("rootflags".to_string());
+        self.kernel
+            .params
+            .remove_all_by_key("rootfstype".to_string());
+    }
+
+    pub fn add_sev_protection_device(&mut self, cbitpos: u32, firmware: &str) {
+        let sev_object = ObjectSevSnpGuest::new(true, cbitpos, None);
+        self.devices.push(Box::new(sev_object));
+
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        self.machine
+            .set_confidential_guest_support("sev")
+            .set_nvdimm(false);
+    }
+
+    pub fn add_sev_snp_protection_device(
+        &mut self,
+        cbitpos: u32,
+        firmware: &str,
+        host_data: &Option<String>,
+    ) {
+        let sev_snp_object = ObjectSevSnpGuest::new(true, cbitpos, host_data.clone());
+        self.devices.push(Box::new(sev_snp_object));
+
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        self.machine
+            .set_confidential_guest_support("snp")
+            .set_nvdimm(false);
+
+        self.cpu.set_type("EPYC-v4");
+    }
+
+    pub fn add_tdx_protection_device(
+        &mut self,
+        id: &str,
+        firmware: &str,
+        qgs_port: u32,
+        mrconfigid: &Option<String>,
+        debug: bool,
+    ) {
+        let tdx_object = ObjectTdxGuest::new(id, mrconfigid.clone(), qgs_port, debug);
+        self.devices.push(Box::new(tdx_object));
+        self.devices.push(Box::new(Bios::new(firmware.to_owned())));
+
+        self.machine
+            .set_confidential_guest_support("tdx")
+            .set_nvdimm(false);
+    }
+
+    /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.
+    /// The design origins from https://github.com/qemu/qemu/blob/master/docs/pcie.txt
+    ///
+    ///     pcie.0 bus
+    ///     ---------------------------------------------------------------------
+    ///          |                                         |
+    ///     -------------                            -------------
+    ///     | Root Port |                            | Root Port |
+    ///     ------------                             -------------
+    ///           |               -------------------------|------------------------
+    ///      ------------         |                 -----------------              |
+    ///      | PCIe Dev |         |    PCI Express  | Upstream Port |              |
+    ///      ------------         |      Switch     -----------------              |
+    ///                           |                  |            |                |
+    ///                           |    -------------------    -------------------  |
+    ///                           |    | Downstream Port |    | Downstream Port |  |
+    ///                           |    -------------------    -------------------  |
+    ///                           -------------|-----------------------|------------
+    ///                                  ------------
+    ///                                  | PCIe Dev |
+    ///                                  ------------
+    ///  Using multi-function PCI Express Root Ports:
+    ///     -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0] \
+    ///     -device pcie-root-port,id=root_port2,chassis=x1,addr=z.1[,slot=y1][,bus=pcie.0] \
+    ///     -device pcie-root-port,id=root_port3,chassis=x2,addr=z.2[,slot=y2][,bus=pcie.0] \
+    pub fn add_pcie_root_ports(
+        &mut self,
+        root_ports: HashMap<u32, TopologyPortDevice>,
+        mem_reserve: u64,
+        pref64_reserve: u64,
+    ) -> Result<()> {
+        if root_ports.is_empty() {
+            return Ok(());
+        }
+
+        let machine_type: &str = &self.config.machine_info.machine_type;
+        let (addr, multi_function) = match machine_type {
+            "q35" | "virt" => ("0", false),
+            _ => {
+                info!(
+                    sl!(),
+                    "PCIe root ports not supported for machine type: {}", machine_type
+                );
+                return Ok(());
+            }
+        };
+
+        // -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0]
+        for (index, rp) in root_ports.iter() {
+            let (chassis, slot) = (format!("{}", index + 1), format!("{}", index));
+            let mut root_port_dev = PCIeRootPortDevice::new(
+                &rp.port_id(), // rpX
+                &rp.bus,       // pcie.0
+                &chassis,
+                &slot,
+                multi_function,
+                addr,
+            );
+            root_port_dev
+                .set_mem_reserve(mem_reserve)
+                .set_pref64_reserve(pref64_reserve);
+
+            self.devices.push(Box::new(root_port_dev));
+        }
+
+        Ok(())
+    }
+
+    ///  Plugging a PCI Express device into a Switch:
+    ///     -device pcie-root-port,id=root_port1,chassis=x,slot=y[,bus=pcie.0][,addr=z]  \
+    ///     -device x3130-upstream,id=upstream_port1,bus=root_port1[,addr=x]          \
+    ///     -device xio3130-downstream,id=downstream_port1,bus=upstream_port1,chassis=x1,slot=y1[,addr=z1]] \
+    ///     -device <dev>,bus=downstream_port1
+    ///         Root Port
+    ///             |
+    ///        PCIe Switch
+    ///         /   |   \
+    ///    Device Device Device
+    pub fn add_pcie_switch_ports(
+        &mut self,
+        switch_ports: HashMap<u32, TopologyPortDevice>,
+        mem_reserve: u64,
+        pref64_reserve: u64,
+    ) -> Result<()> {
+        if switch_ports.is_empty() {
+            return Ok(());
+        }
+
+        let machine_type = &self.config.machine_info.machine_type;
+        if machine_type != "q35" && machine_type != "virt" {
+            info!(
+                sl!(),
+                "PCIe switch ports not supported for machine type: {}", machine_type
+            );
+            return Ok(());
+        }
+
+        for (index, rp) in switch_ports.iter() {
+            // 1. Create Root Port
+            // -device pcie-root-port,id=root_port1,chassis=x,slot=y[,bus=pcie.0][,addr=z]
+
+            // (slot, chassis) pair is mandatory and must be unique for each PCI Express Root Port
+            let (slot, chassis) = (format!("{}", index), format!("{}", index + 1));
+            let mut pcie_root_port = PCIeRootPortDevice::new(
+                &rp.port_id(),
+                &rp.bus, // pcie.0
+                &chassis,
+                &slot,
+                false,
+                "0",
+            );
+            pcie_root_port
+                .set_mem_reserve(mem_reserve)
+                .set_pref64_reserve(pref64_reserve);
+            self.devices.push(Box::new(pcie_root_port));
+
+            if let Some(switch) = &rp.connected_switch {
+                // 2. Create Upstream Port
+                // -device x3130-upstream,id=upstream_port1,bus=root_port1[,addr=x]
+                let upstream_port_id = switch.port_id();
+                let pcie_switch_upstream_port =
+                    PCIeSwitchUpstreamPortDevice::new(&upstream_port_id, &switch.bus);
+                self.devices.push(Box::new(pcie_switch_upstream_port));
+
+                // 3. Create Downstream Ports
+                // -device xio3130-downstream,id=downstream_port1,bus=upstream_port1,chassis=x1,slot=y1[,addr=z1]]
+                let next_chassis = chassis.parse::<u32>()? + 1;
+                for (index, swdp) in switch.switch_ports.iter() {
+                    let pcie_switch_downstream_port = PCIeSwitchDownstreamPortDevice::new(
+                        &swdp.bus,
+                        next_chassis + index,
+                        *index,
+                    );
+                    self.devices.push(Box::new(pcie_switch_downstream_port));
+                }
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
@@ -1707,5 +2641,68 @@ impl<'a> QemuCmdLine<'a> {
         result.append(&mut self.knobs.qemu_params().await?);
 
         Ok(result)
+    }
+}
+
+pub fn get_network_device(
+    config: &HypervisorConfig,
+    host_dev_name: &str,
+    guest_mac: Address,
+    ccw_subchannel: &mut Option<CcwSubChannel>,
+) -> Result<(Netdev, DeviceVirtioNet)> {
+    let mut netdev = Netdev::new(
+        &format!("network-{}", host_dev_name),
+        host_dev_name,
+        config.network_info.network_queues,
+    )?;
+    if config.network_info.disable_vhost_net {
+        netdev.set_disable_vhost_net(true);
+    }
+
+    let devno = get_devno_ccw(ccw_subchannel, &netdev.id);
+    let mut virtio_net_device =
+        DeviceVirtioNet::new(&netdev.id, guest_mac, bus_type(config), devno);
+
+    if should_disable_modern() {
+        virtio_net_device.set_disable_modern(true);
+    }
+    if config.device_info.enable_iommu_platform && bus_type(config) == VirtioBusType::Ccw {
+        virtio_net_device.set_iommu_platform(true);
+    }
+    if config.network_info.network_queues > 1 {
+        virtio_net_device.set_num_queues(config.network_info.network_queues);
+    }
+
+    Ok((netdev, virtio_net_device))
+}
+
+fn get_devno_ccw(ccw_subchannel: &mut Option<CcwSubChannel>, device_name: &str) -> Option<String> {
+    ccw_subchannel.as_mut().and_then(|subchannel| {
+        subchannel.add_device(device_name).map_or_else(
+            |err| {
+                info!(sl!(), "failed to add device to subchannel: {:?}", err);
+                None
+            },
+            |slot| Some(subchannel.address_format_ccw(slot)),
+        )
+    })
+}
+
+#[derive(Debug)]
+struct DeviceVirtioBalloon {}
+
+impl DeviceVirtioBalloon {
+    fn new() -> Self {
+        DeviceVirtioBalloon {}
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioBalloon {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec![
+            "-device".to_owned(),
+            "virtio-balloon,free-page-reporting=on".to_owned(),
+        ])
     }
 }

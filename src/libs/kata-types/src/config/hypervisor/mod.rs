@@ -33,7 +33,7 @@ use std::collections::HashMap;
 use std::io::{self, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use sysinfo::System;
+use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 mod dragonball;
 pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
@@ -43,6 +43,9 @@ pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 
 mod ch;
 pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
+
+mod remote;
+pub use self::remote::{RemoteConfig, HYPERVISOR_NAME_REMOTE};
 
 /// Virtual PCI block device driver.
 pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
@@ -62,6 +65,7 @@ pub const VIRTIO_PMEM: &str = "virtio-pmem";
 mod firecracker;
 pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
 
+const NO_VIRTIO_FS: &str = "none";
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
@@ -102,6 +106,21 @@ pub struct BlockDeviceInfo {
     /// by a block device. This is virtio-scsi, virtio-blk or nvdimm.
     #[serde(default)]
     pub block_device_driver: String,
+
+    /// Block device AIO is the I/O mechanism specially for Qemu
+    /// Options:
+    ///
+    ///   - threads
+    ///     Pthread based disk I/O.
+    ///
+    ///   - native
+    ///     Native Linux I/O.
+    ///
+    ///   - io_uring
+    ///     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel > 5.1 and
+    ///     qemu >= 5.0.
+    #[serde(default)]
+    pub block_device_aio: String,
 
     /// Specifies cache-related options will be set to block devices or not.
     #[serde(default)]
@@ -163,6 +182,21 @@ impl BlockDeviceInfo {
 
         if self.block_device_driver.is_empty() {
             self.block_device_driver = default::DEFAULT_BLOCK_DEVICE_TYPE.to_string();
+        }
+        if self.block_device_aio.is_empty() {
+            self.block_device_aio = default::DEFAULT_BLOCK_DEVICE_AIO.to_string();
+        } else {
+            const VALID_BLOCK_DEVICE_AIO: &[&str] = &[
+                default::DEFAULT_BLOCK_DEVICE_AIO,
+                default::DEFAULT_BLOCK_DEVICE_AIO_NATIVE,
+                default::DEFAULT_BLOCK_DEVICE_AIO_THREADS,
+            ];
+            if !VALID_BLOCK_DEVICE_AIO.contains(&self.block_device_aio.as_str()) {
+                return Err(eother!(
+                    "{} is unsupported block device AIO mode.",
+                    self.block_device_aio
+                ));
+            }
         }
         if self.memory_offset == 0 {
             self.memory_offset = default::DEFAULT_BLOCK_NVDIMM_MEM_OFFSET;
@@ -471,13 +505,17 @@ pub struct DeviceInfo {
     #[serde(default)]
     pub hotplug_vfio_on_root_bus: bool,
 
-    /// Before hot plugging a PCIe device, you need to add a pcie_root_port device.
-    ///
-    /// Use this parameter when using some large PCI bar devices, such as Nvidia GPU.
-    /// The value means the number of pcie_root_port.
-    /// This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+    /// This value of pcie_root_port device indicates that how many root ports to
+    /// be created when VM creation.
+    /// It's valid when hotplug_vfio_on_root_bus is true and machine_type is "q35".
     #[serde(default)]
     pub pcie_root_port: u32,
+
+    /// This value of pcie_switch_port device indicates that how many switch ports to
+    /// be created when VM creation.
+    /// It's valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35".
+    #[serde(default)]
+    pub pcie_switch_port: u32,
 
     /// Enable vIOMMU, default false
     ///
@@ -496,7 +534,7 @@ pub struct DeviceInfo {
     ///
     /// Enabling this will result in the VM balloon device having f_reporting=on set
     #[serde(default)]
-    pub enable_balloon_f_reporting: bool,
+    pub reclaim_guest_freed_memory: bool,
 }
 
 impl DeviceInfo {
@@ -517,6 +555,13 @@ impl DeviceInfo {
                 self.default_bridges
             ));
         }
+        // It's not allowed to set PCIe RootPort and SwitchPort at the same time.
+        if self.pcie_root_port > 0 && self.pcie_switch_port > 0 {
+            return Err(eother!(
+                "Root Port and Switch Port set at the same time is forbidden."
+            ));
+        }
+
         Ok(())
     }
 }
@@ -540,6 +585,7 @@ impl TopologyConfigInfo {
             HYPERVISOR_NAME_CH,
             HYPERVISOR_NAME_DRAGONBALL,
             HYPERVISOR_NAME_FIRECRACKER,
+            HYPERVISOR_NAME_REMOTE,
         ];
         let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
         if !hypervisor_names.contains(&hypervisor_name) {
@@ -704,24 +750,39 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub enable_virtio_mem: bool,
 
-    /// Enable swap of vm memory. Default false.
-    ///
-    /// The behaviour is undefined if mem_prealloc is also set to true
-    #[serde(default)]
-    pub enable_swap: bool,
-
     /// Enable swap in the guest. Default false.
     ///
-    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device if the
-    /// swappiness of a container (set by annotation "io.katacontainers.container.resource.swappiness")
-    /// is bigger than 0.
-    ///
-    /// The size of the swap device should be swap_in_bytes (set by annotation
-    /// "io.katacontainers.container.resource.swap_in_bytes") - memory_limit_in_bytes.
-    /// If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
-    /// If swap_in_bytes and memory_limit_in_bytes is not set, the size should be default_memory.
+    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
     #[serde(default)]
     pub enable_guest_swap: bool,
+
+    /// If enable_guest_swap is enabled, the swap device will be created in the guest
+    /// at this path. Default "/run/kata-containers/swap".
+    #[serde(default = "default_guest_swap_path")]
+    pub guest_swap_path: String,
+
+    /// The percentage of the total memory to be used as swap device.
+    /// Default 100.
+    #[serde(default = "default_guest_swap_size_percent")]
+    pub guest_swap_size_percent: u64,
+
+    /// The threshold in seconds to create swap device in the guest.
+    /// Kata will wait guest_swap_create_threshold_secs seconds before creating swap device.
+    /// Default 60.
+    #[serde(default = "default_guest_swap_create_threshold_secs")]
+    pub guest_swap_create_threshold_secs: u64,
+}
+
+fn default_guest_swap_size_percent() -> u64 {
+    100
+}
+
+fn default_guest_swap_path() -> String {
+    "/run/kata-containers/swap".to_string()
+}
+
+fn default_guest_swap_create_threshold_secs() -> u64 {
+    60
 }
 
 impl MemoryInfo {
@@ -732,7 +793,9 @@ impl MemoryInfo {
             "Memory backend file {} is invalid: {}"
         )?;
         if self.default_maxmemory == 0 {
-            let s = System::new_all();
+            let s = System::new_with_specifics(
+                RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
+            );
             self.default_maxmemory = Byte::from_u64(s.total_memory())
                 .get_adjusted_unit(Unit::MiB)
                 .get_value() as u32;
@@ -827,6 +890,10 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub confidential_guest: bool,
 
+    /// If false prefer SEV even if SEV-SNP is also available
+    #[serde(default)]
+    pub sev_snp_guest: bool,
+
     /// Path to OCI hook binaries in the *guest rootfs*.
     ///
     /// This does not affect host-side hooks which must instead be added to the OCI spec passed to
@@ -848,12 +915,29 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub guest_hook_path: String,
 
+    /// Initdata is dynamic configuration (like policies, configs, and identity files) with encoded format that users inject
+    /// into the TEE Guest upon CVM launch. And it's implemented based on the `InitData Specification`:
+    /// https://github.com/confidential-containers/trustee/blob/61c1dc60ee1f926c2eb95d69666c2430c3fea808/kbs/docs/initdata.md
+    #[serde(default)]
+    pub initdata: String,
+
     /// List of valid annotation names for the hypervisor.
     ///
     /// Each member of the list is a regular expression, which is the base name of the annotation,
     /// e.g. "path" for io.katacontainers.config.hypervisor.path"
     #[serde(default)]
     pub enable_annotations: Vec<String>,
+
+    /// qgs_port defines Intel Quote Generation Service port exposed from the host
+    #[serde(
+        default = "default_qgs_port",
+        rename = "tdx_quote_generation_service_socket_port"
+    )]
+    pub qgs_port: u32,
+}
+
+fn default_qgs_port() -> u32 {
+    4050
 }
 
 impl SecurityInfo {
@@ -896,6 +980,7 @@ pub struct SharedFsInfo {
     /// Shared file system type:
     /// - virtio-fs (default)
     /// - virtio-9p`
+    /// - none
     pub shared_fs: Option<String>,
 
     /// Path to vhost-user-fs daemon.
@@ -945,6 +1030,11 @@ pub struct SharedFsInfo {
 impl SharedFsInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
+        if self.shared_fs.as_deref() == Some(NO_VIRTIO_FS) {
+            self.shared_fs = None;
+            return Ok(());
+        }
+
         if self.shared_fs.as_deref() == Some("") {
             self.shared_fs = Some(default::DEFAULT_SHARED_FS_TYPE.to_string());
         }
@@ -1040,6 +1130,26 @@ impl SharedFsInfo {
     }
 }
 
+/// Configuration information for remote hypervisor type.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RemoteInfo {
+    /// Remote hypervisor socket path
+    #[serde(default)]
+    pub hypervisor_socket: String,
+
+    /// Remote hyperisor timeout of creating (in seconds)
+    #[serde(default)]
+    pub hypervisor_timeout: i32,
+
+    /// GPU specific annotations (currently only applicable for Remote Hypervisor)
+    /// default_gpus specifies the number of GPUs required for the Kata VM
+    #[serde(default)]
+    pub default_gpus: u32,
+    /// default_gpu_model specifies GPU model like tesla, h100, a100, readeon etc.
+    #[serde(default)]
+    pub default_gpu_model: String,
+}
+
 /// Common configuration information for hypervisors.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Hypervisor {
@@ -1123,6 +1233,10 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub shared_fs: SharedFsInfo,
 
+    /// Remote hypervisor configuration information.
+    #[serde(default, flatten)]
+    pub remote_info: RemoteInfo,
+
     /// A sandbox annotation used to specify prefetch_files.list host path container image
     /// being used, and runtime will pass it to Hypervisor to  search for corresponding
     /// prefetch list file:
@@ -1164,6 +1278,10 @@ impl ConfigOps for Hypervisor {
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
+        info!(
+            sl!(),
+            "Adjusting hypervisor configuration {:?}", hypervisors
+        );
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_config(conf)?;

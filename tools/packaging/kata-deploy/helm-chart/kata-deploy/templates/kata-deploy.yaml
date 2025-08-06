@@ -1,22 +1,42 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
   name: {{ .Chart.Name }}
+{{- end }}
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:
+{{- if .Values.env.multiInstallSuffix }}
+      name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
       name: {{ .Chart.Name }}
+{{- end }}
   template:
     metadata:
       labels:
+{{- if .Values.env.multiInstallSuffix }}
+        name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
         name: {{ .Chart.Name }}
+{{- end }}
     spec:
 {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
 {{- toYaml . | nindent 6 }}
 {{- end }}
+{{- if .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
       serviceAccountName: {{ .Chart.Name }}-sa
+{{- end }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{- toYaml . | nindent 8 }}
+{{- end }}
       hostPID: true
       containers:
       - name: kube-kata
@@ -50,6 +70,8 @@ spec:
           value: {{ .Values.env.pullTypeMapping | quote }}
         - name: INSTALLATION_PREFIX
           value: {{ .Values.env.installationPrefix | quote }}
+        - name: MULTI_INSTALL_SUFFIX
+          value: {{ .Values.env.multiInstallSuffix | quote }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}

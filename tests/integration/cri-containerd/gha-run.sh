@@ -16,8 +16,16 @@ source "${cri_containerd_dir}/../../common.bash"
 function install_dependencies() {
 	info "Installing the dependencies needed for running the cri-containerd tests"
 
+	# Remove go if it's installed as it conflicts with another version of go
+	sudo apt-get remove -y golang-* || true
+	sudo rm -rf /usr/local/go
+
 	# Remove Docker if it's installed as it conflicts with podman-docker
 	sudo apt-get remove -y docker-ce-cli || true
+
+	# Remove containerd if it's installed as it conflicts with another version of containerd
+	sudo apt-get remove -y containerd containerd.io || true
+	sudo rm -rf /etc/systemd/system/containerd.service
 
 	# Dependency list of projects that we can rely on the system packages
 	# - build-essential
@@ -38,7 +46,7 @@ function install_dependencies() {
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
-	. "${repo_root_dir}/tests/install_go.sh" -p -f
+	"${repo_root_dir}/tests/install_go.sh" -p -f
 
 	# Dependency list of projects that we can install them
 	# directly from their releases on GitHub:
@@ -48,6 +56,8 @@ function install_dependencies() {
 	declare -a github_deps
 	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
+	github_deps[2]="runc:$(get_from_kata_deps ".externals.runc.latest")"
+	github_deps[3]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"

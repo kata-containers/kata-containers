@@ -71,7 +71,7 @@ kernel_params = "@KERNELTDXPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWARETDVFPATH@"
+firmware = "@FIRMWAREPATH_NV@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
@@ -149,7 +149,7 @@ default_memory = @DEFMEMSZ@
 default_maxmemory = @DEFMAXMEMSZ@
 
 # The size in MiB will be plused to max memory of hypervisor.
-# It is the memory address space for the NVDIMM devie.
+# It is the memory address space for the NVDIMM device.
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
@@ -337,21 +337,11 @@ pflashes = []
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-#disable_image_nvdimm = true
-
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-#hotplug_vfio_on_root_bus = true
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
 # Default 0
 #pcie_root_port = 2
 
@@ -676,3 +666,8 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# Enforce guest pull. This instructs the runtime to communicate to the agent via annotations that
+# the container image should be pulled in the guest, without using an external snapshotter.
+# This is an experimental feature and might be removed in the future.
+experimental_force_guest_pull = @DEFFORCEGUESTPULL@

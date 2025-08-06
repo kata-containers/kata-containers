@@ -12,7 +12,9 @@ Set the correct containerd conf path depending on the k8s distribution
 {{- else if eq .k8sDistribution "k3s" -}}
  /var/lib/rancher/k3s/agent/etc/containerd/
 {{- else if eq .k8sDistribution "k0s" -}}
-/etc/k0s/containerd.d/
+/etc/k0s/
+{{- else if eq .k8sDistribution "microk8s" -}}
+/var/snap/microk8s/current/args/
 {{- else -}}
 /etc/containerd/
 {{- end -}}

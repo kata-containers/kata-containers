@@ -9,14 +9,14 @@
 use std::fs::File;
 use std::sync::{Arc, Mutex};
 
-use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use log::{debug, error, info, warn};
+use std::sync::mpsc;
 use tracing::instrument;
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
-use crate::vcpu::VcpuManagerError;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
@@ -54,6 +54,8 @@ pub use crate::device_manager::virtio_net_dev_mgr::{
 };
 #[cfg(feature = "virtio-vsock")]
 pub use crate::device_manager::vsock_dev_mgr::{VsockDeviceConfigInfo, VsockDeviceError};
+#[cfg(feature = "host-device")]
+use crate::vcpu::VcpuManagerError;
 #[cfg(feature = "hotplug")]
 pub use crate::vcpu::{VcpuResizeError, VcpuResizeInfo};
 
@@ -284,7 +286,7 @@ pub enum VmmData {
     /// Return vfio device's slot number in guest.
     VfioDeviceData(Option<u8>),
     /// Sync Hotplug
-    SyncHotplug((Sender<Option<i32>>, Receiver<Option<i32>>)),
+    SyncHotplug((mpsc::Sender<Option<i32>>, mpsc::Receiver<Option<i32>>)),
 }
 
 /// Request data type used to communicate between the API and the VMM.
@@ -900,7 +902,7 @@ impl VmmService {
             }
         })?;
 
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = mpsc::channel();
 
         // It is safe because we don't expect poison lock.
         let vfio_manager = vm.device_manager.vfio_manager.lock().unwrap();
@@ -965,15 +967,17 @@ impl VmmService {
             ));
         }
 
+        let (sender, revceiver) = mpsc::channel();
+
         #[cfg(feature = "dbs-upcall")]
-        vm.resize_vcpu(config, None).map_err(|e| {
+        vm.resize_vcpu(config, Some(sender.clone())).map_err(|e| {
             if let VcpuResizeError::UpcallServerNotReady = e {
                 return VmmActionError::UpcallServerNotReady;
             }
             VmmActionError::ResizeVcpu(e)
         })?;
 
-        Ok(VmmData::Empty)
+        Ok(VmmData::SyncHotplug((sender, revceiver)))
     }
 
     #[cfg(feature = "virtio-mem")]

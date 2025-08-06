@@ -143,6 +143,16 @@ default_maxvcpus = @DEFMAXVCPUS_QEMU@
 # > 5                --> will be set to 5
 default_bridges = @DEFBRIDGES@
 
+# Reclaim guest freed memory.
+# Enabling this will result in the VM balloon device having f_reporting=on set.
+# Then the hypervisor will use it to reclaim guest freed memory.
+# This is useful for reducing the amount of memory used by a VM.
+# Enabling this feature may sometimes reduce the speed of memory access in
+# the VM.
+#
+# Default false
+#reclaim_guest_freed_memory = true
+
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
@@ -225,9 +235,15 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 #    Metadata, data, and pathname lookup are cached in guest and never expire.
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
-# Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
-# or nvdimm.
+# Block device driver to be used by the hypervisor when a container's
+# storage is backed by a block device or a file. This driver facilitates attaching
+# the storage directly to the guest VM.
+#
+# Examples include:
+# - virtio-blk-pci
+# - virtio-blk-ccw
+# - virtio-scsi
+# - nvidmm
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # aio is the I/O mechanism used by qemu
@@ -392,6 +408,13 @@ pflashes = []
 # Default 0
 #pcie_root_port = 2
 
+# Before hot plugging a PCIe device onto a switch port, you need add a pcie_switch_port device fist.
+# Use this parameter when using some large PCI bar devices, such as Nvidia GPU
+# The value means how many devices attached onto pcie_switch_port will be created.
+# This value is valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35"
+# Default 0
+#pcie_switch_port = 2
+
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance.
 #disable_vhost_net = true
@@ -429,6 +452,18 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
 #guest_hook_path = "/usr/share/oci/hooks"
+
+# Enable connection to Quote Generation Service (QGS)
+# The "tdx_quote_generation_service_socket_port" parameter configures how QEMU connects to the TDX Quote Generation Service (QGS).
+# This connection is essential for Trusted Domain (TD) attestation, as QGS signs the TDREPORT sent by QEMU via the GetQuote hypercall.
+# By default QGS runs on vsock port 4050, but can be modified by the host admin. For QEMU's tdx-guest object, this connection needs to
+# be specified in a JSON format, for example:
+# -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}'
+# It's important to note that setting "tdx_quote_generation_service_socket_port" to 0 enables communication via Unix Domain Sockets (UDS).
+# To activate UDS, the QGS service itself must be launched with the "-port=0" parameter and the UDS will always be located at /var/run/tdx-qgs/qgs.socket.
+# -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}}'
+# tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
+
 #
 # Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
 # In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) to discipline traffic.
@@ -459,17 +494,6 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 #
 # See: https://www.qemu.org/docs/master/qemu-qmp-ref.html#Dump-guest-memory for details
 #guest_memory_dump_paging=false
-
-# Enable swap in the guest. Default false.
-# When enable_guest_swap is enabled, insert a raw file to the guest as the swap device
-# if the swappiness of a container (set by annotation "io.katacontainers.container.resource.swappiness")
-# is bigger than 0.
-# The size of the swap device should be
-# swap_in_bytes (set by annotation "io.katacontainers.container.resource.swap_in_bytes") - memory_limit_in_bytes.
-# If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
-# If swap_in_bytes and memory_limit_in_bytes is not set, the size should
-# be default_memory.
-#enable_guest_swap = true
 
 # use legacy serial for guest console if available and implemented for architecture. Default false
 #use_legacy_serial = true
@@ -579,6 +603,115 @@ kernel_modules=[]
 # idea of what you are doing.
 # (default: 3000)
 #reconnect_timeout_ms = 3000
+
+[agent.@PROJECT_TYPE@.mem_agent]
+# Control the mem-agent function enable or disable.
+# Default to false
+#mem_agent_enable = true
+
+# Control the mem-agent memcg function disable or enable
+# Default to false
+#memcg_disable = false
+
+# Control the mem-agent function swap enable or disable.
+# Default to false
+#memcg_swap = false
+
+# Control the mem-agent function swappiness max number.
+# Default to 50
+#memcg_swappiness_max = 50
+
+# Control the mem-agent memcg function wait period seconds
+# Default to 600
+#memcg_period_secs = 600
+
+# Control the mem-agent memcg wait period PSI percent limit.
+# If the percentage of memory and IO PSI stall time within
+# the memcg waiting period for a cgroup exceeds this value,
+# then the aging and eviction for this cgroup will not be
+# executed after this waiting period.
+# Default to 1
+#memcg_period_psi_percent_limit = 1
+
+# Control the mem-agent memcg eviction PSI percent limit.
+# If the percentage of memory and IO PSI stall time for a cgroup
+# exceeds this value during an eviction cycle, the eviction for
+# this cgroup will immediately stop and will not resume until
+# the next memcg waiting period.
+# Default to 1
+#memcg_eviction_psi_percent_limit = 1
+
+# Control the mem-agent memcg eviction run aging count min.
+# A cgroup will only perform eviction when the number of aging cycles
+# in memcg is greater than or equal to memcg_eviction_run_aging_count_min.
+# Default to 3
+#memcg_eviction_run_aging_count_min = 3
+
+# Control the mem-agent compact function disable or enable
+# Default to false
+#compact_disable = false
+
+# Control the mem-agent compaction function wait period seconds
+# Default to 600
+#compact_period_secs = 600
+
+# Control the mem-agent compaction function wait period PSI percent limit.
+# If the percentage of memory and IO PSI stall time within
+# the compaction waiting period exceeds this value,
+# then the compaction will not be executed after this waiting period.
+# Default to 1
+#compact_period_psi_percent_limit = 1
+
+# Control the mem-agent compaction function compact PSI percent limit.
+# During compaction, the percentage of memory and IO PSI stall time
+# is checked every second. If this percentage exceeds
+# compact_psi_percent_limit, the compaction process will stop.
+# Default to 5
+#compact_psi_percent_limit = 5
+
+# Control the maximum number of seconds for each compaction of mem-agent compact function.
+# Default to 180
+#compact_sec_max = 180
+
+# Control the mem-agent compaction function compact order.
+# compact_order is use with compact_threshold.
+# Default to 9
+#compact_order = 9
+
+# Control the mem-agent compaction function compact threshold.
+# compact_threshold is the pages number.
+# When examining the /proc/pagetypeinfo, if there's an increase in the
+# number of movable pages of orders smaller than the compact_order
+# compared to the amount following the previous compaction,
+# and this increase surpasses a certain threshold—specifically,
+# more than 'compact_threshold' number of pages.
+# Or the number of free pages has decreased by 'compact_threshold'
+# since the previous compaction.
+# then the system should initiate another round of memory compaction.
+# Default to 1024
+#compact_threshold = 1024
+
+# Control the mem-agent compaction function force compact times.
+# After one compaction, if there has not been a compaction within
+# the next compact_force_times times, a compaction will be forced
+# regardless of the system's memory situation.
+# If compact_force_times is set to 0, will do force compaction each time.
+# If compact_force_times is set to 18446744073709551615, will never do force compaction.
+# Default to 18446744073709551615
+#compact_force_times = 18446744073709551615
+
+# Create Container Request Timeout
+# This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
+# It's also used to ensure that workloads, especially those involving large image pulls within the guest,
+# have sufficient time to complete.
+#
+# Effective Timeout Determination:
+# The effective timeout for a CreateContainerRequest is determined by taking the minimum of the following two values:
+# - create_container_timeout: The timeout value configured for creating containers (default: 30,000 milliseconds).
+# - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
+# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
+# create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

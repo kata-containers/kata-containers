@@ -1,14 +1,16 @@
 [package]
 name = "wasm_container"
 version = "0.1.0"
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
+authors = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
 
 [dependencies]
-anyhow = "^1.0"
-async-trait = "0.1.48"
-tokio = { version = "1.38.0" }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
 
-common = { path = "../common" }
-kata-types = { path = "../../../../libs/kata-types" }
-resource = { path = "../../resource" }
+# Local dependencies
+common = { workspace = true }
+kata-types = { workspace = true }
+resource = { workspace = true }

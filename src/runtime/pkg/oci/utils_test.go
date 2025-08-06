@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
@@ -224,22 +224,22 @@ func TestContainerType(t *testing.T) {
 		},
 		{
 			description:     "crio unexpected annotation, expect error",
-			annotationKey:   podmanAnnotations.ContainerType,
+			annotationKey:   crioAnnotations.ContainerType,
 			annotationValue: "foo",
 			expectedType:    vc.UnknownContainerType,
 			expectedErr:     true,
 		},
 		{
 			description:     "crio sandbox",
-			annotationKey:   podmanAnnotations.ContainerType,
-			annotationValue: string(podmanAnnotations.ContainerTypeSandbox),
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: string(crioAnnotations.ContainerTypeSandbox),
 			expectedType:    vc.PodSandbox,
 			expectedErr:     false,
 		},
 		{
 			description:     "crio container",
-			annotationKey:   podmanAnnotations.ContainerType,
-			annotationValue: string(podmanAnnotations.ContainerTypeContainer),
+			annotationKey:   crioAnnotations.ContainerType,
+			annotationValue: string(crioAnnotations.ContainerTypeContainer),
 			expectedType:    vc.PodContainer,
 			expectedErr:     false,
 		},
@@ -287,7 +287,7 @@ func TestSandboxIDSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
 	ociSpec.Annotations = map[string]string{
-		podmanAnnotations.SandboxID: testSandboxID,
+		crioAnnotations.SandboxID: testSandboxID,
 	}
 
 	sandboxID, err := SandboxID(ociSpec)
@@ -771,10 +771,40 @@ func TestAddRemoteHypervisorAnnotations(t *testing.T) {
 	assert.NoError(err)
 
 	// When initdata specified, remote hypervisor annotations do have the annotation added.
-	ocispec.Annotations[vcAnnotations.Initdata] = "initdata"
+	// Note that the initdata annotation parsing logic will extract it into plaintext
+	ocispec.Annotations[vcAnnotations.Initdata] = "H4sIAFlC92cAAytLLSrOzM9TsFVQMtAz1DNQ4krMSc8vyizJyAWJFWckGpmaKXFFpySWJMZyKSUm6pXk5+YoAeXU1dW5QJhLKTklA4toQX5OZnKlXlFqej6yBABS/5JkcQAAAA=="
 	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.NoError(err)
-	assert.Equal(sbConfig.HypervisorConfig.Initdata, "initdata")
+	assert.Equal(sbConfig.HypervisorConfig.Initdata, `version = "0.1.0"
+algorithm = "sha256"
+[data]
+"aa.toml" = '''
+'''
+
+"cdh.toml" = '''
+'''
+
+"policy.rego" = '''
+'''
+`)
+	assert.Equal(sbConfig.HypervisorConfig.InitdataDigest, []byte{0xc6, 0x69, 0x4b, 0xb7, 0xa2, 0x9d, 0x6f, 0x37, 0xec, 0x72, 0xa1, 0x55, 0x82, 0xe0, 0x4, 0xb9, 0xf3, 0x14, 0x21, 0x59, 0x68, 0x2d, 0xb8, 0x50, 0x9a, 0x30, 0x44, 0x7, 0x41, 0x9a, 0x49, 0xe5})
+
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUs] = "-1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultGPUs] = "1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUs, uint32(1))
+
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUModel] = "tesla"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUModel, "tesla")
+
 }
 
 func TestAddProtectedHypervisorAnnotations(t *testing.T) {
@@ -862,7 +892,9 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
 	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
 	ocispec.Annotations[vcAnnotations.CreateContainerTimeout] = "100"
-	ocispec.Annotations[vcAnnotations.Initdata] = "initdata"
+
+	// Note that the initdata annotation parsing logic will extract it into plaintext
+	ocispec.Annotations[vcAnnotations.Initdata] = "H4sIAFlC92cAAytLLSrOzM9TsFVQMtAz1DNQ4krMSc8vyizJyAWJFWckGpmaKXFFpySWJMZyKSUm6pXk5+YoAeXU1dW5QJhLKTklA4toQX5OZnKlXlFqej6yBABS/5JkcQAAAA=="
 
 	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
@@ -870,7 +902,20 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	assert.Equal(config.NetworkConfig.DisableNewNetwork, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
 	assert.Equal(config.CreateContainerTimeout, uint64(100))
-	assert.Equal(config.HypervisorConfig.Initdata, "initdata")
+	assert.Equal(config.HypervisorConfig.Initdata, `version = "0.1.0"
+algorithm = "sha256"
+[data]
+"aa.toml" = '''
+'''
+
+"cdh.toml" = '''
+'''
+
+"policy.rego" = '''
+'''
+`)
+	assert.Equal(config.HypervisorConfig.InitdataDigest, []byte{0xc6, 0x69, 0x4b, 0xb7, 0xa2, 0x9d, 0x6f, 0x37, 0xec, 0x72, 0xa1, 0x55, 0x82, 0xe0, 0x4, 0xb9, 0xf3, 0x14, 0x21, 0x59, 0x68, 0x2d, 0xb8, 0x50, 0x9a, 0x30, 0x44, 0x7, 0x41, 0x9a, 0x49, 0xe5})
+
 }
 
 func TestRegexpContains(t *testing.T) {
@@ -942,15 +987,15 @@ func TestIsCRIOContainerManager(t *testing.T) {
 		result      bool
 	}{
 		{
-			annotations: map[string]string{podmanAnnotations.ContainerType: "abc"},
+			annotations: map[string]string{crioAnnotations.ContainerType: "abc"},
 			result:      false,
 		},
 		{
-			annotations: map[string]string{podmanAnnotations.ContainerType: podmanAnnotations.ContainerTypeSandbox},
+			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeSandbox},
 			result:      true,
 		},
 		{
-			annotations: map[string]string{podmanAnnotations.ContainerType: podmanAnnotations.ContainerTypeContainer},
+			annotations: map[string]string{crioAnnotations.ContainerType: crioAnnotations.ContainerTypeContainer},
 			result:      true,
 		},
 	}

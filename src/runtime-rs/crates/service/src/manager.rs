@@ -17,7 +17,9 @@ use tokio::sync::mpsc::{channel, Receiver};
 use ttrpc::asynchronous::Server;
 
 use crate::event::{new_event_publisher, Forwarder};
+use crate::sandbox_service::SandboxService;
 use crate::task_service::TaskService;
+use containerd_shim_protos::sandbox_async;
 
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
@@ -136,25 +138,29 @@ impl ServiceManager {
     }
 
     fn registry_service(&mut self) -> Result<()> {
-        if let Some(t) = self.server.take() {
-            let task_service = Arc::new(Box::new(TaskService::new(self.handler.clone()))
-                as Box<dyn shim_async::Task + Send + Sync>);
-            let t = t.register_service(shim_async::create_task(task_service));
-            self.server = Some(t);
+        if let Some(s) = self.server.take() {
+            let sandbox_service: Arc<dyn sandbox_async::Sandbox + Send + Sync> =
+                Arc::new(SandboxService::new(self.handler.clone()));
+            let s = s.register_service(sandbox_async::create_sandbox(sandbox_service));
+
+            let task_service: Arc<dyn shim_async::Task + Send + Sync> =
+                Arc::new(TaskService::new(self.handler.clone()));
+            let s = s.register_service(shim_async::create_task(task_service));
+            self.server = Some(s);
         }
         Ok(())
     }
 
     async fn start_service(&mut self) -> Result<()> {
-        if let Some(t) = self.server.as_mut() {
-            t.start().await.context("task server start")?;
+        if let Some(s) = self.server.as_mut() {
+            s.start().await.context("task server start")?;
         }
         Ok(())
     }
 
     async fn stop_service(&mut self) -> Result<()> {
-        if let Some(t) = self.server.as_mut() {
-            t.stop_listen().await;
+        if let Some(s) = self.server.as_mut() {
+            s.stop_listen().await;
         }
         Ok(())
     }

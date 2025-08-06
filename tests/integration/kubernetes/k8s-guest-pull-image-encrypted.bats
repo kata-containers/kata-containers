@@ -20,7 +20,7 @@ setup() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    setup_common
+    setup_common || die "setup_common failed"
     ENCRYPTED_IMAGE="${ENCRYPTED_IMAGE:-ghcr.io/confidential-containers/test-container:multi-arch-encrypted}"
     DECRYPTION_KEY="${DECRYPTION_KEY:-HUlOu8NWz8si11OZUzUJMnjiq/iZyHBJZMSD3BaqgMc=}"
     DECRYPTION_KEY_ID="${DECRYPTION_KEY_ID:-ssh-demo}"
@@ -52,8 +52,7 @@ function setup_kbs_decryption_key() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
-    assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'Failed to decrypt the image layer, please ensure that the decryption key is placed and correct'
 }
 
 
@@ -80,8 +79,7 @@ function setup_kbs_decryption_key() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
-    assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'Failed to decrypt the image layer, please ensure that the decryption key is placed and correct'
 }
 
 teardown() {
@@ -95,5 +93,5 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    teardown_common "${node}" "${node_start_time:-}"
+    confidential_teardown_common "${node}" "${node_start_time:-}"
 }

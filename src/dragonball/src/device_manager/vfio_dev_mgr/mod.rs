@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::os::fd::RawFd;
 use std::path::Path;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Weak};
 
-use crossbeam_channel::Sender;
 use dbs_device::resources::Resource::LegacyIrq;
 use dbs_device::resources::{DeviceResources, Resource, ResourceConstraint};
 use dbs_device::DeviceIo;
@@ -729,10 +729,10 @@ mod tests {
     use vm_memory::{GuestAddress, GuestMemoryMmap, MmapRegion};
 
     use super::*;
-    use crate::config_manager::DeviceInfoGroup;
+    use crate::config_manager::DeviceConfigInfo;
     use crate::test_utils::tests::create_vm_for_test;
 
-    type VfioDeviceInfo = DeviceInfoGroup<VfioDeviceConfigInfo, VfioDeviceError>;
+    type VfioDeviceInfo = DeviceConfigInfo<VfioDeviceConfigInfo, VfioDeviceError>;
 
     fn get_vfio_dev_mgr() -> VfioDeviceMgr {
         let kvm = Kvm::new().unwrap();

@@ -20,15 +20,19 @@ export PATH="$PATH:/usr/local/sbin"
 # golang is installed in /usr/local/go/bin/ add that path
 export PATH="$PATH:/usr/local/go/bin"
 
+#the latest containerd from 2.0 need to set the CGROUP_DRIVER for e2e testing
+export CGROUP_DRIVER=""
+
 # Runtime to be used for testing
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
 FACTORY_TEST=${FACTORY_TEST:-""}
 ARCH=$(uname -m)
+SANDBOXER=${SANDBOXER:-"podsandbox"}
 
 containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
 
-containerd_shim_path="$(command -v containerd-shim)"
+containerd_shim_path="$(command -v containerd-shim || true)"
 
 #containerd config file
 readonly tmp_dir=$(mktemp -t -d test-cri-containerd.XXXX)
@@ -97,26 +101,36 @@ function create_containerd_config() {
 		runtime_config_path=""
 		runtime_binary_path=""
 	fi
+
+	# check containerd config version
+	if containerd config default | grep -q "version = 3\>"; then
+		pluginid=\"io.containerd.cri.v1.runtime\"
+	else
+		pluginid="cri"
+	fi
 	info "Kata Config Path ${runtime_config_path}, Runtime Binary Name ${runtime_binary_path}"
 
 cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
 [debug]
   level = "debug"
 [plugins]
-  [plugins.cri]
-    [plugins.cri.containerd]
+  [plugins.${pluginid}]
+    [plugins.${pluginid}.containerd]
         default_runtime_name = "$runtime"
-      [plugins.cri.containerd.runtimes.${runtime}]
+      [plugins.${pluginid}.containerd.runtimes.${runtime}]
         runtime_type = "${runtime_type}"
+        sandboxer = "${SANDBOXER}"
         $( [ $kata_annotations -eq 1 ] && \
         echo 'pod_annotations = ["io.katacontainers.*"]' && \
         echo '        container_annotations = ["io.katacontainers.*"]'
         )
-        [plugins.cri.containerd.runtimes.${runtime}.options]
+        [plugins.${pluginid}.containerd.runtimes.${runtime}.options]
           ConfigPath = "${runtime_config_path}"
           BinaryName = "${runtime_binary_path}"
-[plugins.linux]
-       shim = "${containerd_shim_path}"
+$( [[ -n "$containerd_shim_path" ]] && \
+echo "[plugins.linux]" && \
+echo "  shim = \"${containerd_shim_path}\""
+)
 EOF
 }
 
@@ -266,7 +280,7 @@ function PrepareContainerMemoryUpdate() {
 	test_virtio_mem=$1
 
 	if [ $test_virtio_mem -eq 1 ]; then
-		if [[ "$ARCH" != "x86_64" ]]; then
+		if [[ "$ARCH" != "x86_64" ]] && [[ "$ARCH" != "aarch64" ]]; then
 			return
 		fi
 		info "Test container memory update with virtio-mem"
@@ -596,6 +610,17 @@ function TestDeviceCgroup() {
 
 function main() {
 
+	info "Clean up containers and pods"
+	restart_containerd_service
+	containers=( $(sudo crictl ps --all -o json | jq -r '.containers[].id') )
+	for c in "${containers[@]}"; do
+		sudo crictl rm -f $c
+	done
+	pods=( $(sudo crictl pods -o json | jq -r '.items[].id') )
+	for p in "${pods[@]}"; do
+		sudo crictl rmp -f $p
+	done
+
 	info "Stop crio service"
 	systemctl is-active --quiet crio && sudo systemctl stop crio
 
@@ -609,6 +634,12 @@ function main() {
 
 	# Make sure the right artifacts are going to be built
 	sudo make clean
+
+	# the latest containerd had an issue for its e2e test, thus we should do the following
+	# fix to workaround this issue. For much info about this issue, please see:
+	# https://github.com/containerd/containerd/pull/11240
+	# Once this pr was merged and release new version, we can remove this workaround.
+	sed -i 's/cat "\${config_file}"/cat "\${CONTAINERD_CONFIG_FILE}"/' script/test/utils.sh
 
 	check_daemon_setup
 
@@ -657,10 +688,12 @@ function main() {
 		if [[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ]]; then
 			info "TestKilledVmmCleanup and TestDeviceCgroup skipped for qemu with runtime-rs"
 			info "Please check out https://github.com/kata-containers/kata-containers/issues/9375"
-			break
+			return
 		else
 			TestKilledVmmCleanup
-			TestDeviceCgroup
+
+			info "Skipping TestDeviceCgroup till the test is adapted to cgroupsv2"
+			#TestDeviceCgroup
 		fi
 	fi
 

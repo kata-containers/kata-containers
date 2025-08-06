@@ -452,6 +452,37 @@ func (clh *cloudHypervisor) enableProtection() error {
 	}
 }
 
+func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bool, debug bool, confidential bool, iommu bool) ([]Param, error) {
+	params, err := GetKernelRootParams(rootfstype, disableNvdimm, dax)
+	if err != nil {
+		return []Param{}, err
+	}
+	params = append(params, clhKernelParams...)
+
+	if iommu {
+		params = append(params, Param{"iommu", "pt"})
+	}
+
+	if !debug {
+		// start the guest kernel with 'quiet' in non-debug mode
+		params = append(params, Param{"quiet", ""})
+		return params, nil
+	}
+
+	// In case of debug ...
+
+	// Followed by extra debug parameters if debug enabled in configuration file
+	if confidential {
+		params = append(params, clhDebugConfidentialGuestKernelParams...)
+	} else if runtime.GOARCH == "arm64" {
+		params = append(params, clhArmDebugKernelParams...)
+	} else {
+		params = append(params, clhDebugKernelParams...)
+	}
+	params = append(params, clhDebugKernelParamsCommon...)
+	return params, nil
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through StartVM().
 func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
@@ -513,42 +544,39 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// Create the VM memory config via the constructor to ensure default values are properly assigned
 	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
-	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
-	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+	// Memory config shared is to be enabled when using vhost_user backends, ex. virtio-fs
+	// or when using HugePages.
+	// If such features are disabled, turn off shared memory config.
+	if clh.config.SharedFS == config.NoSharedFS && !clh.config.HugePages {
+		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(false)
+	} else {
+		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+	}
 	// Enable hugepages if needed
 	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
 	if !clh.config.ConfidentialGuest {
 		hotplugSize := clh.config.DefaultMaxMemorySize
 		// OpenAPI only supports int64 values
 		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+
+		if clh.config.ReclaimGuestFreedMemory {
+			// Create VM with a balloon config so we can enable free page reporting (size of the balloon can be set to zero)
+			clh.vmconfig.Balloon = chclient.NewBalloonConfig(0)
+			// Set the free page reporting flag for ballooning to be true
+			clh.vmconfig.Balloon.SetFreePageReporting(true)
+		}
 	}
+
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
-	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, !clh.config.ConfidentialGuest)
+	disableNvdimm := (clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest)
+	enableDax := !disableNvdimm
+
+	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
 	if err != nil {
 		return err
 	}
-	params = append(params, clhKernelParams...)
-
-	// Followed by extra debug parameters if debug enabled in configuration file
-	if clh.config.Debug {
-		if clh.config.ConfidentialGuest {
-			params = append(params, clhDebugConfidentialGuestKernelParams...)
-		} else if runtime.GOARCH == "arm64" {
-			params = append(params, clhArmDebugKernelParams...)
-		} else {
-			params = append(params, clhDebugKernelParams...)
-		}
-		params = append(params, clhDebugKernelParamsCommon...)
-	} else {
-		// start the guest kernel with 'quiet' in non-debug mode
-		params = append(params, Param{"quiet", ""})
-	}
-	if clh.config.IOMMU {
-		params = append(params, Param{"iommu", "pt"})
-	}
-
 	// Followed by extra kernel parameters defined in the configuration file
 	params = append(params, clh.config.KernelParams...)
 
@@ -565,8 +593,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 
 	if assetType == types.ImageAsset {
-		if clh.config.ConfidentialGuest {
-			disk := chclient.NewDiskConfig(assetPath)
+		if clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest {
+			disk := chclient.NewDiskConfig()
+			disk.Path = &assetPath
 			disk.SetReadonly(true)
 
 			diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
@@ -701,7 +730,11 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		return err
 	}
 	defer func() {
-		if err != nil {
+		if err == nil {
+			return
+		}
+
+		if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
 			if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
 				clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
 			}
@@ -854,7 +887,8 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	}
 
 	// Create the clh disk config via the constructor to ensure default values are properly assigned
-	clhDisk := *chclient.NewDiskConfig(drive.File)
+	clhDisk := *chclient.NewDiskConfig()
+	clhDisk.Path = &drive.File
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 	if clh.config.BlockDeviceCacheSet {
@@ -1278,10 +1312,12 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 		return err
 	}
 
-	clh.Logger().Debug("stop virtiofsDaemon")
+	if clh.config.SharedFS == config.VirtioFS || clh.config.SharedFS == config.VirtioFSNydus {
+		clh.Logger().Debug("stop virtiofsDaemon")
 
-	if err = clh.stopVirtiofsDaemon(ctx); err != nil {
-		clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		if err = clh.stopVirtiofsDaemon(ctx); err != nil {
+			clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		}
 	}
 
 	return
@@ -1356,14 +1392,13 @@ func (clh *cloudHypervisor) launchClh() error {
 	}
 
 	args := []string{cscAPIsocket, clh.state.apiSocket}
-	if clh.config.Debug {
+	if clh.config.Debug && clh.config.HypervisorLoglevel > 0 {
 		// Cloud hypervisor log levels
 		// 'v' occurrences increase the level
-		//0 =>  Error
-		//1 =>  Warn
-		//2 =>  Info
-		//3 =>  Debug
-		//4+ => Trace
+		//0 =>  Warn
+		//1 =>  Info
+		//2 =>  Debug
+		//3+ => Trace
 		// Use Info, the CI runs with debug enabled
 		// a high level of logging increases the boot time
 		// and in a nested environment this could increase
@@ -1377,7 +1412,8 @@ func (clh *cloudHypervisor) launchClh() error {
 		// output. For further details, see the discussion on:
 		//
 		//   https://github.com/kata-containers/kata-containers/pull/2751
-		args = append(args, "-v")
+		verbosityString := fmt.Sprintf("-%s", strings.Repeat("v", int(clh.config.HypervisorLoglevel)))
+		args = append(args, verbosityString)
 	}
 
 	// Enable the `seccomp` feature from Cloud Hypervisor by default
@@ -1628,7 +1664,7 @@ func (clh *cloudHypervisor) getDiskRateLimiterConfig() *chclient.RateLimiterConf
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
-	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
+	clh.Logger().WithField("endpoint", e).Debugf("Adding Endpoint of type %v", e.Type())
 
 	mac := e.HardwareAddr()
 	netPair := e.NetworkPair()

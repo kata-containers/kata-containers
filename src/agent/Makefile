@@ -41,21 +41,7 @@ ifeq ($(AGENT_POLICY),yes)
     override EXTRA_RUSTFEATURES += agent-policy
 endif
 
-##VAR PULL_TYPE=default|guest-pull define if agent enables the guest pull image feature
-PULL_TYPE ?= default
-ifeq ($(PULL_TYPE),default)
-    override EXTRA_RUSTFEATURES += default-pull
-# Enable guest pull image feature of rust build
-else ifeq ($(PULL_TYPE),guest-pull)
-    override EXTRA_RUSTFEATURES += guest-pull
-endif
-
-
 include ../../utils.mk
-
-ifeq ($(ARCH), ppc64le)
-    override ARCH = powerpc64le
-endif
 
 ##VAR STANDARD_OCI_RUNTIME=yes|no define if agent enables standard oci runtime feature
 STANDARD_OCI_RUNTIME := no
@@ -231,4 +217,11 @@ codecov-html: check_tarpaulin
 
 ##TARGET generate-protocols: generate/update grpc agent protocols
 generate-protocols:
+	image=$$(docker build -q \
+	  --build-arg GO_VERSION=$$(yq '.languages.golang.version' $(CURDIR)/../../versions.yaml) \
+	  --build-arg PROTOC_VERSION=$$(yq '.externals.protoc.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg PROTOC_GEN_GO_VERSION=$$(yq '.externals.protoc-gen-go.version' $(CURDIR)/../../versions.yaml) \
+	  --build-arg TTRPC_VERSION=$$(yq '.externals.ttrpc.version' $(CURDIR)/../../versions.yaml) \
+	  $(CURDIR)/../../tools/packaging/static-build/codegen) && \
+	docker run --rm --workdir /kata/src/agent -v $(CURDIR)/../..:/kata --user $(shell id -u) $$image \
 	../libs/protocols/hack/update-generated-proto.sh all

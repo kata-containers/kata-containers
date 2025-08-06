@@ -21,9 +21,6 @@ GOPATH="${GOPATH%%:*}"
 kernel_version=""
 # Flag know if need to download the kernel source
 download_kernel=false
-# The repository where kernel configuration lives
-readonly kernel_config_repo="github.com/${project_name}/kata-containers/tools/packaging"
-readonly patches_repo="github.com/${project_name}/kata-containers/tools/packaging"
 # Default path to search patches to apply to kernel
 readonly default_patches_dir="${script_dir}/patches"
 # Default path to search config for kata
@@ -35,6 +32,8 @@ readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # xPU vendor
 readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
+readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
+readonly KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 #Path to kernel directory
 kernel_path=""
@@ -72,6 +71,7 @@ measured_rootfs="false"
 CROSS_BUILD_ARG=""
 
 packaging_scripts_dir="${script_dir}/../scripts"
+# shellcheck source=tools/packaging/scripts/lib.sh
 source "${packaging_scripts_dir}/lib.sh"
 
 usage() {
@@ -95,7 +95,7 @@ Commands:
 
 Options:
 
-	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
+	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/riscv64/s390x/x86_64.
 	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
 	-D <vendor> 	: DPU/SmartNIC vendor, only nvidia.
@@ -125,6 +125,7 @@ arch_to_kernel() {
 	case "$arch" in
 		aarch64) echo "arm64" ;;
 		ppc64le) echo "powerpc" ;;
+		riscv64) echo "riscv" ;;
 		s390x) echo "s390" ;;
 		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
@@ -137,28 +138,6 @@ check_initramfs_or_die() {
 		die "Initramfs for measured rootfs not found at ${default_initramfs}"
 }
 
-get_tee_kernel() {
-	local version="${1}"
-	local kernel_path="${2}"
-	local tee="${3}"
-
-	mkdir -p ${kernel_path}
-
-	if [ -z "${kernel_url}" ]; then
-		kernel_url=$(get_from_kata_deps ".assets.kernel.${tee}.url")
-	fi
-
-	local kernel_tarball="${version}.tar.gz"
-
-	# Depending on where we're getting the tarball from it may have a
-	# different name, such as linux-${version}.tar.gz or simply
-	# ${version}.tar.gz.  Let's try both before failing.
-	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
-
-	mkdir -p ${kernel_path}
-	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
-}
-
 get_kernel() {
 	local version="${1:-}"
 
@@ -166,44 +145,57 @@ get_kernel() {
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	if [ "${conf_guest}" != "" ]; then
-		get_tee_kernel ${version} ${kernel_path} ${conf_guest}
-		return
-	fi
-
 	#Remove extra 'v'
 	version=${version#v}
 
-	major_version=$(echo "${version}" | cut -d. -f1)
-	kernel_tarball="linux-${version}.tar.xz"
+	local major_version=$(echo "${version}" | cut -d. -f1)
+	local rc=$(echo "${version}" | grep -oE "\-rc[0-9]+$")
 
-	if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
-		info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
-		cp -f "${kernel_tarball}.sha256" sha256sums.asc
-	else
-		shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-		info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
-		curl --fail -OL "${shasum_url}"
-		if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
-			info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+	local tar_suffix="tar.xz"
+	if [ -n "${rc}" ]; then
+		tar_suffix="tar.gz"
+	fi
+	kernel_tarball="linux-${version}.${tar_suffix}"
+
+	if [ -z "${rc}" ]; then
+		if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
+			info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
+			cp -f "${kernel_tarball}.sha256" sha256sums.asc
 		else
-			die "sha256sums.asc is invalid"
+			shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+			info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
+			curl --fail -OL "${shasum_url}"
+			if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
+				info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+			else
+				die "sha256sums.asc is invalid"
+			fi
+		fi
+	else
+		info "Release candidate kernels are not part of the official sha256sums.asc -- skipping sha256sum validation"
+	fi
+
+	if [ -f "${kernel_tarball}" ]; then
+	       	if [ -n "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+			info "invalid kernel tarball ${kernel_tarball} removing "
+			rm -f "${kernel_tarball}"
 		fi
 	fi
-
-	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-		info "invalid kernel tarball ${kernel_tarball} removing "
-		rm -f "${kernel_tarball}"
-	fi
 	if [ ! -f "${kernel_tarball}" ]; then
+		kernel_tarball_url="https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		if [ -n "${kernel_url}" ]; then
+			kernel_tarball_url="${kernel_url}${kernel_tarball}"
+		fi
 		info "Download kernel version ${version}"
-		info "Download kernel"
-		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		info "Download kernel from: ${kernel_tarball_url}"
+		curl --fail -OL "${kernel_tarball_url}"
 	else
 		info "kernel tarball already downloaded"
 	fi
 
-	sha256sum -c "${kernel_tarball}.sha256"
+	if [ -z "${rc}" ]; then
+		sha256sum -c "${kernel_tarball}.sha256"
+	fi
 
 	tar xf "${kernel_tarball}"
 
@@ -235,8 +227,15 @@ get_kernel_frag_path() {
 	local config_path="${arch_path}/.config"
 
 	local arch_configs="$(ls ${arch_path}/*.conf)"
-	# Exclude configs if they have !$arch tag in the header
-	local common_configs="$(grep "\!${arch}" ${common_path}/*.conf -L)"
+	# By default, exclude configs if they have !$arch tag in the header
+	local exclude_tags="-e "\!${arch}""
+
+	# Also, let confidential guest opt-out some insecure configs
+	if [[ "${conf_guest}" != "" ]];then
+		exclude_tags="${exclude_tags} -e "\!${conf_guest}""
+	fi
+
+	local common_configs="$(grep ${exclude_tags} ${common_path}/*.conf -L)"
 
 	local extra_configs=""
 	if [ "${build_type}" != "" ];then
@@ -305,6 +304,22 @@ get_kernel_frag_path() {
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
+
+		local tmpfs_configs="$(ls ${common_path}/confidential_containers/tmpfs.conf)"
+		all_configs="${all_configs} ${tmpfs_configs}"
+	fi
+
+	if [[ "${KBUILD_SIGN_PIN}" != "" ]]; then
+		info "Enabling config for module signing"
+		local sign_configs
+		sign_configs="$(ls ${common_path}/signing/module_signing.conf)"
+		all_configs="${all_configs} ${sign_configs}"
+	fi
+
+	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
+		info "Enable kernel debug"
+		local debug_configs="$(ls ${common_path}/common/debug.conf)"
+		all_configs="${all_configs} ${debug_configs}"
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
@@ -375,9 +390,6 @@ get_default_kernel_config() {
 	[ -n "${version}" ] || die "kernel version not provided"
 	[ -n "${hypervisor}" ] || die "hypervisor not provided"
 	[ -n "${kernel_arch}" ] || die "kernel arch not provided"
-
-	local kernel_ver
-	kernel_ver=$(get_major_kernel_version "${version}")
 
 	archfragdir="${default_config_frags_dir}/${kernel_arch}"
 	if [ -d "${archfragdir}" ]; then
@@ -505,6 +517,15 @@ build_kernel_headers() {
 	if [ "$linux_headers" == "rpm" ]; then
 		make -j $(nproc) rpm-pkg ARCH="${arch_target}"
 	fi
+	# If we encrypt the key earlier it will break the kernel_headers build.
+	# At this stage the kernel has created the certs/signing_key.pem
+	# encrypt it for later usage in another job or out-of-tree build
+	# only encrypt if we have KBUILD_SIGN_PIN set
+	local key="certs/signing_key.pem"
+	if [ -n "${KBUILD_SIGN_PIN}" ]; then
+		[ -e "${key}" ] || die "${key} missing but KBUILD_SIGN_PIN is set"
+		openssl rsa -aes256 -in ${key} -out ${key} -passout env:KBUILD_SIGN_PIN
+	fi
 
 	popd >>/dev/null
 }
@@ -552,7 +573,7 @@ install_kata() {
 	fi
 
 	# Install uncompressed kernel
-	if [ "${arch_target}" = "arm64" ]; then
+	if [ "${arch_target}" = "arm64" ] || [ "${arch_target}" = "riscv" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
 	elif [ "${arch_target}" = "s390" ]; then
 		install --mode 0644 -D "arch/${arch_target}/boot/vmlinux" "${install_path}/${vmlinux}"
@@ -719,4 +740,4 @@ main() {
 	esac
 }
 
-main $@
+main "$@"

@@ -6,6 +6,9 @@ on:
       - reopened
       - synchronize
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -15,14 +18,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        persist-credentials: false
     - name: Ensure the split out runtime classes match the all-in-one file
       run: |
         pushd tools/packaging/kata-deploy/runtimeclasses/
         echo "::group::Combine runtime classes"
-        for runtimeClass in `find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort`; do
+        for runtimeClass in $(find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort); do
             echo "Adding ${runtimeClass} to the resultingRuntimeClasses.yaml"
-            cat ${runtimeClass} >> resultingRuntimeClasses.yaml;
+            cat "${runtimeClass}" >> resultingRuntimeClasses.yaml;
         done
         echo "::endgroup::"
         echo "::group::Displaying the content of resultingRuntimeClasses.yaml"

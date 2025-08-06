@@ -15,6 +15,7 @@ use serde::Deserialize;
 use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
 
 use crate::config::TomlConfig;
+use crate::initdata::add_hypervisor_initdata_overrides;
 use crate::sl;
 
 use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
@@ -187,6 +188,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_HOTPLUG_VFIO_ON_ROOT_BUS: &str =
 /// PCIeRootPort is used to indicate the number of PCIe Root Port devices
 pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT: &str =
     "io.katacontainers.config.hypervisor.pcie_root_port";
+/// PCIeSwitchPort is used to indicate the number of PCIe Switch Port devices
+pub const KATA_ANNO_CFG_HYPERVISOR_PCIE_SWITCH_PORT: &str =
+    "io.katacontainers.config.hypervisor.pcie_switch_port";
 /// A sandbox annotation to specify if the VM should have a vIOMMU device.
 pub const KATA_ANNO_CFG_HYPERVISOR_IOMMU: &str = "io.katacontainers.config.hypervisor.enable_iommu";
 /// Enable Hypervisor Devices IOMMU_PLATFORM
@@ -227,9 +231,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR: &str =
 /// A sandbox annotation that is used to enable/disable virtio-mem.
 pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM: &str =
     "io.katacontainers.config.hypervisor.enable_virtio_mem";
-/// A sandbox annotation to enable swap of vm memory.
-pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP: &str =
-    "io.katacontainers.config.hypervisor.enable_swap";
 /// A sandbox annotation to enable swap in the guest.
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP: &str =
     "io.katacontainers.config.hypervisor.enable_guest_swap";
@@ -271,6 +272,17 @@ pub const KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS: &str =
     "io.katacontainers.config.hypervisor.virtio_fs_extra_args";
 /// A sandbox annotation to specify as the msize for 9p shares.
 pub const KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P: &str = "io.katacontainers.config.hypervisor.msize_9p";
+/// The initdata annotation passed in when CVM launchs
+pub const KATA_ANNO_CFG_HYPERVISOR_INIT_DATA: &str =
+    "io.katacontainers.config.hypervisor.cc_init_data";
+
+/// GPU specific annotations for remote hypervisor to help with instance selection
+/// It's for minimum number of GPUs required for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS: &str =
+    "io.katacontainers.config.hypervisor.default_gpus";
+/// It's for the GPU model(tesla, h100, a100, radeon etc.) required for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL: &str =
+    "io.katacontainers.config.hypervisor.default_gpu_model";
 
 // Runtime related annotations
 /// Prefix for Runtime configurations.
@@ -303,6 +315,9 @@ pub const KATA_ANNO_CFG_DISABLE_NEW_NETNS: &str =
 pub const KATA_ANNO_CFG_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio_mode";
 /// An annotation to declare shared mount points, which is a set of mount points that directly share mounted objects between containers.
 pub const KATA_ANNO_CFG_SHARED_MOUNTS: &str = "io.katacontainers.config.runtime.shared_mounts";
+/// An annotation to set timeout value in second when do create container
+pub const KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT: &str =
+    "io.katacontainers.config.runtime.create_container_timeout";
 
 /// A sandbox annotation used to specify prefetch_files.list host path container image
 /// being used,
@@ -315,6 +330,12 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PREFETCH_FILES_LIST: &str =
 /// A sandbox annotation for sandbox level volume sharing with host.
 pub const KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS: &str =
     "io.katacontainers.config.runtime.sandbox_bind_mounts";
+
+/// Max PCIe root ports is 16
+pub const MAX_PCIE_ROOT_PORT: u32 = 16_u32;
+
+/// Max PCIe switch ports is 16
+pub const MAX_PCIE_SWITCH_PORT: u32 = 16_u32;
 
 /// A helper structure to query configuration information by check annotations.
 #[derive(Debug, Default, Deserialize)]
@@ -661,9 +682,53 @@ impl Annotation {
                             }
                         }
                     }
+                    // Limitations documents aligned with runtime-go:
+                    // If number of PCIe root ports > 16 then bail out otherwise we may
+                    // use up all slots or IO memory on the root bus and vfio-XXX-pci devices
+                    // cannot be added which are crucial for Kata max slots on root bus is 32
+                    // max slots on the complete pci(e) topology is 256 in QEMU
+                    // If a user uses 8 GPUs with 4 devices in each IOMMU Group that means we need
+                    // to hotplug 32 devices. We do not have enough PCIe root bus slots to
+                    // accomplish this task. Kata will use already some slots for vfio-xxxx-pci
+                    // devices.
+                    // Max PCI slots per root bus is 32
+                    // Max PCIe root ports is 16
+                    // Max PCIe switch ports is 16
+                    // There is only 64kB of IO memory each root,switch port will consume 4k hence
+                    // only 16 ports possible.
                     KATA_ANNO_CFG_HYPERVISOR_PCIE_ROOT_PORT => match self.get_value::<u32>(key) {
                         Ok(r) => {
-                            hv.device_info.pcie_root_port = r.unwrap_or_default();
+                            let root_ports = r.unwrap_or_default();
+                            if root_ports > MAX_PCIE_ROOT_PORT {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "root ports allocated exceeds the max {}",
+                                        MAX_PCIE_ROOT_PORT
+                                    ),
+                                ));
+                            } else {
+                                hv.device_info.pcie_root_port = root_ports;
+                            }
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_PCIE_SWITCH_PORT => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            let switch_ports = r.unwrap_or_default();
+                            if switch_ports > MAX_PCIE_SWITCH_PORT {
+                                return Err(io::Error::new(
+                                    io::ErrorKind::InvalidData,
+                                    format!(
+                                        "switch ports allocated exceeds the max {}",
+                                        MAX_PCIE_SWITCH_PORT
+                                    ),
+                                ));
+                            } else {
+                                hv.device_info.pcie_switch_port = switch_ports;
+                            }
                         }
                         Err(_e) => {
                             return Err(u32_err);
@@ -786,14 +851,6 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
-                    KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP => match self.get_value::<bool>(key) {
-                        Ok(r) => {
-                            hv.memory_info.enable_swap = r.unwrap_or_default();
-                        }
-                        Err(_e) => {
-                            return Err(bool_err);
-                        }
-                    },
                     KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP => match self.get_value::<bool>(key)
                     {
                         Ok(r) => {
@@ -837,6 +894,21 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH => {
                         hv.security_info.validate_path(value)?;
                         hv.security_info.guest_hook_path = value.to_string();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_INIT_DATA => {
+                        hv.security_info.initdata =
+                            add_hypervisor_initdata_overrides(value).unwrap();
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            hv.remote_info.default_gpus = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL => {
+                        hv.remote_info.default_gpu_model = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR => {
                         match self.get_value::<bool>(key) {
@@ -915,6 +987,14 @@ impl Annotation {
                     KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             ag.container_pipe_size = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            ag.request_timeout_ms = v.unwrap_or_default() * 1000;
                         }
                         Err(_e) => {
                             return Err(u32_err);

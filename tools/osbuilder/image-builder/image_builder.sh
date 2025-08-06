@@ -12,6 +12,7 @@ set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+IMAGE_SIZE_ALIGNMENT_MB=${IMAGE_SIZE_ALIGNMENT_MB:-128}
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -29,7 +30,6 @@ readonly lib_file="${script_dir}/../scripts/lib.sh"
 
 readonly ext4_format="ext4"
 readonly xfs_format="xfs"
-readonly erofs_format="erofs"
 
 # ext4: percentage of the filesystem which may only be allocated by privileged processes.
 readonly reserved_blocks_percentage=3
@@ -50,37 +50,10 @@ readonly dax_header_sz=2
 # [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
 readonly dax_alignment=2
 
-# The list of systemd units and files that are not needed in Kata Containers
-readonly -a systemd_units=(
-	"systemd-coredump@"
-	"systemd-journald"
-	"systemd-journald-dev-log"
-	"systemd-journal-flush"
-	"systemd-random-seed"
-	"systemd-timesyncd"
-	"systemd-tmpfiles-setup"
-	"systemd-udevd"
-	"systemd-udevd-control"
-	"systemd-udevd-kernel"
-	"systemd-udev-trigger"
-	"systemd-update-utmp"
-)
-
-readonly -a systemd_files=(
-	"systemd-bless-boot-generator"
-	"systemd-fstab-generator"
-	"systemd-getty-generator"
-	"systemd-gpt-auto-generator"
-	"systemd-tmpfiles-cleanup.timer"
-)
-
 # Set a default value
 AGENT_INIT=${AGENT_INIT:-no}
 SELINUX=${SELINUX:-no}
 SELINUXFS="/sys/fs/selinux"
-
-# Align image to 128M
-readonly mem_boundary_mb=128
 
 # shellcheck source=../scripts/lib.sh
 source "${lib_file}"
@@ -203,6 +176,7 @@ build_with_container() {
 		   --env TARGET_ARCH="${TARGET_ARCH}" \
 		   --env USER="$(id -u)" \
 		   --env GROUP="$(id -g)" \
+		   --env IMAGE_SIZE_ALIGNMENT_MB="${IMAGE_SIZE_ALIGNMENT_MB}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
@@ -333,9 +307,9 @@ calculate_img_size() {
 		img_size="$((img_size + root_free_space_mb))"
 	fi
 
-	remaining="$((img_size % mem_boundary_mb))"
+	remaining="$((img_size % ${IMAGE_SIZE_ALIGNMENT_MB}))"
 	if [ "${remaining}" != "0" ]; then
-		img_size=$((img_size + mem_boundary_mb - remaining))
+		img_size=$((img_size + ${IMAGE_SIZE_ALIGNMENT_MB} - remaining))
 	fi
 
 	echo "${img_size}"
@@ -456,21 +430,6 @@ setup_selinux() {
 }
 
 setup_systemd() {
-		local mount_dir="$1"
-
-		info "Removing unneeded systemd services and sockets"
-		for u in "${systemd_units[@]}"; do
-			find "${mount_dir}" -type f \( \
-				 -name "${u}.service" -o \
-				 -name "${u}.socket" \) \
-				 -exec rm -f {} \;
-		done
-
-		info "Removing unneeded systemd files"
-		for u in "${systemd_files[@]}"; do
-			find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
-		done
-
 		info "Creating empty machine-id to allow systemd to bind-mount it"
 		touch "${mount_dir}/etc/machine-id"
 }

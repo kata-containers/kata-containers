@@ -15,17 +15,21 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && skip "https://github.com/kata-containers/kata-containers/issues/9039"
 	[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
+		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
 
 
 	pod_name="constraints-cpu-test"
 	container_name="first-cpu-container"
-	sharessyspath="/sys/fs/cgroup/cpu/cpu.shares"
-	quotasyspath="/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
-	periodsyspath="/sys/fs/cgroup/cpu/cpu.cfs_period_us"
+
+	weightsyspath="/sys/fs/cgroup/cpu.weight"
+	maxsyspath="/sys/fs/cgroup/cpu.max"
+
 	total_cpus=2
-	total_requests=512
+	# https://github.com/containers/crun/blob/main/crun.1.md#cgroup-v2
+	# The weight is calculated by the:
+	# weight = (1 + ((request - 2) * 9999) / 262142)
+	total_requests=20
 	total_cpu_container=1
 
 	get_pod_config_dir
@@ -38,17 +42,13 @@ setup() {
 	exec_num_cpus_cmd=(sh -c "${num_cpus_cmd}")
 	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_num_cpus_cmd[@]}"
 
-	quotasyspath_cmd="cat ${quotasyspath}"
-	exec_quotasyspath_cmd=(sh -c "${quotasyspath_cmd}")
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_quotasyspath_cmd[@]}"
+	maxsyspath_cmd="cat ${maxsyspath}"
+	exec_maxsyspath_cmd=(sh -c "${maxsyspath_cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_maxsyspath_cmd[@]}"
 
-	periodsyspath_cmd="cat ${periodsyspath}"
-	exec_periodsyspath_cmd=(sh -c "${periodsyspath_cmd}")
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_periodsyspath_cmd[@]}"
-
-	sharessyspath_cmd="cat ${sharessyspath}"
-	exec_sharessyspath_cmd=(sh -c "${sharessyspath_cmd}")
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_sharessyspath_cmd[@]}"
+	weightsyspath_cmd="cat ${weightsyspath}"
+	exec_weightsyspath_cmd=(sh -c "${weightsyspath_cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_weightsyspath_cmd[@]}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -66,8 +66,18 @@ setup() {
 	# Check the total of cpus
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
-		total_cpus_container=$(kubectl exec pod/"$pod_name" -c "$container_name" \
+		# Retry "kubectl exec" several times in case it unexpectedly returns an empty output string,
+		# in an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
+		for _ in {1..10}; do
+			total_cpus_container=$(kubectl exec pod/"$pod_name" -c "$container_name" \
 			-- "${exec_num_cpus_cmd[@]}")
+			if [[ -n "${total_cpus_container}" ]]; then
+				break
+			fi
+			warn "Empty output from kubectl exec" >&2
+			sleep 1
+		done
+
 		# Verify number of cpus
 		[ "$total_cpus_container" -le "$total_cpus" ]
 		[ "$total_cpus_container" -eq "$total_cpus" ] && break
@@ -76,19 +86,29 @@ setup() {
 	[ "$total_cpus_container" -eq "$total_cpus" ]
 
 	# Check the total of requests
-	total_requests_container=$(kubectl exec $pod_name -c $container_name \
-		-- "${exec_sharessyspath_cmd[@]}")
+	for _ in {1..10}; do
+		total_requests_container=$(kubectl exec $pod_name -c $container_name \
+			-- "${exec_weightsyspath_cmd[@]}")
+		if [[ -n "${total_requests_container}" ]]; then
+			break
+		fi
+		warn "Empty output from kubectl exec" >&2
+		sleep 1
+	done
 	info "total_requests_container = $total_requests_container"
 
 	[ "$total_requests_container" -eq "$total_requests" ]
 
 	# Check the cpus inside the container
-
-	total_cpu_quota=$(kubectl exec $pod_name -c $container_name \
-		-- "${exec_quotasyspath_cmd[@]}")
-
-	total_cpu_period=$(kubectl exec $pod_name -c $container_name \
-		-- "${exec_periodsyspath_cmd[@]}")
+	for _ in {1..10}; do
+		maxsyspath=$(kubectl exec $pod_name -c $container_name -- "${exec_maxsyspath_cmd[@]}")
+		if [[ -n "${maxsyspath}" ]]; then
+			break
+		fi
+		warn "Empty output from kubectl exec" >&2
+		sleep 1
+	done
+	read total_cpu_quota total_cpu_period <<< ${maxsyspath}
 
 	division_quota_period=$(echo $((total_cpu_quota/total_cpu_period)))
 
@@ -102,7 +122,7 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && skip "https://github.com/kata-containers/kata-containers/issues/9039"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
+		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
 
 	# Debugging information

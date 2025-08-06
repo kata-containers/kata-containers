@@ -42,7 +42,7 @@ impl TaskService {
         let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
         debug!(logger, "====> task service {:?}", &r);
         let resp =
-            self.handler.handler_message(r).await.map_err(|err| {
+            self.handler.handler_task_message(r).await.map_err(|err| {
                 ttrpc::Error::Others(format!("failed to handle message {:?}", err))
             })?;
         debug!(logger, "<==== task service {:?}", &resp);

@@ -14,7 +14,7 @@ edition = "2018"
 bitmask-enum = "2.1.0"
 anyhow = "1.0"
 base64 = "0.13.0"
-byte-unit = "5.0.3"
+byte-unit = "5.1.6"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"
@@ -26,15 +26,18 @@ serde_json = "1.0.73"
 thiserror = "1.0"
 toml = "0.5.8"
 serde-enum-str = "0.4"
-sysinfo = "0.30.5"
+sysinfo = "0.34.2"
+sha2 = "0.10.8"
+flate2 = { version = "1.0", features = ["zlib"] }
+hex = "0.4"
 
-oci-spec = { version = "0.6.8", features = ["runtime"] }
+oci-spec = { version = "0.8.1", features = ["runtime"] }
 safe-path = { path = "../safe-path" }
 
 [dev-dependencies]
-tempfile = "3"
+tempfile = "3.19.1"
 test-utils = { path = "../test-utils" }
-nix = "0.24.2"
+nix = "0.26.4"
 
 [features]
 default = []

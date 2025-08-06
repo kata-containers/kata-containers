@@ -11,6 +11,7 @@ mod cronjob;
 mod daemon_set;
 mod deployment;
 mod job;
+mod layers_cache;
 mod list;
 mod mount_and_storage;
 mod no_policy;
@@ -27,7 +28,6 @@ mod secret;
 mod settings;
 mod stateful_set;
 mod utils;
-mod verity;
 mod version;
 mod volume;
 mod yaml;
@@ -52,5 +52,6 @@ async fn main() {
 
     debug!("Exporting policy to yaml file...");
     policy.export_policy();
+    config.layers_cache.persist();
     info!("Success!");
 }

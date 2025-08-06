@@ -22,6 +22,8 @@ spec:
       app: "confidential-unencrypted"
   template:
     metadata:
+      annotations:
+        io.katacontainers.config.hypervisor.kernel_params: "log_buf_len=4M"
       labels:
         app: "confidential-unencrypted"
     spec:

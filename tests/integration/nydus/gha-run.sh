@@ -39,6 +39,8 @@ function install_dependencies() {
 	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
 	github_deps[2]="nydus:$(get_from_kata_deps ".externals.nydus.version")"
 	github_deps[3]="nydus_snapshotter:$(get_from_kata_deps ".externals.nydus-snapshotter.version")"
+	github_deps[4]="runc:$(get_from_kata_deps ".externals.runc.latest")"
+	github_deps[5]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"

@@ -7,11 +7,16 @@
 package oci
 
 import (
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -21,8 +26,9 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/BurntSushi/toml"
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -31,6 +37,7 @@ import (
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	kataTypes "github.com/kata-containers/kata-containers/src/runtime/pkg/types"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
@@ -49,17 +56,17 @@ var (
 
 	// CRIContainerTypeKeyList lists all the CRI keys that could define
 	// the container type from annotations in the config.json.
-	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, podmanAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
+	CRIContainerTypeKeyList = []string{ctrAnnotations.ContainerType, crioAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
 
 	// CRISandboxNameKeyList lists all the CRI keys that could define
 	// the sandbox ID (sandbox ID) from annotations in the config.json.
-	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, podmanAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
+	CRISandboxNameKeyList = []string{ctrAnnotations.SandboxID, crioAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
 
 	// CRIContainerTypeList lists all the maps from CRI ContainerTypes annotations
 	// to a virtcontainers ContainerType.
 	CRIContainerTypeList = []annotationContainerType{
-		{podmanAnnotations.ContainerTypeSandbox, vc.PodSandbox},
-		{podmanAnnotations.ContainerTypeContainer, vc.PodContainer},
+		{crioAnnotations.ContainerTypeSandbox, vc.PodSandbox},
+		{crioAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{ctrAnnotations.ContainerTypeSandbox, vc.PodSandbox},
 		{ctrAnnotations.ContainerTypeContainer, vc.PodContainer},
 		{dockershimAnnotations.ContainerTypeLabelSandbox, vc.PodSandbox},
@@ -164,6 +171,9 @@ type RuntimeConfig struct {
 
 	// Base directory of directly attachable network config
 	DanConfig string
+
+	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
+	ForceGuestPull bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -485,6 +495,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorInitdataOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -556,8 +570,9 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 		config.HypervisorConfig.SGXEPCSize = size
 	}
-	if initdata, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
-		config.HypervisorConfig.Initdata = initdata
+
+	if err := addHypervisorGPUOverrides(ocispec, config); err != nil {
+		return err
 	}
 
 	return nil
@@ -693,6 +708,12 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.ReclaimGuestFreedMemory).setBool(func(reclaimGuestFreedMemory bool) {
+		sbConfig.HypervisorConfig.ReclaimGuestFreedMemory = reclaimGuestFreedMemory
+	}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.HugePages).setBool(func(hugePages bool) {
 		sbConfig.HypervisorConfig.HugePages = hugePages
 	}); err != nil {
@@ -752,6 +773,26 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
 		return nil
 	})
+}
+
+func addHypervisorGPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if sbConfig.HypervisorType != vc.RemoteHypervisor {
+		return nil
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultGPUs).setUint(func(gpus uint64) {
+		sbConfig.HypervisorConfig.DefaultGPUs = uint32(gpus)
+	}); err != nil {
+		return err
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultGPUModel]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.DefaultGPUModel = value
+		}
+	}
+
+	return nil
 }
 
 func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
@@ -895,6 +936,53 @@ func addHypervisorNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfi
 	})
 }
 
+func addHypervisorInitdataOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
+		if len(value) == 0 {
+			ociLog.Debug("Initdata annotation set without any value")
+			return nil
+		}
+		b64Reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(value))
+		gzipReader, err := gzip.NewReader(b64Reader)
+		if err != nil {
+			return fmt.Errorf("initdata create gzip reader error: %v", err)
+		}
+
+		initdataToml, err := io.ReadAll(gzipReader)
+		if err != nil {
+			return fmt.Errorf("uncompressing initdata with gzip error: %v", err)
+		}
+
+		initdataStr := string(initdataToml)
+		var initdata kataTypes.Initdata
+		if _, err := toml.Decode(initdataStr, &initdata); err != nil {
+			return fmt.Errorf("parsing initdata annotation failed: %v", err)
+		}
+
+		var initdataDigest []byte
+		var h hash.Hash
+		switch initdata.Algorithm {
+		case "sha256":
+			h = sha256.New()
+		case "sha384":
+			h = sha512.New384()
+		case "sha512":
+			h = sha512.New()
+		}
+
+		h.Write([]byte(initdataToml))
+		initdataDigest = h.Sum(nil)
+
+		ociLog.Debugf("Initdata digest set to: %v", initdataDigest)
+
+		sbConfig.HypervisorConfig.Initdata = initdataStr
+
+		sbConfig.HypervisorConfig.InitdataDigest = initdataDigest
+	}
+
+	return nil
+}
+
 func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableGuestSeccomp).setBool(func(disableGuestSeccomp bool) {
@@ -911,6 +999,12 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.CreateContainerTimeout).setUint(func(createContainerTimeout uint64) {
 		sbConfig.CreateContainerTimeout = createContainerTimeout
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.ForceGuestPull).setBool(func(forceGuestPull bool) {
+		sbConfig.ForceGuestPull = forceGuestPull
 	}); err != nil {
 		return err
 	}
@@ -1060,6 +1154,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		Experimental: runtime.Experimental,
 
 		CreateContainerTimeout: runtime.CreateContainerTimeout,
+
+		ForceGuestPull: runtime.ForceGuestPull,
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {
@@ -1075,6 +1171,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+
+		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
 		ociLog.WithFields(logrus.Fields{
 			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,
@@ -1183,8 +1281,8 @@ func getShmSize(c vc.ContainerConfig) (uint64, error) {
 
 // IsCRIOContainerManager check if a Pod is created from CRI-O
 func IsCRIOContainerManager(spec *specs.Spec) bool {
-	if val, ok := spec.Annotations[podmanAnnotations.ContainerType]; ok {
-		if val == podmanAnnotations.ContainerTypeSandbox || val == podmanAnnotations.ContainerTypeContainer {
+	if val, ok := spec.Annotations[crioAnnotations.ContainerType]; ok {
+		if val == crioAnnotations.ContainerTypeSandbox || val == crioAnnotations.ContainerTypeContainer {
 			return true
 		}
 	}

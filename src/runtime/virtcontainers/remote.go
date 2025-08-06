@@ -18,7 +18,6 @@ import (
 	hypannotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 const defaultMinTimeout = 60
@@ -81,6 +80,8 @@ func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Net
 	annotations[hypannotations.DefaultVCPUs] = strconv.FormatUint(uint64(hypervisorConfig.NumVCPUs()), 10)
 	annotations[hypannotations.DefaultMemory] = strconv.FormatUint(uint64(hypervisorConfig.MemorySize), 10)
 	annotations[hypannotations.Initdata] = hypervisorConfig.Initdata
+	annotations[hypannotations.DefaultGPUs] = strconv.FormatUint(uint64(hypervisorConfig.DefaultGPUs), 10)
+	annotations[hypannotations.DefaultGPUModel] = hypervisorConfig.DefaultGPUModel
 
 	req := &pb.CreateVMRequest{
 		Id:                   id,
@@ -126,7 +127,7 @@ func (rh *remoteHypervisor) StartVM(ctx context.Context, timeout int) error {
 	ctx2, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
 	defer cancel()
 
-	logrus.Printf("calling remote hypervisor StartVM (timeout: %d)", timeout)
+	hvLogger.Infof("calling remote hypervisor StartVM (timeout: %d)", timeout)
 
 	if _, err := s.client.StartVM(ctx2, req); err != nil {
 		return fmt.Errorf("remote hypervisor call failed: %w", err)
@@ -177,11 +178,11 @@ func notImplemented(name string) error {
 
 	err := errors.Errorf("%s: not implemented", name)
 
-	logrus.Errorf(err.Error())
+	hvLogger.Errorf(err.Error())
 
 	if tracer, ok := err.(interface{ StackTrace() errors.StackTrace }); ok {
 		for _, f := range tracer.StackTrace() {
-			logrus.Errorf("%+s:%d\n", f, f)
+			hvLogger.Errorf("%+s:%d\n", f, f)
 		}
 	}
 
@@ -202,7 +203,7 @@ func (rh *remoteHypervisor) ResumeVM(ctx context.Context) error {
 
 func (rh *remoteHypervisor) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	// TODO should we return notImplemented("AddDevice"), rather than nil and ignoring it?
-	logrus.Printf("addDevice: deviceType=%v devInfo=%#v", devType, devInfo)
+	hvLogger.Infof("addDevice: deviceType=%v devInfo=%#v", devType, devInfo)
 	return nil
 }
 
@@ -220,7 +221,7 @@ func (rh *remoteHypervisor) ResizeMemory(ctx context.Context, memMB uint32, memo
 
 func (rh *remoteHypervisor) GetTotalMemoryMB(ctx context.Context) uint32 {
 	//The remote hypervisor uses the peer pod config to determine the memory of the VM, so we need to use static resource management
-	logrus.Error("GetTotalMemoryMB - remote hypervisor cannot update resources")
+	hvLogger.Error("GetTotalMemoryMB - remote hypervisor cannot update resources")
 	return 0
 }
 

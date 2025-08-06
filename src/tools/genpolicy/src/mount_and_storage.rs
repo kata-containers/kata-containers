@@ -122,11 +122,7 @@ pub fn get_mount_and_storage(
         }
 
         if volume.is_none() {
-            volume = if settings.kata_config.confidential_guest {
-                Some(&settings_volumes.confidential_emptyDir)
-            } else {
-                Some(&settings_volumes.emptyDir)
-            }
+            volume = Some(&settings_volumes.emptyDir);
         }
 
         get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
@@ -270,14 +266,10 @@ fn get_config_map_mount_and_storage(
     yaml_mount: &pod::VolumeMount,
 ) {
     let settings_volumes = &settings.volumes;
-    let settings_config_map = if settings.kata_config.confidential_guest {
-        &settings_volumes.confidential_configMap
-    } else {
-        &settings_volumes.configMap
-    };
+    let settings_config_map = &settings_volumes.configMap;
     debug!("Settings configMap: {:?}", settings_config_map);
 
-    if !settings.kata_config.confidential_guest {
+    if settings.kata_config.enable_configmap_secret_storages {
         let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let mount_path_str = OsString::from(mount_path).into_string().unwrap();
 
@@ -375,7 +367,6 @@ fn get_downward_api_mount(yaml_mount: &pod::VolumeMount, p_mounts: &mut Vec<poli
 pub fn get_image_mount_and_storage(
     settings: &settings::Settings,
     p_mounts: &mut Vec<policy::KataMount>,
-    storages: &mut Vec<agent::Storage>,
     destination: &str,
 ) {
     // https://github.com/kubernetes/examples/blob/master/cassandra/image/Dockerfile
@@ -403,17 +394,6 @@ pub fn get_image_mount_and_storage(
         "get_image_mount_and_storage: settings for container image volumes: {:?}",
         settings_image
     );
-
-    storages.push(agent::Storage {
-        driver: settings_image.driver.clone(),
-        driver_options: Vec::new(),
-        source: settings_image.source.clone(),
-        fstype: settings_image.fstype.clone(),
-        options: settings_image.options.clone(),
-        mount_point: destination_string.clone(),
-        fs_group: protobuf::MessageField::none(),
-        special_fields: ::protobuf::SpecialFields::new(),
-    });
 
     let file_name = Path::new(&destination_string).file_name().unwrap();
     let name = OsString::from(file_name).into_string().unwrap();

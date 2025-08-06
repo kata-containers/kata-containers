@@ -63,7 +63,7 @@ function _create_our_own_notes()
 	libseccomp_version=$(get_from_kata_deps ".externals.libseccomp.version")
 	libseccomp_url=$(get_from_kata_deps ".externals.libseccomp.url")
 
-	cat >> /tmp/our_notes_${RELEASE_VERSION} <<EOF 
+	cat >> /tmp/our_notes_${RELEASE_VERSION} <<EOF
 ## Survey
 
 Please take the Kata Containers survey:
@@ -112,6 +112,11 @@ function _create_new_release()
 
 	RELEASE_VERSION="$(_release_version)"
 
+	if gh release view ${RELEASE_VERSION}; then
+		echo "Release already exists, aborting"
+		exit 1
+	fi
+
 	_create_our_own_notes
 
 	# This automatically creates the ${RELEASE_VERSION} tag in the repo
@@ -138,8 +143,8 @@ function _publish_multiarch_manifest()
 	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
 	_check_required_env_var "KATA_DEPLOY_REGISTRIES"
 
-	for registry in ${REGISTRIES[@]}; do
-		for tag in ${IMAGE_TAGS[@]}; do
+	for registry in "${REGISTRIES[@]}"; do
+		for tag in "${IMAGE_TAGS[@]}"; do
 			docker manifest create ${registry}:${tag} \
 				--amend ${registry}:${tag}-amd64 \
 				--amend ${registry}:${tag}-arm64 \
@@ -205,6 +210,16 @@ function _upload_libseccomp_tarball()
 	gh release upload "${RELEASE_VERSION}" "${asc}"
 }
 
+function _upload_helm_chart_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+
+	RELEASE_VERSION="$(_release_version)"
+
+	helm package ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
+	gh release upload "${RELEASE_VERSION}" "kata-deploy-${RELEASE_VERSION}.tgz"
+}
+
 function main()
 {
 	action="${1:-}"
@@ -217,6 +232,7 @@ function main()
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
 		upload-libseccomp-tarball) _upload_libseccomp_tarball ;;
+		upload-helm-chart-tarball) _upload_helm_chart_tarball ;;
 		publish-release) _publish_release ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac

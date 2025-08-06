@@ -1,0 +1,90 @@
+---
+version: 2
+updates:
+  - package-ecosystem: "cargo"
+    directories:
+      - "/src/agent"
+      - "/src/dragonball"
+      - "/src/libs"
+      - "/src/mem-agent"
+      - "/src/mem-agent/example"
+      - "/src/runtime-rs"
+      - "/src/tools/agent-ctl"
+      - "/src/tools/genpolicy"
+      - "/src/tools/kata-ctl"
+      - "/src/tools/runk"
+      - "/src/tools/trace-forwarder"
+    schedule:
+      interval: "daily"
+    ignore:
+    # rust-vmm repos might cause incompatibilities on patch versions, so
+    # lets handle them manually for now.
+      - dependency-name: "event-manager"
+      - dependency-name: "kvm-bindings"
+      - dependency-name: "kvm-ioctls"
+      - dependency-name: "linux-loader"
+      - dependency-name: "seccompiler"
+      - dependency-name: "vfio-bindings"
+      - dependency-name: "vfio-ioctls"
+      - dependency-name: "virtio-bindings"
+      - dependency-name: "virtio-queue"
+      - dependency-name: "vm-fdt"
+      - dependency-name: "vm-memory"
+      - dependency-name: "vm-superio"
+      - dependency-name: "vmm-sys-util"
+    # As we often have up to 8/9 components that need the same versions bumps
+    # create groups for common dependencies, so they can all go in a single PR
+    # We can extend this as we see more frequent groups
+    groups:
+      bit-vec:
+        patterns:
+          - bit-vec
+      bumpalo:
+        patterns:
+          - bumpalo
+      clap:
+        patterns:
+          - clap
+      crossbeam:
+        patterns:
+          - crossbeam
+      h2:
+        patterns:
+          - h2
+      idna:
+        patterns:
+          - idna
+      openssl:
+        patterns:
+          - openssl
+      protobuf:
+        patterns:
+          - protobuf
+      rsa:
+        patterns:
+          - rsa
+      rustix:
+        patterns:
+          - rustix
+      time:
+        patterns:
+          - time
+      tokio:
+        patterns:
+          - tokio
+      tracing:
+        patterns:
+          - tracing
+
+  - package-ecosystem: "gomod"
+    directories:
+      - "src/runtime"
+      - "tools/testing/kata-webhook"
+      - "src/tools/csi-kata-directvolume"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

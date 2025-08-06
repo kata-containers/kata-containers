@@ -37,6 +37,9 @@ pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 pub const DEFAULT_BLOCK_DEVICE_TYPE: &str = "virtio-blk-pci";
 pub const DEFAULT_VHOST_USER_STORE_PATH: &str = "/var/run/vhost-user";
 pub const DEFAULT_BLOCK_NVDIMM_MEM_OFFSET: u64 = 0;
+pub const DEFAULT_BLOCK_DEVICE_AIO_THREADS: &str = "threads";
+pub const DEFAULT_BLOCK_DEVICE_AIO_NATIVE: &str = "native";
+pub const DEFAULT_BLOCK_DEVICE_AIO: &str = "io_uring";
 
 pub const DEFAULT_SHARED_FS_TYPE: &str = "virtio-fs";
 pub const DEFAULT_VIRTIO_FS_CACHE_MODE: &str = "never";
@@ -98,3 +101,11 @@ pub const DEFAULT_FIRECRACKER_GUEST_KERNEL_IMAGE: &str = "vmlinux";
 pub const DEFAULT_FIRECRACKER_GUEST_KERNEL_PARAMS: &str = "";
 pub const MAX_FIRECRACKER_VCPUS: u32 = 32;
 pub const MIN_FIRECRACKER_MEMORY_SIZE_MB: u32 = 128;
+
+// Default configuration for remote
+pub const DEFAULT_REMOTE_HYPERVISOR_SOCKET: &str = "/run/peerpod/hypervisor.sock";
+pub const DEFAULT_REMOTE_HYPERVISOR_TIMEOUT: i32 = 600; // 600 Seconds
+pub const MAX_REMOTE_VCPUS: u32 = 32;
+pub const MIN_REMOTE_MEMORY_SIZE_MB: u32 = 64;
+pub const DEFAULT_REMOTE_MEMORY_SIZE_MB: u32 = 128;
+pub const DEFAULT_REMOTE_MEMORY_SLOTS: u32 = 128;

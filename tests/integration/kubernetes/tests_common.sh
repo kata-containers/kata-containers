@@ -17,26 +17,31 @@ export container_images_agnhost_version="2.21"
 
 # Timeout options, mainly for use with waitForProcess(). Use them unless the
 # operation needs to wait longer.
-wait_time=90
-sleep_time=3
+export wait_time=90
+export sleep_time=3
 
 # Timeout for use with `kubectl wait`, unless it needs to wait longer.
 # Note: try to keep timeout and wait_time equal.
-timeout=90s
+export timeout=90s
 
 # issues that can't test yet.
-fc_limitations="https://github.com/kata-containers/documentation/issues/351"
-dragonball_limitations="https://github.com/kata-containers/kata-containers/issues/6621"
+export fc_limitations="https://github.com/kata-containers/documentation/issues/351"
+export dragonball_limitations="https://github.com/kata-containers/kata-containers/issues/6621"
 
 # Path to the kubeconfig file which is used by kubectl and other tools.
 # Note: the init script sets that variable but if you want to run the tests in
 # your own provisioned cluster and you know what you are doing then you should
 # overwrite it.
-export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
 # ALLOW_ALL_POLICY is a Rego policy that allows all the Agent ttrpc requests.
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../src/kata-opa/allow-all.rego")}"
+
+AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
+GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+KATA_HOST_OS="${KATA_HOST_OS:-}"
 
 # Common setup for tests.
 #
@@ -47,24 +52,24 @@ ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../sr
 #
 setup_common() {
 	node=$(get_one_kata_node)
-	[ -n "$node" ]
-	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+	[[ -n "${node}" ]]
+	node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
 	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
 	count=0
-	while [ -z "$node_start_time" ] && [ $count -lt 3 ]; do
+	while [[ -z "${node_start_time}" ]] && [[ "${count}" -lt 3 ]]; do
 		echo "node_start_time is empty, trying again..."
 		sleep 5
-		node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+		node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
 		count=$((count + 1))
 	done
-	[ -n "$node_start_time" ]
+	[[ -n "${node_start_time}" ]]
 	export node node_start_time
 
 	k8s_delete_all_pods_if_any_exists || true
 }
 
 get_pod_config_dir() {
-	pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
+	export pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
 	info "k8s configured to use runtimeclass"
 }
 
@@ -77,53 +82,56 @@ get_one_kata_node() {
 }
 
 auto_generate_policy_enabled() {
-	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
+	[[ "${AUTO_GENERATE_POLICY}" == "yes" ]]
 }
 
-# adapt common policy settings for tdx or snp
-adapt_common_policy_settings_for_tdx() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for TDX or SNP"
-	jq '.common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+is_coco_platform() {
+	case "${KATA_HYPERVISOR}" in
+		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
+			return 0
+			;;
+		*)
+			return 1
+	esac
 }
 
-# adapt common policy settings for qemu-sev
-adapt_common_policy_settings_for_sev() {
+adapt_common_policy_settings_for_non_coco() {
 	local settings_dir=$1
 
-	info "Adapting common policy settings for SEV"
-	jq '.kata_config.oci_version = "1.1.0-rc.1" | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
+	info "Adapting common policy settings from ${settings_dir} for non-CoCo guest"
 
-# adapt common policy settings for CBL-Mariner https://github.com/kata-containers/kata-containers/issues/10189
-adapt_common_policy_settings_for_cbl_mariner() {
-	local settings_dir=$1
+	# Using UpdateEphemeralMountsRequest - instead of CopyFileRequest.
+	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 
-	info "Adapting common policy settings for CBL-Mariner"
-	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-	jq '.kata_config.oci_version = "1.1.0-rc.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	# Using a different path to container container root.
+	jq '.common.root_path = "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using CreateContainer Storage input structs for configMap & secret volumes - instead of using CopyFile like CoCo.
+	jq '.kata_config.enable_configmap_secret_storages = true' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using watchable binds for configMap volumes - instead of CopyFileRequest.
+	jq '.volumes.configMap.mount_point = "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-" | .volumes.configMap.driver = "watchable-bind"' \
+		"${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Using a Storage input struct for paths shared with the Host using virtio-fs.
+	jq '.sandbox.storages += [{"driver":"virtio-fs","driver_options":[],"fs_group":null,"fstype":"virtiofs","mount_point":"/run/kata-containers/shared/containers/","options":[],"source":"kataShared"}]' \
+		"${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Disable guest pull.
+	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
-
 	local settings_dir=$1
 
-	case "${KATA_HYPERVISOR}" in
-  		"qemu-tdx"|"qemu-snp")
-			adapt_common_policy_settings_for_tdx "${settings_dir}"
-			;;
-  		"qemu-sev")
-			adapt_common_policy_settings_for_sev "${settings_dir}"
-			;;
-	esac
-
-	case "${KATA_HOST_OS}" in
-		"cbl-mariner")
-			adapt_common_policy_settings_for_cbl_mariner "${settings_dir}"
-			;;
-	esac
+	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
@@ -138,9 +146,6 @@ create_common_genpolicy_settings() {
 
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
-
-	# Set the default namespace of Kata CI tests in the genpolicy settings.
-	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -163,7 +168,7 @@ delete_tmp_policy_settings_dir() {
 
 	auto_generate_policy_enabled || return 0
 
-	if [ -d "${settings_dir}" ]; then
+	if [[ -d "${settings_dir}" ]]; then
 		info "Deleting ${settings_dir}"
 		rm -rf "${settings_dir}"
 	fi
@@ -181,18 +186,25 @@ auto_generate_policy() {
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
-	if [ ! -z "${config_map_yaml_file}" ]; then
+	if [[ -n "${config_map_yaml_file}" ]]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
 	fi
 
-	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
+	if [[ "${GENPOLICY_PULL_METHOD}" == "containerd" ]]; then
 		genpolicy_command+=" -d"
 	fi
 
 	genpolicy_command+=" ${additional_flags}"
 
-	info "Executing: ${genpolicy_command}"
-	eval "${genpolicy_command}"
+	# Retry if genpolicy fails, because typical failures of this tool are caused by
+	# transient network errors.
+	for _ in {1..6}; do
+		info "Executing: ${genpolicy_command}"
+		eval "${genpolicy_command}" && return 0
+		info "Sleeping after command failed..."
+		sleep 10s
+	done
+	return 1
 }
 
 # Change genpolicy settings to allow "kubectl exec" to execute a command
@@ -204,7 +216,8 @@ add_exec_to_policy_settings() {
 	shift
 
 	# Create a JSON array of strings containing all the args of the command to be allowed.
-	local exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
+	local exec_args
+	exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
 
 	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
 	local jq_command=".request_defaults.ExecProcessRequest.allowed_commands |= . + [${exec_args}]"
@@ -224,7 +237,7 @@ add_requests_to_policy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
-	for request in ${requests[@]}
+	for request in "${requests[@]}"
 	do
 		info "${settings_dir}/genpolicy-settings.json: allowing ${request}"
 		jq ".request_defaults.${request} |= true" \
@@ -241,9 +254,9 @@ add_copy_from_host_to_policy_settings() {
 	local -r genpolicy_settings_dir="$1"
 
 	local exec_command=(test -d /tmp)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 	exec_command=(tar -xmf - -C /tmp)
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 }
 
 # Change genpolicy settings to allow executing on the Guest VM the commands
@@ -253,32 +266,32 @@ add_copy_from_guest_to_policy_settings() {
 	local -r copied_file="$2"
 
 	exec_command=(tar cf - "${copied_file}")
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
-}
-
-# Change genpolicy settings to use a pod namespace different than "default".
-set_namespace_to_policy_settings() {
-	local -r settings_dir="$1"
-	local -r namespace="$2"
-
-	auto_generate_policy_enabled || return 0
-
-	info "${settings_dir}/genpolicy-settings.json: namespace: ${namespace}"
-	jq --arg namespace "${namespace}" \
-		'.cluster_config.default_namespace |= $namespace' \
-		"${settings_dir}/genpolicy-settings.json" > \
-		"${settings_dir}/new-genpolicy-settings.json"
-	mv "${settings_dir}/new-genpolicy-settings.json" "${settings_dir}/genpolicy-settings.json"
+	add_exec_to_policy_settings "${genpolicy_settings_dir}" "${exec_command[@]}"
 }
 
 hard_coded_policy_tests_enabled() {
+	local enabled="no"
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
-	[[ " $enabled_hypervisors " =~ " ${KATA_HYPERVISOR} " ]] || \
-		[ "${KATA_HOST_OS}" == "cbl-mariner" ] || \
-		auto_generate_policy_enabled
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-tdx")
+	for enabled_hypervisor in "${enabled_hypervisors[@]}"
+	do
+		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then
+			enabled="yes"
+			break
+		fi
+	done
+
+	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" ]]; then
+		enabled="yes"
+	fi
+
+	if [[ "${enabled}" == "no" ]] && auto_generate_policy_enabled; then
+		enabled="yes"
+	fi
+
+	[[ "${enabled}" == "yes" ]]
 }
 
 add_allow_all_policy_to_yaml() {
@@ -288,20 +301,21 @@ add_allow_all_policy_to_yaml() {
 	# Previous version of yq was not ready to handle multiple objects in a single yaml.
 	# By default was changing only the first object.
 	# With yq>4 we need to make it explicit during the read and write.
-	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
+	local resource_kind
+	resource_kind=$(yq .kind "${yaml_file}" | head -1)
 
 	case "${resource_kind}" in
 
 	Pod)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+		yq -i \
 			".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+		yq -i \
 			".spec.template.metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
@@ -328,7 +342,7 @@ wait_for_blocked_request() {
 
 	local -r command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
 	info "Waiting ${wait_time} seconds for: ${command}"
-	waitForProcess "${wait_time}" "$sleep_time" "${command}" >/dev/null 2>/dev/null
+	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
 
 # Execute in a pod a command that is allowed by policy.
@@ -374,8 +388,41 @@ teardown_common() {
 	k8s_delete_all_pods_if_any_exists || true
 
 	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "$BATS_TEST_COMPLETED" ]]; then
-		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
+	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
+		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
+		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
 	fi
+}
+
+# Invoke "kubectl exec", log its output, and check that a grep pattern is present in the output.
+#
+# Retry "kubectl exec" several times in case it unexpectedly returns an empty output string,
+# in an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
+#
+# Parameters:
+#	$1	- pod name
+#	$2	- the grep pattern
+#	$3+	- the command to execute using "kubectl exec"
+#
+grep_pod_exec_output() {
+	local -r pod_name="$1"
+	shift
+	local -r grep_arg="$1"
+	shift
+	local grep_out=""
+	local cmd_out=""
+
+	for _ in {1..10}; do
+		info "Executing in pod ${pod_name}: $*"
+		cmd_out=$(kubectl exec "${pod_name}" -- "$@")
+		if [[ -n "${cmd_out}" ]]; then
+			info "command output: ${cmd_out}"
+			grep_out=$(echo "${cmd_out}" | grep "${grep_arg}")
+			info "grep output: ${grep_out}"
+			break
+		fi
+		warn "Empty output from kubectl exec"
+		sleep 1
+	done
+	[[ -n "${grep_out}" ]]
 }

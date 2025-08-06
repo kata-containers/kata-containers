@@ -470,7 +470,7 @@ mod tests {
             },
             TestData {
                 test_url: "http://localhost :80",
-                expected: "builder error: invalid domain character",
+                expected: "builder error: invalid international domain name",
             },
         ];
 
@@ -513,7 +513,6 @@ mod tests {
     #[test]
     fn check_module_loaded() {
         #[allow(dead_code)]
-
         struct TestData<'a> {
             module_name: &'a str,
             param_name: &'a str,

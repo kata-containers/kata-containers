@@ -15,7 +15,7 @@ setup() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    setup_common
+    setup_common || die "setup_common failed"
     get_pod_config_dir
     unencrypted_image="quay.io/prometheus/busybox:latest"
     image_pulled_time_less_than_default_time="ghcr.io/confidential-containers/test-container:rust-1.79.0" # unpacked size: 1.41GB
@@ -84,11 +84,13 @@ setup() {
 
     # The pod should be failed because the unpacked image size is larger than the memory size in the guest.
     assert_pod_fail "$pod_config"
-    assert_logs_contain "$node" kata "$node_start_time" \
-		'No space left on device'
+    assert_logs_contain "$node" kata "$node_start_time" "failed to pull image"
 }
 
 @test "Test we can pull an image inside the guest using trusted storage" {
+	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
     # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
 
@@ -101,7 +103,7 @@ setup() {
     cat $storage_config
 
     # Create persistent volume and persistent volume claim
-    kubectl create -f $storage_config
+    retry_kubectl_apply $storage_config
 
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$image_pulled_time_less_than_default_time" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
@@ -136,6 +138,9 @@ setup() {
 }
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
+	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
 
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
     local_device=$(create_loop_device)
@@ -146,7 +151,7 @@ setup() {
     cat $storage_config
 
     # Create persistent volume and persistent volume claim
-    kubectl create -f $storage_config
+    retry_kubectl_apply $storage_config
 
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
@@ -171,13 +176,16 @@ setup() {
     echo "Pod $pod_config file:"
     cat $pod_config
 
-    # The pod should be failed because the default timeout of CreateContainerRequest is 60s
+    # The pod should be failed because the image is too large to be pulled in the timeout
     assert_pod_fail "$pod_config"
-    assert_logs_contain "$node" kata "$node_start_time" \
-		'CreateContainerRequest timed out'
+    assert_logs_contain "$node" kata "$node_start_time" 'createContainer failed'
+    assert_logs_contain "$node" kata "$node_start_time" 'timeout'
 }
 
 @test "Test we can pull a large image inside the guest with large createcontainer timeout" {
+	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
 
     if [ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] && [ "${KBS_INGRESS}" = "aks" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10299"
@@ -191,7 +199,7 @@ setup() {
     cat $storage_config
 
     # Create persistent volume and persistent volume claim
-    kubectl create -f $storage_config
+    retry_kubectl_apply $storage_config
 
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"

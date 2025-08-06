@@ -1,7 +1,7 @@
 # Copyright (c) 2020 Eric Ernst
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.19-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 RUN apk add --no-cache bash curl git make build-base
 WORKDIR /go/src/github.com/kata-containers/kata-containers/src/runtime

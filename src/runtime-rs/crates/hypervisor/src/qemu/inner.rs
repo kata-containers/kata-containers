@@ -3,12 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::cmdline_generator::{QemuCmdLine, QMP_SOCKET_FILE};
+use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
+use crate::device::topology::PCIePort;
 use crate::{
-    hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
-    VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, HypervisorConfig,
+    MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
+
+use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
+
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
@@ -18,7 +22,6 @@ use kata_types::{
 };
 use persist::sandbox_persist::Persist;
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
@@ -106,9 +109,13 @@ impl QemuInner {
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "ccw" => cmdline.add_block_device(
+                        "ccw" | "blk" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
+                            block_dev
+                                .config
+                                .is_direct
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
                         )?,
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
@@ -120,10 +127,53 @@ impl QemuInner {
                     let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
 
                     cmdline.add_network_device(
-                        network.config.index,
                         &network.config.host_dev_name,
                         network.config.guest_mac.clone().unwrap(),
                     )?;
+                }
+                DeviceType::Protection(prot_dev) => match &prot_dev.config {
+                    ProtectionDeviceConfig::SevSnp(sev_snp_cfg) => {
+                        if sev_snp_cfg.is_snp {
+                            cmdline.add_sev_snp_protection_device(
+                                sev_snp_cfg.cbitpos,
+                                &sev_snp_cfg.firmware,
+                                &sev_snp_cfg.host_data,
+                            )
+                        } else {
+                            cmdline.add_sev_protection_device(
+                                sev_snp_cfg.cbitpos,
+                                &sev_snp_cfg.firmware,
+                            )
+                        }
+                    }
+                    ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),
+                    ProtectionDeviceConfig::Tdx(tdx_config) => cmdline.add_tdx_protection_device(
+                        &tdx_config.id,
+                        &tdx_config.firmware,
+                        tdx_config.qgs_port,
+                        &tdx_config.mrconfigid,
+                        tdx_config.debug,
+                    ),
+                },
+                DeviceType::PortDevice(port_device) => {
+                    let port_type = port_device.config.port_type;
+                    let mem_reserve = port_device.config.memsz_reserve;
+                    let pref64_reserve = port_device.config.pref64_reserve;
+                    let devices_per_port = port_device.port_devices.clone();
+
+                    match port_type {
+                        PCIePort::RootPort => cmdline.add_pcie_root_ports(
+                            devices_per_port,
+                            mem_reserve,
+                            pref64_reserve,
+                        )?,
+                        PCIePort::SwitchPort => cmdline.add_pcie_switch_ports(
+                            devices_per_port,
+                            mem_reserve,
+                            pref64_reserve,
+                        )?,
+                        _ => info!(sl!(), "no need to add {} ports", port_type),
+                    }
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
@@ -237,13 +287,14 @@ impl QemuInner {
         todo!()
     }
 
-    pub(crate) async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
+    pub(crate) async fn get_thread_ids(&mut self) -> Result<VcpuThreadIds> {
         info!(sl!(), "QemuInner::get_thread_ids()");
-        //todo!()
-        let vcpu_thread_ids: VcpuThreadIds = VcpuThreadIds {
-            vcpus: HashMap::new(),
-        };
-        Ok(vcpu_thread_ids)
+
+        Ok(self
+            .qmp
+            .as_mut()
+            .and_then(|qmp| qmp.get_vcpu_thread_ids().ok())
+            .unwrap_or_default())
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
@@ -338,7 +389,19 @@ impl QemuInner {
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
-        caps.set(CapabilityBits::FsSharingSupport);
+
+        // Confidential Guest doesn't permit virtio-fs.
+        let flags = if self.hypervisor_config().security_info.confidential_guest
+            || self.hypervisor_config().shared_fs.shared_fs.is_none()
+        {
+            CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
+        } else {
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::FsSharingSupport
+        };
+        caps.set(flags);
+
         Ok(caps)
     }
 
@@ -394,15 +457,6 @@ impl QemuInner {
             sl!(),
             "QemuInner::resize_memory(): asked to resize memory to {} MB", new_total_mem_mb
         );
-
-        // stick to the apparent de facto convention and represent megabytes
-        // as u32 and bytes as u64
-        fn bytes_to_megs(bytes: u64) -> u32 {
-            (bytes / (1 << 20)) as u32
-        }
-        fn megs_to_bytes(bytes: u32) -> u64 {
-            bytes as u64 * (1 << 20)
-        }
 
         let qmp = match self.qmp {
             Some(ref mut qmp) => qmp,
@@ -540,9 +594,16 @@ use crate::device::DeviceType;
 
 // device manager part of Hypervisor
 impl QemuInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+    pub(crate) async fn add_device(&mut self, mut device: DeviceType) -> Result<DeviceType> {
         info!(sl!(), "QemuInner::add_device() {}", device);
-        self.devices.push(device.clone());
+        let is_qemu_ready_to_hotplug = self.qmp.is_some();
+        if is_qemu_ready_to_hotplug {
+            // hypervisor is running already
+            device = self.hotplug_device(device)?;
+        } else {
+            // store the device to coldplug it later, on hypervisor launch
+            self.devices.push(device.clone());
+        }
         Ok(device)
     }
 
@@ -552,6 +613,68 @@ impl QemuInner {
             "QemuInner::remove_device({}): Not yet implemented",
             device
         ))
+    }
+
+    fn hotplug_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+        let qmp = match self.qmp {
+            Some(ref mut qmp) => qmp,
+            None => return Err(anyhow!("QMP not initialized")),
+        };
+
+        match device {
+            DeviceType::Network(ref network_device) => {
+                let (netdev, virtio_net_device) = get_network_device(
+                    &self.config,
+                    &network_device.config.host_dev_name,
+                    network_device.config.guest_mac.clone().unwrap(),
+                    &mut None,
+                )?;
+                qmp.hotplug_network_device(&netdev, &virtio_net_device)?
+            }
+            DeviceType::Block(mut block_device) => {
+                let (pci_path, scsi_addr) = qmp
+                    .hotplug_block_device(
+                        &self.config.blockdev_info.block_device_driver,
+                        block_device.config.index,
+                        &block_device.config.path_on_host,
+                        &block_device.config.blkdev_aio.to_string(),
+                        block_device.config.is_direct,
+                        block_device.config.is_readonly,
+                        block_device.config.no_drop,
+                    )
+                    .context("hotplug block device")?;
+
+                if pci_path.is_some() {
+                    block_device.config.pci_path = pci_path;
+                }
+                if scsi_addr.is_some() {
+                    block_device.config.scsi_addr = scsi_addr;
+                }
+
+                return Ok(DeviceType::Block(block_device));
+            }
+            DeviceType::Vfio(mut vfiodev) => {
+                // FIXME: the first one might not the true device we want to passthrough.
+                // The `multifunction=on` is temporarily unsupported.
+                // Tracking issue #11292 has been created to monitor progress towards full multifunction support.
+                let primary_device = vfiodev.devices.first_mut().unwrap();
+                info!(
+                    sl!(),
+                    "qmp hotplug vfio primary_device {:?}", &primary_device
+                );
+
+                primary_device.guest_pci_path = qmp.hotplug_vfio_device(
+                    &primary_device.hostdev_id,
+                    &primary_device.bus_slot_func,
+                    &vfiodev.driver_type,
+                    &vfiodev.bus,
+                )?;
+
+                return Ok(DeviceType::Vfio(vfiodev));
+            }
+            _ => info!(sl!(), "hotplugging of {:#?} is unsupported", device),
+        }
+        Ok(device)
     }
 }
 

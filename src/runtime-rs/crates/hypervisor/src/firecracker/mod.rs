@@ -18,6 +18,7 @@ use inner::FcInner;
 use kata_types::capabilities::Capabilities;
 use kata_types::capabilities::CapabilityBits;
 use persist::sandbox_persist::Persist;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
@@ -50,7 +51,7 @@ impl Firecracker {
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
@@ -58,7 +59,12 @@ impl Firecracker {
 
 #[async_trait]
 impl Hypervisor for Firecracker {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }

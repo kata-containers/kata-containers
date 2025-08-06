@@ -37,8 +37,10 @@ fn get_uds_with_sid(short_id: &str, path: &str) -> Result<String> {
         return Ok(format!("unix://{}", p.display()));
     }
 
-    let _ = fs::create_dir_all(kata_run_path.join(short_id))
-            .context(format!("failed to create directory {:?}", kata_run_path.join(short_id)));
+    let _ = fs::create_dir_all(kata_run_path.join(short_id)).context(format!(
+        "failed to create directory {:?}",
+        kata_run_path.join(short_id)
+    ));
 
     let target_ids: Vec<String> = fs::read_dir(&kata_run_path)?
         .filter_map(|e| {
@@ -71,8 +73,11 @@ fn get_uds_with_sid(short_id: &str, path: &str) -> Result<String> {
 }
 
 // return sandbox's storage path
-pub fn sb_storage_path() -> String {
-    String::from(KATA_PATH)
+pub fn sb_storage_path() -> Result<&'static str> {
+    //make sure the path existed
+    std::fs::create_dir_all(KATA_PATH).context(format!("failed to create dir: {}", KATA_PATH))?;
+
+    Ok(KATA_PATH)
 }
 
 // returns the address of the unix domain socket(UDS) for communication with shim
@@ -85,7 +90,7 @@ pub fn mgmt_socket_addr(sid: &str) -> Result<String> {
         ));
     }
 
-    get_uds_with_sid(sid, &sb_storage_path())
+    get_uds_with_sid(sid, &sb_storage_path()?)
 }
 
 #[cfg(test)]

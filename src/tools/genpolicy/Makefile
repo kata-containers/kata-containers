@@ -6,10 +6,6 @@
 
 include ../../../utils.mk
 
-ifeq ($(ARCH), ppc64le)
-     override ARCH = powerpc64le
- endif
-
 COMMIT_HASH := $(shell git rev-parse HEAD 2>/dev/null || true)
 # appends '-dirty' to the commit hash if there are uncommitted changes
 COMMIT_INFO := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),${COMMIT_HASH}-dirty,${COMMIT_HASH})
@@ -28,7 +24,7 @@ $(GENERATED_FILES): %: %.in
 default: build
 
 build: $(GENERATED_FILES)
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release)
 
 static-checks-build:
 	@echo "INFO: static-checks-build do nothing.."

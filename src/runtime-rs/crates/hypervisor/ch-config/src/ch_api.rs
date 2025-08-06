@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DeviceConfig, DiskConfig, FsConfig, NetConfig, VmConfig, VsockConfig};
-use anyhow::{anyhow, Result};
+use crate::{
+    DeviceConfig, DiskConfig, FsConfig, NetConfig, VmConfig, VmInfo, VmResize, VsockConfig,
+};
+use anyhow::{anyhow, Context, Result};
 use api_client::simple_api_full_command_and_response;
 
 use serde::{Deserialize, Serialize};
@@ -183,6 +185,37 @@ pub async fn cloud_hypervisor_vm_vsock_add(
             "PUT",
             "vm.add-vsock",
             Some(&serde_json::to_string(&vsock_config)?),
+        )
+        .map_err(|e| anyhow!(e))?;
+
+        Ok(response)
+    })
+    .await?
+}
+
+pub async fn cloud_hypervisor_vm_info(mut socket: UnixStream) -> Result<VmInfo> {
+    let vm_info = task::spawn_blocking(move || -> Result<Option<String>> {
+        let response = simple_api_full_command_and_response(&mut socket, "GET", "vm.info", None)
+            .map_err(|e| anyhow!(format!("failed to run get vminfo with err: {:?}", e)))?;
+
+        Ok(response)
+    })
+    .await??;
+
+    let vm_info = vm_info.ok_or(anyhow!("failed to get vminfo"))?;
+    serde_json::from_str(&vm_info).with_context(|| format!("failed to serde {}", vm_info))
+}
+
+pub async fn cloud_hypervisor_vm_resize(
+    mut socket: UnixStream,
+    vmresize: VmResize,
+) -> Result<Option<String>> {
+    task::spawn_blocking(move || -> Result<Option<String>> {
+        let response = simple_api_full_command_and_response(
+            &mut socket,
+            "PUT",
+            "vm.resize",
+            Some(&serde_json::to_string(&vmresize)?),
         )
         .map_err(|e| anyhow!(e))?;
 

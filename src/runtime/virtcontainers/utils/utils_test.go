@@ -595,7 +595,7 @@ func TestIsDockerContainer(t *testing.T) {
 	}
 	assert.False(IsDockerContainer(ociSpec))
 
-	ociSpec.Hooks.Prestart = append(ociSpec.Hooks.Prestart, specs.Hook{
+	ociSpec.Hooks.Prestart = append(ociSpec.Hooks.Prestart, specs.Hook{ //nolint:all
 		Args: []string{"libnetwork-xxx"},
 	})
 	assert.True(IsDockerContainer(ociSpec))

@@ -47,10 +47,9 @@ pub fn annotate_container_devices(
     // Step 1: Extract all devices and filter out devices without device_info for vfio_devices
     let vfio_devices: Vec<ContainerDevice> = container_devices
         .into_iter()
-        .map(|device| {
+        .inspect(|device| {
             // push every device's Device to agent_devices
-            devices_agent.push(device.device.clone());
-            device
+            devices_agent.push(device.device.clone())
         })
         .filter(|device| device.device_info.is_some())
         .collect();

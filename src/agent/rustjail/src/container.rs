@@ -8,6 +8,7 @@ use libc::pid_t;
 use oci::{Linux, LinuxDevice, LinuxIdMapping, LinuxNamespace, LinuxResources, Spec};
 use oci_spec::runtime as oci;
 use runtime_spec as spec;
+use serde::{Deserialize, Serialize};
 use spec::{ContainerState, State as OCIState};
 use std::clone::Clone;
 use std::ffi::CString;
@@ -31,6 +32,7 @@ use crate::cgroups::{DevicesCgroupInfo, Manager};
 use crate::console;
 use crate::log_child;
 use crate::process::Process;
+use crate::process::ProcessOperations;
 #[cfg(feature = "seccomp")]
 use crate::seccomp;
 use crate::selinux;
@@ -158,7 +160,7 @@ lazy_static! {
                 .typ(oci::LinuxDeviceType::C)
                 .major(1)
                 .minor(3)
-                .file_mode(0o066_u32)
+                .file_mode(0o666_u32)
                 .uid(0xffffffff_u32)
                 .gid(0xffffffff_u32)
                 .build()
@@ -168,7 +170,7 @@ lazy_static! {
                 .typ(oci::LinuxDeviceType::C)
                 .major(1)
                 .minor(5)
-                .file_mode(0o066_u32)
+                .file_mode(0o666_u32)
                 .uid(0xffffffff_u32)
                 .gid(0xffffffff_u32)
                 .build()
@@ -178,7 +180,7 @@ lazy_static! {
                 .typ(oci::LinuxDeviceType::C)
                 .major(1)
                 .minor(7)
-                .file_mode(0o066_u32)
+                .file_mode(0o666_u32)
                 .uid(0xffffffff_u32)
                 .gid(0xffffffff_u32)
                 .build()
@@ -188,7 +190,7 @@ lazy_static! {
                 .typ(oci::LinuxDeviceType::C)
                 .major(5)
                 .minor(0)
-                .file_mode(0o066_u32)
+                .file_mode(0o666_u32)
                 .uid(0xffffffff_u32)
                 .gid(0xffffffff_u32)
                 .build()
@@ -198,7 +200,7 @@ lazy_static! {
                 .typ(oci::LinuxDeviceType::C)
                 .major(1)
                 .minor(9)
-                .file_mode(0o066_u32)
+                .file_mode(0o666_u32)
                 .uid(0xffffffff_u32)
                 .gid(0xffffffff_u32)
                 .build()
@@ -208,7 +210,7 @@ lazy_static! {
                 .typ(oci::LinuxDeviceType::C)
                 .major(1)
                 .minor(8)
-                .file_mode(0o066_u32)
+                .file_mode(0o666_u32)
                 .uid(0xffffffff_u32)
                 .gid(0xffffffff_u32)
                 .build()
@@ -260,7 +262,7 @@ pub struct LinuxContainer {
     pub init_process_start_time: u64,
     pub uid_map_path: String,
     pub gid_map_path: String,
-    pub processes: HashMap<pid_t, Process>,
+    pub processes: HashMap<String, Process>,
     pub status: ContainerStatus,
     pub created: SystemTime,
     pub logger: Logger,
@@ -449,26 +451,21 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
         let s = s.unwrap();
 
-        if ns
-            .path()
-            .as_ref()
-            .map_or(true, |p| p.as_os_str().is_empty())
-        {
+        if ns.path().as_ref().is_none_or(|p| p.as_os_str().is_empty()) {
             // skip the pidns since it has been done in parent process.
             if *s != CloneFlags::CLONE_NEWPID {
                 to_new.set(*s, true);
             }
         } else {
             let fd = fcntl::open(ns.path().as_ref().unwrap(), OFlag::O_CLOEXEC, Mode::empty())
-                .map_err(|e| {
+                .inspect_err(|e| {
                     log_child!(
                         cfd_log,
                         "cannot open type: {} path: {}",
                         &ns.typ().to_string(),
                         ns.path().as_ref().unwrap().display()
                     );
-                    log_child!(cfd_log, "error is : {:?}", e);
-                    e
+                    log_child!(cfd_log, "error is : {:?}", e)
                 })?;
 
             if *s != CloneFlags::CLONE_NEWPID {
@@ -684,14 +681,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             .map(|gid| Gid::from_raw(*gid))
             .collect();
 
-        unistd::setgroups(&gids).map_err(|e| {
+        unistd::setgroups(&gids).inspect_err(|e| {
             let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
                 format!("setgroups failed: {:?}", e).as_str(),
             );
-
-            e
         })?;
     }
 
@@ -939,17 +934,13 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn processes(&self) -> Result<Vec<i32>> {
-        Ok(self.processes.keys().cloned().collect())
+        Ok(self.processes.values().map(|p| p.pid).collect())
     }
 
     fn get_process(&mut self, eid: &str) -> Result<&mut Process> {
-        for (_, v) in self.processes.iter_mut() {
-            if eid == v.exec_id.as_str() {
-                return Ok(v);
-            }
-        }
-
-        Err(anyhow!("invalid eid {}", eid))
+        self.processes
+            .get_mut(eid)
+            .ok_or_else(|| anyhow!("invalid eid {}", eid))
     }
 
     fn stats(&self) -> Result<StatsContainerResponse> {
@@ -973,6 +964,12 @@ impl BaseContainer for LinuxContainer {
 
     async fn start(&mut self, mut p: Process) -> Result<()> {
         let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
+
+        // Check if exec_id is already in use to prevent collisions
+        if self.processes.contains_key(p.exec_id.as_str()) {
+            return Err(anyhow!("exec_id '{}' already exists", p.exec_id));
+        }
+
         let tty = p.tty;
         let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         info!(logger, "enter container.start!");
@@ -1241,7 +1238,7 @@ impl BaseContainer for LinuxContainer {
             let spec = self.config.spec.as_mut().unwrap();
             update_namespaces(&self.logger, spec, p.pid)?;
         }
-        self.processes.insert(p.pid, p);
+        self.processes.insert(p.exec_id.clone(), p);
 
         info!(logger, "wait on child log handler");
         let _ = log_handler
@@ -1267,13 +1264,13 @@ impl BaseContainer for LinuxContainer {
         let spec = self.config.spec.as_ref().unwrap();
         let st = self.oci_state()?;
 
-        for pid in self.processes.keys() {
-            match signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL)) {
+        for process in self.processes.values() {
+            match signal::kill(process.pid(), Some(Signal::SIGKILL)) {
                 Err(Errno::ESRCH) => {
                     info!(
                         self.logger,
                         "kill encounters ESRCH, pid: {}, container: {}",
-                        pid,
+                        process.pid(),
                         self.id.clone()
                     );
                     continue;
@@ -1426,7 +1423,7 @@ pub fn update_namespaces(logger: &Logger, spec: &mut Spec, init_pid: RawFd) -> R
                 if namespace
                     .path()
                     .as_ref()
-                    .map_or(true, |p| p.as_os_str().is_empty())
+                    .is_none_or(|p| p.as_os_str().is_empty())
                 {
                     namespace.set_path(Some(PathBuf::from(&ns_path)));
                 }
@@ -1448,16 +1445,14 @@ fn get_pid_namespace(logger: &Logger, linux: &Linux) -> Result<PidNs> {
                     OFlag::O_RDONLY,
                     Mode::empty(),
                 )
-                .map_err(|e| {
+                .inspect_err(|e| {
                     error!(
                         logger,
                         "cannot open type: {} path: {}",
                         &ns.typ().to_string(),
                         ns_path.display()
                     );
-                    error!(logger, "error is : {:?}", e);
-
-                    e
+                    error!(logger, "error is : {:?}", e)
                 })?,
             };
 
@@ -1638,10 +1633,8 @@ fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Resul
     if !data.is_empty() {
         let fd = fcntl::open(path, OFlag::O_WRONLY, Mode::empty())?;
         defer!(unistd::close(fd).unwrap());
-        unistd::write(fd, data.as_bytes()).map_err(|e| {
-            info!(logger, "cannot write mapping");
-            e
-        })?;
+        unistd::write(fd, data.as_bytes())
+            .inspect_err(|_| info!(logger, "cannot write mapping"))?;
     }
     Ok(())
 }
@@ -2091,13 +2084,14 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_linuxcontainer_get_process() {
+    #[tokio::test]
+    async fn test_linuxcontainer_get_process() {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.processes.insert(
-                1,
-                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap(),
-            );
+            let process =
+                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap();
+            let exec_id = process.exec_id.clone();
+            c.processes.insert(exec_id, process);
+
             let p = c.get_process("123");
             assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
             Ok(())

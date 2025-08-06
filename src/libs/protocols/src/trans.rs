@@ -10,7 +10,6 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 
 use crate::oci as grpc;
-use kata_sys_util::spec::parse_json_string;
 use oci_spec::runtime as oci;
 
 // translate from interface to ttprc tools
@@ -41,8 +40,11 @@ fn cap_hashset2vec(hash_set: &Option<HashSet<oci::Capability>>) -> Vec<String> {
 fn cap_vec2hashset(caps: Vec<String>) -> HashSet<oci::Capability> {
     caps.iter()
         .map(|cap: &String| {
-            let cap_str = parse_json_string(cap);
-            cap_str
+            // cap might be JSON-encoded
+            let decoded: &str = serde_json::from_str(cap).unwrap_or(cap);
+            decoded
+                .strip_prefix("CAP_")
+                .unwrap_or(decoded)
                 .parse::<oci::Capability>()
                 .unwrap_or_else(|_| panic!("Failed to parse {:?} to Enum Capability", cap))
         })
@@ -97,6 +99,8 @@ impl From<oci::LinuxCapabilities> for grpc::LinuxCapabilities {
     }
 }
 
+// TODO(burgerdev): remove condition here and below after upgrading to oci_spec > 0.7.
+#[cfg(target_os = "linux")]
 impl From<oci::PosixRlimit> for grpc::POSIXRlimit {
     fn from(from: oci::PosixRlimit) -> Self {
         grpc::POSIXRlimit {
@@ -118,6 +122,7 @@ impl From<oci::Process> for grpc::Process {
             Env: option_vec_to_vec(from.env()),
             Cwd: from.cwd().display().to_string(),
             Capabilities: from_option(from.capabilities().clone()),
+            #[cfg(target_os = "linux")]
             Rlimits: from_option_vec(from.rlimits().clone()),
             NoNewPrivileges: from.no_new_privileges().unwrap_or_default(),
             ApparmorProfile: from
@@ -993,6 +998,7 @@ impl From<grpc::Linux> for oci::Linux {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl From<grpc::POSIXRlimit> for oci::PosixRlimit {
     fn from(proto: grpc::POSIXRlimit) -> Self {
         oci::PosixRlimitBuilder::default()
@@ -1078,6 +1084,8 @@ impl From<grpc::Process> for oci::Process {
         } else {
             process.set_capabilities(None);
         }
+
+        #[cfg(target_os = "linux")]
         if !from.Rlimits().is_empty() {
             process.set_rlimits(Some(
                 from.Rlimits().iter().cloned().map(|r| r.into()).collect(),
@@ -1238,6 +1246,11 @@ impl From<grpc::LinuxIntelRdt> for oci::LinuxIntelRdt {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
+    use super::cap_vec2hashset;
+    use super::oci;
+
     fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> Vec<T> {
         let mut to: Vec<T> = vec![];
         for data in from {
@@ -1288,5 +1301,25 @@ mod tests {
 
         assert_eq!(from.len(), to.len());
         assert_eq!(from[0].from, to[0].to);
+    }
+
+    #[test]
+    fn test_cap_vec2hashset_good() {
+        let expected: HashSet<oci::Capability> =
+            vec![oci::Capability::NetAdmin, oci::Capability::Mknod]
+                .into_iter()
+                .collect();
+        let actual = cap_vec2hashset(vec![
+            "CAP_NET_ADMIN".to_string(),
+            "\"CAP_MKNOD\"".to_string(),
+        ]);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_cap_vec2hashset_bad() {
+        cap_vec2hashset(vec!["CAP_DOES_NOT_EXIST".to_string()]);
     }
 }

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -263,6 +264,15 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
 		noarp := endpoint.Properties().Iface.RawFlags & unix.IFF_NOARP
+		devicePath := endpoint.PciPath().String()
+		if runtime.GOARCH == "s390x" {
+			device := endpoint.CcwDevice()
+			if device == nil {
+				devicePath = ""
+			} else {
+				devicePath = device.String()
+			}
+		}
 		ifc := pbTypes.Interface{
 			IPAddresses: ipAddresses,
 			Device:      endpoint.Name(),
@@ -271,7 +281,7 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			Type:        string(endpoint.Type()),
 			RawFlags:    noarp,
 			HwAddr:      endpoint.HardwareAddr(),
-			PciPath:     endpoint.PciPath().String(),
+			DevicePath:  devicePath,
 		}
 
 		ifaces = append(ifaces, &ifc)
@@ -299,6 +309,9 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			r.Device = endpoint.Name()
 			r.Scope = uint32(route.Scope)
 			r.Family = utils.ConvertAddressFamily((int32)(route.Family))
+			r.Flags = uint32(route.Flags)
+			r.Mtu = uint32(route.MTU)
+
 			routes = append(routes, &r)
 		}
 

@@ -26,6 +26,7 @@ pub const DEFAULT_VOLUME_FS_TYPE: &str = "ext4";
 pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
 
 pub const KATA_BLK_DEV_TYPE: &str = "blk";
+pub const KATA_SCSI_DEV_TYPE: &str = "scsi";
 
 pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
     let file_name = src
@@ -97,6 +98,13 @@ pub async fn handle_block_volume(
                     pci_path.to_string()
                 } else {
                     return Err(anyhow!("block driver is blk but no pci path exists"));
+                }
+            }
+            KATA_SCSI_DEV_TYPE => {
+                if let Some(scsi_addr) = device.config.scsi_addr {
+                    scsi_addr.to_string()
+                } else {
+                    return Err(anyhow!("block driver is scsi but no scsi address exists"));
                 }
             }
             _ => device.config.virt_path,

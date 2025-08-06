@@ -1,7 +1,11 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
   name: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
   namespace: {{ .Release.Namespace }}
   annotations:
     "helm.sh/hook": post-delete
@@ -11,7 +15,11 @@ metadata:
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
   name: {{ .Chart.Name }}-role-cleanup
+{{- end }}
   annotations:
     "helm.sh/hook": post-delete
     "helm.sh/hook-weight": "-2"
@@ -23,11 +31,18 @@ rules:
 - apiGroups: ["node.k8s.io"]
   resources: ["runtimeclasses"]
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps"]
+  resources: ["daemonsets"]
+  verbs: ["list"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-rb-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
   name: {{ .Chart.Name }}-rb-cleanup
+{{- end }}
   annotations:
     "helm.sh/hook": post-delete
     "helm.sh/hook-weight": "-1"
@@ -35,16 +50,28 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
   name: {{ .Chart.Name }}-role-cleanup
+{{- end }}
 subjects:
 - kind: ServiceAccount
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
   name: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
   namespace: {{ .Release.Namespace }}
 ---
 apiVersion: batch/v1
 kind: Job
 metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
   name: {{ .Chart.Name }}-cleanup
+{{- end }}
   namespace: {{ .Release.Namespace }}
   annotations:
     "helm.sh/hook": post-delete
@@ -56,7 +83,11 @@ spec:
       labels:
         role: cleanup
     spec:
+{{- if .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}-cleanup
+{{- else }}
       serviceAccountName: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
       hostPID: true
       containers:
       - name: kube-kata-cleanup
@@ -90,6 +121,10 @@ spec:
           value: {{ .Values.env.pullTypeMapping | quote }}
         - name: HELM_POST_DELETE_HOOK
           value: "true"
+        - name: INSTALLATION_PREFIX
+          value: {{ .Values.env.installationPrefix | quote }}
+        - name: MULTI_INSTALL_SUFFIX
+          value: {{ .Values.env.multiInstallSuffix | quote }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}

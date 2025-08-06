@@ -1,14 +1,14 @@
 // Copyright (c) 2020 Intel Corporation
+// Copyright (c) 2025 IBM Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #[macro_use]
 extern crate lazy_static;
-
 use crate::types::Config;
 use anyhow::{anyhow, Result};
-use clap::{crate_name, crate_version, App, Arg, SubCommand};
+use clap::{crate_name, crate_version, Arg, Command};
 use std::io;
 use std::process::exit;
 
@@ -21,6 +21,7 @@ macro_rules! sl {
 }
 
 mod client;
+mod image;
 mod rpc;
 mod types;
 mod utils;
@@ -136,11 +137,12 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         .subcommand_matches("connect")
         .ok_or_else(|| anyhow!("BUG: missing sub-command arguments"))?;
 
-    let interactive = args.is_present("interactive");
-    let ignore_errors = args.is_present("ignore-errors");
+    let interactive = args.contains_id("interactive");
+    let ignore_errors = args.contains_id("ignore-errors");
 
     let server_address = args
-        .value_of("server-address")
+        .get_one::<String>("server-address")
+        .map(|s| s.as_str())
         .ok_or_else(|| anyhow!("need server adddress"))?
         .to_string();
 
@@ -148,13 +150,15 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
 
     if !interactive {
         commands = args
-            .values_of("cmd")
+            .get_many::<String>("cmd")
             .ok_or_else(|| anyhow!("need commands to send to the server"))?
+            .map(|s| s.as_str())
             .collect();
     }
 
     let log_level_name = global_args
-        .value_of("log-level")
+        .get_one::<String>("log-level")
+        .map(|s| s.as_str())
         .ok_or_else(|| anyhow!("cannot get log level"))?;
 
     let log_level = logging::level_name_to_slog_level(log_level_name).map_err(|e| anyhow!(e))?;
@@ -162,21 +166,26 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let writer = io::stdout();
     let (logger, _guard) = logging::create_logger(name, crate_name!(), log_level, writer);
 
-    let timeout_nano: i64 = match args.value_of("timeout") {
+    let timeout_nano: i64 = match args.get_one::<String>("timeout").map(|s| s.as_str()) {
         Some(t) => utils::human_time_to_ns(t)?,
         None => 0,
     };
 
     let hybrid_vsock_port = args
-        .value_of("hybrid-vsock-port")
+        .get_one::<String>("hybrid-vsock-port")
+        .map(|s| s.as_str())
         .ok_or_else(|| anyhow!("Need Hybrid VSOCK port number"))?
         .parse::<u64>()
         .map_err(|e| anyhow!("VSOCK port number must be an integer: {:?}", e))?;
 
-    let bundle_dir = args.value_of("bundle-dir").unwrap_or("").to_string();
+    let bundle_dir = args
+        .get_one::<String>("bundle-dir")
+        .map(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
 
-    let hybrid_vsock = args.is_present("hybrid-vsock");
-    let no_auto_values = args.is_present("no-auto-values");
+    let hybrid_vsock = args.contains_id("hybrid-vsock");
+    let no_auto_values = args.contains_id("no-auto-values");
 
     let cfg = Config {
         server_address,
@@ -202,95 +211,89 @@ fn real_main() -> Result<()> {
         DEFAULT_KATA_AGENT_API_VSOCK_PORT
     );
 
-    let app = App::new(name)
+    let app = Command::new(name)
         .version(crate_version!())
         .about(ABOUT_TEXT)
         .long_about(DESCRIPTION_TEXT)
         .after_help(WARNING_TEXT)
         .arg(
-            Arg::with_name("log-level")
+            Arg::new("log-level")
                 .long("log-level")
-                .short("l")
+                .short('l')
                 .help("specific log level")
                 .default_value(logging::slog_level_to_level_name(DEFAULT_LOG_LEVEL).map_err(|e| anyhow!(e))?)
-                .possible_values(&logging::get_log_levels())
-                .takes_value(true)
+                .value_parser(logging::get_log_levels())
                 .required(false),
         )
         .subcommand(
-            SubCommand::with_name("connect")
+            Command::new("connect")
                 .about("Connect to agent")
                 .after_help(WARNING_TEXT)
                 .arg(
-                    Arg::with_name("bundle-dir")
+                    Arg::new("bundle-dir")
                     .long("bundle-dir")
                     .help("OCI bundle directory")
-                    .takes_value(true)
                     .value_name("directory"),
                     )
                 .arg(
-                    Arg::with_name("cmd")
+                    Arg::new("cmd")
                     .long("cmd")
-                    .short("c")
-                    .takes_value(true)
-                    .multiple(true)
+                    .short('c')
+                    .num_args(0..)
                     .help("API command (with optional arguments) to send to the server"),
                     )
                 .arg(
-                    Arg::with_name("ignore-errors")
+                    Arg::new("ignore-errors")
                     .long("ignore-errors")
                     .help("Don't exit on first error"),
                     )
                 .arg(
-                    Arg::with_name("hybrid-vsock")
+                    Arg::new("hybrid-vsock")
                     .long("hybrid-vsock")
                     .help("Treat a unix:// server address as a Hybrid VSOCK one"),
                     )
                 .arg(
-                    Arg::with_name("hybrid-vsock-port")
+                    Arg::new("hybrid-vsock-port")
                     .long("hybrid-vsock-port")
                     .help(&hybrid_vsock_port_help)
                     .default_value(DEFAULT_KATA_AGENT_API_VSOCK_PORT)
-                    .takes_value(true)
                     .value_name("PORT")
                     )
                 .arg(
-                    Arg::with_name("interactive")
-                    .short("i")
+                    Arg::new("interactive")
+                    .short('i')
                     .long("interactive")
                     .help("Allow interactive client"),
                     )
                 .arg(
-                    Arg::with_name("no-auto-values")
-                    .short("n")
+                    Arg::new("no-auto-values")
+                    .short('n')
                     .long("no-auto-values")
                     .help("Disable automatic generation of values for sandbox ID, container ID, etc"),
                     )
                 .arg(
-                    Arg::with_name("server-address")
+                    Arg::new("server-address")
                     .long("server-address")
                     .help("server URI (vsock:// or unix://)")
-                    .takes_value(true)
                     .value_name("URI"),
                     )
                 .arg(
-                    Arg::with_name("timeout")
+                    Arg::new("timeout")
                     .long("timeout")
                     .help("timeout value as nanoseconds or using human-readable suffixes (0 [forever], 99ns, 30us, 2ms, 5s, 7m, etc)")
-                    .takes_value(true)
                     .value_name("human-time"),
                     )
                 )
                 .subcommand(
-                    SubCommand::with_name("generate-cid")
+                    Command::new("generate-cid")
                     .about("Create a random container ID")
                 )
                 .subcommand(
-                    SubCommand::with_name("generate-sid")
+                    Command::new("generate-sid")
                     .about("Create a random sandbox ID")
                 )
                 .subcommand(
-                    SubCommand::with_name("examples")
+                    Command::new("examples")
                     .about("Show usage examples")
                 );
 

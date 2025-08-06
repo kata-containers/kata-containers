@@ -93,7 +93,7 @@ pub struct Interface {
     pub mtu: u64,
     pub hw_addr: String,
     #[serde(default)]
-    pub pci_addr: String,
+    pub device_path: String,
     #[serde(default)]
     pub field_type: String,
     #[serde(default)]
@@ -113,6 +113,8 @@ pub struct Route {
     pub source: String,
     pub scope: u32,
     pub family: IPFamily,
+    pub flags: u32,
+    pub mtu: u32,
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone, Default)]
@@ -601,6 +603,16 @@ pub struct VolumeStatsRequest {
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct VolumeStatsResponse {
     pub data: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct AddSwapRequest {
+    pub pci_path: Vec<u32>,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct AddSwapPathRequest {
+    pub path: String,
 }
 
 #[cfg(test)]

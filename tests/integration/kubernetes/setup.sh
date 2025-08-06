@@ -99,19 +99,20 @@ add_annotations_to_yaml() {
 	esac
 }
 
-add_cbl_mariner_kernel_initrd_annotations() {
+add_cbl_mariner_specific_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and initrd path and annotations for cbl-mariner"
-		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
-		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
+		info "Add image path annotation for cbl-mariner"
 
-		local mariner_annotation_initrd="io.katacontainers.config.hypervisor.initrd"
-		local mariner_initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
+		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
+		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
+
+		local mariner_annotation_disable_image_nvdimm="io.katacontainers.config.hypervisor.disable_image_nvdimm"
+		local mariner_disable_image_nvdimm=true
 
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_initrd}" "${mariner_initrd_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_disable_image_nvdimm}" "${mariner_disable_image_nvdimm}"
 		done
 	fi
 }
@@ -125,7 +126,7 @@ add_runtime_handler_annotations() {
 	fi
 
 	case "${KATA_HYPERVISOR}" in
-		qemu-coco-dev | qemu-sev | qemu-snp | qemu-tdx)
+		qemu-coco-dev | qemu-snp | qemu-tdx)
 			info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
 			local handler_value="kata-${KATA_HYPERVISOR}"
 			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
@@ -139,7 +140,7 @@ add_runtime_handler_annotations() {
 main() {
 	ensure_yq
 	reset_workloads_work_dir
-	add_cbl_mariner_kernel_initrd_annotations
+	add_cbl_mariner_specific_annotations
 	add_runtime_handler_annotations
 }
 

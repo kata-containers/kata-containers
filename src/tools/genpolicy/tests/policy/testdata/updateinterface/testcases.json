@@ -1,0 +1,102 @@
+[
+  {
+    "description": "no flags",
+    "allowed": true,
+    "request": {
+      "type": "UpdateInterface",
+      "interface": {
+          "device": "eth0",
+          "name": "eth0",
+          "IPAddresses": [
+              {"family":0, "address":"10.244.0.14", "mask":"24"},
+              {"family":1, "address":"fe80::6474:9fff:fe6a:9601", "mask":"64"}
+          ],
+          "mtu": 1500,
+          "hwAddr": "66:74:9f:6a:96:01",
+          "pciPath": "",
+          "type_": "",
+          "raw_flags": 0
+      }
+    }
+  },
+  {
+    "description": "allowed arp flag",
+    "allowed": true,
+    "request": {
+      "type": "UpdateInterface",
+      "interface": {
+          "device": "eth0",
+          "name": "eth0",
+          "IPAddresses": [
+              {"family":0, "address":"10.244.0.14", "mask":"24"},
+              {"family":1, "address":"fe80::6474:9fff:fe6a:9601", "mask":"64"}
+          ],
+          "mtu": 1500,
+          "hwAddr": "66:74:9f:6a:96:01",
+          "pciPath": "",
+          "type_": "",
+          "raw_flags": 128
+      }
+    }
+  },
+  {
+    "description": "forbidden flag",
+    "allowed": false,
+    "request": {
+      "type": "UpdateInterface",
+      "interface": {
+          "device": "eth0",
+          "name": "eth0",
+          "IPAddresses": [
+              {"family":0, "address":"10.244.0.14", "mask":"24"},
+              {"family":1, "address":"fe80::6474:9fff:fe6a:9601", "mask":"64"}
+          ],
+          "mtu": 1500,
+          "hwAddr": "66:74:9f:6a:96:01",
+          "pciPath": "",
+          "type_": "",
+          "raw_flags": 64
+      }
+    }
+  },
+  {
+    "description": "forbidden name",
+    "allowed": false,
+    "request": {
+      "type": "UpdateInterface",
+      "interface": {
+          "device": "eth0",
+          "name": "lo",
+          "IPAddresses": [
+              {"family":0, "address":"10.244.0.14", "mask":"24"},
+              {"family":1, "address":"fe80::6474:9fff:fe6a:9601", "mask":"64"}
+          ],
+          "mtu": 1500,
+          "hwAddr": "66:74:9f:6a:96:01",
+          "pciPath": "",
+          "type_": "",
+          "raw_flags": 0
+      }
+    }
+  },
+  {
+    "description": "forbidden hwAddr",
+    "allowed": false,
+    "request": {
+      "type": "UpdateInterface",
+      "interface": {
+          "device": "eth0",
+          "name": "eth0",
+          "IPAddresses": [
+              {"family":0, "address":"10.244.0.14", "mask":"24"},
+              {"family":1, "address":"fe80::6474:9fff:fe6a:9601", "mask":"64"}
+          ],
+          "mtu": 1500,
+          "hwAddr": "00:00:00:00:00:00",
+          "pciPath": "",
+          "type_": "",
+          "raw_flags": 0
+      }
+    }
+  }
+]

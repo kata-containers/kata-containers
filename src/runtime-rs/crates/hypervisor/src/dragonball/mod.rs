@@ -12,6 +12,7 @@ use inner::DragonballInner;
 use persist::sandbox_persist::Persist;
 pub mod vmm_instance;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -55,12 +56,12 @@ impl Dragonball {
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
 
-    pub async fn set_passfd_listener_port(&mut self, port: u32) {
+    pub async fn set_passfd_listener_port(&self, port: u32) {
         let mut inner = self.inner.write().await;
         inner.set_passfd_listener_port(port)
     }
@@ -69,7 +70,12 @@ impl Dragonball {
 #[async_trait]
 impl Hypervisor for Dragonball {
     #[instrument]
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
@@ -79,7 +85,7 @@ impl Hypervisor for Dragonball {
         let mut inner = self.inner.write().await;
         let ret = inner.start_vm(timeout).await;
 
-        if ret.is_ok() && inner.config.device_info.enable_balloon_f_reporting {
+        if ret.is_ok() && inner.config.device_info.reclaim_guest_freed_memory {
             // The virtio-balloon device must be inserted into dragonball and
             // recognized by the guest kernel only after the dragonball upcall is ready.
             // The dragonball upcall is not ready immediately after the VM starts,

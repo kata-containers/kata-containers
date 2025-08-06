@@ -96,7 +96,7 @@ impl FcInner {
         ));
         let mut parameters = String::new().to_owned();
 
-        for param in &kernel_params.to_string() {
+        if let Ok(param) = &kernel_params.to_string() {
             parameters.push_str(&param.to_string());
         }
 
@@ -107,6 +107,11 @@ impl FcInner {
             .get_resource(&self.config.boot_info.image, FC_ROOT_FS)
             .context("get resource ROOTFS")?;
 
+        let body_config: String = json!({
+            "mem_size_mib": self.config.memory_info.default_memory,
+            "vcpu_count": self.config.cpu_info.default_vcpus,
+        })
+        .to_string();
         let body_kernel: String = json!({
             "kernel_image_path": kernel,
             "boot_args": parameters,
@@ -123,6 +128,8 @@ impl FcInner {
 
         info!(sl(), "Before first request");
         self.request_with_retry(Method::PUT, "/boot-source", body_kernel)
+            .await?;
+        self.request_with_retry(Method::PUT, "/machine-config", body_config)
             .await?;
         self.request_with_retry(Method::PUT, "/drives/rootfs", body_rootfs)
             .await?;
@@ -295,12 +302,11 @@ impl FcInner {
             self.umount_jail_resource("").ok();
         }
         std::fs::remove_dir_all(self.vm_path.as_str())
-            .map_err(|err| {
+            .inspect_err(|err| {
                 error!(
                     sl(),
                     "failed to remove dir all for {} with error: {:?}", &self.vm_path, &err
-                );
-                err
+                )
             })
             .ok();
     }

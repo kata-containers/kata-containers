@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# shellcheck disable=all
+# Disable shellcheck until we decide if we are keeping this. Issue #10957
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -111,6 +113,7 @@ show_stats()
 	local sizes
 
 	local tmpfile=$(mktemp)
+	trap 'rm -f $tmpfile' EXIT
 
 	# images
 	for name in "${!built_images[@]}"
@@ -140,8 +143,6 @@ show_stats()
 		"Name"
 
 	sort -k1,1n -k3,3n "$tmpfile"
-
-	rm -f "${tmpfile}"
 }
 
 
@@ -210,7 +211,7 @@ exit_handler()
 	sudo -E kata-collect-data.sh >&2
 
 	info "processes:"
-	sudo -E ps -efwww | egrep "docker|kata" >&2
+	sudo -E ps -efwww | grep -E "docker|kata" >&2
 
 	# Restore the default image in config file
 	run_mgr configure-image
@@ -326,13 +327,13 @@ get_distros_config()
 		fi
 
 		tmpfile=$(mktemp /tmp/osbuilder-$d-config.XXX)
+		trap 'rm -f $tmpfile' EXIT
 		${rootfs_builder} -t $d  > $tmpfile
 		# Get value of all keys in distroCfg
 		for k in ${!distroCfg[@]}; do
 			distroCfg[$k]="$(awk -v cfgKey=$k 'BEGIN{FS=":\t+"}{if ($1 == cfgKey) print $2}' $tmpfile)"
 			debug "distroCfg[$k]=${distroCfg[$k]}"
 		done
-		rm -f $tmpfile
 
 		machinePattern="\<${MACHINE_TYPE}\>"
 		if [[ "${distroCfg[ARCH_EXCLUDE_LIST]}" =~ $machinePattern ]]; then

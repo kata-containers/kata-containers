@@ -53,6 +53,7 @@ use std::time::Instant;
 use lazy_static::lazy_static;
 use nix::mount::{mount, MntFlags, MsFlags};
 use nix::{unistd, NixPath};
+use oci_spec::runtime as oci;
 
 use crate::fs::is_symlink;
 use crate::sl;
@@ -799,8 +800,20 @@ pub fn get_mount_options(options: &Option<Vec<String>>) -> Vec<String> {
     }
 }
 
-pub fn get_mount_type(typ: &Option<String>) -> String {
-    typ.clone().unwrap_or("bind".to_string())
+pub fn get_mount_type(m: &oci::Mount) -> String {
+    m.typ()
+        .clone()
+        .map(|typ| {
+            if typ.as_str() == "none" {
+                if let Some(opts) = m.options() {
+                    if opts.iter().any(|opt| opt == "bind" || opt == "rbind") {
+                        return "bind".to_string();
+                    }
+                }
+            }
+            typ
+        })
+        .unwrap_or("bind".to_string())
 }
 
 #[cfg(test)]

@@ -7,9 +7,6 @@ CONFIG_PCI_MMCONFIG=y
 CONFIG_MODULES=y
 CONFIG_MODULE_UNLOAD=y
 
-# CRYPTO_FIPS requires this config when loading modules is enabled.
-CONFIG_MODULE_SIG=y
-
 # Linux kernel version suffix
 CONFIG_LOCALVERSION="-nvidia-gpu${CONF_GUEST_SUFFIX}"
 
@@ -25,3 +22,6 @@ CONFIG_X86_PAT=y
 CONFIG_CRYPTO_ECC=y
 CONFIG_CRYPTO_ECDH=y
 CONFIG_CRYPTO_ECDSA=y
+
+# Dependency of _CRYPTO_
+CONFIG_MODULE_SIG=y

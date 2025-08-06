@@ -2,6 +2,8 @@
 
 ## Introduction
 
+This document describes how to setup swap device with runtime-golang.  See [How to use mem-agent to decrease the memory usage of Kata container](how-to-use-memory-agent.md#setup-guest-swap) to get how to setup and use guest swap with runtime-rs.
+
 Setup swap device in guest kernel can help to increase memory capacity, handle some memory issues and increase file access speed sometimes.
 Kata Containers can insert a raw file to the guest as the swap device.
 

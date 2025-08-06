@@ -5,6 +5,7 @@
 //
 
 use std::{
+    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -19,7 +20,7 @@ use kata_sys_util::fs::get_base_name;
 use crate::{
     device::{
         pci_path::PciPath,
-        topology::{do_add_pcie_endpoint, PCIeTopology},
+        topology::{do_add_pcie_endpoint, AvailableNode, PCIePort, PCIeTopology},
         util::{do_decrease_count, do_increase_count},
         Device, DeviceType, PCIeDevice,
     },
@@ -164,6 +165,9 @@ pub struct HostDevice {
     /// Sysfs path for mdev bus type device
     pub sysfs_path: String,
 
+    /// PCI device information (Domain)
+    pub domain: String,
+
     /// PCI device information (BDF): "bus:slot:function"
     pub bus_slot_func: String,
 
@@ -177,6 +181,7 @@ pub struct HostDevice {
     pub guest_pci_path: Option<PciPath>,
 
     /// vfio_vendor for vendor's some special cases.
+    #[allow(unexpected_cfgs)]
     #[cfg(feature = "enable-vendor")]
     pub vfio_vendor: VfioVendor,
 }
@@ -221,6 +226,15 @@ pub struct VfioDevice {
     pub devices: Vec<HostDevice>,
     // options for vfio pci handler in kata-agent
     pub device_options: Vec<String>,
+
+    // specifies the PCIe port type to which the device is attached
+    pub port: PCIePort,
+
+    // bus of VFIO PCIe device
+    pub bus: String,
+
+    // Indicated host device allocated or not.
+    pub allocated: bool,
 }
 
 impl VfioDevice {
@@ -243,6 +257,8 @@ impl VfioDevice {
             config: dev_info.clone(),
             devices,
             device_options,
+            allocated: false,
+            ..Default::default()
         };
 
         vfio_device
@@ -340,12 +356,13 @@ impl VfioDevice {
     }
 
     // read vendor and deviceor from /sys/bus/pci/devices/BDF/X
-    fn get_vfio_device_vendor_class(&self, bdf: &str) -> Result<DeviceVendorClass> {
+    fn get_vfio_device_vendor_class(&self, device_name: &str) -> Result<DeviceVendorClass> {
         let device =
-            get_device_property(bdf, "device").context("get device from syspath failed")?;
+            get_device_property(device_name, "device").context("get device from syspath failed")?;
         let vendor =
-            get_device_property(bdf, "vendor").context("get vendor from syspath failed")?;
-        let class = get_device_property(bdf, "class").context("get class from syspath failed")?;
+            get_device_property(device_name, "vendor").context("get vendor from syspath failed")?;
+        let class =
+            get_device_property(device_name, "class").context("get class from syspath failed")?;
 
         Ok(DeviceVendorClass(device, vendor, class))
     }
@@ -362,10 +379,14 @@ impl VfioDevice {
         // It's safe as BDF really exists.
         let dev_bdf = vfio_dev_details.0.unwrap();
         let dev_vendor_class = self
-            .get_vfio_device_vendor_class(&dev_bdf)
+            .get_vfio_device_vendor_class(device_name)
             .context("get property device and vendor failed")?;
 
+        let parts: Vec<&str> = device_name.splitn(2, ':').collect();
+        let domain_part = parts.first().context("missing domain segment")?;
+
         let vfio_dev = HostDevice {
+            domain: domain_part.to_string(),
             bus_slot_func: dev_bdf.clone(),
             device_vendor_class: Some(dev_vendor_class),
             sysfs_path: vfio_dev_details.1,
@@ -438,7 +459,7 @@ impl VfioDevice {
             let mut hostdev: HostDevice = self
                 .set_vfio_config(iommu_devs_path.clone(), device)
                 .context("set vfio config failed")?;
-            let dev_prefix = self.get_vfio_prefix();
+            let dev_prefix = format!("{}_{}", self.get_vfio_prefix(), &vfio_group);
             hostdev.hostdev_id = make_device_nameid(&dev_prefix, index, MAX_DEV_ID_SIZE);
 
             self.devices.push(hostdev);
@@ -478,6 +499,7 @@ impl Device for VfioDevice {
                 if let DeviceType::Vfio(vfio) = dev {
                     self.config = vfio.config;
                     self.devices = vfio.devices;
+                    self.allocated = true;
                 }
 
                 update_pcie_device!(self, pcie_topo)?;
@@ -547,6 +569,34 @@ impl PCIeDevice for VfioDevice {
             return Ok(());
         }
 
+        // handle port devices
+        if !self.allocated {
+            let (port_type, _) = pcie_topo
+                .get_pcie_port()
+                .ok_or_else(|| anyhow!("No validated port type supported."))?;
+            let avail_port = match port_type {
+                PCIePort::RootPort | PCIePort::SwitchPort => pcie_topo.find_available_node(),
+                _ => {
+                    info!(
+                        sl!(),
+                        "There's no need to set ports used to hot-plug vfio devices"
+                    );
+                    None
+                }
+            };
+            // vfio device attached onto port(root port | switch port)
+            let port_device = avail_port
+                .ok_or_else(|| anyhow!("No available node found for {:?} device", port_type))?;
+            self.bus = match port_device {
+                AvailableNode::TopologyPortDevice(root_port) => root_port.port_id(),
+                AvailableNode::SwitchDownPort(swdown_port) => swdown_port.port_id(),
+            };
+
+            self.port = port_type;
+            self.allocated = true;
+            info!(sl!(), "bus: {:?}, port type: {:?}", &self.bus, &self.port);
+        }
+
         self.device_options.clear();
         for hostdev in self.devices.iter_mut() {
             let pci_path = do_add_pcie_endpoint(
@@ -561,9 +611,8 @@ impl PCIeDevice for VfioDevice {
             hostdev.guest_pci_path = Some(pci_path.clone());
 
             self.device_options.push(format!(
-                "0000:{}={}",
-                hostdev.bus_slot_func,
-                pci_path.to_string()
+                "{}:{}={}",
+                hostdev.domain, hostdev.bus_slot_func, pci_path
             ));
         }
 
@@ -680,13 +729,14 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 // expected format <bus>:<slot>.<func> eg. 02:10.0
 fn get_device_bdf(dev_sys_str: String) -> Option<String> {
     let dev_sys = dev_sys_str;
-    if !dev_sys.starts_with("0000:") {
-        return Some(dev_sys);
-    }
-
     let parts: Vec<&str> = dev_sys.as_str().splitn(2, ':').collect();
     if parts.len() < 2 {
         return None;
+    }
+
+    let domain_part = parts.first()?;
+    if domain_part.len() != 4 {
+        return Some(dev_sys);
     }
 
     parts.get(1).copied().map(|bdf| bdf.to_owned())
@@ -694,7 +744,8 @@ fn get_device_bdf(dev_sys_str: String) -> Option<String> {
 
 // expected format <domain>:<bus>:<slot>.<func> eg. 0000:02:10.0
 fn normalize_device_bdf(bdf: &str) -> String {
-    if !bdf.starts_with("0000") {
+    let parts: Vec<&str> = bdf.split(':').collect();
+    if parts.len() == 2 {
         format!("0000:{}", bdf)
     } else {
         bdf.to_string()
@@ -729,9 +780,7 @@ fn get_mediated_device_bdf(dev_sys_str: String) -> Option<String> {
 
 // dev_sys_path: /sys/bus/pci/devices/DDDD:BB:DD.F
 // cfg_path: : /sys/bus/pci/devices/DDDD:BB:DD.F/xxx
-fn get_device_property(bdf: &str, property: &str) -> Result<String> {
-    let device_name = normalize_device_bdf(bdf);
-
+fn get_device_property(device_name: &str, property: &str) -> Result<String> {
     let dev_sys_path = Path::new(SYS_BUS_PCI_DEVICES).join(device_name);
     let cfg_path = fs::read_to_string(dev_sys_path.join(property)).with_context(|| {
         format!(
@@ -761,14 +810,21 @@ pub fn get_vfio_iommu_group(bdf: String) -> Result<String> {
     let iommugrp_symlink = fs::read_link(&iommugrp_path)
         .map_err(|e| anyhow!("read iommu group symlink failed {:?}", e))?;
 
-    // get base name from iommu group symlink: X
-    let iommu_group = get_base_name(iommugrp_symlink)?
-        .into_string()
-        .map_err(|e| anyhow!("failed to get iommu group {:?}", e))?;
+    // Just get base name from iommu group symlink is enough as it will be checked
+    // within the full path /sys/kernel/iommu_groups/$iommu_group in the subsequent step.
+    let iommu_group = iommugrp_symlink
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| {
+            anyhow!(
+                "failed to get iommu group with symlink {:?}",
+                iommugrp_symlink
+            )
+        })?;
 
     // we'd better verify the path to ensure it dose exist.
     if !Path::new(SYS_KERN_IOMMU_GROUPS)
-        .join(&iommu_group)
+        .join(iommu_group)
         .join("devices")
         .join(dbdf.as_str())
         .exists()

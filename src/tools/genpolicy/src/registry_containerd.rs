@@ -5,18 +5,19 @@
 
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
+use crate::layers_cache::ImageLayersCache;
 use crate::registry::{
-    add_verity_and_users_to_store, get_verity_hash_and_users, read_verity_and_users_from_store,
-    Container, DockerConfigLayer, ImageLayer,
+    get_users_from_decompressed_layer, Container, DockerConfigLayer, ImageLayer, WHITEOUT_MARKER,
 };
+use crate::utils::Config;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use containerd_client::{services::v1::GetImageRequest, with_namespace};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use k8s_cri::v1::{image_service_client::ImageServiceClient, AuthConfig};
 use log::{debug, info, warn};
-use oci_distribution::Reference;
-use std::{collections::HashMap, convert::TryFrom, io::Seek, io::Write, path::Path};
+use oci_client::Reference;
+use std::{collections::HashMap, convert::TryFrom, io::Write, path::Path};
 use tokio::{
     io,
     io::{AsyncSeekExt, AsyncWriteExt},
@@ -28,7 +29,7 @@ use tower::service_fn;
 
 impl Container {
     pub async fn new_containerd_pull(
-        layers_cache_file_path: Option<String>,
+        config: &Config,
         image: &str,
         containerd_socket_path: &str,
     ) -> Result<Self> {
@@ -50,30 +51,65 @@ impl Container {
         let image_ref: Reference = image_str.parse().unwrap();
 
         info!("Pulling image: {:?}", image_ref);
-
         pull_image(&image_ref, k8_cri_image_client.clone()).await?;
 
         let image_ref_str = &image_ref.to_string();
-
         let manifest = get_image_manifest(image_ref_str, &ctrd_client).await?;
+        debug!(
+            "manifest: {}",
+            serde_json::to_string_pretty(&manifest).unwrap()
+        );
+
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        let image_layers = get_image_layers(
-            layers_cache_file_path,
-            &manifest,
-            &config_layer,
-            &ctrd_client,
-        )
-        .await?;
+        debug!("config_layer: {:?}", &config_layer);
+
+        let mut passwd = String::new();
+        let mut group = String::new();
+
+        // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
+        // See issue https://github.com/kata-containers/kata-containers/issues/11162
+        if config.settings.cluster_config.guest_pull {
+            info!("Guest pull is enabled, skipping passwd/group file parsing");
+            return Ok(Container {
+                image: image_str,
+                config_layer,
+                passwd,
+                group,
+            });
+        }
+
+        let image_layers =
+            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client)
+                .await
+                .unwrap();
+
+        // Find the last layer with an /etc/* file, respecting whiteouts.
+        info!("Parsing users and groups in image layers");
+        for layer in &image_layers {
+            if layer.passwd == WHITEOUT_MARKER {
+                passwd = String::new();
+            } else if !layer.passwd.is_empty() {
+                passwd = layer.passwd.clone();
+            }
+
+            if layer.group == WHITEOUT_MARKER {
+                group = String::new();
+            } else if !layer.group.is_empty() {
+                group = layer.group.clone();
+            }
+        }
 
         Ok(Container {
             image: image_str,
             config_layer,
-            image_layers,
+            passwd,
+            group,
         })
     }
 }
+
 pub async fn get_content(
     digest: &str,
     client: &containerd_client::Client,
@@ -249,7 +285,7 @@ pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {
 }
 
 pub async fn get_image_layers(
-    layers_cache_file_path: Option<String>,
+    layers_cache: &ImageLayersCache,
     manifest: &serde_json::Value,
     config_layer: &DockerConfigLayer,
     client: &containerd_client::Client,
@@ -265,18 +301,14 @@ pub async fn get_image_layers(
             || layer_media_type.eq("application/vnd.oci.image.layer.v1.tar+gzip")
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let (verity_hash, passwd) = get_verity_and_users(
-                    layers_cache_file_path.clone(),
+                let mut imageLayer = get_users_from_layer(
+                    layers_cache,
                     layer["digest"].as_str().unwrap(),
                     client,
                     &config_layer.rootfs.diff_ids[layer_index].clone(),
                 )
                 .await?;
-                let imageLayer = ImageLayer {
-                    diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash,
-                    passwd,
-                };
+                imageLayer.diff_id = config_layer.rootfs.diff_ids[layer_index].clone();
                 layersVec.push(imageLayer);
             } else {
                 return Err(anyhow!("Too many Docker gzip layers"));
@@ -288,12 +320,17 @@ pub async fn get_image_layers(
     Ok(layersVec)
 }
 
-async fn get_verity_and_users(
-    layers_cache_file_path: Option<String>,
+async fn get_users_from_layer(
+    layers_cache: &ImageLayersCache,
     layer_digest: &str,
     client: &containerd_client::Client,
     diff_id: &str,
-) -> Result<(String, String)> {
+) -> Result<ImageLayer> {
+    if let Some(layer) = layers_cache.get_layer(diff_id) {
+        info!("Using cache file");
+        return Ok(layer);
+    }
+
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
     // Use file names supported by both Linux and Windows.
@@ -304,59 +341,32 @@ async fn get_verity_and_users(
     let mut compressed_path = decompressed_path.clone();
     compressed_path.set_extension("gz");
 
-    let mut verity_hash = "".to_string();
-    let mut passwd = "".to_string();
-    let mut error_message = "".to_string();
-    let mut error = false;
-
-    if let Some(path) = layers_cache_file_path.as_ref() {
-        let res = read_verity_and_users_from_store(path, diff_id)?;
-        verity_hash = res.0;
-        passwd = res.1;
-        info!("Using cache file");
-        info!("dm-verity root hash: {verity_hash}");
+    // go find verity hash if not found in cache
+    if let Err(e) =
+        create_decompressed_layer_file(client, layer_digest, &decompressed_path, &compressed_path)
+            .await
+    {
+        temp_dir.close()?;
+        bail!(format!(
+            "Failed to create verity hash for {layer_digest}, error {e}"
+        ));
     }
 
-    if verity_hash.is_empty() {
-        // go find verity hash if not found in cache
-        if let Err(e) = create_decompressed_layer_file(
-            client,
-            layer_digest,
-            &decompressed_path,
-            &compressed_path,
-        )
-        .await
-        {
-            error = true;
-            error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
+    match get_users_from_decompressed_layer(&decompressed_path) {
+        Err(e) => {
+            temp_dir.close()?;
+            bail!(format!("Failed to get verity hash {e}"));
         }
-
-        if !error {
-            match get_verity_hash_and_users(&decompressed_path) {
-                Err(e) => {
-                    error_message = format!("Failed to get verity hash {e}");
-                    error = true;
-                }
-                Ok(res) => {
-                    verity_hash = res.0;
-                    passwd = res.1;
-                    if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_and_users_to_store(path, diff_id, &verity_hash, &passwd)?;
-                    }
-                    info!("dm-verity root hash: {verity_hash}");
-                }
-            }
+        Ok((passwd, group)) => {
+            let layer = ImageLayer {
+                diff_id: diff_id.to_string(),
+                passwd,
+                group,
+            };
+            layers_cache.insert_layer(&layer);
+            Ok(layer)
         }
     }
-    temp_dir.close()?;
-    if error {
-        // remove the cache file if we're using it
-        if let Some(path) = layers_cache_file_path.as_ref() {
-            std::fs::remove_file(path)?;
-        }
-        warn!("{error_message}");
-    }
-    Ok((verity_hash, passwd))
 }
 
 async fn create_decompressed_layer_file(
@@ -404,10 +414,6 @@ async fn create_decompressed_layer_file(
     let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
     std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
-    info!("Adding tarfs index to layer");
-    decompressed_file.seek(std::io::SeekFrom::Start(0))?;
-    tarindex::append_index(&mut decompressed_file).map_err(|e| anyhow!(e))?;
     decompressed_file.flush().map_err(|e| anyhow!(e))?;
-
     Ok(())
 }

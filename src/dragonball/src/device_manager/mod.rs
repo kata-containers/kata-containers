@@ -879,7 +879,7 @@ impl DeviceManager {
     /// Start all registered devices when booting the associated virtual machine.
     pub fn start_devices(
         &mut self,
-        vm_as: &GuestAddressSpaceImpl,
+        #[allow(unused)] vm_as: &GuestAddressSpaceImpl,
     ) -> std::result::Result<(), StartMicroVmError> {
         // It is safe because we don't expect poison lock.
         #[cfg(feature = "host-device")]
@@ -899,6 +899,7 @@ impl DeviceManager {
         address_space: Option<&AddressSpace>,
     ) -> Result<()> {
         // create context for removing devices
+        #[allow(unused)]
         let mut ctx = DeviceOpContext::new(
             Some(epoll_mgr),
             self,
@@ -1275,7 +1276,9 @@ mod tests {
     use dbs_address_space::{AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType};
     use kvm_ioctls::Kvm;
     use test_utils::skip_if_not_root;
-    use vm_memory::{GuestAddress, GuestUsize, MmapRegion};
+    #[cfg(feature = "virtio-fs")]
+    use vm_memory::MmapRegion;
+    use vm_memory::{GuestAddress, GuestUsize};
 
     use super::*;
     #[cfg(target_arch = "x86_64")]
@@ -1296,6 +1299,7 @@ mod tests {
     }
 
     impl DeviceManager {
+        /// Helper function to create a dummy DeviceManager for testing purpose
         pub fn new_test_mgr() -> Self {
             let kvm = Kvm::new().unwrap();
             let vm = kvm.create_vm().unwrap();

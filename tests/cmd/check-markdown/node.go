@@ -7,7 +7,7 @@
 package main
 
 import (
-	bf "gopkg.in/russross/blackfriday.v2"
+	bf "github.com/russross/blackfriday/v2"
 )
 
 // handleNode processes the specified node.

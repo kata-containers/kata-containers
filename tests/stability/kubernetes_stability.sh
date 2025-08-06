@@ -29,7 +29,7 @@ function main() {
 
 	echo "Running kubernetes stability test"
 	count=0
-	while [[ "${end_time}" > $(date +%s) ]]; do
+	while [[ "${end_time}" -gt $(date +%s) ]]; do
 		echo "This is the number of iterations $count"
 		count=$((count+1))
 

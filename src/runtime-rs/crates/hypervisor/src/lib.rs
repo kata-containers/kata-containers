@@ -13,17 +13,20 @@ pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
 use device::DeviceType;
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 pub mod dragonball;
-#[cfg(not(target_arch = "s390x"))]
 pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
+pub mod remote;
 pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
 
-#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 pub mod ch;
 
 use anyhow::Result;
@@ -54,23 +57,23 @@ const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
 pub const HUGETLBFS: &str = "hugetlbfs";
-// Constants required for Dragonball VMM when enabled and not on s390x.
+// Constants required for Dragonball VMM when enabled
 // Not needed when the built-in VMM is not used.
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 const DEV_HUGEPAGES: &str = "/dev/hugepages";
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 const SHMEM: &str = "shmem";
-#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+#[cfg(feature = "dragonball")]
 const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";
 pub const HYPERVISOR_FIRECRACKER: &str = "firecracker";
+pub const HYPERVISOR_REMOTE: &str = "remote";
 
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
 
-#[cfg(not(target_arch = "s390x"))]
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {
     NotReady,
@@ -95,7 +98,12 @@ pub struct MemoryConfig {
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        annotations: &HashMap<String, String>,
+    ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
     async fn wait_vm(&self) -> Result<i32>;

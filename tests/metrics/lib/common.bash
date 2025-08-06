@@ -96,7 +96,7 @@ function generate_build_dockerfile()
 	local text_to_replace="$4"
 	local regs=(${registries["${map_key}"]})
 
-	for r in ${regs[@]}; do
+	for r in "${regs[@]}"; do
 		sed 's|'${text_to_replace}'|'${r}'|g' \
 			"${dockerfile}.in" > "${dockerfile}"
 		if sudo -E "${DOCKER_EXE}" build \
@@ -222,6 +222,23 @@ function kill_processes_before_start()
 	# Remove all running containers
 	# and kills all the kata components
 	kill_kata_components
+}
+
+# Kills running shim and hypervisor components
+function kill_kata_components() {
+	local ATTEMPTS=2
+	local TIMEOUT="300s"
+	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "qemu-system-x86_64-tdx-experimental" "cloud-hypervisor" )
+
+	sudo systemctl stop containerd
+	# iterate over the list of kata components and stop them
+	for (( i=1; i<=ATTEMPTS; i++ )); do
+		for PID_NAME in "${PID_NAMES[@]}"; do
+			[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall -w -s SIGKILL "${PID_NAME}" >/dev/null 2>&1 || true
+		done
+		sleep 1
+	done
+	sudo timeout -s SIGKILL "${TIMEOUT}" systemctl start containerd
 }
 
 # Generate a random name - generally used when creating containers, but can
@@ -513,7 +530,7 @@ function get_current_kata_config_file() {
 	current_config_file="${KATA_CONFIG_FNAME}"
 }
 
-# This function checks if the current session is runnin as root, 
+# This function checks if the current session is runnin as root,
 # if that is not the case, the function exits with an error message.
 function check_if_root() {
 	[ "$EUID" -ne 0 ] && die "Please run as root or use sudo."

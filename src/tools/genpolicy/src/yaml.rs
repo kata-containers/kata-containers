@@ -96,9 +96,17 @@ pub trait K8sResource {
         None
     }
 
-    fn get_process_fields(&self, _process: &mut policy::KataProcess) {
+    fn get_process_fields(
+        &self,
+        _process: &mut policy::KataProcess,
+        _must_check_passwd: &mut bool,
+    ) {
         // No need to implement support for securityContext or similar fields
         // for some of the K8s resource types.
+    }
+
+    fn get_sysctls(&self) -> Vec<pod::Sysctl> {
+        vec![]
     }
 }
 
@@ -305,12 +313,7 @@ pub fn get_container_mounts_and_storages(
         for volume in volumes {
             debug!("get_container_mounts_and_storages: {:?}", &volume);
 
-            mount_and_storage::get_image_mount_and_storage(
-                settings,
-                policy_mounts,
-                storages,
-                volume.0,
-            );
+            mount_and_storage::get_image_mount_and_storage(settings, policy_mounts, volume.0);
         }
     }
 }
@@ -382,10 +385,58 @@ fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
 pub fn get_process_fields(
     process: &mut policy::KataProcess,
     security_context: &Option<pod::PodSecurityContext>,
+    must_check_passwd: &mut bool,
 ) {
     if let Some(context) = security_context {
         if let Some(uid) = context.runAsUser {
             process.User.UID = uid.try_into().unwrap();
+            // Changing the UID can break the GID mapping
+            // if a /etc/passwd file is present.
+            // The proper GID is determined, in order of preference:
+            // 1. the securityContext runAsGroup field (applied last in code)
+            // 2. lacking an explicit runAsGroup, /etc/passwd
+            //      (parsed in policy::get_container_process())
+            // 3. lacking an /etc/passwd, 0 (unwrap_or)
+            //
+            // This behavior comes from the containerd runtime implementation:
+            // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
+            //
+            // We can't parse the /etc/passwd file here because
+            // we are in the resource context. Defer execution to outside
+            // the resource context, in policy::get_container_process()
+            // IFF the UID is changed by the resource securityContext but not the GID.
+            *must_check_passwd = true;
+        }
+
+        if let Some(gid) = context.runAsGroup {
+            process.User.GID = gid.try_into().unwrap();
+            *must_check_passwd = false;
+        }
+
+        if let Some(fs_group) = context.fsGroup {
+            process
+                .User
+                .AdditionalGids
+                .insert(fs_group.try_into().unwrap());
+        }
+
+        if let Some(supplemental_groups) = &context.supplementalGroups {
+            supplemental_groups.iter().for_each(|g| {
+                process.User.AdditionalGids.insert(*g);
+            });
+        }
+
+        if let Some(allow) = context.allowPrivilegeEscalation {
+            process.NoNewPrivileges = !allow
         }
     }
+}
+
+pub fn get_sysctls(security_context: &Option<pod::PodSecurityContext>) -> Vec<pod::Sysctl> {
+    if let Some(context) = security_context {
+        if let Some(ref sysctls) = context.sysctls {
+            return sysctls.clone();
+        }
+    }
+    vec![]
 }

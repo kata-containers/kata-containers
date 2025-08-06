@@ -9,8 +9,12 @@ use self::nvdimm_device_handler::VirtioNvdimmDeviceHandler;
 use self::scsi_device_handler::ScsiDeviceHandler;
 use self::vfio_device_handler::{VfioApDeviceHandler, VfioPciDeviceHandler};
 use crate::pci;
+use crate::sandbox::PciHostGuestMapping;
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Context, Result};
+use cdi::annotations::parse_annotations;
+use cdi::cache::{new_cache, with_auto_refresh, CdiOption};
+use cdi::spec_dirs::with_spec_dirs;
 use kata_types::device::DeviceHandlerManager;
 use nix::sys::stat;
 use oci::{LinuxDeviceCgroup, Spec};
@@ -25,6 +29,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time;
+use tokio::time::Duration;
 use tracing::instrument;
 
 pub mod block_device_handler;
@@ -175,6 +181,7 @@ lazy_static! {
 
 #[instrument]
 pub async fn add_devices(
+    cid: &String,
     logger: &Logger,
     devices: &[Device],
     spec: &mut Spec,
@@ -206,8 +213,9 @@ pub async fn add_devices(
                     }
 
                     let mut sb = sandbox.lock().await;
+                    let mut host_guest: PciHostGuestMapping = HashMap::new();
                     for (host, guest) in update.pci {
-                        if let Some(other_guest) = sb.pcimap.insert(host, guest) {
+                        if let Some(other_guest) = host_guest.insert(host, guest) {
                             return Err(anyhow!(
                                 "Conflicting guest address for host device {} ({} versus {})",
                                 host,
@@ -216,6 +224,9 @@ pub async fn add_devices(
                             ));
                         }
                     }
+                    // Save all the host -> guest mappings per container upon
+                    // removal of the container, the mappings will be removed
+                    sb.pcimap.insert(cid.clone(), host_guest);
                 }
                 Err(e) => {
                     error!(logger, "failed to add devices, error: {e:?}");
@@ -233,9 +244,77 @@ pub async fn add_devices(
     if let Some(process) = spec.process_mut() {
         let env_vec: &mut Vec<String> =
             &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
-        update_env_pci(env_vec, &sandbox.lock().await.pcimap)?
+        update_env_pci(cid, env_vec, &sandbox.lock().await.pcimap)?
     }
     update_spec_devices(logger, spec, dev_updates)
+}
+
+#[instrument]
+pub async fn handle_cdi_devices(
+    logger: &Logger,
+    spec: &mut Spec,
+    spec_dir: &str,
+    cdi_timeout: time::Duration,
+) -> Result<()> {
+    if let Some(container_type) = spec
+        .annotations()
+        .as_ref()
+        .and_then(|a| a.get("io.katacontainers.pkg.oci.container_type"))
+    {
+        if container_type == "pod_sandbox" {
+            return Ok(());
+        }
+    }
+
+    let (_, devices) = parse_annotations(spec.annotations().as_ref().unwrap())?;
+
+    if devices.is_empty() {
+        info!(logger, "no CDI annotations, no devices to inject");
+        return Ok(());
+    }
+    // Explicitly set the cache options to disable auto-refresh and
+    // to use the single spec dir "/var/run/cdi" for tests it can be overridden
+    let options: Vec<CdiOption> = vec![with_auto_refresh(false), with_spec_dirs(&[spec_dir])];
+    let cache: Arc<std::sync::Mutex<cdi::cache::Cache>> = new_cache(options);
+
+    for i in 0..=cdi_timeout.as_secs() {
+        let inject_result = {
+            // Lock cache within this scope, std::sync::Mutex has no Send
+            // and await will not work with time::sleep
+            let mut cache = cache.lock().unwrap();
+            match cache.refresh() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(anyhow!("error refreshing cache: {:?}", e));
+                }
+            }
+            cache.inject_devices(Some(spec), devices.clone())
+        };
+
+        match inject_result {
+            Ok(_) => {
+                info!(
+                    logger,
+                    "all devices injected successfully, modified CDI container spec: {:?}", &spec
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                info!(
+                    logger,
+                    "waiting for CDI spec(s) to be generated ({} of {} max tries) {:?}",
+                    i,
+                    cdi_timeout.as_secs(),
+                    e
+                );
+            }
+        }
+        time::sleep(Duration::from_secs(1)).await;
+    }
+    Err(anyhow!(
+        "failed to inject devices after CDI timeout of {} seconds",
+        cdi_timeout.as_secs()
+    ))
 }
 
 #[instrument]
@@ -318,8 +397,9 @@ pub fn insert_devices_cgroup_rule(
 // given a map of (host address => guest address)
 #[instrument]
 pub fn update_env_pci(
+    cid: &String,
     env: &mut [String],
-    pcimap: &HashMap<pci::Address, pci::Address>,
+    pcimap: &HashMap<String, PciHostGuestMapping>,
 ) -> Result<()> {
     // SR-IOV device plugin may add two environment variables for one resource:
     // - PCIDEVICE_<prefix>_<resource-name>: a list of PCI device ids separated by comma
@@ -345,7 +425,10 @@ pub fn update_env_pci(
         for host_addr_str in val.split(',') {
             let host_addr = pci::Address::from_str(host_addr_str)
                 .with_context(|| format!("Can't parse {} environment variable", name))?;
-            let guest_addr = pcimap
+            let host_guest = pcimap
+                .get(cid)
+                .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
+            let guest_addr = host_guest
                 .get(&host_addr)
                 .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
 
@@ -979,7 +1062,7 @@ mod tests {
             "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
         ];
 
-        let pci_fixups = example_map
+        let _pci_fixups = example_map
             .iter()
             .map(|(h, g)| {
                 (
@@ -989,7 +1072,11 @@ mod tests {
             })
             .collect();
 
-        let res = update_env_pci(&mut env, &pci_fixups);
+        let cid = "0".to_string();
+        let mut pci_fixups: HashMap<String, HashMap<pci::Address, pci::Address>> = HashMap::new();
+        pci_fixups.insert(cid.clone(), _pci_fixups);
+
+        let res = update_env_pci(&cid, &mut env, &pci_fixups);
         assert!(res.is_ok(), "error: {}", res.err().unwrap());
 
         assert_eq!(env[0], "PCIDEVICE_x=0000:01:01.0,0000:01:02.0");
@@ -1109,5 +1196,102 @@ mod tests {
         let name = example_get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), devname);
+    }
+
+    #[tokio::test]
+    async fn test_handle_cdi_devices() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut spec = Spec::default();
+
+        let mut annotations = HashMap::new();
+        // cdi.k8s.io/vendor1_devices: vendor1.com/device=foo
+        annotations.insert(
+            "cdi.k8s.io/vfio17".to_string(),
+            "kata.com/gpu=0".to_string(),
+        );
+        spec.set_annotations(Some(annotations));
+
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let cdi_file = temp_dir.path().join("kata.json");
+
+        let cdi_version = "0.6.0";
+        let kind = "kata.com/gpu";
+        let device_name = "0";
+        let annotation_whatever = "false";
+        let annotation_whenever = "true";
+        let inner_env = "TEST_INNER_ENV=TEST_INNER_ENV_VALUE";
+        let outer_env = "TEST_OUTER_ENV=TEST_OUTER_ENV_VALUE";
+        let inner_device = "/dev/zero";
+        let outer_device = "/dev/null";
+
+        let cdi_content = format!(
+            r#"{{
+            "cdiVersion": "{cdi_version}",
+            "kind": "{kind}",
+            "devices": [
+                {{
+                    "name": "{device_name}",
+                    "annotations": {{
+                        "whatever": "{annotation_whatever}",
+                        "whenever": "{annotation_whenever}"
+                    }},
+                    "containerEdits": {{
+                        "env": [
+                            "{inner_env}"
+                        ],
+                        "deviceNodes": [
+                            {{
+                                "path": "{inner_device}"
+                            }}
+                        ]
+                    }}
+                }}
+            ],
+            "containerEdits": {{
+                "env": [
+                    "{outer_env}"
+                ],
+                "deviceNodes": [
+                    {{
+                        "path": "{outer_device}"
+                    }}
+                ]
+            }}
+        }}"#
+        );
+
+        fs::write(&cdi_file, cdi_content).expect("Failed to write CDI file");
+
+        let cdi_timeout = Duration::from_secs(0);
+
+        let res = handle_cdi_devices(
+            &logger,
+            &mut spec,
+            temp_dir.path().to_str().unwrap(),
+            cdi_timeout,
+        )
+        .await;
+        println!("modfied spec {:?}", spec);
+        assert!(res.is_ok(), "{}", res.err().unwrap());
+
+        let linux = spec.linux().as_ref().unwrap();
+        let devices = linux
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .as_ref()
+            .unwrap();
+        assert_eq!(devices.len(), 2);
+
+        let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
+
+        // find string TEST_OUTER_ENV in env
+        let outer_env = env.iter().find(|e| e.starts_with("TEST_OUTER_ENV"));
+        assert!(outer_env.is_some(), "TEST_OUTER_ENV not found in env");
+
+        // find TEST_INNER_ENV in env
+        let inner_env = env.iter().find(|e| e.starts_with("TEST_INNER_ENV"));
+        assert!(inner_env.is_some(), "TEST_INNER_ENV not found in env");
     }
 }

@@ -95,6 +95,8 @@ impl StorageState {
     }
 }
 
+pub type PciHostGuestMapping = HashMap<pci::Address, pci::Address>;
+
 #[derive(Debug)]
 pub struct Sandbox {
     pub logger: Logger,
@@ -118,7 +120,7 @@ pub struct Sandbox {
     pub event_rx: Arc<Mutex<Receiver<String>>>,
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
-    pub pcimap: HashMap<pci::Address, pci::Address>,
+    pub pcimap: HashMap<String, PciHostGuestMapping>,
     pub devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
 }
 
@@ -270,8 +272,10 @@ impl Sandbox {
 
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
-            if let Some(p) = c.processes.get_mut(&pid) {
-                return Some(p);
+            for p in c.processes.values_mut() {
+                if p.pid == pid {
+                    return Some(p);
+                }
             }
         }
 
@@ -284,9 +288,11 @@ impl Sandbox {
             .ok_or_else(|| anyhow!(ERR_INVALID_CONTAINER_ID))?;
 
         if eid.is_empty() {
+            let init_pid = ctr.init_process_pid;
             return ctr
                 .processes
-                .get_mut(&ctr.init_process_pid)
+                .values_mut()
+                .find(|p| p.pid == init_pid)
                 .ok_or_else(|| anyhow!("cannot find init process!"));
         }
 
@@ -426,13 +432,10 @@ impl Sandbox {
     pub fn setup_shared_mounts(&self, c: &LinuxContainer, mounts: &Vec<SharedMount>) -> Result<()> {
         let mut src_ctrs: HashMap<String, i32> = HashMap::new();
         for shared_mount in mounts {
-            match src_ctrs.get(&shared_mount.src_ctr) {
-                None => {
-                    if let Some(c) = self.find_container_by_name(&shared_mount.src_ctr) {
-                        src_ctrs.insert(shared_mount.src_ctr.clone(), c.init_process_pid);
-                    }
+            if !src_ctrs.contains_key(&shared_mount.src_ctr) {
+                if let Some(c) = self.find_container_by_name(&shared_mount.src_ctr) {
+                    src_ctrs.insert(shared_mount.src_ctr.clone(), c.init_process_pid);
                 }
-                Some(_) => {}
             }
         }
 
@@ -1015,23 +1018,26 @@ mod tests {
         linux_container.init_process_pid = 1;
         linux_container.id = cid.to_string();
         // add init process
-        linux_container.processes.insert(
-            1,
-            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap(),
-        );
+        let mut init_process =
+            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap();
+        init_process.pid = 1;
+        linux_container
+            .processes
+            .insert("1".to_string(), init_process);
         // add exec process
-        linux_container.processes.insert(
-            123,
-            Process::new(
-                &logger,
-                &oci::Process::default(),
-                "exec-123",
-                false,
-                1,
-                None,
-            )
-            .unwrap(),
-        );
+        let mut exec_process = Process::new(
+            &logger,
+            &oci::Process::default(),
+            "exec-123",
+            false,
+            1,
+            None,
+        )
+        .unwrap();
+        exec_process.pid = 123;
+        linux_container
+            .processes
+            .insert("exec-123".to_string(), exec_process);
 
         s.add_container(linux_container);
 
@@ -1065,7 +1071,7 @@ mod tests {
 
         let logger = slog::Logger::root(slog::Discard, o!());
 
-        let test_pids = [std::i32::MIN, -1, 0, 1, std::i32::MAX];
+        let test_pids = [i32::MIN, -1, 0, 1, i32::MAX];
 
         for test_pid in test_pids {
             let mut s = Sandbox::new(&logger).unwrap();
@@ -1082,8 +1088,8 @@ mod tests {
             .unwrap();
             // processes interally only have pids when manually set
             test_process.pid = test_pid;
-
-            linux_container.processes.insert(test_pid, test_process);
+            let test_exec_id = test_process.exec_id.clone();
+            linux_container.processes.insert(test_exec_id, test_process);
 
             s.add_container(linux_container);
 

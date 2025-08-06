@@ -16,12 +16,14 @@ import (
 
 // PlatformConfig struct for PlatformConfig
 type PlatformConfig struct {
-	NumPciSegments *int32    `json:"num_pci_segments,omitempty"`
-	IommuSegments  *[]int32  `json:"iommu_segments,omitempty"`
-	SerialNumber   *string   `json:"serial_number,omitempty"`
-	Uuid           *string   `json:"uuid,omitempty"`
-	OemStrings     *[]string `json:"oem_strings,omitempty"`
-	Tdx            *bool     `json:"tdx,omitempty"`
+	NumPciSegments    *int32    `json:"num_pci_segments,omitempty"`
+	IommuSegments     *[]int32  `json:"iommu_segments,omitempty"`
+	IommuAddressWidth *int32    `json:"iommu_address_width,omitempty"`
+	SerialNumber      *string   `json:"serial_number,omitempty"`
+	Uuid              *string   `json:"uuid,omitempty"`
+	OemStrings        *[]string `json:"oem_strings,omitempty"`
+	Tdx               *bool     `json:"tdx,omitempty"`
+	SevSnp            *bool     `json:"sev_snp,omitempty"`
 }
 
 // NewPlatformConfig instantiates a new PlatformConfig object
@@ -32,6 +34,8 @@ func NewPlatformConfig() *PlatformConfig {
 	this := PlatformConfig{}
 	var tdx bool = false
 	this.Tdx = &tdx
+	var sevSnp bool = false
+	this.SevSnp = &sevSnp
 	return &this
 }
 
@@ -42,6 +46,8 @@ func NewPlatformConfigWithDefaults() *PlatformConfig {
 	this := PlatformConfig{}
 	var tdx bool = false
 	this.Tdx = &tdx
+	var sevSnp bool = false
+	this.SevSnp = &sevSnp
 	return &this
 }
 
@@ -107,6 +113,38 @@ func (o *PlatformConfig) HasIommuSegments() bool {
 // SetIommuSegments gets a reference to the given []int32 and assigns it to the IommuSegments field.
 func (o *PlatformConfig) SetIommuSegments(v []int32) {
 	o.IommuSegments = &v
+}
+
+// GetIommuAddressWidth returns the IommuAddressWidth field value if set, zero value otherwise.
+func (o *PlatformConfig) GetIommuAddressWidth() int32 {
+	if o == nil || o.IommuAddressWidth == nil {
+		var ret int32
+		return ret
+	}
+	return *o.IommuAddressWidth
+}
+
+// GetIommuAddressWidthOk returns a tuple with the IommuAddressWidth field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetIommuAddressWidthOk() (*int32, bool) {
+	if o == nil || o.IommuAddressWidth == nil {
+		return nil, false
+	}
+	return o.IommuAddressWidth, true
+}
+
+// HasIommuAddressWidth returns a boolean if a field has been set.
+func (o *PlatformConfig) HasIommuAddressWidth() bool {
+	if o != nil && o.IommuAddressWidth != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetIommuAddressWidth gets a reference to the given int32 and assigns it to the IommuAddressWidth field.
+func (o *PlatformConfig) SetIommuAddressWidth(v int32) {
+	o.IommuAddressWidth = &v
 }
 
 // GetSerialNumber returns the SerialNumber field value if set, zero value otherwise.
@@ -237,6 +275,38 @@ func (o *PlatformConfig) SetTdx(v bool) {
 	o.Tdx = &v
 }
 
+// GetSevSnp returns the SevSnp field value if set, zero value otherwise.
+func (o *PlatformConfig) GetSevSnp() bool {
+	if o == nil || o.SevSnp == nil {
+		var ret bool
+		return ret
+	}
+	return *o.SevSnp
+}
+
+// GetSevSnpOk returns a tuple with the SevSnp field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PlatformConfig) GetSevSnpOk() (*bool, bool) {
+	if o == nil || o.SevSnp == nil {
+		return nil, false
+	}
+	return o.SevSnp, true
+}
+
+// HasSevSnp returns a boolean if a field has been set.
+func (o *PlatformConfig) HasSevSnp() bool {
+	if o != nil && o.SevSnp != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSevSnp gets a reference to the given bool and assigns it to the SevSnp field.
+func (o *PlatformConfig) SetSevSnp(v bool) {
+	o.SevSnp = &v
+}
+
 func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.NumPciSegments != nil {
@@ -244,6 +314,9 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.IommuSegments != nil {
 		toSerialize["iommu_segments"] = o.IommuSegments
+	}
+	if o.IommuAddressWidth != nil {
+		toSerialize["iommu_address_width"] = o.IommuAddressWidth
 	}
 	if o.SerialNumber != nil {
 		toSerialize["serial_number"] = o.SerialNumber
@@ -256,6 +329,9 @@ func (o PlatformConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Tdx != nil {
 		toSerialize["tdx"] = o.Tdx
+	}
+	if o.SevSnp != nil {
+		toSerialize["sev_snp"] = o.SevSnp
 	}
 	return json.Marshal(toSerialize)
 }

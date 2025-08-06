@@ -22,6 +22,9 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+
 jobs:
   run-k8s-tests-amd64:
     strategy:
@@ -49,18 +52,20 @@ jobs:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
-      PR_NUMBER: ${{ inputs.pr-number }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: ${{ matrix.k8s }}
       KUBERNETES_EXTRA_PARAMS: ${{ matrix.container_runtime != 'crio' && '' || '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"' }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: all
+      CONTAINER_RUNTIME: ${{ matrix.container_runtime }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -74,6 +79,8 @@ jobs:
 
       - name: Deploy ${{ matrix.k8s }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+        env:
+          CONTAINER_RUNTIME: ${{ matrix.container_runtime }}
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
         if: matrix.snapshotter != ''
@@ -85,23 +92,24 @@ jobs:
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
-  
+
       - name: Run tests
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
-  
+
       - name: Collect artifacts ${{ matrix.vmm }}
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
         continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.vmm }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: k8s-tests-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ matrix.instance }}-${{ inputs.tag }}
+          name: k8s-tests-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ inputs.tag }}
           path: /tmp/artifacts
           retention-days: 1
 
       - name: Delete kata-deploy
         if: always()
+        timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh cleanup

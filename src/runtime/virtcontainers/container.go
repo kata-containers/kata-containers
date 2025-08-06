@@ -821,6 +821,57 @@ func (c *Container) createMounts(ctx context.Context) error {
 	return c.createBlockDevices(ctx)
 }
 
+func findMountSource(mnt string) (string, error) {
+	output, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return "", err
+	}
+
+	// /proc/mounts has 6 fields per line, one mount per line, e.g.
+	// /dev/loop0 /var/lib/containerd/io.containerd.snapshotter.v1.erofs/snapshots/1/fs erofs ro,relatime,user_xattr,acl,cache_strategy=readaround 0 0
+	for _, line := range strings.Split(string(output), "\n") {
+		parts := strings.Split(line, " ")
+		if len(parts) == 6 {
+			switch parts[2] {
+			case "erofs":
+				if parts[1] == mnt {
+					return parts[0], nil
+				}
+			}
+		}
+	}
+	return "", fmt.Errorf("erofs mount not found for %s", mnt)
+}
+
+func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
+	var deviceInfos []config.DeviceInfo
+	if IsErofsRootFS(c.rootFs) {
+		lowerdirs := parseErofsRootFsOptions(c.rootFs.Options)
+		for _, path := range lowerdirs {
+			s, err := findMountSource(path)
+			if err != nil {
+				return nil, err
+			}
+			if strings.HasPrefix(s, "/dev/loop") {
+				b, err := os.ReadFile(fmt.Sprintf("/sys/block/loop%s/loop/backing_file", strings.TrimPrefix(s, "/dev/loop")))
+				if err != nil {
+					return nil, err
+				}
+				s = strings.TrimSuffix(string(b), "\n")
+			}
+			if filepath.Base(s) != "layer.erofs" {
+				return nil, fmt.Errorf("unsupported mount source %s for %s", s, path)
+			}
+			di, err := c.createDeviceInfo(s, s, true, true)
+			if err != nil {
+				return nil, err
+			}
+			deviceInfos = append(deviceInfos, *di)
+		}
+	}
+	return deviceInfos, nil
+}
+
 func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
@@ -831,6 +882,12 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	}
 	deviceInfos := append(virtualVolumesDeviceInfos, contConfig.DeviceInfos...)
 
+	erofsDeviceInfos, err := c.createErofsDevices()
+	if err != nil {
+		return err
+	}
+	deviceInfos = append(erofsDeviceInfos, deviceInfos...)
+
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
 	coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
@@ -839,9 +896,23 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	hotPlugVFIO := (c.sandbox.config.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
 	hotPlugDevices := []config.DeviceInfo{}
-	coldPlugDevices := []config.DeviceInfo{}
+	vfioColdPlugDevices := []config.DeviceInfo{}
 
 	for i, vfio := range deviceInfos {
+		// If device is already attached during sandbox creation, e.g.
+		// with an CDI annotation, skip it in the container creation and
+		// only create the proper CDI annotation for the kata-agent
+		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
+			if dev.HostPath == vfio.ContainerPath {
+				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
+			}
+		}
+		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
+			if dev.HostPath == vfio.ContainerPath {
+				c.Logger().Warnf("device %s already attached to the sandbox, skipping", vfio.ContainerPath)
+			}
+		}
+
 		// Only considering VFIO updates for Port and ColdPlug or
 		// HotPlug updates
 		isVFIODevice := deviceManager.IsVFIODevice(vfio.ContainerPath)
@@ -854,7 +925,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 		// Device is already cold-plugged at sandbox creation time
 		// ignore it for the container creation
 		if coldPlugVFIO && isVFIODevice {
-			coldPlugDevices = append(coldPlugDevices, deviceInfos[i])
+			vfioColdPlugDevices = append(vfioColdPlugDevices, deviceInfos[i])
 			continue
 		}
 		hotPlugDevices = append(hotPlugDevices, deviceInfos[i])
@@ -864,7 +935,17 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
 	// Sort the devices starting with device #1 being the VFIO control group
 	// device and the next the actuall device(s) /dev/vfio/<group>
-	deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+	if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
+		// DeviceInfo should still be added to the sandbox's device manager
+		// if vfio_mode is VFIO and coldPlugVFIO is true (e.g. vfio-ap-cold).
+		// This ensures that ociSpec.Linux.Devices is updated with
+		// this information before the container is created on the guest.
+		sortedVFIODevices := sortContainerVFIODevices(vfioColdPlugDevices)
+		// Combine sorted VFIO devices with hot-plug devices
+		deviceInfos = append(sortedVFIODevices, hotPlugDevices...)
+	} else {
+		deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+	}
 
 	for _, info := range deviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
@@ -884,7 +965,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 
 	// If we're hot-plugging this will be a no-op because at this stage
 	// no devices are attached to the root-port or switch-port
-	c.annotateContainerWithVFIOMetadata(coldPlugDevices)
+	c.annotateContainerWithVFIOMetadata(vfioColdPlugDevices)
 
 	return nil
 }
@@ -1031,7 +1112,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) {
+	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !IsErofsRootFS(c.rootFs) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return

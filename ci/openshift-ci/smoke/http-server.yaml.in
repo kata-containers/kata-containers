@@ -13,7 +13,7 @@ metadata:
 spec:
   containers:
     - name: http-server
-      image: registry.fedoraproject.org/fedora
+      image: docker.io/library/python:3
       ports:
         - containerPort: 8080
       command: ["python3"]

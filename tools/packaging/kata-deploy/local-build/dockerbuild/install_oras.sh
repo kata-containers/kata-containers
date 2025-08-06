@@ -37,7 +37,7 @@ fi
 oras_tarball="oras_${oras_required_version#v}_linux_${arch}.tar.gz"
 
 echo "Downloading ORAS ${oras_required_version}"
-sudo curl -OL https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}
+curl -OL https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}
 
 echo "Installing ORAS to ${install_dest}"
 sudo mkdir -p "${install_dest}"

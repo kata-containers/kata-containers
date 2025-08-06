@@ -20,8 +20,6 @@ source "${cidir}/common.bash"
 # set GO111MODULE to "auto" to enable module-aware mode only when
 # a go.mod file is present in the current directory.
 export GO111MODULE="auto"
-export test_path="${test_path:-github.com/kata-containers/kata-containers/tests}"
-export test_dir="${GOPATH}/src/${test_path}"
 
 # List of files to delete on exit
 files_to_remove=()
@@ -125,7 +123,7 @@ usage()
 	cat <<EOF
 
 Usage: $script_name help
-       $script_name [options] repo-name [true]
+       $script_name [options] [repo-name] [true]
 
 Options:
 
@@ -175,7 +173,7 @@ Examples:
 
 - Auto-detect repository and run golang tests for current repository:
 
-  $ KATA_DEV_MODE=true $script_name --golang
+  $ $script_name --golang
 
 - Run all tests on the kata-containers repository, forcing the tests to
   consider all files, not just those changed by a PR branch:
@@ -413,10 +411,21 @@ static_check_license_headers()
 
 	files=$(get_pr_changed_file_details || true)
 
-	# Strip off status
-	files=$(echo "$files"|awk '{print $NF}')
+	# Strip off status and convert to array
+	files=($(echo "$files"|awk '{print $NF}'))
 
-	# no files were changed
+	text_files=()
+	# Filter out non-text files
+	for file in "${files[@]}"; do
+		if [[ -f "$file" ]] && file --mime-type "$file" | grep -q "text/"; then
+			text_files+=("$file")
+		else
+			info "Ignoring non-text file: $file"
+		fi
+	done
+	files="${text_files[*]}"
+
+	# no text files were changed
 	[ -z "$files" ] && info "No files found" && popd && return
 
 	local header_check
@@ -429,7 +438,7 @@ static_check_license_headers()
 
 		info "Checking $desc"
 
-		local missing=$(egrep \
+		local missing=$(grep \
 			--exclude=".git/*" \
 			--exclude=".gitignore" \
 			--exclude=".dockerignore" \
@@ -472,9 +481,11 @@ static_check_license_headers()
 			--exclude="tools/packaging/qemu/default-configs/*" \
 			--exclude="src/libs/protocols/protos/gogo/*.proto" \
 			--exclude="src/libs/protocols/protos/google/*.proto" \
+			--exclude="src/libs/protocols/protos/cri-api/api.proto" \
+			--exclude="src/mem-agent/example/protocols/protos/google/protobuf/*.proto" \
 			--exclude="src/libs/*/test/texture/*" \
 			--exclude="*.dic" \
-			-EL $extra_args "\<${pattern}\>" \
+			-EL $extra_args -E "\<${pattern}\>" \
 			$files || true)
 
 		if [ -n "$missing" ]; then
@@ -782,7 +793,7 @@ static_check_docs()
 
 	local exclude_pattern
 
-	# Convert the list of files into an egrep(1) alternation pattern.
+	# Convert the list of files into an grep(1) alternation pattern.
 	exclude_pattern=$(echo "${exclude_doc_regexs[@]}"|sed 's, ,|,g')
 
 	# Every document in the repo (except a small handful of exceptions)
@@ -791,7 +802,7 @@ static_check_docs()
 	do
 		# Check the ignore list for markdown files that do not need to
 		# be referenced by others.
-		echo "$doc"|egrep -q "(${exclude_pattern})" && continue
+		echo "$doc"|grep -q -E "(${exclude_pattern})" && continue
 
 		grep -q "$doc" "$md_links" || die "Document $doc is not referenced"
 	done
@@ -826,7 +837,7 @@ static_check_docs()
 		if [ "$specific_branch" != "true" ]
 		then
 			# If the URL is new on this PR, it cannot be checked.
-			echo "$new_urls" | egrep -q "\<${url}\>" && \
+			echo "$new_urls" | grep -q -E "\<${url}\>" && \
 				info "ignoring new (but correct) URL: $url" && continue
 		fi
 
@@ -924,12 +935,12 @@ static_check_eof()
 	[ "$file" == "Vagrantfile" ] && return
 
 	local invalid=$(cat "$file" |\
-		egrep -o '<<-* *\w*' |\
+		grep -o -E '<<-* *\w*' |\
 		sed -e 's/^<<-*//g' |\
 		tr -d ' ' |\
 		sort -u |\
-		egrep -v '^$' |\
-		egrep -v "$anchor" || true)
+		grep -v -E '^$' |\
+		grep -v -E "$anchor" || true)
 	[ -z "$invalid" ] || die "Expected '$anchor' here anchor, in $file found: $invalid"
 }
 
@@ -956,7 +967,7 @@ static_check_files()
 	then
 		info "Checking all files in $branch branch"
 
-		files=$(git ls-files | egrep -v "/(.git|vendor|grpc-rs|target)/" || true)
+		files=$(git ls-files | grep -v -E "/(.git|vendor|grpc-rs|target)/" || true)
 	else
 		info "Checking local branch for changed files only"
 
@@ -978,7 +989,7 @@ static_check_files()
 
 		# Look for files containing the specified comment tags but
 		# which do not include a github URL.
-		match=$(egrep -H "\<FIXME\>|\<TODO\>" "$file" |\
+		match=$(grep -H -E "\<FIXME\>|\<TODO\>" "$file" |\
 			grep -v "https://github.com/.*/issues/[0-9]" |\
 			cut -d: -f1 |\
 			sort -u || true)
@@ -1218,10 +1229,7 @@ has_hadolint_or_install()
 	local linter_dest="${GOPATH}/bin/hadolint"
 
 	local has_linter=$(command -v "$linter_cmd")
-	if [[ -z "$has_linter" && "$KATA_DEV_MODE" == "yes" ]]; then
-		# Do not install if it is in development mode.
-		die "$linter_cmd command not found. You must have the version $linter_version installed to run this check."
-	elif [ -n "$has_linter" ]; then
+	if [ -n "$has_linter" ]; then
 		# Check if the expected linter version
 		if $linter_cmd --version | grep -v "$linter_version" &>/dev/null; then
 			warn "$linter_cmd command found but not the required version $linter_version"
@@ -1293,7 +1301,7 @@ static_check_dockerfiles()
 	linter_cmd+=" --ignore DL3041"
 	# "DL3033 warning: Specify version with `yum install -y <package>-<version>`"
 	linter_cmd+=" --ignore DL3033"
-	# "DL3018 warning: Pin versions in apk add. Instead of `apk add <package>` use `apk add <package>=<version>`" 
+	# "DL3018 warning: Pin versions in apk add. Instead of `apk add <package>` use `apk add <package>=<version>`"
 	linter_cmd+=" --ignore DL3018"
 	# "DL3003 warning: Use WORKDIR to switch to a directory"
 	# See https://github.com/hadolint/hadolint/issues/70
@@ -1347,6 +1355,38 @@ static_check_dockerfiles()
 		[ "$ret" -eq 0 ] || die "failed to check Dockerfile '$file'"
 	done
 	popd
+}
+
+static_check_rego()
+{
+	local rego_files
+	rego_files=$(git ls-files | grep -E '.*\.rego$')
+
+	interpreters=("opa" "regorus")
+	for interpreter in "${interpreters[@]}"
+	do
+		if ! command -v "${interpreter}" &>/dev/null; then
+			die "Required rego interpreter '${interpreter}' not found in PATH"
+		fi
+	done
+
+	found_unparsable=0
+	for file in ${rego_files}
+	do
+		for interpreter in "${interpreters[@]}"
+			do
+			if ! ${interpreter} parse "${file}" > /dev/null; then
+				info "Failed to parse Rego file '${file}' with ${interpreter}"
+				found_unparsable=1
+			else
+				info "Successfully parsed Rego file '${file}' with ${interpreter}"
+			fi
+		done
+	done
+
+	if [[ ${found_unparsable} -ne 0 ]]; then
+		die "Unparsable rego files found"
+	fi
 }
 
 # Run the specified function (after first checking it is compatible with the
@@ -1492,6 +1532,7 @@ main()
 			--list) list_only="true" ;;
 			--no-arch) handle_funcs="arch-agnostic" ;;
 			--only-arch) handle_funcs="arch-specific" ;;
+			--rego) func=static_check_rego ;;
 			--repo) repo="$2"; shift ;;
 			--scripts) func=static_check_shell ;;
 			--vendor) func=static_check_vendor;;
@@ -1514,21 +1555,16 @@ main()
 
 	if [ -z "$repo" ]
 	then
-		if [ -n "$KATA_DEV_MODE" ]
-		then
-			# No repo param provided so assume it's the current
-			# one to avoid developers having to specify one now
-			# (backwards compatability).
-			repo=$(git config --get remote.origin.url |\
-				sed 's!https://!!g' || true)
-
-			info "Auto-detected repo as $repo"
-		else
-			if [ "$list_only" != "true" ]; then
-				echo >&2 "ERROR: need repo" && usage && exit 1
-			fi
-		fi
+		# No repo param provided so assume it's the current
+		# one to avoid developers having to specify one now
+		# (backwards compatability).
+		repo=$(git config --get remote.origin.url |\
+			sed 's!https://!!g' || true)
+		info "Auto-detected repo as $repo"
 	fi
+
+	test_path="${test_path:-"${repo}/tests"}"
+	test_dir="${GOPATH}/src/${test_path}"
 
 	repo_path=$GOPATH/src/$repo
 

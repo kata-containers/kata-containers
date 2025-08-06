@@ -5,31 +5,36 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 check_and_skip() {
-	# Currently the kernel-confidential, isn't built withh measured rootfs support, so this test
-	# should be skipped until it is
-	# See https://github.com/kata-containers/kata-containers/issues/9612,
-	# https://github.com/kata-containers/kata-containers/issues/7235
-	# and https://github.com/kata-containers/kata-containers/issues/7415
-	skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
+	case "${KATA_HYPERVISOR}" in
+		qemu-tdx|qemu-coco-dev)
+			if [ "$(uname -m)" == "s390x" ]; then
+				skip "measured rootfs tests not implemented for s390x"
+			fi
+			return
+			;;
+		*)
+			skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
+			;;
+	esac
 }
 
 setup() {
 	check_and_skip
-	setup_common
+	setup_common || die "setup_common failed"
 }
 
 @test "Test cannnot launch pod with measured boot enabled and incorrect hash" {
 	pod_config="$(new_pod_config nginx "kata-${KATA_HYPERVISOR}")"
 
-	incorrect_hash="5180b1568c2ba972e4e06ee0a55976acae8329f2a5d1d2004395635e1ec4a76e"
+	incorrect_hash="1111111111111111111111111111111111111111111111111111111111111111"
 
-	# Despite the kernel being built with support, it is not currently enabled
-	# on configuration.toml. To avoid editing that file on the worker node,
-	# here it will be enabled via pod annotations.
+	# To avoid editing that file on the worker node, here it will be
+	# enabled via pod annotations.
 	set_metadata_annotation "$pod_config" \
 		"io.katacontainers.config.hypervisor.kernel_params" \
 		"rootfs_verity.scheme=dm-verity rootfs_verity.hash=$incorrect_hash"
@@ -45,10 +50,9 @@ setup() {
 	echo "Pod $pod_config file:"
 	cat $pod_config
 
-	assert_pod_fail "$pod_config"
+	kubectl apply -f $pod_config
 
-	assert_logs_contain "$node" kata "$node_start_time" \
-		'verity: .* metadata block .* is corrupted'
+	waitForProcess "60" "3" "exec_host $node journalctl -t kata | grep \"verity: .* metadata block .* is corrupted\""
 }
 
 teardown() {

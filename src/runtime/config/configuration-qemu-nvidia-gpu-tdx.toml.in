@@ -12,7 +12,7 @@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUTDXPATH@"
+path = "@QEMUTDXEXPERIMENTALPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
 initrd = "@INITRDPATH_CONFIDENTIAL_NV@"
 
@@ -54,7 +54,7 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUTDXVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUTDXEXPERIMENTALVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -70,7 +70,7 @@ kernel_params = "@KERNELTDXPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWARETDVFPATH@"
+firmware = "@FIRMWAREPATH_NV@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
@@ -148,7 +148,7 @@ default_memory = @DEFAULTMEMORY_NV@
 default_maxmemory = @DEFMAXMEMSZ@
 
 # The size in MiB will be plused to max memory of hypervisor.
-# It is the memory address space for the NVDIMM devie.
+# It is the memory address space for the NVDIMM device.
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
@@ -336,21 +336,11 @@ pflashes = []
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-#disable_image_nvdimm = true
-
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-#hotplug_vfio_on_root_bus = true
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
 # Default 0
 #pcie_root_port = 2
 
@@ -537,8 +527,8 @@ kernel_modules=[]
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 60)
-dial_timeout = @DEFAULTTIMEOUT_NV@
+# (default: 90)
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -613,7 +603,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_NV@
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
@@ -672,7 +662,7 @@ experimental=@DEFAULTEXPFEATURES@
 # Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
-create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+create_container_timeout = @DEFAULTTIMEOUT_NV@
 
 # Base directory of directly attachable network config.
 # Network devices for VM-based containers are allowed to be placed in the
@@ -682,3 +672,8 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# Enforce guest pull. This instructs the runtime to communicate to the agent via annotations that
+# the container image should be pulled in the guest, without using an external snapshotter.
+# This is an experimental feature and might be removed in the future.
+experimental_force_guest_pull = @DEFFORCEGUESTPULL@

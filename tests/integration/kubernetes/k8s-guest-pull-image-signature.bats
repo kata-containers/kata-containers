@@ -22,7 +22,7 @@ setup() {
         tag_suffix="-$(uname -m)"
     fi
 
-    setup_common
+    setup_common || die "setup_common failed"
     UNSIGNED_UNPROTECTED_REGISTRY_IMAGE="quay.io/prometheus/busybox:latest"
     UNSIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:unsigned${tag_suffix}"
     COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed${tag_suffix}"
@@ -97,7 +97,7 @@ EOF
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "Security validate failed: Validate image failed: Cannot pull manifest"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Image policy rejected: Denied by policy"
 }
 
 @test "Create a pod from a signed image, on a 'restricted registry' is successful" {
@@ -123,7 +123,7 @@ EOF
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "Security validate failed: Validate image failed: \[PublicKeyVerifier"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Image policy rejected: Denied by policy"
 }
 
 @test "Create a pod from an unsigned image, on a 'restricted registry' works if policy files isn't set" {

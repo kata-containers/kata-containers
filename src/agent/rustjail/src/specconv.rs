@@ -4,6 +4,7 @@
 //
 
 use oci_spec::runtime::Spec;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 pub struct CreateOpts {

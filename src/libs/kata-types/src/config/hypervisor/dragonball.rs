@@ -151,6 +151,7 @@ impl ConfigPlugin for DragonballConfig {
             if db.device_info.hotplug_vfio_on_root_bus
                 || db.device_info.default_bridges > 0
                 || db.device_info.pcie_root_port > 0
+                || db.device_info.pcie_switch_port > 0
             {
                 return Err(eother!(
                     "dragonball hypervisor does not support PCI hotplug options"
@@ -164,12 +165,6 @@ impl ConfigPlugin for DragonballConfig {
             }
             if !db.machine_info.pflashes.is_empty() {
                 return Err(eother!("dragonball hypervisor does not support pflashes"));
-            }
-
-            if db.memory_info.enable_guest_swap {
-                return Err(eother!(
-                    "dragonball hypervisor doesn't support enable_guest_swap"
-                ));
             }
 
             if db.security_info.rootless {

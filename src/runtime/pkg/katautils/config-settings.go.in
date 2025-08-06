@@ -63,6 +63,7 @@ const defaultVCPUCount uint32 = 1
 const defaultMaxVCPUCount uint32 = 0
 const defaultMemSize uint32 = 2048 // MiB
 const defaultMemSlots uint32 = 10
+const defaultHypervisorLoglevel uint32 = 1
 const defaultMemOffset uint64 = 0 // MiB
 const defaultVirtioMem bool = false
 const defaultBridgesCount uint32 = 1
@@ -75,6 +76,7 @@ const defaultBlockDeviceCacheDirect bool = false
 const defaultBlockDeviceCacheNoflush bool = false
 const defaultEnableIOThreads bool = false
 const defaultEnableMemPrealloc bool = false
+const defaultEnableReclaimGuestFreedMemory bool = false
 const defaultEnableHugePages bool = false
 const defaultEnableIOMMU bool = false
 const defaultEnableIOMMUPlatform bool = false
@@ -116,5 +118,3 @@ const defaultPCIeSwitchPort = 0
 
 const defaultRemoteHypervisorSocket = "/run/peerpod/hypervisor.sock"
 const defaultRemoteHypervisorTimeout = 600
-
-const defaultSnpCertsPath = "/opt/snp/cert_chain.cert"

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -37,7 +38,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
-	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
@@ -108,9 +109,10 @@ var (
 	kataVirtioFSDevType              = "virtio-fs"
 	kataOverlayDevType               = "overlayfs"
 	kataWatchableBindDevType         = "watchable-bind"
-	kataVfioPciDevType               = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
-	kataVfioPciGuestKernelDevType    = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
-	kataVfioApDevType                = "vfio-ap"
+	kataVfioPciDevType               = "vfio-pci"     // VFIO PCI device to used as VFIO in the container
+	kataVfioPciGuestKernelDevType    = "vfio-pci-gk"  // VFIO PCI device for consumption by the guest kernel
+	kataVfioApDevType                = "vfio-ap"      // VFIO AP device for hot-plugging
+	kataVfioApColdDevType            = "vfio-ap-cold" // VFIO AP device for cold-plugging
 	sharedDir9pOptions               = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	sharedDirVirtioFSOptions         = []string{}
 	sharedDirVirtioFSDaxOptions      = "dax"
@@ -1032,20 +1034,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		grpcSpec.Linux.Resources.CPU.Mems = ""
 	}
 
-	// We need agent systemd cgroup now.
-	// There are three main reasons to do not apply systemd cgroups in the VM
-	// - Initrd image doesn't have systemd.
-	// - Nobody will be able to modify the resources of a specific container by using systemctl set-property.
-	// - docker is not running in the VM.
-	// if resCtrl.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
-	// 	// Convert systemd cgroup to cgroupfs
-	// 	slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
-	// 	// 0 - slice: system.slice
-	// 	// 1 - prefix: docker
-	// 	// 2 - name: abc123
-	// 	grpcSpec.Linux.CgroupsPath = filepath.Join("/", slice[1], slice[2])
-	// }
-
 	// Disable network namespace since it is already handled on the host by
 	// virtcontainers. The network is a complex part which cannot be simply
 	// passed to the agent.
@@ -1211,6 +1199,15 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	for i, dev := range devList {
 		if dev.Type == config.VFIOAPDeviceMediatedType {
 			kataDevice.Type = kataVfioApDevType
+			coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+			if coldPlugVFIO && c.sandbox.config.VfioMode == config.VFIOModeVFIO {
+				// A new device type is required for cold-plugging VFIO-AP.
+				// The VM guest should handle this differently from hot-plugging VFIO-AP
+				// (e.g., wait_for_ap_device).
+				// Note that a device already exists for cold-plugging VFIO-AP
+				// at the time the device type is checked.
+				kataDevice.Type = kataVfioApColdDevType
+			}
 			kataDevice.Options = dev.APDevices
 		} else {
 
@@ -1686,7 +1683,7 @@ func getContainerTypeforCRI(c *Container) (string, string) {
 
 	// CRIContainerTypeKeyList lists all the CRI keys that could define
 	// the container type from annotations in the config.json.
-	CRIContainerTypeKeyList := []string{ctrAnnotations.ContainerType, podmanAnnotations.ContainerType}
+	CRIContainerTypeKeyList := []string{ctrAnnotations.ContainerType, crioAnnotations.ContainerType}
 	containerType := c.config.Annotations[vcAnnotations.ContainerTypeKey]
 	for _, key := range CRIContainerTypeKeyList {
 		_, ok := c.config.CustomSpec.Annotations[key]
@@ -1711,7 +1708,7 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 		switch criContainerType {
 		case ctrAnnotations.ContainerType:
 			image_ref = container_annotations[kubernetesCRIImageName]
-		case podmanAnnotations.ContainerType:
+		case crioAnnotations.ContainerType:
 			image_ref = container_annotations[kubernetesCRIOImageName]
 		default:
 			// There are cases, like when using nerdctl, where the criContainerType
@@ -1780,9 +1777,18 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 	if len(vol.Options) == 0 {
 		vol.Options = m.Options
 	}
+
 	if m.FSGroup != nil {
+		var safeFsgroup uint32
+		// Check conversions from int to uint32 is safe
+		if *m.FSGroup > 0 && *m.FSGroup <= math.MaxUint32 {
+			safeFsgroup = uint32(*m.FSGroup)
+		} else {
+			return nil, fmt.Errorf("m.FSGroup value was out of range: %d", m.FSGroup)
+
+		}
 		vol.FsGroup = &grpc.FSGroup{
-			GroupId:           uint32(*m.FSGroup),
+			GroupId:           safeFsgroup,
 			GroupChangePolicy: getFSGroupChangePolicy(m.FSGroupChangePolicy),
 		}
 	}
@@ -2695,4 +2701,31 @@ func IsNydusRootFSType(s string) bool {
 	}
 	s = strings.TrimPrefix(s, "fuse.")
 	return strings.HasPrefix(path.Base(s), "nydus-overlayfs")
+}
+
+// IsErofsRootFS checks if any of the options contain io.containerd.snapshotter.v1.erofs path
+func IsErofsRootFS(root RootFs) bool {
+	// TODO: support containerd mount manager: https://github.com/containerd/containerd/issues/11303
+	if root.Type != "overlay" {
+		return false
+	}
+	for _, opt := range root.Options {
+		if strings.Contains(opt, "io.containerd.snapshotter.v1.erofs") {
+			return true
+		}
+	}
+	return false
+}
+
+func parseErofsRootFsOptions(options []string) []string {
+	lowerdirs := []string{}
+
+	for _, opt := range options {
+		if strings.HasPrefix(opt, "lowerdir=") {
+			lowerdirValue := strings.TrimPrefix(opt, "lowerdir=")
+
+			lowerdirs = append(lowerdirs, strings.Split(lowerdirValue, ":")...)
+		}
+	}
+	return lowerdirs
 }

@@ -26,7 +26,7 @@ pub use self::agent::Agent;
 use self::default::DEFAULT_AGENT_DBG_CONSOLE_PORT;
 pub use self::hypervisor::{
     BootInfo, CloudHypervisorConfig, DragonballConfig, FirecrackerConfig, Hypervisor, QemuConfig,
-    HYPERVISOR_NAME_DRAGONBALL, HYPERVISOR_NAME_FIRECRACKER, HYPERVISOR_NAME_QEMU,
+    RemoteConfig, HYPERVISOR_NAME_DRAGONBALL, HYPERVISOR_NAME_FIRECRACKER, HYPERVISOR_NAME_QEMU,
 };
 
 mod runtime;
@@ -113,6 +113,14 @@ pub struct TomlConfig {
     /// Kata runtime configuration information.
     #[serde(default)]
     pub runtime: Runtime,
+}
+
+macro_rules! mem_agent_kv_insert {
+    ($ma_cfg:expr, $key:expr, $map:expr) => {
+        if let Some(n) = $ma_cfg {
+            $map.insert($key.to_string(), n.to_string());
+        }
+    };
 }
 
 impl TomlConfig {
@@ -202,6 +210,83 @@ impl TomlConfig {
                 kv.insert(
                     DEBUG_CONSOLE_VPORT_OPTION.to_string(),
                     DEFAULT_AGENT_DBG_CONSOLE_PORT.to_string(),
+                );
+            }
+            if cfg.mem_agent.enable {
+                kv.insert("psi".to_string(), "1".to_string());
+                kv.insert("agent.mem_agent_enable".to_string(), "1".to_string());
+
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.memcg_disable,
+                    "agent.mem_agent_memcg_disable",
+                    kv
+                );
+                mem_agent_kv_insert!(cfg.mem_agent.memcg_swap, "agent.mem_agent_memcg_swap", kv);
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.memcg_swappiness_max,
+                    "agent.mem_agent_memcg_swappiness_max",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.memcg_period_secs,
+                    "agent.mem_agent_memcg_period_secs",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.memcg_period_psi_percent_limit,
+                    "agent.mem_agent_memcg_period_psi_percent_limit",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.memcg_eviction_psi_percent_limit,
+                    "agent.mem_agent_memcg_eviction_psi_percent_limit",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.memcg_eviction_run_aging_count_min,
+                    "agent.mem_agent_memcg_eviction_run_aging_count_min",
+                    kv
+                );
+
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_disable,
+                    "agent.mem_agent_compact_disable",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_period_secs,
+                    "agent.mem_agent_compact_period_secs",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_period_psi_percent_limit,
+                    "agent.mem_agent_compact_period_psi_percent_limit",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_psi_percent_limit,
+                    "agent.mem_agent_compact_psi_percent_limit",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_sec_max,
+                    "agent.mem_agent_compact_sec_max",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_order,
+                    "agent.mem_agent_compact_order",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_threshold,
+                    "agent.mem_agent_compact_threshold",
+                    kv
+                );
+                mem_agent_kv_insert!(
+                    cfg.mem_agent.compact_force_times,
+                    "agent.mem_agent_compact_force_times",
+                    kv
                 );
             }
         }

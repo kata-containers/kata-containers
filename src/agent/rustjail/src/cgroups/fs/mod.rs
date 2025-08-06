@@ -33,6 +33,7 @@ use protocols::agent::{
     BlkioStats, BlkioStatsEntry, CgroupStats, CpuStats, CpuUsage, HugetlbStats, MemoryData,
     MemoryStats, PidsStats, ThrottlingData,
 };
+use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
@@ -559,11 +560,7 @@ fn build_blk_io_device_throttle_resource(
 }
 
 fn linux_device_cgroup_to_device_resource(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.typ().unwrap_or_default().as_str().chars().next())
-    {
-        Some(t) => t,
-        None => return None,
-    };
+    let dev_type = DeviceType::from_char(d.typ().unwrap_or_default().as_str().chars().next())?;
 
     let mut permissions: Vec<DevicePermissions> = vec![];
     for p in d
@@ -1170,6 +1167,23 @@ impl Manager {
         })
     }
 
+    pub fn subcgroup(&self) -> &str {
+        // Check if we're in a Docker-in-Docker setup by verifying:
+        // 1. We're using cgroups v2 (which restricts direct process control)
+        // 2. An "init" subdirectory exists (used by DinD for process delegation)
+        let is_dind = cgroups::hierarchies::is_cgroup2_unified_mode()
+            && cgroups::hierarchies::auto()
+                .root()
+                .join(&self.cpath)
+                .join("init")
+                .exists();
+        if is_dind {
+            "/init/"
+        } else {
+            "/"
+        }
+    }
+
     fn get_paths_and_mounts(
         cpath: &str,
     ) -> Result<(HashMap<String, String>, HashMap<String, String>)> {
@@ -1306,10 +1320,7 @@ fn default_allowed_devices() -> Vec<DeviceResource> {
 
 /// Convert LinuxDevice to DeviceResource.
 fn linux_device_to_device_resource(d: &LinuxDevice) -> Option<DeviceResource> {
-    let dev_type = match DeviceType::from_char(d.typ().as_str().chars().next()) {
-        Some(t) => t,
-        None => return None,
-    };
+    let dev_type = DeviceType::from_char(d.typ().as_str().chars().next())?;
 
     let permissions = vec![
         DevicePermissions::Read,

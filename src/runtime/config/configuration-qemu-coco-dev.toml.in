@@ -73,7 +73,7 @@ valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS@"
+kernel_params = "@KERNELQEMUCOCODEVPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
@@ -155,7 +155,7 @@ default_memory = @DEFMEMSZ@
 default_maxmemory = @DEFMAXMEMSZ@
 
 # The size in MiB will be plused to max memory of hypervisor.
-# It is the memory address space for the NVDIMM devie.
+# It is the memory address space for the NVDIMM device.
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
@@ -358,16 +358,7 @@ pflashes = []
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-#disable_image_nvdimm = true
-
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-#hotplug_vfio_on_root_bus = true
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 
 # Enable hot-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 
@@ -384,7 +375,6 @@ pflashes = []
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
 # Default 0
 #pcie_root_port = 2
 
@@ -653,7 +643,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
@@ -713,3 +703,8 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# Enforce guest pull. This instructs the runtime to communicate to the agent via annotations that
+# the container image should be pulled in the guest, without using an external snapshotter.
+# This is an experimental feature and might be removed in the future.
+experimental_force_guest_pull = @DEFFORCEGUESTPULL@

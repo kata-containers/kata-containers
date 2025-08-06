@@ -132,6 +132,12 @@ const (
 	// UseLegacySerial sets legacy serial device for guest console if available and implemented for architecture
 	UseLegacySerial = kataAnnotHypervisorPrefix + "use_legacy_serial"
 
+	// GPU specific annotations used by remote hypervisor for instance selection
+	// Number of GPUs required in the Kata VM
+	DefaultGPUs = kataAnnotHypervisorPrefix + "default_gpus"
+	// GPU model - tesla, h100, radeon etc..
+	DefaultGPUModel = kataAnnotHypervisorPrefix + "default_gpu_model"
+
 	//
 	// CPU Annotations
 	//
@@ -160,6 +166,9 @@ const (
 
 	// MemPrealloc is a sandbox annotation that specifies the memory space used for nvdimm device by the hypervisor.
 	MemPrealloc = kataAnnotHypervisorPrefix + "enable_mem_prealloc"
+
+	// ReclaimGuestFreedMemory is a sandbox annotation that specifies whether the memory freed by the guest will be reclaimed by the hypervisor or not.
+	ReclaimGuestFreedMemory = kataAnnotHypervisorPrefix + "reclaim_guest_freed_memory"
 
 	// HugePages is a sandbox annotation to specify if the memory should be pre-allocated from huge pages
 	HugePages = kataAnnotHypervisorPrefix + "enable_hugepages"
@@ -274,6 +283,9 @@ const (
 
 	// CreateContainerTimeout is a sandbox annotaion that sets the create container timeout.
 	CreateContainerTimeout = kataAnnotRuntimePrefix + "create_container_timeout"
+
+	// ForceGuestPull is a sandbox annotation that sets experimental_force_guest_pull.
+	ForceGuestPull = kataAnnotRuntimePrefix + "experimental_force_guest_pull"
 )
 
 // Agent related annotations

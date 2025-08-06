@@ -11,3 +11,7 @@ data:
   data-1: value-1
   data-2: value-2
   data-3: value-3
+binaryData:
+  bin-data-1: YmluLXZhbHVlLTE=
+  bin-data-2: YmluLXZhbHVlLTI=
+  bin-data-3: YmluLXZhbHVlLTM=

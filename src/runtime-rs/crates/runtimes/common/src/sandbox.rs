@@ -4,7 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::{types::ContainerProcess, ContainerManager};
+use crate::{
+    types::{ContainerProcess, SandboxExitInfo, SandboxStatus},
+    ContainerManager,
+};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -30,6 +34,8 @@ pub trait Sandbox: Send + Sync {
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
+    async fn status(&self) -> Result<SandboxStatus>;
+    async fn wait(&self) -> Result<SandboxExitInfo>;
 
     // utils
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>>;

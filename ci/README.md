@@ -41,7 +41,7 @@ responsible for ensuring that:
 
 ### Jobs that require a maintainer's approval to run
 
-These are the required tests, and our so-called "CI".  These require a
+There are some tests, and our so-called "CI".  These require a
 maintainer's approval to run as parts of those jobs will be running on "paid
 runners", which are currently using Azure infrastructure.
 
@@ -55,14 +55,14 @@ of a PR review), the following tests will be executed:
 - Run the following tests:
   - Tests depending on the generated tarball
     - Metrics (runs on bare-metal)
-    - `docker` (runs on Azure small instances)
-    - `nerdctl` (runs on Azure small instances)
-    - `kata-monitor` (runs on Azure small instances)
-    - `cri-containerd` (runs on Azure small instances)
-    - `nydus` (runs on Azure small instances)
-    - `vfio` (runs on Azure normal instances)
+    - `docker` (runs on cost free runners)
+    - `nerdctl` (runs on cost free runners)
+    - `kata-monitor` (runs on cost free runners)
+    - `cri-containerd` (runs on cost free runners)
+    - `nydus` (runs on cost free runners)
+    - `vfio` (runs on cost free runners)
   - Tests depending on the generated kata-deploy payload
-    - kata-deploy (runs on Azure small instances)
+    - kata-deploy (runs on cost free runners)
       - Tests are performed using different "Kubernetes flavors", such as k0s, k3s, rke2, and Azure Kubernetes Service (AKS).
     - Kubernetes (runs in Azure small and medium instances depending on what's required by each test, and on TEE bare-metal machines)
       - Tests are performed with different runtime engines, such as CRI-O and containerd.
@@ -77,11 +77,11 @@ them to merely debug issues.
 
 In the previous section we've mentioned using different runners, now in this section we'll go through each type of runner used.
 
-- Cost free runners:  Those are the runners provided by GIthub itself, and
-  those are fairly small machines with no virtualization capabilities enabled - 
+- Cost free runners:  Those are the runners provided by GitHub itself, and
+  those are fairly small machines with virtualization capabilities enabled.
 - Azure small instances: Those are runners which have virtualization
   capabilities enabled, 2 CPUs, and 8GB of RAM.  These runners have a "-smaller"
-  suffix to their name. 
+  suffix to their name.
 - Azure normal instances: Those are runners which have virtualization
   capabilities enabled, 4 CPUs, and 16GB of RAM.  These runners are usually
   `garm` ones with no "-smaller" suffix.
@@ -91,7 +91,7 @@ In the previous section we've mentioned using different runners, now in this sec
   runners which will be actually performing the tests must have virtualization
   capabilities and a reasonable amount for CPU and RAM available (at least
   matching the Azure normal instances).
-  
+
 ## Adding new tests
 
 Before someone decides to add a new test, we strongly recommend them to go
@@ -137,6 +137,79 @@ With the expectations aligned, adding a test consists in:
 Following those examples, the community advice during the review, and even
 asking the community directly on Slack are the best ways to get your test
 accepted.
+
+## Required tests
+
+In our CI we have two categories of jobs - required and non-required:
+- Required jobs need to all pass for a PR to be merged normally and
+should cover all the core features on Kata Containers that we want to
+ensure don't have regressions.
+- The non-required jobs are for unstable tests, or for features that
+are experimental and not-fully supported. We'd like those tests to also
+pass on all PRs ideally, but don't block merging if they don't as it's
+not necessarily an indication of the PR code causing regressions.
+
+### Transitioning between required and non-required status
+
+Required jobs that fail block merging of PRs, so we want to ensure that
+jobs are stable and maintained before we make them required.
+
+The [Kata Containers CI Dashboard](https://kata-containers.github.io/)
+is a useful resource to check when collecting evidence of job stability.
+At time of writing it reports the last ten days of Kata CI nightly test
+results for each job. This isn't perfect as it doesn't currently capture
+results on PRs, but is a good guideline for stability.
+
+> [!NOTE]
+> Below are general guidelines about jobs being marked as
+> required/non-required, but they are subject to change and the Kata
+> Architecture Committee may overrule these guidelines at their
+> discretion.
+
+#### Initial marking as required
+
+For new jobs, or jobs that haven't been marked as required recently,
+the criteria to be initially marked as required is ten days
+of passing tests, with no relevant PR failures reported in that time.
+Required jobs also need one or more nominated maintainers that are
+responsible for the stability of their jobs. Maintainers can be registered
+in [`maintainers.yml`](https://github.com/kata-containers/kata-containers.github.io/blob/main/maintainers.yml)
+and will then show on the CI Dashboard.
+
+To add transparency to making jobs required/non-required and to keep the
+GitHub UI in sync with the [Gatekeeper job](../tools/testing/gatekeeper),
+the process to update a job's required state is as follows:
+1. Create a PR to update `maintainers.yml`, if new maintainers are being
+declared on a CI job.
+1. Create a PR which updates
+[`required-tests.yaml`](../tools/testing/gatekeeper/required-tests.yaml)
+adding the new job and listing the evidence that the job meets the
+requirements above. Ensure that all maintainers and
+@kata-containers/architecture-committee are notified to give them the
+opportunity to review the PR. See
+[#11015](https://github.com/kata-containers/kata-containers/pull/11015)
+as an example.
+1. The maintainers and Architecture Committee get a chance to review the PR.
+It can be discussed in an AC meeting to get broader input.
+1. Once the PR has been merged, a Kata Containers admin should be notified
+to ensure that the GitHub UI is updated to reflect the change in
+`required-tests.yaml`.
+
+#### Expectation of required job maintainers
+
+Due to the nature of the Kata Containers community having contributors
+spread around the world, required jobs being blocked due to infrastructure,
+or test issues can have a big impact on work. As such, the expectation is
+that when a problem with a required job is noticed/reported, the maintainers
+have one working day to acknowledge the issue, perform an initial
+investigation and then either fix it, or get it marked as non-required
+whilst the investigation and/or fix it done.
+
+### Re-marking of required status
+
+Once a job has been removed from the required list, it requires two
+consecutive successful nightly test runs before being made required
+again.
 
 ## Running tests
 
@@ -247,7 +320,7 @@ $ git remote add upstream https://github.com/kata-containers/kata-containers
 $ git remote update
 $ git config --global user.email "you@example.com"
 $ git config --global user.name "Your Name"
-$ git rebase upstream/main 
+$ git rebase upstream/main
 ```
 
 Now copy the `kata-static.tar.xz` into your `kata-containers/kata-artifacts` directory
@@ -261,7 +334,7 @@ $ cp ../kata-static.tar.xz kata-artifacts/
 > If you downloaded the .zip from GitHub you need to uncompress first to see `kata-static.tar.xz`
 
 And finally run the tests following what's in the yaml file for the test you're
-debugging. 
+debugging.
 
 In our case, the `run-nerdctl-tests-on-garm.yaml`.
 
@@ -284,7 +357,7 @@ $ bash tests/integration/nerdctl/gha-run.sh run
 
 And with this you should've been able to reproduce exactly the same issue found
 in the CI, and from now on you can build your own code, use your own binaries,
-and have fun debugging and hacking! 
+and have fun debugging and hacking!
 
 ### Debugging a Kubernetes test
 
@@ -332,7 +405,7 @@ If you want to remove a current self-hosted runner:
 
 - For each runner there's a "..." menu, where you can just click and the
   "Remove runner" option will show up
-  
+
 ## Known limitations
 
 As the GitHub actions are structured right now we cannot: Test the addition of a

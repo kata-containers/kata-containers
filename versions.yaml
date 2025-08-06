@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v41.0"
+      version: "v47.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -83,13 +83,13 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v1.8.0"
+      version: "v1.12.1"
 
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v8.2.4"
-      tag: "v8.2.4"
+      version: "v9.1.2"
+      tag: "v9.1.2"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -100,9 +100,14 @@ assets:
         .*/v?(\d\S+)\.tar\.gz
 
     qemu-snp-experimental:
-      description: "QEMU with SNP support"
+      description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "amd-snp-202402240000"
+      tag: "gpu-snp-20250211"
+
+    qemu-tdx-experimental:
+      description: "QEMU with GPU+TDX support"
+      url: "https://github.com/confidential-containers/qemu.git"
+      tag: "gpu-tdx-20250211"
 
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"
@@ -116,38 +121,38 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-image-name "ubuntu"
-        version: &default-image-version "latest"
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
         nvidia-gpu:
-          name: *default-image-name
-          version: "jammy"
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
-          name: *default-image-name
-          version: "jammy"
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
       ppc64le:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
       s390x:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
         confidential:
-          name: *default-image-name
-          version: *default-image-version
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
       x86_64:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
         confidential:
-          name: *default-image-name
-          version: *default-image-version
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
+        mariner:
+          name: "cbl-mariner"
+          version: "3.0"
         nvidia-gpu:
-          name: *default-image-name
-          version: "jammy"
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
-          name: *default-image-name
-          version: "jammy"
-
-    meta:
-      image-type: *default-image-name
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
 
   initrd:
     description: |
@@ -156,49 +161,46 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-initrd-name "alpine"
-        version: &default-initrd-version "3.18"
+        name: "alpine"
+        version: "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "noble"  # 24.04 LTS
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
-        name: &glibc-initrd-name "ubuntu"
-        version: &glibc-initrd-version "20.04"
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
       s390x:
-        name: *glibc-initrd-name
-        version: *glibc-initrd-version
+        name: "ubuntu"
+        version: "noble"  # 24.04 LTS
         confidential:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
       x86_64:
-        name: *default-initrd-name
-        version: *default-initrd-version
+        name: "alpine"
+        version: "3.18"
         confidential:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
-        mariner:
-          name: "cbl-mariner"
-          version: "2.0"
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu:
-          name: *glibc-initrd-name
-          version: "jammy"
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu-confidential:
-          name: *glibc-initrd-name
-          version: "jammy"
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.1.62"
+    version: "v6.12.36"
     confidential:
-      description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
+      description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.7"
+      version: "v6.12.36"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -207,8 +209,8 @@ assets:
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v6.1.62"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+    version: "v6.12.36"
 
 externals:
   description: "Third-party projects used by the system"
@@ -231,16 +233,19 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "v0.10.0"
-    toolchain: "1.76.0"
+    version: "1a521e14b8c0a039ae7ae98f520fcb5020d95dec"
+    toolchain: "1.85.1"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "v0.10.1"
-    image: "ghcr.io/confidential-containers/key-broker-service"
-    image_tag: "built-in-as-v0.10.1"
-    toolchain: "1.74.0"
+    version: "beb4ce9346bc7f9a7ff0f686eb868472767ad8fb"
+    # image / ita_image and image_tag / ita_image_tag must be in sync
+    image: "ghcr.io/confidential-containers/staged-images/kbs"
+    image_tag: "beb4ce9346bc7f9a7ff0f686eb868472767ad8fb"
+    ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
+    ita_image_tag: "beb4ce9346bc7f9a7ff0f686eb868472767ad8fb-x86_64"
+    toolchain: "1.85.1"
 
   crio:
     description: |
@@ -256,9 +261,12 @@ externals:
     # containerd from v1.5.0 used the path unix socket
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
-    version: "v1.6.8"
-    lts: "v1.6"
-    active: "v1.7"
+    version: "v1.7.25"
+    lts: "v1.7"
+    active: "v2.0"
+    # keep the latest version to make the current PR ci work, once it was
+    # merged,we can remove the latest version.
+    latest: "v2.0"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
@@ -268,6 +276,11 @@ externals:
     # create a "latest" entry and use that for the GitHub actions tests.
     latest: "v1.29"
 
+  runc:
+    description: "CLI tool for spawning and running containers"
+    url: "https://github.com/opencontainers/runc"
+    latest: "v1.2"
+
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
     url: "https://gitlab.com/cryptsetup/cryptsetup"
@@ -275,7 +288,7 @@ externals:
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
-    url: "http://ftp.gnu.org/pub/gnu/gperf/"
+    url: "http://ftpmirror.gnu.org/gperf/"
     version: "3.1"
 
   hadolint:
@@ -287,6 +300,13 @@ externals:
     description: "LVM2 and device-mapper tools and libraries"
     url: "https://github.com/lvmteam/lvm2"
     version: "v2_03_16"
+
+  # This is only used for CRI-O.
+  # kata-deploy tests rely on the latest version of k0s.
+  k0s:
+    description: "K0s Kubernetes distribution, used in cri-o testing"
+    url: "https://get.k0s.sh"
+    version: "v1.31.5+k0s.0"
 
   kubernetes:
     description: "Kubernetes project container manager"
@@ -327,33 +347,59 @@ externals:
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.13.14"
+    version: "v0.15.2"
+
+  opa:
+    description: "Open Policy Agent"
+    url: "https://github.com/open-policy-agent/opa"
+    version: "v1.6.0"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
     url: "https://github.com/tianocore/edk2"
     x86_64:
       description: "Vanilla firmware build"
-      version: "edk2-stable202402"
+      version: "edk2-stable202411"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
     sev:
+      # Used by AMD SEV-SNP for measured direct boot
       description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202402"
+      version: "edk2-stable202411"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
+    arm64:
+      description: "UEFI for arm64 virtual machines."
+      version: "edk2-stable202411"
+      package: "ArmVirtPkg/ArmVirtQemu.dsc"
+      package_output_dir: "ArmVirtQemu-AARCH64"
+
+  protoc:
+    description: "Protobuf compiler"
+    url: "https://github.com/protocolbuffers/protobuf/releases"
+    version: "v21.12"
+
+  protoc-gen-go:
+    description: "Protobuf Go compiler"
+    url: "https://github.com/protocolbuffers/protobuf-go/releases"
+    version: "v1.28.1"
+
+  ttrpc:
+    description: "ttRPC libary and code generation utilities"
+    url: "https://github.com/containerd/ttrpc/releases"
+    version: "v1.2.7"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.8.0"
-    toolchain: "1.72.0"
+    version: "v1.13.1"
+    toolchain: "1.85.1"
     meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.8.0,
-      # this is the link labelled virtiofsd-v1.8.0.zip
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.13.1,
+      # this is the link labelled virtiofsd-v1.13.1.zip
       #
       # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9ec473efd0203219d016e66aac4190aa/virtiofsd-v1.8.0.zip"
+      binary: "https://gitlab.com/-/project/21523468/uploads/05d4925181301a59b8c322cd9f9d44a7/virtiofsd-v1.13.1.zip"
 
   xurls:
     description: |
@@ -369,33 +415,34 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.22.2"
+    version: "1.23.10"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.22.2"
+      newest-version: "1.23.10"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.75.0"
+    # Keep in sync with rust-toolchain.toml
+    version: "1.85.1"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.75.0"
+      newest-version: "1.85.1"
 
   golangci-lint:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
     url: "github.com/golangci/golangci-lint"
-    version: "1.57.2"
+    version: "1.64.8"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.57.2"
+      newest-version: "1.64.8"
 
 plugins:
   description: |

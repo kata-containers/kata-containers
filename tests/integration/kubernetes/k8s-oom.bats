@@ -9,8 +9,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HOST_OS}" == "cbl-mariner" ] && skip "test not working see: see #8821"
-
 	pod_name="pod-oom"
 	get_pod_config_dir
 
@@ -26,7 +24,12 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Check if OOMKilled
-	cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' | grep OOMKilled"
+    container_name=$(kubectl get pod "$pod_name" -o jsonpath='{.status.containerStatuses[0].name}')
+    if [[ $container_name == "oom-test" ]]; then
+        cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' | grep OOMKilled"
+    else
+        cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[1].state.terminated.reason}' | grep OOMKilled"
+    fi
 
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
@@ -34,8 +37,6 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HOST_OS}" == "cbl-mariner" ] && skip "test not working see: see #8821"
-
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 	kubectl get "pod/$pod_name" -o yaml

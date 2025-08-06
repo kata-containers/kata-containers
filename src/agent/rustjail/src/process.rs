@@ -179,6 +179,11 @@ impl Process {
                 p.parent_stdin = Some(pstdin);
                 p.stdin = Some(stdin);
 
+                // Make sure the parent stdin writer be inserted into
+                // p.writes hashmap, thus the cleanup_process_stream can
+                // cleanup and close the parent stdin fd.
+                let _ = p.get_writer(StreamType::ParentStdin);
+
                 // These pipes are necessary as the stdout/stderr of the child process
                 // cannot be a socket. Otherwise, some images relying on the /dev/stdout(stderr)
                 // and /proc/self/fd/1(2) will fail to boot as opening an existing socket
@@ -308,8 +313,8 @@ mod tests {
         assert_eq!(max_size, actual_size);
     }
 
-    #[test]
-    fn test_process() {
+    #[tokio::test]
+    async fn test_process() {
         let id = "abc123rgb";
         let init = true;
         let process = Process::new(

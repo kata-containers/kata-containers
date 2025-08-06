@@ -29,7 +29,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	cri "github.com/containerd/containerd/pkg/cri/annotations"
-	crio "github.com/containers/podman/v4/pkg/annotations"
+	crio "github.com/cri-o/cri-o/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
@@ -185,6 +185,9 @@ type SandboxConfig struct {
 	// Create container timeout which, if provided, indicates the create container timeout
 	// needed for the workload(s)
 	CreateContainerTimeout uint64
+
+	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
+	ForceGuestPull bool
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -445,6 +448,14 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 	}
 
 	return c.ioStream(processID)
+}
+
+// IsGuestPullEnforced returns true if guest pull is forced through the sandbox configuration.
+func (s *Sandbox) IsGuestPullForced() bool {
+	if s.config == nil {
+		return false
+	}
+	return s.config.ForceGuestPull
 }
 
 func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
@@ -722,79 +733,7 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	// for correct number of PCIe root ports.
 	var vhostUserBlkDevices []config.DeviceInfo
 
-	//io.katacontainers.pkg.oci.container_type:pod_sandbox
-
 	for cnt, container := range sandboxConfig.Containers {
-		// Do not alter the original spec, we do not want to inject
-		// CDI devices into the sandbox container, were using the CDI
-		// devices as additional information to determine the number of
-		// PCIe root ports to reserve for the hypervisor.
-		// A single_container type will have the CDI devices injected
-		// only do this if we're a pod_sandbox type.
-		if container.Annotations["io.katacontainers.pkg.oci.container_type"] == "pod_sandbox" && container.CustomSpec != nil {
-			cdiSpec := container.CustomSpec
-			// We can provide additional directories where to search for
-			// CDI specs if needed. immutable OS's only have specific
-			// directories where applications can write too. For instance /opt/cdi
-			//
-			// _, err = withCDI(ociSpec.Annotations, []string{"/opt/cdi"}, ociSpec)
-			//
-			_, err := config.WithCDI(cdiSpec.Annotations, []string{}, cdiSpec)
-			if err != nil {
-				return coldPlugVFIO, fmt.Errorf("adding CDI devices failed")
-			}
-
-			for _, dev := range cdiSpec.Linux.Devices {
-				isVFIODevice := deviceManager.IsVFIODevice(dev.Path)
-				if hotPlugVFIO && isVFIODevice {
-					vfioDev := config.DeviceInfo{
-						ColdPlug:      true,
-						ContainerPath: dev.Path,
-						Port:          sandboxConfig.HypervisorConfig.HotPlugVFIO,
-						DevType:       dev.Type,
-						Major:         dev.Major,
-						Minor:         dev.Minor,
-					}
-					if dev.FileMode != nil {
-						vfioDev.FileMode = *dev.FileMode
-					}
-					if dev.UID != nil {
-						vfioDev.UID = *dev.UID
-					}
-					if dev.GID != nil {
-						vfioDev.GID = *dev.GID
-					}
-
-					vfioDevices = append(vfioDevices, vfioDev)
-					continue
-				}
-				if coldPlugVFIO && isVFIODevice {
-					vfioDev := config.DeviceInfo{
-						ColdPlug:      true,
-						ContainerPath: dev.Path,
-						Port:          sandboxConfig.HypervisorConfig.ColdPlugVFIO,
-						DevType:       dev.Type,
-						Major:         dev.Major,
-						Minor:         dev.Minor,
-					}
-					if dev.FileMode != nil {
-						vfioDev.FileMode = *dev.FileMode
-					}
-					if dev.UID != nil {
-						vfioDev.UID = *dev.UID
-					}
-					if dev.GID != nil {
-						vfioDev.GID = *dev.GID
-					}
-
-					vfioDevices = append(vfioDevices, vfioDev)
-					continue
-				}
-			}
-		}
-		// As stated before the single_container will have the  CDI
-		// devices injected by the runtime. For the pod_container use-case
-		// see container.go how cold and hot-plug are handled.
 		for dev, device := range container.DeviceInfos {
 			if deviceManager.IsVhostUserBlk(device) {
 				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
@@ -1169,7 +1108,7 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 	}()
 
 	// Add network for vm
-	inf.PciPath = endpoints[0].PciPath().String()
+	inf.DevicePath = endpoints[0].PciPath().String()
 	result, err := s.agent.updateInterface(ctx, inf)
 	if err != nil {
 		return nil, err
@@ -1272,12 +1211,15 @@ func (cw *consoleWatcher) start(s *Sandbox) (err error) {
 
 	go func() {
 		for scanner.Scan() {
-			s.Logger().WithFields(logrus.Fields{
-				"console-protocol": cw.proto,
-				"console-url":      cw.consoleURL,
-				"sandbox":          s.id,
-				"vmconsole":        scanner.Text(),
-			}).Debug("reading guest console")
+			text := scanner.Text()
+			if text != "" {
+				s.Logger().WithFields(logrus.Fields{
+					"console-protocol": cw.proto,
+					"console-url":      cw.consoleURL,
+					"sandbox":          s.id,
+					"vmconsole":        text,
+				}).Debug("reading guest console")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -1455,6 +1397,8 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 
 	defer func() {
 		if err != nil {
+			// Log error, otherwise nobody might see it - StopVM could kill this process.
+			s.Logger().WithError(err).Error("Cannot start VM")
 			s.hypervisor.StopVM(ctx, false)
 		}
 	}()
@@ -2620,8 +2564,10 @@ func (s *Sandbox) resourceControllerDelete() error {
 	}
 
 	resCtrlParent := sandboxController.Parent()
-	if err := sandboxController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
-		return err
+	if resCtrlParent != "." {
+		if err := sandboxController.MoveTo(resCtrlParent); err != nil {
+			return err
+		}
 	}
 
 	if err := sandboxController.Delete(); err != nil {

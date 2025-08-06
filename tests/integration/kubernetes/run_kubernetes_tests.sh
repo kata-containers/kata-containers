@@ -6,6 +6,7 @@
 #
 
 set -e
+set -o pipefail
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 source "${kubernetes_dir}/../../common.bash"
@@ -33,12 +34,16 @@ else
 	# we need run k8s-guest-pull-image.bats test first, otherwise the test result will be affected
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
-	K8S_TEST_SMALL_HOST_UNION=( \
+	K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION=( \
 		"k8s-guest-pull-image-encrypted.bats" \
-		"k8s-guest-pull-image.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
+		"k8s-initdata.bats" \
 		"k8s-confidential-attestation.bats" \
+	)
+
+	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
@@ -54,6 +59,7 @@ else
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
 		"k8s-file-volume.bats" \
+		"k8s-hostname.bats" \
 		"k8s-inotify.bats" \
 		"k8s-job.bats" \
 		"k8s-kill-all-process-in-container.bats" \
@@ -69,7 +75,9 @@ else
 		"k8s-pod-quota.bats" \
 		"k8s-policy-hard-coded.bats" \
 		"k8s-policy-deployment.bats" \
+		"k8s-policy-deployment-sc.bats" \
 		"k8s-policy-job.bats" \
+		"k8s-policy-logs.bats" \
 		"k8s-policy-pod.bats" \
 		"k8s-policy-pvc.bats" \
 		"k8s-policy-rc.bats" \
@@ -85,15 +93,6 @@ else
 		"k8s-nginx-connectivity.bats" \
 	)
 
-	# When testing auto-generated policy, the genpolicy tool:
-	# - Is able to pull this older format container image by pulling through containerd.
-	# - Fails to pull the same container image by using the oci_distribution crate.
-	# Pulling through containerd might not be practical for all users, so both pulling
-	# methods are supported for most container images.
-	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
-		K8S_TEST_SMALL_HOST_UNION+=("k8s-pod-manifest-v1.bats")
-	fi
-
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \
@@ -103,14 +102,19 @@ else
 
 	case ${K8S_TEST_HOST_TYPE} in
 		small)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
 			;;
 		normal)
 			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
 		all|baremetal)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			;;
+		baremetal-attestation)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]})
+			;;
+		baremetal-no-attestation)
 			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
-
 			;;
 		*)
 			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
@@ -128,14 +132,25 @@ fi
 
 ensure_yq
 
+report_dir="${kubernetes_dir}/reports/$(date +'%F-%T')"
+mkdir -p "${report_dir}"
+
+info "Running tests with bats version: $(bats --version). Save outputs to ${report_dir}"
+
 tests_fail=()
-for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
+for K8S_TEST_ENTRY in "${K8S_TEST_UNION[@]}"
 do
+	K8S_TEST_ENTRY=$(echo "$K8S_TEST_ENTRY" | tr -d '[:space:][:cntrl:]')
 	info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
-	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"; then
+	# Output file will be prefixed with "ok" or "not_ok" based on the result
+	out_file="${report_dir}/${K8S_TEST_ENTRY}.out"
+	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "${out_file}"; then
 		tests_fail+=("${K8S_TEST_ENTRY}")
+		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
 		[ "${K8S_TEST_FAIL_FAST}" = "yes" ] && break
+	else
+		mv "${out_file}" "$(dirname "${out_file}")/ok-$(basename "${out_file}")"
 	fi
 done
 

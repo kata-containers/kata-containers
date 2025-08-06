@@ -15,15 +15,17 @@ pub const DRIVER_BLK_MMIO_TYPE: &str = "mmioblk";
 pub const DRIVER_SCSI_TYPE: &str = "scsi";
 /// DRIVER_NVDIMM_TYPE is the device driver for nvdimm
 pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
-/// DRIVER_VFIO_PCI_GK_TYPE is the device driver for vfio-pci 
+/// DRIVER_VFIO_PCI_GK_TYPE is the device driver for vfio-pci
 /// while the device will be bound to a guest kernel driver
 pub const DRIVER_VFIO_PCI_GK_TYPE: &str = "vfio-pci-gk";
 /// DRIVER_VFIO_PCI_TYPE is the device driver for vfio-pci
 /// VFIO PCI device to be bound to vfio-pci and made available inside the
 /// container as a VFIO device node
 pub const DRIVER_VFIO_PCI_TYPE: &str = "vfio-pci";
-/// DRIVER_VFIO_AP_TYPE is the device driver for vfio-ap.
+/// DRIVER_VFIO_AP_TYPE is the device driver for vfio-ap hotplug.
 pub const DRIVER_VFIO_AP_TYPE: &str = "vfio-ap";
+/// DRIVER_VFIO_AP_COLD_TYPE is the device driver for vfio-ap coldplug.
+pub const DRIVER_VFIO_AP_COLD_TYPE: &str = "vfio-ap-cold";
 
 /// DRIVER_9P_TYPE is the driver for 9pfs volume.
 pub const DRIVER_9P_TYPE: &str = "9p";

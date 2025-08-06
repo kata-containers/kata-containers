@@ -147,3 +147,11 @@ all images with a single MCP update instead of per-image MCP update.
 You can check the bisection progress during/after execution by running
 ``bisecter log`` from the current directory. Before starting a new
 bisection you need to execute ``bisecter reset``.
+
+
+Peer pods
+=========
+
+It's possible to run similar testing on peer-pods using cloud-api-adaptor.
+Our CI configuration to run inside azure's OCP is in ``peer-pods-azure.sh``
+and can be used to replace the `test.sh` step in snippets above.

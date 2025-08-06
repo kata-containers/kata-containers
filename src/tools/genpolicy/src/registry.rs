@@ -7,34 +7,31 @@
 #![allow(non_snake_case)]
 
 use crate::containerd;
+use crate::layers_cache::ImageLayersCache;
 use crate::policy;
 use crate::utils::Config;
-use crate::verity;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
-use fs2::FileExt;
-use log::{debug, info, warn, LevelFilter};
-use oci_distribution::{
+use log::{debug, info, warn};
+use oci_client::{
     client::{linux_amd64_resolver, ClientConfig, ClientProtocol},
     manifest,
     secrets::RegistryAuth,
     Client, Reference,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{
-    collections::BTreeMap, fs::OpenOptions, io, io::BufWriter, io::Read, io::Seek, io::Write,
-    path::Path,
-};
+use std::{collections::BTreeMap, io::Read, io::Write, path::Path};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
 #[derive(Clone, Debug, Default)]
 pub struct Container {
+    #[allow(dead_code)]
     pub image: String,
     pub config_layer: DockerConfigLayer,
-    pub image_layers: Vec<ImageLayer>,
+    pub passwd: String,
+    pub group: String,
 }
 
 /// Image config layer properties.
@@ -68,8 +65,8 @@ pub struct DockerRootfs {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ImageLayer {
     pub diff_id: String,
-    pub verity_hash: String,
     pub passwd: String,
+    pub group: String,
 }
 
 /// See https://docs.docker.com/reference/dockerfile/#volume.
@@ -97,17 +94,35 @@ struct PasswdRecord {
     pub shell: String,
 }
 
+/// A single record in a Unix group file.
+#[derive(Debug)]
+struct GroupRecord {
+    #[allow(dead_code)]
+    pub name: String,
+    #[allow(dead_code)]
+    pub validate: bool,
+    pub gid: u32,
+    pub user_list: Vec<String>,
+}
+
 /// Path to /etc/passwd in a container layer's tar file.
 const PASSWD_FILE_TAR_PATH: &str = "etc/passwd";
+
+/// Path to /etc/group in a container layer's tar file.
+const GROUP_FILE_TAR_PATH: &str = "etc/group";
 
 /// Path to a file indicating a whiteout of the /etc/passwd file in a container
 /// layer's tar file (i.e., /etc/passwd was deleted in the layer).
 const PASSWD_FILE_WHITEOUT_TAR_PATH: &str = "etc/.wh.passwd";
 
+/// Path to a file indicating a whiteout of the /etc/group file in a container
+/// layer's tar file (i.e., /etc/group was deleted in the layer).
+const GROUP_FILE_WHITEOUT_TAR_PATH: &str = "etc/.wh.group";
+
 /// A marker used to track whether a particular container layer has had its
-/// /etc/passwd file deleted, and thus any such files read from previous, lower
+/// /etc/* file deleted, and thus any such files read from previous, lower
 /// layers should be discarded.
-const WHITEOUT_MARKER: &str = "WHITEOUT";
+pub const WHITEOUT_MARKER: &str = "WHITEOUT";
 
 impl Container {
     pub async fn new(config: &Config, image: &str) -> Result<Self> {
@@ -123,42 +138,12 @@ impl Container {
             ..Default::default()
         });
 
-        match client.pull_manifest_and_config(&reference, &auth).await {
-            Ok((manifest, digest_hash, config_layer_str)) => {
-                debug!("digest_hash: {:?}", digest_hash);
-                debug!(
-                    "manifest: {}",
-                    serde_json::to_string_pretty(&manifest).unwrap()
-                );
-
-                // Log the contents of the config layer.
-                if log::max_level() >= LevelFilter::Debug {
-                    let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
-                    let mut serializer = serde_json::Serializer::pretty(io::stderr());
-                    serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
-                }
-
-                let config_layer: DockerConfigLayer =
-                    serde_json::from_str(&config_layer_str).unwrap();
-                debug!("config_layer: {:?}", &config_layer);
-
-                let image_layers = get_image_layers(
-                    config.layers_cache_file_path.clone(),
-                    &mut client,
-                    &reference,
-                    &manifest,
-                    &config_layer,
-                )
-                .await
-                .unwrap();
-
-                Ok(Container {
-                    image: image_string,
-                    config_layer,
-                    image_layers,
-                })
-            }
-            Err(oci_distribution::errors::OciDistributionError::AuthenticationFailure(message)) => {
+        let (manifest, digest_hash, config_layer_str) = match client
+            .pull_manifest_and_config(&reference, &auth)
+            .await
+        {
+            Ok((m, d, c)) => (m, d, c),
+            Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
                 panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
             }
             Err(e) => {
@@ -166,6 +151,167 @@ impl Container {
                     "Failed to pull container image manifest and config - error: {:#?}",
                     &e
                 );
+            }
+        };
+
+        debug!("digest_hash: {:?}", digest_hash);
+        debug!(
+            "manifest: {}",
+            serde_json::to_string_pretty(&manifest).unwrap()
+        );
+        debug!("config_layer string: {config_layer_str}");
+        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
+        debug!("config_layer: {:?}", &config_layer);
+
+        let mut passwd = String::new();
+        let mut group = String::new();
+
+        // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
+        // See issue https://github.com/kata-containers/kata-containers/issues/11162
+        if config.settings.cluster_config.guest_pull {
+            info!("Guest pull is enabled, skipping passwd/group file parsing");
+            return Ok(Container {
+                image: image_string,
+                config_layer,
+                passwd,
+                group,
+            });
+        }
+
+        let image_layers = get_image_layers(
+            &config.layers_cache,
+            &mut client,
+            &reference,
+            &manifest,
+            &config_layer,
+        )
+        .await
+        .unwrap();
+
+        // Find the last layer with an /etc/* file, respecting whiteouts.
+        info!("Parsing users and groups in image layers");
+        for layer in &image_layers {
+            if layer.passwd == WHITEOUT_MARKER {
+                passwd = String::new();
+            } else if !layer.passwd.is_empty() {
+                passwd = layer.passwd.clone();
+            }
+
+            if layer.group == WHITEOUT_MARKER {
+                group = String::new();
+            } else if !layer.group.is_empty() {
+                group = layer.group.clone();
+            }
+        }
+
+        Ok(Container {
+            image: image_string,
+            config_layer,
+            passwd,
+            group,
+        })
+    }
+
+    pub fn get_gid_from_passwd_uid(&self, uid: u32) -> Result<u32> {
+        if self.passwd.is_empty() {
+            return Err(anyhow!(
+                "No /etc/passwd file is available, unable to parse gids from uid"
+            ));
+        }
+        match parse_passwd_file(&self.passwd) {
+            Ok(records) => {
+                if let Some(record) = records.iter().find(|&r| r.uid == uid) {
+                    Ok(record.gid)
+                } else {
+                    Err(anyhow!("Failed to find uid {} in /etc/passwd", uid))
+                }
+            }
+            Err(inner_e) => Err(anyhow!("Failed to parse /etc/passwd - error {inner_e}")),
+        }
+    }
+
+    pub fn get_uid_gid_from_passwd_user(&self, user: String) -> Result<(u32, u32)> {
+        if user.is_empty() {
+            return Err(anyhow!("User is empty"));
+        }
+
+        if self.passwd.is_empty() {
+            return Err(anyhow!(
+                "No /etc/passwd file is available, unable to parse uid/gid from user"
+            ));
+        }
+
+        match parse_passwd_file(&self.passwd) {
+            Ok(records) => {
+                if let Some(record) = records.iter().find(|&r| r.user == user) {
+                    Ok((record.uid, record.gid))
+                } else {
+                    Err(anyhow!("Failed to find user {} in /etc/passwd", user))
+                }
+            }
+            Err(inner_e) => Err(anyhow!("Failed to parse /etc/passwd - error {inner_e}.")),
+        }
+    }
+
+    fn get_user_from_passwd_uid(&self, uid: u32) -> Result<String> {
+        for record in parse_passwd_file(&self.passwd)? {
+            if record.uid == uid {
+                return Ok(record.user);
+            }
+        }
+        Err(anyhow!("No user found with uid {uid}"))
+    }
+
+    pub fn get_additional_groups_from_uid(&self, uid: u32) -> Result<Vec<u32>> {
+        if self.group.is_empty() || self.passwd.is_empty() {
+            return Err(anyhow!(
+                "No /etc/group, /etc/passwd file is available, unable to parse additional group membership from uid"
+            ));
+        }
+
+        let user = self.get_user_from_passwd_uid(uid)?;
+
+        match parse_group_file(&self.group) {
+            Ok(records) => {
+                let mut groups = Vec::new();
+                for record in records.iter() {
+                    record.user_list.iter().for_each(|u| {
+                        if u == &user && &record.name != u {
+                            // The second condition works around containerd bug
+                            // https://github.com/containerd/containerd/issues/11937.
+                            groups.push(record.gid);
+                        }
+                    });
+                }
+                Ok(groups)
+            }
+            Err(inner_e) => Err(anyhow!("Failed to parse /etc/group - error {inner_e}")),
+        }
+    }
+
+    fn parse_user_string(&self, user: &str) -> u32 {
+        if user.is_empty() {
+            return 0;
+        }
+
+        match user.parse::<u32>() {
+            Ok(uid) => uid,
+            // If the user is not a number, interpret it as a user name.
+            Err(outer_e) => {
+                debug!(
+                    "Failed to parse {} as u32, using it as a user name - error {outer_e}",
+                    user
+                );
+                match self.get_uid_gid_from_passwd_user(user.to_string().clone()) {
+                    Ok((uid, _)) => uid,
+                    Err(err) => {
+                        warn!(
+                            "could not resolve named user {}, defaulting to uid 0: {}",
+                            user, err
+                        );
+                        0
+                    }
+                }
             }
         }
     }
@@ -187,7 +333,8 @@ impl Container {
          * 2. Contain only a UID
          * 3. Contain a UID:GID pair, in that format
          * 4. Contain a user name, which we need to translate into a UID/GID pair
-         * 5. Be erroneus, somehow
+         * 5. Contain a (user name:group name) pair, which we need to translate into a UID/GID pair
+         * 6. Be erroneus, somehow
          */
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
@@ -202,62 +349,19 @@ impl Container {
                         );
                     } else {
                         debug!("Parsing uid from user[0] = {}", &user[0]);
-                        match user[0].parse() {
-                            Ok(id) => process.User.UID = id,
-                            Err(e) => {
-                                warn!(
-                                    "Failed to parse {} as u32, using uid = 0 - error {e}",
-                                    &user[0]
-                                );
-                            }
-                        }
+                        process.User.UID = self.parse_user_string(user[0]);
 
-                        debug!("Parsing gid from user[1] = {:?}", user[1]);
-                        match user[1].parse() {
-                            Ok(id) => process.User.GID = id,
-                            Err(e) => {
-                                warn!(
-                                    "Failed to parse {} as u32, using gid = 0 - error {e}",
-                                    &user[0]
-                                );
-                            }
-                        }
+                        debug!(
+                            "Overriding OCI container GID with UID:GID mapping from /etc/passwd"
+                        );
                     }
                 } else {
-                    match image_user.parse::<u32>() {
-                        Ok(uid) => process.User.UID = uid,
-                        Err(outer_e) => {
-                            // Find the last layer with an /etc/passwd file,
-                            // respecting whiteouts.
-                            let mut passwd = "".to_string();
-                            for layer in self.get_image_layers() {
-                                if !layer.passwd.is_empty() {
-                                    passwd = layer.passwd
-                                } else if layer.passwd == WHITEOUT_MARKER {
-                                    passwd = "".to_string();
-                                }
-                            }
+                    debug!("Parsing uid from image_user = {}", image_user);
+                    process.User.UID = self.parse_user_string(image_user);
 
-                            if passwd.is_empty() {
-                                warn!("Failed to parse {} as u32 - error {outer_e} - and no /etc/passwd file is available, using uid = gid = 0", image_user);
-                            } else {
-                                match parse_passwd_file(passwd) {
-                                    Ok(records) => {
-                                        if let Some(record) =
-                                            records.iter().find(|&r| r.user == *image_user)
-                                        {
-                                            process.User.UID = record.uid;
-                                            process.User.GID = record.gid;
-                                        }
-                                    }
-                                    Err(inner_e) => {
-                                        warn!("Failed to parse {} as u32 - error {outer_e} - and failed to parse /etc/passwd - error {inner_e}, using uid = gid = 0", image_user);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    debug!("Using UID:GID mapping from /etc/passwd");
                 }
+                process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
             }
         }
 
@@ -323,14 +427,10 @@ impl Container {
 
         debug!("get_process succeeded.");
     }
-
-    pub fn get_image_layers(&self) -> Vec<ImageLayer> {
-        self.image_layers.clone()
-    }
 }
 
 async fn get_image_layers(
-    layers_cache_file_path: Option<String>,
+    layers_cache: &ImageLayersCache,
     client: &mut Client,
     reference: &Reference,
     manifest: &manifest::OciImageManifest,
@@ -346,19 +446,16 @@ async fn get_image_layers(
             || layer.media_type.eq(manifest::IMAGE_LAYER_GZIP_MEDIA_TYPE)
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
-                let (verity_hash, passwd) = get_verity_and_users(
-                    layers_cache_file_path.clone(),
+                let mut imageLayer = get_users_from_layer(
+                    layers_cache,
                     client,
                     reference,
                     &layer.digest,
                     &config_layer.rootfs.diff_ids[layer_index].clone(),
                 )
                 .await?;
-                layers.push(ImageLayer {
-                    diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash: verity_hash.to_owned(),
-                    passwd: passwd.to_owned(),
-                });
+                imageLayer.diff_id = config_layer.rootfs.diff_ids[layer_index].clone();
+                layers.push(imageLayer);
             } else {
                 return Err(anyhow!("Too many Docker gzip layers"));
             }
@@ -370,13 +467,18 @@ async fn get_image_layers(
     Ok(layers)
 }
 
-async fn get_verity_and_users(
-    layers_cache_file_path: Option<String>,
+async fn get_users_from_layer(
+    layers_cache: &ImageLayersCache,
     client: &mut Client,
     reference: &Reference,
     layer_digest: &str,
     diff_id: &str,
-) -> Result<(String, String)> {
+) -> Result<ImageLayer> {
+    if let Some(layer) = layers_cache.get_layer(diff_id) {
+        info!("Using cache file");
+        return Ok(layer);
+    }
+
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
     // Use file names supported by both Linux and Windows.
@@ -387,138 +489,33 @@ async fn get_verity_and_users(
     let mut compressed_path = decompressed_path.clone();
     compressed_path.set_extension("gz");
 
-    let mut verity_hash = "".to_string();
-    let mut passwd = "".to_string();
-    let mut error_message = "".to_string();
-    let mut error = false;
-
-    // get value from store and return if it exists
-    if let Some(path) = layers_cache_file_path.as_ref() {
-        let res = read_verity_and_users_from_store(path, diff_id)?;
-        verity_hash = res.0;
-        passwd = res.1;
-        info!("Using cache file");
-        info!("dm-verity root hash: {verity_hash}");
-    }
-
-    // create the layer files
-    if verity_hash.is_empty() {
-        if let Err(e) = create_decompressed_layer_file(
-            client,
-            reference,
-            layer_digest,
-            &decompressed_path,
-            &compressed_path,
-        )
-        .await
-        {
-            error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
-            error = true
-        };
-
-        if !error {
-            match get_verity_hash_and_users(&decompressed_path) {
-                Err(e) => {
-                    error_message = format!("Failed to get verity hash {e}");
-                    error = true;
-                }
-                Ok(res) => {
-                    verity_hash = res.0;
-                    passwd = res.1;
-                    if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_and_users_to_store(path, diff_id, &verity_hash, &passwd)?;
-                    }
-                    info!("dm-verity root hash: {verity_hash}");
-                }
-            }
-        }
-    }
-
-    temp_dir.close()?;
-    if error {
-        // remove the cache file if we're using it
-        if let Some(path) = layers_cache_file_path.as_ref() {
-            std::fs::remove_file(path)?;
-        }
-        warn!("{error_message}");
-    }
-    Ok((verity_hash, passwd))
-}
-
-// the store is a json file that matches layer hashes to verity hashes
-pub fn add_verity_and_users_to_store(
-    cache_file: &str,
-    diff_id: &str,
-    verity_hash: &str,
-    passwd: &str,
-) -> Result<()> {
-    // open the json file in read mode, create it if it doesn't exist
-    let read_file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(cache_file)?;
-
-    let mut data: Vec<ImageLayer> = if let Ok(vec) = serde_json::from_reader(read_file) {
-        vec
-    } else {
-        // Delete the malformed file here if it's present
-        Vec::new()
+    if let Err(e) = create_decompressed_layer_file(
+        client,
+        reference,
+        layer_digest,
+        &decompressed_path,
+        &compressed_path,
+    )
+    .await
+    {
+        bail!(format!("Failed to decompress image layer, error {e}"));
     };
 
-    // Add new data to the deserialized JSON
-    data.push(ImageLayer {
-        diff_id: diff_id.to_string(),
-        verity_hash: verity_hash.to_string(),
-        passwd: passwd.to_string(),
-    });
-
-    // Serialize in pretty format
-    let serialized = serde_json::to_string_pretty(&data)?;
-
-    // Open the JSON file to write
-    let file = OpenOptions::new().write(true).open(cache_file)?;
-
-    // try to lock the file, if it fails, get the error
-    let result = file.try_lock_exclusive();
-    if result.is_err() {
-        warn!("Waiting to lock file: {cache_file}");
-        file.lock_exclusive()?;
-    }
-    // Write the serialized JSON to the file
-    let mut writer = BufWriter::new(&file);
-    writeln!(writer, "{}", serialized)?;
-    writer.flush()?;
-    file.unlock()?;
-    Ok(())
-}
-
-// helper function to read the verity hash from the store
-// returns empty string if not found or file does not exist
-pub fn read_verity_and_users_from_store(
-    cache_file: &str,
-    diff_id: &str,
-) -> Result<(String, String)> {
-    match OpenOptions::new().read(true).open(cache_file) {
-        Ok(file) => match serde_json::from_reader(file) {
-            Result::<Vec<ImageLayer>, _>::Ok(layers) => {
-                for layer in layers {
-                    if layer.diff_id == diff_id {
-                        return Ok((layer.verity_hash, layer.passwd));
-                    }
-                }
-            }
-            Err(e) => {
-                warn!("read_verity_and_users_from_store: failed to read cached image layers: {e}");
-            }
-        },
+    match get_users_from_decompressed_layer(&decompressed_path) {
         Err(e) => {
-            info!("read_verity_and_users_from_store: failed to open cache file: {e}");
+            temp_dir.close()?;
+            bail!(format!("Failed to get users from image layer, error {e}"));
+        }
+        Ok((passwd, group)) => {
+            let layer = ImageLayer {
+                diff_id: diff_id.to_string(),
+                passwd,
+                group,
+            };
+            layers_cache.insert_layer(&layer);
+            Ok(layer)
         }
     }
-
-    Ok((String::new(), String::new()))
 }
 
 async fn create_decompressed_layer_file(
@@ -549,54 +546,52 @@ async fn create_decompressed_layer_file(
     let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
     std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
-    info!("Adding tarfs index to layer");
-    decompressed_file.seek(std::io::SeekFrom::Start(0))?;
-    tarindex::append_index(&mut decompressed_file).map_err(|e| anyhow!(e))?;
     decompressed_file.flush().map_err(|e| anyhow!(e))?;
-
     Ok(())
 }
 
-pub fn get_verity_hash_and_users(path: &Path) -> Result<(String, String)> {
-    info!("Calculating dm-verity root hash");
-    let mut file = std::fs::File::open(path)?;
-    let size = file.seek(std::io::SeekFrom::End(0))?;
-    if size < 4096 {
-        return Err(anyhow!("Block device {:?} is too small: {size}", &path));
-    }
-
-    let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
-    let v = verity::Verity::<Sha256>::new(size, 4096, 4096, &salt, 0)?;
-    let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
-    let result = format!("{:x}", hash);
-
-    file.seek(std::io::SeekFrom::Start(0))?;
-
+pub fn get_users_from_decompressed_layer(path: &Path) -> Result<(String, String)> {
+    let file = std::fs::File::open(path)?;
     let mut passwd = String::new();
+    let mut group = String::new();
+    let (mut found_passwd, mut found_group) = (false, false);
     for entry_wrap in tar::Archive::new(file).entries()? {
         let mut entry = entry_wrap?;
         let entry_path = entry.header().path()?;
         let path_str = entry_path.to_str().unwrap();
         if path_str == PASSWD_FILE_TAR_PATH {
             entry.read_to_string(&mut passwd)?;
-            break;
+            found_passwd = true;
+            if found_passwd && found_group {
+                break;
+            }
         } else if path_str == PASSWD_FILE_WHITEOUT_TAR_PATH {
             passwd = WHITEOUT_MARKER.to_owned();
-            break;
+            found_passwd = true;
+            if found_passwd && found_group {
+                break;
+            }
+        } else if path_str == GROUP_FILE_TAR_PATH {
+            entry.read_to_string(&mut group)?;
+            found_group = true;
+            if found_passwd && found_group {
+                break;
+            }
+        } else if path_str == GROUP_FILE_WHITEOUT_TAR_PATH {
+            group = WHITEOUT_MARKER.to_owned();
+            found_group = true;
+            if found_passwd && found_group {
+                break;
+            }
         }
     }
 
-    Ok((result, passwd))
+    Ok((passwd, group))
 }
 
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
     if let Some(socket_path) = &config.containerd_socket_path {
-        return Container::new_containerd_pull(
-            config.layers_cache_file_path.clone(),
-            image,
-            socket_path,
-        )
-        .await;
+        return Container::new_containerd_pull(config, image, socket_path).await;
     }
     Container::new(config, image).await
 }
@@ -642,7 +637,7 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
     RegistryAuth::Anonymous
 }
 
-fn parse_passwd_file(passwd: String) -> Result<Vec<PasswdRecord>> {
+fn parse_passwd_file(passwd: &str) -> Result<Vec<PasswdRecord>> {
     let mut records = Vec::new();
 
     for rec in passwd.lines() {
@@ -664,6 +659,36 @@ fn parse_passwd_file(passwd: String) -> Result<Vec<PasswdRecord>> {
             gecos: fields[4].to_string(),
             home: fields[5].to_string(),
             shell: fields[6].to_string(),
+        });
+    }
+
+    Ok(records)
+}
+
+fn parse_group_file(group: &str) -> Result<Vec<GroupRecord>> {
+    let mut records = Vec::new();
+
+    for rec in group.lines() {
+        let fields: Vec<&str> = rec.split(':').collect();
+
+        let field_count = fields.len();
+        if field_count != 4 {
+            return Err(anyhow!(
+                "Incorrect group record, expected 3 fields, got {}",
+                field_count
+            ));
+        }
+
+        let mut user_list = vec![];
+        if !fields[3].is_empty() {
+            user_list = fields[3].split(',').map(|s| s.to_string()).collect();
+        }
+
+        records.push(GroupRecord {
+            name: fields[0].to_string(),
+            validate: fields[1] == "x",
+            gid: fields[2].parse().unwrap(),
+            user_list,
         });
     }
 

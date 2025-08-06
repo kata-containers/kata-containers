@@ -16,7 +16,7 @@ setup() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    setup_common
+    setup_common || die "setup_common failed"
     AUTHENTICATED_IMAGE="${AUTHENTICATED_IMAGE:-quay.io/kata-containers/confidential-containers-auth:test}"
     AUTHENTICATED_IMAGE_USER=${AUTHENTICATED_IMAGE_USER:-}
     AUTHENTICATED_IMAGE_PASSWORD=${AUTHENTICATED_IMAGE_PASSWORD:-}
@@ -87,7 +87,7 @@ function setup_kbs_credentials() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Not authorized"
 }
 
 @test "Test that creating a container from an authenticated image, with no credentials fails" {
@@ -100,7 +100,7 @@ function setup_kbs_credentials() {
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
     assert_pod_fail "${kata_pod}"
-    assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Not authorized"
 }
 
 teardown() {
@@ -110,6 +110,6 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    teardown_common "${node}" "${node_start_time:-}"
+    confidential_teardown_common "${node}" "${node_start_time:-}"
     kubectl delete secret cococred --ignore-not-found
 }

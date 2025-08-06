@@ -112,19 +112,16 @@ memory_slots = @DEFMEMSLOTS@
 # > amount of physical RAM      --> will be set to the actual amount of physical RAM
 default_maxmemory = @DEFMAXMEMSZ_FC@
 
-# Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
-# or nvdimm.
+# Block device driver to be used by the hypervisor when a container's storage
+# is backed by a block device or a file. This driver facilitates attaching the
+# storage directly to the guest VM.
+#
+# FC only supports virtio-blk-mmio.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
 #block_device_cache_set = true
-
-# Specifies cache-related options for block devices.
-# Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
-# Default false
-#block_device_cache_direct = true
 
 # Specifies cache-related options for block devices.
 # Denotes whether flush requests for the device are ignored.
@@ -285,6 +282,19 @@ dial_timeout = 45
 # Confidential Data Hub API timeout value in seconds
 # (default: 50)
 #cdh_api_timeout = 50
+
+# Create Container Request Timeout
+# This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
+# It's also used to ensure that workloads, especially those involving large image pulls within the guest,
+# have sufficient time to complete.
+#
+# Effective Timeout Determination:
+# The effective timeout for a CreateContainerRequest is determined by taking the minimum of the following two values:
+# - create_container_timeout: The timeout value configured for creating containers (default: 30,000 milliseconds).
+# - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
+# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
+# create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

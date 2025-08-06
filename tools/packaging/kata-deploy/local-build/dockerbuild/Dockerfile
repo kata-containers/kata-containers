@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 # Required for libxml2-dev
@@ -18,6 +18,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
+        docker.io \
         curl \
         make \
         git \
@@ -25,11 +26,7 @@ RUN apt-get update && \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
-    install_oras.sh && \
-    curl -fsSL https://get.docker.com -o get-docker.sh && \
-    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10" && \
-    sed -i 's/\<docker-compose-plugin\>//g' get-docker.sh; fi && \
-    sh get-docker.sh
+    install_oras.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000
@@ -45,10 +42,10 @@ RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 
 RUN if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list && \
     dpkg --add-architecture "s390x" && \
-    echo "deb [arch=s390x] http://ports.ubuntu.com/ focal main multiverse universe" >> /etc/apt/sources.list && \
-    echo "deb [arch=s390x] http://ports.ubuntu.com/ focal-security main multiverse universe" >> /etc/apt/sources.list && \
-    echo "deb [arch=s390x] http://ports.ubuntu.com/ focal-backports main multiverse universe" >> /etc/apt/sources.list && \
-    echo "deb [arch=s390x] http://ports.ubuntu.com/ focal-updates main multiverse universe" >> /etc/apt/sources.list; fi
+    echo "deb [arch=s390x] http://ports.ubuntu.com/ jammy main multiverse universe" >> /etc/apt/sources.list && \
+    echo "deb [arch=s390x] http://ports.ubuntu.com/ jammy-security main multiverse universe" >> /etc/apt/sources.list && \
+    echo "deb [arch=s390x] http://ports.ubuntu.com/ jammy-backports main multiverse universe" >> /etc/apt/sources.list && \
+    echo "deb [arch=s390x] http://ports.ubuntu.com/ jammy-updates main multiverse universe" >> /etc/apt/sources.list; fi
 
 #FIXME: gcc is required as agent is build out of a container build.
 RUN apt-get update && \
@@ -57,6 +54,9 @@ RUN apt-get update && \
     cpio \
     gcc \
     unzip \
+    git \
+    make \
+    wget \
     xz-utils && \
     if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then \
         apt-get install -y --no-install-recommends \

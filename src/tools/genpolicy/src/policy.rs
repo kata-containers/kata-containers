@@ -12,7 +12,6 @@ use crate::mount_and_storage;
 use crate::no_policy;
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::secret;
 use crate::utils;
 use crate::yaml;
@@ -24,16 +23,15 @@ use oci_spec::runtime as oci;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
-use sha2::{Digest, Sha256};
 use std::boxed;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::read_to_string;
 use std::io::Write;
 
 /// Intermediary format of policy data.
 pub struct AgentPolicy {
     /// K8s resources described by the input YAML file.
-    resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
+    pub resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
 
     /// K8s ConfigMap resources described by an additional input YAML file
     /// or by the "main" input YAML file, containing additional pod settings.
@@ -57,6 +55,9 @@ pub struct PolicyData {
 
     /// Settings read from genpolicy-settings.json.
     pub common: CommonData,
+
+    /// Sandbox settings read from genpolicy-settings.json.
+    pub sandbox: SandboxData,
 
     /// Settings read from genpolicy-settings.json, related directly to each
     /// kata agent endpoint, that get added to the output policy.
@@ -147,7 +148,7 @@ pub struct KataUser {
     pub GID: u32,
 
     /// AdditionalGids are additional group ids set for the container's process.
-    pub AdditionalGids: Vec<u32>,
+    pub AdditionalGids: BTreeSet<u32>,
 
     /// Username is the user name.
     pub Username: String,
@@ -177,14 +178,20 @@ pub struct KataLinux {
     pub Namespaces: Vec<KataLinuxNamespace>,
 
     /// MaskedPaths masks over the provided paths inside the container.
+    #[serde(default)]
     pub MaskedPaths: Vec<String>,
 
     /// ReadonlyPaths sets the provided paths as RO inside the container.
+    #[serde(default)]
     pub ReadonlyPaths: Vec<String>,
 
     /// Devices contains devices to be created inside the container.
     #[serde(default)]
     pub Devices: Vec<KataLinuxDevice>,
+
+    /// Sysctls contains sysctls to be applied inside the container.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub Sysctl: BTreeMap<String, String>,
 }
 
 /// OCI container LinuxNamespace struct. This struct is similar to the LinuxNamespace
@@ -325,6 +332,29 @@ pub struct ExecProcessRequestDefaults {
     regex: Vec<String>,
 }
 
+/// UpdateRoutesRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateRoutesRequestDefaults {
+    /// Forbid adding routes to devices of these names.
+    forbidden_device_names: Vec<String>,
+
+    /// Forbid adding routes originating from these addresses.
+    forbidden_source_regex: Vec<String>,
+}
+
+/// UpdateInterfaceRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UpdateInterfaceRequestDefaults {
+    /// Raw flag bitmask explicitly allowed to configure
+    allow_raw_flags: u32,
+
+    /// Explicitly blocked interface names. Intent is to block changes to loopback interface.
+    forbidden_names: Vec<String>,
+
+    /// Explicitly blocked mac addresses. Intent is to block changes to loopback interface.
+    forbidden_hw_addrs: Vec<String>,
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -337,6 +367,12 @@ pub struct RequestDefaults {
 
     /// Commands allowed to be executed by the Host in all Guest containers.
     pub ExecProcessRequest: ExecProcessRequestDefaults,
+
+    /// Allow the host to update routes for devices other than the loopback.
+    pub UpdateRoutesRequest: UpdateRoutesRequestDefaults,
+
+    /// Allow the host to configure only used raw_flags and reject names/mac addresses of the loopback.
+    pub UpdateInterfaceRequest: UpdateInterfaceRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,
@@ -357,8 +393,8 @@ pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
     pub cpath: String,
 
-    /// Path to the shared container files for mount sources - e.g., "/run/kata-containers/shared/containers".
-    pub mount_source_cpath: String,
+    /// Path to the container root - e.g., "/run/kata-containers/$(bundle-id)/rootfs".
+    pub root_path: String,
 
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
@@ -369,8 +405,8 @@ pub struct CommonData {
     /// Regex for an IP port number.
     pub ip_p: String,
 
-    /// Regex for a K8s service name.
-    pub svc_name: String,
+    /// Regex for a K8s service name (RFC 1035), after downward API transformation.
+    pub svc_name_downward_env: String,
 
     // Regex for a DNS label (e.g., host name).
     pub dns_label: String,
@@ -385,10 +421,24 @@ pub struct CommonData {
 /// Configuration from "kubectl config".
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
-    default_namespace: String,
-
     /// Pause container image reference.
     pub pause_container_image: String,
+    /// Whether or not the cluster uses the guest pull mechanism
+    /// In guest pull, host can't look into layers to determine GID.
+    /// See issue https://github.com/kata-containers/kata-containers/issues/11162
+    pub guest_pull: bool,
+}
+
+/// Struct used to read data from the settings file and copy that data into the policy.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SandboxData {
+    /// Expected value of the CreateSandboxRequest storages field.
+    pub storages: Vec<agent::Storage>,
+}
+
+enum K8sEnvFromSource {
+    ConfigMap(config_map::ConfigMap),
+    Secret(secret::Secret),
 }
 
 impl AgentPolicy {
@@ -441,9 +491,18 @@ impl AgentPolicy {
             }
         }
 
-        if let Some(config_map_files) = &config.config_map_files {
-            for file in config_map_files {
-                config_maps.push(config_map::ConfigMap::new(file)?);
+        if let Some(config_files) = &config.config_files {
+            for resource_file in config_files {
+                for config_resource in parse_config_file(resource_file.to_string(), config).await? {
+                    match config_resource {
+                        K8sEnvFromSource::ConfigMap(config_map) => {
+                            config_maps.push(config_map);
+                        }
+                        K8sEnvFromSource::Secret(secret) => {
+                            secrets.push(secret);
+                        }
+                    }
+                }
             }
         }
 
@@ -498,6 +557,7 @@ impl AgentPolicy {
             containers: policy_containers,
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
+            sandbox: self.config.settings.sandbox.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -521,15 +581,7 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = match resource.get_namespace() {
-            Some(ns) if !ns.is_empty() => ns,
-            _ => self
-                .config
-                .settings
-                .cluster_config
-                .default_namespace
-                .clone(),
-        };
+        let namespace = resource.get_namespace().unwrap_or_default();
 
         let use_host_network = resource.use_host_network();
         let annotations = get_container_annotations(
@@ -559,9 +611,7 @@ impl AgentPolicy {
             is_pause_container,
         );
 
-        let image_layers = yaml_container.registry.get_image_layers();
         let mut storages = Default::default();
-        get_image_layer_storages(&mut storages, &image_layers, &root);
         resource.get_container_mounts_and_storages(
             &mut mounts,
             &mut storages,
@@ -603,6 +653,11 @@ impl AgentPolicy {
         }
         for default_device in &c_settings.Linux.Devices {
             linux.Devices.push(default_device.clone())
+        }
+
+        linux.Sysctl.extend(c_settings.Linux.Sysctl.clone());
+        for sysctl in resource.get_sysctls() {
+            linux.Sysctl.insert(sysctl.name, sysctl.value);
         }
 
         ContainerPolicy {
@@ -672,8 +727,25 @@ impl AgentPolicy {
         substitute_args_env_variables(&mut process.Args, &process.Env);
 
         c_settings.get_process_fields(&mut process);
-        resource.get_process_fields(&mut process);
+        let mut must_check_passwd = false;
+        resource.get_process_fields(&mut process, &mut must_check_passwd);
+
+        // The actual GID of the process run by the CRI
+        // Depends on the contents of /etc/passwd in the container
+        if must_check_passwd {
+            process.User.GID = yaml_container
+                .registry
+                .get_gid_from_passwd_uid(process.User.UID)
+                .unwrap_or(0);
+        }
         yaml_container.get_process_fields(&mut process);
+
+        // The last step containerd always does is add the User.GID to AdditionalGids
+        // The sandbox path does not respect the securityContext fsGroup/supplementalGroups
+        if is_pause_container {
+            process.User.AdditionalGids.clear();
+        }
+        process.User.AdditionalGids.insert(process.User.GID);
 
         process
     }
@@ -694,7 +766,7 @@ impl KataSpec {
             process.User.GID = self.Process.User.GID;
         }
 
-        process.User.AdditionalGids = self.Process.User.AdditionalGids.to_vec();
+        process.User.AdditionalGids = self.Process.User.AdditionalGids.clone();
         process.User.Username = String::from(&self.Process.User.Username);
         add_missing_strings(&self.Process.Args, &mut process.Args);
 
@@ -702,76 +774,35 @@ impl KataSpec {
     }
 }
 
-fn get_image_layer_storages(
-    storages: &mut Vec<agent::Storage>,
-    image_layers: &Vec<registry::ImageLayer>,
-    root: &KataRoot,
-) {
-    let mut new_storages: Vec<agent::Storage> = Vec::new();
-    let mut layer_names: Vec<String> = Vec::new();
-    let mut layer_hashes: Vec<String> = Vec::new();
-    let mut previous_chain_id = String::new();
-    let layers_count = image_layers.len();
-    let mut layer_index = layers_count;
+async fn parse_config_file(
+    yaml_file: String,
+    config: &utils::Config,
+) -> Result<Vec<K8sEnvFromSource>> {
+    let mut k8sRes = Vec::new();
+    let yaml_contents = yaml::get_input_yaml(&Some(yaml_file))?;
+    for document in serde_yaml::Deserializer::from_str(&yaml_contents) {
+        let doc_mapping = Value::deserialize(document)?;
+        if doc_mapping != Value::Null {
+            let yaml_string = serde_yaml::to_string(&doc_mapping)?;
+            let silent = config.silent_unsupported_fields;
+            let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
 
-    for layer in image_layers {
-        // See https://github.com/opencontainers/image-spec/blob/main/config.md#layer-chainid
-        let chain_id = if previous_chain_id.is_empty() {
-            layer.diff_id.clone()
-        } else {
-            let mut hasher = Sha256::new();
-            hasher.update(format!("{previous_chain_id} {}", &layer.diff_id));
-            format!("sha256:{:x}", hasher.finalize())
-        };
-        debug!(
-            "previous_chain_id = {}, chain_id = {}",
-            &previous_chain_id, &chain_id
-        );
-        previous_chain_id.clone_from(&chain_id);
+            resource.init(config, &doc_mapping, silent).await;
 
-        layer_names.push(name_to_hash(&chain_id));
-        layer_hashes.push(layer.verity_hash.to_string());
-        layer_index -= 1;
-
-        new_storages.push(agent::Storage {
-            driver: "blk".to_string(),
-            driver_options: Vec::new(),
-            source: String::new(), // TODO
-            fstype: "tar".to_string(),
-            options: vec![format!("$(hash{layer_index})")],
-            mount_point: format!("$(layer{layer_index})"),
-            fs_group: protobuf::MessageField::none(),
-            special_fields: ::protobuf::SpecialFields::new(),
-        });
+            // ConfigMap and Secret documents contain additional input for policy generation.
+            if kind.eq("ConfigMap") {
+                let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
+                debug!("{:#?}", &config_map);
+                k8sRes.push(K8sEnvFromSource::ConfigMap(config_map));
+            } else if kind.eq("Secret") {
+                let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
+                debug!("{:#?}", &secret);
+                k8sRes.push(K8sEnvFromSource::Secret(secret));
+            }
+        }
     }
 
-    new_storages.reverse();
-    for storage in new_storages {
-        storages.push(storage);
-    }
-
-    layer_names.reverse();
-    layer_hashes.reverse();
-
-    let overlay_storage = agent::Storage {
-        driver: "overlayfs".to_string(),
-        driver_options: Vec::new(),
-        source: String::new(), // TODO
-        fstype: "fuse3.kata-overlay".to_string(),
-        options: vec![layer_names.join(":"), layer_hashes.join(":")],
-        mount_point: root.Path.clone(),
-        fs_group: protobuf::MessageField::none(),
-        special_fields: ::protobuf::SpecialFields::new(),
-    };
-
-    storages.push(overlay_storage);
-}
-
-/// Converts the given name to a string representation of its sha256 hash.
-fn name_to_hash(name: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(name);
-    format!("{:x}", hasher.finalize())
+    Ok(k8sRes)
 }
 
 fn substitute_env_variables(env: &mut Vec<String>) {

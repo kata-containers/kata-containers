@@ -9,7 +9,10 @@ package virtcontainers
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -394,6 +397,23 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	return sockets, nil
 }
 
+func (q *qemu) buildInitdataDevice(devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
+	device := govmmQemu.BlockDevice{
+		Driver:    govmmQemu.VirtioBlock,
+		Transport: govmmQemu.TransportPCI,
+		ID:        "initdata",
+		File:      InitdataImage,
+		SCSI:      false,
+		WCE:       false,
+		AIO:       govmmQemu.Threads,
+		Interface: "none",
+		Format:    "raw",
+	}
+
+	devices = append(devices, device)
+	return devices
+}
+
 func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, *govmmQemu.Kernel, error) {
 	var devices []govmmQemu.Device
 
@@ -540,6 +560,94 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 	}, nil
 }
 
+// prepareInitdataImage will create an image with a very simple layout
+//
+// There will be multiple sectors. The first 8 bytes are Magic number "initdata".
+// Then a "length" field of 8 bytes follows (unsigned int64).
+// Finally the gzipped initdata toml. The image will be padded to an
+// integer multiple of the sector size for alignment.
+//
+// offset 0                                8                    16
+// 0	  'i' 'n' 'i' 't' 'd' 'a' 't' 'a'  | gzip length in le  |
+// 16	  gzip(initdata toml) ...
+// (end of the last sector)  '\0' paddings
+func prepareInitdataImage(initdata string, imagePath string) error {
+	SectorSize := 512
+	var buf bytes.Buffer
+	gzipper := gzip.NewWriter(&buf)
+	defer gzipper.Close()
+
+	gzipper.Write([]byte(initdata))
+	err := gzipper.Close()
+	if err != nil {
+		return fmt.Errorf("failed to compress initdata: %v", err)
+	}
+
+	compressedInitdata := buf.Bytes()
+
+	compressedInitdataLength := len(compressedInitdata)
+	lengthBuffer := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lengthBuffer, uint64(compressedInitdataLength))
+
+	paddingLength := (compressedInitdataLength+16+SectorSize-1)/SectorSize*SectorSize - (compressedInitdataLength + 16)
+	paddingBuffer := make([]byte, paddingLength)
+
+	file, err := os.OpenFile(imagePath, os.O_CREATE|os.O_RDWR, 0640)
+	if err != nil {
+		return fmt.Errorf("failed to create initdata image: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.Write([]byte("initdata"))
+	if err != nil {
+		return fmt.Errorf("failed to write magic number to initdata image: %v", err)
+	}
+
+	_, err = file.Write(lengthBuffer)
+	if err != nil {
+		return fmt.Errorf("failed to write data length to initdata image: %v", err)
+	}
+
+	_, err = file.Write([]byte(compressedInitdata))
+	if err != nil {
+		return fmt.Errorf("failed to write compressed initdata to initdata image: %v", err)
+	}
+
+	_, err = file.Write(paddingBuffer)
+	if err != nil {
+		return fmt.Errorf("failed to write compressed initdata to initdata image: %v", err)
+	}
+
+	return nil
+}
+
+func (q *qemu) prepareInitdataMount(config *HypervisorConfig) error {
+	if len(config.Initdata) == 0 {
+		q.Logger().Info("No initdata provided. Skip prepare initdata device")
+		return nil
+	}
+
+	q.Logger().Info("Start to prepare initdata")
+	initdataWorkdir := filepath.Join("/run/kata-containers/shared/initdata", q.id)
+	initdataImagePath := filepath.Join(initdataWorkdir, "data.img")
+
+	err := os.MkdirAll(initdataWorkdir, 0755)
+	if err != nil {
+		q.Logger().WithField("initdata", "create initdata image path").WithError(err)
+		return err
+	}
+
+	err = prepareInitdataImage(config.Initdata, initdataImagePath)
+	if err != nil {
+		q.Logger().WithField("initdata", "prepare initdata image").WithError(err)
+		return err
+	}
+
+	config.InitdataImage = initdataImagePath
+
+	return nil
+}
+
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
 func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
@@ -549,6 +657,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	defer span.End()
 
 	if err := q.setup(ctx, id, hypervisorConfig); err != nil {
+		return err
+	}
+
+	if err := q.prepareInitdataMount(hypervisorConfig); err != nil {
 		return err
 	}
 
@@ -650,6 +762,10 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	if len(hypervisorConfig.Initdata) > 0 {
+		devices = q.buildInitdataDevice(devices, hypervisorConfig.InitdataImage)
+	}
+
 	// some devices configuration may also change kernel params, make sure this is called afterwards
 	kernel.Params = q.kernelParameters()
 	q.checkBpfEnabled()
@@ -681,7 +797,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Debug:          hypervisorConfig.Debug,
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath, hypervisorConfig.InitdataDigest)
 	if err != nil {
 		return err
 	}
@@ -690,8 +806,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
 	// Add RNG device to hypervisor
-	// Skip for s390x as CPACF is used
-	if machine.Type != QemuCCWVirtio {
+	// Skip for s390x (as CPACF is used) or when Confidential Guest is enabled
+	if machine.Type != QemuCCWVirtio && !q.config.ConfidentialGuest {
 		rngDev := config.RNGDev{
 			ID:       rngID,
 			Filename: q.config.EntropySource,
@@ -792,11 +908,25 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			return fmt.Errorf("Cannot get host path for device: %v err: %v", dev, err)
 		}
 
-		devicesPerIOMMUGroup, err := drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
-		if err != nil {
-			return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
+		var vfioDevices []*config.VFIODev
+		// This works for IOMMUFD enabled kernels > 6.x
+		// In the case of IOMMUFD the device.HostPath will look like
+		// /dev/vfio/devices/vfio0
+		// (1) Check if we have the new IOMMUFD or old container based VFIO
+		if strings.HasPrefix(dev.HostPath, drivers.IommufdDevPath) {
+			q.Logger().Infof("### IOMMUFD Path: %s", dev.HostPath)
+			vfioDevices, err = drivers.GetDeviceFromVFIODev(dev)
+			if err != nil {
+				return fmt.Errorf("Cannot get VFIO device from IOMMUFD with device: %v err: %v", dev, err)
+			}
+		} else {
+			vfioDevices, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+			if err != nil {
+				return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
+			}
 		}
-		for _, vfioDevice := range devicesPerIOMMUGroup {
+
+		for _, vfioDevice := range vfioDevices {
 			if drivers.IsPCIeDevice(vfioDevice.BDF) {
 				numOfPluggablePorts = numOfPluggablePorts + 1
 			}
@@ -1226,17 +1356,18 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		return errors.New("cannot determine QEMU PID")
 	}
 	pid := pids[0]
-
-	if waitOnly {
-		err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
-		if err != nil {
-			return err
-		}
-	} else {
-		err = syscall.Kill(pid, syscall.SIGKILL)
-		if err != nil {
-			q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
-			return err
+	if pid > 0 {
+		if waitOnly {
+			err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
+			if err != nil {
+				return err
+			}
+		} else {
+			err = syscall.Kill(pid, syscall.SIGKILL)
+			if err != nil {
+				q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
+				return err
+			}
 		}
 	}
 
@@ -1302,6 +1433,15 @@ func (q *qemu) cleanupVM() error {
 				"user": q.config.User,
 				"uid":  q.config.Uid,
 			}).Debug("successfully removed the non root user")
+	}
+
+	// If we have initdata, we should drop initdata image path
+	hypervisorConfig := q.HypervisorConfig()
+	if len(hypervisorConfig.Initdata) > 0 {
+		initdataWorkdir := filepath.Join(string(filepath.Separator), "/run/kata-containers/shared/initdata", q.id)
+		if err := os.RemoveAll(initdataWorkdir); err != nil {
+			q.Logger().WithError(err).Warnf("failed to remove initdata work dir %s", initdataWorkdir)
+		}
 	}
 
 	return nil
@@ -1928,16 +2068,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			}
 		}()
 
-		bridgeSlot, err := types.PciSlotFromInt(bridge.Addr)
-		if err != nil {
-			return err
-		}
-		devSlot, err := types.PciSlotFromString(addr)
-		if err != nil {
-			return err
-		}
-		pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
-		endpoint.SetPciPath(pciPath)
+		q.arch.setEndpointDevicePath(endpoint, bridge.Addr, addr)
 
 		var machine govmmQemu.Machine
 		machine, err = q.getQemuMachine()
@@ -1945,7 +2076,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			return err
 		}
 		if machine.Type == QemuCCWVirtio {
-			devNoHotplug := fmt.Sprintf("fe.%x.%x", bridge.Addr, addr)
+			devNoHotplug := fmt.Sprintf("fe.%x.%v", bridge.Addr, addr)
 			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs()))
 		}
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)

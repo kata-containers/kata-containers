@@ -7,19 +7,17 @@ license = "Apache-2.0"
 
 [features]
 default = []
-with-serde = [ "serde", "serde_json" ]
+with-serde = []
 async = ["ttrpc/async", "async-trait"]
 
 [dependencies]
-ttrpc = "0.8"
+ttrpc = "0.8.4"
 async-trait = { version = "0.1.42", optional = true }
-protobuf = { version = "3.2.0" }
-serde = { version = "1.0.130", features = ["derive"], optional = true }
-serde_json = { version = "1.0.68", optional = true }
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-
-kata-sys-util = { path = "../kata-sys-util" }
+protobuf = { version = "3.7.2" }
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0.68"
+oci-spec = { version = "0.8.1", features = ["runtime"] }
 
 [build-dependencies]
-ttrpc-codegen = "0.4.2"
-protobuf = { version = "3.2.0" }
+ttrpc-codegen = "0.6.0"
+protobuf = { version = "3.7.2" }

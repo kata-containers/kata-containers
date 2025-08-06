@@ -116,6 +116,9 @@ type qemuArch interface {
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
 
+	// setEndpointDevicePath sets the appropriate PCI or CCW device path for an endpoint
+	setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error
+
 	// addDeviceToBridge adds devices to the bus
 	addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error)
 
@@ -162,7 +165,7 @@ type qemuArch interface {
 	// This implementation is architecture specific, some archs may need
 	// a firmware, returns a string containing the path to the firmware that should
 	// be used with the -bios option, ommit -bios option if the path is empty.
-	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error)
+	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, initdataDigest []byte) ([]govmmQemu.Device, string, error)
 
 	// scans the PCIe space and returns the biggest BAR sizes for 32-bit
 	// and 64-bit addressable memory
@@ -218,7 +221,7 @@ const (
 	// QemuMicrovm is the QEMU microvm machine type for amd64
 	QemuMicrovm = "microvm"
 
-	// QemuVirt is the QEMU virt machine type for aarch64 or amd64
+	// QemuVirt is the QEMU virt machine type for aarch64 or arm
 	QemuVirt = "virt"
 
 	// QemuPseries is a QEMU virt machine type for ppc64le
@@ -708,10 +711,13 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
+			ID:       vfioDev.ID,
 			BDF:      vfioDev.BDF,
 			VendorID: vfioDev.VendorID,
 			DeviceID: vfioDev.DeviceID,
 			Bus:      vfioDev.Bus,
+			SysfsDev: vfioDev.SysfsDev,
+			DevfsDev: vfioDev.DevfsDev,
 		},
 	)
 
@@ -727,6 +733,23 @@ func (q *qemuArchBase) appendRNGDevice(_ context.Context, devices []govmmQemu.De
 	)
 
 	return devices, nil
+}
+
+func (q *qemuArchBase) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error {
+	bridgeSlot, err := types.PciSlotFromInt(bridgeAddr)
+	if err != nil {
+		return err
+	}
+	devSlot, err := types.PciSlotFromString(devAddr)
+	if err != nil {
+		return err
+	}
+	pciPath, err := types.PciPathFromSlots(bridgeSlot, devSlot)
+	if err != nil {
+		return err
+	}
+	endpoint.SetPciPath(pciPath)
+	return nil
 }
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {
@@ -897,7 +920,7 @@ func (q *qemuArchBase) setPFlash(p []string) {
 }
 
 // append protection device
-func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
+func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, initdataDigest []byte) ([]govmmQemu.Device, string, error) {
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
 	return devices, firmware, nil
 }

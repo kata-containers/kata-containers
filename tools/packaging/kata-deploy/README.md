@@ -77,6 +77,13 @@ $ sudo k0s kubectl apply -k kata-deploy/overlays/k0s
 $ sudo k0s kubectl apply -f kata-deploy/base/kata-deploy.yaml
 ```
 
+#### Microk8s Kubernetes cluster
+
+```bash
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -k https://github.com/kata-containers/kata-containers//tools/packaging/kata-deploy/kata-deploy/overlays/microk8s
+```
+
 #### Vanilla Kubernetes cluster
 
 ```bash
@@ -95,10 +102,8 @@ Workloads specify the runtime they'd like to utilize by setting the appropriate 
 the `Pod` specification. The `runtimeClass` examples provided define a node selector to match node label `katacontainers.io/kata-runtime:"true"`,
 which will ensure the workload is only scheduled on a node that has Kata Containers installed
 
-`runtimeClass` is a built-in type in Kubernetes. To apply each Kata Containers `runtimeClass`:
-```bash
-$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-```
+`runtimeClass` is a built-in type in Kubernetes, and are created by kata-deploy during the deployment.
+
 The following YAML snippet shows how to specify a workload should use Kata with `Dragonball`:
 
 ```yaml

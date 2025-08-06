@@ -14,7 +14,7 @@ setup() {
 	agnhost_name="${container_images_agnhost_name}"
 	agnhost_version="${container_images_agnhost_version}"
 
-	setup_common
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 }
 

@@ -19,4 +19,4 @@ supported_artifacts=(
   "install_qemu"
 )
 
-for c in ${supported_artifacts[@]}; do echo $c; done
+for c in "${supported_artifacts[@]}"; do echo $c; done

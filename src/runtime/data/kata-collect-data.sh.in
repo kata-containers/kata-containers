@@ -5,18 +5,22 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# kata-deploy installs binaries in /opt/kata/bin by default, which is not in the PATH.
+# We need to add it to PATH to ensure commands like kata-monitor and kata-runtime.
+SCRIPT_DIR="$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")"
+
 typeset -r script_name=${0##*/}
 typeset -r runtime_name="@RUNTIME_NAME@"
-typeset -r runtime_path=$(command -v "$runtime_name" 2>/dev/null)
+typeset -r runtime_path=$(PATH="$SCRIPT_DIR:$PATH" command -v "$runtime_name" 2>/dev/null)
 typeset -r runtime_snap_name="kata-containers.runtime"
 typeset -r runtime_snap_path=$(command -v "$runtime_snap_name" 2>/dev/null)
 typeset -r runtime=${runtime_path:-"$runtime_snap_path"}
 
 typeset -r containerd_shim_v2_name="containerd-shim-kata-v2"
-typeset -r containerd_shim_v2=$(command -v "$containerd_shim_v2_name" 2>/dev/null)
+typeset -r containerd_shim_v2=$(PATH="$SCRIPT_DIR:$PATH" command -v "$containerd_shim_v2_name" 2>/dev/null)
 
 typeset -r kata_monitor_name="kata-monitor"
-typeset -r kata_monitor=$(command -v "$kata_monitor_name" 2>/dev/null)
+typeset -r kata_monitor=$(PATH="$SCRIPT_DIR:$PATH" command -v "$kata_monitor_name" 2>/dev/null)
 
 typeset -r issue_url="@PROJECT_BUG_URL@"
 typeset -r script_version="@VERSION@ (commit @COMMIT@)"
@@ -277,8 +281,8 @@ find_system_journal_problems()
 
 	local problems=$(journalctl -q -o cat -a "$selector" "$program" |\
 		grep "time=" |\
-		egrep -i "$problem_pattern" |\
-		egrep -iv "$problem_exclude_pattern" |\
+		grep -i -E "$problem_pattern" |\
+		grep -iv -E "$problem_exclude_pattern" |\
 		tail -n ${PROBLEM_LIMIT})
 
 	if [ -n "$problems" ]; then
@@ -370,11 +374,11 @@ show_package_versions()
 	pattern+=")"
 
 	if have_cmd "dpkg"; then
-		run_cmd_and_show_quoted_output "" "dpkg -l|egrep \"$pattern\""
+		run_cmd_and_show_quoted_output "" "dpkg -l|grep -E \"$pattern\""
 	fi
 
 	if have_cmd "rpm"; then
-		run_cmd_and_show_quoted_output "" "rpm -qa|egrep \"$pattern\""
+		run_cmd_and_show_quoted_output "" "rpm -qa|grep -E \"$pattern\""
 	fi
 
 	separator
@@ -523,7 +527,7 @@ show_containerd_shimv2()
 {
 	start_section "Containerd shim v2"
 
-	local cmd="${containerd_shim_v2_name} --version"
+	local cmd="${containerd_shim_v2} --version"
 
 	msg "Containerd shim v2 is \`$containerd_shim_v2\`."
 
@@ -633,7 +637,7 @@ get_image_file()
 
 	local image=$(eval "$cmdline" 2>/dev/null |\
 		grep -A 1 '^\[Image\]' |\
-		egrep "\<Path\> =" |\
+		grep -E "\<Path\> =" |\
 		awk '{print $3}' |\
 		tr -d '"')
 
@@ -648,7 +652,7 @@ get_initrd_file()
 
 	local initrd=$(eval "$cmdline" 2>/dev/null |\
 		grep -A 1 '^\[Initrd\]' |\
-		egrep "\<Path\> =" |\
+		grep -E "\<Path\> =" |\
 		awk '{print $3}' |\
 		tr -d '"')
 
@@ -742,7 +746,7 @@ show_throttler_details()
 
 	throttlers=$(find /usr/libexec /usr/lib* -type f |\
 		grep -v trigger |\
-		egrep "(cc|kata)-ksm-throttler" |\
+		grep -E "(cc|kata)-ksm-throttler" |\
 		sort -u)
 
 	echo "$throttlers" | while read throttler
@@ -777,7 +781,7 @@ show_kata_monitor_version()
 {
 	start_section "Kata Monitor"
 
-	local cmd="${kata_monitor_name} --version"
+	local cmd="${kata_monitor} --version"
 
 	msg "Kata Monitor \`$kata_monitor_name\`."
 

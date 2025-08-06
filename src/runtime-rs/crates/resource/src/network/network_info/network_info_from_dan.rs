@@ -7,7 +7,7 @@
 use agent::{ARPNeighbor, IPAddress, Interface, Route};
 use anyhow::Result;
 use async_trait::async_trait;
-use netlink_packet_route::IFF_NOARP;
+use netlink_packet_route::link::LinkFlags;
 
 use super::NetworkInfo;
 use crate::network::dan::DanDevice;
@@ -53,9 +53,9 @@ impl NetworkInfoFromDan {
             ip_addresses,
             mtu: dan_device.network_info.interface.mtu,
             hw_addr: dan_device.guest_mac.clone(),
-            pci_addr: String::default(),
+            device_path: String::default(),
             field_type: dan_device.network_info.interface.ntype.clone(),
-            raw_flags: dan_device.network_info.interface.flags & IFF_NOARP,
+            raw_flags: dan_device.network_info.interface.flags & LinkFlags::Noarp.bits(),
         };
 
         let routes = dan_device
@@ -74,6 +74,8 @@ impl NetworkInfoFromDan {
                     source: route.source.clone(),
                     scope: route.scope,
                     family,
+                    flags: route.flags,
+                    mtu: route.mtu,
                 })
             })
             .collect();
@@ -159,6 +161,8 @@ mod tests {
                     source: "172.18.0.1".to_owned(),
                     gateway: "172.18.31.1".to_owned(),
                     scope: 0,
+                    flags: 0,
+                    mtu: 1450,
                 }],
                 neighbors: vec![DanARPNeighbor {
                     ip_address: Some("192.168.0.3/16".to_owned()),
@@ -181,7 +185,7 @@ mod tests {
             }],
             mtu: 1500,
             hw_addr: "xx:xx:xx:xx:xx".to_owned(),
-            pci_addr: String::default(),
+            device_path: String::default(),
             field_type: "tuntap".to_owned(),
             raw_flags: 0,
         };
@@ -194,6 +198,8 @@ mod tests {
             source: "172.18.0.1".to_owned(),
             scope: 0,
             family: IPFamily::V4,
+            flags: 0,
+            mtu: 1450,
         }];
         assert_eq!(routes, network_info.routes().await.unwrap());
 

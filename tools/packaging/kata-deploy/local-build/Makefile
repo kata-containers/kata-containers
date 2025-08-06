@@ -29,14 +29,15 @@ BASE_TARBALLS = serial-targets \
 	ovmf-sev-tarball \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
+	qemu-tdx-experimental-tarball \
 	qemu-tarball \
 	stratovirt-tarball \
 	shim-v2-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
+	rootfs-image-mariner-tarball \
 	rootfs-initrd-confidential-tarball \
-	rootfs-initrd-mariner-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball \
 	cloud-hypervisor-glibc-tarball
@@ -54,10 +55,18 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
+define DUMMY
+	$(call BUILD,"dummy")
+	mv $(MK_DIR)/build/kata-static-dummy.tar.xz $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.xz
+endef
+
 kata-tarball: | all-parallel merge-builds
 
 copy-scripts-for-the-agent-build:
-	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh
+	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "agent"
+
+copy-scripts-for-the-tools-build:
+	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "tools"
 
 all-parallel:
 	${MAKE} -f $(MK_PATH) all -j $(shell nproc) V=
@@ -74,11 +83,12 @@ serial-targets:
 agent-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
-agent-ctl-tarball:
+agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
+BUSYBOX_CONF_FILE ?= busybox.nvidia.conf
 busybox-tarball: 
-	${MAKE} $@-build
+	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
 	
 coco-guest-components-tarball:
 	${MAKE} $@-build
@@ -89,16 +99,19 @@ cloud-hypervisor-tarball:
 cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
+csi-kata-directvolume-tarball: copy-scripts-for-the-tools-build
+	${MAKE} $@-build
+
 firecracker-tarball:
 	${MAKE} $@-build
 
-genpolicy-tarball:
+genpolicy-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 pause-image-tarball:
 	${MAKE} $@-build
 
-kata-ctl-tarball:
+kata-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 kata-manager-tarball:
@@ -134,6 +147,9 @@ ovmf-tarball:
 qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
+qemu-tdx-experimental-tarball:
+	${MAKE} $@-build
+
 qemu-tarball:
 	${MAKE} $@-build
 
@@ -149,7 +165,7 @@ rootfs-image-tarball: agent-tarball
 rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-mariner-tarball: agent-tarball
+rootfs-image-mariner-tarball: agent-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
@@ -158,13 +174,24 @@ rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest
 rootfs-initrd-tarball: agent-tarball
 	${MAKE} $@-build
 
-runk-tarball:
+runk-tarball: copy-scripts-for-the-tools-build
+	${MAKE} $@-build
+rootfs-image-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
 	${MAKE} $@-build
 
 shim-v2-tarball:
 	${MAKE} $@-build
 
-trace-forwarder-tarball:
+trace-forwarder-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 virtiofsd-tarball:

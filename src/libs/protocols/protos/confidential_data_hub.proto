@@ -28,10 +28,43 @@ message SecureMountResponse {
     string mount_path = 1;
 }
 
+message ImagePullRequest {
+    // - `image_url`: The reference of the image to pull
+    string image_url = 1;
+
+    // - `bundle_path`: The path to store the OCI bundle. This path
+    // should be created by client, and initially empty. After the RPC is
+    // called, a mounted `rootfs` directory under the this path. Note
+    // that this path is CDH's root filesystem, not the caller's root filesystem.
+    // However, usually the caller (kata-agent) and the server (CDH) runs on the same
+    // root, so it's safe to use an absolute path of kata-agent.
+    string bundle_path = 2;
+}
+
+message ImagePullResponse {}
+
 service SealedSecretService {
     rpc UnsealSecret(UnsealSecretInput) returns (UnsealSecretOutput) {};
 }
 
 service SecureMountService {
     rpc SecureMount(SecureMountRequest) returns (SecureMountResponse) {};
+}
+
+message GetResourceRequest {
+    string ResourcePath = 1;
+}
+
+message GetResourceResponse {
+    bytes Resource = 1;
+}
+
+service GetResourceService {
+    rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {};
+}
+
+// ImagePullService is used to pull images from a remote registry
+// and mount the resulting root filesystems.
+service ImagePullService {
+    rpc PullImage(ImagePullRequest) returns (ImagePullResponse) {};
 }

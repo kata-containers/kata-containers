@@ -5,8 +5,8 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Tap** | Pointer to **string** |  | [optional] 
-**Ip** | Pointer to **string** |  | [optional] [default to "192.168.249.1"]
-**Mask** | Pointer to **string** |  | [optional] [default to "255.255.255.0"]
+**Ip** | Pointer to **string** | IPv4 or IPv6 address | [optional] [default to "192.168.249.1"]
+**Mask** | Pointer to **string** | Must be a valid IPv4 netmask if ip is an IPv4 address or a valid IPv6 netmask if ip is an IPv6 address. | [optional] [default to "255.255.255.0"]
 **Mac** | Pointer to **string** |  | [optional] 
 **HostMac** | Pointer to **string** |  | [optional] 
 **Mtu** | Pointer to **int32** |  | [optional] 

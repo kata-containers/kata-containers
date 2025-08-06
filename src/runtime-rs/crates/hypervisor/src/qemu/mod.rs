@@ -18,6 +18,7 @@ use persist::sandbox_persist::Persist;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::{mpsc, Mutex};
@@ -44,7 +45,7 @@ impl Qemu {
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
@@ -52,7 +53,12 @@ impl Qemu {
 
 #[async_trait]
 impl Hypervisor for Qemu {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
@@ -129,7 +135,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.get_thread_ids().await
     }
 

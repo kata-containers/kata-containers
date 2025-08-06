@@ -40,8 +40,8 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Check env
-	kubectl exec $pod_name -- "${exec_command[@]}" | grep "KUBE_CONFIG_1=value-1"
-	kubectl exec $pod_name -- "${exec_command[@]}" | grep "KUBE_CONFIG_2=value-2"
+	grep_pod_exec_output "${pod_name}" "KUBE_CONFIG_1=value-1" "${exec_command[@]}"
+	grep_pod_exec_output "${pod_name}" "KUBE_CONFIG_2=value-2" "${exec_command[@]}"
 }
 
 teardown() {

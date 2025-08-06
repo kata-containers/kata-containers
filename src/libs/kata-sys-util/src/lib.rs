@@ -14,6 +14,7 @@ pub mod k8s;
 pub mod mount;
 pub mod netns;
 pub mod numa;
+pub mod pcilibs;
 pub mod protection;
 pub mod rand;
 pub mod spec;

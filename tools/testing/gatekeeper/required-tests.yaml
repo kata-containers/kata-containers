@@ -1,0 +1,201 @@
+required_tests:
+  # Always required tests
+  - Commit Message Check / Commit Message Check
+  - Pull request WIP checks / WIP Check
+  - Darwin tests / test
+  - Shellcheck required / shellcheck-required
+  # TODO: cargo-deny-runner.yaml not yet treated as conditional
+  - Cargo Crates Check Runner / cargo-deny-runner
+  - GHA security analysis / zizmor
+
+required_regexps:
+  # Always required regexps
+
+paths:
+  # Mapping of path (python) regexps to set-of-tests (sort by order of importance)
+  # CI
+  - "^ci/openshift-ci/": []
+  - "^\\.github/workflows/static-checks": ["static"]
+  - "^\\.github/workflows/": []
+  - "\\.md$": ["static"]
+  # TODO: Expand filters
+  # Sources
+  #- "^src/": ["static", "build", "test"]
+
+mapping:
+  # Mapping of set-of-tests to required test names and/or test name regexps
+  #
+  # Format is (test name includes workflow!):
+  # {set-of-tests-label}:
+  #   names:
+  #     - {required-test-name1}
+  #     - {required-test-name2}
+  #   regexps: "{python-regular-expression-matching-required-tests}|{another-regexp}|{yet-another-regexp}"
+  #   required-labels:
+  #     - {label-required-to-run-those-tests}
+  #
+  # TODO: Add support for "depends" to automatically add dependant set-of-tests
+  #       (eg. "build" is required for "test")
+  # TODO: Add support for "ignore:" to remove individual tests from regexps
+  test:
+    # Checks the basic functional tests work
+    names:
+      # ci-on-push.yaml (ci.yaml)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, stratovirt)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (clh)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (cloud-hypervisor)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (dragonball)
+      # - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-docker-tests (qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-kata-agent-apis
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (lts, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, cloud-hypervisor) / run-cri-containerd-amd64 (active, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, clh) / run-cri-containerd-amd64 (active, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, dragonball) / run-cri-containerd-amd64 (active, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, qemu-runtime-rs) / run-cri-containerd-amd64 (active, qemu-runtime-rs)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, qemu) / run-cri-containerd-amd64 (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (active, stratovirt) / run-cri-containerd-amd64 (active, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, clh) / run-cri-containerd-amd64 (lts, clh)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, cloud-hypervisor) / run-cri-containerd-amd64 (lts, cloud-hypervisor)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, dragonball) / run-cri-containerd-amd64 (lts, dragonball)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, qemu-runtime-rs) / run-cri-containerd-amd64 (lts, qemu-runtime-rs)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, qemu) / run-cri-containerd-amd64 (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-amd64 (lts, stratovirt) / run-cri-containerd-amd64 (lts, stratovirt)
+      - Kata Containers CI / kata-containers-ci-on-push / run-cri-containerd-s390x (active, qemu) / run-cri-containerd-s390x (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-arm64 / run-k8s-tests-on-arm64 (qemu, kubeadm)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, normal, yes)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, containerd, yes)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, oci-distribution, yes)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, clh, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, clh, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, cloud-hypervisor, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, cloud-hypervisor, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, dragonball, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, dragonball, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, normal)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (devmapper, qemu, kubeadm)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (nydus, qemu-coco-dev, kubeadm)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-sev-snp (qemu-snp, nydus, guest-pull)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-coco-tests / run-k8s-tests-coco-nontee (qemu-coco-dev, nydus, guest-pull)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k0s)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, k3s)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, microk8s)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-deploy-tests / run-kata-deploy-tests (qemu, rke2)
+      - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
+    required-labels:
+      - ok-to-test
+  build:
+    # Checks that the kata-containers static tarball is created
+    names:
+      # ci-on-push.yaml (ci.yaml)
+      - Kata Containers CI / kata-containers-ci-on-push / build-and-publish-tee-confidential-unencrypted-image
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (agent-ctl, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (cloud-hypervisor-glibc, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (cloud-hypervisor, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (firecracker, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kata-ctl, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-dragonball-experimental, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-nvidia-gpu, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (nydus, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf-sev, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu-snp-experimental, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (trace-forwarder, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (virtiofsd, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / create-kata-tarball
+      - Kata Containers CI / kata-containers-ci-on-push / publish-kata-deploy-payload-amd64 / kata-payload
+    required-labels:
+  static:
+    # Checks that static checks are passing
+    names:
+      # static-checks.yaml (build-checks.yaml)
+      - Static checks / build-checks / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make check, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (make check, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (make check, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (make check, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks / check (make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make test, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (make test, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks / check (make vendor, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make vendor, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks / build-checks / check (make vendor, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (make vendor, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (make vendor, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (make vendor, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf...
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks / build-checks / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks / build-checks-depending-on-kvm (runtime-rs)
+      - Static checks / check-kernel-config-version
+      - Static checks / static-checks (make static-checks)
+      # static-checks-self-hosted.yaml
+      - Static checks self-hosted / build-checks (s390x) / check (make check, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (make check, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (make test, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, agent, src/agent, rust, libdevmapper, libseccomp, protobuf-compiler, clang)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (make vendor, trace-forwarder, src/tools/trace-forwarder, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, agent-ctl, src/tools/agent-ctl, rust, protobuf-compiler, c...
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, dragonball, src/dragonball, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, kata-ctl, src/tools/kata-ctl, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, runtime-rs, src/runtime-rs, rust)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
+      - Static checks self-hosted / build-checks (s390x) / check (sudo -E PATH="$PATH" make test, trace-forwarder, src/tools/trace-forwarder, rust)
+    required-labels:
+      - ok-to-test

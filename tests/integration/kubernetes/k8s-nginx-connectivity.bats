@@ -9,6 +9,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
+
 	nginx_version="${docker_images_nginx_version}"
 	nginx_image="nginx:$nginx_version"
 	busybox_image="quay.io/prometheus/busybox:latest"
@@ -42,6 +44,8 @@ setup() {
 }
 
 teardown() {
+	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
+
 	# Debugging information
 	kubectl describe "pod/$busybox_pod"
 	kubectl get "pod/$busybox_pod" -o yaml

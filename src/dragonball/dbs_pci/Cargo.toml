@@ -1,0 +1,40 @@
+[package]
+name = "dbs-pci"
+version = "0.1.0"
+authors = ["Alibaba Dragonball Team"]
+license = "Apache-2.0"
+edition = "2018"
+description = "dbs-pci is a crate for emulating pci device"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-pci"
+keywords = ["dragonball", "secure-sandbox", "devices", "pci"]
+readme = "README.md"
+
+[dependencies]
+log = "0.4.14"
+thiserror = "1"
+dbs-allocator = { workspace = true }
+dbs-boot = { workspace = true }
+dbs-device = { workspace = true }
+dbs-interrupt = { workspace = true, features = [
+    "kvm-irq",
+    "kvm-legacy-irq",
+    "kvm-msi-irq",
+] }
+downcast-rs = "1.2.0"
+byteorder = "1.4.3"
+vm-memory = {workspace = true}
+kvm-ioctls = {workspace = true}
+kvm-bindings = {workspace = true}
+vfio-ioctls = {workspace = true}
+vfio-bindings = {workspace = true}
+libc = "0.2.39"
+
+[dev-dependencies]
+dbs-arch = { workspace = true }
+kvm-ioctls = {workspace = true}
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+    'cfg(feature, values("test-mock"))',
+] }

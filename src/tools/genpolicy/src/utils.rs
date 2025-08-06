@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::layers_cache;
 use crate::settings;
 use clap::Parser;
 
@@ -18,9 +19,15 @@ struct CommandLineOptions {
     #[clap(
         short,
         long,
-        help = "Optional Kubernetes config map YAML input file path"
+        help = "Optional Kubernetes config map YAML input file path. DEPRECATED: use --config-file instead"
     )]
     config_map_file: Option<String>,
+
+    #[clap(
+        long,
+        help = "Optional Kubernetes YAML input file path containing config resources such as ConfigMaps and Secrets"
+    )]
+    config_file: Option<Vec<String>>,
 
     #[clap(
         short = 'p',
@@ -103,6 +110,7 @@ struct CommandLineOptions {
 /// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
+    #[allow(dead_code)]
     pub use_cache: bool,
     pub insecure_registries: Vec<String>,
     pub runtime_class_names: Vec<String>,
@@ -110,13 +118,13 @@ pub struct Config {
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
     pub settings: settings::Settings,
-    pub config_map_files: Option<Vec<String>>,
+    pub config_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
     pub raw_out: bool,
     pub base64_out: bool,
     pub containerd_socket_path: Option<String>,
-    pub layers_cache_file_path: Option<String>,
+    pub layers_cache: layers_cache::ImageLayersCache,
     pub version: bool,
 }
 
@@ -124,16 +132,15 @@ impl Config {
     pub fn new() -> Self {
         let args = CommandLineOptions::parse();
 
-        let mut config_map_files = Vec::new();
-        if let Some(config_map_file) = &args.config_map_file {
-            config_map_files.push(config_map_file.clone());
-        }
+        // Migrate all files from the old `config_map_file` to the new `config_files` field
+        let config_files = args
+            .config_file
+            .unwrap_or_default()
+            .into_iter()
+            .chain(args.config_map_file.iter().cloned())
+            .collect::<Vec<_>>();
 
-        let cm_files = if !config_map_files.is_empty() {
-            Some(config_map_files.clone())
-        } else {
-            None
-        };
+        let config_files = (!config_files.is_empty()).then_some(config_files);
 
         let mut layers_cache_file_path = args.layers_cache_file_path;
         // preserve backwards compatibility for only using the `use_cached_files` flag
@@ -150,13 +157,19 @@ impl Config {
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
             settings,
-            config_map_files: cm_files,
+            config_files,
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,
             base64_out: args.base64_out,
             containerd_socket_path: args.containerd_socket_path,
-            layers_cache_file_path,
+            layers_cache: layers_cache::ImageLayersCache::new(&layers_cache_file_path),
             version: args.version,
         }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
     }
 }

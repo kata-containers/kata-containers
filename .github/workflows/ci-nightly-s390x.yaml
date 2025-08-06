@@ -3,6 +3,10 @@ on:
     - cron: '0 5 * * *'
 
 name: Nightly CI for s390x
+
+permissions:
+  contents: read
+
 jobs:
   check-internal-test-result:
     runs-on: s390x
@@ -11,11 +15,12 @@ jobs:
       matrix:
         test_title:
           - kata-vfio-ap-e2e-tests
+          - cc-vfio-ap-e2e-tests
           - cc-se-e2e-tests
     steps:
     - name: Fetch a test result for {{ matrix.test_title }}
       run: |
         file_name="${TEST_TITLE}-$(date +%Y-%m-%d).log"
-        /home/${USER}/script/handle_test_log.sh download $file_name
+        "/home/${USER}/script/handle_test_log.sh" download "$file_name"
       env:
         TEST_TITLE: ${{ matrix.test_title }}

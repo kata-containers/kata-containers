@@ -4,15 +4,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#[cfg(target_arch = "s390x")]
-use crate::ap;
 use crate::device::{pcipath_to_sysfs, DevUpdate, DeviceContext, DeviceHandler, SpecUpdate};
 use crate::linux_abi::*;
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
-use kata_types::device::{DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE};
+use cfg_if::cfg_if;
+use kata_types::device::{
+    DRIVER_VFIO_AP_COLD_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE,
+};
 use protocols::agent::Device;
 use slog::Logger;
 use std::ffi::OsStr;
@@ -24,6 +25,22 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
+
+cfg_if! {
+    if #[cfg(target_arch = "s390x")] {
+        use crate::ap;
+        use crate::confidential_data_hub::get_cdh_resource;
+        use std::convert::TryFrom;
+        use pv_core::ap::{
+            Apqn,
+            apqn_info::Ep11,
+            assoc_state::AssocState,
+            bind_state::BindState,
+        };
+        use pv_core::misc::{encode_hex, pv_guest_bit_set};
+        use pv_core::uv;
+    }
+}
 
 #[derive(Debug)]
 pub struct VfioPciDeviceHandler {}
@@ -94,16 +111,32 @@ impl DeviceHandler for VfioPciDeviceHandler {
 impl DeviceHandler for VfioApDeviceHandler {
     #[instrument]
     fn driver_types(&self) -> &[&str] {
-        &[DRIVER_VFIO_AP_TYPE]
+        &[DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_AP_COLD_TYPE]
     }
 
     #[cfg(target_arch = "s390x")]
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         // Force AP bus rescan
-        fs::write(AP_SCANS_PATH, "1")?;
+        let mut ap_context = String::from("Failed to rescan AP bus");
+        if pv_guest_bit_set() {
+            ap_context.push_str(
+                ". Verify your host kernel supports AP pass-through with Secure Execution",
+            );
+        }
+        fs::write(AP_SCANS_PATH, "1").context(ap_context)?;
+
         for apqn in device.options.iter() {
-            wait_for_ap_device(ctx.sandbox, ap::Address::from_str(apqn)?).await?;
+            let ap_address = ap::Address::from_str(apqn).context("Failed to parse AP address")?;
+            match device.type_.as_str() {
+                DRIVER_VFIO_AP_TYPE => {
+                    wait_for_ap_device(ctx.sandbox, ap_address).await?;
+                }
+                DRIVER_VFIO_AP_COLD_TYPE => {
+                    check_ap_device(ap_address).await?;
+                }
+                _ => return Err(anyhow!("Unsupported AP device type: {}", device.type_)),
+            }
         }
         let dev_update = Some(DevUpdate::new(Z9_CRYPT_DEV_PATH, Z9_CRYPT_DEV_PATH)?);
         Ok(SpecUpdate {
@@ -199,6 +232,72 @@ async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address)
     let matcher = ApMatcher::new(address);
     wait_for_uevent(sandbox, matcher).await?;
     Ok(())
+}
+
+#[cfg(target_arch = "s390x")]
+#[instrument]
+async fn check_ap_device(address: ap::Address) -> Result<()> {
+    let apqn = Apqn::try_from(&address.to_string() as &str)
+        .context("Failed to establish AP at {address}")?;
+    if apqn.info.is_none() {
+        return Err(anyhow!("Failed to read info for AP {address}"));
+    }
+    if !pv_guest_bit_set() {
+        return Ok(());
+    }
+    apqn.set_bind_state(BindState::Bound)
+        .context(anyhow!("Failed to bind AP {address}"))?;
+    if let Some(Ep11(ep11_info)) = &apqn.info {
+        if ep11_info.mkvp.is_empty() {
+            return Err(anyhow!(
+                "Master key verification pattern for AP {address} is unset"
+            ));
+        }
+        associate_ap_device(&apqn, &ep11_info.mkvp)
+            .await
+            .context(anyhow!("Failed to associate AP {address}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(target_arch = "s390x")]
+async fn associate_ap_device(apqn: &Apqn, mkvp: &str) -> Result<()> {
+    let resource_path = format!("/vfio_ap/{mkvp}");
+    let secret_resource_path = format!("{resource_path}/secret");
+    let secret_id_resource_path = format!("{resource_path}/secret_id");
+
+    let uv_secret = get_cdh_resource(&secret_resource_path)
+        .await
+        .context(anyhow!(
+            "Failed to read Confidential Data Hub secret {secret_resource_path}. \
+             Provide the desired Ultravisor secret for this MKVP with an appropriate key broker service."
+        ))?;
+    let secret_id_bytes = get_cdh_resource(&secret_id_resource_path)
+        .await
+        .context(anyhow!(
+            "Failed to read Confidential Data Hub secret {secret_id_resource_path}. \
+             Provide the desired Ultravisor secret ID for this MKVP with an appropriate key broker service."
+        ))?;
+    let secret_id = std::str::from_utf8(&secret_id_bytes)?
+        .trim_start_matches("0x")
+        .trim_end();
+
+    // TODO Once initdata is stable, enable and mandate this request be signed
+    // (`pvsecret create --user-sign-key`, `pvsecret verify --user-cert`)
+    let uv = uv::UvDevice::open()?;
+    let mut add_cmd = uv::AddCmd::new(&mut uv_secret.as_slice())
+        .context("Failed to create add secret request")?;
+    uv.send_cmd(&mut add_cmd).context("Failed to add secret")?;
+    let mut list_cmd = uv::ListCmd::new();
+    uv.send_cmd(&mut list_cmd)?;
+
+    let secret_idx = uv::SecretList::try_from(list_cmd)?
+        .iter()
+        .find(|&s| encode_hex(s.id()) == secret_id)
+        .ok_or_else(|| anyhow!("Could not find secret with the ID {secret_id}. \
+                                Perhaps there is a mismatch between the provided secret and secret ID."))?
+        .index();
+    Ok(apqn.set_associate_state(AssocState::Associated(secret_idx))?)
 }
 
 pub async fn wait_for_pci_device(

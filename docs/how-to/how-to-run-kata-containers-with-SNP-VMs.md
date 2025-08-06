@@ -10,7 +10,19 @@ To run  Kata Containers in SNP-VMs, the following software stack is used.
 
 ![Kubernetes integration with shimv2](./images/SNP-stack.svg)
 
-The host BIOS and kernel must be capable of supporting AMD SEV-SNP and configured accordingly. For Kata Containers, the host kernel with branch [`sev-snp-iommu-avic_5.19-rc6_v3`](https://github.com/AMDESE/linux/tree/sev-snp-iommu-avic_5.19-rc6_v3) and commit [`3a88547`](https://github.com/AMDESE/linux/commit/3a885471cf89156ea555341f3b737ad2a8d9d3d0) is known to work in conjunction with SEV Firmware version 1.51.3 (0xh\_1.33.03) available on AMD's [SEV developer website](https://developer.amd.com/sev/). See [AMD's guide](https://github.com/AMDESE/AMDSEV/tree/sev-snp-devel) to configure the host accordingly. Verify that you are able to run SEV-SNP encrypted VMs first. The guest components required for Kata Containers are built as described below.
+The host BIOS and kernel must be capable of supporting AMD SEV-SNP and the host must be configured accordingly.
+
+The latest SEV Firmware version is available on AMD's [SEV Developer Webpage](https://www.amd.com/en/developer/sev.html). It can also be updated via a platform OEM BIOS update.
+
+The host kernel must be equal to or later than upstream version [6.11](https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.11.tar.xz).
+
+[`sev-utils`](https://github.com/amd/sev-utils/blob/coco-202501150000/docs/snp.md) is an easy way to install the required host kernel with the `setup-host` command. However, it will also build compatible guest kernel, OVMF, and QEMU components which are not necessary as these components are packaged with kata. The `sev-utils` script utility can be used with these additional components to test the memory encrypted launch and attestation of a base QEMU SNP guest.
+
+For a simplified way to build just the upstream compatible host kernel, use the Confidential Containers fork of [AMDESE AMDSEV](https://github.com/confidential-containers/amdese-amdsev/tree/amd-snp-202501150000). Individual components can be built by running the following command:
+
+```
+./build.sh kernel host --install
+```
 
 **Tip**: It is easiest to first have Kata Containers running on your system and then modify it to run containers in SNP-VMs. Follow the [Developer guide](../Developer-Guide.md#warning) and then follow the below steps. Nonetheless, you can just follow this guide from the start.
 
@@ -29,16 +41,16 @@ __SNP-specific steps:__
 - Build the SNP-specific kernel as shown below (see this [guide](../../tools/packaging/kernel/README.md#build-kata-containers-kernel) for more information)
 ```bash
 $ pushd kata-containers/tools/packaging/
-$ ./kernel/build-kernel.sh -a x86_64 -x snp setup
-$ ./kernel/build-kernel.sh -a x86_64 -x snp build
-$ sudo -E PATH="${PATH}" ./kernel/build-kernel.sh -x snp install
+$ ./kernel/build-kernel.sh -a x86_64 -x setup
+$ ./kernel/build-kernel.sh -a x86_64 -x build
+$ sudo -E PATH="${PATH}" ./kernel/build-kernel.sh -x install
 $ popd
 ```
 - Build a current OVMF capable of SEV-SNP:
 ```bash
 $ pushd kata-containers/tools/packaging/static-build/ovmf
-$ ./build.sh
-$ tar -xvf edk2-x86_64.tar.gz
+$ ovmf_build=sev ./build.sh
+$ tar -xvf edk2-sev.tar.gz
 $ popd
 ```
 - Build a custom QEMU
@@ -106,7 +118,7 @@ sev_snp_guest = true
 ```
   - Configure an OVMF (add path)
 ```toml
-firmware = "/path/to/kata-containers/tools/packaging/static-build/ovmf/opt/kata/share/ovmf/OVMF.fd"
+firmware = "/path/to/kata-containers/tools/packaging/static-build/ovmf/opt/kata/share/ovmf/AMDSEV.fd"
 ```
   - SNP attestation (add cert-chain to default path or add the path with cert-chain)
 ```toml

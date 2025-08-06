@@ -13,7 +13,7 @@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUSNPPATH@"
+path = "@QEMUPATH@"
 kernel = "@KERNELCONFIDENTIALPATH@"
 #image = "@IMAGEPATH@"
 initrd = "@INITRDCONFIDENTIALPATH@"
@@ -44,11 +44,6 @@ confidential_guest = true
 # enable SEV SNP VMs
 sev_snp_guest = true
 
-# The path to the file containing the SNP certificate chain (including
-# VCEK/VLEK certificates). This wil be used to get the extended attestation
-# report from the guest. The default path is @SNPCERTSPATH@.
-snp_certs_path = "@SNPCERTSPATH@"
-
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
@@ -63,7 +58,19 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
+
+# SNP 'ID Block' and 'ID Authentication Information Structure'.
+# If one of snp_id_block or snp_id_auth is specified, the other must be specified, too.
+# Notice that the default SNP policy of QEMU (0x30000) is used by Kata, and the IDBlock
+# must be generated with exactly this policy.
+#
+# 96-byte, base64-encoded blob to provide the ‘ID Block’ structure for the
+# SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
+#snp_id_block = ""
+# 4096-byte, base64-encoded blob to provide the ‘ID Authentication Information Structure’
+# for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
+#snp_id_auth = ""
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -157,7 +164,7 @@ default_memory = @DEFMEMSZ@
 default_maxmemory = @DEFMAXMEMSZ@
 
 # The size in MiB will be plused to max memory of hypervisor.
-# It is the memory address space for the NVDIMM devie.
+# It is the memory address space for the NVDIMM device.
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
@@ -335,7 +342,7 @@ pflashes = []
 # that it is running on top a VMM. This will result in the runtime
 # behaving as it would when running on bare metal.
 #
-#disable_nesting_checks = true
+disable_nesting_checks = true
 
 # This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
@@ -345,21 +352,11 @@ pflashes = []
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-disable_image_nvdimm = true
-
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-#hotplug_vfio_on_root_bus = true
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
 # Default 0
 #pcie_root_port = 2
 
@@ -684,3 +681,8 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# Enforce guest pull. This instructs the runtime to communicate to the agent via annotations that
+# the container image should be pulled in the guest, without using an external snapshotter.
+# This is an experimental feature and might be removed in the future.
+experimental_force_guest_pull = @DEFFORCEGUESTPULL@
