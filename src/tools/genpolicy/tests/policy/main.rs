@@ -13,8 +13,8 @@ mod tests {
     use std::str;
 
     use protocols::agent::{
-        CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
-        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        AddARPNeighborsRequest, CopyFileRequest, CreateContainerRequest, CreateSandboxRequest,
+        ExecProcessRequest, RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -32,6 +32,7 @@ mod tests {
         RemoveContainer(RemoveContainerRequest),
         UpdateInterface(UpdateInterfaceRequest),
         UpdateRoutes(UpdateRoutesRequest),
+        AddARPNeighbors(AddARPNeighborsRequest),
     }
 
     impl Display for TestRequest {
@@ -44,6 +45,7 @@ mod tests {
                 TestRequest::RemoveContainer(_) => write!(f, "RemoveContainerRequest"),
                 TestRequest::UpdateInterface(_) => write!(f, "UpdateInterfaceRequest"),
                 TestRequest::UpdateRoutes(_) => write!(f, "UpdateRoutesRequest"),
+                TestRequest::AddARPNeighbors(_) => write!(f, "AddARPNeighborsRequest"),
             }
         }
     }
@@ -238,6 +240,11 @@ mod tests {
     #[tokio::test]
     async fn test_update_interface() {
         runtests("updateinterface").await;
+    }
+
+    #[tokio::test]
+    async fn test_add_arp_neighbors() {
+        runtests("addarpneighbors").await;
     }
 
     #[tokio::test]
