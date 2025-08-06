@@ -2197,20 +2197,20 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		// CPU type, i.e host-x86_64-cpu
 		driver := hc.Type
 		cpuID := fmt.Sprintf("cpu-%d", len(q.state.HotpluggedVCPUs))
-		socketID := fmt.Sprintf("%d", hc.Properties.Socket)
-		dieID := fmt.Sprintf("%d", hc.Properties.Die)
-		coreID := fmt.Sprintf("%d", hc.Properties.Core)
-		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
+		socketID := hc.Properties.Socket
+		dieID := hc.Properties.Die
+		coreID := hc.Properties.Core
+		threadID := hc.Properties.Thread
 
 		// If CPU type is IBM pSeries, Z or arm virt, we do not set socketID and threadID
 		if machine.Type == "pseries" || machine.Type == QemuCCWVirtio || machine.Type == "virt" {
-			socketID = ""
-			threadID = ""
-			dieID = ""
+			socketID = -1
+			threadID = -1
+			dieID = -1
 		}
 
 		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, dieID, coreID, threadID, romFile); err != nil {
-			q.Logger().WithField("hotplug", "cpu").Warnf("qmp hotplug cpu, cpuID=%s socketID=%s, error: %v", cpuID, socketID, err)
+			q.Logger().WithField("hotplug", "cpu").Warnf("qmp hotplug cpu, cpuID=%s socketID=%d, error: %v", cpuID, socketID, err)
 			// don't fail, let's try with other CPU
 			continue
 		}

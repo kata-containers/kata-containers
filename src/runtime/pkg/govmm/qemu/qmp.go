@@ -1257,25 +1257,23 @@ func (q *QMP) isDieIDSupported(driver string) bool {
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
 // thread number within core the CPU belongs to. Note that socketID and threadID are not a requirement for
 // architecures like ppc64le.
-func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, dieID, coreID, threadID, romfile string) error {
+func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID string, socketID, dieID, coreID, threadID int, romfile string) error {
 	args := map[string]interface{}{
 		"driver":  driver,
 		"id":      cpuID,
 		"core-id": coreID,
 	}
 
-	if socketID != "" && isSocketIDSupported(driver) {
+	if socketID >= 0 && isSocketIDSupported(driver) {
 		args["socket-id"] = socketID
 	}
 
-	if threadID != "" && isThreadIDSupported(driver) {
+	if threadID >= 0 && isThreadIDSupported(driver) {
 		args["thread-id"] = threadID
 	}
 
-	if q.isDieIDSupported(driver) {
-		if dieID != "" {
-			args["die-id"] = dieID
-		}
+	if dieID >= 0 && q.isDieIDSupported(driver) {
+		args["die-id"] = dieID
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
