@@ -819,6 +819,7 @@ function arch_to_golang() {
 
 	case "${arch}" in
 		aarch64) echo "arm64";;
+		arm64) echo "${arch}";;
 		ppc64le) echo "${arch}";;
 		riscv64) echo "${arch}";;
 		x86_64) echo "amd64";;
