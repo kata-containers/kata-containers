@@ -1144,7 +1144,9 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 
 	return currentVCPUs, newVCPUs, nil
 }
-
+func (clh *cloudHypervisor) ResizeBlock(ctx context.Context, deviceID string, size uint64) error {
+	return nil
+}
 func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
 	clh.Logger().WithField("function", "Cleanup").Info("Cleanup")
 	return nil
