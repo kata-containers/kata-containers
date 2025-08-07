@@ -683,6 +683,7 @@ impl Qmp {
             // add SCSI frontend device
             blkdev_add_args.insert("scsi-id".to_string(), scsi_id.into());
             blkdev_add_args.insert("lun".to_string(), lun.into());
+            blkdev_add_args.insert("share-rw".to_string(), true.into());
 
             self.qmp
                 .execute(&qmp::device_add {
@@ -703,6 +704,7 @@ impl Qmp {
         } else {
             let (bus, slot) = self.find_free_slot()?;
             blkdev_add_args.insert("addr".to_owned(), format!("{:02}", slot).into());
+            blkdev_add_args.insert("share-rw".to_string(), true.into());
 
             self.qmp
                 .execute(&qmp::device_add {
