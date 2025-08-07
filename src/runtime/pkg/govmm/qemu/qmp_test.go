@@ -1140,10 +1140,10 @@ func TestQMPAPVFIOMediatedDeviceAdd(t *testing.T) {
 func TestQMPCPUDeviceAdd(t *testing.T) {
 	drivers := []string{"host-x86_64-cpu", "host-s390x-cpu", "host-powerpc64-cpu"}
 	cpuID := "cpu-0"
-	socketID := "0"
-	dieID := "0"
-	coreID := "1"
-	threadID := "0"
+	socketID := 0
+	dieID := 0
+	coreID := 1
+	threadID := 0
 	for _, d := range drivers {
 		connectedCh := make(chan *QMPVersion)
 		disconnectedCh := make(chan struct{})
