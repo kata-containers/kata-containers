@@ -852,6 +852,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "crypto-mac"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1d1a86f49236c215f271d40892d5fc950490551400b02ef360692c29815c714"
+dependencies = [
+ "generic-array",
+ "subtle",
+]
+
+[[package]]
 name = "darling"
 version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1789,6 +1799,16 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hmac"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a2a2320eb7ec0ebe8da8f744d7812d9fc4cb4d09344ac01898dbcb6a20ae69b"
+dependencies = [
+ "crypto-mac",
+ "digest 0.9.0",
+]
+
+[[package]]
+name = "hmac"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
@@ -2305,6 +2325,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
 
 [[package]]
+name = "libsystemd"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f4f0b5b062ba67aa075e331de778082c09e66b5ef32970ea5a1e9c37c9555d1"
+dependencies = [
+ "hmac 0.11.0",
+ "libc",
+ "log",
+ "nix 0.23.2",
+ "once_cell",
+ "serde",
+ "sha2 0.9.3",
+ "thiserror 1.0.69",
+ "uuid 0.8.2",
+]
+
+[[package]]
 name = "libz-sys"
 version = "1.1.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2390,6 +2427,7 @@ dependencies = [
  "serde_json",
  "slog",
  "slog-async",
+ "slog-journald",
  "slog-json",
  "slog-scope",
  "slog-term",
@@ -2797,7 +2835,7 @@ dependencies = [
  "bitflags 1.3.2",
  "fuse-backend-rs",
  "hex",
- "hmac",
+ "hmac 0.12.1",
  "httpdate",
  "lazy_static",
  "libc",
@@ -4465,6 +4503,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "slog-journald"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83e14eb8c2f5d0c8fc9fbac40e6391095e4dc5cb334f7dce99c75cb1919eb39c"
+dependencies = [
+ "libsystemd",
+ "slog",
+]
+
+[[package]]
 name = "slog-json"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4617,9 +4665,9 @@ dependencies = [
 
 [[package]]
 name = "subtle"
-version = "2.5.0"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
+checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "syn"
@@ -5193,6 +5241,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cfec50b0842181ba6e713151b72f4ec84a6a7e2c9c8a8a3ffc37bb1cd16b231"
 dependencies = [
  "rand 0.3.23",
+]
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

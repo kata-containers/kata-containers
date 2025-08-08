@@ -22,6 +22,7 @@ slog-json = "2.4.0"
 slog-term = "2.9.1"
 slog-async = "2.7.0"
 slog-scope = "4.4.0"
+slog-journald = "2.2.0"
 lazy_static = "1.3.0"
 arc-swap = "1.5.0"
 
