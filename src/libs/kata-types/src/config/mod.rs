@@ -131,9 +131,7 @@ impl TomlConfig {
     pub fn load_from_file<P: AsRef<Path>>(config_file: P) -> Result<(TomlConfig, PathBuf)> {
         let mut result = Self::load_raw_from_file(config_file);
         if let Ok((ref mut config, _)) = result {
-            Hypervisor::adjust_config(config)?;
-            Runtime::adjust_config(config)?;
-            Agent::adjust_config(config)?;
+            config.adjust_config()?;
             info!(sl!(), "get kata config: {:?}", config);
         }
 
@@ -175,11 +173,18 @@ impl TomlConfig {
     /// drop-in config file fragments in config.d/.
     pub fn load(content: &str) -> Result<TomlConfig> {
         let mut config: TomlConfig = toml::from_str(content)?;
-        Hypervisor::adjust_config(&mut config)?;
-        Runtime::adjust_config(&mut config)?;
-        Agent::adjust_config(&mut config)?;
+        config.adjust_config()?;
         info!(sl!(), "get kata config: {:?}", config);
         Ok(config)
+    }
+
+    /// Adjust Kata configuration information.
+    pub fn adjust_config(&mut self) -> Result<()> {
+        Hypervisor::adjust_config(self)?;
+        Runtime::adjust_config(self)?;
+        Agent::adjust_config(self)?;
+
+        Ok(())
     }
 
     /// Validate Kata configuration information.

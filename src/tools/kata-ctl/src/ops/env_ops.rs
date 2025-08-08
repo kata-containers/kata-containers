@@ -198,7 +198,7 @@ pub struct HypervisorInfo {
     #[serde(default)]
     enable_iommu_platform: bool,
     #[serde(default)]
-    default_vcpus: i32,
+    default_vcpus: f32,
     #[serde(default)]
     cpu_features: String,
     #[serde(default)]

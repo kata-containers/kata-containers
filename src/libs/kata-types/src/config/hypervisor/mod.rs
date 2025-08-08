@@ -348,7 +348,7 @@ pub struct CpuInfo {
     ///  > 0 <= number of physical cores --> will be set to the specified number
     ///  > number of physical cores      --> will be set to the actual number of physical cores
     #[serde(default)]
-    pub default_vcpus: i32,
+    pub default_vcpus: f32,
 
     /// Default maximum number of vCPUs per SB/VM:
     /// - unspecified or == 0             --> will be set to the actual number of physical cores or
@@ -380,22 +380,22 @@ impl CpuInfo {
         let features: Vec<&str> = self.cpu_features.split(',').map(|v| v.trim()).collect();
         self.cpu_features = features.join(",");
 
-        let cpus = num_cpus::get() as u32;
+        let cpus = num_cpus::get() as f32;
 
         // adjust default_maxvcpus
-        if self.default_maxvcpus == 0 || self.default_maxvcpus > cpus {
-            self.default_maxvcpus = cpus;
+        if self.default_maxvcpus == 0 || self.default_maxvcpus as f32 > cpus {
+            self.default_maxvcpus = cpus as u32;
         }
 
         // adjust default_vcpus
-        if self.default_vcpus < 0 || self.default_vcpus as u32 > cpus {
-            self.default_vcpus = cpus as i32;
-        } else if self.default_vcpus == 0 {
-            self.default_vcpus = default::DEFAULT_GUEST_VCPUS as i32;
+        if self.default_vcpus < 0.0 || self.default_vcpus > cpus {
+            self.default_vcpus = cpus;
+        } else if self.default_vcpus == 0.0 {
+            self.default_vcpus = default::DEFAULT_GUEST_VCPUS as f32;
         }
 
-        if self.default_vcpus > self.default_maxvcpus as i32 {
-            self.default_vcpus = self.default_maxvcpus as i32;
+        if self.default_vcpus > self.default_maxvcpus as f32 {
+            self.default_vcpus = self.default_maxvcpus as f32;
         }
 
         Ok(())
@@ -403,7 +403,7 @@ impl CpuInfo {
 
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
-        if self.default_vcpus > self.default_maxvcpus as i32 {
+        if self.default_vcpus > self.default_maxvcpus as f32 {
             return Err(eother!(
                 "The default_vcpus({}) is greater than default_maxvcpus({})",
                 self.default_vcpus,
@@ -1413,8 +1413,8 @@ mod tests {
     #[test]
     fn test_cpu_info_adjust_config() {
         // get CPU cores of the test node
-        let node_cpus = num_cpus::get() as u32;
-        let default_vcpus = default::DEFAULT_GUEST_VCPUS as i32;
+        let node_cpus = num_cpus::get() as f32;
+        let default_vcpus = default::DEFAULT_GUEST_VCPUS as f32;
 
         struct TestData<'a> {
             desc: &'a str,
@@ -1427,38 +1427,38 @@ mod tests {
                 desc: "all with default values",
                 input: &mut CpuInfo {
                     cpu_features: "".to_string(),
-                    default_vcpus: 0,
+                    default_vcpus: 0.0,
                     default_maxvcpus: 0,
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
                     default_vcpus,
-                    default_maxvcpus: node_cpus,
+                    default_maxvcpus: node_cpus as u32,
                 },
             },
             TestData {
                 desc: "all with big values",
                 input: &mut CpuInfo {
                     cpu_features: "a,b,c".to_string(),
-                    default_vcpus: 9999999,
+                    default_vcpus: 9999999.0,
                     default_maxvcpus: 9999999,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
-                    default_vcpus: node_cpus as i32,
-                    default_maxvcpus: node_cpus,
+                    default_vcpus: node_cpus,
+                    default_maxvcpus: node_cpus as u32,
                 },
             },
             TestData {
                 desc: "default_vcpus lager than default_maxvcpus",
                 input: &mut CpuInfo {
                     cpu_features: "a, b ,c".to_string(),
-                    default_vcpus: -1,
+                    default_vcpus: -1.0,
                     default_maxvcpus: 1,
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
-                    default_vcpus: 1,
+                    default_vcpus: 1.0,
                     default_maxvcpus: 1,
                 },
             },

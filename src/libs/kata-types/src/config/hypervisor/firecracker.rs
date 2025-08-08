@@ -93,7 +93,7 @@ impl ConfigPlugin for FirecrackerConfig {
                 ));
             }
 
-            if (firecracker.cpu_info.default_vcpus > 0
+            if (firecracker.cpu_info.default_vcpus > 0.0
                 && firecracker.cpu_info.default_vcpus as u32 > default::MAX_FIRECRACKER_VCPUS)
                 || firecracker.cpu_info.default_maxvcpus > default::MAX_FIRECRACKER_VCPUS
             {
