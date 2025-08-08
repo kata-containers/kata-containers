@@ -22,7 +22,7 @@ jobs:
     name: WIP Check
     steps:
     - name: WIP Check
-      uses: tim-actions/wip-check@1c2a1ca6c110026b3e2297bb2ef39e1747b5a755 # master (2021-06-10)
+      uses: tim-actions/wip-check@8c84f5987215d49440b86475062d61e4f099e1b7 # master (2021-06-10)
       with:
         labels: '["do-not-merge", "wip", "rfc"]'
         keywords: '["WIP", "wip", "RFC", "rfc", "dnm", "DNM", "do-not-merge"]'
