@@ -1,0 +1,156 @@
+[
+  {
+    "description": "compliant neighbors",
+    "allowed": true,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 128,
+            "flags": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "allowed flags: NTF_PROXY",
+    "allowed": true,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 128,
+            "flags": 8
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "allowed flags: NTF_ROUTER",
+    "allowed": true,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 128,
+            "flags": 128
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "bad interface",
+    "allowed": false,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "lo",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 128,
+            "flags": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "bad IP",
+    "allowed": false,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "127.1.2.3",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 128,
+            "flags": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "bad state",
+    "allowed": false,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 0,
+            "flags": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "description": "bad flags",
+    "allowed": false,
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 128,
+            "flags": 5
+          }
+        ]
+      }
+    }
+  }
+]
