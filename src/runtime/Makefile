@@ -460,10 +460,10 @@ ifneq (,$(QEMUCMD))
     FIRMWAREPATH_NV := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 
     ifneq (,$(QEMUFW))
-        FIRMWAREPATH := $(PREFIXDEPS)/share/ovmf/$(QEMUFW)
+        FIRMWAREPATH := $(PREFIXDEPS)/share/aavmf/$(QEMUFW)
     endif
     ifneq (,$(QEMUFWVOL))
-        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/ovmf/$(QEMUFWVOL)
+        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/aavmf/$(QEMUFWVOL)
     endif
 endif
 
