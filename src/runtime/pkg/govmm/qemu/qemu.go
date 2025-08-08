@@ -2657,8 +2657,13 @@ type SMP struct {
 	Sockets uint32
 
 	// MaxCPUs is the maximum number of VCPUs that a VM can have.
-	// This value, if non-zero, MUST BE equal to or greater than CPUs
+	// This value, if non-zero, MUST BE equal to or greater than CPUs,
+	// and must be equal to Sockets * Cores * Threads if all are non-zero.
 	MaxCPUs uint32
+
+	// NumNUMA is the number of NUMA nodes that VM have.
+	// The value MUST NOT be greater than Sockets.
+	NumNUMA uint32
 }
 
 // Memory is the guest memory configuration structure.
@@ -2679,6 +2684,26 @@ type Memory struct {
 	// Path is the file path of the memory device. It points to a local
 	// file path used by FileBackedMem.
 	Path string
+
+	// MemoryModules describes memory topology and allocation policy.
+	MemoryModules []MemoryModule
+}
+
+// MemoryModule represents single module of guest memory.
+type MemoryModule struct {
+	// Size of memory module.
+	// It should be suffixed with M or G for sizes in megabytes or
+	// gigabytes respectively.
+	Size string
+
+	// NodeId is the guest NUMA node this module belongs to.
+	NodeId uint32
+
+	// HostNodes defines host NUMA nodes mask for binding memory allocation.
+	HostNodes string
+
+	// MemoryPolicy defines host NUMA memory allocation policy.
+	MemoryPolicy string
 }
 
 // Kernel is the guest kernel configuration structure.
@@ -3064,11 +3089,25 @@ func (config *Config) appendCPUs() error {
 				return fmt.Errorf("MaxCPUs %d must be equal to or greater than CPUs %d",
 					config.SMP.MaxCPUs, config.SMP.CPUs)
 			}
+			topologyCPUs := config.SMP.Sockets * config.SMP.Cores * config.SMP.Threads
+			if topologyCPUs != 0 && config.SMP.MaxCPUs != topologyCPUs {
+				return fmt.Errorf("MaxCPUs %d must match CPU topology: sockets %d * cores %d * thread %d",
+					config.SMP.MaxCPUs, config.SMP.Sockets, config.SMP.Cores, config.SMP.Threads)
+			}
 			SMPParams = append(SMPParams, fmt.Sprintf("maxcpus=%d", config.SMP.MaxCPUs))
 		}
 
 		config.qemuParams = append(config.qemuParams, "-smp")
 		config.qemuParams = append(config.qemuParams, strings.Join(SMPParams, ","))
+
+		if config.SMP.NumNUMA > 1 {
+			// Interleave CPU sockets over NUMA nodes.
+			for socketId := uint32(0); socketId < config.SMP.Sockets; socketId++ {
+				nodeId := socketId % config.SMP.NumNUMA
+				config.qemuParams = append(config.qemuParams, "-numa",
+					fmt.Sprintf("cpu,node-id=%d,socket-id=%d", nodeId, socketId))
+			}
+		}
 	}
 
 	return nil
@@ -3137,34 +3176,49 @@ func (config *Config) appendMemoryKnobs() {
 	if config.Memory.Size == "" {
 		return
 	}
-	var objMemParam, numaMemParam string
-	dimmName := "dimm1"
+	if len(config.Memory.MemoryModules) == 0 {
+		config.appendMemoryModule("dimm1", MemoryModule{Size: config.Memory.Size})
+	}
+	for i, memModule := range config.Memory.MemoryModules {
+		config.appendMemoryModule(fmt.Sprintf("dimm%d", i), memModule)
+	}
+}
+
+func (config *Config) appendMemoryModule(memoryId string, memoryModule MemoryModule) {
+	var objMemParams []string
+
 	if config.Knobs.HugePages {
-		objMemParam = "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=/dev/hugepages"
-		numaMemParam = "node,memdev=" + dimmName
+		objMemParams = append(objMemParams, "memory-backend-file", "mem-path=/dev/hugepages")
 	} else if config.Knobs.FileBackedMem && config.Memory.Path != "" {
-		objMemParam = "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
-		numaMemParam = "node,memdev=" + dimmName
+		objMemParams = append(objMemParams, "memory-backend-file", "mem-path="+config.Memory.Path)
 	} else {
-		objMemParam = "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size
-		numaMemParam = "node,memdev=" + dimmName
+		objMemParams = append(objMemParams, "memory-backend-ram")
+	}
+
+	objMemParams = append(objMemParams, "id="+memoryId, "size="+memoryModule.Size)
+
+	if memoryModule.MemoryPolicy != "" {
+		objMemParams = append(objMemParams, "policy="+memoryModule.MemoryPolicy)
+	}
+
+	if memoryModule.HostNodes != "" {
+		objMemParams = append(objMemParams, "host-nodes="+memoryModule.HostNodes)
 	}
 
 	if config.Knobs.MemShared {
-		objMemParam += ",share=on"
+		objMemParams = append(objMemParams, "share=on")
 	}
 	if config.Knobs.MemPrealloc {
-		objMemParam += ",prealloc=on"
+		objMemParams = append(objMemParams, "prealloc=on")
 	}
-	config.qemuParams = append(config.qemuParams, "-object")
-	config.qemuParams = append(config.qemuParams, objMemParam)
+
+	config.qemuParams = append(config.qemuParams, "-object", strings.Join(objMemParams, ","))
 
 	if isDimmSupported(config) {
-		config.qemuParams = append(config.qemuParams, "-numa")
-		config.qemuParams = append(config.qemuParams, numaMemParam)
+		config.qemuParams = append(config.qemuParams, "-numa",
+			fmt.Sprintf("node,nodeid=%d,memdev=%s", memoryModule.NodeId, memoryId))
 	} else {
-		config.qemuParams = append(config.qemuParams, "-machine")
-		config.qemuParams = append(config.qemuParams, "memory-backend="+dimmName)
+		config.qemuParams = append(config.qemuParams, "-machine", "memory-backend="+memoryId)
 	}
 }
 
