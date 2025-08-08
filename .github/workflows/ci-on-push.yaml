@@ -3,7 +3,6 @@ on:
   pull_request_target:
     branches:
       - 'main'
-      - 'stable-*'
     types:
       # Adding 'labeled' to the list of activity types that trigger this event
       # (default: opened, synchronize, reopened) so that we can run this
