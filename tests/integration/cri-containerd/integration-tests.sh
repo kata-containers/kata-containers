@@ -211,7 +211,7 @@ EOF
 	restart_containerd_service
 
 	sudo crictl pull $image
-	podid=$(sudo crictl runp $pod_yaml)
+	podid=$(sudo crictl --timeout=5s runp $pod_yaml)
 	cid=$(sudo crictl create $podid $container_yaml $pod_yaml)
 	sudo crictl start $cid
 }
@@ -537,7 +537,7 @@ EOF
 	restart_containerd_service
 
 	sudo crictl pull $image
-	podid=$(sudo crictl runp $pod_yaml)
+	podid=$(sudo crictl --timeout=5s runp $pod_yaml)
 	cid1=$(sudo crictl create $podid $container1_yaml $pod_yaml)
 	cid2=$(sudo crictl create $podid $container2_yaml $pod_yaml)
 	sudo crictl start $cid1
