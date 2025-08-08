@@ -16,9 +16,11 @@ ifeq ($(ARCH),)
 endif
 ifeq ($(ARCH),x86_64)
     override ARCH = amd64
+    override EDK2_NAME = ovmf
 endif
 ifeq ($(ARCH),aarch64)
     override ARCH = arm64
+    override EDK2_NAME = aavmf
 endif
 ifeq ($(ARCH),riscv64gc)
     override ARCH = riscv64
@@ -460,10 +462,10 @@ ifneq (,$(QEMUCMD))
     FIRMWAREPATH_NV := $(PREFIXDEPS)/share/ovmf/OVMF.fd
 
     ifneq (,$(QEMUFW))
-        FIRMWAREPATH := $(PREFIXDEPS)/share/ovmf/$(QEMUFW)
+        FIRMWAREPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
     endif
     ifneq (,$(QEMUFWVOL))
-        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/ovmf/$(QEMUFWVOL)
+        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFWVOL)
     endif
 endif
 
