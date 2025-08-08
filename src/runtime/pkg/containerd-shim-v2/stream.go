@@ -101,7 +101,7 @@ func newTtyIO(ctx context.Context, ns, id, stdin, stdout, stderr string, console
 	}, nil
 }
 
-func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
+func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser, stdioCloser chan struct{}, tty *ttyIO, stdinPipe io.WriteCloser, stdoutPipe, stderrPipe io.Reader) {
 	var wg sync.WaitGroup
 
 	if tty.io.Stdin() != nil {
@@ -149,6 +149,7 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 
 	wg.Wait()
 	tty.close()
+	close(stdioCloser)
 	close(exitch)
 	shimLog.Debug("all io stream copy goroutines exited")
 }

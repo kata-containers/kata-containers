@@ -31,6 +31,7 @@ type exec struct {
 
 	exitIOch    chan struct{}
 	stdinCloser chan struct{}
+	stdioCloser chan struct{}
 
 	exitCh chan uint32
 
@@ -125,6 +126,7 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *a
 		exitCode:    exitCode255,
 		exitIOch:    make(chan struct{}),
 		stdinCloser: make(chan struct{}),
+		stdioCloser: make(chan struct{}),
 		exitCh:      make(chan uint32, 1),
 		status:      task.Status_CREATED,
 	}
