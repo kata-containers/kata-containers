@@ -16,6 +16,7 @@ use super::inner::DragonballInner;
 use crate::{
     utils::{self, get_hvsock_path, get_jailer_root, get_sandbox_path},
     VcpuThreadIds, VmmState,
+    dragonball::seccomp::{ThreadType, get_seccomp_filter},
 };
 
 impl DragonballInner {
@@ -26,6 +27,21 @@ impl DragonballInner {
         self.vm_path = get_sandbox_path(id);
         self.jailer_root = get_jailer_root(id);
         self.netns = netns;
+        
+        if !self.config.security_info.disable_seccomp {
+            let seccomp = HashMap::from([
+                (
+                    ThreadType::Vmm,
+                    get_seccomp_filter(&ThreadType::Vmm),
+                ),
+                (
+                    ThreadType::Vcpu,
+                    get_seccomp_filter(&ThreadType::Vcpu),
+                ),
+            ]);
+
+            self.vmm_instance.set_seccomp(seccomp);
+        }
 
         Ok(())
     }
