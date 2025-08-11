@@ -25,6 +25,7 @@ mod image;
 mod rpc;
 mod types;
 mod utils;
+mod vm;
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 
@@ -72,6 +73,10 @@ fn make_examples_text(program_name: &str) -> String {
 
   # Abstract socket
   $ {program} connect --server-address "{abstract_server_address}" --cmd Check
+
+- Boot up a test VM and connect to the agent (socket address determined by the tool):
+
+  $ {program} connect --vm qemu --cmd Check
 
 - Query the agent environment:
 
@@ -140,11 +145,24 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let interactive = args.contains_id("interactive");
     let ignore_errors = args.contains_id("ignore-errors");
 
+    // boot-up a test vm for testing commands
+    let hypervisor_name = args
+        .get_one::<String>("vm")
+        .map(|s| s.as_str())
+        .unwrap_or_default()
+        .to_string();
+
     let server_address = args
         .get_one::<String>("server-address")
         .map(|s| s.as_str())
-        .ok_or_else(|| anyhow!("need server adddress"))?
+        .unwrap_or_default()
         .to_string();
+
+    // if vm is requested, we retrieve the server
+    // address after the boot-up is completed
+    if hypervisor_name.is_empty() && server_address.is_empty() {
+        return Err(anyhow!("need server address"));
+    }
 
     let mut commands: Vec<&str> = Vec::new();
 
@@ -187,7 +205,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
     let hybrid_vsock = args.contains_id("hybrid-vsock");
     let no_auto_values = args.contains_id("no-auto-values");
 
-    let cfg = Config {
+    let mut cfg = Config {
         server_address,
         bundle_dir,
         timeout_nano,
@@ -196,9 +214,10 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         hybrid_vsock,
         ignore_errors,
         no_auto_values,
+        hypervisor_name,
     };
 
-    let result = rpc::run(&logger, &cfg, commands);
+    let result = rpc::run(&logger, &mut cfg, commands);
 
     result.map_err(|e| anyhow!(e))
 }
@@ -282,6 +301,12 @@ fn real_main() -> Result<()> {
                     .long("timeout")
                     .help("timeout value as nanoseconds or using human-readable suffixes (0 [forever], 99ns, 30us, 2ms, 5s, 7m, etc)")
                     .value_name("human-time"),
+                    )
+                .arg(
+                    Arg::new("vm")
+                    .long("vm")
+                    .help("boot a pod vm for testing")
+                    .value_name("HYPERVISOR"),
                     )
                 )
                 .subcommand(
