@@ -150,7 +150,7 @@ impl CgroupsResourceInner {
                 let pid = CgroupPid::from(*pid as u64);
                 self.sandbox_cgroup
                     .add_thread(pid)
-                    .with_context(|| format!("add vcpu pid {}", pid.pid))?
+                    .with_context(|| format!("add vcpu pid {}", pid.as_raw()))?
             }
         } else {
             // No vCPU, exits early

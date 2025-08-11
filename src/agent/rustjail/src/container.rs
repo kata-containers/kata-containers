@@ -19,15 +19,12 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::fs::File;
 
-use cgroups::freezer::FreezerState;
+use cgroups::manager::{FsManager, SystemdManager};
+use cgroups::{CgroupPid, FreezerState, Manager};
 
 use crate::capabilities;
-#[cfg(not(test))]
-use crate::cgroups::fs::Manager as FsManager;
-#[cfg(test)]
-use crate::cgroups::mock::Manager as FsManager;
-use crate::cgroups::systemd::manager::Manager as SystemdManager;
-use crate::cgroups::{DevicesCgroupInfo, Manager};
+use crate::cgroups::utils::convert_cgroup_stats;
+use crate::cgroups::{ContainerCgroupManager, SandboxCgroupManager};
 #[cfg(feature = "standard-oci-runtime")]
 use crate::console;
 use crate::log_child;
@@ -59,7 +56,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::os::unix::io::FromRawFd;
 use std::str::FromStr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use slog::{info, o, Logger};
 
@@ -257,7 +254,7 @@ pub struct LinuxContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
-    pub cgroup_manager: Box<dyn Manager + Send + Sync>,
+    pub cgroup_manager: Arc<ContainerCgroupManager>,
     pub init_process_pid: pid_t,
     pub init_process_start_time: u64,
     pub uid_map_path: String,
@@ -317,7 +314,7 @@ impl Container for LinuxContainer {
             ));
         }
 
-        self.cgroup_manager.as_ref().freeze(FreezerState::Frozen)?;
+        self.cgroup_manager.freeze(FreezerState::Frozen)?;
 
         self.status.transition(ContainerState::Paused);
 
@@ -330,7 +327,7 @@ impl Container for LinuxContainer {
             return Err(anyhow!("container status is: {:?}, not paused", status));
         }
 
-        self.cgroup_manager.as_ref().freeze(FreezerState::Thawed)?;
+        self.cgroup_manager.freeze(FreezerState::Thawed)?;
 
         self.status.transition(ContainerState::Running);
 
@@ -567,7 +564,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     sched::unshare(to_new & !CloneFlags::CLONE_NEWUSER)?;
 
-    if cgroups::hierarchies::is_cgroup2_unified_mode() {
+    if cgroups::fs::hierarchies::is_cgroup2_unified_mode() {
         sched::unshare(CloneFlags::CLONE_NEWCGROUP)?;
     }
 
@@ -595,13 +592,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             mount::init_rootfs(
                 cfd_log,
                 &spec,
-                &systemd_cm.paths,
-                &systemd_cm.mounts,
+                systemd_cm.paths(),
+                systemd_cm.mounts(),
                 bind_device,
             )?;
         } else {
             let fs_cm = fs_cm.unwrap();
-            mount::init_rootfs(cfd_log, &spec, &fs_cm.paths, &fs_cm.mounts, bind_device)?;
+            mount::init_rootfs(cfd_log, &spec, fs_cm.paths(), fs_cm.mounts(), bind_device)?;
         }
     }
 
@@ -946,14 +943,17 @@ impl BaseContainer for LinuxContainer {
     fn stats(&self) -> Result<StatsContainerResponse> {
         // what about network interface stats?
 
+        let cgroup_stats =
+            convert_cgroup_stats(self.cgroup_manager.stats()).context("convert cgroup stats")?;
+
         Ok(StatsContainerResponse {
-            cgroup_stats: MessageField::some(self.cgroup_manager.as_ref().get_stats()?),
+            cgroup_stats: MessageField::some(cgroup_stats),
             ..Default::default()
         })
     }
 
     fn set(&mut self, r: LinuxResources) -> Result<()> {
-        self.cgroup_manager.as_ref().set(&r, true)?;
+        self.cgroup_manager.set(&r)?;
 
         if let Some(linux) = self.config.spec.as_mut().unwrap().linux_mut() {
             linux.set_resources(Some(r));
@@ -1216,8 +1216,7 @@ impl BaseContainer for LinuxContainer {
             &logger,
             spec,
             &p,
-            self.cgroup_manager.as_ref(),
-            self.config.use_systemd_cgroup,
+            self.cgroup_manager.clone(),
             &st,
             &mut pipe_w,
             &mut pipe_r,
@@ -1313,18 +1312,17 @@ impl BaseContainer for LinuxContainer {
         })?;
         fs::remove_dir_all(&self.root)?;
 
-        let cgm = self.cgroup_manager.as_mut();
         // Kill all of the processes created in this container to prevent
         // the leak of some daemon process when this container shared pidns
         // with the sandbox.
-        let pids = cgm.get_pids().context("get cgroup pids")?;
+        let pids = self.cgroup_manager.pids().context("get cgroup pids")?;
         for i in pids {
-            if let Err(e) = signal::kill(Pid::from_raw(i), Signal::SIGKILL) {
-                warn!(self.logger, "kill the process {} error: {:?}", i, e);
+            if let Err(e) = signal::kill(Pid::from_raw(i.as_raw() as i32), Signal::SIGKILL) {
+                warn!(self.logger, "kill the process {:?} error: {:?}", i, e);
             }
         }
 
-        cgm.destroy().context("destroy cgroups")?;
+        self.cgroup_manager.destroy().context("destroy cgroups")?;
 
         Ok(())
     }
@@ -1517,8 +1515,7 @@ async fn join_namespaces(
     logger: &Logger,
     spec: &Spec,
     p: &Process,
-    cm: &(dyn Manager + Send + Sync),
-    use_systemd_cgroup: bool,
+    cm: Arc<ContainerCgroupManager>,
     st: &OCIState,
     pipe_w: &mut PipeStream,
     pipe_r: &mut PipeStream,
@@ -1554,11 +1551,8 @@ async fn join_namespaces(
     info!(logger, "wait child received oci state");
     read_async(pipe_r).await?;
 
-    let cm_str = if use_systemd_cgroup {
-        serde_json::to_string(cm.as_any()?.downcast_ref::<SystemdManager>().unwrap())
-    } else {
-        serde_json::to_string(cm.as_any()?.downcast_ref::<FsManager>().unwrap())
-    }?;
+    let cm_str = cm.serialize().context("serialize cgroup manager")?;
+
     write_async(pipe_w, SYNC_DATA, cm_str.as_str()).await?;
 
     // wait child setup user namespace
@@ -1579,12 +1573,13 @@ async fn join_namespaces(
     // For SystemdManger, apply must be precede set because we can only create a systemd unit with specific processes(pids).
     if res.is_some() {
         info!(logger, "apply processes to cgroups!");
-        cm.apply(p.pid)?;
+        cm.add_thread(CgroupPid::from(p.pid))?;
     }
 
     if p.init && res.is_some() {
         info!(logger, "set properties to cgroups!");
-        cm.set(res.unwrap(), false)?;
+        let resources = res.ok_or(anyhow!("empty linux resources"))?;
+        cm.set(resources)?;
     }
 
     info!(logger, "notify child to continue");
@@ -1665,7 +1660,7 @@ impl LinuxContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
-        devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
+        sandbox_cgroup_manager: Arc<SandboxCgroupManager>,
         config: Config,
         logger: &Logger,
     ) -> Result<Self> {
@@ -1712,20 +1707,15 @@ impl LinuxContainer {
             linux_cgroups_path.replace(':', "/")
         };
 
-        let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
-            Box::new(SystemdManager::new(cpath.as_str()).context("Create systemd manager")?)
-        } else {
-            Box::new(
-                FsManager::new(cpath.as_str(), spec, devcg_info)
-                    .context("Create cgroupfs manager")?,
-            )
-        };
+        let cgroup_manager =
+            ContainerCgroupManager::new(sandbox_cgroup_manager, cpath.as_str(), spec)
+                .context("new container cgroup manager")?;
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
         Ok(LinuxContainer {
             id: id.clone(),
             root,
-            cgroup_manager,
+            cgroup_manager: Arc::new(cgroup_manager),
             status: ContainerStatus::new(),
             uid_map_path: String::from(""),
             gid_map_path: "".to_string(),
@@ -1953,7 +1943,7 @@ mod tests {
             LinuxContainer::new(
                 "some_id",
                 &dir.path().join("rootfs").to_str().unwrap(),
-                None,
+                Arc::new(SandboxCgroupManager::default()),
                 create_dummy_opts(),
                 &slog_scope::logger(),
             ),
@@ -1983,10 +1973,14 @@ mod tests {
     #[test]
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager =
-                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
-                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
-                })?);
+            c.cgroup_manager = Arc::new(
+                ContainerCgroupManager::new(
+                    Arc::new(SandboxCgroupManager::default()),
+                    "kata-agent-test",
+                    &Spec::default(),
+                )
+                .unwrap(),
+            );
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -2008,12 +2002,18 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager =
-                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
-                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
-                })?);
+            c.cgroup_manager = Arc::new(
+                ContainerCgroupManager::new(
+                    Arc::new(SandboxCgroupManager::default()),
+                    "kata-agent-test",
+                    &Spec::default(),
+                )
+                .unwrap(),
+            );
             // Change status to paused, this way we can resume it
+            c.pause().map_err(|e| anyhow!(e))?;
             c.status.transition(ContainerState::Paused);
+
             c.resume().map_err(|e| anyhow!(e))
         });
 
