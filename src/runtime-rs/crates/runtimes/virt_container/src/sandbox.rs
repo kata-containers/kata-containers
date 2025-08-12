@@ -374,9 +374,9 @@ impl VirtSandbox {
         hypervisor_config: &HypervisorConfig,
         init_data: Option<String>,
     ) -> Result<Option<ProtectionDeviceConfig>> {
-        if !hypervisor_config.security_info.confidential_guest {
-            return Ok(None);
-        }
+        // if !hypervisor_config.security_info.confidential_guest {
+        //     return Ok(None);
+        // }
 
         let available_protection = available_guest_protection()?;
         info!(
@@ -438,9 +438,9 @@ impl VirtSandbox {
         &self,
         hypervisor_config: &HypervisorConfig,
     ) -> Result<Option<InitDataConfig>> {
-        if !hypervisor_config.security_info.confidential_guest {
-            return Ok(None);
-        }
+        // if !hypervisor_config.security_info.confidential_guest {
+        //     return Ok(None);
+        // }
 
         let initdata = hypervisor_config.security_info.initdata.clone();
         if initdata.is_empty() {

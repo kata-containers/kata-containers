@@ -62,7 +62,7 @@ setup() {
 	kubectl get "pvc/${volume_claim}" | grep "Bound"
 
 	# make fs, mount device and write on it
-	kubectl exec "$pod_name" -- sh -c "mkfs.ext4 $ctr_dev_path"
+	kubectl exec "$pod_name" -- sh -c "mkfs.ext4 $ctr_dev_path && sleep 1"
 	ctr_mount_path="/mnt"
 	ctr_message="Hello World"
 	ctr_file="${ctr_mount_path}/file.txt"
