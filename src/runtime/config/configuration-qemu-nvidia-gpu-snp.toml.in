@@ -62,8 +62,9 @@ valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
 
 # SNP 'ID Block' and 'ID Authentication Information Structure'.
 # If one of snp_id_block or snp_id_auth is specified, the other must be specified, too.
-# Notice that the default SNP policy of QEMU (0x30000) is used by Kata, and the IDBlock
-# must be generated with exactly this policy.
+# Notice that the default SNP policy of QEMU (0x30000) is used by Kata, if not explicitly
+# set via 'snp_guest_policy' option. The IDBlock contains the guest policy as field, and
+# it must match the value from 'snp_guest_policy' or, if unset, the QEMU default policy.
 #
 # 96-byte, base64-encoded blob to provide the ‘ID Block’ structure for the
 # SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
@@ -71,6 +72,13 @@ valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
 # 4096-byte, base64-encoded blob to provide the ‘ID Authentication Information Structure’
 # for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
 #snp_id_auth = ""
+
+# SNP Guest Policy, the ‘POLICY’ parameter to the SNP_LAUNCH_START command.
+# If unset, the QEMU default policy (0x30000) will be used.
+# Notice that the guest policy is enforced at VM launch, and your pod VMs 
+# won't start at all if the policy denys it. This will be indicated by a
+# 'SNP_LAUNCH_START' error.
+#snp_guest_policy = 196608
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
