@@ -23,7 +23,7 @@
 //! hypervisors, so let's contain it...
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
-use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
+use crate::annotations::{KATA_ANNO_CFG_HYPERVISOR_PREFIX, KATA_ANNO_CFG_RUNTIME_INIT_DATA};
 use crate::{eother, resolve_path, sl, validate_path};
 use byte_unit::{Byte, Unit};
 use lazy_static::lazy_static;
@@ -956,6 +956,10 @@ impl SecurityInfo {
 
     /// Check whether annotation key is enabled or not.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
+        if matches!(path, KATA_ANNO_CFG_RUNTIME_INIT_DATA) {
+            return true;
+        }
+
         if !path.starts_with(KATA_ANNO_CFG_HYPERVISOR_PREFIX) {
             return false;
         }
