@@ -429,6 +429,7 @@ impl VirtSandbox {
                     debug: false,
                 })))
             },
+            GuestProtection::NoProtection => Ok(None),
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
         }
     }
@@ -437,6 +438,10 @@ impl VirtSandbox {
         &self,
         hypervisor_config: &HypervisorConfig,
     ) -> Result<Option<InitDataConfig>> {
+        if !hypervisor_config.security_info.confidential_guest {
+            return Ok(None);
+        }
+
         let initdata = hypervisor_config.security_info.initdata.clone();
         if initdata.is_empty() {
             return Ok(None);
@@ -451,6 +456,9 @@ impl VirtSandbox {
             GuestProtection::Tdx => calculate_initdata_digest(&initdata, ProtectedPlatform::Tdx)?,
             GuestProtection::Snp(_details) => {
                 calculate_initdata_digest(&initdata, ProtectedPlatform::Snp)?
+            }
+            GuestProtection::NoProtection => {
+                calculate_initdata_digest(&initdata, ProtectedPlatform::NoProtection)?
             }
             // TODO: there's more `GuestProtection` types to be supported.
             _ => return Ok(None),
