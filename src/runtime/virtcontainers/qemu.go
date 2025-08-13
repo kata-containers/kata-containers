@@ -873,18 +873,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	// Deduce the right values for mem-reserve and pref-64-reserve memory regions
 	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory()
 
-	// The default OVMF MMIO aperture is too small for some PCIe devices
-	// with huge BARs so we need to increase it.
-	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
-	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
-		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
-		fwCfg := govmmQemu.FwCfg{
-			Name: "opt/ovmf/X-PciMmio64Mb",
-			Str:  pciMmio64Mb,
-		}
-		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
-	}
-
 	// Get the number of hot(cold)-pluggable ports needed from the provided
 	// VFIO devices
 	var numOfPluggablePorts uint32 = 0
@@ -967,6 +955,19 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	// If both Root Port and Switch Port are not enabled, check if QemuVirt need add pcie root port.
 	if machineType == QemuVirt {
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+	}
+
+	// The default OVMF MMIO aperture is too small for some PCIe devices
+	// with huge BARs so we need to increase it.
+	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
+	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
+		memSize64bit *= uint64(vfioOnRootPort + vfioOnSwitchPort)
+		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
+		fwCfg := govmmQemu.FwCfg{
+			Name: "opt/ovmf/X-PciMmio64Mb",
+			Str:  pciMmio64Mb,
+		}
+		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
 	}
 	return nil
 }
