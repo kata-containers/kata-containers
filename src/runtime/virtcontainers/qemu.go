@@ -467,7 +467,7 @@ func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu
 	}
 
 	var ioThread *govmmQemu.IOThread
-	if q.config.BlockDeviceDriver == config.VirtioSCSI {
+	if q.config.BlockDeviceDriver == config.VirtioSCSI && !q.config.DisableBlockDeviceUse {
 		devices, ioThread, err = q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
 		if err != nil {
 			return nil, nil, nil, err
