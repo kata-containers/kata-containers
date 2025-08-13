@@ -220,5 +220,7 @@ func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 }
 
 func (q *qemuArm64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
-	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
+	memory := genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
+	memory.MemoryModules = genericNUMAMemoryModles(memoryMb, 4, q.numaNodes)
+	return memory
 }
