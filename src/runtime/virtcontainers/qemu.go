@@ -323,10 +323,13 @@ func (q *qemu) cpuTopology() govmmQemu.SMP {
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
-	hostMemMb := q.config.DefaultMaxMemorySize
 	memMb := uint64(q.config.MemorySize)
+	if !q.config.ConfidentialGuest {
+		hostMemMb := q.config.DefaultMaxMemorySize
+		return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
+	}
 
-	return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
+	return q.arch.memoryTopology(memMb, 0, 0), nil
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
@@ -2566,12 +2569,13 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	// See https://github.com/clearcontainers/runtime/issues/380
 	memoryOffset += 1024
 
-	memMax := fmt.Sprintf("%dM", hostMemoryMb+memoryOffset)
-
-	mem := fmt.Sprintf("%dM", memoryMb)
+	memMax := ""
+	if hostMemoryMb != 0 {
+		memMax = fmt.Sprintf("%dM", hostMemoryMb+memoryOffset)
+	}
 
 	memory := govmmQemu.Memory{
-		Size:   mem,
+		Size:   fmt.Sprintf("%dM", memoryMb),
 		Slots:  slots,
 		MaxMem: memMax,
 	}
