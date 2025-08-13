@@ -991,6 +991,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HugePages:                h.HugePages,
 		IOMMU:                    h.IOMMU,
 		IOMMUPlatform:            h.getIOMMUPlatform(),
+		NUMA:                     h.NUMA,
 		NUMANodes:                h.defaultNUMANodes(),
 		FileBackedMemRootDir:     h.FileBackedMemRootDir,
 		FileBackedMemRootList:    h.FileBackedMemRootList,
@@ -1884,6 +1885,20 @@ func checkConfig(config oci.RuntimeConfig) error {
 	hypervisorType := config.HypervisorType
 	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType, hypervisorType); err != nil {
 		return err
+	}
+
+	if err := checkNumaConfig(config); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkNumaConfig ensures that we have static resource management set since
+// NUMA does not support hot-plug of memory or CPU, VFIO devices can be
+// hot-plugged.
+func checkNumaConfig(config oci.RuntimeConfig) error {
+	if !config.StaticSandboxResourceMgmt && config.HypervisorConfig.NUMA {
+		return errors.New("NUMA is enabled but static sandbox resource management is false, NUMA cannot hot-plug CPUs or memory, VFIO hot-plugging works, set static_sandbox_resource_mgmt=true")
 	}
 
 	return nil

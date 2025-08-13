@@ -641,6 +641,9 @@ type HypervisorConfig struct {
 	// IOMMUPlatform is used to indicate if IOMMU_PLATFORM is enabled for supported devices
 	IOMMUPlatform bool
 
+	// NUMA states if we have NUMA enabled or not
+	NUMA bool
+
 	// NUMANodes defines VM NUMA topology and mapping to host NUMA nodes and CPUs.
 	NUMANodes []types.NUMANode
 
