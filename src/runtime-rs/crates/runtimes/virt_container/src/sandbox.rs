@@ -6,7 +6,7 @@
 
 use crate::health_check::HealthCheck;
 use agent::kata::KataAgent;
-use agent::types::KernelModule;
+use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
     self, Agent, GetGuestDetailsRequest, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest,
 };
@@ -345,6 +345,24 @@ impl VirtSandbox {
         }))
     }
 
+    async fn set_agent_policy(&self) -> Result<()> {
+        // TODO: Exclude policy-related items from the annotations.
+        let toml_config = self.resource_manager.config().await;
+        if let Some(agent_config) = toml_config.agent.get(&toml_config.runtime.agent_name) {
+            // If a Policy has been specified, send it to the agent.
+            if !agent_config.policy.is_empty() {
+                self.agent
+                    .set_policy(SetPolicyRequest {
+                        policy: agent_config.policy.clone(),
+                    })
+                    .await
+                    .context("sandbox: set policy failed")?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
         // It will check the hypervisor's capabilities to see if it supports hybrid-vsock.
         // If it does not, it'll assume that it only supports legacy vsock.
@@ -592,6 +610,7 @@ impl Sandbox for VirtSandbox {
             .start(&address)
             .await
             .context(format!("connect to address {:?}", &address))?;
+        self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager
             .setup_after_start_vm()

@@ -115,7 +115,10 @@ pub struct Agent {
     /// This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
     /// It's also used to ensure that workloads, especially those involving large image pulls within the guest,
     /// have sufficient time to complete.
-    #[serde(default = "default_request_timeout", rename = "create_container_timeout")]
+    #[serde(
+        default = "default_request_timeout",
+        rename = "create_container_timeout"
+    )]
     pub request_timeout_ms: u32,
 
     /// Agent health check request timeout value in millisecond
@@ -143,6 +146,10 @@ pub struct Agent {
     /// Memory agent configuration
     #[serde(default)]
     pub mem_agent: MemAgent,
+
+    /// Agent policy
+    #[serde(default)]
+    pub policy: String,
 }
 
 impl std::default::Default for Agent {
@@ -162,6 +169,7 @@ impl std::default::Default for Agent {
             kernel_modules: Default::default(),
             container_pipe_size: 0,
             mem_agent: MemAgent::default(),
+            policy: Default::default(),
         }
     }
 }
