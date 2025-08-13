@@ -473,6 +473,9 @@ type HypervisorConfig struct {
 	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
 	SnpIdAuth string
 
+	// SnpGuestPolicy is the integer representation of the SEV-SNP guest policy.
+	SnpGuestPolicy *uint64
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
