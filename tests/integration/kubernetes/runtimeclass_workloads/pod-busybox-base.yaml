@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2025 Advanced Micro Devices, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox-base-pod
+spec:
+  runtimeClassName: kata
+  containers:
+    - name: busybox-base
+      image: quay.io/prometheus/busybox:latest
+      command: ["/bin/sh", "-c"]
+      args:
+        - sleep 180
