@@ -54,6 +54,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		qemuArchBase{
 			qemuMachine:          supportedQemuMachine,
 			qemuExePath:          defaultQemuPath,
+			numaNodes:            config.NUMANodes,
 			memoryOffset:         config.MemOffset,
 			kernelParamsNonDebug: kernelParamsNonDebug,
 			kernelParamsDebug:    kernelParamsDebug,
@@ -163,5 +164,7 @@ func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 }
 
 func (q *qemuArm64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
-	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
+	memory := genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
+	memory.MemoryModules = genericNUMAMemoryModules(memoryMb, 4, q.numaNodes)
+	return memory
 }
