@@ -28,7 +28,7 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
-export branch="${target_branch:-main}"
+export branch="${target_branch:-"$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')"}"
 
 function die() {
 	local msg="$*"
