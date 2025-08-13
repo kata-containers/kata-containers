@@ -20,5 +20,7 @@ pub const IP_TABLE_URL: &str = "/iptables";
 pub const IP6_TABLE_URL: &str = "/ip6tables";
 /// URL for querying metrics inside shim
 pub const METRICS_URL: &str = "/metrics";
+/// URL for setting agent policy
+pub const AGENT_POLICY_URL: &str = "/policy";
 
 pub const ERR_NO_SHIM_SERVER: &str = "Failed to create shim management server";
