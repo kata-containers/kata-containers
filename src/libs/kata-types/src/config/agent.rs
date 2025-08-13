@@ -146,6 +146,10 @@ pub struct Agent {
     /// Memory agent configuration
     #[serde(default)]
     pub mem_agent: MemAgent,
+
+    /// Agent policy
+    #[serde(default)]
+    pub policy: String,
 }
 
 impl std::default::Default for Agent {
@@ -165,6 +169,7 @@ impl std::default::Default for Agent {
             kernel_modules: Default::default(),
             container_pipe_size: 0,
             mem_agent: MemAgent::default(),
+            policy: Default::default(),
         }
     }
 }
