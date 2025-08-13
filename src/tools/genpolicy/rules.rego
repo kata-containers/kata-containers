@@ -1400,6 +1400,25 @@ UpdateInterfaceRequest if {
     print("UpdateInterfaceRequest: true")
 }
 
+AddARPNeighborsRequest if {
+    p_defaults := policy_data.request_defaults.AddARPNeighborsRequest
+    print("AddARPNeighborsRequest: policy =", p_defaults)
+
+    every i_neigh in input.neighbors.ARPNeighbors {
+        print("AddARPNeighborsRequest: i_neigh =", i_neigh)
+
+        not i_neigh.device in p_defaults.forbidden_device_names
+        i_neigh.toIPAddress.mask == ""
+        every p_cidr in p_defaults.forbidden_cidrs_regex {
+            not regex.match(p_cidr, i_neigh.toIPAddress.address)
+        }
+        i_neigh.state == 128
+        bits.or(i_neigh.flags, 136) == 136
+    }
+
+    print("AddARPNeighborsRequest: true")
+}
+
 CloseStdinRequest if {
     policy_data.request_defaults.CloseStdinRequest == true
 }

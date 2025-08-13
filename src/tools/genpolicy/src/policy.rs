@@ -355,6 +355,16 @@ pub struct UpdateInterfaceRequestDefaults {
     forbidden_hw_addrs: Vec<String>,
 }
 
+/// UpdateInterfaceRequest settings from genpolicy-settings.json.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AddARPNeighborsRequestDefaults {
+    /// Explicitly blocked interface names. Intent is to block changes to loopback interface.
+    forbidden_device_names: Vec<String>,
+    /// Explicitly blocked IP address ranges.
+    /// Should include loopback addresses and other CIDRs that should not be routed outside the VM.
+    forbidden_cidrs_regex: Vec<String>,
+}
+
 /// Settings specific to each kata agent endpoint, loaded from
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -373,6 +383,9 @@ pub struct RequestDefaults {
 
     /// Allow the host to configure only used raw_flags and reject names/mac addresses of the loopback.
     pub UpdateInterfaceRequest: UpdateInterfaceRequestDefaults,
+
+    /// Allow the host to configure only used raw_flags and reject names/mac addresses of the loopback.
+    pub AddARPNeighborsRequest: AddARPNeighborsRequestDefaults,
 
     /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
     pub CloseStdinRequest: bool,
