@@ -516,8 +516,8 @@ func TestAppendMemoryHugePages(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     true,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=/dev/hugepages,id=dimm1,size=1G,share=on,prealloc=on"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -547,7 +547,7 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 		MemShared:   true,
 	}
 	objMemString := "-object memory-backend-ram,id=dimm1,size=1G,share=on,prealloc=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -576,8 +576,8 @@ func TestAppendMemoryMemShared(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     true,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=foobar,id=dimm1,size=1G,share=on"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -606,8 +606,8 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     false,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=foobar,id=dimm1,size=1G"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -637,8 +637,8 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 		MemShared:     true,
 		MemPrealloc:   true,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on,prealloc=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=foobar,id=dimm1,size=1G,share=on,prealloc=on"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
