@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 )
 
 var ioctlFunc = Ioctl
@@ -219,4 +220,51 @@ func getHostNUMANodeCPUs(nodeId int) (string, error) {
 		return "", err
 	}
 	return strings.TrimSuffix(string(data), "\n"), nil
+}
+
+// GetNUMANodes constructs VM NUMA nodes mapping to host NUMA nodes and host CPUs.
+func GetNUMANodes(numaMapping []string) ([]types.NUMANode, error) {
+	// Add VM NUMA node for each specified subsets of host NUMA nodes.
+	if numNUMA := len(numaMapping); numNUMA > 0 {
+		numaNodes := make([]types.NUMANode, numNUMA)
+		for i, hostNodes := range numaMapping {
+			hostNodeIds, err := cpuset.Parse(hostNodes)
+			if err != nil {
+				return nil, err
+			}
+			numaNodes[i].HostNodes = hostNodes
+			for _, nodeId := range hostNodeIds.ToSlice() {
+				cpus, err := getHostNUMANodeCPUs(nodeId)
+				if err != nil {
+					return nil, err
+				}
+				if numaNodes[i].HostCPUs != "" {
+					numaNodes[i].HostCPUs += ","
+				}
+				numaNodes[i].HostCPUs += cpus
+			}
+		}
+		return numaNodes, nil
+	}
+
+	// Add VM NUMA node for each host NUMA node.
+	nodeIds, err := getHostNUMANodes()
+	if err != nil {
+		return nil, err
+	}
+	if len(nodeIds) == 0 {
+		return nil, nil
+	}
+
+	numaNodes := make([]types.NUMANode, len(nodeIds))
+	for i, nodeId := range nodeIds {
+		cpus, err := getHostNUMANodeCPUs(nodeId)
+		if err != nil {
+			return nil, err
+		}
+		numaNodes[i].HostNodes = fmt.Sprintf("%d", nodeId)
+		numaNodes[i].HostCPUs = cpus
+	}
+
+	return numaNodes, nil
 }
