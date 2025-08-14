@@ -64,8 +64,6 @@ const (
 
 	// the maximum valid loglevel for the hypervisor
 	maxHypervisorLoglevel uint32 = 3
-	// the maximum number of NUMA nodes in Linux kernel: 1 << CONFIG_NODES_SHIFT, which is up to 10.
-	maxNumNUMA uint32 = 1024
 
 	errInvalidHypervisorPrefix = "configuration file contains invalid hypervisor section"
 )
