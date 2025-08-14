@@ -5,6 +5,7 @@
 //
 
 use std::{
+    collections::HashMap,
     fs::{File, OpenOptions},
     os::unix::{io::IntoRawFd, prelude::AsRawFd},
     sync::{Arc, Mutex, RwLock},
@@ -34,6 +35,8 @@ use vmm_sys_util::eventfd::EventFd;
 
 use crate::ShareFsMountOperation;
 
+use crate::dragonball::seccomp::ThreadType;
+
 pub enum Request {
     Sync(VmmAction),
 }
@@ -49,7 +52,7 @@ pub struct VmmInstance {
     to_vmm: Option<Sender<VmmRequest>>,
     from_vmm: Option<Receiver<VmmResponse>>,
     to_vmm_fd: EventFd,
-    seccomp: BpfProgram,
+    seccomp: HashMap<ThreadType, BpfProgram>,
     vmm_thread: Option<thread::JoinHandle<Result<i32>>>,
     exit_notify: Option<mpsc::Sender<i32>>,
 }
@@ -69,7 +72,7 @@ impl VmmInstance {
             to_vmm: None,
             from_vmm: None,
             to_vmm_fd,
-            seccomp: vec![],
+            seccomp: HashMap::new(),
             vmm_thread: None,
             exit_notify: Some(exit_notify),
         }
@@ -103,6 +106,10 @@ impl VmmInstance {
         result
     }
 
+    pub fn set_seccomp(&mut self, seccomp: HashMap<ThreadType, BpfProgram>) {
+        self.seccomp = seccomp;
+    }
+
     pub fn run_vmm_server(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         let kvm = OpenOptions::new().read(true).write(true).open(KVM_DEVICE)?;
 
@@ -120,8 +127,14 @@ impl VmmInstance {
         let vmm = Vmm::new(
             self.vmm_shared_info.clone(),
             api_event_fd2,
-            self.seccomp.clone(),
-            self.seccomp.clone(),
+            self.seccomp
+                .get(&ThreadType::Vmm)
+                .unwrap_or(&vec![])
+                .clone(),
+            self.seccomp
+                .get(&ThreadType::Vcpu)
+                .unwrap_or(&vec![])
+                .clone(),
             Some(kvm.into_raw_fd()),
         )
         .expect("Failed to start vmm");
