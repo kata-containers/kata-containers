@@ -203,7 +203,7 @@ func (q *qemuAmd64) cpuModel() string {
 
 func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 	memory := genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
-	memory.MemoryModules = genericNUMAMemoryModles(memoryMb, 4, q.numaNodes)
+	memory.MemoryModules = genericNUMAMemoryModules(memoryMb, 4, q.numaNodes)
 	return memory
 }
 

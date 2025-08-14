@@ -2612,7 +2612,7 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	return memory
 }
 
-func genericNUMAMemoryModles(memoryMb, memoryAlign uint64, numaNodes []types.NUMANode) []govmmQemu.MemoryModule {
+func genericNUMAMemoryModules(memoryMb, memoryAlign uint64, numaNodes []types.NUMANode) []govmmQemu.MemoryModule {
 	if len(numaNodes) == 0 {
 		return nil
 	}
