@@ -397,23 +397,6 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	return sockets, nil
 }
 
-func (q *qemu) buildInitdataDevice(devices []govmmQemu.Device, InitdataImage string) []govmmQemu.Device {
-	device := govmmQemu.BlockDevice{
-		Driver:    govmmQemu.VirtioBlock,
-		Transport: govmmQemu.TransportPCI,
-		ID:        "initdata",
-		File:      InitdataImage,
-		SCSI:      false,
-		WCE:       false,
-		AIO:       govmmQemu.Threads,
-		Interface: "none",
-		Format:    "raw",
-	}
-
-	devices = append(devices, device)
-	return devices
-}
-
 func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, *govmmQemu.Kernel, error) {
 	var devices []govmmQemu.Device
 
@@ -763,7 +746,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	}
 
 	if len(hypervisorConfig.Initdata) > 0 {
-		devices = q.buildInitdataDevice(devices, hypervisorConfig.InitdataImage)
+		devices = q.arch.buildInitdataDevice(ctx, devices, hypervisorConfig.InitdataImage)
 	}
 
 	// some devices configuration may also change kernel params, make sure this is called afterwards

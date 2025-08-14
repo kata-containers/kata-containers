@@ -349,8 +349,9 @@ func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 	case seProtection:
 		return append(devices,
 			govmmQemu.Object{
-				Type: govmmQemu.SecExecGuest,
-				ID:   secExecID,
+				Type:           govmmQemu.SecExecGuest,
+				ID:             secExecID,
+				InitdataDigest: initdataDigest,
 			}), firmware, nil
 	case noneProtection:
 		return devices, firmware, nil
@@ -379,6 +380,42 @@ func (q *qemuS390x) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.
 			SysfsDev: vfioDev.SysfsDev,
 		},
 	)
+	return devices
+}
+
+func (q *qemuS390x) buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, initdataImage string) []govmmQemu.Device {
+
+	var transport govmmQemu.VirtioTransport
+	var devNo string
+
+	transport = govmmQemu.TransportCCW
+	id := "initdata"
+	addr, bridge, err := q.addDeviceToBridge(ctx, id, types.CCW)
+	if err != nil {
+		hvLogger.WithError(err).Error("Failed to allocate CCW address for initdata")
+		return nil
+	}
+	devNo, err = bridge.AddressFormatCCW(addr)
+	if err != nil {
+		hvLogger.WithError(err).Error("Failed to format CCW address for initdata")
+		return nil
+	}
+	hvLogger.WithField("devno", devNo).Info("Using dynamic CCW DevNo for initdata")
+
+	device := govmmQemu.BlockDevice{
+		Driver:    govmmQemu.VirtioBlock,
+		Transport: transport,
+		ID:        id,
+		File:      initdataImage,
+		SCSI:      false,
+		WCE:       false,
+		AIO:       govmmQemu.Threads,
+		Interface: "none",
+		Format:    "raw",
+		DevNo:     devNo,
+	}
+
+	devices = append(devices, device)
 	return devices
 }
 
