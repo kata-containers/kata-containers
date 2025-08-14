@@ -84,7 +84,11 @@ fi
 popd
 
 info "Install fd to destdir"
-install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
+if [ "${ovmf_build}" == "arm64" ]; then
+	install_dir="${DESTDIR}/${PREFIX}/share/aavmf"
+else
+	install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
+fi
 
 mkdir -p "${install_dir}"
 if [ "${ovmf_build}" == "sev" ]; then
