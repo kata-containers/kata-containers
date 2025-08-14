@@ -145,6 +145,9 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Disable the 'seccomp' feature from Cloud Hypervisor or firecracker, default false
+# disable_seccomp = true
+
 # Enable vIOMMU, default false
 # Enabling this will result in the VM having a vIOMMU device
 # This will also add the following options to the kernel's
