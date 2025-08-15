@@ -176,6 +176,9 @@ type qemuArch interface {
 
 	// Query QMP to find the PCI slot of a device, given its QOM path or ID
 	qomGetSlot(qomPath string, qmpCh *qmpChannel) (types.PciSlot, error)
+
+	// buildInitdataDevice creates an initdata device for the given architecture.
+	buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, initdataImage string) []govmmQemu.Device
 }
 
 type qemuArchBase struct {
@@ -947,6 +950,24 @@ func (q *qemuArchBase) qomGetSlot(qomPath string, qmpCh *qmpChannel) (types.PciS
 	}
 
 	return types.PciSlotFromInt(slotNum)
+}
+
+// build initdata device
+func (q *qemuArchBase) buildInitdataDevice(ctx context.Context, devices []govmmQemu.Device, initdataImage string) []govmmQemu.Device {
+	device := govmmQemu.BlockDevice{
+		Driver:    govmmQemu.VirtioBlock,
+		Transport: govmmQemu.TransportPCI,
+		ID:        "initdata",
+		File:      initdataImage,
+		SCSI:      false,
+		WCE:       false,
+		AIO:       govmmQemu.Threads,
+		Interface: "none",
+		Format:    "raw",
+	}
+
+	devices = append(devices, device)
+	return devices
 }
 
 // Query QMP to find a device's PCI path given its QOM path or ID
