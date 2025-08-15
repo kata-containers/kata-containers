@@ -374,9 +374,9 @@ impl VirtSandbox {
         hypervisor_config: &HypervisorConfig,
         init_data: Option<String>,
     ) -> Result<Option<ProtectionDeviceConfig>> {
-        if !hypervisor_config.security_info.confidential_guest {
-            return Ok(None);
-        }
+        // if !hypervisor_config.security_info.confidential_guest {
+        //     return Ok(None);
+        // }
 
         let available_protection = available_guest_protection()?;
         info!(
@@ -429,6 +429,7 @@ impl VirtSandbox {
                     debug: false,
                 })))
             },
+            GuestProtection::NoProtection => Ok(None),
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
         }
     }
@@ -437,6 +438,10 @@ impl VirtSandbox {
         &self,
         hypervisor_config: &HypervisorConfig,
     ) -> Result<Option<InitDataConfig>> {
+        // if !hypervisor_config.security_info.confidential_guest {
+        //     return Ok(None);
+        // }
+
         let initdata = hypervisor_config.security_info.initdata.clone();
         if initdata.is_empty() {
             return Ok(None);
@@ -451,6 +456,9 @@ impl VirtSandbox {
             GuestProtection::Tdx => calculate_initdata_digest(&initdata, ProtectedPlatform::Tdx)?,
             GuestProtection::Snp(_details) => {
                 calculate_initdata_digest(&initdata, ProtectedPlatform::Snp)?
+            }
+            GuestProtection::NoProtection => {
+                calculate_initdata_digest(&initdata, ProtectedPlatform::NoProtection)?
             }
             // TODO: there's more `GuestProtection` types to be supported.
             _ => return Ok(None),
@@ -469,7 +477,7 @@ impl VirtSandbox {
             sl!(),
             "initdata push data into compressed block: {:?}", &image_path
         );
-        let block_driver = &hypervisor_config.boot_info.vm_rootfs_driver;
+        let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
         let block_config = BlockConfig {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
