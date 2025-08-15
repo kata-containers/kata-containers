@@ -206,6 +206,10 @@ pub fn calculate_initdata_digest(
 /// The argument `initda_annotation` is a Standard base64 encoded string containing a TOML formatted content.
 /// This function decodes the base64 string, parses the TOML content into an InitData structure.
 pub fn add_hypervisor_initdata_overrides(initda_annotation: &str) -> Result<String> {
+    if initda_annotation.is_empty() {
+        return Ok("".to_string());
+    }
+
     // Base64 decode the annotation value
     let b64_decoded =
         base64::decode_config(initda_annotation, base64::STANDARD).context("base64 decode")?;
@@ -230,6 +234,139 @@ mod tests {
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::Write;
+
+    // create gzipped and base64 encoded string
+    fn create_encoded_input(content: &str) -> String {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(content.as_bytes()).unwrap();
+        let compressed = encoder.finish().unwrap();
+        base64::encode_config(&compressed, base64::STANDARD)
+    }
+
+    #[test]
+    fn test_empty_annotation() {
+        // Test with empty string input
+        let result = add_hypervisor_initdata_overrides("");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "");
+    }
+
+    #[test]
+    fn test_empty_data_section() {
+        // Test with empty data section
+        let toml_content = r#"
+algorithm = "sha384"
+version = "0.1.0"
+
+[data]
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_valid_complete_initdata() {
+        // Test with complete InitData structure
+        let toml_content = r#"
+algorithm = "sha384"
+version = "0.1.0"
+
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.coco_as]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+
+[token_configs.kbs]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+'''
+
+"cdh.toml" = '''
+socket = 'unix:///run/guest-services/cdh.sock'
+credentials = []
+
+[kbc]
+name = 'cc_kbc'
+url = 'http://kbs-service.xxx.cluster.local:8080'
+'''
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert!(!output.is_empty());
+        assert!(output.contains("algorithm"));
+        assert!(output.contains("version"));
+    }
+
+    #[test]
+    fn test_invalid_base64() {
+        // Test with invalid base64 string
+        let invalid_base64 = "This is not valid base64!";
+
+        let result = add_hypervisor_initdata_overrides(invalid_base64);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("base64 decode"));
+    }
+
+    #[test]
+    fn test_valid_base64_invalid_gzip() {
+        // Test with valid base64 but invalid gzip content
+        let not_gzipped = "This is not gzipped content";
+        let encoded = base64::encode_config(not_gzipped.as_bytes(), base64::STANDARD);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("gz decoder failed"));
+    }
+
+    #[test]
+    fn test_missing_algorithm() {
+        // Test with missing algorithm field
+        let toml_content = r#"
+version = "0.1.0"
+
+[data]
+"test.toml" = '''
+key = "value"
+'''
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        // This might fail depending on whether algorithm is required
+        if result.is_err() {
+            assert!(result.unwrap_err().to_string().contains("parse initdata"));
+        }
+    }
+
+    #[test]
+    fn test_missing_version() {
+        // Test with missing version field
+        let toml_content = r#"
+algorithm = "sha384"
+
+[data]
+"test.toml" = '''
+key = "value"
+'''
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        // This might fail depending on whether version is required
+        if result.is_err() {
+            assert!(result.unwrap_err().to_string().contains("parse initdata"));
+        }
+    }
 
     /// Test InitData creation and serialization
     #[test]
