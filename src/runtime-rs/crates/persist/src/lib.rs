@@ -6,7 +6,10 @@
 
 pub mod sandbox_persist;
 use anyhow::{anyhow, Context, Ok, Result};
-use kata_types::config::KATA_PATH;
+use kata_types::{
+    config::KATA_PATH,
+    rootless::{is_rootless, rootless_dir},
+};
 use serde::de;
 use std::{fs::File, io::BufReader};
 
@@ -17,8 +20,13 @@ use safe_path::scoped_join;
 pub fn to_disk<T: serde::Serialize>(value: &T, sid: &str, jailer_path: &str) -> Result<()> {
     verify_id(sid).context("failed to verify sid")?;
     // FIXME: handle jailed case
+    let vm_path = if is_rootless() {
+        format!("{}{}", rootless_dir(), KATA_PATH)
+    } else {
+        KATA_PATH.to_string()
+    };
     let mut path = match jailer_path {
-        "" => scoped_join(KATA_PATH, sid)?,
+        "" => scoped_join(vm_path, sid)?,
         _ => scoped_join(jailer_path, "root")?,
     };
     //let mut path = scoped_join(KATA_PATH, sid)?;
@@ -39,7 +47,12 @@ where
     T: de::DeserializeOwned,
 {
     verify_id(sid).context("failed to verify sid")?;
-    let mut path = scoped_join(KATA_PATH, sid)?;
+    let vm_path = if is_rootless() {
+        format!("{}{}", rootless_dir(), KATA_PATH)
+    } else {
+        KATA_PATH.to_string()
+    };
+    let mut path = scoped_join(vm_path, sid)?;
     if path.exists() {
         path.push(PERSIST_FILE);
         let file = File::open(path).context("failed to open the file")?;

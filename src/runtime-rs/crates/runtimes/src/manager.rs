@@ -14,15 +14,25 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 
-use hypervisor::Param;
+use hypervisor::{
+    utils::{create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user},
+    Param,
+};
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
-    annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
+    annotations::Annotation,
+    config::{default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig},
+    rootless::{is_rootless, rootless_dir, set_rootless},
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
 use netns_rs::NetNs;
+use nix::{
+    mount::{mount, MsFlags},
+    sched::{unshare, CloneFlags},
+    unistd::{gettid, User},
+};
 use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use resource::{
@@ -33,10 +43,14 @@ use runtime_spec as spec;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use std::{
     collections::HashMap,
+    env,
+    fs::File,
     ops::Deref,
+    os::unix::fs::{chown, MetadataExt},
     path::{Path, PathBuf},
-    str::from_utf8,
+    str::{from_utf8, FromStr},
     sync::Arc,
+    thread::{self, JoinHandle},
     time::SystemTime,
 };
 use tokio::fs;
@@ -160,6 +174,26 @@ impl RuntimeHandlerManagerInner {
 
         let mut config =
             load_config(&sandbox_config.annotations, options).context("load config")?;
+
+        let hypervisor_name = &config.runtime.hypervisor_name;
+        let hypervisor = config
+            .hypervisor
+            .get_mut(hypervisor_name)
+            .ok_or_else(|| anyhow!("hypervisor {} not found in config", hypervisor_name))?;
+
+        set_rootless(hypervisor.security_info.rootless);
+        if is_rootless() {
+            configure_non_root_hypervisor(hypervisor).context("configure non-root hypervisor")?;
+
+            // When kata-runtime is invoked as rootless by podman with net=none,
+            // the initially created netns (bind-mounted under /var/run/netns) requires root privileges.
+            // This makes it inaccessible to non-root users. We need to create a non-root accessible
+            // netns and replace the original network namespace path in the config.
+            if sandbox_config.network_env.network_created {
+                setup_non_root_netns(&mut sandbox_config.network_env)
+                    .context("create non-root network namespace")?;
+            }
+        }
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -713,4 +747,122 @@ fn update_component_log_level(config: &TomlConfig) {
         );
         updated_inner
     });
+}
+
+fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
+    let user_name = create_vmm_user().context("failed to create vmm user")?;
+    let user = User::from_name(&user_name)?
+        .ok_or_else(|| anyhow!("failed to get user by name {}, user not found", user_name))?;
+
+    let uid = user.uid.as_raw();
+    let gid = user.gid.as_raw();
+
+    let user_tmp_dir = PathBuf::from_str(&format!("/run/user/{}", uid))?;
+
+    match std::fs::create_dir_all(&user_tmp_dir) {
+        Ok(_) => match chown(&user_tmp_dir, Some(uid), Some(gid)) {
+            Ok(_) => info!(
+                sl!(),
+                "chown user tmp dir {} to uid {}, gid {}",
+                user_tmp_dir.display(),
+                uid,
+                gid
+            ),
+            Err(e) => {
+                remove_vmm_user(&user_name)?;
+                return Err(anyhow!(
+                    "failed to chown user tmp dir {}: {}",
+                    user_tmp_dir.display(),
+                    e
+                ));
+            }
+        },
+        Err(e) => {
+            remove_vmm_user(&user_name)?;
+            return Err(anyhow!(
+                "failed to create user tmp dir {}: {}",
+                user_tmp_dir.display(),
+                e
+            ));
+        }
+    }
+
+    env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
+
+    // Update the rootless dir prefix for guest_swap_path
+    config.memory_info.guest_swap_path =
+        format!("{}{}", rootless_dir(), "/run/kata-containers/swap");
+
+    let kvm_path = PathBuf::from("/dev/kvm");
+    let metadata = std::fs::metadata(&kvm_path)?;
+    let kvm_gid = metadata.gid();
+
+    config.security_info.rootless_user = Some(RootlessUser {
+        uid,
+        gid,
+        groups: [kvm_gid].to_vec(),
+        user_name,
+    });
+
+    Ok(())
+}
+
+fn setup_non_root_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
+    let persist_dir = PathBuf::from(rootless_dir()).join("netns");
+    create_dir_all_with_inherit_owner(&persist_dir, 0o755)?;
+
+    let ns_path = persist_dir.join(generate_netns_name());
+    let _ = File::create(&ns_path).context("create netns file")?;
+    persistent(&ns_path, true).inspect_err(|_| {
+        std::fs::remove_file(&ns_path).ok();
+    })?;
+
+    let raw_netns = netns_rs::get_from_path(ns_path)?;
+    let netns = Some(PathBuf::from(raw_netns.path()).display().to_string());
+    network_env.netns = netns;
+
+    Ok(())
+}
+
+// Copied from `net-ns` pkg.
+fn persistent<P: AsRef<Path>>(ns_path: &P, new_thread: bool) -> Result<()> {
+    if new_thread {
+        let ns_path_clone = ns_path.as_ref().to_path_buf();
+        let new_thread: JoinHandle<Result<()>> =
+            thread::spawn(move || persistent(&ns_path_clone, false));
+        match new_thread.join() {
+            Ok(t) => {
+                t?;
+            }
+            Err(e) => {
+                return Err(anyhow!("failed to join persistent thread: {:?}", e));
+            }
+        };
+    } else {
+        // Create a new netns for the current thread.
+        unshare(CloneFlags::CLONE_NEWNET).context("failed to unshare network namespace")?;
+        // bind mount the netns from the current thread (from /proc) onto the mount point.
+        // This persists the namespace, even when there are no threads in the ns.
+        let src = get_current_thread_netns_path();
+        mount(
+            Some(src.as_path()),
+            ns_path.as_ref(),
+            Some("none"),
+            MsFlags::MS_BIND,
+            Some(""),
+        )
+        .context(format!(
+            "failed to bind mount netns from {} to {}",
+            src.display(),
+            ns_path.as_ref().display()
+        ))?;
+    }
+
+    Ok(())
+}
+
+/// Copied from `netns-rs` pkg.
+#[inline]
+fn get_current_thread_netns_path() -> PathBuf {
+    PathBuf::from(format!("/proc/self/task/{}/ns/net", gettid()))
 }
