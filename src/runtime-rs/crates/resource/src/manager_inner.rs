@@ -505,10 +505,12 @@ impl ResourceManagerInner {
 
     pub async fn cleanup(&self) -> Result<()> {
         // clean up cgroup
-        self.cgroups_resource
-            .delete()
-            .await
-            .context("delete cgroup")?;
+        if !kata_types::rootless::is_rootless() {
+            self.cgroups_resource
+                .delete()
+                .await
+                .context("delete cgroup")?;
+        }
 
         // cleanup sandbox bind mounts: setup = false
         self.handle_sandbox_bindmounts(false)

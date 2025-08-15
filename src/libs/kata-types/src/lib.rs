@@ -44,6 +44,9 @@ pub mod capabilities;
 /// any well-defined data from an untrusted host into a TEE (Trusted Execution Environment).
 pub mod initdata;
 
+/// rootless vmm
+pub mod rootless;
+
 /// Common error codes.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
