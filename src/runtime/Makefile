@@ -6,6 +6,10 @@
 #
 include golang.mk
 
+golang_version_raw=$(shell go version 2>/dev/null)
+HOST_ARCH=$(shell uname -m)
+GOARCH=$(shell go env GOARCH)
+
 #Get ARCH.
 ifeq ($(ARCH),)
     ifneq (,$(golang_version_raw))
