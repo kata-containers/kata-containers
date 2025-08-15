@@ -5,8 +5,7 @@ on:
     branches: ["main"]
   pull_request:
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -27,3 +26,5 @@ jobs:
 
       - name: Run zizmor
         uses: zizmorcore/zizmor-action@f52a838cfabf134edcbaa7c8b3677dde20045018 # v0.1.1
+        with:
+          persona: auditor
