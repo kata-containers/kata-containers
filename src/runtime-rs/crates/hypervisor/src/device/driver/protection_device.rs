@@ -21,6 +21,7 @@ pub enum ProtectionDeviceConfig {
 pub struct SevSnpConfig {
     pub is_snp: bool,
     pub cbitpos: u32,
+    pub phys_addr_reduction: u32,
     pub firmware: String,
     pub host_data: Option<String>,
 }
