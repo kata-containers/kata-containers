@@ -67,9 +67,13 @@ impl BlockRootfs {
         let mut storage = Storage {
             fs_type: rootfs.fs_type.clone(),
             mount_point: container_path.clone(),
-            options: rootfs.options.clone(),
+            options: vec![],
             ..Default::default()
         };
+
+        if rootfs.fs_type == "xfs" {
+            storage.options.push("nouuid".to_string());
+        }
 
         let mut device_id: String = "".to_owned();
         if let DeviceType::Block(device) = device_info {
