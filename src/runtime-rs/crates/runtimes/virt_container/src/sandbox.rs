@@ -6,7 +6,7 @@
 
 use crate::health_check::HealthCheck;
 use agent::kata::KataAgent;
-use agent::types::KernelModule;
+use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
     self, Agent, GetGuestDetailsRequest, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest,
 };
@@ -345,6 +345,24 @@ impl VirtSandbox {
         }))
     }
 
+    async fn set_agent_policy(&self) -> Result<()> {
+        // TODO: Exclude policy-related items from the annotations.
+        let toml_config = self.resource_manager.config().await;
+        if let Some(agent_config) = toml_config.agent.get(&toml_config.runtime.agent_name) {
+            // If a Policy has been specified, send it to the agent.
+            if !agent_config.policy.is_empty() {
+                self.agent
+                    .set_policy(SetPolicyRequest {
+                        policy: agent_config.policy.clone(),
+                    })
+                    .await
+                    .context("sandbox: set policy failed")?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
         // It will check the hypervisor's capabilities to see if it supports hybrid-vsock.
         // If it does not, it'll assume that it only supports legacy vsock.
@@ -374,10 +392,6 @@ impl VirtSandbox {
         hypervisor_config: &HypervisorConfig,
         init_data: Option<String>,
     ) -> Result<Option<ProtectionDeviceConfig>> {
-        if !hypervisor_config.security_info.confidential_guest {
-            return Ok(None);
-        }
-
         let available_protection = available_guest_protection()?;
         info!(
             sl!(),
@@ -429,6 +443,7 @@ impl VirtSandbox {
                     debug: false,
                 })))
             },
+            GuestProtection::NoProtection => Ok(None),
             _ => Err(anyhow!("confidential_guest requested by configuration but no supported protection available"))
         }
     }
@@ -452,6 +467,9 @@ impl VirtSandbox {
             GuestProtection::Snp(_details) => {
                 calculate_initdata_digest(&initdata, ProtectedPlatform::Snp)?
             }
+            GuestProtection::NoProtection => {
+                calculate_initdata_digest(&initdata, ProtectedPlatform::NoProtection)?
+            }
             // TODO: there's more `GuestProtection` types to be supported.
             _ => return Ok(None),
         };
@@ -469,7 +487,7 @@ impl VirtSandbox {
             sl!(),
             "initdata push data into compressed block: {:?}", &image_path
         );
-        let block_driver = &hypervisor_config.boot_info.vm_rootfs_driver;
+        let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
         let block_config = BlockConfig {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
@@ -592,6 +610,7 @@ impl Sandbox for VirtSandbox {
             .start(&address)
             .await
             .context(format!("connect to address {:?}", &address))?;
+        self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager
             .setup_after_start_vm()
