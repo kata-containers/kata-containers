@@ -14,7 +14,9 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/state"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
 
@@ -54,6 +56,10 @@ type Config struct {
 	StoragePath    string
 	IsDirectVolume bool
 	safeMounter    *utils.SafeMountFormater
+
+	SpdkRPCTimeout time.Duration
+	SpdkRawPath    string
+	SpdkVhostPath  string
 }
 
 func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
@@ -80,6 +86,17 @@ func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {
 	if err := utils.MakeFullPath(cfg.StateDir); err != nil {
 		return nil, fmt.Errorf("failed to mkdir -p state dir%v", cfg.StateDir)
 	}
+
+	if err := utils.MakeFullPath(cfg.SpdkRawPath); err != nil {
+		return nil, fmt.Errorf("failed to mkdir -p spdk raw path %v", cfg.SpdkRawPath)
+	}
+
+	if err := utils.MakeFullPath(cfg.SpdkVhostPath); err != nil {
+		return nil, fmt.Errorf("failed to mkdir -p spdk vhost path %v", cfg.SpdkVhostPath)
+	}
+
+	utils.SpdkRawDiskDir = cfg.SpdkRawPath
+	utils.SpdkVhostDir = cfg.SpdkVhostPath
 
 	if cfg.safeMounter == nil {
 		safeMnt := utils.NewSafeMountFormater()
@@ -190,6 +207,64 @@ func (dv *directVolume) deleteVolume(volID string) error {
 	klog.V(4).Infof("deleted direct volume: %s = %+v", volID, vol)
 
 	return nil
+}
+
+// createSPDKVolume allocates backing file, creates the SPDK bdev, and adds the volume to the list.
+// It returns the created volume or an error if one occurs.
+func (dv *directVolume) createSPDKVolume(volumeID, volName string, capacity int64, kind string) (*state.Volume, error) {
+	backingFile := filepath.Join(utils.SpdkRawDiskDir, fmt.Sprintf("%s.raw", volName))
+
+	if err := os.MkdirAll(utils.SpdkRawDiskDir, 0750); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create dir %s: %v", utils.SpdkRawDiskDir, err)
+	}
+
+	fi, err := os.Stat(backingFile)
+	if err == nil {
+		klog.Infof("[SPDK] reuse existing backing file %s (size=%d)", backingFile, fi.Size())
+	} else if os.IsNotExist(err) {
+		f, err := os.Create(backingFile)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create backing file %s: %v", backingFile, err)
+		}
+		defer f.Close()
+
+		if err := f.Truncate(capacity); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to truncate backing file %s: %v", backingFile, err)
+		}
+
+		klog.Infof("[SPDK] created new sparse backing file %s (%d bytes)", backingFile, capacity)
+	} else {
+		return nil, status.Errorf(codes.Internal, "stat backing file %s failed: %v", backingFile, err)
+	}
+
+	bdevName := fmt.Sprintf("bdev-%s", volName)
+
+	params := map[string]interface{}{
+		"name":       bdevName,
+		"filename":   backingFile,
+		"block_size": 512,
+	}
+	if _, err := spdkrpc.Call("bdev_aio_create", params); err != nil {
+		return nil, status.Errorf(codes.Internal, "bdev_aio_create failed: %v", err)
+	}
+
+	vol := &state.Volume{
+		VolID:   volumeID,
+		VolName: volName,
+		VolSize: capacity,
+		Kind:    kind,
+		Metadata: map[string]string{
+			"type":        utils.SpdkVolumeTypeName,
+			"bdevName":    bdevName,
+			"backingFile": backingFile,
+		},
+	}
+	if err := dv.state.UpdateVolume(*vol); err != nil {
+		return nil, err
+	}
+
+	klog.Infof("[SPDK] volume %s registered bdev=%s backing=%s", volumeID, bdevName, backingFile)
+	return vol, nil
 }
 
 func (dv *directVolume) sumVolumeSizes(kind string) (sum int64) {

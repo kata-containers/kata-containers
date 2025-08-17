@@ -27,6 +27,7 @@ const (
 	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
 	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
 	DirectVolumeTypeName           = "directvol"
+	SpdkVolumeTypeName             = "spdkvol"
 	IsDirectVolume                 = "is_directvolume"
 )
 
@@ -45,6 +46,11 @@ const (
 	GiB100 int64 = GiB * 100
 	TiB    int64 = GiB * 1024
 	TiB100 int64 = TiB * 100
+)
+
+var (
+	SpdkRawDiskDir string
+	SpdkVhostDir   string
 )
 
 func AddDirectVolume(targetPath string, mountInfo MountInfo) error {
