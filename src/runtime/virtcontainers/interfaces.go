@@ -79,7 +79,7 @@ type VCSandbox interface {
 
 	GuestVolumeStats(ctx context.Context, volumePath string) ([]byte, error)
 	ResizeGuestVolume(ctx context.Context, volumePath string, size uint64) error
-
+	ResizeBlockDevice(ctx context.Context, blockDevice string, size uint64) error
 	GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
 	SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error
 	SetPolicy(ctx context.Context, policy string) error
