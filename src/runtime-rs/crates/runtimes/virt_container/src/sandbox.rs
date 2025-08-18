@@ -452,6 +452,7 @@ impl VirtSandbox {
             GuestProtection::Snp(_details) => {
                 calculate_initdata_digest(&initdata, ProtectedPlatform::Snp)?
             }
+            GuestProtection::Se => calculate_initdata_digest(&initdata, ProtectedPlatform::Se)?,
             // TODO: there's more `GuestProtection` types to be supported.
             _ => return Ok(None),
         };
