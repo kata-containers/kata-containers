@@ -293,7 +293,7 @@
             "CAP_BPF",
             "CAP_CHECKPOINT_RESTORE"
         ],
-        "image_layer_verification" : "none"
+        "image_layer_verification": "none"
     },
     "kata_config": {
         "oci_version": "1.1.0",
@@ -353,6 +353,10 @@
             ],
             "forbidden_cidrs_regex": [
                 "^127\\.(?:[0-9]{1,3}\\.){2}[0-9]{1,3}$"
+            ],
+            "allowed_states": [
+                2,
+                128
             ]
         },
         "CloseStdinRequest": false,

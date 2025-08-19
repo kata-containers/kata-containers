@@ -1415,7 +1415,7 @@ AddARPNeighborsRequest if {
         every p_cidr in p_defaults.forbidden_cidrs_regex {
             not regex.match(p_cidr, i_neigh.toIPAddress.address)
         }
-        i_neigh.state == 128
+        i_neigh.state in p_defaults.allowed_states
         bits.or(i_neigh.flags, 136) == 136
     }
 
