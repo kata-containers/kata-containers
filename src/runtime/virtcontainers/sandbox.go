@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	v1 "github.com/containerd/cgroups/stats/v1"
 	v2 "github.com/containerd/cgroups/v2/stats"
@@ -2552,8 +2553,15 @@ func (s *Sandbox) resourceControllerDelete() error {
 		}
 	}
 
-	if err := sandboxController.Delete(); err != nil {
-		return err
+	delay := 1 * time.Second
+	maxDeletionAttempts := 5
+	for i := 0; i < maxDeletionAttempts; i++ {
+		if err := sandboxController.Delete(); err == nil {
+			break
+		} else if i == maxDeletionAttempts-1 {
+			return err
+		}
+		time.Sleep(delay)
 	}
 
 	if s.state.OverheadCgroupPath != "" {
@@ -2567,8 +2575,13 @@ func (s *Sandbox) resourceControllerDelete() error {
 			return err
 		}
 
-		if err := overheadController.Delete(); err != nil {
-			return err
+		for i := 0; i < maxDeletionAttempts; i++ {
+			if err := overheadController.Delete(); err == nil {
+				break
+			} else if i == maxDeletionAttempts-1 {
+				return err
+			}
+			time.Sleep(delay)
 		}
 	}
 
