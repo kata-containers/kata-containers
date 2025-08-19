@@ -343,6 +343,20 @@ get_latest_kernel_confidential_artefact_and_builder_image_version() {
 		echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
 }
 
+get_latest_kernel_artefact_and_builder_image_version() {
+	local kernel_version
+	local kernel_kata_config_version
+	local latest_kernel_artefact
+	local latest_kernel_builder_image
+
+	kernel_version=$(get_from_kata_deps ".assets.kernel.version")
+	kernel_kata_config_version="$(cat "${repo_root_dir}"/tools/packaging/kernel/kata_config_version)"
+	latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
+	latest_kernel_builder_image="$(get_kernel_image_name)"
+
+	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -370,12 +384,17 @@ install_image() {
 
 
 	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
-	if [ "${variant}" == "confidential" ]; then
+	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
 		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+	fi
+
+	if [[ "${variant}" == "nvidia-gpu" ]]; then
+		# If we bump the kernel we need to rebuild the image
+		latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version "${variant}")"
 	fi
 
 	latest_builder_image=""
@@ -465,12 +484,17 @@ install_initrd() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 	latest_artefact="$(get_kata_version)-${os_name}-${os_version}-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
-	if [ "${variant}" == "confidential" ]; then
+	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
 		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+	fi
+
+	if [[ "${variant}" == "nvidia-gpu" ]]; then
+		# If we bump the kernel we need to rebuild the initrd as well
+		latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version "${variant}")"
 	fi
 
 	latest_builder_image=""
