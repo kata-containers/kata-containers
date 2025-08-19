@@ -174,7 +174,7 @@ function create_coco_pod_yaml() {
 # This function creates pod yaml. Parameters
 # - $1: image reference
 # - $2: annotation `io.katacontainers.config.hypervisor.kernel_params`
-# - $3: anootation `io.katacontainers.config.runtime.cc_init_data`
+# - $3: annotation `io.katacontainers.config.hypervisor.cc_init_data`
 # - $4: node
 function create_coco_pod_yaml_with_annotations() {
 	image=$1
@@ -183,7 +183,7 @@ function create_coco_pod_yaml_with_annotations() {
 	node=${4:-}
 
 	kernel_params_annotation_key="io.katacontainers.config.hypervisor.kernel_params"
-	cc_initdata_annotation_key="io.katacontainers.config.runtime.cc_init_data"
+	cc_initdata_annotation_key="io.katacontainers.config.hypervisor.cc_init_data"
 
 	# Note: this is not local as we use it in the caller test
 	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"

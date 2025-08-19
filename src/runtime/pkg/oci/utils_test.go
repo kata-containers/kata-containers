@@ -885,6 +885,9 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 
 	runtimeConfig := RuntimeConfig{
 		HypervisorType: vc.QemuHypervisor,
+		HypervisorConfig: vc.HypervisorConfig{
+			EnableAnnotations: []string{"cc_init_data"},
+		},
 	}
 
 	ocispec.Annotations[vcAnnotations.DisableGuestSeccomp] = "true"
