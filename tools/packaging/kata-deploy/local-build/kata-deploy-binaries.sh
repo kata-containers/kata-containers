@@ -123,6 +123,7 @@ options:
 	pause-image
 	ovmf
 	ovmf-sev
+	ovmf-cca
 	qemu
 	qemu-cca-experimental
 	qemu-snp-experimental
@@ -162,7 +163,7 @@ get_kernel_modules_dir() {
 	local version=${kernel_version#v}
 	local numeric_final_version=${version}
 
-	if [ -z "${kernel_ref}" ]; then
+	if [[ -z "${kernel_ref}" ]]; then
 		# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
 		local rc=$(echo ${version} | grep -oE "\-rc[0-9]+$")
 		if [ -n "${rc}" ]; then
@@ -1001,9 +1002,11 @@ install_shimv2() {
 install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
-	if [ "${ARCH}" == "aarch64" ]; then
-		ovmf_type="arm64"
-		tarball_name="edk2-arm64.tar.gz"
+	if [[ "${ARCH}" == "aarch64" ]]; then
+	  if [[ "${ovmf_type}" != "cca" ]]; then
+		  ovmf_type="arm64"
+		  tarball_name="edk2-arm64.tar.gz"
+		fi
 	fi
 
 	local component_name="ovmf"
@@ -1027,6 +1030,11 @@ install_ovmf() {
 # Install OVMF SEV
 install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
+}
+
+# Install OVMF CCA
+install_ovmf_cca() {
+	install_ovmf "cca" "edk2-cca.tar.gz"
 }
 
 install_busybox() {
@@ -1318,6 +1326,8 @@ handle_build() {
 	ovmf) install_ovmf ;;
 
 	ovmf-sev) install_ovmf_sev ;;
+
+	ovmf-cca) install_ovmf_cca ;;
 
 	pause-image) install_pause_image ;;
 

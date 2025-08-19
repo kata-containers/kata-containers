@@ -391,6 +391,12 @@ externals:
       version: "edk2-stable202508"
       package: "ArmVirtPkg/ArmVirtQemu.dsc"
       package_output_dir: "ArmVirtQemu-AARCH64"
+    cca:
+      description: "UEFI for arm64 CCA virtual machines."
+      version: "cca/2025-02-06"
+      url: "https://git.codelinaro.org/linaro/dcap/edk2"
+      package: "ArmVirtPkg/ArmVirtQemu.dsc"
+      package_output_dir: "ArmVirtQemu-AARCH64"
 
   protoc:
     description: "Protobuf compiler"
