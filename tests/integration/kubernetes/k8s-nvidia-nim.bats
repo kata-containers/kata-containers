@@ -58,6 +58,13 @@ create_inference_embedqa_pods() {
     echo "# POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >&3
 }
 
+enable_nvrc_trace() {
+    if [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu" ]]; then
+        config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
+    fi
+    sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 nvrc.log=trace"/g' "${config_file}"
+}
+
 setup_file() {
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
@@ -81,6 +88,8 @@ setup_file() {
 
     export POD_INSTRUCT_YAML="${pod_instruct_yaml}"
     export POD_EMBEDQA_YAML="${pod_embedqa_yaml}"
+
+    enable_nvrc_trace
 
     setup_langchain_flow
     create_inference_embedqa_pods
@@ -324,4 +333,5 @@ EOF
 
 teardown_file() {
         kubectl delete -f "${POD_INSTRUCT_YAML}"
+        kubectl delete -f "${POD_EMBEDQA_YAML}"
 }
