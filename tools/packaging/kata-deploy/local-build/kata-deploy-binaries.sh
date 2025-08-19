@@ -123,6 +123,7 @@ options:
 	pause-image
 	ovmf
 	ovmf-sev
+	ovmf-cca
 	qemu
 	qemu-cca-experimental
 	qemu-snp-experimental
@@ -964,8 +965,10 @@ install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 	if [ "${ARCH}" == "aarch64" ]; then
-		ovmf_type="arm64"
-		tarball_name="edk2-arm64.tar.gz"
+	  if [ "${ovmf_type}" != "cca" ]; then
+		  ovmf_type="arm64"
+		  tarball_name="edk2-arm64.tar.gz"
+		fi
 	fi
 
 	local component_name="ovmf"
@@ -989,6 +992,11 @@ install_ovmf() {
 # Install OVMF SEV
 install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
+}
+
+# Install OVMF CCA
+install_ovmf_cca() {
+	install_ovmf "cca" "edk2-cca.tar.gz"
 }
 
 install_busybox() {
@@ -1280,6 +1288,8 @@ handle_build() {
 	ovmf) install_ovmf ;;
 
 	ovmf-sev) install_ovmf_sev ;;
+
+	ovmf-cca) install_ovmf_cca ;;
 
 	pause-image) install_pause_image ;;
 
