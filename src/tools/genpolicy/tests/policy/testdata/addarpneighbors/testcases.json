@@ -23,6 +23,29 @@
   },
   {
     "allowed": true,
+    "description": "allowed state: reachable",
+    "kind": "AddARPNeighborsRequest",
+    "request": {
+      "type": "AddARPNeighbors",
+      "neighbors": {
+        "ARPNeighbors": [
+          {
+            "toIPAddress": {
+              "family": 0,
+              "address": "10.0.0.1",
+              "mask": ""
+            },
+            "device": "eth0",
+            "lladdr": "00:00:5e:00:53:01",
+            "state": 2,
+            "flags": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "allowed": true,
     "description": "allowed flags: NTF_PROXY",
     "kind": "AddARPNeighborsRequest",
     "request": {
