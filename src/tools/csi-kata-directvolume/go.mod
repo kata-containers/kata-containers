@@ -1,7 +1,7 @@
 module kata-containers/csi-kata-directvolume
 
 // Keep in sync with version in versions.yaml
-go 1.23.0
+go 1.23.12
 
 // WARNING: Do NOT use `replace` directives as those break dependabot:
 // https://github.com/kata-containers/kata-containers/issues/11020
