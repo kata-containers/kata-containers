@@ -157,6 +157,9 @@ nydus-tarball:
 ovmf-sev-tarball:
 	${MAKE} $@-build
 
+ovmf-cca-tarball:
+	${MAKE} $@-build
+
 ovmf-tarball:
 	${MAKE} $@-build
 
