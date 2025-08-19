@@ -252,7 +252,8 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 #   - io_uring
 #     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel>5.1 and
 #     qemu >=5.0.
-block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
+# block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
+block_device_aio = "native"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
