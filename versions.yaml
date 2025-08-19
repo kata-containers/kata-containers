@@ -415,6 +415,7 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
+    # When updating this, also update in go.mod files.
     version: "1.23.12"
     meta:
       description: |
