@@ -20,11 +20,13 @@ RUN apt-get update && \
 	    git \
 	    iptables \
 	    kmod \
+	    libdw-dev \
 	    libelf-dev \
 	    libssl-dev \
 	    gettext \
 	    rsync \
 	    cpio \
-	    patch && \
+	    patch \
+	    python3 && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${ARCH}"-linux-gnu binutils-"${ARCH}"-linux-gnu; fi && \
     apt-get clean && apt-get autoclean && rm -rf /var/lib/apt/lists/*
