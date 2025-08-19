@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, sync::Arc, thread};
 
-use agent::{types::Device, Agent, OnlineCPUMemRequest, Storage};
+use agent::{types::Device, ARPNeighbor, Agent, OnlineCPUMemRequest, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use hypervisor::{
@@ -22,6 +22,7 @@ use kata_types::{
     config::{hypervisor::TopologyConfigInfo, TomlConfig},
     mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
 };
+use libc::NUD_PERMANENT;
 use oci::{Linux, LinuxCpu, LinuxResources};
 use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
@@ -260,7 +261,14 @@ impl ResourceManagerInner {
     }
 
     async fn handle_neighbours(&self, network: &dyn Network) -> Result<()> {
-        let neighbors = network.neighs().await.context("neighs")?;
+        let all_neighbors = network.neighs().await.context("neighs")?;
+
+        // We add only static ARP entries
+        let neighbors: Vec<ARPNeighbor> = all_neighbors
+            .iter()
+            .filter(|n| n.state == NUD_PERMANENT as i32)
+            .cloned()
+            .collect();
         if !neighbors.is_empty() {
             info!(sl!(), "update neighbors {:?}", neighbors);
             self.agent
