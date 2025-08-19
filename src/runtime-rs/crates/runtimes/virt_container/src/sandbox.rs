@@ -470,7 +470,7 @@ impl VirtSandbox {
             sl!(),
             "initdata push data into compressed block: {:?}", &image_path
         );
-        let block_driver = &hypervisor_config.boot_info.vm_rootfs_driver;
+        let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
         let block_config = BlockConfig {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
