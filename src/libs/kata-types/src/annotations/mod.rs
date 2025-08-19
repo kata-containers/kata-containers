@@ -895,7 +895,7 @@ impl Annotation {
                         hv.security_info.validate_path(value)?;
                         hv.security_info.guest_hook_path = value.to_string();
                     }
-                    KATA_ANNO_CFG_RUNTIME_INIT_DATA => {
+                    KATA_ANNO_CFG_HYPERVISOR_INIT_DATA => {
                         hv.security_info.initdata =
                             add_hypervisor_initdata_overrides(value).unwrap();
                     }
