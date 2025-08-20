@@ -74,7 +74,7 @@ impl SPDKVolume {
             }
         }
 
-        let block_driver = get_block_driver(d).await;
+        let block_driver = get_block_driver(d).await.block_device_driver;
 
         let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,

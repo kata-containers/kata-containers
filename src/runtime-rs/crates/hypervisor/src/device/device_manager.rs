@@ -8,15 +8,15 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
-use kata_types::config::hypervisor::{TopologyConfigInfo, VIRTIO_SCSI};
+use kata_types::config::hypervisor::{BlockDeviceInfo, TopologyConfigInfo, VIRTIO_SCSI};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
-    NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice, VfioDevice, VhostUserConfig,
-    VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
-    KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO,
-    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, BlockDeviceAio,
+    HybridVsockDevice, Hypervisor, NetworkDevice, PCIePortDevice, ProtectionDevice, ShareFsDevice,
+    VfioDevice, VhostUserConfig, VhostUserNetDevice, VsockDevice, KATA_BLK_DEV_TYPE,
+    KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
+    VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -117,12 +117,8 @@ impl DeviceManager {
         self.pcie_topology.clone()
     }
 
-    async fn get_block_driver(&self) -> String {
-        self.hypervisor
-            .hypervisor_config()
-            .await
-            .blockdev_info
-            .block_device_driver
+    async fn get_block_driver(&self) -> BlockDeviceInfo {
+        self.hypervisor.hypervisor_config().await.blockdev_info
     }
 
     async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
@@ -498,6 +494,14 @@ impl DeviceManager {
                     .context("failed to get host path")?;
         }
 
+        let block_device_aio = self.get_block_driver().await.block_device_aio;
+        block_config.is_direct = if BlockDeviceAio::Native == BlockDeviceAio::new(&block_device_aio)
+        {
+            Some(true)
+        } else {
+            None
+        };
+
         Ok(Arc::new(Mutex::new(BlockDevice::new(
             device_id,
             block_config,
@@ -623,7 +627,7 @@ pub async fn do_update_device(
     Ok(())
 }
 
-pub async fn get_block_driver(d: &RwLock<DeviceManager>) -> String {
+pub async fn get_block_driver(d: &RwLock<DeviceManager>) -> BlockDeviceInfo {
     d.read().await.get_block_driver().await
 }
 
@@ -670,7 +674,7 @@ mod tests {
         assert!(dm.is_ok());
 
         let d = dm.unwrap();
-        let block_driver = get_block_driver(&d).await;
+        let block_driver = get_block_driver(&d).await.block_device_driver;
         let dev_info = DeviceConfig::BlockCfg(BlockConfig {
             path_on_host: "/dev/dddzzz".to_string(),
             driver_option: block_driver,
