@@ -35,7 +35,7 @@ use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use crate::share_fs::PASSTHROUGH_FS_DIR;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::{
-    k8s::{is_configmap, is_downward_api, is_projected, is_secret},
+    k8s::{is_configmap, is_downward_api, is_empty_dir, is_projected, is_secret},
     mount,
 };
 use oci_spec::runtime as oci;
@@ -160,9 +160,28 @@ impl FsWatcher {
         let inotify = self.inotify.clone();
         let monitor_config = self.config.clone();
 
+        // Perform a full sync before starting monitoring to ensure that files which exist before monitoring starts are also synced.
+        let agent_sync = agent.clone();
+        let src_sync = src.clone();
+        let dst_sync = dst.clone();
+
         tokio::spawn(async move {
             let mut buffer = [0u8; 4096];
             let mut last_event_time = None;
+
+            // Initial sync: ensure existing contents in the directory are synchronized
+            {
+                info!(
+                    sl!(),
+                    "Initial sync from {:?} to {:?}", &src_sync, &dst_sync
+                );
+                if let Err(e) =
+                    copy_dir_recursively(&src_sync, &dst_sync.display().to_string(), &agent_sync)
+                        .await
+                {
+                    error!(sl!(), "Initial sync failed: {:?}", e);
+                }
+            }
 
             loop {
                 // use cloned inotify instance
@@ -174,7 +193,8 @@ impl FsWatcher {
                                     | EventMask::MODIFY
                                     | EventMask::DELETE
                                     | EventMask::MOVED_FROM
-                                    | EventMask::MOVED_TO,
+                                    | EventMask::MOVED_TO
+                                    | EventMask::CLOSE_WRITE,
                             ) {
                                 continue;
                             }
@@ -776,11 +796,14 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
     if !source_path.is_dir() {
         return false;
     }
-    // watchable list: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
+
+    // /var/lib/kubelet/pods/{pod-uid}/volumes/@{k8s-type}/{volume-name}
+    // watchable list: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api, kubernetes.io~empty-dir }
     is_projected(source_path)
         || is_downward_api(source_path)
         || is_secret(source_path)
         || is_configmap(source_path)
+        || is_empty_dir(source_path)
 }
 
 #[cfg(test)]
