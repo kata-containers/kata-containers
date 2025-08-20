@@ -36,7 +36,7 @@ impl RawblockVolume {
         read_only: bool,
         sid: &str,
     ) -> Result<Self> {
-        let block_driver = get_block_driver(d).await;
+        let block_driver = get_block_driver(d).await.block_device_driver;
 
         // check volume type
         if mount_info.volume_type != KATA_DIRECT_VOLUME_TYPE {
