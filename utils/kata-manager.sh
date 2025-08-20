@@ -219,7 +219,7 @@ github_get_release_file_url()
 
 	case "$url" in
 		*kata*)
-			regex="kata-static-${version}-${arch_regex}.tar.xz" ;;
+			regex="kata-static-${version}-${arch_regex}.tar.zst" ;;
 		*nerdctl*)
 			# Keep this *always* before the containerd check, as it comes from
 			# the very same containerd organisation on GitHub.

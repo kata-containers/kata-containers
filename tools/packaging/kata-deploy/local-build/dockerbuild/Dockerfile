@@ -57,7 +57,8 @@ RUN apt-get update && \
     git \
     make \
     wget \
-    xz-utils && \
+    xz-utils \
+    zstd && \
     if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then \
         apt-get install -y --no-install-recommends \
         gcc-s390x-linux-gnu \

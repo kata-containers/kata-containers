@@ -89,16 +89,16 @@ However, if any of these components are absent, they must be built from the
 $ # Assume that the project is cloned at $GOPATH/src/github.com/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ make rootfs-initrd-confidential-tarball
-$ tar -tf build/kata-static-kernel-confidential.tar.xz | grep vmlinuz
+$ tar --zstd -tf build/kata-static-kernel-confidential.tar.zst | grep vmlinuz
 ./opt/kata/share/kata-containers/vmlinuz-confidential.container
 ./opt/kata/share/kata-containers/vmlinuz-6.7-136-confidential
 $ kernel_version=6.7-136
-$ tar -tf build/kata-static-rootfs-initrd-confidential.tar.xz | grep initrd
+$ tar --zstd -tf build/kata-static-rootfs-initrd-confidential.tar.zst | grep initrd
 ./opt/kata/share/kata-containers/kata-containers-initrd-confidential.img
 ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ mkdir artifacts
-$ tar -xvf build/kata-static-kernel-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/vmlinuz-${kernel_version}-confidential
-$ tar -xvf build/kata-static-rootfs-initrd-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
+$ tar --zstd -xvf build/kata-static-kernel-confidential.tar.zst -C artifacts ./opt/kata/share/kata-containers/vmlinuz-${kernel_version}-confidential
+$ tar --zstd -xvf build/kata-static-rootfs-initrd-confidential.tar.zst -C artifacts ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ ls artifacts/opt/kata/share/kata-containers/
 kata-ubuntu-20.04-confidential.initrd  vmlinuz-${kernel_version}-confidential
 ```
@@ -190,8 +190,8 @@ can be easily accomplished by issuing the following make target:
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ mkdir hkd_dir && cp $host_key_document hkd_dir
 $ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-tarball
-$ ls build/kata-static-boot-image-se.tar.xz
-build/kata-static-boot-image-se.tar.xz
+$ ls build/kata-static-boot-image-se.tar.zst
+build/kata-static-boot-image-se.tar.zst
 ```
 
 `SE_KERNEL_PARAMS` could be used to add any extra kernel parameters. If no additional kernel configuration is required, this can be omitted.
@@ -344,18 +344,18 @@ $ make virtiofsd-tarball
 $ make shim-v2-tarball
 $ mkdir kata-artifacts
 $ build_dir=$(readlink -f build)
-$ cp -r $build_dir/*.tar.xz kata-artifacts
+$ cp -r $build_dir/*.tar.zst kata-artifacts
 $ ls -1 kata-artifacts
-kata-static-agent.tar.xz
-kata-static-boot-image-se.tar.xz
-kata-static-coco-guest-components.tar.xz
-kata-static-kernel-confidential-modules.tar.xz
-kata-static-kernel-confidential.tar.xz
-kata-static-pause-image.tar.xz
-kata-static-qemu.tar.xz
-kata-static-rootfs-initrd-confidential.tar.xz
-kata-static-shim-v2.tar.xz
-kata-static-virtiofsd.tar.xz
+kata-static-agent.tar.zst
+kata-static-boot-image-se.tar.zst
+kata-static-coco-guest-components.tar.zst
+kata-static-kernel-confidential-modules.tar.zst
+kata-static-kernel-confidential.tar.zst
+kata-static-pause-image.tar.zst
+kata-static-qemu.tar.zst
+kata-static-rootfs-initrd-confidential.tar.zst
+kata-static-shim-v2.tar.zst
+kata-static-virtiofsd.tar.zst
 $ ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
 ```
 
@@ -369,7 +369,7 @@ command before running `kata-deploy-merge-builds.sh`:
 $ make rootfs-image-tarball
 ```
 
-At this point, you should have an archive file named `kata-static.tar.xz` at the project root,
+At this point, you should have an archive file named `kata-static.tar.zst` at the project root,
 which will be used to build a payload image. If you are using a local container registry at
 `localhost:5000`, proceed with the following:
 
@@ -381,7 +381,7 @@ Build and push a payload image with the name `localhost:5000/build-kata-deploy` 
 `latest` using the following:
 
 ```
-$ ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh kata-static.tar.xz localhost:5000/build-kata-deploy latest
+$ ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh kata-static.tar.zst localhost:5000/build-kata-deploy latest
 ... logs ...
 Pushing the image localhost:5000/build-kata-deploy:latest to the registry
 The push refers to repository [localhost:5000/build-kata-deploy]

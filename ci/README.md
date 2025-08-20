@@ -306,7 +306,7 @@ tarball to the newly created VM that will be used for debugging purposes.
 > [!NOTE]
 > Those artifacts are only available (for 15 days) when all jobs are finished.
 
-Once you have the `kata-static.tar.xz` in your VM, you can login to the VM with
+Once you have the `kata-static.tar.zst` in your VM, you can login to the VM with
 `kcli ssh debug-nerdctl-pr8070`, go ahead and then clone your development branch
 
 ```bash
@@ -323,15 +323,15 @@ $ git config --global user.name "Your Name"
 $ git rebase upstream/main
 ```
 
-Now copy the `kata-static.tar.xz` into your `kata-containers/kata-artifacts` directory
+Now copy the `kata-static.tar.zst` into your `kata-containers/kata-artifacts` directory
 
 ```bash
 $ mkdir kata-artifacts
-$ cp ../kata-static.tar.xz kata-artifacts/
+$ cp ../kata-static.tar.zst kata-artifacts/
 ```
 
 > [!NOTE]
-> If you downloaded the .zip from GitHub you need to uncompress first to see `kata-static.tar.xz`
+> If you downloaded the .zip from GitHub you need to uncompress first to see `kata-static.tar.zst`
 
 And finally run the tests following what's in the yaml file for the test you're
 debugging.
@@ -363,11 +363,11 @@ and have fun debugging and hacking!
 
 Steps for debugging the Kubernetes tests are very similar to the ones for
 debugging non-Kubernetes tests, with the caveat that what you'll need, this
-time, is not the `kata-static.tar.xz` tarball, but rather a payload to be used
+time, is not the `kata-static.tar.zst` tarball, but rather a payload to be used
 with kata-deploy.
 
 In order to generate your own kata-deploy image you can generate your own
-`kata-static.tar.xz` and then take advantage of the following script.  Be aware
+`kata-static.tar.zst` and then take advantage of the following script.  Be aware
 that the image generated and uploaded must be accessible by the VM where you'll
 be performing your tests.
 

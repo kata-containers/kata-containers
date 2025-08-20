@@ -26,6 +26,7 @@ RUN apk update && apk add --no-cache \
     musl-dev \
     protoc \
     tar \
-    xz
+    xz \
+    zstd
 # aarch64 requires this name -- link for all
 RUN ln -s /usr/bin/gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
