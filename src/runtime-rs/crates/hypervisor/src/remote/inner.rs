@@ -14,8 +14,8 @@ use kata_types::{
         cri_containerd::{SANDBOX_NAMESPACE_LABEL_KEY, SANDBOX_NAME_LABEL_KEY},
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
-        KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH, KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
-        KATA_ANNO_CFG_RUNTIME_INIT_DATA,
+        KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA,
+        KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
     },
     capabilities::{Capabilities, CapabilityBits},
 };
@@ -127,7 +127,7 @@ impl RemoteInner {
             config.boot_info.image.to_string(),
         );
         annotations.insert(
-            KATA_ANNO_CFG_RUNTIME_INIT_DATA.to_string(),
+            KATA_ANNO_CFG_HYPERVISOR_INIT_DATA.to_string(),
             config.security_info.initdata.to_string(),
         );
         annotations.insert(

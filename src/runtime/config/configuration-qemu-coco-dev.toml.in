@@ -55,7 +55,7 @@ rootfs_type=@DEFROOTFSTYPE@
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-enable_annotations = @DEFENABLEANNOTATIONSTEE@
+enable_annotations = @DEFENABLEANNOTATIONS_COCO@
 
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).

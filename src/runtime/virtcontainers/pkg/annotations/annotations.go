@@ -245,7 +245,7 @@ const (
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
 
 	// Initdata is the initdata passed in when CreateVM
-	Initdata = kataConfAnnotationsPrefix + "runtime.cc_init_data"
+	Initdata = kataConfAnnotationsPrefix + "hypervisor.cc_init_data"
 )
 
 // Runtime related annotations

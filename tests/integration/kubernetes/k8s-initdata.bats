@@ -182,7 +182,7 @@ EOF
         return 1
     fi
 
-    assert_logs_contain "${node}" kata "${node_start_time}" "\[CDH\] \[ERROR\]: Get Resource failed"
+    assert_logs_contain "${node}" kata "${node_start_time}" "\[CDH\] \[ERROR\]: Image Client error: Initialize resource provider failed: Get resource failed"
 }
 
 teardown() {
