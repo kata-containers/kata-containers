@@ -67,15 +67,19 @@ pub(crate) fn share_to_guest(
 //
 // 3. host-guest shared files/directories are mounted one-level under /run/kata-containers/shared/sandboxes/$sbx_id/rw/passthrough and thus present to guest at one level under run/kata-containers/shared/containers/passthrough.
 pub(crate) fn get_host_ro_shared_path(id: &str) -> PathBuf {
-    Path::new(KATA_HOST_SHARED_DIR).join(id).join("ro")
+    Path::new(kata_host_shared_dir().as_str())
+        .join(id)
+        .join("ro")
 }
 
 pub fn get_host_rw_shared_path(sid: &str) -> PathBuf {
-    Path::new(KATA_HOST_SHARED_DIR).join(sid).join("rw")
+    Path::new(kata_host_shared_dir().as_str())
+        .join(sid)
+        .join("rw")
 }
 
 pub fn get_host_shared_path(sid: &str) -> PathBuf {
-    Path::new(KATA_HOST_SHARED_DIR).join(sid)
+    Path::new(kata_host_shared_dir().as_str()).join(sid)
 }
 
 fn do_get_guest_any_path(
@@ -93,7 +97,7 @@ fn do_get_guest_any_path(
     let guest_share_dir = if is_virtiofs {
         Path::new("/").to_path_buf()
     } else {
-        Path::new(KATA_GUEST_SHARE_DIR).to_path_buf()
+        Path::new(kata_guest_share_dir().as_str()).to_path_buf()
     };
 
     let path = if is_volume && !is_virtiofs {

@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
+use crate::share_fs::kata_guest_sandbox_dir;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
@@ -51,7 +51,7 @@ impl EphemeralVolume {
         let file_name = Path::new(source)
             .file_name()
             .context(format!("get file name from {:?}", &m.source()))?;
-        let source = Path::new(DEFAULT_KATA_GUEST_SANDBOX_DIR)
+        let source = Path::new(kata_guest_sandbox_dir().as_str())
             .join(KATA_EPHEMERAL_VOLUME_TYPE)
             .join(file_name)
             .into_os_string()
