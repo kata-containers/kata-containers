@@ -5,17 +5,18 @@
 
 //! Configuration information for hypervisors.
 //!
-//! The configuration information for hypervisors is complex, and different hypervisor requires
+//! The configuration information for hypervisors is complex, and different hypervisors require
 //! different configuration information. To make it flexible and extensible, we build a multi-layer
 //! architecture to manipulate hypervisor configuration information.
-//! - the vendor layer. The `HypervisorVendor` structure provides hook points for vendors to
-//!   customize the configuration for its deployment.
-//! - the hypervisor plugin layer. The hypervisor plugin layer provides hook points for different
-//!   hypervisors to manipulate the configuration information.
-//! - the hypervisor common layer. This layer handles generic logic for all types of hypervisors.
 //!
-//! These three layers are applied in order. So changes made by the vendor layer will be visible
-//! to the hypervisor plugin layer and the common layer. And changes made by the plugin layer will
+//! - **Vendor layer**: The `HypervisorVendor` structure provides hook points for vendors to
+//!   customize the configuration for its deployment.
+//! - **Hypervisor plugin layer**: Provides hook points for different hypervisors to manipulate
+//!   the configuration information.
+//! - **Hypervisor common layer**: Handles generic logic for all types of hypervisors.
+//!
+//! These three layers are applied in order. Changes made by the vendor layer will be visible
+//! to the hypervisor plugin layer and the common layer. Changes made by the plugin layer will
 //! only be visible to the common layer.
 //!
 //! Ideally the hypervisor configuration information should be split into hypervisor specific
@@ -103,7 +104,10 @@ pub struct BlockDeviceInfo {
     pub disable_block_device_use: bool,
 
     /// Block storage driver to be used for the hypervisor in case the container rootfs is backed
-    /// by a block device. This is virtio-scsi, virtio-blk or nvdimm.
+    /// by a block device. Options include:
+    /// - `virtio-scsi`
+    /// - `virtio-blk`
+    /// - `nvdimm`
     #[serde(default)]
     pub block_device_driver: String,
 
@@ -133,6 +137,7 @@ pub struct BlockDeviceInfo {
     pub block_device_cache_direct: bool,
 
     /// Specifies cache-related options for block devices.
+    ///
     /// Denotes whether flush requests for the device are ignored.
     #[serde(default)]
     pub block_device_cache_noflush: bool,
@@ -143,12 +148,12 @@ pub struct BlockDeviceInfo {
 
     /// The size in MiB will be plused to max memory of hypervisor.
     ///
-    /// It is the memory address space for the NVDIMM devie. If set block storage driver
-    /// (block_device_driver) to "nvdimm", should set memory_offset to the size of block device.
+    /// It is the memory address space for the NVDIMM device. If set block storage driver
+    /// (`block_device_driver`) to `nvdimm`, should set `memory_offset` to the size of block device.
     #[serde(default)]
     pub memory_offset: u64,
 
-    /// Enable vhost-user storage device, default false
+    /// Enable vhost-user storage device, default false.
     ///
     /// Enabling this will result in some Linux reserved block type major range 240-254 being
     /// chosen to represent vhost-user devices.
@@ -157,8 +162,8 @@ pub struct BlockDeviceInfo {
 
     /// The base directory specifically used for vhost-user devices.
     ///
-    /// Its sub-path "block" is used for block devices; "block/sockets" is where we expect
-    /// vhost-user sockets to live; "block/devices" is where simulated block device nodes for
+    /// Its sub-path `block` is used for block devices; `block/sockets` is where we expect
+    /// vhost-user sockets to live; `block/devices` is where simulated block device nodes for
     /// vhost-user devices to live.
     #[serde(default)]
     pub vhost_user_store_path: String,
@@ -249,28 +254,37 @@ impl BlockDeviceInfo {
 /// Guest kernel boot information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct BootInfo {
-    /// Path to guest kernel file on host
+    /// Path to guest kernel file on host.
     #[serde(default)]
     pub kernel: String,
+
     /// Guest kernel commandline.
     #[serde(default)]
     pub kernel_params: String,
-    /// Path to initrd file on host
+
+    /// Path to initrd file on host.
     #[serde(default)]
     pub initrd: String,
-    /// Path to root device on host
+
+    /// Path to root device on host.
     #[serde(default)]
     pub image: String,
+
     /// Rootfs filesystem type.
     #[serde(default)]
     pub rootfs_type: String,
+
     /// Path to the firmware.
     ///
-    /// If you want that qemu uses the default firmware leave this option empty.
+    /// If you want that qemu uses the default firmware, leave this option empty.
     #[serde(default)]
     pub firmware: String,
-    /// Block storage driver to be used for the VM rootfs is backed
-    /// by a block device. This is virtio-pmem, virtio-blk-pci or virtio-blk-mmio
+
+    /// Block storage driver to be used for the VM rootfs when backed by a block device.
+    /// Options include:
+    /// - `virtio-pmem`
+    /// - `virtio-blk-pci`
+    /// - `virtio-blk-mmio`
     #[serde(default)]
     pub vm_rootfs_driver: String,
 }
@@ -317,17 +331,18 @@ impl BootInfo {
         Ok(())
     }
 
-    /// Add kernel parameters to bootinfo. It is always added before the original
-    /// to let the original one takes priority
+    /// Add kernel parameters to bootinfo.
+    ///
+    /// New parameters are added before the original to let the original ones take priority.
     pub fn add_kernel_params(&mut self, params: Vec<String>) {
         let mut p = params;
         if !self.kernel_params.is_empty() {
-            p.push(self.kernel_params.clone()); // [new_params0, new_params1, ..., original_params]
+            p.push(self.kernel_params.clone());
         }
         self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
     }
 
-    /// Validate guest kernel image annotaion
+    /// Validate guest kernel image annotation.
     pub fn validate_boot_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
         Ok(())
@@ -338,38 +353,30 @@ impl BootInfo {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CpuInfo {
     /// CPU features, comma-separated list of cpu features to pass to the cpu.
-    /// For example, `cpu_features = "pmu=off,vmx=off"
+    ///
+    /// Example: `cpu_features = "pmu=off,vmx=off"`
     #[serde(default)]
     pub cpu_features: String,
 
     /// Default number of vCPUs per SB/VM:
-    /// - unspecified or 0                --> will be set to @DEFVCPUS@
-    /// - < 0                             --> will be set to the actual number of physical cores
-    ///  > 0 <= number of physical cores --> will be set to the specified number
-    ///  > number of physical cores      --> will be set to the actual number of physical cores
+    /// - Unspecified or `0`: Set to `@DEFVCPUS@`
+    /// - `< 0`: Set to the actual number of physical cores
+    /// - `> 0` and `<= number of physical cores`: Set to specified number
+    /// - `> number of physical cores`: Set to actual number of physical cores
     #[serde(default)]
     pub default_vcpus: f32,
 
     /// Default maximum number of vCPUs per SB/VM:
-    /// - unspecified or == 0             --> will be set to the actual number of physical cores or
-    ///                                       to the maximum number of vCPUs supported by KVM
-    ///                                       if that number is exceeded
-    /// - > 0 <= number of physical cores --> will be set to the specified number
-    /// - > number of physical cores      --> will be set to the actual number of physical cores or
-    ///                                       to the maximum number of vCPUs supported by KVM
-    ///                                       if that number is exceeded
+    /// - Unspecified or `0`: Set to actual number of physical cores or
+    ///   maximum vCPUs supported by KVM if exceeded
+    /// - `> 0` and `<= number of physical cores`: Set to specified number
+    /// - `> number of physical cores`: Set to actual number of physical cores or
+    ///   maximum vCPUs supported by KVM if exceeded
     ///
-    /// WARNING: Depending of the architecture, the maximum number of vCPUs supported by KVM is used
-    /// when the actual number of physical cores is greater than it.
+    /// # WARNING
     ///
-    /// WARNING: Be aware that this value impacts the virtual machine's memory footprint and CPU
-    /// the hotplug functionality. For example, `default_maxvcpus = 240` specifies that until 240
-    /// vCPUs can be added to a SB/VM, but the memory footprint will be big. Another example, with
-    /// `default_maxvcpus = 8` the memory footprint will be small, but 8 will be the maximum number
-    /// of vCPUs supported by the SB/VM. In general, we recommend that you do not edit this
-    /// variable, unless you know what are you doing.
-    ///
-    /// NOTICE: on arm platform with gicv2 interrupt controller, set it to 8.
+    /// - This impacts memory footprint and CPU hotplug functionality
+    /// - On ARM with GICv2, max is 8
     #[serde(default)]
     pub default_maxvcpus: u32,
 }
@@ -417,49 +424,52 @@ impl CpuInfo {
 /// Configuration information for debug
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DebugInfo {
-    /// This option changes the default hypervisor and kernel parameters to enable debug output
-    /// where available.
+    /// Enable debug output for hypervisor and kernel parameters.
     #[serde(default)]
     pub enable_debug: bool,
 
-    /// The log log level will be applied to hypervisor.
-    /// Possible values are:
-    /// - trace
-    /// - debug
-    /// - info
-    /// - warn
-    /// - error
-    /// - critical
+    /// Log level for hypervisor. Possible values:
+    /// - `trace`
+    /// - `debug`
+    /// - `info`
+    /// - `warn`
+    /// - `error`
+    /// - `critical`
     #[serde(default = "default_hypervisor_log_level")]
     pub log_level: String,
 
-    /// Enable dumping information about guest page structures if true.
+    /// Enable dumping information about guest page structures.
     #[serde(default)]
     pub guest_memory_dump_paging: bool,
 
-    /// Set where to save the guest memory dump file.
+    /// Path to save guest memory dump files.
     ///
-    /// If set, when GUEST_PANICKED event occurred, guest memory will be dumped to host filesystem
-    /// under guest_memory_dump_path. This directory will be created automatically if it does not
-    /// exist. The dumped file(also called vmcore) can be processed with crash or gdb.
+    /// When `GUEST_PANICKED` event occurs, guest memory will be dumped here.
     ///
-    /// # WARNING:
-    ///  Dump guest's memory can take very long depending on the amount of guest memory and use
-    /// much disk space.
+    /// # WARNING
+    ///
+    /// Dumping guest memory can be time-consuming and use significant disk space.
     #[serde(default)]
     pub guest_memory_dump_path: String,
 
-    /// This option allows to add a debug monitor socket when `enable_debug = true`
-    /// WARNING: Anyone with access to the monitor socket can take full control of
-    /// Qemu. This is for debugging purpose only and must *NEVER* be used in
-    /// production.
-    /// Valid values are :
-    /// - "hmp"
-    /// - "qmp"
-    /// - "qmp-pretty" (same as "qmp" with pretty json formatting)
-    /// If set to the empty string "", no debug monitor socket is added. This is
-    /// the default.
+    /// Add a debug monitor socket when `enable_debug = true`.
+    ///
+    /// # WARNING
+    ///
+    /// Anyone with access to the monitor socket can take full control of Qemu.
+    /// **Never** use in production.
+    ///
+    /// Valid values:
+    /// - `"hmp"`
+    /// - `"qmp"`
+    /// - `"qmp-pretty"` (formatted JSON)
+    ///
+    /// Empty string disables this feature (default).
+    ///
+    /// Example usage in configuration:
+    /// ```toml
     /// dbg_monitor_socket = "hmp"
+    /// ```
     #[serde(default)]
     pub dbg_monitor_socket: String,
 }
@@ -483,56 +493,49 @@ fn default_hypervisor_log_level() -> String {
 /// Virtual machine device configuration information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DeviceInfo {
-    /// Bridges can be used to hot plug devices.
+    /// Number of bridges for hot plugging devices.
     ///
-    /// Limitations:
-    /// - Currently only pci bridges are supported
-    /// - Until 30 devices per bridge can be hot plugged.
-    /// - Until 5 PCI bridges can be cold plugged per VM.
+    /// # Limitations
     ///
-    /// This limitation could be a bug in qemu or in the kernel
-    /// Default number of bridges per SB/VM:
-    /// - unspecified or 0   --> will be set to @DEFBRIDGES@
-    /// - > 1 <= 5           --> will be set to the specified number
-    /// - > 5                --> will be set to 5
+    /// - Only PCI bridges supported
+    /// - Max 30 devices per bridge
+    /// - Max 5 PCI bridges per VM
+    ///
+    /// # Configuration
+    ///
+    /// - Unspecified or `0`: Set to `@DEFBRIDGES@`
+    /// - `> 1` and `<= 5`: Set to specified number
+    /// - `> 5`: Set to 5
     #[serde(default)]
     pub default_bridges: u32,
 
-    /// VFIO devices are hotplugged on a bridge by default.
-    ///
-    /// Enable hotplugging on root bus. This may be required for devices with a large PCI bar,
-    /// as this is a current limitation with hotplugging on a bridge.
+    /// Enable hotplugging on root bus for devices with large PCI bars.
     #[serde(default)]
     pub hotplug_vfio_on_root_bus: bool,
 
-    /// This value of pcie_root_port device indicates that how many root ports to
-    /// be created when VM creation.
-    /// It's valid when hotplug_vfio_on_root_bus is true and machine_type is "q35".
+    /// Number of PCIe root ports to create during VM creation.
+    ///
+    /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.
     #[serde(default)]
     pub pcie_root_port: u32,
 
-    /// This value of pcie_switch_port device indicates that how many switch ports to
-    /// be created when VM creation.
-    /// It's valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35".
+    /// Number of PCIe switch ports to create during VM creation.
+    ///
+    /// Valid when `hotplug_vfio_on_root_bus = true` and `machine_type = "q35"`.
     #[serde(default)]
     pub pcie_switch_port: u32,
 
-    /// Enable vIOMMU, default false
+    /// Enable vIOMMU device.
     ///
-    /// Enabling this will result in the VM having a vIOMMU device. This will also add the
-    /// following options to the kernel's command line: intel_iommu=on,iommu=pt
+    /// Adds kernel parameters: `intel_iommu=on,iommu=pt`
     #[serde(default)]
     pub enable_iommu: bool,
 
-    /// Enable IOMMU_PLATFORM, default false
-    ///
-    /// Enabling this will result in the VM device having iommu_platform=on set
+    /// Set `iommu_platform=on` for VM devices.
     #[serde(default)]
     pub enable_iommu_platform: bool,
 
-    /// Enable balloon f_reporting, default false
-    ///
-    /// Enabling this will result in the VM balloon device having f_reporting=on set
+    /// Enable balloon device reporting.
     #[serde(default)]
     pub reclaim_guest_freed_memory: bool,
 }
@@ -555,7 +558,7 @@ impl DeviceInfo {
                 self.default_bridges
             ));
         }
-        // It's not allowed to set PCIe RootPort and SwitchPort at the same time.
+        // Root Port and Switch Port cannot be set simultaneously
         if self.pcie_root_port > 0 && self.pcie_switch_port > 0 {
             return Err(eother!(
                 "Root Port and Switch Port set at the same time is forbidden."
@@ -569,14 +572,15 @@ impl DeviceInfo {
 /// Virtual machine PCIe Topology configuration.
 #[derive(Clone, Debug, Default)]
 pub struct TopologyConfigInfo {
-    /// Hypervisor name
+    /// Hypervisor name.
     pub hypervisor_name: String,
-    /// Device Info
+
+    /// Device information.
     pub device_info: DeviceInfo,
 }
 
 impl TopologyConfigInfo {
-    /// Initialize the topology config info from toml config
+    /// Initialize the topology config info from TOML config.
     pub fn new(toml_config: &TomlConfig) -> Option<Self> {
         // Firecracker does not support PCIe Devices, so we should not initialize such a PCIe topology for it.
         // If the case of fc hit, just return None.
@@ -607,30 +611,29 @@ pub struct MachineInfo {
     #[serde(default)]
     pub machine_type: String,
 
-    /// Machine accelerators.
-    /// Comma-separated list of machine accelerators to pass to the hypervisor.
-    /// For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
+    /// Machine accelerators as comma-separated list.
+    ///
+    /// Example: `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
     #[serde(default)]
     pub machine_accelerators: String,
 
-    /// Add flash image file to VM.
+    /// Flash image files for VM.
     ///
-    /// The arguments of it should be in format of ["/path/to/flash0.img", "/path/to/flash1.img"].
+    /// Format: `["/path/to/flash0.img", "/path/to/flash1.img"]`
     #[serde(default)]
     pub pflashes: Vec<String>,
 
-    /// Default entropy source.
-    /// The path to a host source of entropy (including a real hardware RNG).
-    /// `/dev/urandom` and `/dev/random` are two main options. Be aware that `/dev/random` is a
-    /// blocking source of entropy.  If the host runs out of entropy, the VMs boot time will
-    /// increase leading to get startup timeouts. The source of entropy `/dev/urandom` is
-    /// non-blocking and provides a generally acceptable source of entropy. It should work well
-    /// for pretty much all practical purposes.
+    /// Default entropy source path.
+    ///
+    /// Options:
+    /// - `/dev/urandom` (non-blocking, recommended)
+    /// - `/dev/random` (blocking, may cause boot delays)
     #[serde(default)]
     pub entropy_source: String,
 
-    /// List of valid annotations values for entropy_source.
-    /// The default if not set is empty (all annotations rejected.)
+    /// List of valid entropy source paths for annotations.
+    ///
+    /// Default: empty (all annotations rejected)
     #[serde(default)]
     pub valid_entropy_sources: Vec<String>,
 }
@@ -646,7 +649,7 @@ impl MachineInfo {
         self.machine_accelerators = accelerators.join(",");
 
         for pflash in self.pflashes.iter_mut() {
-            resolve_path!(*pflash, "Flash image file {} is invalide: {}")?;
+            resolve_path!(*pflash, "Flash image file {} is invalid: {}")?;
         }
         resolve_path!(self.entropy_source, "Entropy source {} is invalid: {}")?;
 
@@ -671,12 +674,11 @@ impl MachineInfo {
 /// Huge page type for VM RAM backend
 #[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, PartialEq, Eq)]
 pub enum HugePageType {
-    /// This will result in the VM memory being allocated using hugetlbfs backend. This is useful
-    /// when you want to use vhost-user network stacks within the container. This will automatically
-    /// result in memory pre allocation.
+    /// Memory allocated using hugetlbfs backend
     #[serde(rename = "hugetlbfs")]
     Hugetlbfs,
-    /// This will result in the VM memory being allocated using transparant huge page backend.
+
+    /// Memory allocated using transparent huge pages
     #[serde(rename = "thp")]
     THP,
 }
@@ -694,81 +696,64 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub default_memory: u32,
 
-    /// Default maximum memory in MiB per SB / VM
-    /// unspecified or == 0           --> will be set to the actual amount of physical RAM
-    /// > 0 <= amount of physical RAM --> will be set to the specified number
-    /// > amount of physical RAM      --> will be set to the actual amount of physical RAM
+    /// Default maximum memory in MiB per SB/VM:
+    /// - Unspecified or `0`: Set to actual physical RAM
+    /// - `> 0` and `<= physical RAM`: Set to specified number
+    /// - `> physical RAM`: Set to actual physical RAM
     #[serde(default)]
     pub default_maxmemory: u32,
 
     /// Default memory slots per SB/VM.
     ///
-    /// This is will determine the times that memory will be hotadded to sandbox/VM.
+    /// Determines how many times memory can be hot-added.
     #[serde(default)]
     pub memory_slots: u32,
 
-    /// Enable file based guest memory support.
+    /// File-based guest memory support path.
     ///
-    /// The default is an empty string which will disable this feature. In the case of virtio-fs,
-    /// this is enabled automatically and '/dev/shm' is used as the backing folder. This option
-    /// will be ignored if VM templating is enabled.
+    /// Disabled by default. Automatically set to `/dev/shm` for virtio-fs.
     #[serde(default)]
     pub file_mem_backend: String,
 
-    /// List of valid annotations values for the file_mem_backend annotation
+    /// Valid file memory backends for annotations.
     ///
-    /// The default if not set is empty (all annotations rejected.)
+    /// Default: empty (all annotations rejected)
     #[serde(default)]
     pub valid_file_mem_backends: Vec<String>,
 
-    /// Enable pre allocation of VM RAM, default false
-    ///
-    /// Enabling this will result in lower container density as all of the memory will be allocated
-    /// and locked. This is useful when you want to reserve all the memory upfront or in the cases
-    /// where you want memory latencies to be very predictable
+    /// Pre-allocate VM RAM (reduces container density).
     #[serde(default)]
     pub enable_mem_prealloc: bool,
 
-    /// Enable huge pages for VM RAM, default false
-    ///
-    /// Enabling this will result in the VM memory being allocated using huge pages.
-    /// Its backend type is specified by item "hugepage_type"
+    /// Use huge pages for VM RAM.
     #[serde(default)]
     pub enable_hugepages: bool,
 
-    /// Select huge page type, default "hugetlbfs"
-    /// Following huge types are supported:
-    /// - hugetlbfs
-    /// - thp
+    /// Huge page type:
+    /// - `hugetlbfs`
+    /// - `thp`
     #[serde(default)]
     pub hugepage_type: HugePageType,
 
-    /// Specifies virtio-mem will be enabled or not.
+    /// Enable virtio-mem.
     ///
-    /// Please note that this option should be used with the command
-    /// "echo 1 > /proc/sys/vm/overcommit_memory".
+    /// Requires `echo 1 > /proc/sys/vm/overcommit_memory`
     #[serde(default)]
     pub enable_virtio_mem: bool,
 
-    /// Enable swap in the guest. Default false.
-    ///
-    /// When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
+    /// Enable swap in guest.
     #[serde(default)]
     pub enable_guest_swap: bool,
 
-    /// If enable_guest_swap is enabled, the swap device will be created in the guest
-    /// at this path. Default "/run/kata-containers/swap".
+    /// Swap device path in guest (when `enable_guest_swap = true`).
     #[serde(default = "default_guest_swap_path")]
     pub guest_swap_path: String,
 
-    /// The percentage of the total memory to be used as swap device.
-    /// Default 100.
+    /// Swap size as percentage of total memory.
     #[serde(default = "default_guest_swap_size_percent")]
     pub guest_swap_size_percent: u64,
 
-    /// The threshold in seconds to create swap device in the guest.
-    /// Kata will wait guest_swap_create_threshold_secs seconds before creating swap device.
-    /// Default 60.
+    /// Threshold in seconds before creating swap device.
     #[serde(default = "default_guest_swap_create_threshold_secs")]
     pub guest_swap_create_threshold_secs: u64,
 }
@@ -786,7 +771,11 @@ fn default_guest_swap_create_threshold_secs() -> u64 {
 }
 
 impl MemoryInfo {
-    /// Adjust the configuration information after loading from configuration file.
+    /// Adjusts the configuration information after loading from a configuration file.
+    ///
+    /// This method resolves the path for the file memory backend and
+    /// sets `default_maxmemory` if it's currently zero, calculating it
+    /// from the total system memory.
     pub fn adjust_config(&mut self) -> Result<()> {
         resolve_path!(
             self.file_mem_backend,
@@ -803,7 +792,11 @@ impl MemoryInfo {
         Ok(())
     }
 
-    /// Validate the configuration information.
+    /// Validates the memory configuration information.
+    ///
+    /// This ensures that critical memory parameters like `default_memory`
+    /// and `memory_slots` are non-zero, and checks the validity of
+    /// the memory backend file path.
     pub fn validate(&self) -> Result<()> {
         validate_path!(
             self.file_mem_backend,
@@ -819,116 +812,123 @@ impl MemoryInfo {
         Ok(())
     }
 
-    /// Validate path of memory backend files.
+    /// Validates the path of memory backend files against configured patterns.
     pub fn validate_memory_backend_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_file_mem_backends, path)
     }
 }
 
-/// Configuration information for network.
+/// Configuration information for network settings.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct NetworkInfo {
-    /// If vhost-net backend for virtio-net is not desired, set to true.
+    /// If set to `true`, disables the `vhost-net` backend for `virtio-net`.
     ///
-    /// Default is false, which trades off security (vhost-net runs ring0) for network I/O
-    /// performance.
+    /// The default is `false`, which prioritizes network I/O performance
+    /// over security (as `vhost-net` runs in ring0).
     #[serde(default)]
     pub disable_vhost_net: bool,
 
-    /// Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
+    /// Sets the maximum inbound bandwidth for network I/O in bits/sec for the sandbox/VM.
     ///
-    /// In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) to discipline traffic.
-    /// Default 0-sized value means unlimited rate.
+    /// In QEMU, this is implemented using classful `qdiscs HTB` (Hierarchy Token Bucket)
+    /// to manage traffic. A value of `0` indicates an unlimited rate (default).
     #[serde(default)]
     pub rx_rate_limiter_max_rate: u64,
 
-    /// Use tx Rate Limiter to control network I/O outbound bandwidth(size in bits/sec for SB/VM).
+    /// Sets the maximum outbound bandwidth for network I/O in bits/sec for the sandbox/VM.
     ///
-    /// In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) and ifb(Intermediate Functional
-    /// Block) to discipline traffic.
-    /// Default 0-sized value means unlimited rate.
+    /// In QEMU, this is implemented using classful `qdiscs HTB` (Hierarchy Token Bucket)
+    /// and `ifb` (Intermediate Functional Block) to manage traffic. A value of `0`
+    /// indicates an unlimited rate (default).
     #[serde(default)]
     pub tx_rate_limiter_max_rate: u64,
 
-    /// network queues
+    /// Configures the number of network queues.
     #[serde(default)]
     pub network_queues: u32,
 }
 
 impl NetworkInfo {
-    /// Adjust the configuration information after loading from configuration file.
+    /// Adjusts the network configuration information after loading from a configuration file.
+    /// (Currently, this method performs no adjustments.)
     pub fn adjust_config(&mut self) -> Result<()> {
         Ok(())
     }
 
-    /// Validate the configuration information.
+    /// Validates the network configuration information.
+    /// (Currently, this method performs no specific validations beyond basic type checks.)
     pub fn validate(&self) -> Result<()> {
         Ok(())
     }
 }
 
-/// Configuration information for security.
+/// Configuration information for security settings.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SecurityInfo {
-    /// Enable running QEMU VMM as a non-root user.
+    /// Enables running the QEMU VMM as a non-root user.
     ///
-    /// By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
-    /// a non-root random user. See documentation for the limitations of this mode.
+    /// By default, the QEMU VMM runs as root. When this is set to `true`,
+    /// the QEMU VMM process runs as a non-root, randomly generated user.
+    /// Refer to the documentation for limitations of this mode.
     #[serde(default)]
     pub rootless: bool,
 
-    /// Disable seccomp.
+    /// Disables `seccomp` for the guest VM.
     #[serde(default)]
     pub disable_seccomp: bool,
 
-    /// Enable confidential guest support.
+    /// Enables confidential guest support.
     ///
-    /// Toggling that setting may trigger different hardware features, ranging from memory
-    /// encryption to both memory and CPU-state encryption and integrity.The Kata Containers
-    /// runtime dynamically detects the available feature set and aims at enabling the largest
-    /// possible one.
+    /// Toggling this setting may activate different hardware features, ranging from
+    /// memory encryption to both memory and CPU-state encryption and integrity.
+    /// The Kata Containers runtime dynamically detects the available feature set
+    /// and aims to enable the largest possible one.
     #[serde(default)]
     pub confidential_guest: bool,
 
-    /// If false prefer SEV even if SEV-SNP is also available
+    /// If `false`, SEV (Secure Encrypted Virtualization) is preferred even if
+    /// SEV-SNP (Secure Nested Paging) is also available.
     #[serde(default)]
     pub sev_snp_guest: bool,
 
     /// Path to OCI hook binaries in the *guest rootfs*.
     ///
-    /// This does not affect host-side hooks which must instead be added to the OCI spec passed to
-    /// the runtime.
+    /// This setting does not affect host-side hooks, which must instead be
+    /// added to the OCI spec passed to the runtime.
     ///
-    /// You can create a rootfs with hooks by customizing the osbuilder scripts:
-    /// https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder
+    /// To create a rootfs with hooks, you can customize the osbuilder scripts:
+    /// <https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder>
     ///
-    /// Hooks must be stored in a subdirectory of guest_hook_path according to their hook type,
-    /// i.e. "guest_hook_path/{prestart,poststart,poststop}". The agent will scan these directories
-    /// for executable files and add them, in lexicographical order, to the lifecycle of the guest
-    /// container.
+    /// Hooks must be stored in a subdirectory of `guest_hook_path` according to
+    /// their hook type, e.g., `guest_hook_path/{prestart,poststart,poststop}`.
+    /// The agent will scan these directories for executable files and add them,
+    /// in lexicographical order, to the lifecycle of the guest container.
     ///
-    /// Hooks are executed in the runtime namespace of the guest. See the official documentation:
-    /// https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
+    /// Hooks are executed in the runtime namespace of the guest. See the official
+    /// Open Containers Initiative (OCI) documentation for more details:
+    /// <https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks>
     ///
-    /// Warnings will be logged if any error is encountered while scanning for hooks, but it will
-    /// not abort container execution.
+    /// Warnings will be logged if any error is encountered while scanning for hooks,
+    /// but it will not abort container execution.
     #[serde(default)]
     pub guest_hook_path: String,
 
-    /// Initdata is dynamic configuration (like policies, configs, and identity files) with encoded format that users inject
-    /// into the TEE Guest upon CVM launch. And it's implemented based on the `InitData Specification`:
-    /// https://github.com/confidential-containers/trustee/blob/61c1dc60ee1f926c2eb95d69666c2430c3fea808/kbs/docs/initdata.md
+    /// Initdata provides dynamic configuration (such as policies, configs, and identity files)
+    /// in an encoded format that users inject into the TEE Guest upon CVM launch.
+    ///
+    /// It is implemented based on the `InitData Specification`:
+    /// <https://github.com/confidential-containers/trustee/blob/61c1dc60ee1f926c2eb95d69666c2430c3fea808/kbs/docs/initdata.md>
     #[serde(default)]
     pub initdata: String,
 
     /// List of valid annotation names for the hypervisor.
     ///
-    /// Each member of the list is a regular expression, which is the base name of the annotation,
-    /// e.g. "path" for io.katacontainers.config.hypervisor.path"
+    /// Each member of the list is a regular expression, representing the base name
+    /// of the annotation (e.g., "path" for "io.katacontainers.config.hypervisor.path").
     #[serde(default)]
     pub enable_annotations: Vec<String>,
 
-    /// qgs_port defines Intel Quote Generation Service port exposed from the host
+    /// Defines the Intel Quote Generation Service (QGS) port exposed from the host.
     #[serde(
         default = "default_qgs_port",
         rename = "tdx_quote_generation_service_socket_port"
@@ -949,17 +949,23 @@ fn default_qgs_port() -> u32 {
 }
 
 impl SecurityInfo {
-    /// Adjust the configuration information after loading from configuration file.
+    /// Adjusts the security configuration information after loading from a configuration file.
+    ///
+    /// Sets `guest_hook_path` to its default value if it is empty.
     pub fn adjust_config(&mut self) -> Result<()> {
         Ok(())
     }
 
-    /// Validate the configuration information.
+    /// Validates the security configuration information.
+    /// (Currently, this method performs no specific validations.)
     pub fn validate(&self) -> Result<()> {
         Ok(())
     }
 
-    /// Check whether annotation key is enabled or not.
+    /// Checks whether a given annotation key is enabled based on the `enable_annotations` list.
+    ///
+    /// Returns `true` if the annotation key (after removing the `KATA_ANNO_CFG_HYPERVISOR_PREFIX`)
+    /// matches any of the regular expressions in `enable_annotations`.
     pub fn is_annotation_enabled(&self, path: &str) -> bool {
         if !path.starts_with(KATA_ANNO_CFG_HYPERVISOR_PREFIX) {
             return false;
@@ -972,68 +978,72 @@ impl SecurityInfo {
         false
     }
 
-    /// Validate path
+    /// Validates a given file system path.
     pub fn validate_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
         Ok(())
     }
 }
 
-/// Configuration information for shared filesystem, such virtio-9p and virtio-fs.
+/// Configuration information for shared filesystems, such as virtio-9p and virtio-fs.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SharedFsInfo {
-    /// Shared file system type:
-    /// - virtio-fs (default)
-    /// - virtio-9p`
-    /// - none
+    /// Type of shared file system to use:
+    /// - `virtio-fs` (default)
+    /// - `virtio-9p`
+    /// - `none` (disables shared filesystem)
     pub shared_fs: Option<String>,
 
-    /// Path to vhost-user-fs daemon.
+    /// Path to the `vhost-user-fs` daemon executable.
     #[serde(default)]
     pub virtio_fs_daemon: String,
 
-    /// List of valid annotations values for the virtiofs daemon
-    /// The default if not set is empty (all annotations rejected.)
+    /// List of valid annotation values for the `virtiofsd` daemon.
+    ///
+    /// If not set, the default is an empty list, meaning all annotations are rejected.
     #[serde(default)]
     pub valid_virtio_fs_daemon_paths: Vec<String>,
 
-    /// Extra args for virtiofsd daemon
+    /// Extra arguments for the `virtiofsd` daemon.
     ///
-    /// Format example:
-    ///    ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+    /// Format example: `["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]`
     ///
-    ///  see `virtiofsd -h` for possible options.
+    /// Refer to `virtiofsd -h` for possible options.
     #[serde(default)]
     pub virtio_fs_extra_args: Vec<String>,
 
-    /// Cache mode:
-    /// - never: Metadata, data, and pathname lookup are not cached in guest. They are always
-    ///   fetched from host and any changes are immediately pushed to host.
-    /// - auto: Metadata and pathname lookup cache expires after a configured amount of time
-    ///   (default is 1 second). Data is cached while the file is open (close to open consistency).
-    /// - always: Metadata, data, and pathname lookup are cached in guest and never expire.
+    /// Cache mode for `virtio-fs`:
+    /// - `never`: Metadata, data, and pathname lookups are not cached in the guest.
+    ///   They are always fetched from the host, and any changes are immediately pushed to the host.
+    /// - `auto`: Metadata and pathname lookup cache expires after a configured amount of time
+    ///   (default is 1 second). Data is cached while the file is open (close-to-open consistency).
+    /// - `always`: Metadata, data, and pathname lookups are cached in the guest and never expire.
     #[serde(default)]
     pub virtio_fs_cache: String,
 
-    /// Default size of DAX cache in MiB
+    /// Default size of the DAX cache in MiB for `virtio-fs`.
     #[serde(default)]
     pub virtio_fs_cache_size: u32,
 
-    /// Default size of virtqueues
+    /// Default size of virtqueues for `virtio-fs`.
     #[serde(default)]
     pub virtio_fs_queue_size: u32,
 
-    /// Enable virtio-fs DAX window if true.
+    /// Enables `virtio-fs` DAX (Direct Access) window if `true`.
     #[serde(default)]
     pub virtio_fs_is_dax: bool,
 
-    /// This is the msize used for 9p shares. It is the number of bytes used for 9p packet payload.
+    /// This is the `msize` used for 9p shares. It represents the number of bytes
+    /// used for the 9p packet payload.
     #[serde(default)]
     pub msize_9p: u32,
 }
 
 impl SharedFsInfo {
-    /// Adjust the configuration information after loading from configuration file.
+    /// Adjusts the shared filesystem configuration after loading from a configuration file.
+    ///
+    /// Handles default values for `shared_fs` type, `virtio-fs` specific settings
+    /// (daemon path, cache mode, DAX), and `virtio-9p` msize.
     pub fn adjust_config(&mut self) -> Result<()> {
         if self.shared_fs.as_deref() == Some(NO_VIRTIO_FS) {
             self.shared_fs = None;
@@ -1057,7 +1067,10 @@ impl SharedFsInfo {
         Ok(())
     }
 
-    /// Validate the configuration information.
+    /// Validates the shared filesystem configuration.
+    ///
+    /// Checks the validity of the selected `shared_fs` type and
+    /// performs specific validations for `virtio-fs` and `virtio-9p` settings.
     pub fn validate(&self) -> Result<()> {
         match self.shared_fs.as_deref() {
             None => Ok(()),
@@ -1078,11 +1091,15 @@ impl SharedFsInfo {
         }
     }
 
-    /// Validate path of virtio-fs daemon, especially for annotations.
+    /// Validates the path of the virtio-fs daemon, especially for annotations.
     pub fn validate_virtiofs_daemon_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_virtio_fs_daemon_paths, path)
     }
 
+    /// Adjusts virtio-fs specific configuration settings.
+    ///
+    /// Handles `virtio_fs_daemon` path resolution (unless in inline mode),
+    /// default `virtio_fs_cache` mode, and `virtio_fs_is_dax` with `virtio_fs_cache_size`.
     fn adjust_virtio_fs(&mut self, inline: bool) -> Result<()> {
         // inline mode doesn't need external virtiofsd daemon
         if !inline {
@@ -1108,6 +1125,10 @@ impl SharedFsInfo {
         Ok(())
     }
 
+    /// Validates virtio-fs specific configuration settings.
+    ///
+    /// Checks the validity of the `virtio_fs_daemon` path (unless in inline mode),
+    /// `virtio_fs_cache` mode, and `virtio_fs_is_dax` with `virtio_fs_cache_size`.
     fn validate_virtio_fs(&self, inline: bool) -> Result<()> {
         // inline mode doesn't need external virtiofsd daemon
         if !inline {
@@ -1135,22 +1156,22 @@ impl SharedFsInfo {
     }
 }
 
-/// Configuration information for remote hypervisor type.
+/// Configuration information for a remote hypervisor type.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct RemoteInfo {
-    /// Remote hypervisor socket path
+    /// Socket path for the remote hypervisor.
     #[serde(default)]
     pub hypervisor_socket: String,
 
-    /// Remote hyperisor timeout of creating (in seconds)
+    /// Timeout (in seconds) for creating the remote hypervisor.
     #[serde(default)]
     pub hypervisor_timeout: i32,
 
-    /// GPU specific annotations (currently only applicable for Remote Hypervisor)
-    /// default_gpus specifies the number of GPUs required for the Kata VM
+    /// GPU specific annotations (currently only applicable for Remote Hypervisor).
+    /// Specifies the number of GPUs required for the Kata VM.
     #[serde(default)]
     pub default_gpus: u32,
-    /// default_gpu_model specifies GPU model like tesla, h100, a100, readeon etc.
+    /// Specifies the GPU model, e.g., "tesla", "h100", "a100", "radeon", etc.
     #[serde(default)]
     pub default_gpu_model: String,
 }
@@ -1161,40 +1182,43 @@ pub struct Hypervisor {
     /// Path to the hypervisor executable.
     #[serde(default)]
     pub path: String,
-    /// List of valid annotations values for the hypervisor.
+    /// List of valid annotation values for the hypervisor path.
     ///
-    /// Each member of the list is a path pattern as described by glob(3). The default if not set
-    /// is empty (all annotations rejected.)
+    /// Each member of the list is a path pattern as described by `glob(3)`.
+    /// The default is an empty list (all annotations rejected) if not set.
     #[serde(default)]
     pub valid_hypervisor_paths: Vec<String>,
 
     /// Hypervisor control executable path.
     #[serde(default)]
     pub ctlpath: String,
-    /// List of valid annotations values for the hypervisor control executable.
+    /// List of valid annotation values for the hypervisor control executable path.
     ///
-    /// Each member of the list is a path pattern as described by glob(3). The default if not set
-    /// is empty (all annotations rejected.)
+    /// Each member of the list is a path pattern as described by `glob(3)`.
+    /// The default is an empty list (all annotations rejected) if not set.
     #[serde(default)]
     pub valid_ctlpaths: Vec<String>,
 
-    /// Control channel path.
+    /// Path to the jailer executable.
     #[serde(default)]
     pub jailer_path: String,
-    /// List of valid annotations values for the hypervisor jailer path.
+    /// List of valid annotation values for the hypervisor jailer path.
     ///
-    /// Each member of the list is a path pattern as described by glob(3). The default if not set
-    /// is empty (all annotations rejected.)
+    /// Each member of the list is a path pattern as described by `glob(3)`.
+    /// The default is an empty list (all annotations rejected) if not set.
     #[serde(default)]
     pub valid_jailer_paths: Vec<String>,
 
-    /// Disable the customizations done in the runtime when it detects that it is running on top
-    /// a VMM. This will result in the runtime behaving as it would when running on bare metal.
+    /// Disables the runtime customizations applied when running on top of a VMM.
+    ///
+    /// Setting this to `true` will make the runtime behave as it would when running on bare metal.
     #[serde(default)]
     pub disable_nesting_checks: bool,
 
-    /// Enable iothreads (data-plane) to be used. This causes IO to be handled in a separate IO
-    /// thread. This is currently only implemented for SCSI.
+    /// Enables the use of iothreads (data-plane).
+    ///
+    /// When enabled, I/O operations are handled in a separate I/O thread.
+    /// This is currently only implemented for SCSI devices.
     #[serde(default)]
     pub enable_iothreads: bool,
 
@@ -1242,10 +1266,11 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub remote_info: RemoteInfo,
 
-    /// A sandbox annotation used to specify prefetch_files.list host path container image
-    /// being used, and runtime will pass it to Hypervisor to  search for corresponding
-    /// prefetch list file:
-    ///   prefetch_list_path = /path/to/<uid>/xyz.com/fedora:36/prefetch_file.list
+    /// A sandbox annotation used to specify the host path to the `prefetch_files.list`
+    /// for the container image being used. The runtime will pass this path to the
+    /// Hypervisor to search for the corresponding prefetch list file.
+    ///
+    /// Example: `/path/to/<uid>/xyz.com/fedora:36/prefetch_file.list`
     #[serde(default)]
     pub prefetch_list_path: String,
 
@@ -1253,7 +1278,7 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
 
-    /// Disable applying SELinux on the container process.
+    /// Disables applying SELinux on the container process within the guest.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
 }
@@ -1263,23 +1288,29 @@ fn yes() -> bool {
 }
 
 impl Hypervisor {
-    /// Validate path of hypervisor executable.
+    /// Validates the path of the hypervisor executable against configured patterns.
     pub fn validate_hypervisor_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_hypervisor_paths, path)
     }
 
-    /// Validate path of hypervisor control executable.
+    /// Validates the path of the hypervisor control executable against configured patterns.
     pub fn validate_hypervisor_ctlpath<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_ctlpaths, path)
     }
 
-    /// Validate path of jailer executable.
+    /// Validates the path of the jailer executable against configured patterns.
     pub fn validate_jailer_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         validate_path_pattern(&self.valid_jailer_paths, path)
     }
 }
 
 impl ConfigOps for Hypervisor {
+    /// Adjusts the overall hypervisor configuration after loading from the configuration file.
+    ///
+    /// This method iterates through configured hypervisors, calls their respective
+    /// plugin adjustments, and then recursively adjusts nested configuration structs
+    /// like `blockdev_info`, `boot_info`, etc. It also resolves paths for
+    /// `prefetch_list_path`.
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
@@ -1316,6 +1347,11 @@ impl ConfigOps for Hypervisor {
         Ok(())
     }
 
+    /// Validates the overall hypervisor configuration.
+    ///
+    /// This method iterates through configured hypervisors, calls their respective
+    /// plugin validations, and then recursively validates nested configuration structs
+    /// and various paths (`path`, `ctlpath`, `jailer_path`, `prefetch_list_path`).
     fn validate(conf: &TomlConfig) -> Result<()> {
         HypervisorVendor::validate(conf)?;
 
@@ -1469,7 +1505,7 @@ mod tests {
             },
         ];
 
-        for (_, tc) in tests.iter_mut().enumerate() {
+        for tc in tests.iter_mut() {
             // we can ensure that unwrap will not panic
             tc.input.adjust_config().unwrap();
 

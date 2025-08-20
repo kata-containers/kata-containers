@@ -129,20 +129,20 @@ fn calculate_digest(algorithm: &str, data: &str) -> Result<Vec<u8>> {
     let digest = match algorithm {
         "sha256" => {
             let mut hasher = Sha256::new();
-            hasher.update(&data);
+            hasher.update(data);
             hasher.finalize().to_vec()
         }
         "sha384" => {
             let mut hasher = Sha384::new();
-            hasher.update(&data);
+            hasher.update(data);
             hasher.finalize().to_vec()
         }
         "sha512" => {
             let mut hasher = Sha512::new();
-            hasher.update(&data);
+            hasher.update(data);
             hasher.finalize().to_vec()
         }
-        _ => return Err(anyhow!("unsupported Hash algorithm: {}", algorithm).into()),
+        _ => return Err(anyhow!("unsupported Hash algorithm: {}", algorithm)),
     };
 
     Ok(digest)
@@ -172,7 +172,7 @@ fn adjust_digest(digest: &[u8], platform: ProtectedPlatform) -> Vec<u8> {
 
 /// Parse initdata
 fn parse_initdata(initdata_str: &str) -> Result<InitData> {
-    let initdata: InitData = toml::from_str(&initdata_str)?;
+    let initdata: InitData = toml::from_str(initdata_str)?;
     initdata.validate()?;
 
     Ok(initdata)
@@ -192,7 +192,7 @@ pub fn calculate_initdata_digest(
     let algorithm: &str = &initdata.algorithm;
 
     // 2. Calculate Digest
-    let digest = calculate_digest(algorithm, &initdata_toml).context("calculate digest")?;
+    let digest = calculate_digest(algorithm, initdata_toml).context("calculate digest")?;
 
     // 3. Adjust Digest with Platform
     let digest_platform = adjust_digest(&digest, platform);

@@ -142,14 +142,11 @@ pub fn arch_guest_protection(
 #[allow(dead_code)]
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
     if !Uid::effective().is_root() {
-        return Err(ProtectionError::NoPerms)?;
+        Err(ProtectionError::NoPerms)?;
     }
 
     let facilities = crate::cpu::retrieve_cpu_facilities().map_err(|err| {
-        ProtectionError::CheckFailed(format!(
-            "Error retrieving cpu facilities file : {}",
-            err.to_string()
-        ))
+        ProtectionError::CheckFailed(format!("Error retrieving cpu facilities file : {}", err))
     })?;
 
     // Secure Execution

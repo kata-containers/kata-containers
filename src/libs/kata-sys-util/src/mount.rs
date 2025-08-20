@@ -823,11 +823,11 @@ mod tests {
 
     #[test]
     fn test_get_linux_mount_info() {
-        let info = get_linux_mount_info("/sys/fs/cgroup").unwrap();
+        let info = get_linux_mount_info("/dev/shm").unwrap();
 
         assert_eq!(&info.device, "tmpfs");
         assert_eq!(&info.fs_type, "tmpfs");
-        assert_eq!(&info.path, "/sys/fs/cgroup");
+        assert_eq!(&info.path, "/dev/shm");
 
         assert!(matches!(
             get_linux_mount_info(""),
