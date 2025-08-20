@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG BASE_IMAGE_NAME=alpine
-ARG BASE_IMAGE_TAG=3.18
+ARG BASE_IMAGE_TAG=3.22
 FROM $BASE_IMAGE_NAME:$BASE_IMAGE_TAG
 ARG KATA_ARTIFACTS=./kata-static.tar.xz
 ARG DESTINATION=/opt/kata-artifacts
@@ -34,7 +34,7 @@ RUN \
 	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
 	apk del curl && \
 	apk --no-cache add py3-pip && \
-	pip install --no-cache-dir yq==3.2.3
+	pip install --no-cache-dir yq==3.2.3 --break-system-packages
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses
