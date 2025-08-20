@@ -951,9 +951,6 @@ fn default_qgs_port() -> u32 {
 impl SecurityInfo {
     /// Adjust the configuration information after loading from configuration file.
     pub fn adjust_config(&mut self) -> Result<()> {
-        if self.guest_hook_path.is_empty() {
-            self.guest_hook_path = default::DEFAULT_GUEST_HOOK_PATH.to_string();
-        }
         Ok(())
     }
 
