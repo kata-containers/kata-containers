@@ -96,14 +96,14 @@ func (mounter *SafeMountFormater) SafeFormatWithFstype(source string, fstype str
 		if output, err := doSafeCommand(mkfsCmd, args...); err != nil {
 			detailedErr := fmt.Sprintf("format disk %q failed: type:(%q) errcode:(%v) output:(%v) ", source, fstype, err, string(output))
 			klog.Error(detailedErr)
-			return mountutils.NewMountError(mountutils.FormatFailed, detailedErr)
+			return mountutils.NewMountError(mountutils.FormatFailed, "%s", detailedErr)
 		}
 
 		klog.Infof("Disk successfully formatted (mkfs): %s - %s", fstype, source)
 	} else {
 		if fstype != existingFormat {
 			// Do verify the disk formatted with expected fs type.
-			return mountutils.NewMountError(mountutils.FilesystemMismatch, err.Error())
+			return mountutils.NewMountError(mountutils.FilesystemMismatch, "%s", err.Error())
 		}
 
 		if !readOnly {
