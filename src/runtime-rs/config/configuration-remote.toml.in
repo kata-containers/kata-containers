@@ -29,7 +29,7 @@ remote_hypervisor_timeout = 600
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
@@ -41,7 +41,7 @@ remote_hypervisor_timeout = 600
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
 # Note: Remote hypervisor is only handling the following annotations
-enable_annotations = ["machine_type", "default_memory", "default_vcpus", "default_gpus", "default_gpu_model"]
+enable_annotations = ["machine_type", "default_memory", "default_vcpus", "default_gpus", "default_gpu_model", "cc_init_data"]
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -251,7 +251,7 @@ disable_guest_seccomp=true
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # (default: false)
-# Note: The remote hypervisor has a different networking model, which requires true 
+# Note: The remote hypervisor has a different networking model, which requires true
 disable_new_netns = false
 
 # if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
