@@ -202,7 +202,7 @@ func CreateDirectBlockDevice(volID, capacityInBytesStr, storagePath string) (*st
 	// create raw disk
 	if _, err = diskfs.Create(devicePath, capacityInBytes, diskfs.Raw, diskfs.SectorSizeDefault); err != nil {
 		errMsg := fmt.Errorf("diskfs create disk failed: %v", err)
-		klog.Errorf(errMsg.Error())
+		klog.Error(errMsg.Error())
 
 		return nil, errMsg
 	}
