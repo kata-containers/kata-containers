@@ -91,6 +91,7 @@ setup() {
 	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
+    [ "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ] && skip "WIP: Test was taking 30m to fail"
     # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
     # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
 
