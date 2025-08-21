@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::sl;
 use anyhow::{anyhow, Context, Result};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::{collections::HashMap, io::Read};
-use crate::sl;
 
 /// Currently, initdata only supports version 0.1.0.
 const INITDATA_VERSION: &str = "0.1.0";
@@ -24,6 +24,8 @@ pub enum ProtectedPlatform {
     Snp,
     /// Cca platform for ARM CCA
     Cca,
+    /// Se platform for IBM SEL
+    Se,
     /// Default with no protection
     #[default]
     NoProtection,
@@ -155,6 +157,7 @@ fn adjust_digest(digest: &[u8], platform: ProtectedPlatform) -> Vec<u8> {
         ProtectedPlatform::Tdx => 48,
         ProtectedPlatform::Snp => 32,
         ProtectedPlatform::Cca => 64,
+        ProtectedPlatform::Se => 256,
         ProtectedPlatform::NoProtection => digest.len(),
     };
 
@@ -432,6 +435,12 @@ key = "value"
         assert_eq!(cca_result.len(), 64);
         assert_eq!(&cca_result[..32], &short_digest[..]);
         assert_eq!(&cca_result[32..], vec![0u8; 32]);
+
+        // Test SE platform (requires 256 bytes)
+        let long_digest = vec![0xAA; 256];
+        let se_result = adjust_digest(&long_digest, ProtectedPlatform::Se);
+        assert_eq!(se_result.len(), 256);
+        assert_eq!(&se_result[..256], &long_digest[..256]);
     }
 
     /// Test hypervisor initdata processing with compression
