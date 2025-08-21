@@ -173,7 +173,7 @@ pub enum DeviceMgrError {
     HotplugDevice(#[source] UpcallClientError),
 
     /// Failed to free device resource.
-    #[error("failed to free device resources: {0}")]
+    #[error("failed to allocate/free device resources: {0}")]
     ResourceError(#[source] crate::resource_manager::ResourceError),
 
     #[cfg(feature = "host-device")]
@@ -293,6 +293,7 @@ pub struct DeviceOpContext {
     virtio_devices: Vec<Arc<DbsMmioV2Device>>,
     #[cfg(feature = "host-device")]
     vfio_manager: Option<Arc<Mutex<VfioDeviceMgr>>>,
+    pci_system_manager: Arc<Mutex<PciSystemManager>>,
     vm_config: Option<VmConfigInfo>,
     shared_info: Arc<RwLock<InstanceInfo>>,
 }
@@ -343,6 +344,7 @@ impl DeviceOpContext {
             shared_info,
             #[cfg(feature = "host-device")]
             vfio_manager: None,
+            pci_system_manager: device_mgr.pci_system_manager.clone(),
         }
     }
 
@@ -630,6 +632,7 @@ pub struct DeviceManager {
     vhost_user_net_manager: VhostUserNetDeviceMgr,
     #[cfg(feature = "host-device")]
     pub(crate) vfio_manager: Arc<Mutex<VfioDeviceMgr>>,
+    pub(crate) pci_system_manager: Arc<Mutex<PciSystemManager>>,
 }
 
 impl DeviceManager {
@@ -640,11 +643,25 @@ impl DeviceManager {
         epoll_manager: EpollManager,
         logger: &slog::Logger,
         shared_info: Arc<RwLock<InstanceInfo>>,
-    ) -> Self {
-        DeviceManager {
-            io_manager: Arc::new(ArcSwap::new(Arc::new(IoManager::new()))),
-            io_lock: Arc::new(Mutex::new(())),
-            irq_manager: Arc::new(KvmIrqManager::new(vm_fd.clone())),
+    ) -> Result<Self> {
+        let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
+        let io_manager = Arc::new(ArcSwap::new(Arc::new(IoManager::new())));
+        let io_lock = Arc::new(Mutex::new(()));
+        let io_context = DeviceManagerContext::new(io_manager.clone(), io_lock.clone());
+        let mut mgr = PciSystemManager::new(irq_manager.clone(), io_context, res_manager.clone())?;
+
+        let requirements = mgr.resource_requirements();
+        let resources = res_manager
+            .allocate_device_resources(&requirements, USE_SHARED_IRQ)
+            .map_err(DeviceMgrError::ResourceError)?;
+        mgr.activate(resources)?;
+
+        let pci_system_manager = Arc::new(Mutex::new(mgr));
+
+        Ok(DeviceManager {
+            io_manager,
+            io_lock,
+            irq_manager,
             res_manager,
             vm_fd: vm_fd.clone(),
             logger: logger.new(slog::o!()),
@@ -671,8 +688,13 @@ impl DeviceManager {
             #[cfg(feature = "vhost-user-net")]
             vhost_user_net_manager: VhostUserNetDeviceMgr::default(),
             #[cfg(feature = "host-device")]
-            vfio_manager: Arc::new(Mutex::new(VfioDeviceMgr::new(vm_fd, logger))),
-        }
+            vfio_manager: Arc::new(Mutex::new(VfioDeviceMgr::new(
+                vm_fd,
+                pci_system_manager.clone(),
+                logger,
+            ))),
+            pci_system_manager,
+        })
     }
 
     /// Get the underlying IoManager to dispatch IO read/write requests.

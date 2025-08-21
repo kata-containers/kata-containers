@@ -888,7 +888,7 @@ pub struct VfioPciDeviceState<C: PciSystemContext> {
     vfio_path: String,
     interrupt: Interrupt,
     vfio_dev: Arc<VfioDevice>,
-    context: Weak<C>,
+    context: Arc<Mutex<C>>,
     configuration: PciConfiguration,
     device: Option<Weak<dyn DeviceIo>>,
     regions: Vec<Region>,
@@ -904,7 +904,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         vfio_path: String,
         vfio_dev: Arc<VfioDevice>,
         bus: Weak<PciBus>,
-        context: Weak<C>,
+        context: Arc<Mutex<C>>,
         vendor_device_id: u32,
         clique_id: Option<u8>,
         vfio_container: Arc<VfioContainer>,
@@ -1277,11 +1277,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
     }
 
     fn register_regions(&mut self, vm: &Arc<VmFd>) -> Result<()> {
-        let ctx = self
-            .context
-            .upgrade()
-            .ok_or(VfioPciError::BusIsDropped)?
-            .get_device_manager_context();
+        let ctx = self.context.lock().unwrap().get_device_manager_context();
         let mut tx = ctx.begin_tx();
 
         for region in self.regions.iter_mut() {
@@ -1336,22 +1332,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
     }
 
     fn unregister_regions(&mut self, vm: &Arc<VmFd>) -> Result<()> {
-        // This routine handle VfioPciDevice dropped but not unmap memory
-        if self.context.upgrade().is_none() {
-            for region in self.regions.iter_mut() {
-                if region.mappable() {
-                    region.unmap(vm, &self.vfio_container)?;
-                }
-            }
-
-            return Ok(());
-        }
-
-        let ctx = self
-            .context
-            .upgrade()
-            .ok_or(VfioPciError::BusIsDropped)?
-            .get_device_manager_context();
+        let ctx = self.context.lock().unwrap().get_device_manager_context();
         let mut tx = ctx.begin_tx();
 
         for region in self.regions.iter_mut() {
@@ -1380,11 +1361,8 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 } else {
                     // Safe to unwrap because activate() has set self.device to a valid value.
                     let device = self.device.as_ref().unwrap().clone();
-                    let ctx: <C as PciSystemContext>::D = self
-                        .context
-                        .upgrade()
-                        .ok_or(VfioPciError::BusIsDropped)?
-                        .get_device_manager_context();
+                    let ctx: <C as PciSystemContext>::D =
+                        self.context.lock().unwrap().get_device_manager_context();
                     let mut tx = ctx.begin_tx();
 
                     if let Err(e) = region.retrap(
@@ -1561,7 +1539,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
         path: String,
         bus: Weak<PciBus>,
         device: VfioDevice,
-        context: Weak<C>,
+        context: Arc<Mutex<C>>,
         vm_fd: Arc<VmFd>,
         vendor_device_id: u32,
         clique_id: Option<u8>,
@@ -1649,11 +1627,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
             state.interrupt.add_msi_irq_resource(base, size);
         }
 
-        let irq_manager = state
-            .context
-            .upgrade()
-            .ok_or(VfioPciError::BusIsDropped)?
-            .get_interrupt_manager();
+        let irq_manager = state.context.lock().unwrap().get_interrupt_manager();
         state.interrupt.initialize(irq_manager)?;
         #[cfg(target_arch = "aarch64")]
         self.set_device_id(&mut state);
