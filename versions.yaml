@@ -162,7 +162,7 @@ assets:
     architecture:
       aarch64:
         name: "alpine"
-        version: "3.18"
+        version: "3.22"
         nvidia-gpu:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -182,7 +182,7 @@ assets:
           version: "noble"  # 24.04 LTS
       x86_64:
         name: "alpine"
-        version: "3.18"
+        version: "3.22"
         confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
