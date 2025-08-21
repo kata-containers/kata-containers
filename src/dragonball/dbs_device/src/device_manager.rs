@@ -102,7 +102,7 @@ use crate::resources::Resource;
 use crate::{DeviceIo, IoAddress, IoSize, PioAddress};
 
 /// Error types for `IoManager` related operations.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     /// The inserting device overlaps with a current device.
     #[error("device address conflicts with existing devices")]
