@@ -51,9 +51,11 @@ build-kernel-arm64:
     expire_in: 1 week
 
 build-shim-amd64:
-  image: registry.ddbuild.io/images/mirror/library/golang:1.23.10
+  image: registry.ddbuild.io/images/mirror/library/golang:1.24.5
   stage: build
   tags: [ "arch:amd64" ]
+  variables:
+    GOTOOLCHAIN: auto
   script:
     - cd src/runtime
     - make containerd-shim-v2
@@ -64,9 +66,11 @@ build-shim-amd64:
     expire_in: 1 week
 
 build-shim-arm64:
-  image: registry.ddbuild.io/images/mirror/library/golang:1.23.10
+  image: registry.ddbuild.io/images/mirror/library/golang:1.24.5
   stage: build
   tags: [ "arch:arm64" ]
+  variables:
+    GOTOOLCHAIN: auto
   script:
     - cd src/runtime
     - make containerd-shim-v2
