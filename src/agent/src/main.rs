@@ -484,9 +484,13 @@ async fn launch_guest_component_procs(
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
     let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
-    if initdata_return_value.is_some() {
+    let mut log_level = "info";
+    if let Some(initdata_return_value) = initdata_return_value {
         aa_args.push("--initdata-toml");
         aa_args.push(initdata::INITDATA_TOML_PATH);
+        if initdata_return_value.debug {
+            log_level = "debug";
+        }
     }
 
     launch_process(
@@ -496,7 +500,7 @@ async fn launch_guest_component_procs(
         Some(AA_CONFIG_PATH),
         AA_ATTESTATION_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
-        &[],
+        &[("RUST_LOG", log_level)],
     )
     .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
@@ -518,7 +522,10 @@ async fn launch_guest_component_procs(
         Some(CDH_CONFIG_PATH),
         CDH_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
-        &[("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH)],
+        &[
+            ("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH),
+            ("RUST_LOG", log_level),
+        ],
     )
     .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
@@ -540,7 +547,7 @@ async fn launch_guest_component_procs(
         None,
         "",
         0,
-        &[],
+        &[("RUST_LOG", log_level)],
     )
     .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
