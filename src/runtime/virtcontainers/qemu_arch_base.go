@@ -116,6 +116,9 @@ type qemuArch interface {
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
 
+	// appendBalloonDevice appends a Balloon device to devices
+	appendBalloonDevice(ctx context.Context, devices []govmmQemu.Device, BalloonDevice config.BalloonDev) ([]govmmQemu.Device, error)
+
 	// setEndpointDevicePath sets the appropriate PCI or CCW device path for an endpoint
 	setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error
 
@@ -732,6 +735,19 @@ func (q *qemuArchBase) appendRNGDevice(_ context.Context, devices []govmmQemu.De
 		govmmQemu.RngDevice{
 			ID:       rngDev.ID,
 			Filename: rngDev.Filename,
+		},
+	)
+
+	return devices, nil
+}
+
+func (q *qemuArchBase) appendBalloonDevice(_ context.Context, devices []govmmQemu.Device, balloonDev config.BalloonDev) ([]govmmQemu.Device, error) {
+	devices = append(devices,
+		govmmQemu.BalloonDevice{
+			ID:                balloonDev.ID,
+			DeflateOnOOM:      balloonDev.DeflateOnOOM,
+			DisableModern:     balloonDev.DisableModern,
+			FreePageReporting: balloonDev.FreePageReporting,
 		},
 	)
 

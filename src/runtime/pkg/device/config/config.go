@@ -439,6 +439,14 @@ type RNGDev struct {
 	Filename string
 }
 
+// BalloonDev represents a balloon device
+type BalloonDev struct {
+	ID                string
+	DeflateOnOOM      bool
+	DisableModern     bool
+	FreePageReporting bool
+}
+
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
 type VhostUserDeviceAttrs struct {
 	DevID      string

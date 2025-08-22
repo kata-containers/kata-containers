@@ -139,6 +139,7 @@ const (
 	scsiControllerID         = "scsi0"
 	rngID                    = "rng0"
 	fallbackFileBackedMemDir = "/dev/shm"
+	balloonID                = "balloon0"
 
 	qemuStopSandboxTimeoutSecs = 15
 
@@ -632,6 +633,9 @@ func (q *qemu) prepareInitdataMount(config *HypervisorConfig) error {
 }
 
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
+// This function is complex and there's not much to be done about it, unfortunately.
+//
+//nolint:gocyclo
 func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	q.ctx = ctx
@@ -796,6 +800,20 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 			Filename: q.config.EntropySource,
 		}
 		qemuConfig.Devices, err = q.arch.appendRNGDevice(ctx, qemuConfig.Devices, rngDev)
+		if err != nil {
+			return err
+		}
+	}
+
+	if q.config.ReclaimGuestFreedMemory && !q.config.ConfidentialGuest {
+		balloonDev := config.BalloonDev{
+			ID:                balloonID,
+			DeflateOnOOM:      true,
+			DisableModern:     false,
+			FreePageReporting: true,
+		}
+
+		qemuConfig.Devices, err = q.arch.appendBalloonDevice(ctx, qemuConfig.Devices, balloonDev)
 		if err != nil {
 			return err
 		}

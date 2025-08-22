@@ -952,6 +952,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSQueueSize:        h.VirtioFSQueueSize,
 		VirtioFSExtraArgs:        h.VirtioFSExtraArgs,
 		MemPrealloc:              h.MemPrealloc,
+		ReclaimGuestFreedMemory:  h.ReclaimGuestFreedMemory,
 		HugePages:                h.HugePages,
 		IOMMU:                    h.IOMMU,
 		IOMMUPlatform:            h.getIOMMUPlatform(),

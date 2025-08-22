@@ -2409,9 +2409,10 @@ func (v RngDevice) deviceName(config *Config) string {
 // BalloonDevice represents a memory balloon device.
 // nolint: govet
 type BalloonDevice struct {
-	DeflateOnOOM  bool
-	DisableModern bool
-	ID            string
+	DeflateOnOOM      bool
+	DisableModern     bool
+	FreePageReporting bool
+	ID                string
 
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
@@ -2457,6 +2458,11 @@ func (b BalloonDevice) QemuParams(config *Config) []string {
 	}
 	if s := b.Transport.disableModern(config, b.DisableModern); s != "" {
 		deviceParams = append(deviceParams, s)
+	}
+	if b.FreePageReporting {
+		deviceParams = append(deviceParams, "free-page-reporting=on")
+	} else {
+		deviceParams = append(deviceParams, "free-page-reporting=off")
 	}
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
