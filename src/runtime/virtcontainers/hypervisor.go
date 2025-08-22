@@ -612,6 +612,9 @@ type HypervisorConfig struct {
 	// Supported currently for virtio-scsi driver.
 	EnableIOThreads bool
 
+	// Independent IOThreads enables IO to be processed in a separate thread.
+	IndepIOThreads uint32
+
 	// Debug changes the default hypervisor and kernel parameters to
 	// enable debug output where available.
 	Debug bool
