@@ -2,8 +2,7 @@ name: Release Kata Containers
 on:
   workflow_dispatch
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   release:

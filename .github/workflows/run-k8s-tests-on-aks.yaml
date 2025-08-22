@@ -34,9 +34,7 @@ on:
         required: true
 
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
   run-k8s-tests:
@@ -71,6 +69,9 @@ jobs:
             instance-type: normal
             auto-generate-policy: yes
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write # Used for OIDC access to log into Azure
     environment: ci
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}

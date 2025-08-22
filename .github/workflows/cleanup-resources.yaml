@@ -4,13 +4,13 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
   cleanup-resources:
     runs-on: ubuntu-22.04
+    permissions:
+      id-token: write # Used for OIDC access to log into Azure
     environment: ci
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2

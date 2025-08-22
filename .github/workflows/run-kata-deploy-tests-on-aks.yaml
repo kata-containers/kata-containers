@@ -29,9 +29,7 @@ on:
       AZ_SUBSCRIPTION_ID:
         required: true
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
   run-kata-deploy-tests:
@@ -50,6 +48,8 @@ jobs:
             vmm: clh
     runs-on: ubuntu-22.04
     environment: ci
+    permissions:
+      id-token: write # Used for OIDC access to log into Azure
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
