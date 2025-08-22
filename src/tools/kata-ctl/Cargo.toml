@@ -27,16 +27,24 @@ futures = "0.3.24"
 base64 = "0.13.0"
 toml = "0.5.8"
 sys-info = "0.9.1"
+async-trait = "0.1"
+containerd-shim-protos = { version = "0.10.0", features = ["sandbox"] }
 
 shim-interface = { path = "../../libs/shim-interface" }
 kata-types = { path = "../../libs/kata-types" }
 kata-sys-util = { path = "../../../src/libs/kata-sys-util/" }
 safe-path = { path = "../../libs/safe-path" }
 agent = { path = "../../runtime-rs/crates/agent" }
+hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = ["cloud-hypervisor"] }
+resource = { path = "../../runtime-rs/crates/resource" }
+virt_container = { path = "../../runtime-rs/crates/runtimes/virt_container" }
+common = { path = "../../runtime-rs/crates/runtimes/common" }
+
 serial_test = "0.10.0"
 vmm-sys-util = "0.11.0"
 epoll = "4.0.1"
 libc = "0.2.138"
+
 
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
@@ -72,6 +80,7 @@ reqwest = { version = "0.11", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
+
 
 [dev-dependencies]
 semver = "1.0.12"

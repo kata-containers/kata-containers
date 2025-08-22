@@ -42,7 +42,7 @@ macro_rules! sl {
     };
 }
 
-fn real_main() -> Result<()> {
+async fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
 
     if args.show_default_config_paths {
@@ -69,7 +69,7 @@ fn real_main() -> Result<()> {
             Commands::DirectVolume(args) => handle_direct_volume(args),
             Commands::Exec(args) => handle_exec(args),
             Commands::Env(args) => handle_env(args),
-            Commands::Factory(args) => handle_factory(args),
+            Commands::Factory(args) => handle_factory(args).await,
             Commands::Iptables(args) => handle_iptables(args),
             Commands::Metrics(args) => handle_metrics(args),
             Commands::Monitor(args) => handle_monitor(args),
@@ -104,7 +104,13 @@ fn real_main() -> Result<()> {
 }
 
 fn main() {
-    if let Err(_e) = real_main() {
-        exit(1);
+    // if let Err(_e) = real_main().await {
+    //     exit(1);
+    // }
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    if let Err(e) = rt.block_on(real_main()) {
+        eprintln!("error: {:?}", e);
+        std::process::exit(1);
     }
 }
