@@ -389,6 +389,7 @@ impl VirtSandbox {
                 Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
                     is_snp: false,
                     cbitpos: details.cbitpos,
+                    phys_addr_reduction: details.phys_addr_reduction,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
                     host_data: None,
                 })))
@@ -409,6 +410,7 @@ impl VirtSandbox {
                 Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
                     is_snp,
                     cbitpos: details.cbitpos,
+                    phys_addr_reduction: details.phys_addr_reduction,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
                     host_data: init_data,
                 })))
