@@ -57,7 +57,7 @@ endef
 
 define DUMMY
 	$(call BUILD,"dummy")
-	mv $(MK_DIR)/build/kata-static-dummy.tar.xz $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.xz
+	mv $(MK_DIR)/build/kata-static-dummy.tar.zst $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.zst
 endef
 
 kata-tarball: | all-parallel merge-builds
@@ -201,4 +201,4 @@ merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
 
 install-tarball:
-	tar -xf ./kata-static.tar.xz -C /
+	tar --zstd -xf ./kata-static.tar.zst -C /

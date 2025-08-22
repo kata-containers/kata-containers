@@ -12,7 +12,7 @@ set -o pipefail
 set -o errtrace
 
 KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy"
-KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.xz"}"
+KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.zst"}"
 REGISTRY="${2:-"quay.io/kata-containers/kata-deploy"}"
 TAG="${3:-}"
 

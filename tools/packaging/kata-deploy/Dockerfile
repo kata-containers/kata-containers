@@ -3,9 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG BASE_IMAGE_NAME=alpine
-ARG BASE_IMAGE_TAG=3.18
+ARG BASE_IMAGE_TAG=3.22
 FROM $BASE_IMAGE_NAME:$BASE_IMAGE_TAG
-ARG KATA_ARTIFACTS=./kata-static.tar.xz
+ARG KATA_ARTIFACTS=./kata-static.tar.zst
 ARG DESTINATION=/opt/kata-artifacts
 
 COPY ${KATA_ARTIFACTS} ${WORKDIR}
@@ -19,7 +19,7 @@ COPY ${KATA_ARTIFACTS} ${WORKDIR}
 # word splitting, which can also be ignored for now.
 # hadolint ignore=DL3018,SC2086
 RUN \
-	apk --no-cache add bash curl && \
+	apk --no-cache add bash curl tar zstd && \
 	ARCH=$(uname -m) && \
 	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64; fi && \
 	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
@@ -30,11 +30,11 @@ RUN \
 	curl -fL --progress-bar -o /usr/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${DEBIAN_ARCH} && \
 	chmod +x /usr/bin/jq && \
 	mkdir -p ${DESTINATION} && \
-	tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
+	tar --zstd -xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
 	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
-	apk del curl && \
+	apk del curl tar zstd && \
 	apk --no-cache add py3-pip && \
-	pip install --no-cache-dir yq==3.2.3
+	pip install --no-cache-dir yq==3.2.3 --break-system-packages
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses

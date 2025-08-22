@@ -16,7 +16,7 @@ repo_root_dir="$(cd "${this_script_dir}/../../../../" && pwd)"
 kata_build_dir=${1:-build}
 kata_versions_yaml_file=${2:-""}
 
-tar_path="${PWD}/kata-static.tar.xz"
+tar_path="${PWD}/kata-static.tar.zst"
 kata_versions_yaml_file_path="${PWD}/${kata_versions_yaml_file}"
 
 pushd "${kata_build_dir}"
@@ -24,10 +24,10 @@ tarball_content_dir="${PWD}/kata-tarball-content"
 rm -rf "${tarball_content_dir}"
 mkdir "${tarball_content_dir}"
 
-for c in kata-static-*.tar.xz
+for c in kata-static-*.tar.zst
 do
 	echo "untarring tarball \"${c}\" into ${tarball_content_dir}"
-	tar -xvf "${c}" -C "${tarball_content_dir}"
+	tar --zstd -xvf "${c}" -C "${tarball_content_dir}"
 done
 
 pushd "${tarball_content_dir}"
@@ -46,5 +46,5 @@ pushd "${tarball_content_dir}"
 popd
 
 echo "create ${tar_path}"
-(cd "${tarball_content_dir}"; tar cvfJ "${tar_path}" --owner=0 --group=0 .)
+(cd "${tarball_content_dir}"; tar --zstd -cvf "${tar_path}" --owner=0 --group=0 .)
 popd

@@ -164,7 +164,7 @@ function _upload_kata_static_tarball()
 
 	RELEASE_VERSION="$(_release_version)"
 
-	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.xz"
+	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.zst"
 	mv ${KATA_STATIC_TARBALL} "${new_tarball_name}"
 	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
 	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"

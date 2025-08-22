@@ -83,7 +83,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 1
           if-no-files-found: error
 
@@ -148,7 +148,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 1
           if-no-files-found: error
 
@@ -221,7 +221,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-ppc64le-shim-v2${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-shim-v2.tar.xz
+          path: kata-build/kata-static-shim-v2.tar.zst
           retention-days: 1
           if-no-files-found: error
 
@@ -262,6 +262,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
-          path: kata-static.tar.xz
+          path: kata-static.tar.zst
           retention-days: 1
           if-no-files-found: error

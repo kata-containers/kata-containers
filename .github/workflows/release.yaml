@@ -127,7 +127,7 @@ jobs:
 
       - name: Set KATA_STATIC_TARBALL env var
         run: |
-          tarball=$(pwd)/kata-static.tar.xz
+          tarball=$(pwd)/kata-static.tar.zst
           echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
 
       - name: Download amd64 artifacts

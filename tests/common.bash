@@ -430,13 +430,13 @@ EOF
 function install_kata_core() {
 	declare -r katadir="$1"
 	declare -r destdir="/"
-	declare -r kata_tarball="kata-static.tar.xz"
+	declare -r kata_tarball="kata-static.tar.zst"
 
 	# Removing previous kata installation
 	sudo rm -rf "${katadir}"
 
 	pushd "${kata_tarball_dir}"
-	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
+	sudo tar --zstd -xvf "${kata_tarball}" -C "${destdir}"
 	popd
 }
 

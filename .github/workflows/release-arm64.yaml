@@ -71,9 +71,9 @@ jobs:
           fi
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.xz "ghcr.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.zst "ghcr.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.zst "quay.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
           done
