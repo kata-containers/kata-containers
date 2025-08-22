@@ -27,8 +27,7 @@ on:
         required: true
 
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-asset:

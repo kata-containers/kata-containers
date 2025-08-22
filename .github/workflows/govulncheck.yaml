@@ -3,8 +3,7 @@ on:
 
 name: Govulncheck
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   govulncheck:
@@ -14,12 +13,12 @@ jobs:
         include:
           - binary: "kata-runtime"
             make_target: "runtime"
-          - binary: "containerd-shim-kata-v2" 
+          - binary: "containerd-shim-kata-v2"
             make_target: "containerd-shim-v2"
           - binary: "kata-monitor"
             make_target: "monitor"
       fail-fast: false
-    
+
     steps:
       - name: Checkout the code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

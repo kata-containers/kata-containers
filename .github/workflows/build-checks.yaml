@@ -5,8 +5,8 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+permissions: {}
+
 
 name: Build checks
 jobs:

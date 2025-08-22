@@ -24,8 +24,7 @@ on:
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-asset:

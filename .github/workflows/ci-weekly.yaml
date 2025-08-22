@@ -30,8 +30,7 @@ on:
       KBUILD_SIGN_PIN:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-kata-static-tarball-amd64:
