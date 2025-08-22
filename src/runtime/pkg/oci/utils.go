@@ -840,6 +840,16 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IndepIOThreads).setUintWithCheck(func(indepiothreads uint64) error {
+		if indepiothreads < 0 {
+			return fmt.Errorf("Error parsing annotation for indepiothreads, please specify positive numeric value")
+		}
+		sbConfig.HypervisorConfig.IndepIOThreads = uint32(indepiothreads)
+		return nil
+		}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.BlockDeviceCacheSet).setBool(func(blockDeviceCacheSet bool) {
 		sbConfig.HypervisorConfig.BlockDeviceCacheSet = blockDeviceCacheSet
 	}); err != nil {
