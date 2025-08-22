@@ -33,7 +33,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type EthtoolCmd struct { /* ethtool.c: struct ethtool_cmd */
+// EthtoolCmd is the Go version of the Linux kerne ethtool_cmd struct
+// see ethtool.c
+type EthtoolCmd struct {
 	Cmd            uint32
 	Supported      uint32
 	Advertising    uint32
@@ -83,29 +85,25 @@ func (f *EthtoolCmd) reflect(retv *map[string]uint64) {
 		typeField := val.Type().Field(i)
 
 		t := valueField.Interface()
-		//tt := reflect.TypeOf(t)
-		//fmt.Printf(" t %T %v  tt %T %v\n", t, t, tt, tt)
-		switch t.(type) {
+		// tt := reflect.TypeOf(t)
+		// fmt.Printf(" t %T %v  tt %T %v\n", t, t, tt, tt)
+		switch tt := t.(type) {
 		case uint32:
-			//fmt.Printf("    t is uint32\n")
-			(*retv)[typeField.Name] = uint64(t.(uint32))
+			// fmt.Printf("    t is uint32\n")
+			(*retv)[typeField.Name] = uint64(tt)
 		case uint16:
-			(*retv)[typeField.Name] = uint64(t.(uint16))
+			(*retv)[typeField.Name] = uint64(tt)
 		case uint8:
-			(*retv)[typeField.Name] = uint64(t.(uint8))
+			(*retv)[typeField.Name] = uint64(tt)
 		case int32:
-			(*retv)[typeField.Name] = uint64(t.(int32))
+			(*retv)[typeField.Name] = uint64(tt)
 		case int16:
-			(*retv)[typeField.Name] = uint64(t.(int16))
+			(*retv)[typeField.Name] = uint64(tt)
 		case int8:
-			(*retv)[typeField.Name] = uint64(t.(int8))
+			(*retv)[typeField.Name] = uint64(tt)
 		default:
 			(*retv)[typeField.Name+"_unknown_type"] = 0
 		}
-
-		//tag := typeField.Tag
-		//fmt.Printf("Field Name: %s,\t Field Value: %v,\t Tag Value: %s\n",
-		//	typeField.Name, valueField.Interface(), tag.Get("tag_name"))
 	}
 }
 
@@ -185,7 +183,7 @@ func (e *Ethtool) CmdGetMapped(intf string) (map[string]uint64, error) {
 		return nil, ep
 	}
 
-	var result = make(map[string]uint64)
+	result := make(map[string]uint64)
 
 	// ref https://gist.github.com/drewolson/4771479
 	// Golang Reflection Example
@@ -198,6 +196,7 @@ func (e *Ethtool) CmdGetMapped(intf string) (map[string]uint64, error) {
 	return result, nil
 }
 
+// CmdGetMapped returns the interface settings in a map
 func CmdGetMapped(intf string) (map[string]uint64, error) {
 	e, err := NewEthtool()
 	if err != nil {
