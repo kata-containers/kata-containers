@@ -149,6 +149,10 @@ impl RuntimeHandler for VirtContainer {
     }
 }
 
+// pub async fn p_new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
+//     new_hypervisor(toml_config).await
+// }
+
 async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
     let hypervisor_name = &toml_config.runtime.hypervisor_name;
     let hypervisor_config = toml_config
