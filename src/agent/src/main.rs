@@ -30,6 +30,7 @@ use nix::unistd::{self, dup, sync, Pid};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
+use std::io::ErrorKind;
 use std::os::unix::fs::{self as unixfs, FileTypeExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -465,8 +466,17 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
         _ => vec![],
     };
     for binary in binaries.iter() {
-        if !Path::new(binary).exists() {
-            warn!(logger, "{} not found", binary);
+        let exists = Path::new(binary).try_exists().unwrap_or_else(|error| {
+            match error.kind() {
+                ErrorKind::NotFound => {
+                    warn!(logger, "{} not found", binary);
+                    false
+                },
+                _ => panic!("Path existence check failed for '{}': {}", binary, error)
+            }
+        });
+
+        if !exists {
             return false;
         }
     }
