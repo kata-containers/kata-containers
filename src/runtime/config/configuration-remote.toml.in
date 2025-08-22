@@ -26,7 +26,7 @@ remote_hypervisor_timeout = 600
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
@@ -38,7 +38,7 @@ remote_hypervisor_timeout = 600
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
 # Note: Remote hypervisor is only handling the following annotations
-enable_annotations = ["machine_type", "default_memory", "default_vcpus", "image", "default_gpus", "gpu_model"]
+enable_annotations = ["machine_type", "default_memory", "default_vcpus", "image", "default_gpus", "gpu_model", "cc_init_data"]
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -231,7 +231,7 @@ disable_guest_seccomp=true
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # (default: false)
-# Note: The remote hypervisor has a different networking model, which requires true 
+# Note: The remote hypervisor has a different networking model, which requires true
 disable_new_netns = true
 
 # if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
@@ -291,9 +291,9 @@ experimental=@DEFAULTEXPFEATURES@
 
 # Indicates the CreateContainer request timeout needed for the workload(s)
 # It using guest_pull this includes the time to pull the image inside the guest
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)  
-# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
+# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
+# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout.
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
