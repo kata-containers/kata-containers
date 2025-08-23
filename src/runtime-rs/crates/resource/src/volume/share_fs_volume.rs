@@ -31,7 +31,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
+use crate::share_fs::kata_guest_sandbox_dir;
 use crate::share_fs::PASSTHROUGH_FS_DIR;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::{
@@ -287,7 +287,7 @@ impl ShareFsVolume {
                 if src.is_file() {
                     // This is where we set the value for the guest path
                     let dest = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
+                        kata_guest_sandbox_dir().as_str(),
                         PASSTHROUGH_FS_DIR,
                         file_name.clone().as_str(),
                     ]
@@ -348,7 +348,7 @@ impl ShareFsVolume {
 
                     // create target path in guest
                     let dest_dir = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
+                        kata_guest_sandbox_dir().as_str(),
                         PASSTHROUGH_FS_DIR,
                         file_name.clone().as_str(),
                     ]
