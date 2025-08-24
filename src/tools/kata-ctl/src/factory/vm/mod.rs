@@ -1,12 +1,16 @@
+#![allow(unused_mut)]
 use anyhow::Result;
 use anyhow::anyhow;
 use anyhow::Context;
 
 use std::sync::Arc;
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use kata_types::config::default;
 use kata_types::config::Agent as AgentConfig;
 use kata_types::config::Hypervisor as HypervisorConfig;
+use kata_types::config::{TomlConfig};
 
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU, Hypervisor};
 use agent::{Agent, kata::KataAgent, AGENT_KATA};
@@ -15,9 +19,10 @@ use resource::{
     cpu_mem::initial_size::InitialSizeManager
 };
 
+use runtime_spec;
 use virt_container::{sandbox::VirtSandbox};
 use tokio::sync::mpsc::channel;
-use common::{message::Message};
+use common::{message::Message, types::SandboxConfig, SandboxNetworkEnv, Sandbox};
 use slog::{error};
 macro_rules! sl {
     () => {
@@ -186,9 +191,37 @@ impl VM {
         }
     }
 
+    // pub struct SandboxNetworkEnv {
+    //     pub netns: Option<String>,
+    //     pub network_created: bool,
+    // }
+
+
+    fn new_empty_sandbox_config() -> SandboxConfig {
+        SandboxConfig {
+            sandbox_id: String::new(),
+            hostname: String::new(),
+            dns: Vec::new(),
+            network_env: SandboxNetworkEnv {
+                netns: None,
+                network_created: false,
+            },  
+            annotations: HashMap::default(),
+            hooks: None,
+            state: runtime_spec::State {
+                version: Default::default(),
+                id: String::new(),
+                status: runtime_spec::ContainerState::Creating,
+                pid: 0,
+                bundle: String::new(),
+                annotations: Default::default(),
+            },
+        }
+    }
+
     /// Creates a new VM based on the provided configuration.
     #[allow(unused_variables)]
-    pub async fn new_vm(config: VMConfig, toml_config：TomlConfig) -> Result<Self> {
+    pub async fn new_vm(config: VMConfig, toml_config: TomlConfig) -> Result<Self> {
         info!(sl!(), "vm::new_vm"; "VMConfig" => format!("{:?}", config));
         //sid
         let sid = "xxx";
@@ -203,50 +236,64 @@ impl VM {
         // // get uds from hypervisor and get config from toml_config
         let agent = Self::new_agent(&config).context("new agent")?;
         
-        // get oci spec
-        let bundler_path = format!(
-            "{}/{}",
-            container_config.bundle,
-            spec::OCI_SPEC_CONFIG_FILE_NAME
+        let sandbox_config = Self::new_empty_sandbox_config();
+        info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sandbox_config));
+
+        let mut initial_size_manager = InitialSizeManager::new_from(&sandbox_config.annotations)
+                .context("failed to construct static resource manager")?;
+        // info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sandbox_config));
+
+        // 这里要用runtime信息更新toml_config, 暂时直接在配置文件里设置了slot和maxmemory不为0
+        // initial_size_manager
+        //     .setup_config(&mut toml_config)
+        //     .context("failed to setup static resource mgmt config")?;
+        
+        
+        info!(sl!(), "vm::new_vm"; "toml_config" => format!("{:#?}", toml_config));
+
+        let toml_config_arc = Arc::new(toml_config);
+        // 这里toml_config的所有权就给了resource_manager
+        //resource_manager
+        let resource_manager = Arc::new(
+            ResourceManager::new(
+                sid,
+                agent.clone(),
+                hypervisor.clone(),
+                toml_config_arc,
+                initial_size_manager,
+            )
+            .await?,
         );
-        let spec = oci::Spec::load(&bundler_path).context("load spec")?;
-        let mut initial_size_manager = if let Some(spec) = spec {
-            InitialSizeManager::new(spec).context("failed to construct static resource manager")?
-        } else {
-            InitialSizeManager::new_from(&sandbox_config.annotations)
-                .context("failed to construct static resource manager")?
-        };
-        initial_size_manager
-            .setup_config(&mut config)
-            .context("failed to setup static resource mgmt config")?;
-        // //resource_manager
-        // let resource_manager = Arc::new(
-        //     ResourceManager::new(
-        //         sid,
-        //         agent.clone(),
-        //         hypervisor.clone(),
-        //         toml_config,
-        //         init_size_manager,
-        //     )
-        //     .await?,
-        // );
 
         // //sandbox_config
 
 
-        // let sandbox = VirtSandbox::new(
-        //     sid,
-        //     msg_sender,
-        //     agent.clone(),
-        //     hypervisor.clone(),
-        //     resource_manager.clone(),
-        //     sandbox_config,
-        // )
-        // .await
+        let sandbox = VirtSandbox::new(
+            sid,
+            sender.clone(),
+            agent.clone(),
+            hypervisor.clone(),
+            resource_manager.clone(),
+            sandbox_config,
+        )
+        .await;
 
 
-        // info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sandbox));
+        info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sandbox));
+        // 假设你已经有一个 sandbox 实例（比如从 new_vm 得到的 Ok(sandbox)）
+        let sb = sandbox.unwrap();  // 如果 sandbox 是 Result<VirtSandbox, _>
 
+        // 调用 start()
+        match sb.start().await {
+            Ok(_) => {
+                info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sb));
+            }
+            Err(e) => {
+                error!(sl!(), "sandbox start failed: {}", e);
+            }
+        }
+
+        info!(sl!(), "vm::new_vm end" );
         // 1. 设置 hypervisor
         // let hypervisor = Self::new_hypervisor(&config).await?;
         //2. 设置网络

@@ -99,6 +99,12 @@ impl std::fmt::Debug for VirtSandbox {
         f.debug_struct("VirtSandbox")
             .field("sid", &self.sid)
             .field("msg_sender", &self.msg_sender)
+            .field("inner", &"<SandboxInner>")
+            .field("resource_manager",  &self.resource_manager)
+            .field("agent",  &"<Agent>")
+            .field("hypervisor", &self.hypervisor)
+            .field("monitor", &"<HealthCheck>")
+            .field("sandbox_config", &self.sandbox_config)
             .finish()
     }
 }

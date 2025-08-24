@@ -104,7 +104,7 @@ pub fn status_factory_command() -> Result<()> {
     Ok(())
 }
 
-pub async fn new_factory(config: &mut FactoryConfig, toml_config：TomlConfig, fetch_only: bool) -> Result<()> {
+pub async fn new_factory(config: &mut FactoryConfig, toml_config: TomlConfig, fetch_only: bool) -> Result<()> {
     // 1. 校验 VMConfig
     if let Err(e) = config.vm_config.valid() {
         error!(sl!(), "{:#?}", e);

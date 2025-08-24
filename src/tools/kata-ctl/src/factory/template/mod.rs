@@ -20,7 +20,7 @@ use nix::mount::{mount, MsFlags};
 use crate::factory::vm::{VMConfig,VM};
 // use crate::runtime::protocols::cache::GrpcVMStatus;
 // use crate::runtime::virtcontainers::factory::base::FactoryBase;
-
+use kata_types::config::{TomlConfig};
 
 // const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8; // as in Go templateDeviceStateSize
@@ -57,13 +57,13 @@ impl Template {
         Ok(Box::new(t))
     }
 
-    pub async fn new(config: VMConfig, toml_config：TomlConfig, template_path: PathBuf) -> Result<Box<dyn FactoryBase>> {
+    pub async fn new(config: VMConfig, toml_config: TomlConfig, template_path: PathBuf) -> Result<Box<dyn FactoryBase>> {
         let t = Template {
             state_path: template_path,
             config,
         };
 
-        match t.check_template_vm(toml_config) {
+        match t.check_template_vm() {
             Ok(_) => {
                 return Err(anyhow!("There is already a VM template in {:?}", t.state_path));
             }
@@ -75,7 +75,7 @@ impl Template {
 
         t.prepare_template_files()?;
 
-        if let Err(e) = t.create_template_vm().await {
+        if let Err(e) = t.create_template_vm(toml_config).await {
             // t.close()?;
             return Err(e);
         }
@@ -123,7 +123,7 @@ impl Template {
         Ok(())
     }
 
-    async fn create_template_vm(&self, toml_config：TomlConfig) -> Result<()> {
+    async fn create_template_vm(&self, toml_config: TomlConfig) -> Result<()> {
         let mut config = self.config.clone();
         config.hypervisor_config.boot_to_be_template = true;
         config.hypervisor_config.boot_from_template = false;

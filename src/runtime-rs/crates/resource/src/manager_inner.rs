@@ -147,12 +147,15 @@ impl ResourceManagerInner {
         for dc in device_configs {
             match dc {
                 ResourceConfig::ShareFs(c) => {
+                    info!(sl!(), "prepare_before_start_vm: handling ShareFs {:?}", c);
+
                     self.share_fs = if self
                         .hypervisor
                         .capabilities()
                         .await?
                         .is_fs_sharing_supported()
                     {
+                        info!(sl!(), " ResourceConfig::ShareFs: BEGIN");
                         let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
                         share_fs
                             .setup_device_before_start_vm(
@@ -161,43 +164,50 @@ impl ResourceManagerInner {
                             )
                             .await
                             .context("setup share fs device before start vm")?;
-
+                            info!(sl!(), "prepare_before_start_vm: setup_device_before_start_vm");
                         // setup sandbox bind mounts: setup = true
                         self.handle_sandbox_bindmounts(true)
                             .await
                             .context("failed setup sandbox bindmounts")?;
-
+                            
+                            info!(sl!(), "prepare_before_start_vm: handle_sandbox_bindmounts");
                         Some(share_fs)
                     } else {
                         None
                     };
                 }
                 ResourceConfig::Network(c) => {
+                    info!(sl!(), "prepare_before_start_vm: handling Network {:?}", c);
                     self.handle_network(c)
                         .await
                         .context("failed to handle network")?;
                 }
                 ResourceConfig::VmRootfs(r) => {
+                    info!(sl!(), "prepare_before_start_vm: handling VmRootfs {:?}", r);
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(r))
                         .await
                         .context("do handle device failed.")?;
                 }
                 ResourceConfig::HybridVsock(hv) => {
+                    info!(sl!(), "prepare_before_start_vm: handling HybridVsock {:?}", hv);
                     do_handle_device(&self.device_manager, &DeviceConfig::HybridVsockCfg(hv))
                         .await
                         .context("do handle hybrid-vsock device failed.")?;
                 }
                 ResourceConfig::Vsock(v) => {
+                    info!(sl!(), "prepare_before_start_vm: handling Vsock {:?}", v);
                     do_handle_device(&self.device_manager, &DeviceConfig::VsockCfg(v))
                         .await
                         .context("do handle vsock device failed.")?;
                 }
                 ResourceConfig::Protection(p) => {
+                    info!(sl!(), "prepare_before_start_vm: handling Protection {:?}", p);
                     do_handle_device(&self.device_manager, &DeviceConfig::ProtectionDevCfg(p))
                         .await
                         .context("do handle protection device failed.")?;
                 }
                 ResourceConfig::PortDevice(pd) => {
+                    info!(sl!(), "prepare_before_start_vm: handling PortDevice {:?}", pd);
                     do_handle_device(
                         &self.device_manager,
                         &DeviceConfig::PortDeviceCfg(pd.clone()),
@@ -206,6 +216,7 @@ impl ResourceManagerInner {
                     .context("do handle port device failed.")?;
                 }
                 ResourceConfig::InitData(id) => {
+                    info!(sl!(), "prepare_before_start_vm: handling InitData {:?}", id);
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(id))
                         .await
                         .context("do handle initdata block device failed.")?;
@@ -215,6 +226,84 @@ impl ResourceManagerInner {
 
         Ok(())
     }
+
+
+    // pub async fn prepare_before_start_vm(
+    //     &mut self,
+    //     device_configs: Vec<ResourceConfig>,
+    // ) -> Result<()> {
+    //     for dc in device_configs {
+    //         match dc {
+    //             ResourceConfig::ShareFs(c) => {
+    //                 self.share_fs = if self
+    //                     .hypervisor
+    //                     .capabilities()
+    //                     .await?
+    //                     .is_fs_sharing_supported()
+    //                 {
+
+    //                     let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
+    //                     share_fs
+    //                         .setup_device_before_start_vm(
+    //                             self.hypervisor.as_ref(),
+    //                             &self.device_manager,
+    //                         )
+    //                         .await
+    //                         .context("setup share fs device before start vm")?;
+
+    //                     // setup sandbox bind mounts: setup = true
+    //                     self.handle_sandbox_bindmounts(true)
+    //                         .await
+    //                         .context("failed setup sandbox bindmounts")?;
+
+    //                     Some(share_fs)
+    //                 } else {
+    //                     None
+    //                 };
+    //             }
+    //             ResourceConfig::Network(c) => {
+    //                 self.handle_network(c)
+    //                     .await
+    //                     .context("failed to handle network")?;
+    //             }
+    //             ResourceConfig::VmRootfs(r) => {
+    //                 do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(r))
+    //                     .await
+    //                     .context("do handle device failed.")?;
+    //             }
+    //             ResourceConfig::HybridVsock(hv) => {
+    //                 do_handle_device(&self.device_manager, &DeviceConfig::HybridVsockCfg(hv))
+    //                     .await
+    //                     .context("do handle hybrid-vsock device failed.")?;
+    //             }
+    //             ResourceConfig::Vsock(v) => {
+    //                 do_handle_device(&self.device_manager, &DeviceConfig::VsockCfg(v))
+    //                     .await
+    //                     .context("do handle vsock device failed.")?;
+    //             }
+    //             ResourceConfig::Protection(p) => {
+    //                 do_handle_device(&self.device_manager, &DeviceConfig::ProtectionDevCfg(p))
+    //                     .await
+    //                     .context("do handle protection device failed.")?;
+    //             }
+    //             ResourceConfig::PortDevice(pd) => {
+    //                 do_handle_device(
+    //                     &self.device_manager,
+    //                     &DeviceConfig::PortDeviceCfg(pd.clone()),
+    //                 )
+    //                 .await
+    //                 .context("do handle port device failed.")?;
+    //             }
+    //             ResourceConfig::InitData(id) => {
+    //                 do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(id))
+    //                     .await
+    //                     .context("do handle initdata block device failed.")?;
+    //             }
+    //         };
+    //     }
+
+    //     Ok(())
+    // }
 
     pub async fn handle_network(&mut self, network_config: NetworkConfig) -> Result<()> {
         // 1. When using Rust asynchronous programming, we use .await to

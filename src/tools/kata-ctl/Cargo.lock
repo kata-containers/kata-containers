@@ -1965,6 +1965,7 @@ dependencies = [
  "reqwest",
  "resource",
  "ron",
+ "runtime-spec",
  "safe-path 0.1.0",
  "semver",
  "serde",
