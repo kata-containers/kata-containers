@@ -350,14 +350,12 @@ impl Compact {
                         } else {
                             debug!("compact killed and keep wait");
                         }
-                    } else {
-                        if rest_sec <= 0 {
-                            debug!("compact timeout");
-                            child
-                                .kill()
-                                .map_err(|e| anyhow!("child.kill failed: {}", e))?;
-                            killed = true;
-                        }
+                    } else if rest_sec <= 0 {
+                        debug!("compact timeout");
+                        child
+                            .kill()
+                            .map_err(|e| anyhow!("child.kill failed: {}", e))?;
+                        killed = true;
                     }
 
                     let percent = compact_psi

@@ -20,10 +20,8 @@ fn find_psi_subdirs() -> Result<PathBuf> {
         for entry in fs::read_dir(CGROUP_PATH)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() {
-                if path.join(MEM_PSI).is_file() && path.join(IO_PSI).is_file() {
-                    return Ok(path.clone());
-                }
+            if path.is_dir() && path.join(MEM_PSI).is_file() && path.join(IO_PSI).is_file() {
+                return Ok(path.clone());
             }
         }
 
