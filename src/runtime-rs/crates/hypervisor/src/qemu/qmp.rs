@@ -767,6 +767,18 @@ impl Qmp {
 
         Ok(Some(pci_path))
     }
+    
+    pub fn qmp_stop(&mut self) -> Result<()> {
+        let cmd = qmp::stop {};
+        self.qmp.execute(&cmd)?;
+        Ok(())
+    }
+
+    pub fn qmp_cont(&mut self) -> Result<()> {
+        let cmd = qmp::cont {};
+        self.qmp.execute(&cmd)?;
+        Ok(())
+    }
 
     /// Get vCPU thread IDs through QMP query_cpus_fast.
     pub fn get_vcpu_thread_ids(&mut self) -> Result<VcpuThreadIds> {

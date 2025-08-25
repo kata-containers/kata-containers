@@ -3,31 +3,32 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-use std::fs::{File};
-use std::path::PathBuf;
 use std::fmt::Debug;
+use std::fs::File;
+use std::path::PathBuf;
 use std::sync::Arc;
-// use std::time::Duration;
+
+use std::thread::sleep;
+use std::time::Duration;
+
 // use std::thread;
 // use std::{thread, os::unix::fs::PermissionsExt};
 
 use anyhow::{anyhow, Result};
 // use async_trait::async_trait;
-use async_trait::async_trait; 
+use async_trait::async_trait;
 use nix::mount::{mount, MsFlags};
 // use tokio::sync::Mutex;
 
-use crate::factory::vm::{VMConfig,VM};
+use crate::factory::vm::{VMConfig, VM};
 // use crate::runtime::protocols::cache::GrpcVMStatus;
 // use crate::runtime::virtcontainers::factory::base::FactoryBase;
-use kata_types::config::{TomlConfig};
+use kata_types::config::TomlConfig;
 
-// const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
+const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8; // as in Go templateDeviceStateSize
 #[allow(unused_imports)]
-use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU, Hypervisor};
-
-
+use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
 // use slog::{error};
 macro_rules! sl {
     () => {
@@ -35,9 +36,7 @@ macro_rules! sl {
     };
 }
 
-pub trait FactoryBase : Debug {
-
-}
+pub trait FactoryBase: Debug {}
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -46,7 +45,7 @@ pub struct Template {
     config: VMConfig,
 }
 
-impl Template { 
+impl Template {
     pub fn fetch(config: VMConfig, template_path: PathBuf) -> Result<Box<dyn FactoryBase>> {
         let t = Template {
             state_path: template_path,
@@ -57,7 +56,11 @@ impl Template {
         Ok(Box::new(t))
     }
 
-    pub async fn new(config: VMConfig, toml_config: TomlConfig, template_path: PathBuf) -> Result<Box<dyn FactoryBase>> {
+    pub async fn new(
+        config: VMConfig,
+        toml_config: TomlConfig,
+        template_path: PathBuf,
+    ) -> Result<Box<dyn FactoryBase>> {
         let t = Template {
             state_path: template_path,
             config,
@@ -65,13 +68,15 @@ impl Template {
 
         match t.check_template_vm() {
             Ok(_) => {
-                return Err(anyhow!("There is already a VM template in {:?}", t.state_path));
+                return Err(anyhow!(
+                    "There is already a VM template in {:?}",
+                    t.state_path
+                ));
             }
             Err(e) => {
                 info!(sl!(), "check_template_vm failed as expected: {}", e);
             }
         }
-
 
         t.prepare_template_files()?;
 
@@ -108,7 +113,11 @@ impl Template {
 
     fn prepare_template_files(&self) -> Result<()> {
         std::fs::create_dir_all(&self.state_path)?;
-        let opts = format!("size={}M", self.config.hypervisor_config.memory_info.default_memory + TEMPLATE_DEVICE_STATE_SIZE_MB);
+        let opts = format!(
+            "size={}M",
+            self.config.hypervisor_config.memory_info.default_memory
+                + TEMPLATE_DEVICE_STATE_SIZE_MB
+        );
         mount(
             Some("tmpfs"),
             &self.state_path,
@@ -127,28 +136,41 @@ impl Template {
         let mut config = self.config.clone();
         config.hypervisor_config.boot_to_be_template = true;
         config.hypervisor_config.boot_from_template = false;
-        config.hypervisor_config.memory_path = self.state_path.join("memory").to_string_lossy().to_string();
-        config.hypervisor_config.device_state_path = self.state_path.join("state").to_string_lossy().to_string();
+        config.hypervisor_config.memory_path =
+            self.state_path.join("memory").to_string_lossy().to_string();
+        config.hypervisor_config.device_state_path =
+            self.state_path.join("state").to_string_lossy().to_string();
         // config.new_vm();
         let vm = VM::new_vm(config, toml_config).await?;
-        // let hypervisor: Arc<dyn Hypervisor> = match config.hypervisor_name.as_str() {
-        //     HYPERVISOR_QEMU => {
-        //         let h = Qemu::new();
-        //         h.set_hypervisor_config(config.hypervisor_config.clone()).await;
-        //         Arc::new(h)
-        //     }
-        //     _ => return Err(anyhow!("Unsupported hypervisor {}", config.hypervisor_name)),
-        // };
+        info!(
+            sl!(),
+            "template::create_template_vm: new_vm() VM id={}, cpu={}, memory={}",
+            vm.id,
+            vm.cpu,
+            vm.memory
+        );
 
-        // info!(sl!(),"Created hypervisor: {:?}", hypervisor);
-        
-        // hypervisor.stop_vm().await?;
-        // hypervisor.disconnect().await;
+        vm.stop().await?;
+        info!(sl!(), "template::create_template_vm: stop()");
 
-        // thread::sleep(TEMPLATE_WAIT_FOR_AGENT);
+        vm.disconnect().await?;
+        info!(sl!(), "template::create_template_vm: disconnect()");
 
-        // hypervisor.pause_vm().await?;
-        // hypervisor.save_vm().await?;
+        // 在断开 gRPC 后 sleep 一会儿，给 agent 充分的时间清理资源并重新监听端口
+        // Sleep a bit to let the agent grpc server clean up
+        // When we close connection to the agent, it needs sometime to cleanup
+        // and restart listening on the communication( serial or vsock) port.
+        // That time can be saved if we sleep a bit to wait for the agent to
+        // come around and start listening again. The sleep is only done when
+        // creating new vm templates and saves time for every new vm that are
+        // created from template, so it worth the invest.
+        sleep(TEMPLATE_WAIT_FOR_AGENT);
+
+        vm.pause().await?;
+        info!(sl!(), "template::create_template_vm: pause()");
+
+        vm.save().await?;
+        info!(sl!(), "template::create_template_vm: save()");
 
         Ok(())
     }
