@@ -18,6 +18,7 @@ pub mod dragonball;
 pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
+pub mod selinux;
 pub mod remote;
 pub use kernel_param::Param;
 pub mod utils;
@@ -103,6 +104,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
         id: &str,
         netns: Option<String>,
         annotations: &HashMap<String, String>,
+        selinux_label: Option<String>,
     ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
