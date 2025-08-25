@@ -294,7 +294,7 @@ impl VsockDeviceMgr {
                 info.config.id
             );
             if let Some(device) = info.device.take() {
-                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                DeviceManager::destroy_mmio_device(device, ctx)?;
             }
         }
         Ok(())
