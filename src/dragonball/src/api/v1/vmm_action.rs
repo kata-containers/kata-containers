@@ -664,10 +664,17 @@ impl VmmService {
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
             })?;
 
+        let (sender, receiver) = mpsc::channel();
+        let vmm_data = if ctx.is_hotplug() {
+            VmmData::SyncHotplug((sender.clone(), receiver))
+        } else {
+            VmmData::Empty
+        };
+
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, config)
-            .map(|_| VmmData::Empty)
+            .insert_device(ctx, config, sender.clone())
+            .map(|_| vmm_data)
             .map_err(VmmActionError::Block)
     }
 
@@ -1526,6 +1533,7 @@ mod tests {
                     queue_size: 256,
                     use_shared_irq: None,
                     use_generic_irq: None,
+                    use_pci_bus: Some(true),
                 }),
                 InstanceState::Uninitialized,
                 &|result| {
