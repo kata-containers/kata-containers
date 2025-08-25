@@ -5,9 +5,7 @@
 //
 
 use std::{
-    collections::{HashSet, VecDeque},
-    fs::File,
-    io::Read,
+    collections::{HashMap, HashSet, VecDeque},
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
@@ -22,6 +20,7 @@ use hypervisor::device::device_manager::DeviceManager;
 use inotify::{EventMask, Inotify, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
+use sha2::{Digest, Sha256};
 use tokio::{
     io::AsyncReadExt,
     sync::{Mutex, RwLock},
@@ -54,7 +53,12 @@ pub(crate) struct ShareFsVolume {
     share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
-    monitor_task: Option<JoinHandle<()>>,
+    // Add volume manager reference
+    volume_manager: Option<Arc<VolumeStateManager>>,
+    // Record the source path for cleanup
+    source_path: Option<String>,
+    // Record the container ID
+    container_id: String,
 }
 
 /// Directory Monitor Config
@@ -268,6 +272,161 @@ impl FsWatcher {
     }
 }
 
+/// Sandbox-level volume state manager
+/// Tracks which paths have been copied to the guest on the runtime side
+#[derive(Clone, Default)]
+pub struct VolumeStateManager {
+    /// Mapping of source path -> volume state
+    volume_states: Arc<RwLock<HashMap<String, VolumeState>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct VolumeState {
+    /// Source path (on the host)
+    source_path: String,
+    /// Guest path
+    guest_path: String,
+    /// Whether the volume has been copied to the guest
+    copied_to_guest: bool,
+    /// Reference count (how many containers are using it)
+    ref_count: usize,
+    /// List of container IDs using this volume
+    containers: HashSet<String>,
+    /// Monitor task handle (if any)
+    monitor_task: Option<Arc<JoinHandle<()>>>,
+}
+
+impl VolumeStateManager {
+    pub fn new() -> Self {
+        Self {
+            volume_states: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Gets or creates the volume's guest path
+    /// Returns: (guest_path, need_copy)
+    pub async fn get_or_create_volume(
+        &self,
+        source_path: &str,
+        container_id: &str,
+        mount_destination: &Path,
+    ) -> Result<(String, bool)> {
+        let mut states = self.volume_states.write().await;
+
+        // Canonicalize the source path as a key
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            // Existing volume
+            state.ref_count += 1;
+            state.containers.insert(container_id.to_string());
+
+            info!(
+                sl!(),
+                "Reusing existing volume: source={:?}, guest={:?}, ref_count={}, already_copied={}",
+                canonical_source,
+                state.guest_path,
+                state.ref_count,
+                state.copied_to_guest
+            );
+
+            // Return guest path and whether a copy is needed (false, as it's already copied)
+            return Ok((state.guest_path.clone(), false));
+        }
+
+        // Create a new volume state
+        let guest_path = generate_deterministic_path(&canonical_source, mount_destination);
+
+        let mut containers = HashSet::new();
+        containers.insert(container_id.to_string());
+
+        let state = VolumeState {
+            source_path: canonical_source.clone(),
+            guest_path: guest_path.clone(),
+            copied_to_guest: false, // Not yet copied
+            ref_count: 1,
+            containers,
+            monitor_task: None,
+        };
+
+        states.insert(state.source_path.clone(), state.clone());
+
+        info!(
+            sl!(),
+            "Created new volume state: source={:?}, guest={:?}",
+            state.source_path,
+            state.guest_path,
+        );
+
+        // Return guest path and whether a copy is needed (true, as it's new)
+        Ok((guest_path, true))
+    }
+
+    /// Marks the volume as copied to the guest
+    pub async fn mark_as_copied(
+        &self,
+        source_path: &str,
+        monitor_task: Option<JoinHandle<()>>,
+    ) -> Result<()> {
+        let mut states = self.volume_states.write().await;
+
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            state.copied_to_guest = true;
+            if let Some(handle) = monitor_task {
+                state.monitor_task = Some(Arc::new(handle));
+            }
+
+            info!(
+                sl!(),
+                "Marked volume as copied: source={:?}, guest={:?}",
+                canonical_source,
+                state.guest_path
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Releases a volume reference
+    pub async fn release_volume(&self, source_path: &str, container_id: &str) -> Result<bool> {
+        let mut states = self.volume_states.write().await;
+
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            state.containers.remove(container_id);
+            state.ref_count = state.ref_count.saturating_sub(1);
+
+            if state.ref_count == 0 {
+                // Abort the monitor task
+                if let Some(handle) = &state.monitor_task {
+                    handle.abort();
+                }
+
+                info!(
+                    sl!(),
+                    "Volume has no more references, removing: source={:?}, guest={:?}",
+                    canonical_source,
+                    state.guest_path
+                );
+
+                states.remove(&canonical_source);
+                return Ok(true); // Can be cleaned up
+            }
+        }
+
+        Ok(false)
+    }
+}
+
 impl ShareFsVolume {
     pub(crate) async fn new(
         share_fs: &Option<Arc<dyn ShareFs>>,
@@ -275,6 +434,7 @@ impl ShareFsVolume {
         cid: &str,
         readonly: bool,
         agent: Arc<dyn Agent>,
+        volume_manager: Arc<VolumeStateManager>,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
@@ -289,159 +449,88 @@ impl ShareFsVolume {
             share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
-            monitor_task: None,
+            volume_manager: Some(volume_manager.clone()),
+            source_path: Some(source_path.clone()),
+            container_id: cid.to_string(),
         };
+
         match share_fs {
             None => {
-                let src = match std::fs::canonicalize(&source_path) {
-                    Err(err) => {
-                        return Err(anyhow!(format!(
-                            "failed to canonicalize file {} {:?}",
-                            &source_path, err
-                        )))
-                    }
-                    Ok(src) => src,
-                };
+                // Get or create the guest path
+                let (guest_path, need_copy) = volume_manager
+                    .get_or_create_volume(&source_path, cid, m.destination())
+                    .await?;
 
-                // If the mount source is a file, we can copy it to the sandbox
-                if src.is_file() {
-                    // This is where we set the value for the guest path
-                    let dest = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                        PASSTHROUGH_FS_DIR,
-                        file_name.clone().as_str(),
-                    ]
-                    .join("/");
+                let src = std::fs::canonicalize(&source_path)?;
 
-                    debug!(
-                        sl!(),
-                        "copy local file {:?} to guest {:?}",
-                        &source_path,
-                        dest.clone()
-                    );
-
-                    // Read file metadata
-                    let file_metadata = std::fs::metadata(src.clone())
-                        .with_context(|| format!("Failed to read metadata from file: {:?}", src))?;
-
-                    // Open file
-                    let mut file = File::open(&src)
-                        .with_context(|| format!("Failed to open file: {:?}", src))?;
-
-                    // Open read file contents to buffer
-                    let mut buffer = Vec::new();
-                    file.read_to_end(&mut buffer)
-                        .with_context(|| format!("Failed to read file: {:?}", src))?;
-
-                    // Create gRPC request
-                    let r = agent::CopyFileRequest {
-                        path: dest.clone(),
-                        file_size: file_metadata.len() as i64,
-                        uid: file_metadata.uid() as i32,
-                        gid: file_metadata.gid() as i32,
-                        file_mode: file_metadata.mode(),
-                        data: buffer,
-                        ..Default::default()
-                    };
-
-                    debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, dest.clone());
-
-                    // Issue gRPC request to agent
-                    agent.copy_file(r).await.with_context(|| {
-                        format!(
-                            "copy file request failed: src: {:?}, dest: {:?}",
-                            file_name, dest
-                        )
-                    })?;
-
-                    // append oci::Mount structure to volume mounts
-                    let mut oci_mount = oci::Mount::default();
-                    oci_mount.set_destination(m.destination().clone());
-                    oci_mount.set_typ(Some("bind".to_string()));
-                    oci_mount.set_source(Some(PathBuf::from(&dest)));
-                    oci_mount.set_options(m.options().clone());
-                    volume.mounts.push(oci_mount);
-                } else if src.is_dir() {
-                    // We allow directory copying wildly
-                    // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
-                    info!(sl!(), "copying directory {:?} to guest", &source_path);
-
-                    // create target path in guest
-                    let dest_dir = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                        PASSTHROUGH_FS_DIR,
-                        file_name.clone().as_str(),
-                    ]
-                    .join("/");
-
-                    // create directory
-                    let dir_metadata = std::fs::metadata(src.clone())
-                        .context(format!("read metadata from directory: {:?}", src))?;
-
-                    // ttRPC request for creating directory
-                    let dir_request = agent::CopyFileRequest {
-                        path: dest_dir.clone(),
-                        file_size: 0, // useless for dir
-                        uid: dir_metadata.uid() as i32,
-                        gid: dir_metadata.gid() as i32,
-                        dir_mode: dir_metadata.mode(),
-                        file_mode: SFlag::S_IFDIR.bits(),
-                        data: vec![], // no files
-                        ..Default::default()
-                    };
-
-                    // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
+                // Only copy if needed (first time creating)
+                if need_copy {
                     info!(
                         sl!(),
-                        "creating directory: {:?} in sandbox with file_mode: {:?}",
-                        dest_dir,
-                        dir_request.file_mode
+                        "First time creating volume, copying from {:?} to {:?}", src, guest_path
                     );
 
-                    // send request for creating directory
-                    agent
-                        .copy_file(dir_request)
-                        .await
-                        .context(format!("create directory in sandbox: {:?}", dest_dir))?;
+                    let mut monitor_task = None;
 
-                    // recursively copy files from this directory
-                    // similar to `scp -r $source_dir $target_dir`
-                    copy_dir_recursively(src.clone(), &dest_dir, &agent)
-                        .await
-                        .context(format!("failed to copy directory contents: {:?}", src))?;
+                    if src.is_file() {
+                        // Copy a single file
+                        Self::copy_file_to_guest(&src, &guest_path, &agent).await?;
+                    } else if src.is_dir() {
+                        // Create directory
+                        Self::create_guest_directory(&src, &guest_path, &agent).await?;
 
-                    // handle special mount options
-                    let mut options = m.options().clone().unwrap_or_default();
-                    if !options.iter().any(|x| x == "rbind") {
-                        options.push("rbind".into());
+                        // Copy directory contents
+                        copy_dir_recursively(&src, &guest_path, &agent).await?;
+
+                        // Start monitoring (only for watchable volumes)
+                        if is_watchable_volume(&src) {
+                            info!(sl!(), "Starting monitor for watchable volume: {:?}", src);
+                            let watcher = FsWatcher::new(&src).await?;
+                            let handle = watcher
+                                .start_monitor(
+                                    agent.clone(),
+                                    src.clone(),
+                                    PathBuf::from(&guest_path),
+                                )
+                                .await;
+                            monitor_task = Some(handle);
+                        }
+                    } else {
+                        warn!(
+                            sl!(),
+                            "Ignoring non-regular file {:?} as FS sharing not supported", src
+                        );
+                        return Ok(volume);
                     }
-                    if !options.iter().any(|x| x == "rprivate") {
-                        options.push("rprivate".into());
-                    }
 
-                    // add OCI Mount
-                    let mut oci_mount = oci::Mount::default();
-                    oci_mount.set_destination(m.destination().clone());
-                    oci_mount.set_typ(Some("bind".to_string()));
-                    oci_mount.set_source(Some(PathBuf::from(&dest_dir)));
-                    oci_mount.set_options(Some(options));
-                    volume.mounts.push(oci_mount);
-
-                    // start monitoring
-                    if is_watchable_volume(&src) {
-                        let watcher = FsWatcher::new(Path::new(&source_path)).await?;
-                        let monitor_task = watcher
-                            .start_monitor(agent.clone(), src.clone(), dest_dir.into())
-                            .await;
-                        volume.monitor_task = Some(monitor_task);
-                    }
+                    // Mark as copied
+                    volume_manager
+                        .mark_as_copied(&source_path, monitor_task)
+                        .await?;
                 } else {
-                    // If not, we can ignore it. Let's issue a warning so that the user knows.
-                    warn!(
+                    info!(
                         sl!(),
-                        "Ignoring non-regular file as FS sharing not supported. mount: {:?}", m
+                        "Volume already exists in guest, skipping copy: {:?}", guest_path
                     );
                 }
+
+                // Create mount configuration
+                let mut oci_mount = oci::Mount::default();
+                oci_mount.set_destination(m.destination().clone());
+                oci_mount.set_typ(Some("bind".to_string()));
+                oci_mount.set_source(Some(PathBuf::from(&guest_path)));
+
+                // Set mount options
+                let mut options = m.options().clone().unwrap_or_default();
+                if !options.iter().any(|x| x == "rbind") {
+                    options.push("rbind".into());
+                }
+                if !options.iter().any(|x| x == "rprivate") {
+                    options.push("rprivate".into());
+                }
+                oci_mount.set_options(Some(options));
+
+                volume.mounts.push(oci_mount);
             }
             Some(share_fs) => {
                 let share_fs_mount = share_fs.get_share_fs_mount();
@@ -520,7 +609,62 @@ impl ShareFsVolume {
                 }
             }
         }
+
         Ok(volume)
+    }
+
+    async fn copy_file_to_guest(
+        src: &Path,
+        guest_path: &str,
+        agent: &Arc<dyn Agent>,
+    ) -> Result<()> {
+        let metadata = std::fs::metadata(src)?;
+        let mut file = tokio::fs::File::open(src).await?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).await?;
+
+        let request = agent::CopyFileRequest {
+            path: guest_path.to_string(),
+            file_size: metadata.len() as i64,
+            uid: metadata.uid() as i32,
+            gid: metadata.gid() as i32,
+            file_mode: metadata.mode(),
+            data: buffer,
+            ..Default::default()
+        };
+
+        agent
+            .copy_file(request)
+            .await
+            .with_context(|| format!("Failed to copy file {:?} to guest {:?}", src, guest_path))?;
+
+        Ok(())
+    }
+
+    async fn create_guest_directory(
+        src: &Path,
+        guest_path: &str,
+        agent: &Arc<dyn Agent>,
+    ) -> Result<()> {
+        let metadata = std::fs::metadata(src)?;
+
+        let dir_request = agent::CopyFileRequest {
+            path: guest_path.to_string(),
+            file_size: 0,
+            uid: metadata.uid() as i32,
+            gid: metadata.gid() as i32,
+            dir_mode: metadata.mode(),
+            file_mode: SFlag::S_IFDIR.bits(),
+            data: vec![],
+            ..Default::default()
+        };
+
+        agent
+            .copy_file(dir_request)
+            .await
+            .with_context(|| format!("Failed to create directory {:?} in guest", guest_path))?;
+
+        Ok(())
     }
 }
 
@@ -537,7 +681,26 @@ impl Volume for ShareFsVolume {
     async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
-            None => return Ok(()),
+            None => {
+                return {
+                    // Release volume reference
+                    if let (Some(manager), Some(source)) = (&self.volume_manager, &self.source_path)
+                    {
+                        let should_cleanup =
+                            manager.release_volume(source, &self.container_id).await?;
+
+                        if should_cleanup {
+                            info!(
+                                sl!(),
+                                "Volume {:?} has no more references, can be cleaned up", source
+                            );
+                            // NOTE: We cannot delete files from the guest because there is no corresponding API
+                            // Files will be cleaned up automatically when the sandbox is destroyed
+                        }
+                    }
+                    Ok(())
+                };
+            }
         };
 
         let mounted_info_set = share_fs.mounted_info_set();
@@ -609,7 +772,6 @@ impl Volume for ShareFsVolume {
     }
 }
 
-#[allow(dead_code)]
 async fn copy_dir_recursively<P: AsRef<Path>>(
     src_dir: P,
     dest_dir: &str,
@@ -804,6 +966,25 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
         || is_secret(source_path)
         || is_configmap(source_path)
         || is_empty_dir(source_path)
+}
+
+/// Generates a deterministic guest path
+fn generate_deterministic_path(source_path: &str, mount_destination: &Path) -> String {
+    // Use a hash of the source path to generate a unique but deterministic identifier
+    let mut hasher = Sha256::new();
+    hasher.update(source_path.as_bytes());
+    let hash = hasher.finalize();
+    let hash_str = hex::encode(&hash[..8]);
+
+    let dest_base = mount_destination
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("volume");
+
+    format!(
+        "{}/{}/shared-{}-{}",
+        DEFAULT_KATA_GUEST_SANDBOX_DIR, PASSTHROUGH_FS_DIR, hash_str, dest_base
+    )
 }
 
 #[cfg(test)]
