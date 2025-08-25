@@ -6,13 +6,15 @@
 
 use std::convert::TryFrom;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
 use crate::device::pci_path::PciPath;
 use crate::VhostUserConfig;
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
-    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, JAILER_ROOT,
+    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, DEFAULT_HOTPLUG_TIMEOUT,
+    JAILER_ROOT,
 };
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
@@ -219,10 +221,11 @@ impl DragonballInner {
             is_direct: is_direct.unwrap_or(self.config.blockdev_info.block_device_cache_direct),
             no_drop,
             is_read_only: read_only,
+            use_pci_bus: Some(true),
             ..Default::default()
         };
         self.vmm_instance
-            .insert_block_device(blk_cfg)
+            .insert_block_device(blk_cfg, Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT))
             .context("insert block device")
     }
 
