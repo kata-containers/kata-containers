@@ -85,7 +85,7 @@ kata-agent-policy = { path = "policy" }
 rustjail = { path = "rustjail" }
 vsock-exporter = { path = "vsock-exporter" }
 
-mem-agent = { path = "../mem-agent" }
+mem-agent = { path = "../libs/mem-agent" }
 
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types", features = ["safe-path"] }
