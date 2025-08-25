@@ -19,6 +19,7 @@ use hypervisor::{
 use kata_types::config::hypervisor::{
     VIRTIO_BLK_CCW, VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_PMEM, VIRTIO_SCSI,
 };
+use kata_types::fs::VM_ROOTFS_FILESYSTEM_XFS;
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
 use oci_spec::runtime as oci;
@@ -67,9 +68,13 @@ impl BlockRootfs {
         let mut storage = Storage {
             fs_type: rootfs.fs_type.clone(),
             mount_point: container_path.clone(),
-            options: rootfs.options.clone(),
+            options: vec![],
             ..Default::default()
         };
+
+        if rootfs.fs_type == VM_ROOTFS_FILESYSTEM_XFS {
+            storage.options.push("nouuid".to_string());
+        }
 
         let mut device_id: String = "".to_owned();
         if let DeviceType::Block(device) = device_info {
