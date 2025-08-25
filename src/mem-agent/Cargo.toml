@@ -1,5 +1,5 @@
 [package]
-name = "mem-agent-lib"
+name = "mem-agent"
 version = "0.2.0"
 edition = "2021"
 
