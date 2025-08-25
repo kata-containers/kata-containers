@@ -175,9 +175,12 @@ impl Process {
             } else {
                 info!(logger, "created console socket!");
 
-                let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-                p.parent_stdin = Some(pstdin);
-                p.stdin = Some(stdin);
+                let devnull = std::fs::OpenOptions::new()
+                    .read(true)
+                    .open("/dev/null")
+                    .map_err(|e| Errno::from_i32(e.raw_os_error().unwrap_or(libc::EIO)))?;
+                p.stdin = Some(devnull.as_raw_fd());
+                p.extra_files.push(devnull);
 
                 // Make sure the parent stdin writer be inserted into
                 // p.writes hashmap, thus the cleanup_process_stream can
