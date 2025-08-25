@@ -428,6 +428,7 @@ check_deps()
 	elems+=("git:git")
 	elems+=("jq:jq")
 	elems+=("tar:tar")
+	elems+=("sudo:sudo")
 
 	local pkgs_to_install=()
 
