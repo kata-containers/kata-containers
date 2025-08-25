@@ -237,11 +237,20 @@ impl VmmInstance {
         Ok(())
     }
 
-    pub fn insert_block_device(&self, device_cfg: BlockDeviceConfigInfo) -> Result<()> {
-        self.handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
-            device_cfg.clone(),
-        )))
-        .with_context(|| format!("Failed to insert block device {:?}", device_cfg))?;
+    pub fn insert_block_device(
+        &self,
+        device_cfg: BlockDeviceConfigInfo,
+        timeout: Duration,
+    ) -> Result<()> {
+        let vmmdata = self
+            .handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
+                device_cfg.clone(),
+            )))
+            .with_context(|| format!("Failed to insert block device {:?}", device_cfg))?;
+
+        if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
+            let _ = receiver.recv_timeout(timeout)?;
+        }
         Ok(())
     }
 
