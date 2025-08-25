@@ -7,19 +7,27 @@
 // found in the THIRD-PARTY file.
 
 //! Device manager for virtio-blk and vhost-user-blk devices.
-use std::collections::{vec_deque, VecDeque};
 use std::convert::TryInto;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{
+    collections::{vec_deque, VecDeque},
+    sync::mpsc,
+};
 
+use dbs_device::DeviceIo;
+use dbs_pci::VirtioPciDevice;
+use dbs_upcall::UpcallClientResponse;
 use dbs_virtio_devices as virtio;
 use dbs_virtio_devices::block::{aio::Aio, io_uring::IoUring, Block, LocalFile, Ufile};
 #[cfg(feature = "vhost-user-blk")]
 use dbs_virtio_devices::vhost::vhost_user::block::VhostUserBlock;
 use serde_derive::{Deserialize, Serialize};
+use virtio_queue::QueueSync;
+use vm_memory::GuestRegionMmap;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, RateLimiterConfigInfo};
@@ -190,6 +198,8 @@ pub struct BlockDeviceConfigInfo {
     pub use_shared_irq: Option<bool>,
     /// Use generic irq
     pub use_generic_irq: Option<bool>,
+    /// Use pci bus
+    pub use_pci_bus: Option<bool>,
 }
 
 impl std::default::Default for BlockDeviceConfigInfo {
@@ -208,6 +218,7 @@ impl std::default::Default for BlockDeviceConfigInfo {
             rate_limiter: None,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: None,
         }
     }
 }
@@ -349,6 +360,7 @@ impl BlockDeviceMgr {
         &mut self,
         mut ctx: DeviceOpContext,
         config: BlockDeviceConfigInfo,
+        sender: mpsc::Sender<Option<i32>>,
     ) -> std::result::Result<(), BlockDeviceError> {
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
             return Err(BlockDeviceError::UpdateNotAllowedPostBoot);
@@ -380,31 +392,68 @@ impl BlockDeviceMgr {
                     return Ok(());
                 }
 
+                let mut slot = 0;
+
+                let use_generic_irq = config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ);
+
                 match config.device_type {
                     BlockDeviceType::RawBlock => {
                         let device = Self::create_blk_device(&config, &mut ctx)
                             .map_err(BlockDeviceError::Virtio)?;
-                        let dev = DeviceManager::create_mmio_virtio_device(
-                            device,
-                            &mut ctx,
-                            config.use_shared_irq.unwrap_or(self.use_shared_irq),
-                            config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
-                        )
-                        .map_err(BlockDeviceError::DeviceManager)?;
-                        self.update_device_by_index(index, Arc::clone(&dev))?;
+
+                        let dev = if let Some(true) = config.use_pci_bus {
+                            let pci_dev = DeviceManager::create_virtio_pci_device(
+                                device,
+                                &mut ctx,
+                                use_generic_irq,
+                            )
+                            .map_err(BlockDeviceError::DeviceManager)?;
+
+                            let (_, devfn) = DeviceManager::get_pci_device_info(&pci_dev)?;
+                            slot = devfn >> 3;
+
+                            pci_dev
+                        } else {
+                            DeviceManager::create_mmio_virtio_device(
+                                device,
+                                &mut ctx,
+                                config.use_shared_irq.unwrap_or(self.use_shared_irq),
+                                use_generic_irq,
+                            )
+                            .map_err(BlockDeviceError::DeviceManager)?
+                        };
+
+                        let callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>> =
+                            Some(Box::new(move |_| {
+                                // send the pci device slot to caller.
+                                let _ = sender.send(Some(slot as i32));
+                            }));
+
+                        self.update_device_by_index(index, dev.clone())?;
                         // live-upgrade need save/restore device from info.device.
                         self.info_list[index].set_device(dev.clone());
-                        ctx.insert_hotplug_mmio_device(&dev, None).map_err(|e| {
+
+                        let mut cleanup = |e, ctx: DeviceOpContext| -> BlockDeviceError {
                             let logger = ctx.logger().new(slog::o!());
                             self.remove_device(ctx, &config.drive_id).unwrap();
                             error!(
                                 logger,
-                                "failed to hot-add virtio block device {}, {:?}",
+                                "failed to hot-add pci virtio block device {}, {:?}",
                                 &config.drive_id,
                                 e
                             );
                             BlockDeviceError::DeviceManager(e)
-                        })
+                        };
+
+                        if let Some(true) = config.use_pci_bus {
+                            let _ = ctx
+                                .insert_hotplug_pci_device(&dev, callback)
+                                .map_err(|e| cleanup(e, ctx))?;
+                            Ok(())
+                        } else {
+                            ctx.insert_hotplug_mmio_device(&dev, callback)
+                                .map_err(|e| cleanup(e, ctx))
+                        }
                     }
                     #[cfg(feature = "vhost-user-blk")]
                     BlockDeviceType::Spool | BlockDeviceType::Spdk => {
@@ -417,8 +466,13 @@ impl BlockDeviceMgr {
                             config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                         )
                         .map_err(BlockDeviceError::DeviceManager)?;
+                        let callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>> =
+                            Some(Box::new(move |_| {
+                                let _ = sender.send(None);
+                            }));
+
                         self.update_device_by_index(index, Arc::clone(&dev))?;
-                        ctx.insert_hotplug_mmio_device(&dev, None).map_err(|e| {
+                        ctx.insert_hotplug_mmio_device(&dev, callback).map_err(|e| {
                             let logger = ctx.logger().new(slog::o!());
                             self.remove_device(ctx, &config.drive_id).unwrap();
                             error!(
@@ -450,15 +504,25 @@ impl BlockDeviceMgr {
                         info.config.drive_id,
                         info.config.path_on_host.to_str().unwrap_or("<unknown>")
                     );
+
+                    let use_shared_irq = info.config.use_shared_irq.unwrap_or(self.use_shared_irq);
+                    let use_generic_irq = info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ);
                     let device = Self::create_blk_device(&info.config, ctx)
                         .map_err(BlockDeviceError::Virtio)?;
-                    let device = DeviceManager::create_mmio_virtio_device(
-                        device,
-                        ctx,
-                        info.config.use_shared_irq.unwrap_or(self.use_shared_irq),
-                        info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
-                    )
-                    .map_err(BlockDeviceError::RegisterBlockDevice)?;
+
+                    let device = if let Some(true) = info.config.use_pci_bus {
+                        DeviceManager::create_virtio_pci_device(device, ctx, use_generic_irq)
+                            .map_err(BlockDeviceError::RegisterBlockDevice)?
+                    } else {
+                        DeviceManager::create_mmio_virtio_device(
+                            device,
+                            ctx,
+                            use_shared_irq,
+                            use_generic_irq,
+                        )
+                        .map_err(BlockDeviceError::RegisterBlockDevice)?
+                    };
+
                     info.device = Some(device);
                 }
                 #[cfg(feature = "vhost-user-blk")]
@@ -496,7 +560,7 @@ impl BlockDeviceMgr {
         while let Some(mut info) = self.info_list.pop_back() {
             info!(ctx.logger(), "remove drive {}", info.config.drive_id);
             if let Some(device) = info.device.take() {
-                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                DeviceManager::destroy_virtio_device(device, ctx)?;
             }
         }
 
@@ -524,7 +588,7 @@ impl BlockDeviceMgr {
             Some(mut info) => {
                 info!(ctx.logger(), "remove drive {}", info.config.drive_id);
                 if let Some(device) = info.device.take() {
-                    DeviceManager::destroy_mmio_virtio_device(device, &mut ctx)
+                    DeviceManager::destroy_virtio_device(device, &mut ctx)
                         .map_err(BlockDeviceError::DeviceManager)?;
                 }
             }
@@ -783,7 +847,7 @@ impl BlockDeviceMgr {
     pub fn update_device_by_index(
         &mut self,
         index: usize,
-        device: Arc<DbsMmioV2Device>,
+        device: Arc<dyn DeviceIo>,
     ) -> Result<(), BlockDeviceError> {
         if let Some(info) = self.info_list.get_mut(index) {
             info.device = Some(device);
@@ -809,6 +873,21 @@ impl BlockDeviceMgr {
                 if let Some(mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
                     let guard = mmio_dev.state();
                     let inner_dev = guard.get_inner_device();
+                    if let Some(blk_dev) = inner_dev
+                        .as_any()
+                        .downcast_ref::<virtio::block::Block<GuestAddressSpaceImpl>>()
+                    {
+                        return blk_dev
+                            .set_patch_rate_limiters(new_cfg.bytes(), new_cfg.ops())
+                            .map(|_p| ())
+                            .map_err(|_e| BlockDeviceError::BlockEpollHanderSendFail);
+                    }
+                } else if let Some(pci_dev) = device.as_any().downcast_ref::<VirtioPciDevice<
+                    GuestAddressSpaceImpl,
+                    QueueSync,
+                    GuestRegionMmap,
+                >>() {
+                    let inner_dev = pci_dev.device();
                     if let Some(blk_dev) = inner_dev
                         .as_any()
                         .downcast_ref::<virtio::block::Block<GuestAddressSpaceImpl>>()
@@ -848,6 +927,7 @@ mod tests {
     use super::*;
     use crate::device_manager::tests::create_address_space;
     use crate::test_utils::tests::create_vm_for_test;
+    use std::sync::mpsc::channel;
 
     #[test]
     fn test_block_device_type() {
@@ -887,14 +967,16 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        let (sender, _receiver) = channel();
         assert!(vm
             .device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device.clone(),)
+            .insert_device(ctx, dummy_block_device.clone(), sender)
             .is_ok());
 
         assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
@@ -961,10 +1043,12 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
+        let (sender, _receiver) = channel();
         vm.device_manager_mut()
             .block_manager
-            .insert_device(device_op_ctx, dummy_block_device)
+            .insert_device(device_op_ctx, dummy_block_device, sender)
             .unwrap();
 
         let cfg = BlockDeviceConfigUpdateInfo {
@@ -1037,14 +1121,16 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        let (sender, _receiver) = channel();
         assert!(vm
             .device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device.clone(),)
+            .insert_device(ctx, dummy_block_device.clone(), sender)
             .is_ok());
 
         assert_eq!(vm.device_manager().block_manager.info_list.len(), 1);
@@ -1077,6 +1163,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1095,19 +1182,21 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        let (sender, _receiver) = channel();
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device_1)
+            .insert_device(ctx, root_block_device_1, sender.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         assert!(vm
             .device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device_2)
+            .insert_device(ctx, root_block_device_2, sender)
             .is_err());
     }
 
@@ -1131,6 +1220,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1149,6 +1239,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let dummy_file_3 = TempFile::new().unwrap();
@@ -1167,6 +1258,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
@@ -1186,23 +1278,24 @@ mod tests {
         assert!(vm.device_manager().block_manager.has_root_block_device(),);
         assert!(!vm.device_manager().block_manager.has_part_uuid_root());
         assert_eq!(vm.device_manager().block_manager.info_list.len(), 3);
+        let (sender, _receiver) = channel();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device)
+            .insert_device(ctx, root_block_device, sender.clone())
             .unwrap();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_2)
+            .insert_device(ctx, dummy_block_device_2, sender.clone())
             .unwrap();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_3)
+            .insert_device(ctx, dummy_block_device_3, sender.clone())
             .unwrap();
     }
 
@@ -1226,6 +1319,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1244,6 +1338,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let dummy_file_3 = TempFile::new().unwrap();
@@ -1262,24 +1357,26 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
 
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
+        let (sender, _receiver) = channel();
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_2.clone())
+            .insert_device(ctx, dummy_block_device_2.clone(), sender.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_3.clone())
+            .insert_device(ctx, dummy_block_device_3.clone(), sender.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device.clone())
+            .insert_device(ctx, root_block_device.clone(), sender.clone())
             .unwrap();
 
         assert!(vm.device_manager().block_manager.has_root_block_device(),);
@@ -1322,6 +1419,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let dummy_file_2 = TempFile::new().unwrap();
@@ -1340,20 +1438,22 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
 
         let mut vm = crate::vm::tests::create_vm_instance();
+        let (sender, _receiver) = channel();
 
         // Add 2 block devices.
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device)
+            .insert_device(ctx, root_block_device, sender.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_2.clone())
+            .insert_device(ctx, dummy_block_device_2.clone(), sender.clone())
             .unwrap();
 
         // Get index zero.
@@ -1384,7 +1484,7 @@ mod tests {
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_2.clone())
+            .insert_device(ctx, dummy_block_device_2.clone(), sender.clone())
             .unwrap();
 
         let index = vm
@@ -1407,7 +1507,7 @@ mod tests {
         assert!(vm
             .device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_2.clone(),)
+            .insert_device(ctx, dummy_block_device_2.clone(), sender.clone())
             .is_err());
 
         // Update with 2 root block devices.
@@ -1417,7 +1517,7 @@ mod tests {
         assert!(vm
             .device_manager_mut()
             .block_manager
-            .insert_device(ctx, dummy_block_device_2,)
+            .insert_device(ctx, dummy_block_device_2, sender.clone())
             .is_err(),);
 
         // Switch roots and add a PARTUUID for the new one.
@@ -1435,6 +1535,7 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
         let root_block_device_new = BlockDeviceConfigInfo {
             path_on_host: dummy_path_2,
@@ -1450,16 +1551,17 @@ mod tests {
             queue_size: 128,
             use_shared_irq: None,
             use_generic_irq: None,
+            use_pci_bus: Some(true),
         };
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device_old)
+            .insert_device(ctx, root_block_device_old, sender.clone())
             .unwrap();
         let ctx = DeviceOpContext::create_boot_ctx(&vm, None);
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, root_block_device_new)
+            .insert_device(ctx, root_block_device_new, sender.clone())
             .unwrap();
         assert!(vm.device_manager().block_manager.has_part_uuid_root);
     }
