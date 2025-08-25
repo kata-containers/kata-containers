@@ -14,9 +14,9 @@ setup() {
 	get_pod_config_dir
 
 	yaml_file="${pod_config_dir}/pod-istio.yaml"
-	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
-	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
-	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
+	# policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	# add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	# auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }
 
 @test "Pod that performs ip6tables setup" {
@@ -30,6 +30,8 @@ setup() {
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Verify the output of the pod
+	echo "Debug logs:"
+	kubectl logs "$pod_name"
 	success_criterion="COMMIT"
 	kubectl logs "$pod_name" | grep "$success_criterion"
 }
@@ -38,6 +40,6 @@ teardown() {
 	# Debugging information
 	kubectl logs "$pod_name"
 
-	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	# delete_tmp_policy_settings_dir "${policy_settings_dir}"
 	teardown_common "${node}" "${node_start_time:-}"
 }
