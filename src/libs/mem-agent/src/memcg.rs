@@ -1212,16 +1212,14 @@ impl MemCG {
                         );
                         ei.file_page_count += released;
 
-                        if !ei.only_swap_mode {
-                            if ci.min_lru_file == 0 {
-                                info!(
-                                "{} {} run_eviction stop because min_lru_file is 0, release {} {} pages",
-                                ci.path, ci.numa_id, ei.anon_page_count, ei.file_page_count,
-                            );
-                                ei.stop_reason = EvictionStopReason::NoMinLru;
-                                removed_infov.push(infov.remove(i));
-                                continue;
-                            }
+                        if !ei.only_swap_mode && ci.min_lru_file == 0 {
+                            info!(
+                            "{} {} run_eviction stop because min_lru_file is 0, release {} {} pages",
+                            ci.path, ci.numa_id, ei.anon_page_count, ei.file_page_count,
+                        );
+                            ei.stop_reason = EvictionStopReason::NoMinLru;
+                            removed_infov.push(infov.remove(i));
+                            continue;
                         }
 
                         let percent = match ei.psi.get_percent() {

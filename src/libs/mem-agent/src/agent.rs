@@ -202,10 +202,8 @@ async fn mem_agent_loop(
             });
 
             mas.timeout = false;
-        } else {
-            if mas.refresh() {
-                continue;
-            }
+        } else if mas.refresh() {
+            continue;
         }
 
         info!("mem_agent_loop wait timeout {:?}", mas.duration);
