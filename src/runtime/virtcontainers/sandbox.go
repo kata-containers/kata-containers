@@ -2546,7 +2546,7 @@ func (s *Sandbox) resourceControllerDelete() error {
 	}
 
 	resCtrlParent := sandboxController.Parent()
-	if resCtrlParent != "." {
+	if !s.config.SystemdCgroup || resCtrlParent != "." {
 		if err := sandboxController.MoveTo(resCtrlParent); err != nil {
 			return err
 		}
