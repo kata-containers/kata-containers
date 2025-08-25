@@ -49,7 +49,7 @@ impl BlockRootfs {
         fs::create_dir_all(&host_path)
             .map_err(|e| anyhow!("failed to create rootfs dir {}: {:?}", host_path, e))?;
 
-        let block_driver = get_block_driver(d).await;
+        let block_driver = get_block_driver(d).await.block_device_driver;
 
         let block_device_config = &mut BlockConfig {
             major: stat::major(dev_id) as i64,

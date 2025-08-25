@@ -396,7 +396,7 @@ impl ResourceManagerInner {
                     let dev_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major(),
                         minor: d.minor(),
-                        driver_option: block_driver,
+                        driver_option: block_driver.block_device_driver,
                         ..Default::default()
                     });
 
