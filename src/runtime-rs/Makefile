@@ -227,7 +227,7 @@ ifneq (,$(DBCMD))
     # dragonball-specific options (all should be suffixed by "_DB")
     VMROOTFSDRIVER_DB := virtio-blk-pci
     DEFMAXVCPUS_DB := 0
-    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
+    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-pci
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
     KERNELTYPE_DB = uncompressed
