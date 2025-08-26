@@ -10,7 +10,7 @@ use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const MEM_PSI: &str = "memory.pressure";
 const IO_PSI: &str = "io.pressure";
@@ -31,15 +31,15 @@ fn find_psi_subdirs() -> Result<PathBuf> {
     }
 }
 
-pub fn check(psi_path: &PathBuf) -> Result<PathBuf> {
+pub fn check(psi_path: &Path) -> Result<PathBuf> {
     if crate::misc::is_test_environment() {
-        return Ok(psi_path.clone());
+        return Ok(psi_path.to_path_buf());
     }
 
     let p = if psi_path.as_os_str().is_empty() {
         find_psi_subdirs().map_err(|e| anyhow!("find_psi_subdirs failed: {}", e))?
     } else {
-        psi_path.clone()
+        psi_path.to_path_buf()
     };
 
     let mem_psi_path = p.join(MEM_PSI);
