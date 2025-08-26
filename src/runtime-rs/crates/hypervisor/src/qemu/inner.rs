@@ -31,7 +31,7 @@ use tokio::{
     process::{Child, ChildStderr, Command},
 };
 
-use qapi_qmp::MigrationStatus;
+use qapi_qmp::{MigrationStatus};
 use tokio::time::{sleep, timeout};
 use tokio::{
     net::UnixStream,
@@ -250,7 +250,10 @@ impl QemuInner {
 
             // Set the migration capability to ignore shared memory regions during state restoration
             if let Err(err) = qmp.set_ignore_shared_memory_capability() {
-                error!(sl!(), "QemuInner::set_ignore_shared_memory_capability(): {}", err);
+                error!(
+                    sl!(),
+                    "QemuInner::set_ignore_shared_memory_capability(): {}", err
+                );
                 return Err(err);
             } else {
                 info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
@@ -259,7 +262,7 @@ impl QemuInner {
             // Step 2: Build migration URI and execute migration
             let uri = format!("exec:cat {}", self.config.device_state_path);
             info!(sl!(), "QemuInner::device_state_path() = {}", uri);
-            
+
             if let Err(err) = qmp.execute_migration_incoming(&uri) {
                 error!(sl!(), "QemuInner::execute_migration_incoming(): {}", err);
                 return Err(err);
@@ -278,7 +281,7 @@ impl QemuInner {
             Ok(())
         } else {
             warn!(sl!(), "QMP not initialized, skip boot_from_template()");
-            Ok(()) 
+            Ok(())
         }
     }
 
@@ -292,15 +295,17 @@ impl QemuInner {
 
         let result = timeout(timeout_duration, async {
             loop {
+                info!(sl!(), "inner::wait_for_migration(): query_migration start");
                 let status = qmp.query_migration()?;
-
+                
+                info!(sl!(), "inner::wait_for_migration(): QEMU migration status: {:#?}", status);
                 if let Some(MigrationStatus::completed) = status.status {
-                    info!(sl!(), "QEMU migration completed");
+                    info!(sl!(), "inner::wait_for_migration(): QEMU migration completed");
                     return Ok(());
                 } else if let Some(s) = status.status {
-                    info!(sl!(), "QEMU migration status: {:?}", s);
+                    info!(sl!(), "inner::wait_for_migration(): QEMU migration status: {:?}", s);
                 } else {
-                    info!(sl!(), "QEMU migration status: <unknown>");
+                    info!(sl!(), "inner::wait_for_migration(): QEMU migration status: <unknown>");
                 }
                 sleep(Duration::from_millis(100)).await;
             }
@@ -346,7 +351,10 @@ impl QemuInner {
     }
 
     pub fn toggle_pause_sandbox(&mut self, pause: bool) -> Result<()> {
+        info!(sl!(), "QemuInner::toggle_pause_sandbox()");
+
         if let Some(ref mut qmp) = self.qmp {
+            info!(sl!(), "QemuInner::toggle_pause_sandbox(): start");
             if pause {
                 // 相当于 Go 的 ExecuteStop
                 qmp.qmp_stop()?;
@@ -382,7 +390,10 @@ impl QemuInner {
             // Step 2: If BootToBeTemplate, set migration capability
             if self.config.boot_to_be_template {
                 if let Err(err) = qmp.set_ignore_shared_memory_capability() {
-                    error!(sl!(), "QemuInner::set_ignore_shared_memory_capability() failed: {}", err);
+                    error!(
+                        sl!(),
+                        "QemuInner::set_ignore_shared_memory_capability() failed: {}", err
+                    );
                     return Err(err);
                 } else {
                     info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
@@ -415,20 +426,60 @@ impl QemuInner {
         }
     }
 
-    pub(crate) fn pause_vm(&self) -> Result<()> {
-        info!(sl!(), "Pausing QEMU VM");
-        // todo!()
+    pub(crate) fn pause_vm(&mut self) -> Result<()> {
+        info!(sl!(), "QemuInner::pause_vm()");
+        let _ = self.toggle_pause_sandbox(true);
         Ok(())
     }
 
     pub(crate) fn resume_vm(&self) -> Result<()> {
-        info!(sl!(), "Resuming QEMU VM");
+        info!(sl!(), "QemuInner::resume_vm()");
         Ok(())
     }
 
-    pub(crate) async fn save_vm(&self) -> Result<()> {
-        info!(sl!(), "Saving QEMU VM");
-        Ok(())
+    pub(crate) async fn save_vm(&mut self) -> Result<()> {
+        info!(sl!(), "QemuInner::save_vm()");
+        if let Some(ref mut qmp) = self.qmp {
+            info!(sl!(), "QemuInner::save_vm(): start");
+
+            // Step 2: If BootToBeTemplate, set migration capability
+            if self.config.boot_to_be_template {
+                if let Err(err) = qmp.set_ignore_shared_memory_capability() {
+                    error!(
+                        sl!(),
+                        "QemuInner::set_ignore_shared_memory_capability() failed: {}", err
+                    );
+                    return Err(err);
+                } else {
+                    info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
+                }
+            }
+
+            // Step 3: Set migration arguments (exec:cat > DevicesStatePath)
+            let uri = format!("exec:cat >{}", self.config.device_state_path);
+            info!(sl!(), "QemuInner::device_state_path() = {}", uri);
+
+            // Step 4: Begin migration
+            if let Err(err) = qmp.execute_migration(&uri) {
+                error!(sl!(), "QemuInner::execute_migration() failed: {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::execute_migration() OK");
+            }
+
+            // Step 5: Wait for migration complete
+            if let Err(err) = self.wait_for_migration().await {
+                error!(sl!(), "QemuInner::wait_for_migration() failed: {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::wait_for_migration() OK");
+            }
+
+            Ok(())
+        } else {
+            info!(sl!(), "QMP not initialized, skip save_vm()");
+            Ok(())
+        }
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {

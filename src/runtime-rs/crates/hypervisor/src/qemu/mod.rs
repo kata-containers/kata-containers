@@ -90,7 +90,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn pause_vm(&self) -> Result<()> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.pause_vm()
     }
 
@@ -100,7 +100,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn save_vm(&self) -> Result<()> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.save_vm().await
     }
 
