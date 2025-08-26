@@ -70,7 +70,7 @@ pub enum SandboxState {
     Stopped,
 }
 
-struct SandboxInner {
+pub struct SandboxInner {
     state: SandboxState,
 }
 
@@ -82,16 +82,17 @@ impl SandboxInner {
     }
 }
 
+//VMTemplate::Todo
 #[derive(Clone)]
 pub struct VirtSandbox {
-    sid: String,
-    msg_sender: Arc<Mutex<Sender<Message>>>,
-    inner: Arc<RwLock<SandboxInner>>,
-    resource_manager: Arc<ResourceManager>,
-    agent: Arc<dyn Agent>,
-    hypervisor: Arc<dyn Hypervisor>,
-    monitor: Arc<HealthCheck>,
-    sandbox_config: Option<SandboxConfig>,
+    pub sid: String,
+    pub msg_sender: Arc<Mutex<Sender<Message>>>,
+    pub inner: Arc<RwLock<SandboxInner>>,
+    pub resource_manager: Arc<ResourceManager>,
+    pub agent: Arc<dyn Agent>,
+    pub hypervisor: Arc<dyn Hypervisor>,
+    pub monitor: Arc<HealthCheck>,
+    pub sandbox_config: Option<SandboxConfig>,
 }
 
 impl std::fmt::Debug for VirtSandbox {

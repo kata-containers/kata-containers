@@ -24,10 +24,9 @@ use crate::factory::vm::{VMConfig, VM};
 // use crate::runtime::protocols::cache::GrpcVMStatus;
 // use crate::runtime::virtcontainers::factory::base::FactoryBase;
 use kata_types::config::TomlConfig;
-
+#[allow(dead_code)]
 const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8; // as in Go templateDeviceStateSize
-#[allow(unused_imports)]
 use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
 // use slog::{error};
 macro_rules! sl {
@@ -150,21 +149,20 @@ impl Template {
             vm.memory
         );
 
-        vm.stop().await?;
-        info!(sl!(), "template::create_template_vm: stop()");
+
 
         vm.disconnect().await?;
         info!(sl!(), "template::create_template_vm: disconnect()");
 
-        // 在断开 gRPC 后 sleep 一会儿，给 agent 充分的时间清理资源并重新监听端口
-        // Sleep a bit to let the agent grpc server clean up
-        // When we close connection to the agent, it needs sometime to cleanup
-        // and restart listening on the communication( serial or vsock) port.
-        // That time can be saved if we sleep a bit to wait for the agent to
-        // come around and start listening again. The sleep is only done when
-        // creating new vm templates and saves time for every new vm that are
-        // created from template, so it worth the invest.
-        sleep(TEMPLATE_WAIT_FOR_AGENT);
+        // // 在断开 gRPC 后 sleep 一会儿，给 agent 充分的时间清理资源并重新监听端口
+        // // Sleep a bit to let the agent grpc server clean up
+        // // When we close connection to the agent, it needs sometime to cleanup
+        // // and restart listening on the communication( serial or vsock) port.
+        // // That time can be saved if we sleep a bit to wait for the agent to
+        // // come around and start listening again. The sleep is only done when
+        // // creating new vm templates and saves time for every new vm that are
+        // // created from template, so it worth the invest.
+        // sleep(TEMPLATE_WAIT_FOR_AGENT);
 
         vm.pause().await?;
         info!(sl!(), "template::create_template_vm: pause()");
@@ -172,21 +170,15 @@ impl Template {
         vm.save().await?;
         info!(sl!(), "template::create_template_vm: save()");
 
+        vm.stop().await?;
+        info!(sl!(), "template::create_template_vm: stop()");
+
         Ok(())
     }
 
-    // fn create_from_template_vm(&self, ctx: &tokio::runtime::Handle, c: &VMConfig) -> Result<VM> {
-    //     let mut config = self.config.clone();
-    //     config.hypervisor_config.boot_to_be_template = false;
-    //     config.hypervisor_config.boot_from_template = true;
-    //     config.hypervisor_config.memory_path = Some(self.state_path.join("memory"));
-    //     config.hypervisor_config.devices_state_path = Some(self.state_path.join("state"));
-    //     config.hypervisor_config.shared_path = c.hypervisor_config.shared_path.clone();
-    //     config.hypervisor_config.vm_store_path = c.hypervisor_config.vm_store_path.clone();
-    //     config.hypervisor_config.run_store_path = c.hypervisor_config.run_store_path.clone();
-
-    //     VM::new(ctx, &config)
-    // }
+    fn create_from_template_vm(&self, ctx: &tokio::runtime::Handle, c: &VMConfig) -> Result<VM> {
+        let mut config = self.config.clone();
+        
 }
 
 #[async_trait]
