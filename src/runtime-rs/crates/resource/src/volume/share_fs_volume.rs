@@ -30,9 +30,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
-use crate::share_fs::PASSTHROUGH_FS_DIR;
-use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
+use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig, KATA_GUEST_SHARE_DIR};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_empty_dir, is_projected, is_secret},
     mount,
@@ -62,8 +60,8 @@ pub(crate) struct ShareFsVolume {
     volume_manager: Option<Arc<VolumeStateManager>>,
     // Record the source path for cleanup
     source_path: Option<String>,
-    // Record the container ID
-    container_id: String,
+    // Record the sandbox ID
+    sandbox_id: String,
 }
 
 /// Directory Monitor Config
@@ -313,7 +311,7 @@ impl VolumeStateManager {
     pub async fn get_or_create_volume(
         &self,
         source_path: &str,
-        container_id: &str,
+        sandbox_id: &str,
         mount_destination: &Path,
     ) -> Result<(String, bool)> {
         let mut states = self.volume_states.write().await;
@@ -326,7 +324,7 @@ impl VolumeStateManager {
         if let Some(state) = states.get_mut(&canonical_source) {
             // Existing volume
             state.ref_count += 1;
-            state.containers.insert(container_id.to_string());
+            state.containers.insert(sandbox_id.to_string());
 
             info!(
                 sl!(),
@@ -342,10 +340,9 @@ impl VolumeStateManager {
         }
 
         // Create a new volume state
-        let guest_path = generate_deterministic_path(&canonical_source, mount_destination);
-
+        let guest_path = generate_deterministic_path(sandbox_id, &canonical_source, mount_destination);
         let mut containers = HashSet::new();
-        containers.insert(container_id.to_string());
+        containers.insert(sandbox_id.to_string());
 
         let state = VolumeState {
             source_path: canonical_source.clone(),
@@ -399,7 +396,7 @@ impl VolumeStateManager {
     }
 
     /// Releases a volume reference
-    pub async fn release_volume(&self, source_path: &str, container_id: &str) -> Result<bool> {
+    pub async fn release_volume(&self, source_path: &str, sandbox_id: &str) -> Result<bool> {
         let mut states = self.volume_states.write().await;
 
         let canonical_source = std::fs::canonicalize(source_path)
@@ -407,7 +404,7 @@ impl VolumeStateManager {
             .unwrap_or_else(|_| source_path.to_string());
 
         if let Some(state) = states.get_mut(&canonical_source) {
-            state.containers.remove(container_id);
+            state.containers.remove(sandbox_id);
             state.ref_count = state.ref_count.saturating_sub(1);
 
             if state.ref_count == 0 {
@@ -436,7 +433,7 @@ impl ShareFsVolume {
     pub(crate) async fn new(
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
-        cid: &str,
+        sid: &str,
         readonly: bool,
         agent: Arc<dyn Agent>,
         volume_manager: Arc<VolumeStateManager>,
@@ -457,14 +454,14 @@ impl ShareFsVolume {
             storages: vec![],
             volume_manager: Some(volume_manager.clone()),
             source_path: Some(source_path.clone()),
-            container_id: cid.to_string(),
+            sandbox_id: sid.to_string(),
         };
 
         match share_fs {
             None => {
                 // Get or create the guest path
                 let (guest_path, need_copy) = volume_manager
-                    .get_or_create_volume(&source_path, cid, m.destination())
+                    .get_or_create_volume(&source_path, sid, m.destination())
                     .await?;
 
                 let src = std::fs::canonicalize(&source_path)?;
@@ -555,7 +552,7 @@ impl ShareFsVolume {
                         // The current mount should be upgraded to readwrite permission
                         info!(
                             sl!(),
-                            "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
+                            "The mount will be upgraded, mount = {:?}, cid = {}", m, sid
                         );
                         share_fs_mount
                             .upgrade_to_rw(
@@ -740,7 +737,7 @@ impl Volume for ShareFsVolume {
                     if let (Some(manager), Some(source)) = (&self.volume_manager, &self.source_path)
                     {
                         let should_cleanup =
-                            manager.release_volume(source, &self.container_id).await?;
+                            manager.release_volume(source, &self.sandbox_id).await?;
 
                         if should_cleanup {
                             info!(
@@ -1022,7 +1019,7 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
 }
 
 /// Generates a deterministic guest path
-fn generate_deterministic_path(source_path: &str, mount_destination: &Path) -> String {
+fn generate_deterministic_path(sid: &str, source_path: &str, mount_destination: &Path) -> String {
     // Use a hash of the source path to generate a unique but deterministic identifier
     let mut hasher = Sha256::new();
     hasher.update(source_path.as_bytes());
@@ -1034,10 +1031,7 @@ fn generate_deterministic_path(source_path: &str, mount_destination: &Path) -> S
         .and_then(|n| n.to_str())
         .unwrap_or("volume");
 
-    format!(
-        "{}{}/shared-{}-{}",
-        DEFAULT_KATA_GUEST_SANDBOX_DIR, PASSTHROUGH_FS_DIR, hash_str, dest_base
-    )
+    format!("{}{}-{}-{}", KATA_GUEST_SHARE_DIR, sid, hash_str, dest_base)
 }
 
 #[cfg(test)]

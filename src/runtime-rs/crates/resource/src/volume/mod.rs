@@ -59,7 +59,7 @@ impl VolumeResource {
     pub async fn handler_volumes(
         &self,
         share_fs: &Option<Arc<dyn ShareFs>>,
-        cid: &str,
+        _cid: &str,
         spec: &oci::Spec,
         d: &RwLock<DeviceManager>,
         sid: &str,
@@ -108,7 +108,7 @@ impl VolumeResource {
                     share_fs_volume::ShareFsVolume::new(
                         share_fs,
                         m,
-                        cid,
+                        sid,
                         read_only,
                         agent.clone(),
                         self.volume_state_manager.clone(), // pass the volume state manager
