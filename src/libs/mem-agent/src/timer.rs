@@ -67,22 +67,22 @@ mod tests {
         let mut timeout = Timeout::new(1);
 
         // timeout should be timeout at once.
-        assert_eq!(timeout.is_timeout(), true);
+        assert!(timeout.is_timeout());
 
         timeout.reset();
 
-        assert_eq!(timeout.is_timeout(), false);
+        assert!(!timeout.is_timeout());
         thread::sleep(Duration::from_secs(2));
-        assert_eq!(timeout.is_timeout(), true);
+        assert!(timeout.is_timeout());
 
         timeout.set_sleep_duration(2);
         timeout.reset();
 
-        assert_eq!(timeout.is_timeout(), false);
+        assert!(!timeout.is_timeout());
         thread::sleep(Duration::from_secs(1));
-        assert_eq!(timeout.is_timeout(), false);
+        assert!(!timeout.is_timeout());
 
         thread::sleep(Duration::from_secs(1));
-        assert_eq!(timeout.is_timeout(), true);
+        assert!(timeout.is_timeout());
     }
 }

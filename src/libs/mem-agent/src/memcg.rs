@@ -1373,6 +1373,6 @@ mod tests {
     fn test_memcg_get_timeout_list() {
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
-        assert_eq!(m.get_timeout_list().len() > 0, true);
+        assert!(m.get_timeout_list().len() > 0);
     }
 }
