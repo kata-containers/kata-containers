@@ -43,6 +43,11 @@ const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
 const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
 
+/// Directory permission mode for Kubernetes fsGroup volumes
+/// Sets setgid bit to ensure new files inherit the directory's group
+/// Permission: rwxrwsr-x (2775 in octal)
+const FSGROUP_DIR_PERM: u32 = 0o2775;
+
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
 // Ignore /dev, directories and all other device files. We handle
@@ -435,6 +440,7 @@ impl ShareFsVolume {
         readonly: bool,
         agent: Arc<dyn Agent>,
         volume_manager: Arc<VolumeStateManager>,
+        spec: &oci::Spec,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
@@ -477,7 +483,7 @@ impl ShareFsVolume {
                         Self::copy_file_to_guest(&src, &guest_path, &agent).await?;
                     } else if src.is_dir() {
                         // Create directory
-                        Self::create_guest_directory(&src, &guest_path, &agent).await?;
+                        Self::create_guest_directory(&src, &guest_path, &agent, spec).await?;
 
                         // Copy directory contents
                         copy_dir_recursively(&src, &guest_path, &agent).await?;
@@ -645,16 +651,63 @@ impl ShareFsVolume {
         src: &Path,
         guest_path: &str,
         agent: &Arc<dyn Agent>,
+        spec: &oci::Spec,
     ) -> Result<()> {
-        let metadata = std::fs::metadata(src)?;
+        let (uid, gid, mode) = {
+            let metadata = std::fs::metadata(src)?;
+
+            let process = spec.process().as_ref();
+            info!(sl!(), "OCI Spec Process : {:?}", process);
+
+            let user = process.map(|p| p.user());
+            // Get fsGroup and dirMode
+            let (uid, fs_group, dir_mode) = if let Some(user) = user {
+                debug!(
+                    sl!(),
+                    "User info: uid={}, gid={}, additional_gids={:?}",
+                    user.uid(),
+                    user.gid(),
+                    user.additional_gids()
+                );
+                match user.additional_gids() {
+                    Some(gids) if !gids.is_empty() => {
+                        // Typically, the fsGroup is a non-zero value from additional_gids
+                        // For example, if additional_gids = [0, 123], so fsGroup = 123
+                        let fs_gid = gids.iter().find(|&&g| g != 0).copied().unwrap_or_else(|| {
+                            // If all are 0 or there's no non-zero value, use the last one
+                            gids.last().copied().unwrap_or(user.gid())
+                        });
+
+                        (user.uid(), fs_gid, FSGROUP_DIR_PERM)
+                    }
+                    _ => {
+                        info!(
+                            sl!(),
+                            "No additional_gids, using primary gid={}",
+                            user.gid()
+                        );
+                        (user.uid(), user.gid(), FSGROUP_DIR_PERM)
+                    }
+                }
+            } else {
+                (metadata.uid(), metadata.gid(), metadata.mode())
+            };
+
+            (uid as i32, fs_group as i32, dir_mode)
+        };
+
+        info!(
+            sl!(),
+            "Creating directory {:?} with uid={}/gid={}/mode={:o}", guest_path, uid, gid, mode
+        );
 
         let dir_request = agent::CopyFileRequest {
             path: guest_path.to_string(),
             file_size: 0,
-            uid: metadata.uid() as i32,
-            gid: metadata.gid() as i32,
-            dir_mode: metadata.mode(),
-            file_mode: SFlag::S_IFDIR.bits(),
+            uid,
+            gid,
+            dir_mode: mode,
+            file_mode: SFlag::S_IFDIR.bits() | FSGROUP_DIR_PERM,
             data: vec![],
             ..Default::default()
         };
@@ -982,7 +1035,7 @@ fn generate_deterministic_path(source_path: &str, mount_destination: &Path) -> S
         .unwrap_or("volume");
 
     format!(
-        "{}/{}/shared-{}-{}",
+        "{}{}/shared-{}-{}",
         DEFAULT_KATA_GUEST_SANDBOX_DIR, PASSTHROUGH_FS_DIR, hash_str, dest_base
     )
 }

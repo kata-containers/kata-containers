@@ -112,6 +112,7 @@ impl VolumeResource {
                         read_only,
                         agent.clone(),
                         self.volume_state_manager.clone(), // pass the volume state manager
+                        spec,
                     )
                     .await
                     .with_context(|| format!("new share fs volume {:?}", m))?,
