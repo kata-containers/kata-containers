@@ -222,7 +222,7 @@ impl Config {
 
         // make sure the empty numa_id CgroupConfig at the end of Cgroup
         for vec in self.cgroups.values_mut() {
-            let (keep, moved) = vec.drain(..).partition(|c| c.numa_id.len() > 0);
+            let (keep, moved) = vec.drain(..).partition(|c| !c.numa_id.is_empty());
             *vec = keep;
             vec.extend(moved);
         }
@@ -534,9 +534,9 @@ impl MemCgroups {
                     }
                     should_keep
                 });
-                path_cgs.len() != 0
+                !path_cgs.is_empty()
             });
-            period_cgs.cgs.len() != 0
+            !period_cgs.cgs.is_empty()
         });
 
         self.cgroups.retain(|path, cgroup| {
@@ -718,7 +718,7 @@ impl MemCgroups {
                     }
                 }
 
-                if info_ret.len() > 0 {
+                if !info_ret.is_empty() {
                     infos_ret.push((single_config.clone(), info_ret));
                 }
             }
@@ -1024,7 +1024,7 @@ impl MemCG {
 
         let mut mgs = self.memcgs.blocking_write();
 
-        if target_paths.len() == 0 {
+        if target_paths.is_empty() {
             mgs.remove_changed(&mg_hash);
         }
         mgs.update_and_add(&mg_hash, true);
@@ -1135,7 +1135,7 @@ impl MemCG {
 
         let mut ret = Ok(());
 
-        'main_loop: while infov.len() != 0 {
+        'main_loop: while !infov.is_empty() {
             // update infov
             let path_set: HashSet<String> = infov.iter().map(|info| info.path.clone()).collect();
             match self.refresh(&path_set) {
@@ -1373,6 +1373,6 @@ mod tests {
     fn test_memcg_get_timeout_list() {
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
-        assert!(m.get_timeout_list().len() > 0);
+        assert!(!m.get_timeout_list().is_empty());
     }
 }

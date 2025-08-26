@@ -77,7 +77,7 @@ impl MGenLRU {
 fn lru_gen_lines_parse(reader: &mut BufReader<File>) -> Result<(String, HashMap<usize, MGenLRU>)> {
     let mut line = String::new();
     let mut ret_hash = HashMap::new();
-    while line.len() > 0
+    while !line.is_empty()
         || reader
             .read_line(&mut line)
             .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
@@ -180,7 +180,7 @@ fn lru_gen_file_parse(
 ) -> Result<HashMap<String, (usize, HashMap<usize, MGenLRU>)>> {
     let mut line = String::new();
     let mut ret_hash = HashMap::new();
-    while line.len() > 0
+    while !line.is_empty()
         || reader
             .read_line(&mut line)
             .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
@@ -189,7 +189,7 @@ fn lru_gen_file_parse(
         let mut clear_line = true;
         // Not handle the Err of lru_gen_head_parse because all lines of file will be checked.
         if let Ok((id, path)) = lru_gen_head_parse(&line) {
-            if target_patchs.len() == 0 || target_patchs.contains(&path) {
+            if target_patchs.is_empty() || target_patchs.contains(&path) {
                 let seq_data = if parse_line {
                     let (ret_line, data) = lru_gen_lines_parse(&mut reader).map_err(|e| {
                         anyhow!(
