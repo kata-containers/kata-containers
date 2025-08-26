@@ -14,7 +14,7 @@ use page_size;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::Duration as TokioDuration;
@@ -300,7 +300,7 @@ pub struct Numa {
 }
 
 impl Numa {
-    fn new(mglru: &MGenLRU, path: &str, psi_path: &PathBuf) -> Self {
+    fn new(mglru: &MGenLRU, path: &str, psi_path: &Path) -> Self {
         Self {
             max_seq: mglru.max_seq,
             min_seq: mglru.min_seq,
@@ -362,9 +362,9 @@ impl MemCgroup {
         id: &usize,
         ino: &usize,
         path: &str,
-        numa: &Vec<u32>,
+        numa: &[u32],
         hmg: &HashMap<usize, MGenLRU>,
-        psi_path: &PathBuf,
+        psi_path: &Path,
     ) -> Self {
         let m = Self {
             id: *id as u16,
@@ -389,7 +389,7 @@ impl MemCgroup {
         &mut self,
         numa: &Vec<u32>,
         path: &str,
-        psi_path: &PathBuf,
+        psi_path: &Path,
         hmg: &HashMap<usize, MGenLRU>,
     ) {
         for numa_id in numa {
@@ -1032,7 +1032,7 @@ impl MemCG {
         Ok(())
     }
 
-    fn run_aging(&mut self, config_infov: &mut Vec<(SingleConfig, Vec<Info>)>) {
+    fn run_aging(&mut self, config_infov: &mut [(SingleConfig, Vec<Info>)]) {
         for (config, infov) in config_infov.iter_mut() {
             debug!("run_aging_single_config {:?}", config);
             self.run_aging_single_config(infov, config.swap);
@@ -1094,7 +1094,7 @@ impl MemCG {
         c as u8
     }
 
-    fn run_eviction(&mut self, config_infov: &mut Vec<(SingleConfig, Vec<Info>)>) -> Result<()> {
+    fn run_eviction(&mut self, config_infov: &mut [(SingleConfig, Vec<Info>)]) -> Result<()> {
         for (config, infov) in config_infov.iter_mut() {
             debug!("run_eviction_single_config {:?}", config);
             self.run_eviction_single_config(infov, &config)?;
