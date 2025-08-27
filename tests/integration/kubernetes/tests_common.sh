@@ -34,9 +34,7 @@ export dragonball_limitations="https://github.com/kata-containers/kata-container
 # overwrite it.
 export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 
-# ALLOW_ALL_POLICY is a Rego policy that allows all the Agent ttrpc requests.
 K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
-ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../src/kata-opa/allow-all.rego")}"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
@@ -294,6 +292,31 @@ hard_coded_policy_tests_enabled() {
 	[[ "${enabled}" == "yes" ]]
 }
 
+encode_policy_in_init_data() {
+  local input="$1"   # either a filename or a policy
+  local POLICY
+
+  # if input is a file, read its contents
+  if [[ -f "$input" ]]; then
+    POLICY="$(< "$input")"
+  else
+    POLICY="$input"
+  fi
+
+  cat <<EOF | gzip -c | base64
+version = "0.1.0"
+algorithm = "sha256"
+
+[data]
+"policy.rego" = '''
+$POLICY
+'''
+EOF
+}
+
+# ALLOW_ALL_POLICY is a Rego policy that allows all the Agent ttrpc requests.
+ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(encode_policy_in_init_data "${K8S_TEST_DIR}/../../../src/kata-opa/allow-all.rego")}"
+
 add_allow_all_policy_to_yaml() {
 	hard_coded_policy_tests_enabled || return 0
 
@@ -305,18 +328,17 @@ add_allow_all_policy_to_yaml() {
 	resource_kind=$(yq .kind "${yaml_file}" | head -1)
 
 	case "${resource_kind}" in
-
 	Pod)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
 		yq -i \
-			".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
+			".metadata.annotations.\"io.katacontainers.config.hypervisor.cc_init_data\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
 		yq -i \
-			".spec.template.metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
+			".spec.template.metadata.annotations.\"io.katacontainers.config.hypervisor.cc_init_data\" = \"${ALLOW_ALL_POLICY}\"" \
       "${yaml_file}"
 		;;
 
