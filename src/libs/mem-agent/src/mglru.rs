@@ -140,9 +140,9 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 
         gen.seq = u64::from_str_radix(words[0], 10)
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
-        gen.anon = str_to_u64(&words[2 + WORKINGSET_ANON])
+        gen.anon = str_to_u64(words[2 + WORKINGSET_ANON])
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
-        gen.file = str_to_u64(&words[2 + WORKINGSET_FILE])
+        gen.file = str_to_u64(words[2 + WORKINGSET_FILE])
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
 
         if !got {
@@ -174,7 +174,7 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 //result:
 // HashMap<path, (id, HashMap<node_id, MGenLRU>)>
 fn lru_gen_file_parse(
-    mut reader: &mut BufReader<File>,
+    reader: &mut BufReader<File>,
     target_patchs: &HashSet<String>,
     parse_line: bool,
 ) -> Result<HashMap<String, (usize, HashMap<usize, MGenLRU>)>> {
@@ -191,7 +191,7 @@ fn lru_gen_file_parse(
         if let Ok((id, path)) = lru_gen_head_parse(&line) {
             if target_patchs.is_empty() || target_patchs.contains(&path) {
                 let seq_data = if parse_line {
-                    let (ret_line, data) = lru_gen_lines_parse(&mut reader).map_err(|e| {
+                    let (ret_line, data) = lru_gen_lines_parse(reader).map_err(|e| {
                         anyhow!(
                             "lru_gen_seq_lines_parse file {} failed: {}",
                             LRU_GEN_PATH,

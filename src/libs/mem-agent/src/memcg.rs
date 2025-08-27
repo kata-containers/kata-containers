@@ -574,7 +574,7 @@ impl MemCgroups {
             let need_insert = if update_cgroups {
                 if let Some(mg) = self.cgroups.get_mut(path) {
                     // Update current
-                    mg.update_from_hostmemcg(&hmg);
+                    mg.update_from_hostmemcg(hmg);
                     false
                 } else {
                     true
@@ -594,7 +594,7 @@ impl MemCgroups {
                     loop {
                         if let Some(secs_config_map) = self.config_map.get_mut(&config.period_secs)
                         {
-                            if let Some(config_map) = secs_config_map.cgs.get_mut(&config) {
+                            if let Some(config_map) = secs_config_map.cgs.get_mut(config) {
                                 if let Some(_) = config_map.get_mut(path) {
                                     error!(
                                         "update_and_add found an memcg {:?} {} existed",
@@ -624,7 +624,7 @@ impl MemCgroups {
                                             );
 
                                             cgroups.add_numa(
-                                                &numa_id,
+                                                numa_id,
                                                 path,
                                                 &self.config.psi_path,
                                                 hmg,
@@ -641,7 +641,7 @@ impl MemCgroups {
                                                     id,
                                                     ino,
                                                     path,
-                                                    &numa_id,
+                                                    numa_id,
                                                     hmg,
                                                     &self.config.psi_path,
                                                 ),
@@ -682,7 +682,7 @@ impl MemCgroups {
                 for (path, numa_map) in path_map {
                     if let Some(mcg) = self.cgroups.get_mut(path) {
                         for numa_id in &numa_map.numa {
-                            if let Some(numa) = mcg.numa.get_mut(&numa_id) {
+                            if let Some(numa) = mcg.numa.get_mut(numa_id) {
                                 let pass = match numa
                                     .check_psi(single_config.period_psi_percent_limit as u64)
                                 {
@@ -702,7 +702,7 @@ impl MemCgroups {
                                 }
 
                                 info_ret.push(Info::new(
-                                    &path,
+                                    path,
                                     mcg.id as usize,
                                     *numa_id as usize,
                                     numa,
@@ -1097,7 +1097,7 @@ impl MemCG {
     fn run_eviction(&mut self, config_infov: &mut [(SingleConfig, Vec<Info>)]) -> Result<()> {
         for (config, infov) in config_infov.iter_mut() {
             debug!("run_eviction_single_config {:?}", config);
-            self.run_eviction_single_config(infov, &config)?;
+            self.run_eviction_single_config(infov, config)?;
         }
 
         Ok(())
@@ -1312,7 +1312,7 @@ impl MemCG {
         }
 
         let mut mgs = self.memcgs.blocking_write();
-        mgs.record_eviction(&infov);
+        mgs.record_eviction(infov);
         mgs.record_eviction(&removed_infov);
 
         ret
