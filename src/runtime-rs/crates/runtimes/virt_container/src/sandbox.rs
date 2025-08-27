@@ -38,6 +38,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
+use kata_sys_util::spec::load_oci_spec;
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use protobuf::SpecialFields;
@@ -511,12 +512,20 @@ impl Sandbox for VirtSandbox {
             warn!(sl!(), "sandbox is started");
             return Ok(());
         }
+        let selinux_label = load_oci_spec()
+        .ok()
+        .and_then(|spec| {
+            spec.process()
+                .as_ref()
+                .and_then(|process| process.selinux_label().clone())
+        });
 
         self.hypervisor
             .prepare_vm(
                 id,
                 sandbox_config.network_env.netns.clone(),
                 &sandbox_config.annotations,
+                selinux_label,
             )
             .await
             .context("prepare vm")?;
