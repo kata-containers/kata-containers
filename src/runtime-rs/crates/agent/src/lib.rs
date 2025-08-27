@@ -37,7 +37,7 @@ pub const AGENT_KATA: &str = "kata";
 
 #[async_trait]
 pub trait AgentManager: Send + Sync {
-    async fn start(&self, address: &str) -> Result<()>;
+    async fn start(&self, socket_address: &str, console_address: &str) -> Result<()>;
     async fn stop(&self);
 
     async fn agent_sock(&self) -> Result<String>;

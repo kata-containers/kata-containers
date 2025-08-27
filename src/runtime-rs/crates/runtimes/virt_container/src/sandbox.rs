@@ -584,15 +584,20 @@ impl Sandbox for VirtSandbox {
 
         // connect agent
         // set agent socket
-        let address = self
+        let socket_address = self
             .hypervisor
             .get_agent_socket()
             .await
             .context("get agent socket")?;
-        self.agent
-            .start(&address)
+        let console_address = self
+            .hypervisor
+            .get_console_address()
             .await
-            .context(format!("connect to address {:?}", &address))?;
+            .context("get console address")?;
+        self.agent
+            .start(&socket_address, &console_address)
+            .await
+            .context(format!("connect to address {:?}", &socket_address))?;
 
         self.resource_manager
             .setup_after_start_vm()

@@ -37,6 +37,9 @@ pub(crate) struct KataAgentInner {
     /// Unix domain socket address
     pub socket_address: String,
 
+    /// Unix domain console address
+    pub console_address: String,
+
     /// Agent config
     config: AgentConfig,
 
@@ -49,6 +52,7 @@ impl std::fmt::Debug for KataAgentInner {
         f.debug_struct("KataAgentInner")
             .field("client_fd", &self.client_fd)
             .field("socket_address", &self.socket_address)
+            .field("console_address", &self.console_address)
             .field("config", &self.config)
             .finish()
     }
@@ -68,6 +72,7 @@ impl KataAgent {
                 client: None,
                 client_fd: -1,
                 socket_address: "".to_string(),
+                console_address: "".to_string(),
                 config,
                 log_forwarder: LogForwarder::new(),
             })),
@@ -99,6 +104,12 @@ impl KataAgent {
     pub(crate) async fn set_socket_address(&self, address: &str) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.socket_address = address.to_string();
+        Ok(())
+    }
+
+    pub(crate) async fn set_console_address(&self, address: &str) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.console_address = address.to_string();
         Ok(())
     }
 
