@@ -121,7 +121,7 @@ impl KataAgent {
             inner.config.reconnect_timeout_ms as u64,
         );
         let sock =
-            sock::new(&inner.socket_address, inner.config.server_port).context("new sock")?;
+            sock::new(&inner.socket_address, Some(inner.config.server_port)).context("new sock")?;
         info!(sl!(), "try to connect agent server through {:?}", sock);
         let stream = sock.connect(&config).await.context("connect")?;
         let fd = stream.into_raw_fd();
@@ -144,13 +144,23 @@ impl KataAgent {
             inner.config.dial_timeout_ms as u64,
             inner.config.reconnect_timeout_ms as u64,
         );
-        let address = inner.socket_address.clone();
-        let port = inner.config.log_port;
-        inner
-            .log_forwarder
-            .start(&address, port, config)
-            .await
-            .context("start log forwarder")?;
+        // Use console address if provided, otherwise fall back to vsock
+        if !inner.console_address.is_empty() {
+            let console_address = inner.console_address.clone();
+            inner
+                .log_forwarder
+                .start_console(config, &console_address)
+                .await
+                .context("start console log forwarder")?;
+        } else {
+            let address = inner.socket_address.clone();
+            let port = inner.config.log_port;
+            inner
+                .log_forwarder
+                .start(&address, port, config)
+                .await
+                .context("start vsock log forwarder")?;
+        }
         Ok(())
     }
 
