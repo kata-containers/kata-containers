@@ -340,9 +340,7 @@ mod tests {
     use maplit::hashmap;
     use once_cell::sync::OnceCell;
     use slog::{Drain, Level, Logger};
-    use slog_async;
     use slog_scope::set_global_logger;
-    use slog_term;
     use std::collections::HashMap;
     use std::fs;
     use std::fs::File;
