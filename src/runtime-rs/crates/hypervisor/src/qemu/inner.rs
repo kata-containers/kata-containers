@@ -46,6 +46,7 @@ pub struct QemuInner {
     netns: Option<String>,
 
     exit_notify: Option<mpsc::Sender<()>>,
+    console_address: Option<String>,
 }
 
 impl QemuInner {
@@ -59,6 +60,7 @@ impl QemuInner {
             netns: None,
 
             exit_notify: Some(exit_notify),
+            console_address: None,
         }
     }
 
@@ -184,8 +186,20 @@ impl QemuInner {
         //cmdline.add_serial_console("/dev/pts/23");
 
         // Add a console to the devices of the cmdline
-        let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
-        cmdline.add_console(console_socket_path.to_str().unwrap());
+        if let Some(console_address) = &self.console_address {
+            cmdline.add_console(console_address);
+        } else {
+            let console_socket_path =
+                Path::new(&self.get_jailer_root().await?).join("console.sock");
+
+            let console_address = console_socket_path
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid console socket path: {:?}", console_socket_path))?
+                .to_string();
+
+            self.console_address = Some(console_address.clone());
+            cmdline.add_console(&console_address);
+        }
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
         let mut command = Command::new(&self.config.path);
@@ -280,6 +294,10 @@ impl QemuInner {
         };
 
         Ok(format!("{}://{}", VSOCK_SCHEME, guest_cid))
+    }
+
+    pub(crate) async fn get_console_address(&self) -> Result<String> {
+        Ok(self.console_address.clone().unwrap_or_default())
     }
 
     pub(crate) async fn disconnect(&mut self) {
@@ -723,6 +741,7 @@ impl Persist for QemuInner {
             netns: None,
 
             exit_notify: Some(exit_notify),
+            console_address: None,
         })
     }
 }

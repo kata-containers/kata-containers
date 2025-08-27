@@ -76,6 +76,10 @@ impl DragonballInner {
         ))
     }
 
+    pub(crate) async fn get_console_address(&self) -> Result<String> {
+        Ok(String::new())
+    }
+
     /// Get the address of agent vsock server used to init connections for io
     pub(crate) async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
         if let Some(passfd_port) = self.passfd_listener_port {
