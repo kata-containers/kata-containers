@@ -32,12 +32,13 @@ impl AgentManager for KataAgent {
         self.set_console_address(console_address)
             .await
             .context("set console address")?;
-        self.connect_agent_server()
-            .await
-            .context("connect agent server")?;
+        // Log forwarder can start first to capture system logs streamed before kata agent starts
         self.start_log_forwarder()
             .await
             .context("connect log forwarder")?;
+        self.connect_agent_server()
+            .await
+            .context("connect agent server")?;
         Ok(())
     }
 
