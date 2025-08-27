@@ -1119,7 +1119,7 @@ impl MemCG {
         }
 
         let psi_path = self.memcgs.blocking_read().config.psi_path.clone();
-        for info in infov.into_iter() {
+        for info in infov.iter_mut() {
             info.eviction = Some(EvictionInfo {
                 psi: psi::Period::new(&psi_path.join(info.path.trim_start_matches('/')), false),
                 last_min_lru_file: 0,
