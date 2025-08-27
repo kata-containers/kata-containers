@@ -63,7 +63,7 @@ impl Default for Config {
             compact_sec_max: 5 * 60,
             compact_order: PAGE_REPORTING_MIN_ORDER,
             compact_threshold: 2 << PAGE_REPORTING_MIN_ORDER,
-            compact_force_times: std::u64::MAX,
+            compact_force_times: u64::MAX,
         }
     }
 }
@@ -129,7 +129,7 @@ impl CompactCore {
     }
 
     fn need_force_compact(&self) -> bool {
-        if self.config.compact_force_times == std::u64::MAX {
+        if self.config.compact_force_times == u64::MAX {
             return false;
         }
 
