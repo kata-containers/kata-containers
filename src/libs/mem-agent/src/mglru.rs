@@ -26,7 +26,8 @@ fn lru_gen_head_parse(line: &str) -> Result<(usize, String)> {
         return Err(anyhow!("line {} format is not right", line));
     }
 
-    let id = usize::from_str_radix(words[1], 10)
+    let id = words[1]
+        .parse::<usize>()
         .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
 
     Ok((id, words[2].to_string()))
@@ -86,7 +87,8 @@ fn lru_gen_lines_parse(reader: &mut BufReader<File>) -> Result<(String, HashMap<
         let words: Vec<&str> = line.split_whitespace().map(|word| word.trim()).collect();
         if words.len() == 2 && words[0] == "node" {
             // Got a new node
-            let node_id = usize::from_str_radix(words[1], 10)
+            let node_id = words[1]
+                .parse::<usize>()
                 .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
             let (ret_line, node_size) = lru_gen_seq_lines_parse(reader)
                 .map_err(|e| anyhow!("lru_gen_seq_lines_parse failed: {}", e))?;
@@ -108,7 +110,7 @@ fn str_to_u64(str: &str) -> Result<u64> {
         warn!("{} format {} is not right", LRU_GEN_PATH, str);
         return Ok(0);
     }
-    Ok(u64::from_str_radix(str, 10)?)
+    Ok(str.parse::<u64>()?)
 }
 
 //result:
@@ -129,7 +131,8 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
             break;
         }
 
-        let msecs = i64::from_str_radix(words[1], 10)
+        let msecs = words[1]
+            .parse::<i64>()
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
         // Use milliseconds because will got build error with try_milliseconds.
         #[allow(deprecated)]
@@ -138,7 +141,8 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
         let mut gen = GenLRU::new();
         gen.birth = birth;
 
-        gen.seq = u64::from_str_radix(words[0], 10)
+        gen.seq = words[0]
+            .parse::<u64>()
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
         gen.anon = str_to_u64(words[2 + WORKINGSET_ANON])
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
