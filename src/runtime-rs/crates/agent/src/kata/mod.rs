@@ -140,6 +140,10 @@ impl KataAgent {
 
     pub(crate) async fn start_log_forwarder(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
+        if !inner.config.debug {
+            info!(sl!(), "debug is disabled, skip log forwarder");
+            return Ok(());
+        }
         let config = sock::ConnectConfig::new(
             inner.config.dial_timeout_ms as u64,
             inner.config.reconnect_timeout_ms as u64,
