@@ -17,7 +17,7 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
-use kata_types::k8s;
+use kata_types::{annotations::KATA_ANNO_CFG_AGENT_POLICY, k8s};
 use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
@@ -30,7 +30,7 @@ use super::{
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
-use crate::container_manager::logger_with_process;
+use crate::{container_manager::logger_with_process, remove_annotations_specified};
 
 pub struct Exec {
     pub(crate) process: Process,
@@ -111,11 +111,16 @@ impl Container {
             None => true,
         };
         let annotations = spec.annotations().clone().unwrap_or_default();
+        // The value of this annotation is sent to the sandbox using SetPolicy.
+        // It should be ensured that the related annotation is without the sandbox anntations.
+        let updated_annotations =
+            remove_annotations_specified(&annotations, &[KATA_ANNO_CFG_AGENT_POLICY]);
 
         amend_spec(
             &mut spec,
             toml_config.runtime.disable_guest_seccomp,
             disable_guest_selinux,
+            &updated_annotations,
         )
         .context("amend spec")?;
 
@@ -133,7 +138,7 @@ impl Container {
                 root,
                 &config.bundle,
                 &config.rootfs_mounts,
-                &annotations,
+                &updated_annotations,
             )
             .await
             .context("handler rootfs")?;
@@ -591,6 +596,7 @@ fn amend_spec(
     spec: &mut oci::Spec,
     disable_guest_seccomp: bool,
     disable_guest_selinux: bool,
+    updated_annotaions: &HashMap<String, String>,
 ) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
     let start_container_hooks = if let Some(hooks) = spec.hooks().as_ref() {
@@ -635,6 +641,8 @@ fn amend_spec(
 
         linux.set_namespaces(if ns.is_empty() { None } else { Some(ns) });
     }
+
+    spec.set_annotations(Some(updated_annotaions.clone()));
 
     if disable_guest_selinux {
         if let Some(ref mut process) = spec.process_mut() {
@@ -681,11 +689,11 @@ mod tests {
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = false
-        amend_spec(&mut spec, false, false).unwrap();
+        amend_spec(&mut spec, false, false, &HashMap::new()).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = true
-        amend_spec(&mut spec, true, false).unwrap();
+        amend_spec(&mut spec, true, false, &HashMap::new()).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
     }
 
@@ -708,12 +716,12 @@ mod tests {
             .unwrap();
 
         // disable_guest_selinux = false, selinux labels are left alone
-        amend_spec(&mut spec, false, false).unwrap();
+        amend_spec(&mut spec, false, false, &HashMap::new()).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label() == &Some("xxx".to_owned()));
         assert!(spec.linux().as_ref().unwrap().mount_label() == &Some("yyy".to_owned()));
 
         // disable_guest_selinux = true, selinux labels are reset
-        amend_spec(&mut spec, false, true).unwrap();
+        amend_spec(&mut spec, false, true, &HashMap::new()).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label().is_none());
         assert!(spec.linux().as_ref().unwrap().mount_label().is_none());
     }

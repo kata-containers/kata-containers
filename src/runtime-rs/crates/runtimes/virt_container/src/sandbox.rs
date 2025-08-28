@@ -5,6 +5,7 @@
 //
 
 use crate::health_check::HealthCheck;
+use crate::remove_annotations_specified;
 use agent::kata::KataAgent;
 use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
@@ -33,6 +34,7 @@ use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
+use kata_types::annotations::KATA_ANNO_CFG_AGENT_POLICY;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -521,6 +523,13 @@ impl Sandbox for VirtSandbox {
         }
         let sandbox_config = self.sandbox_config.as_ref().unwrap();
 
+        // The value of this annotation is sent to the sandbox using SetPolicy.
+        // It should be ensured that the related annotation is without the sandbox anntations.
+        let updated_annotations = remove_annotations_specified(
+            &sandbox_config.annotations,
+            &[KATA_ANNO_CFG_AGENT_POLICY],
+        );
+
         // if sandbox is not in SandboxState::Init then return,
         // otherwise try to create sandbox
 
@@ -534,7 +543,7 @@ impl Sandbox for VirtSandbox {
             .prepare_vm(
                 id,
                 sandbox_config.network_env.netns.clone(),
-                &sandbox_config.annotations,
+                &updated_annotations,
             )
             .await
             .context("prepare vm")?;

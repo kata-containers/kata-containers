@@ -340,7 +340,8 @@ impl VolumeStateManager {
         }
 
         // Create a new volume state
-        let guest_path = generate_deterministic_path(sandbox_id, &canonical_source, mount_destination);
+        let guest_path =
+            generate_deterministic_path(sandbox_id, &canonical_source, mount_destination);
         let mut containers = HashSet::new();
         containers.insert(sandbox_id.to_string());
 
