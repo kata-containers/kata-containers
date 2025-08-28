@@ -852,11 +852,7 @@ impl MemCgroups {
             let cur_path = format_path(&path);
             let should_del = if let Some(configs) = self.config.cgroups.get_mut(&cur_path) {
                 configs.retain(|cfg| cfg.numa_id != numa);
-                if configs.is_empty() {
-                    true
-                } else {
-                    false
-                }
+                configs.is_empty()
             } else {
                 false
             };
