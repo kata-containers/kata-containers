@@ -372,11 +372,8 @@ impl MemCgroup {
             numa: numa
                 .iter()
                 .filter_map(|numa_id| {
-                    if let Some(hmg) = hmg.get(&(*numa_id as usize)) {
-                        Some((*numa_id, Numa::new(hmg, path, psi_path)))
-                    } else {
-                        None
-                    }
+                    hmg.get(&(*numa_id as usize))
+                        .map(|hmg| (*numa_id, Numa::new(hmg, path, psi_path)))
                 })
                 .collect(),
         };
