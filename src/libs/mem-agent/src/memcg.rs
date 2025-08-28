@@ -592,7 +592,7 @@ impl MemCgroups {
                         if let Some(secs_config_map) = self.config_map.get_mut(&config.period_secs)
                         {
                             if let Some(config_map) = secs_config_map.cgs.get_mut(config) {
-                                if let Some(_) = config_map.get_mut(path) {
+                                if config_map.get_mut(path).is_some() {
                                     error!(
                                         "update_and_add found an memcg {:?} {} existed",
                                         config, path
