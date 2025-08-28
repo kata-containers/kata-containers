@@ -34,8 +34,8 @@ futures = "0.3.25"
 safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
 qapi = { version = "0.15", features = ["qmp", "async-tokio-all"] }
-qapi-spec = "0.3.1"
-qapi-qmp = "0.15.0"
+qapi-spec = "0.3.2"
+qapi-qmp = "=0.15.0"
 hyperlocal = { workspace = true }
 hyper = { workspace = true, features = ["client"] }
 

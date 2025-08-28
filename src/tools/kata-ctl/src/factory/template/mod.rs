@@ -170,14 +170,15 @@ impl Template {
         vm.save().await?;
         info!(sl!(), "template::create_template_vm: save()");
 
-        vm.stop().await?;
-        info!(sl!(), "template::create_template_vm: stop()");
+        // vm.stop().await?;
+        // info!(sl!(), "template::create_template_vm: stop()");
 
         Ok(())
     }
 
-    fn create_from_template_vm(&self, ctx: &tokio::runtime::Handle, c: &VMConfig) -> Result<VM> {
-        let mut config = self.config.clone();
+    // fn create_from_template_vm(&self, ctx: &tokio::runtime::Handle, c: &VMConfig) -> Result<VM> {
+    //     let mut config = self.config.clone();
+    // }
         
 }
 

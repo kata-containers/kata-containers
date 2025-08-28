@@ -1287,7 +1287,7 @@ pub struct Hypervisor {
     pub boot_to_be_template: bool,
 
     /// Indicate whether the VM should be created from an existing template VM.
-    #[serde(default)]
+    #[serde(default = "yes")]
     pub boot_from_template: bool,
 
 	/// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or BootFromTemplate is true.

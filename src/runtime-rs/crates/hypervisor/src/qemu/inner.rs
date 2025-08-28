@@ -229,7 +229,7 @@ impl QemuInner {
                 return Err(e);
             }
         }
-
+        info!(sl!(), "QemuInner::start_vm() config:{:?}",self.config);
         //Start the virtual machine by restoring it from a VM template if enabled.
         if self.config.boot_from_template {
             self.boot_from_template().await?;
@@ -365,64 +365,6 @@ impl QemuInner {
             Ok(())
         } else {
             Err(anyhow!("qmp not initialized"))
-        }
-    }
-
-    // qmp里的execute要求必须是&mut
-    #[allow(dead_code)]
-    pub(crate) fn pause_vm_for_template(&mut self) -> Result<()> {
-        info!(sl!(), "Pausing QEMU VM");
-        let _ = self.toggle_pause_sandbox(true);
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn resume_vm_for_template(&mut self) -> Result<()> {
-        info!(sl!(), "Resuming QEMU VM");
-        let _ = self.toggle_pause_sandbox(false);
-        Ok(())
-    }
-    #[allow(dead_code)]
-    pub(crate) async fn save_vm_for_template(&mut self) -> Result<()> {
-        if let Some(ref mut qmp) = self.qmp {
-            info!(sl!(), "QemuInner::save_vm(): start");
-
-            // Step 2: If BootToBeTemplate, set migration capability
-            if self.config.boot_to_be_template {
-                if let Err(err) = qmp.set_ignore_shared_memory_capability() {
-                    error!(
-                        sl!(),
-                        "QemuInner::set_ignore_shared_memory_capability() failed: {}", err
-                    );
-                    return Err(err);
-                } else {
-                    info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
-                }
-            }
-
-            // Step 3: Set migration arguments (exec:cat > DevicesStatePath)
-            let uri = format!("exec:cat >{}", self.config.device_state_path);
-            info!(sl!(), "QemuInner::device_state_path() = {}", uri);
-
-            // if let Err(err) = qmp.set_migrate_arguments(&uri) {
-            //     error!(sl!(), "QemuInner::set_migrate_arguments() failed: {}", err);
-            //     return Err(err);
-            // } else {
-            //     info!(sl!(), "QemuInner::set_migrate_arguments() OK");
-            // }
-
-            // Step 4: Wait for migration complete
-            if let Err(err) = self.wait_for_migration().await {
-                error!(sl!(), "QemuInner::wait_for_migration() failed: {}", err);
-                return Err(err);
-            } else {
-                info!(sl!(), "QemuInner::wait_for_migration() OK");
-            }
-
-            Ok(())
-        } else {
-            warn!(sl!(), "QMP not initialized, skip save_vm()");
-            Ok(())
         }
     }
 
