@@ -4,8 +4,7 @@ on:
 
 name: Nightly CI for s390x
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   check-internal-test-result:

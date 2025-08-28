@@ -40,9 +40,7 @@ on:
       KBUILD_SIGN_PIN:
         required: true
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -292,6 +290,10 @@ jobs:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
+
+    permissions:
+      contents: read
+      id-token: write # Used for OIDC access to log into Azure
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -351,6 +353,9 @@ jobs:
      - build-and-publish-tee-confidential-unencrypted-image
      - publish-csi-driver-amd64
     uses: ./.github/workflows/run-kata-coco-tests.yaml
+    permissions:
+      contents: read
+      id-token: write # Used for OIDC access to log into Azure
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io

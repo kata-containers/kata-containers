@@ -2,8 +2,7 @@ on:
   schedule:
     - cron:  '0 23 * * 0'
 
-permissions:
-  contents: read
+permissions: {}
 
 name: Docs URL Alive Check
 jobs:

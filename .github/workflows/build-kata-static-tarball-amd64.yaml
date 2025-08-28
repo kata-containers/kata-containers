@@ -26,8 +26,7 @@ on:
       KBUILD_SIGN_PIN:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-asset:
