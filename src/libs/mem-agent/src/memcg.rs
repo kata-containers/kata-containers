@@ -806,7 +806,7 @@ impl MemCgroups {
     pub fn get_remaining_tokio_duration(&self) -> TokioDuration {
         let mut ret = TokioDuration::MAX;
 
-        for (_, secs_map) in &self.config_map {
+        for secs_map in self.config_map.values() {
             let cur = secs_map.timeout.remaining_tokio_duration();
 
             trace!(
@@ -819,7 +819,7 @@ impl MemCgroups {
                 // check secs_map, make sure it has enabled config
                 let mut has_enable_config = false;
 
-                for (single_config, _) in &secs_map.cgs {
+                for single_config in secs_map.cgs.keys() {
                     if !single_config.disabled {
                         has_enable_config = true;
                         break;
