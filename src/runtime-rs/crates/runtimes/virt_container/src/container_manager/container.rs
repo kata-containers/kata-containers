@@ -18,7 +18,7 @@ use common::{
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{annotations::KATA_ANNO_CFG_AGENT_POLICY, k8s};
-use oci_spec::runtime as oci;
+use oci_spec::runtime::{self as oci, LinuxDeviceCgroup};
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{
@@ -229,6 +229,16 @@ impl Container {
                 .passfd_io_init(hvsock_uds_path, *passfd_port)
                 .await?;
         }
+        if let Some(linux) = &mut spec.linux_mut() {
+            if let Some(resource) = linux.resources_mut() {
+                clean_linux_resources_devices(resource);
+            }
+        }
+        info!(
+            sl!(),
+            "OCI Spec {:?} within CreateContainerRequest.",
+            spec.clone()
+        );
 
         // create container
         let r = agent::CreateContainerRequest {
@@ -605,9 +615,11 @@ fn amend_spec(
         None
     };
 
-    let mut oci_hooks = oci::Hooks::default();
-    oci_hooks.set_start_container(start_container_hooks);
-    spec.set_hooks(Some(oci_hooks));
+    if start_container_hooks.is_some() {
+        let mut oci_hooks = oci::Hooks::default();
+        oci_hooks.set_start_container(start_container_hooks);
+        spec.set_hooks(Some(oci_hooks));
+    }
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);
@@ -669,6 +681,27 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     }
 
     false
+}
+
+fn clean_linux_resources_devices(resources: &mut LinuxResources) {
+    if let Some(devices) = resources.devices_mut().take() {
+        let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
+            .into_iter()
+            .filter(|device| {
+                !(!device.allow()
+                    && device.typ().is_none()
+                    && device.major().is_none()
+                    && device.minor().is_none()
+                    && device.access().as_deref() == Some("rwm"))
+            })
+            .collect();
+
+        resources.set_devices(if cleaned_devices.is_empty() {
+            None
+        } else {
+            Some(cleaned_devices)
+        });
+    }
 }
 
 #[cfg(test)]
