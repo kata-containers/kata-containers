@@ -870,8 +870,10 @@ impl MemCgroups {
                         }
                     }
 
-                    let mut numa_cg = CgroupConfig::default();
-                    numa_cg.numa_id = numa;
+                    let mut numa_cg = CgroupConfig {
+                        numa_id: numa,
+                        ..Default::default()
+                    };
                     numa_cg.set(&oc);
 
                     numa_cgs.push(numa_cg);
