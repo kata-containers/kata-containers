@@ -113,22 +113,11 @@ impl SingleConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct CgroupConfig {
     pub no_subdir: bool,
     pub numa_id: Vec<u32>,
     pub config: SingleConfig,
-}
-
-impl Default for CgroupConfig {
-    fn default() -> Self {
-        Self {
-            no_subdir: false,
-            // empty numa_id means this config not limit numa
-            numa_id: vec![],
-            config: SingleConfig::default(),
-        }
-    }
 }
 
 impl CgroupConfig {
