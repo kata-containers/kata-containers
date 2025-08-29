@@ -159,9 +159,27 @@ impl FsWatcher {
         let inotify = self.inotify.clone();
         let monitor_config = self.config.clone();
 
+        // Perform a full sync before starting monitoring to ensure that files which exist before monitoring starts are also synced.
+        let agent_sync = agent.clone();
+        let src_sync = src.clone();
+        let dst_sync = dst.clone();
+
         tokio::spawn(async move {
             let mut buffer = [0u8; 4096];
             let mut last_event_time = None;
+
+            // Initial sync: ensure existing contents in the directory are synchronized
+            {
+                info!(
+                    sl!(),
+                    "Initial sync from {:?} to {:?}", &src_sync, &dst_sync
+                );
+                if let Err(e) =
+                    copy_dir_recursively(&src_sync, &dst_sync.to_string_lossy(), &agent_sync).await
+                {
+                    error!(sl!(), "Initial sync failed: {:?}", e);
+                }
+            }
 
             loop {
                 // use cloned inotify instance
@@ -173,7 +191,8 @@ impl FsWatcher {
                                     | EventMask::MODIFY
                                     | EventMask::DELETE
                                     | EventMask::MOVED_FROM
-                                    | EventMask::MOVED_TO,
+                                    | EventMask::MOVED_TO
+                                    | EventMask::CLOSE_WRITE,
                             ) {
                                 continue;
                             }
@@ -225,7 +244,7 @@ impl FsWatcher {
                     if Instant::now().duration_since(t) > DEBOUNCE_TIME && *need_sync.lock().await {
                         info!(sl!(), "debounce handle copyfile {:?} -> {:?}", &src, &dst);
                         if let Err(e) =
-                            copy_dir_recursively(&src, &dst.display().to_string(), &agent).await
+                            copy_dir_recursively(&src, &dst.to_string_lossy(), &agent).await
                         {
                             error!(
                                 sl!(),
