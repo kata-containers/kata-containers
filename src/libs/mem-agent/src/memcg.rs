@@ -438,7 +438,7 @@ impl Info {
     fn new(path: &str, memcg_id: usize, numa_id: usize, numa: &Numa) -> Self {
         Self {
             memcg_id,
-            numa_id: numa_id,
+            numa_id,
             path: path.to_string(),
             min_seq: numa.min_seq,
             max_seq: numa.max_seq,
