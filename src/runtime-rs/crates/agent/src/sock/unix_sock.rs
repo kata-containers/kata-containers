@@ -8,23 +8,26 @@ use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use slog::{info, trace};
 use tokio::{io::Interest, net::UnixStream};
 
 use super::{ConnectConfig, Sock, Stream};
 
+/// Unix socket connection logic for both remote and unix schemes
 #[derive(Debug, PartialEq)]
-pub struct Remote {
+pub struct UnixSock {
     path: String,
+    scheme: &'static str,
 }
 
-impl Remote {
-    pub fn new(path: String) -> Self {
-        Self { path }
+impl UnixSock {
+    pub fn new(path: String, scheme: &'static str) -> Self {
+        Self { path, scheme }
     }
 }
 
 #[async_trait]
-impl Sock for Remote {
+impl Sock for UnixSock {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream> {
         let mut last_err = None;
         let retry_times = config.reconnect_timeout_ms / config.dial_timeout_ms;
@@ -32,13 +35,14 @@ impl Sock for Remote {
         for i in 0..retry_times {
             match connect_helper(&self.path).await {
                 Ok(stream) => {
-                    info!(sl!(), "remote sock: connected to {:?}", self);
+                    info!(sl!(), "{}: connected to {:?}", self.scheme, self);
                     return Ok(Stream::Unix(stream));
                 }
                 Err(err) => {
                     trace!(
                         sl!(),
-                        "remote sock: failed to connect to {:?}, err {:?}, attempts {}, will retry after {} ms",
+                        "{}: failed to connect to {:?}, err {:?}, attempts {}, will retry after {} ms",
+                        self.scheme,
                         self,
                         err,
                         i,
@@ -55,17 +59,18 @@ impl Sock for Remote {
         // Safe to unwrap the last_err, as this line will be unreachable if
         // no errors occurred.
         Err(anyhow!(
-            "remote sock: failed to connect to {:?}, err {:?}",
+            "{}: failed to connect to {:?}, err {:?}",
+            self.scheme,
             self,
             last_err.unwrap()
         ))
     }
 }
 
-async fn connect_helper(address: &str) -> Result<UnixStream> {
-    let stream = UnixStream::connect(Path::new(&address))
+async fn connect_helper(path: &str) -> Result<UnixStream> {
+    let stream = UnixStream::connect(Path::new(path))
         .await
-        .context("failed to create UnixAddr")?;
+        .context("failed to connect to Unix domain socket")?;
     stream
         .ready(Interest::READABLE | Interest::WRITABLE)
         .await?;

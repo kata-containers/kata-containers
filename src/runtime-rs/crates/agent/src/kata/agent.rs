@@ -24,17 +24,21 @@ fn new_ttrpc_ctx(timeout: i64) -> ttrpc_ctx::Context {
 #[async_trait]
 impl AgentManager for KataAgent {
     #[instrument]
-    async fn start(&self, address: &str) -> Result<()> {
-        info!(sl!(), "begin to connect agent {:?}", address);
-        self.set_socket_address(address)
+    async fn start(&self, socket_address: &str, console_address: &str) -> Result<()> {
+        info!(sl!(), "begin to connect agent {:?}", socket_address);
+        self.set_socket_address(socket_address)
             .await
             .context("set socket")?;
-        self.connect_agent_server()
+        self.set_console_address(console_address)
             .await
-            .context("connect agent server")?;
+            .context("set console address")?;
+        // Log forwarder can start first to capture system logs streamed before kata agent starts
         self.start_log_forwarder()
             .await
             .context("connect log forwarder")?;
+        self.connect_agent_server()
+            .await
+            .context("connect agent server")?;
         Ok(())
     }
 

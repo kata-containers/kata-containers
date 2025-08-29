@@ -135,6 +135,10 @@ impl FcInner {
         Ok(format!("{}://{}", HYBRID_VSOCK_SCHEME, vsock_path))
     }
 
+    pub(crate) async fn get_console_address(&self) -> Result<String> {
+        Ok(String::new())
+    }
+
     pub(crate) async fn disconnect(&mut self) {
         warn!(sl(), "Disconnect: Not implemented");
     }

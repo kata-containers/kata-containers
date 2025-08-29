@@ -663,6 +663,10 @@ impl CloudHypervisorInner {
         Ok(uri)
     }
 
+    pub(crate) async fn get_console_address(&self) -> Result<String> {
+        Ok(String::new())
+    }
+
     pub(crate) async fn disconnect(&mut self) {
         self.state = VmmState::NotReady;
     }
