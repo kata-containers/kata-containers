@@ -8,10 +8,12 @@ use anyhow::{anyhow, Result};
 
 use crate::{
     VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_BLK_CCW, VM_ROOTFS_DRIVER_MMIO, VM_ROOTFS_DRIVER_PMEM,
-    VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
     VM_ROOTFS_ROOT_BLK, VM_ROOTFS_ROOT_PMEM,
 };
 use kata_types::config::LOG_VPORT_OPTION;
+use kata_types::fs::{
+    VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
+};
 
 // Port where the agent will send the logs. Logs are sent through the vsock in cases
 // where the hypervisor has no console.sock, i.e dragonball
@@ -179,9 +181,10 @@ mod tests {
     use super::*;
 
     use crate::{
-        VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM, VM_ROOTFS_FILESYSTEM_EROFS,
-        VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS, VM_ROOTFS_ROOT_BLK,
-        VM_ROOTFS_ROOT_PMEM,
+        VM_ROOTFS_DRIVER_BLK, VM_ROOTFS_DRIVER_PMEM, VM_ROOTFS_ROOT_BLK, VM_ROOTFS_ROOT_PMEM,
+    };
+    use kata_types::fs::{
+        VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
     };
 
     #[test]
