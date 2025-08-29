@@ -53,7 +53,12 @@ pub(crate) struct ShareFsVolume {
     share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
-    monitor_task: Option<JoinHandle<()>>,
+    // Add volume manager reference
+    volume_manager: Option<Arc<VolumeManager>>,
+    // Record the source path for cleanup
+    source_path: Option<String>,
+    // Record the container ID
+    container_id: String,
 }
 
 /// Directory Monitor Config
@@ -291,7 +296,6 @@ struct VolumeState {
     monitor_task: Option<Arc<JoinHandle<()>>>,
 }
 
-#[allow(dead_code)]
 impl VolumeManager {
     pub fn new() -> Self {
         Self {
@@ -351,7 +355,9 @@ impl VolumeManager {
 
         info!(
             sl!(),
-            "Created new volume: source={:?}, guest={:?}", state.source_path, state.guest_path,
+            "Created new volume state: source={:?}, guest={:?}",
+            state.source_path,
+            state.guest_path,
         );
 
         // Return guest path and whether a copy is needed (true, as it's new)
@@ -429,6 +435,8 @@ impl ShareFsVolume {
         readonly: bool,
         agent: Arc<dyn Agent>,
     ) -> Result<Self> {
+        // TODO: The volume manager should be passed by ShareFsVolume::new(...,volume_manager)
+        let volume_manager: Arc<VolumeManager> = Arc::new(VolumeManager::new());
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
         let file_name = Path::new(&source_path)
@@ -442,59 +450,66 @@ impl ShareFsVolume {
             share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
-            monitor_task: None,
+            volume_manager: Some(volume_manager.clone()),
+            source_path: Some(source_path.clone()),
+            container_id: cid.to_string(),
         };
+
         match share_fs {
             None => {
-                let src = match std::fs::canonicalize(&source_path) {
-                    Err(err) => {
-                        return Err(anyhow!(format!(
-                            "failed to canonicalize file {} {:?}",
-                            &source_path, err
-                        )))
+                // Get or create the guest path
+                let (guest_path, need_copy) = volume_manager
+                    .get_or_create_volume(&source_path, cid, m.destination())
+                    .await?;
+
+                let src = std::fs::canonicalize(&source_path)?;
+
+                // Only copy if needed (first time creating)
+                if need_copy {
+                    info!(
+                        sl!(),
+                        "First time creating volume, copying from {:?} to {:?}", src, guest_path
+                    );
+
+                    let mut monitor_task = None;
+
+                    if src.is_file() {
+                        // Copy a single file
+                        Self::copy_file_to_guest(&src, &guest_path, &agent).await?;
+                    } else if src.is_dir() {
+                        // Create directory
+                        Self::copy_directory_to_guest(&src, &guest_path, &agent).await?;
+
+                        // Start monitoring (only for watchable volumes)
+                        if is_watchable_volume(&src) {
+                            info!(sl!(), "Starting monitor for watchable volume: {:?}", src);
+                            let watcher = FsWatcher::new(&src).await?;
+                            let handle = watcher
+                                .start_monitor(
+                                    agent.clone(),
+                                    src.clone(),
+                                    PathBuf::from(&guest_path),
+                                )
+                                .await;
+                            monitor_task = Some(handle);
+                        }
+                    } else {
+                        warn!(
+                            sl!(),
+                            "Ignoring non-regular file {:?} as FS sharing not supported", src
+                        );
+                        return Ok(volume);
                     }
-                    Ok(src) => src,
-                };
 
-                // let mut monitor_task = None;
-                // This is where we set the value for the guest path
-                let guest_path = [
-                    DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                    PASSTHROUGH_FS_DIR,
-                    file_name.clone().as_str(),
-                ]
-                .join("/");
-
-                debug!(
-                    sl!(),
-                    "copy local file {:?} to guest {:?}",
-                    &source_path,
-                    guest_path.clone()
-                );
-                // If the mount source is a file, we can copy it to the sandbox
-                if src.is_file() {
-                    // Copy a single file
-                    Self::copy_file_to_guest(&src, &guest_path, &agent).await?;
-                } else if src.is_dir() {
-                    // Create directory
-                    Self::copy_directory_to_guest(&src, &guest_path, &agent).await?;
-
-                    // Start monitoring (only for watchable volumes)
-                    if is_watchable_volume(&src) {
-                        info!(sl!(), "Starting monitor for watchable volume: {:?}", src);
-                        let watcher = FsWatcher::new(&src).await?;
-                        let monitor_task = watcher
-                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&guest_path))
-                            .await;
-                        volume.monitor_task = Some(monitor_task);
-                    }
+                    // Mark as copied
+                    volume_manager
+                        .mark_as_copied(&source_path, monitor_task)
+                        .await?;
                 } else {
-                    // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
                         sl!(),
-                        "Ignoring non-regular file {:?} as FS sharing not supported", src
+                        "Volume already exists in guest, skipping copy: {:?}", guest_path
                     );
-                    return Ok(volume);
                 }
 
                 // Create mount configuration
@@ -512,6 +527,8 @@ impl ShareFsVolume {
                     options.push("rprivate".into());
                 }
                 oci_mount.set_options(Some(options));
+
+                volume.mounts.push(oci_mount);
             }
             Some(share_fs) => {
                 let share_fs_mount = share_fs.get_share_fs_mount();
@@ -590,6 +607,7 @@ impl ShareFsVolume {
                 }
             }
         }
+
         Ok(volume)
     }
 
@@ -664,7 +682,26 @@ impl Volume for ShareFsVolume {
     async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
-            None => return Ok(()),
+            None => {
+                return {
+                    // Release volume reference
+                    if let (Some(manager), Some(source)) = (&self.volume_manager, &self.source_path)
+                    {
+                        let should_cleanup =
+                            manager.release_volume(source, &self.container_id).await?;
+
+                        if should_cleanup {
+                            info!(
+                                sl!(),
+                                "Volume {:?} has no more references, can be cleaned up", source
+                            );
+                            // NOTE: We cannot delete files from the guest because there is no corresponding API
+                            // Files will be cleaned up automatically when the sandbox is destroyed
+                        }
+                    }
+                    Ok(())
+                };
+            }
         };
 
         let mounted_info_set = share_fs.mounted_info_set();
@@ -736,7 +773,6 @@ impl Volume for ShareFsVolume {
     }
 }
 
-#[allow(dead_code)]
 async fn copy_dir_recursively<P: AsRef<Path>>(
     src_dir: P,
     dest_dir: &str,
