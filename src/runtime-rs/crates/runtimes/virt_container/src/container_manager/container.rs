@@ -151,6 +151,8 @@ impl Container {
                 .context("get guest rootfs path")?
                 .into(),
         );
+        // FIXME: we do so, just make agent policy happy !
+        root.set_readonly(Some(false));
 
         let mut storages = vec![];
         if let Some(storage) = rootfs.get_storage().await {
