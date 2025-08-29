@@ -105,7 +105,7 @@ async fn async_get_remaining_tokio_duration(
 
 fn agent_work(mut memcg: memcg::MemCG, mut comp: compact::Compact) -> Result<Duration> {
     let memcg_work_list = memcg.get_timeout_list();
-    if memcg_work_list.len() > 0 {
+    if !memcg_work_list.is_empty() {
         info!("memcg.work start");
         memcg
             .work(&memcg_work_list)
@@ -202,10 +202,8 @@ async fn mem_agent_loop(
             });
 
             mas.timeout = false;
-        } else {
-            if mas.refresh() {
-                continue;
-            }
+        } else if mas.refresh() {
+            continue;
         }
 
         info!("mem_agent_loop wait timeout {:?}", mas.duration);
