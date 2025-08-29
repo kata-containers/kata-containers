@@ -280,8 +280,8 @@ pub fn check() -> Result<()> {
     let content = fs::read_to_string(LRU_GEN_ENABLED_PATH)
         .map_err(|e| anyhow!("open file {} failed: {}", LRU_GEN_ENABLED_PATH, e))?;
     let content = content.trim();
-    let r = if content.starts_with("0x") {
-        u32::from_str_radix(&content[2..], 16)
+    let r = if let Some(stripped) = content.strip_prefix("0x") {
+        u32::from_str_radix(stripped, 16)
     } else {
         content.parse()
     };
