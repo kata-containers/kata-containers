@@ -721,7 +721,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		return err
 	}
 
-	assetPath, _, err := fc.config.ImageOrInitrdAssetPath()
+	assetPath, err := fc.config.ImageOrInitrdAssetPath()
 	if err != nil {
 		return err
 	}

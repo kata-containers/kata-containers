@@ -21,8 +21,6 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 
 	if conf.ImagePath == "" && conf.InitrdPath == "" {
 		return fmt.Errorf("Missing image and initrd path")
-	} else if conf.ImagePath != "" && conf.InitrdPath != "" {
-		return fmt.Errorf("Image and initrd path cannot be both set")
 	}
 
 	if conf.NumVCPUs == 0 {
