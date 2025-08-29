@@ -159,9 +159,28 @@ impl FsWatcher {
         let inotify = self.inotify.clone();
         let monitor_config = self.config.clone();
 
+        // Perform a full sync before starting monitoring to ensure that files which exist before monitoring starts are also synced.
+        let agent_sync = agent.clone();
+        let src_sync = src.clone();
+        let dst_sync = dst.clone();
+
         tokio::spawn(async move {
             let mut buffer = [0u8; 4096];
             let mut last_event_time = None;
+
+            // Initial sync: ensure existing contents in the directory are synchronized
+            {
+                info!(
+                    sl!(),
+                    "Initial sync from {:?} to {:?}", &src_sync, &dst_sync
+                );
+                if let Err(e) =
+                    copy_dir_recursively(&src_sync, &dst_sync.display().to_string(), &agent_sync)
+                        .await
+                {
+                    error!(sl!(), "Initial sync failed: {:?}", e);
+                }
+            }
 
             loop {
                 // use cloned inotify instance
@@ -173,7 +192,8 @@ impl FsWatcher {
                                     | EventMask::MODIFY
                                     | EventMask::DELETE
                                     | EventMask::MOVED_FROM
-                                    | EventMask::MOVED_TO,
+                                    | EventMask::MOVED_TO
+                                    | EventMask::CLOSE_WRITE,
                             ) {
                                 continue;
                             }
