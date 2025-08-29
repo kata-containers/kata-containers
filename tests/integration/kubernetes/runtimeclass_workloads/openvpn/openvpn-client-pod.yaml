@@ -1,0 +1,58 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openvpn-client
+  labels:
+    app: openvpn-client
+spec:
+  containers:
+  - name: openvpn-client
+    image: quay.io/kata-containers/alpine:3.22.1-openvpn
+    command:
+    - /bin/sh
+    - -c
+    - |
+      openvpn --config /vpn/client.ovpn
+    securityContext:
+      privileged: false
+      capabilities:
+        add:
+          - NET_ADMIN
+    volumeMounts:
+    - name: openvpn-config
+      mountPath: /vpn
+    - name: openvpn-secrets
+      mountPath: /vpn/keys
+      readOnly: true
+    - name: dev-net-tun
+      mountPath: /dev/net/tun
+    env:
+    - name: VPN_CONFIG
+      value: "/vpn/client.ovpn"
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - "ip a | grep tap0"
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      failureThreshold: 3
+  volumes:
+  - name: openvpn-config
+    configMap:
+      name: openvpn-client-config
+  - name: openvpn-secrets
+    secret:
+      secretName: openvpn-client-secrets
+  - name: dev-net-tun
+    hostPath:
+      path: /dev/net/tun
+      type: CharDevice
+  runtimeClassName: kata

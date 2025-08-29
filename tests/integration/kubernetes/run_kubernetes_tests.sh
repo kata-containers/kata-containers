@@ -70,6 +70,7 @@ else
 		"k8s-memory.bats" \
 		"k8s-nested-configmap-secret.bats" \
 		"k8s-oom.bats" \
+		"k8s-openvpn.bats" \
 		"k8s-optional-empty-configmap.bats" \
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
