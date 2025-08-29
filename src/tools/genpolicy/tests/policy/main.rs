@@ -92,6 +92,36 @@ mod tests {
             None
         };
 
+        let settings_patch_path = path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/policy/testdata")
+            .join(test_case_dir)
+            .join("settings-patch.json");
+
+        if settings_patch_path.exists() {
+            // Adjust genpolicy-settings.json with the patch from the test data dir.
+            let patch_file =
+                File::open(settings_patch_path).expect("settings-patch.json should open");
+            let patch: json_patch::Patch =
+                serde_json::from_reader(patch_file).expect("test case file should parse");
+            let settings_path = workdir.join("genpolicy-settings.json");
+            let mut settings: serde_json::Value = {
+                let settings_file =
+                    File::open(&settings_path).expect("genpolicy-settings.json should open");
+                serde_json::from_reader(settings_file).expect("test case file should parse")
+            };
+
+            json_patch::patch(&mut settings, &patch).unwrap();
+            let settings_file = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .truncate(true)
+                .open(&settings_path)
+                .expect("settings file should open");
+            serde_json::to_writer(settings_file, &settings)
+                .expect("settings file should be writable");
+            print!("{:?}", settings_path)
+        }
+
         let config = genpolicy::utils::Config {
             base64_out: false,
             config_files,

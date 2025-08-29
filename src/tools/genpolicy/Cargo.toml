@@ -73,3 +73,4 @@ tar = "0.4.41"
 kata-agent-policy = { path = "../../agent/policy" }
 slog = "2.5.2"
 assert_cmd = "2.0.14"
+json-patch = "2.0.0"
