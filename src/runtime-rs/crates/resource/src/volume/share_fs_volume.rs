@@ -434,9 +434,8 @@ impl ShareFsVolume {
         cid: &str,
         readonly: bool,
         agent: Arc<dyn Agent>,
+        volume_manager: Arc<VolumeManager>,
     ) -> Result<Self> {
-        // TODO: The volume manager should be passed by ShareFsVolume::new(...,volume_manager)
-        let volume_manager: Arc<VolumeManager> = Arc::new(VolumeManager::new());
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
         let file_name = Path::new(&source_path)
