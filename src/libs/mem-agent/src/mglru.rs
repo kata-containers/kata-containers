@@ -177,6 +177,7 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 // HashMap<node_id, MGenLRU> will be empty.
 //result:
 // HashMap<path, (id, HashMap<node_id, MGenLRU>)>
+#[allow(clippy::type_complexity)]
 fn lru_gen_file_parse(
     reader: &mut BufReader<File>,
     target_patchs: &HashSet<String>,
@@ -226,6 +227,7 @@ fn lru_gen_file_parse(
     Ok(ret_hash)
 }
 
+#[allow(clippy::type_complexity)]
 fn file_parse(
     target_patchs: &HashSet<String>,
     parse_line: bool,
@@ -240,6 +242,7 @@ fn file_parse(
 
 //result:
 // HashMap<path, (id, ino, HashMap<node_id, MGenLRU>)>
+#[allow(clippy::type_complexity)]
 pub fn host_memcgs_get(
     target_patchs: &HashSet<String>,
     parse_line: bool,
