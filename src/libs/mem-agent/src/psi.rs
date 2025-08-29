@@ -62,7 +62,7 @@ fn read_pressure_some_total(file_path: PathBuf) -> Result<u64> {
     if reader
         .read_line(&mut first_line)
         .map_err(|e| anyhow!("reader.read_line failed: {}", e))?
-        <= 0
+        == 0
     {
         return Err(anyhow!("File is empty"));
     }
