@@ -12,7 +12,7 @@ mod share_fs_volume;
 pub mod utils;
 
 pub mod direct_volume;
-use crate::volume::direct_volume::is_direct_volume;
+use crate::volume::{direct_volume::is_direct_volume, share_fs_volume::VolumeStateManager};
 pub mod direct_volumes;
 
 use std::{sync::Arc, vec::Vec};
@@ -45,17 +45,21 @@ pub struct VolumeResourceInner {
 #[derive(Default)]
 pub struct VolumeResource {
     inner: Arc<RwLock<VolumeResourceInner>>,
+    volume_state_manager: Arc<VolumeStateManager>,
 }
 
 impl VolumeResource {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            inner: Arc::new(RwLock::new(VolumeResourceInner::default())),
+            volume_state_manager: Arc::new(VolumeStateManager::new()),
+        }
     }
 
     pub async fn handler_volumes(
         &self,
         share_fs: &Option<Arc<dyn ShareFs>>,
-        cid: &str,
+        _cid: &str,
         spec: &oci::Spec,
         d: &RwLock<DeviceManager>,
         sid: &str,
@@ -101,9 +105,17 @@ impl VolumeResource {
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
-                    share_fs_volume::ShareFsVolume::new(share_fs, m, cid, read_only, agent.clone())
-                        .await
-                        .with_context(|| format!("new share fs volume {:?}", m))?,
+                    share_fs_volume::ShareFsVolume::new(
+                        share_fs,
+                        m,
+                        sid,
+                        read_only,
+                        agent.clone(),
+                        self.volume_state_manager.clone(), // pass the volume state manager
+                        spec,
+                    )
+                    .await
+                    .with_context(|| format!("new share fs volume {:?}", m))?,
                 )
             } else if is_skip_volume(m) {
                 info!(sl!(), "skip volume {:?}", m);

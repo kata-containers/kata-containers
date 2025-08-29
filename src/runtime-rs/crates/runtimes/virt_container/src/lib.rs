@@ -14,6 +14,8 @@ pub mod health_check;
 pub mod sandbox;
 pub mod sandbox_persist;
 
+use std::collections::{HashMap, HashSet};
+use std::hash::RandomState;
 use std::sync::Arc;
 
 use agent::{kata::KataAgent, AGENT_KATA};
@@ -225,6 +227,19 @@ fn new_agent(toml_config: &TomlConfig) -> Result<Arc<KataAgent>> {
     }
 }
 
+pub fn remove_annotations_specified(
+    annotations: &HashMap<String, String, RandomState>,
+    keys_to_remove: &[&str],
+) -> HashMap<String, String, RandomState> {
+    let remove_set: HashSet<&str> = keys_to_remove.iter().copied().collect();
+
+    annotations
+        .iter()
+        .filter(|(k, _)| !remove_set.contains(k.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
 #[cfg(test)]
 mod test {
 
@@ -270,5 +285,64 @@ hypervisor_name="qemu"
 
         let res = new_hypervisor(&toml_config).await;
         assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_empty_annotations() {
+        let empty_map = HashMap::with_hasher(RandomState::new());
+        let result =
+            remove_annotations_specified(&empty_map, &["io.katacontainers.config.agent.policy"]);
+        assert_eq!(result.len(), 0);
+        println!("Empty annotations: {:?}", result);
+    }
+
+    #[test]
+    fn test_empty_keys_to_remove() {
+        let mut annotations = HashMap::with_hasher(RandomState::new());
+        annotations.insert("key1".to_string(), "value1".to_string());
+        annotations.insert("key2".to_string(), "value2".to_string());
+
+        let result = remove_annotations_specified(&annotations, &[]);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get("key1"), Some(&"value1".to_string()));
+        println!("Empty keys_to_remove: {:?}", result);
+    }
+
+    #[test]
+    fn test_both_empty() {
+        let empty_map = HashMap::with_hasher(RandomState::new());
+        let result = remove_annotations_specified(&empty_map, &[]);
+        assert_eq!(result.len(), 0);
+        println!("Both empty: {:?}", result);
+    }
+
+    #[test]
+    fn test_key_not_present() {
+        let mut annotations = HashMap::with_hasher(RandomState::new());
+        annotations.insert("key1".to_string(), "value1".to_string());
+
+        let result =
+            remove_annotations_specified(&annotations, &["io.katacontainers.config.agent.policy"]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result.get("key1"), Some(&"value1".to_string()));
+        println!("Key not present: {:?}", result);
+    }
+
+    #[test]
+    fn test_large_remove_list() {
+        let mut annotations = HashMap::with_hasher(RandomState::new());
+        annotations.insert("key1".to_string(), "value1".to_string());
+        annotations.insert("key2".to_string(), "value2".to_string());
+        annotations.insert("key3".to_string(), "value3".to_string());
+
+        let keys_to_remove = vec![
+            "key1", "key4", "key5", "key6", "key7", "key8", "key9", "key10",
+        ];
+        let result = remove_annotations_specified(&annotations, &keys_to_remove);
+        assert_eq!(result.len(), 2);
+        assert!(!result.contains_key("key1"));
+        assert!(result.contains_key("key2"));
+        assert!(result.contains_key("key3"));
+        println!("Large remove list: {:?}", result);
     }
 }

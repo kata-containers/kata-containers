@@ -17,8 +17,8 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
-use kata_types::k8s;
-use oci_spec::runtime as oci;
+use kata_types::{annotations::KATA_ANNO_CFG_AGENT_POLICY, k8s};
+use oci_spec::runtime::{self as oci, LinuxDeviceCgroup};
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{
@@ -30,7 +30,7 @@ use super::{
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
-use crate::container_manager::logger_with_process;
+use crate::{container_manager::logger_with_process, remove_annotations_specified};
 
 pub struct Exec {
     pub(crate) process: Process,
@@ -111,11 +111,16 @@ impl Container {
             None => true,
         };
         let annotations = spec.annotations().clone().unwrap_or_default();
+        // The value of this annotation is sent to the sandbox using SetPolicy.
+        // It should be ensured that the related annotation is without the sandbox anntations.
+        let updated_annotations =
+            remove_annotations_specified(&annotations, &[KATA_ANNO_CFG_AGENT_POLICY]);
 
         amend_spec(
             &mut spec,
             toml_config.runtime.disable_guest_seccomp,
             disable_guest_selinux,
+            &updated_annotations,
         )
         .context("amend spec")?;
 
@@ -133,7 +138,7 @@ impl Container {
                 root,
                 &config.bundle,
                 &config.rootfs_mounts,
-                &annotations,
+                &updated_annotations,
             )
             .await
             .context("handler rootfs")?;
@@ -146,6 +151,8 @@ impl Container {
                 .context("get guest rootfs path")?
                 .into(),
         );
+        // FIXME: we do so, just make agent policy happy !
+        root.set_readonly(Some(false));
 
         let mut storages = vec![];
         if let Some(storage) = rootfs.get_storage().await {
@@ -224,6 +231,16 @@ impl Container {
                 .passfd_io_init(hvsock_uds_path, *passfd_port)
                 .await?;
         }
+        if let Some(linux) = &mut spec.linux_mut() {
+            if let Some(resource) = linux.resources_mut() {
+                clean_linux_resources_devices(resource);
+            }
+        }
+        info!(
+            sl!(),
+            "OCI Spec {:?} within CreateContainerRequest.",
+            spec.clone()
+        );
 
         // create container
         let r = agent::CreateContainerRequest {
@@ -591,6 +608,7 @@ fn amend_spec(
     spec: &mut oci::Spec,
     disable_guest_seccomp: bool,
     disable_guest_selinux: bool,
+    updated_annotaions: &HashMap<String, String>,
 ) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
     let start_container_hooks = if let Some(hooks) = spec.hooks().as_ref() {
@@ -599,9 +617,11 @@ fn amend_spec(
         None
     };
 
-    let mut oci_hooks = oci::Hooks::default();
-    oci_hooks.set_start_container(start_container_hooks);
-    spec.set_hooks(Some(oci_hooks));
+    if start_container_hooks.is_some() {
+        let mut oci_hooks = oci::Hooks::default();
+        oci_hooks.set_start_container(start_container_hooks);
+        spec.set_hooks(Some(oci_hooks));
+    }
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);
@@ -636,6 +656,8 @@ fn amend_spec(
         linux.set_namespaces(if ns.is_empty() { None } else { Some(ns) });
     }
 
+    spec.set_annotations(Some(updated_annotaions.clone()));
+
     if disable_guest_selinux {
         if let Some(ref mut process) = spec.process_mut() {
             process.set_selinux_label(None);
@@ -663,6 +685,27 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     false
 }
 
+fn clean_linux_resources_devices(resources: &mut LinuxResources) {
+    if let Some(devices) = resources.devices_mut().take() {
+        let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
+            .into_iter()
+            .filter(|device| {
+                !(!device.allow()
+                    && device.typ().is_none()
+                    && device.major().is_none()
+                    && device.minor().is_none()
+                    && device.access().as_deref() == Some("rwm"))
+            })
+            .collect();
+
+        resources.set_devices(if cleaned_devices.is_empty() {
+            None
+        } else {
+            Some(cleaned_devices)
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::amend_spec;
@@ -681,11 +724,11 @@ mod tests {
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = false
-        amend_spec(&mut spec, false, false).unwrap();
+        amend_spec(&mut spec, false, false, &HashMap::new()).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = true
-        amend_spec(&mut spec, true, false).unwrap();
+        amend_spec(&mut spec, true, false, &HashMap::new()).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
     }
 
@@ -708,12 +751,12 @@ mod tests {
             .unwrap();
 
         // disable_guest_selinux = false, selinux labels are left alone
-        amend_spec(&mut spec, false, false).unwrap();
+        amend_spec(&mut spec, false, false, &HashMap::new()).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label() == &Some("xxx".to_owned()));
         assert!(spec.linux().as_ref().unwrap().mount_label() == &Some("yyy".to_owned()));
 
         // disable_guest_selinux = true, selinux labels are reset
-        amend_spec(&mut spec, false, true).unwrap();
+        amend_spec(&mut spec, false, true, &HashMap::new()).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label().is_none());
         assert!(spec.linux().as_ref().unwrap().mount_label().is_none());
     }

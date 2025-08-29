@@ -25,7 +25,7 @@ pub const KATA_CCW_DEV_TYPE: &str = "ccw";
 pub const KATA_NVDIMM_DEV_TYPE: &str = "nvdimm";
 pub const KATA_SCSI_DEV_TYPE: &str = "scsi";
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BlockDeviceAio {
     // IoUring is the Linux io_uring I/O implementation.
     #[default]
