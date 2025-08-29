@@ -1,0 +1,86 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvpn-client-config
+  labels:
+    app: openvpn-client
+data:
+  client.ovpn: |
+    client
+    dev tap
+    proto udp
+    remote openvpn-server 1194
+    resolv-retry infinite
+    nobind
+    persist-key
+    persist-tun
+    ca /vpn/keys/ca.crt
+    cert /vpn/keys/client.crt
+    key /vpn/keys/client.key
+    remote-cert-tls server
+    cipher AES-256-CBC
+    verb 3
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openvpn-client-secrets
+  labels:
+    app: openvpn-client
+  annotations:
+    description: "Contains OpenVPN client certificates and keys"
+type: Opaque
+data:
+  ca.crt: $BASE64_CA_CRT
+  client.crt: $BASE64_CLIENT_CRT
+  client.key: $BASE64_CLIENT_KEY
+---
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openvpn-client
+  labels:
+    app: openvpn-client
+spec:
+  containers:
+  - name: openvpn-client
+    image: dperson/openvpn-client
+    #command: ["/sbin/tini", "--", "/bin/bash", "-x", "/usr/bin/openvpn.sh"]
+    securityContext:
+      privileged: false
+      capabilities:
+        add:
+          - NET_ADMIN
+    volumeMounts:
+    - name: openvpn-config
+      mountPath: /vpn
+    - name: openvpn-secrets
+      mountPath: /vpn/keys
+      readOnly: true
+    env:
+    - name: VPN_CONFIG
+      value: "/vpn/client.ovpn"
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - "ip a | grep tap0"
+      initialDelaySeconds: 10
+      periodSeconds: 5
+      failureThreshold: 3
+  volumes:
+  - name: openvpn-config
+    configMap:
+      name: openvpn-client-config
+  - name: openvpn-secrets
+    secret:
+      secretName: openvpn-client-secrets
+  runtimeClassName: kata
