@@ -17,7 +17,6 @@ use crate::utils;
 use crate::yaml;
 
 use anyhow::Result;
-use base64::{engine::general_purpose, Engine as _};
 use log::debug;
 use oci_spec::runtime as oci;
 use protocols::agent;
@@ -578,7 +577,10 @@ impl AgentPolicy {
         if self.config.raw_out {
             std::io::stdout().write_all(policy.as_bytes()).unwrap();
         }
-        general_purpose::STANDARD.encode(policy.as_bytes())
+        let mut init_data = kata_types::initdata::InitData::new("sha256", "0.1.0");
+        init_data.insert_data("policy.rego", policy);
+
+        encode_init_data(&init_data)
     }
 
     pub fn get_container_policy(
@@ -1027,4 +1029,9 @@ pub fn get_kata_namespaces(
     });
 
     namespaces
+}
+
+fn encode_init_data(init_data: &kata_types::initdata::InitData) -> String {
+    let toml_str = toml::to_string(&init_data).unwrap();
+    kata_types::initdata::create_encoded_input(&toml_str)
 }

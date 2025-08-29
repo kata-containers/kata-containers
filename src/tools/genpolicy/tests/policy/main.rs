@@ -9,6 +9,7 @@ mod tests {
     use base64::prelude::*;
     use std::fmt::{self, Display};
     use std::fs::{self, File};
+    use std::io::Read;
     use std::path;
     use std::str;
 
@@ -131,7 +132,7 @@ mod tests {
             };
             break;
         }
-        let policy = BASE64_STANDARD.decode(&policy).unwrap();
+        let policy = decode_policy(&policy).unwrap();
 
         // write policy to a file
         fs::write(workdir.join("policy.rego"), &policy).unwrap();
@@ -176,6 +177,16 @@ mod tests {
                 logs, results.1
             );
         }
+    }
+
+    fn decode_policy(policy: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let decoded = BASE64_STANDARD.decode(policy)?;
+        let mut decoder = flate2::read::GzDecoder::new(&decoded[..]);
+        let mut decompressed = String::new();
+        decoder.read_to_string(&mut decompressed)?;
+        let init_data: kata_types::initdata::InitData = toml::from_str(&decompressed)?;
+        let policy = init_data.get_coco_data("policy.rego").unwrap();
+        Ok(policy.to_string())
     }
 
     fn prepare_workdir(

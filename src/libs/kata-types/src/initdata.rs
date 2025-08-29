@@ -234,20 +234,22 @@ pub fn add_hypervisor_initdata_overrides(initdata_annotation: &str) -> Result<St
     initdata.to_string()
 }
 
+use std::io::Write;
+
+/// create gzipped and base64 encoded string
+pub fn create_encoded_input(content: &str) -> String {
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(content.as_bytes()).unwrap();
+    let compressed = encoder.finish().unwrap();
+    base64::encode_config(&compressed, base64::STANDARD)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::Write;
-
-    // create gzipped and base64 encoded string
-    fn create_encoded_input(content: &str) -> String {
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(content.as_bytes()).unwrap();
-        let compressed = encoder.finish().unwrap();
-        base64::encode_config(&compressed, base64::STANDARD)
-    }
 
     #[test]
     fn test_empty_annotation() {
