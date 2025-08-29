@@ -5,7 +5,7 @@
 //
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
@@ -20,6 +20,7 @@ use hypervisor::device::device_manager::DeviceManager;
 use inotify::{EventMask, Inotify, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
+use sha2::{Digest, Sha256};
 use tokio::{
     io::AsyncReadExt,
     sync::{Mutex, RwLock},
@@ -263,6 +264,160 @@ impl FsWatcher {
                 tokio::time::sleep(MONITOR_INTERVAL).await;
             }
         })
+    }
+}
+
+/// Sandbox-level volume manager
+/// Tracks which paths have been copied to the guest on the runtime side
+#[derive(Clone, Default)]
+pub struct VolumeManager {
+    // Mapping of source path -> volume
+    volumes: Arc<RwLock<HashMap<String, VolumeState>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct VolumeState {
+    // Source path (on the host)
+    source_path: String,
+    // Guest path
+    guest_path: String,
+    // Whether the volume has been copied to the guest
+    copied_to_guest: bool,
+    // Reference count (how many containers are using it)
+    ref_count: usize,
+    // List of container IDs using this volume
+    containers: HashSet<String>,
+    // Monitor task handle (if any)
+    monitor_task: Option<Arc<JoinHandle<()>>>,
+}
+
+#[allow(dead_code)]
+impl VolumeManager {
+    pub fn new() -> Self {
+        Self {
+            volumes: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Gets or creates the volume's guest path
+    /// Returns: (guest_path, need_copy)
+    pub async fn get_or_create_volume(
+        &self,
+        source_path: &str,
+        container_id: &str,
+        mount_destination: &Path,
+    ) -> Result<(String, bool)> {
+        let mut volumes = self.volumes.write().await;
+
+        // Canonicalize the source path as a key
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = volumes.get_mut(&canonical_source) {
+            // Existing volume
+            state.ref_count += 1;
+            state.containers.insert(container_id.to_string());
+
+            info!(
+                sl!(),
+                "Reusing existing volume: source={:?}, guest={:?}, ref_count={}, already_copied={}",
+                canonical_source,
+                state.guest_path,
+                state.ref_count,
+                state.copied_to_guest
+            );
+
+            // Return guest path and whether a copy is needed (false, as it's already copied)
+            return Ok((state.guest_path.clone(), false));
+        }
+
+        // Create a new volume
+        let guest_path = generate_guest_path(&canonical_source, mount_destination);
+
+        let mut containers = HashSet::new();
+        containers.insert(container_id.to_string());
+
+        let state = VolumeState {
+            source_path: canonical_source.clone(),
+            guest_path: guest_path.clone(),
+            copied_to_guest: false, // Not yet copied
+            ref_count: 1,
+            containers,
+            monitor_task: None,
+        };
+
+        volumes.insert(state.source_path.clone(), state.clone());
+
+        info!(
+            sl!(),
+            "Created new volume: source={:?}, guest={:?}", state.source_path, state.guest_path,
+        );
+
+        // Return guest path and whether a copy is needed (true, as it's new)
+        Ok((guest_path, true))
+    }
+
+    /// Marks the volume as copied to the guest
+    pub async fn mark_as_copied(
+        &self,
+        source_path: &str,
+        monitor_task: Option<JoinHandle<()>>,
+    ) -> Result<()> {
+        let mut states = self.volumes.write().await;
+
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            state.copied_to_guest = true;
+            if let Some(handle) = monitor_task {
+                state.monitor_task = Some(Arc::new(handle));
+            }
+
+            info!(
+                sl!(),
+                "Marked volume as copied: source={:?}, guest={:?}",
+                canonical_source,
+                state.guest_path
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Releases a volume reference
+    pub async fn release_volume(&self, source_path: &str, container_id: &str) -> Result<bool> {
+        let mut states = self.volumes.write().await;
+
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            state.containers.remove(container_id);
+            state.ref_count = state.ref_count.saturating_sub(1);
+
+            if state.ref_count == 0 {
+                // Abort the monitor task
+                if let Some(handle) = &state.monitor_task {
+                    handle.abort();
+                }
+
+                info!(
+                    sl!(),
+                    "Volume has no more references, removing: source={:?}, guest={:?}",
+                    canonical_source,
+                    state.guest_path
+                );
+
+                states.remove(&canonical_source);
+                return Ok(true); // Can be cleaned up
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -773,6 +928,25 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
         || is_downward_api(source_path)
         || is_secret(source_path)
         || is_configmap(source_path)
+}
+
+/// Generates a guest path with hashed source path
+fn generate_guest_path(source_path: &str, mount_destination: &Path) -> String {
+    // Use a hash of the source path to generate a unique but deterministic identifier
+    let mut hasher = Sha256::new();
+    hasher.update(source_path.as_bytes());
+    let hash = hasher.finalize();
+    let hash_str = hex::encode(&hash[..8]);
+
+    let dest_base = mount_destination
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("volume");
+
+    format!(
+        "{}/{}/shared-{}-{}",
+        DEFAULT_KATA_GUEST_SANDBOX_DIR, PASSTHROUGH_FS_DIR, hash_str, dest_base
+    )
 }
 
 #[cfg(test)]
