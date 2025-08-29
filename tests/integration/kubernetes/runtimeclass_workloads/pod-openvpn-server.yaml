@@ -1,0 +1,120 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openvpn-server
+  labels:
+    app: openvpn-server
+spec:
+  containers:
+  - name: openvpn-server
+    image: alpine:3.19
+    command:
+    - /bin/sh
+    - -c
+    - |
+      for i in 1 2 3; do apk add --no-cache openvpn && break || sleep 3; done
+      openvpn --config /etc/openvpn/server.conf
+    securityContext:
+      # without capabilities for both client and server:
+      # ERROR: Cannot ioctl TUNSETIFF tap: Operation not permitted (errno=1)
+      # note: without proper kernel support for both client and server:
+      # ERROR: Cannot open TUN/TAP dev /dev/net/tun: No such device (errno=19)
+      privileged: false
+      capabilities:
+        add:
+          - NET_ADMIN
+    ports:
+    - containerPort: 1194
+      protocol: UDP
+    volumeMounts:
+    - name: openvpn-server-secrets
+      mountPath: /etc/openvpn/keys
+      readOnly: true
+    - name: openvpn-config
+      mountPath: /etc/openvpn/
+      readOnly: true
+    - name: dev-net-tun
+      mountPath: /dev/net/tun
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - "netstat -anu | grep 1194"
+      initialDelaySeconds: 5
+      periodSeconds: 5
+  volumes:
+  - name: openvpn-server-secrets
+    secret:
+      secretName: openvpn-server-secrets
+  - name: openvpn-config
+    configMap:
+      name: openvpn-server-config
+  - name: dev-net-tun
+    hostPath:
+      path: /dev/net/tun
+      type: CharDevice
+  runtimeClassName: kata
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: openvpn-server
+  labels:
+    app: openvpn-server
+spec:
+  type: ClusterIP
+  selector:
+    app: openvpn-server
+  ports:
+  - protocol: UDP
+    port: 1194
+    targetPort: 1194
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvpn-server-config
+  labels:
+    app: openvpn-server
+data:
+  server.conf: |
+    port 1194
+    proto udp
+    dev tap
+    ca /etc/openvpn/keys/ca.crt
+    cert /etc/openvpn/keys/server.crt
+    key /etc/openvpn/keys/server.key
+    dh /etc/openvpn/keys/dh.pem
+    server-bridge 10.8.0.1 255.255.255.0 10.8.0.100 10.8.0.200
+    persist-key
+    persist-tun
+    keepalive 10 120
+    cipher AES-256-GCM
+    user nobody
+    group nogroup
+    status /var/log/openvpn-status.log
+    verb 3
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: openvpn-server-secrets
+  labels:
+    app: openvpn-server
+  annotations:
+    description: "Contains OpenVPN server certificates and keys"
+type: Opaque
+data:
+  ca.crt: $BASE64_CA_CRT
+  server.crt: $BASE64_SERVER_CRT
+  server.key: $BASE64_SERVER_KEY
+  dh.pem: $BASE64_DH_PEM
