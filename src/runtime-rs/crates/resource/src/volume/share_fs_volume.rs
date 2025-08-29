@@ -30,9 +30,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
-use crate::share_fs::PASSTHROUGH_FS_DIR;
-use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
+use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig, KATA_GUEST_SHARE_DIR};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
     mount,
@@ -342,7 +340,7 @@ impl VolumeManager {
         }
 
         // Create a new volume
-        let guest_path = generate_guest_path(&canonical_source, mount_destination);
+        let guest_path = generate_guest_path(container_id, &canonical_source, mount_destination);
 
         let mut containers = HashSet::new();
         containers.insert(container_id.to_string());
@@ -436,7 +434,7 @@ impl ShareFsVolume {
     pub(crate) async fn new(
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
-        cid: &str,
+        sid: &str,
         spec: &oci::Spec,
         readonly: bool,
         agent: Arc<dyn Agent>,
@@ -457,14 +455,14 @@ impl ShareFsVolume {
             storages: vec![],
             volume_manager: Some(volume_manager.clone()),
             source_path: Some(source_path.clone()),
-            container_id: cid.to_string(),
+            container_id: sid.to_string(),
         };
 
         match share_fs {
             None => {
                 // Get or create the guest path
                 let (guest_path, need_copy) = volume_manager
-                    .get_or_create_volume(&source_path, cid, m.destination())
+                    .get_or_create_volume(&source_path, sid, m.destination())
                     .await?;
 
                 let src = std::fs::canonicalize(&source_path)?;
@@ -552,7 +550,7 @@ impl ShareFsVolume {
                         // The current mount should be upgraded to readwrite permission
                         info!(
                             sl!(),
-                            "The mount will be upgraded, mount = {:?}, cid = {}", m, cid
+                            "The mount will be upgraded, mount = {:?}, sid = {}", m, sid
                         );
                         share_fs_mount
                             .upgrade_to_rw(
@@ -1019,7 +1017,7 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
 }
 
 /// Generates a guest path with hashed source path
-fn generate_guest_path(source_path: &str, mount_destination: &Path) -> String {
+fn generate_guest_path(sid: &str, source_path: &str, mount_destination: &Path) -> String {
     // Use a hash of the source path to generate a unique but deterministic identifier
     let mut hasher = Sha256::new();
     hasher.update(source_path.as_bytes());
@@ -1031,10 +1029,7 @@ fn generate_guest_path(source_path: &str, mount_destination: &Path) -> String {
         .and_then(|n| n.to_str())
         .unwrap_or("volume");
 
-    format!(
-        "{}/{}/shared-{}-{}",
-        DEFAULT_KATA_GUEST_SANDBOX_DIR, PASSTHROUGH_FS_DIR, hash_str, dest_base
-    )
+    format!("{}{}-{}-{}", KATA_GUEST_SHARE_DIR, sid, hash_str, dest_base)
 }
 
 #[cfg(test)]
