@@ -1447,13 +1447,10 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	passSeccomp := !sandbox.config.DisableGuestSeccomp && sandbox.seccompSupported
 
-	// Currently, guest SELinux can be enabled only when SELinux is enabled on the host side.
-	if !sandbox.config.HypervisorConfig.DisableGuestSeLinux && !selinux.GetEnabled() {
-		return nil, fmt.Errorf("Guest SELinux is enabled, but SELinux is disabled on the host side")
-	}
 	if sandbox.config.HypervisorConfig.DisableGuestSeLinux && sandbox.config.GuestSeLinuxLabel != "" {
 		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
 	}
+	grpcSpec.Process.SelinuxLabel = sandbox.config.GuestSeLinuxLabel
 
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
