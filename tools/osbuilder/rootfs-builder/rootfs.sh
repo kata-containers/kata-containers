@@ -458,7 +458,7 @@ build_rootfs_distro()
 		if [ "${AGENT_INIT}" == "yes" ]; then
 			die "Guest SELinux with the agent init is not supported yet"
 		fi
-		if [ "${distro}" != "centos" ]; then
+		if [ "${distro}" != "centos" ] && [ "${distro}" != "ubuntu" ]; then
 			die "The guest rootfs must be CentOS to enable guest SELinux"
 		fi
 	fi

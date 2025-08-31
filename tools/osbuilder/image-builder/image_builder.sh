@@ -417,15 +417,16 @@ setup_selinux() {
 			info "Labeling rootfs for SELinux"
 			selinuxfs_path="${mount_dir}${SELINUXFS}"
 			mkdir -p "$selinuxfs_path"
-			if mountpoint $SELINUXFS > /dev/null && \
-				chroot "${mount_dir}" command -v restorecon > /dev/null; then
+			if mountpoint $SELINUXFS > /dev/null; then
 				mount -t selinuxfs selinuxfs "$selinuxfs_path"
-				chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
+				chroot "${mount_dir}" /usr/sbin/restorecon -RF -e ${SELINUXFS} /
 				umount "${selinuxfs_path}"
 			else
 				die "Could not label the rootfs. Make sure that SELinux is enabled on the host \
   and the rootfs is built with SELINUX=yes"
 			fi
+			info "Setting SELinux to enforcing"
+			sed -i 's/^SELINUX=permissive$/SELINUX=enforcing/' ${mount_dir}/etc/selinux/config
 		fi
 }
 
