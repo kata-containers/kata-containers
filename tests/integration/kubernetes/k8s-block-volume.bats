@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	 case "${KATA_HYPERVISOR}" in
-	 	qemu-runtime-rs)
+		qemu-runtime-rs|qemu-se-runtime-rs)
 			skip "See: https://github.com/kata-containers/kata-containers/issues/10373" ;;
 		fc|stratovirt)
 			skip "See: https://github.com/kata-containers/kata-containers/issues/10873" ;;
@@ -73,7 +73,7 @@ setup() {
 
 teardown() {
 	case "${KATA_HYPERVISOR}" in
-	 	qemu-runtime-rs)
+		qemu-runtime-rs|qemu-se-runtime-rs)
 			skip "See: https://github.com/kata-containers/kata-containers/issues/10373" ;;
 		fc|stratovirt)
 			skip "See: https://github.com/kata-containers/kata-containers/issues/10873" ;;

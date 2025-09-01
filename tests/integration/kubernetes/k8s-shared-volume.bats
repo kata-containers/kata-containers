@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "qemu-se" ] && \
+	[[ "${KATA_HYPERVISOR}" == qemu-se* ]] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	get_pod_config_dir
 }
@@ -67,7 +67,7 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "qemu-se" ] && \
+	[[ "${KATA_HYPERVISOR}" == qemu-se* ]] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	# Debugging information
 	kubectl describe "pod/$pod_name" || true
