@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -629,6 +630,12 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 				c.Logger().WithError(err).Error("error writing sandbox info")
 			}
 
+			// When using direct volume assignment, we assume the source file is a raw disk image even if it's a regular file.
+			fileInfo, err := os.Stat(mntInfo.Device)
+			if err == nil && fileInfo.Mode().IsRegular() {
+				isBlockFile = true
+			}
+
 			readonly := false
 			for _, flag := range mntInfo.Options {
 				if flag == "ro" {
@@ -639,7 +646,9 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 			c.mounts[i].Source = mntInfo.Device
 			c.mounts[i].Type = mntInfo.FsType
-			c.mounts[i].Options = mntInfo.Options
+			c.mounts[i].Options = slices.DeleteFunc(mntInfo.Options, func(opt string) bool {
+				return opt == "bind"
+			})
 			c.mounts[i].ReadOnly = readonly
 
 			for key, value := range mntInfo.Metadata {
