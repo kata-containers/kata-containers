@@ -156,7 +156,9 @@ impl SwapTask {
         let swap_path = swap_path.to_string_lossy().to_string();
 
         // Add swap file to sandbox
-        let block_driver = get_block_driver(&self.device_manager).await;
+        let block_driver = get_block_driver(&self.device_manager)
+            .await
+            .block_device_driver;
         let dev_info = DeviceConfig::BlockCfg(BlockConfig {
             path_on_host: swap_path.clone(),
             driver_option: block_driver,

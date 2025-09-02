@@ -5,8 +5,9 @@
 //
 
 use crate::health_check::HealthCheck;
+use crate::remove_annotations_specified;
 use agent::kata::KataAgent;
-use agent::types::KernelModule;
+use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
     self, Agent, GetGuestDetailsRequest, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest,
 };
@@ -33,6 +34,7 @@ use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
+use kata_types::annotations::KATA_ANNO_CFG_AGENT_POLICY;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -345,6 +347,24 @@ impl VirtSandbox {
         }))
     }
 
+    async fn set_agent_policy(&self) -> Result<()> {
+        // TODO: Exclude policy-related items from the annotations.
+        let toml_config = self.resource_manager.config().await;
+        if let Some(agent_config) = toml_config.agent.get(&toml_config.runtime.agent_name) {
+            // If a Policy has been specified, send it to the agent.
+            if !agent_config.policy.is_empty() {
+                self.agent
+                    .set_policy(SetPolicyRequest {
+                        policy: agent_config.policy.clone(),
+                    })
+                    .await
+                    .context("sandbox: set policy failed")?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
         // It will check the hypervisor's capabilities to see if it supports hybrid-vsock.
         // If it does not, it'll assume that it only supports legacy vsock.
@@ -503,6 +523,13 @@ impl Sandbox for VirtSandbox {
         }
         let sandbox_config = self.sandbox_config.as_ref().unwrap();
 
+        // The value of this annotation is sent to the sandbox using SetPolicy.
+        // It should be ensured that the related annotation is without the sandbox anntations.
+        let updated_annotations = remove_annotations_specified(
+            &sandbox_config.annotations,
+            &[KATA_ANNO_CFG_AGENT_POLICY],
+        );
+
         // if sandbox is not in SandboxState::Init then return,
         // otherwise try to create sandbox
 
@@ -516,7 +543,7 @@ impl Sandbox for VirtSandbox {
             .prepare_vm(
                 id,
                 sandbox_config.network_env.netns.clone(),
-                &sandbox_config.annotations,
+                &updated_annotations,
             )
             .await
             .context("prepare vm")?;
@@ -593,6 +620,7 @@ impl Sandbox for VirtSandbox {
             .start(&address)
             .await
             .context(format!("connect to address {:?}", &address))?;
+        self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager
             .setup_after_start_vm()
