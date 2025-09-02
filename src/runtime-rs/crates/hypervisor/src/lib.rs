@@ -19,6 +19,7 @@ pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
 pub mod remote;
+pub mod selinux;
 pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
