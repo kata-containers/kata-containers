@@ -31,8 +31,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
-use crate::share_fs::PASSTHROUGH_FS_DIR;
+use crate::share_fs::KATA_GUEST_SHARE_DIR;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
@@ -286,12 +285,7 @@ impl ShareFsVolume {
                 // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
                     // This is where we set the value for the guest path
-                    let dest = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                        PASSTHROUGH_FS_DIR,
-                        file_name.clone().as_str(),
-                    ]
-                    .join("/");
+                    let dest = [KATA_GUEST_SHARE_DIR, file_name.clone().as_str()].join("/");
 
                     debug!(
                         sl!(),
@@ -347,12 +341,7 @@ impl ShareFsVolume {
                     info!(sl!(), "copying directory {:?} to guest", &source_path);
 
                     // create target path in guest
-                    let dest_dir = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                        PASSTHROUGH_FS_DIR,
-                        file_name.clone().as_str(),
-                    ]
-                    .join("/");
+                    let dest_dir = [KATA_GUEST_SHARE_DIR, file_name.clone().as_str()].join("/");
 
                     // create directory
                     let dir_metadata = std::fs::metadata(src.clone())
