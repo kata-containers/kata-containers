@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: selinux-hv-test
+spec:
+  runtimeClassName: kata
+  securityContext:
+    seLinuxOptions:
+      user: "system_u"
+      role: "system_r"
+      type: "container_t"
+      level: "s0:c123,c456"
+  restartPolicy: Never
+  containers:
+    - name: app
+      image: docker.io/library/busybox:latest
+      imagePullPolicy: IfNotPresent
+      command: ["sh","-c"]
+      args: ["tail -f /dev/null"]
+      securityContext:
+        runAsUser: 1000
+        allowPrivilegeEscalation: false
