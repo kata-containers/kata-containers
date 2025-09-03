@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"kata-containers/csi-kata-directvolume/pkg/state"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
@@ -54,6 +55,8 @@ type Config struct {
 	StoragePath    string
 	IsDirectVolume bool
 	safeMounter    *utils.SafeMountFormater
+
+	SpdkRPCTimeout time.Duration
 }
 
 func NewDirectVolumeDriver(cfg Config) (*directVolume, error) {

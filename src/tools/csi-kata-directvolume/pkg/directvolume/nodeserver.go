@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -24,6 +25,7 @@ import (
 
 const (
 	TopologyKeyNode = "topology.directvolume.csi/node"
+	SpdkErrNoDevice = -19
 )
 
 func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
@@ -68,6 +70,14 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	attrib := req.GetVolumeContext()
 
 	devicePath := dv.config.VolumeDevices[volumeID]
+
+	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
+		if devicePath == "" {
+			return nil, status.Errorf(codes.NotFound, "no mapped device found for SPDK volume %s", volumeID)
+		}
+		klog.Infof("[SPDK] publishing vhost-blk volume %s with device %s", volumeID, devicePath)
+	}
+
 	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
 		targetPath, fsType, devicePath, readOnly, volumeID)
 
@@ -223,6 +233,58 @@ func (dv *directVolume) NodeStageVolume(ctx context.Context, req *csi.NodeStageV
 	dv.mutex.Lock()
 	defer dv.mutex.Unlock()
 
+	// SPDK
+	if req.VolumeContext[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
+		vol, err := dv.state.GetVolumeByID(volumeID)
+		if err != nil {
+			return nil, status.Errorf(codes.NotFound, "volume %s not found in state: %v", volumeID, err)
+		}
+
+		bdevName := vol.Metadata["bdevName"]
+		backingFile := vol.Metadata["backingFile"]
+		if bdevName == "" || backingFile == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing bdevName/backingFile for volume %s", volumeID)
+		}
+
+		// backing file
+		fsType := req.VolumeContext[utils.KataContainersDirectFsType]
+		if fsType == "" {
+			fsType = "ext4"
+		}
+		if err := dv.config.safeMounter.SafeFormatWithFstype(backingFile, fsType, []string{}); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to format %s: %v", backingFile, err)
+		}
+		klog.Infof("[SPDK] formatted %s with fsType=%s", backingFile, fsType)
+
+		// vhost-blk controller
+		ctrlrName := fmt.Sprintf("vhost-%s", volumeID[:8])
+		socketPath := filepath.Join(utils.SpdkVhostDir, ctrlrName)
+
+		resp, err := spdkrpc.CallSPDK("vhost_get_controllers", nil)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "Failed to list vhost controllers: %v", err)
+		}
+
+		if controllerExists(ctrlrName, resp) {
+			klog.Infof("[SPDK] vhost-blk controller %s already exists, reuse it", ctrlrName)
+		} else {
+			params := map[string]interface{}{
+				"ctrlr":    ctrlrName,
+				"dev_name": bdevName,
+				"cpumask":  "0x1",
+			}
+			_, err = spdkrpc.CallSPDK("vhost_create_blk_controller", params)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "Failed to create vhost-blk controller: %v", err)
+			}
+			klog.Infof("[SPDK] created vhost-blk controller %s for bdev %s at %s",
+				ctrlrName, bdevName, socketPath)
+		}
+
+		dv.config.VolumeDevices[volumeID] = socketPath
+		return &csi.NodeStageVolumeResponse{}, nil
+	}
+
 	capacityInBytes := req.VolumeContext[utils.CapabilityInBytes]
 	devicePath, err := utils.CreateDirectBlockDevice(volumeID, capacityInBytes, dv.config.StoragePath)
 	if err != nil {
@@ -335,6 +397,12 @@ func (dv *directVolume) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnst
 		return &csi.NodeUnstageVolumeResponse{}, nil
 	}
 
+	// vhost cleanup
+	ctrlrName := fmt.Sprintf("vhost-%s", volumeID[:8])
+	if err := SpdkDeleteVhostByCtrlr(ctx, ctrlrName); err != nil {
+		klog.Warningf("failed to delete vhost controller %s: %v", ctrlrName, err)
+	}
+
 	if !vol.Staged.Has(stagingTargetPath) {
 		klog.V(4).Infof("Volume %q is not staged at %q, nothing to do.", volumeID, stagingTargetPath)
 		return &csi.NodeUnstageVolumeResponse{}, nil
@@ -387,4 +455,65 @@ func (dv *directVolume) NodeGetVolumeStats(ctx context.Context, in *csi.NodeGetV
 func (dv *directVolume) NodeExpandVolume(ctx context.Context, req *csi.NodeExpandVolumeRequest) (*csi.NodeExpandVolumeResponse, error) {
 
 	return &csi.NodeExpandVolumeResponse{}, nil
+}
+
+func controllerExists(name string, resp interface{}) bool {
+	controllers, ok := resp.([]interface{})
+	if !ok {
+		return false
+	}
+	for _, c := range controllers {
+		m, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if m["ctrlr"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func SpdkDeleteVhostByCtrlr(ctx context.Context, ctrlr string) error {
+	if ctrlr == "" {
+		return nil
+	}
+
+	// check whether the controller exists
+	resp, err := spdkrpc.CallSPDK("vhost_get_controllers", nil)
+	if err != nil {
+		return fmt.Errorf("vhost_get_controllers failed: %w", err)
+	}
+	if !controllerExists(ctrlr, resp) {
+		klog.Infof("[SPDK] controller %s not found, skip delete", ctrlr)
+		return nil
+	}
+
+	// Delete the controller if it exists
+	_, err = spdkrpc.CallSPDK("vhost_delete_controller", map[string]any{
+		"ctrlr": ctrlr,
+	})
+	if err != nil {
+		if spdkErr, ok := err.(*spdkrpc.SpdkError); ok && spdkErr.Code == SpdkErrNoDevice {
+			klog.Infof("[SPDK] controller %s already gone, skip", ctrlr)
+			return nil
+		}
+		return fmt.Errorf("vhost_delete_controller(%s) failed: %w", ctrlr, err)
+	}
+
+	klog.Infof("[SPDK] controller %s deleted", ctrlr)
+	return nil
+}
+
+func RemoveVhostSocketIfExists(ctrlr string) error {
+	if ctrlr == "" {
+		return nil
+	}
+	path := filepath.Join(utils.SpdkVhostDir, ctrlr)
+	if _, err := os.Stat(path); err == nil {
+		if err := os.Remove(path); err != nil {
+			return fmt.Errorf("remove socket %s failed: %w", path, err)
+		}
+	}
+	return nil
 }

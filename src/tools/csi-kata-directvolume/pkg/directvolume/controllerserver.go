@@ -9,6 +9,8 @@ package directvolume
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
@@ -20,6 +22,8 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"k8s.io/klog/v2"
 
+	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
+	"kata-containers/csi-kata-directvolume/pkg/state"
 	"kata-containers/csi-kata-directvolume/pkg/utils"
 )
 
@@ -53,8 +57,9 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	for key, value := range req.GetParameters() {
 		switch strings.ToLower(key) {
 		case utils.KataContainersDirectVolumeType:
-			if value == utils.DirectVolumeTypeName {
+			if value == utils.DirectVolumeTypeName || value == utils.SpdkVolumeTypeName {
 				volumeCtx[utils.IsDirectVolume] = "True"
+				volumeCtx[utils.KataContainersDirectVolumeType] = value
 			}
 		case utils.KataContainersDirectFsType:
 			volumeCtx[utils.KataContainersDirectFsType] = value
@@ -101,12 +106,71 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 	volumeID := uuid.NewUUID().String()
 	kind := volumeCtx[storageKind]
 
-	vol, err := dv.createVolume(volumeID, req.GetName(), capacity, kind)
-	if err != nil {
-		klog.Errorf("created volume %s at path %s failed with error: %v", vol.VolID, vol.VolPath, err.Error())
-		return nil, err
+	var vol *state.Volume
+	var err error
+	if volumeCtx[utils.KataContainersDirectVolumeType] == utils.SpdkVolumeTypeName {
+		volName := req.GetName()
+		backingFile := filepath.Join(utils.SpdkRawDiskDir, fmt.Sprintf("%s.raw", volName))
+
+		if err := os.MkdirAll(utils.SpdkRawDiskDir, 0750); err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create dir %s: %v", utils.SpdkRawDiskDir, err)
+		}
+
+		fi, err := os.Stat(backingFile)
+		if err == nil {
+			klog.Infof("[SPDK] reuse existing backing file %s (size=%d)", backingFile, fi.Size())
+		} else if os.IsNotExist(err) {
+			f, err := os.Create(backingFile)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create backing file %s: %v", backingFile, err)
+			}
+			defer f.Close()
+
+			if err := f.Truncate(capacity); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to truncate backing file %s: %v", backingFile, err)
+			}
+
+			klog.Infof("[SPDK] created new sparse backing file %s (%d bytes)", backingFile, capacity)
+		} else {
+			return nil, status.Errorf(codes.Internal, "stat backing file %s failed: %v", backingFile, err)
+		}
+
+		// bdevName := fmt.Sprintf("bdev-%s", volumeID[:8])
+		bdevName := fmt.Sprintf("bdev-%s", volName)
+
+		params := map[string]interface{}{
+			"name":       bdevName,
+			"filename":   backingFile,
+			"block_size": 512,
+		}
+		if _, err := spdkrpc.CallSPDK("bdev_aio_create", params); err != nil {
+			return nil, status.Errorf(codes.Internal, "bdev_aio_create failed: %v", err)
+		}
+
+		vol = &state.Volume{
+			VolID:   volumeID,
+			VolName: volName,
+			VolSize: capacity,
+			Kind:    kind,
+			Metadata: map[string]string{
+				"type":        utils.SpdkVolumeTypeName,
+				"bdevName":    bdevName,
+				"backingFile": backingFile,
+			},
+		}
+		if err := dv.state.UpdateVolume(*vol); err != nil {
+			return nil, err
+		}
+
+		klog.Infof("[SPDK] volume %s registered bdev=%s backing=%s", volumeID, bdevName, backingFile)
+	} else {
+		vol, err = dv.createVolume(volumeID, req.GetName(), capacity, kind)
+		if err != nil {
+			klog.Errorf("created volume %s at path %s failed with error: %v", vol.VolID, vol.VolPath, err.Error())
+			return nil, err
+		}
+		klog.Infof("created volume %s at path %s", vol.VolID, vol.VolPath)
 	}
-	klog.Infof("created volume %s at path %s", vol.VolID, vol.VolPath)
 
 	if contentSrc != nil {
 		path := dv.getVolumePath(volumeID)
@@ -169,6 +233,36 @@ func (dv *directVolume) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeR
 		msg := fmt.Sprintf("Volume '%s' is still used (attached: %v, staged: %v, published: %v) by '%s' node",
 			vol.VolID, vol.Attached, vol.Staged, vol.Published, vol.NodeID)
 		klog.Warning(msg)
+	}
+
+	if vol.Metadata["type"] == utils.SpdkVolumeTypeName {
+		bdevName := vol.Metadata["bdevName"]
+		backingFile := vol.Metadata["backingFile"]
+
+		if bdevName != "" {
+			_, err := spdkrpc.CallSPDK("bdev_aio_delete", map[string]any{
+				"name": bdevName,
+			})
+			if err != nil {
+				if !strings.Contains(err.Error(), "not found") {
+					klog.Errorf("Failed to delete SPDK bdev %s: %v", bdevName, err)
+					return nil, status.Errorf(codes.Internal, "Failed to delete SPDK bdev: %v", err)
+				}
+				klog.Warningf("SPDK bdev %s already absent: %v", bdevName, err)
+			} else {
+				klog.Infof("SPDK bdev %s deleted for volume %s", bdevName, volId)
+			}
+		} else {
+			klog.Warningf("SPDK volume %s has no bdevName, skip SPDK deletion", volId)
+		}
+
+		if backingFile != "" {
+			if err := os.Remove(backingFile); err != nil && !os.IsNotExist(err) {
+				klog.Warningf("Failed to remove backing file %s for volume %s: %v", backingFile, volId, err)
+			} else {
+				klog.Infof("Removed backing file %s for volume %s", backingFile, volId)
+			}
+		}
 	}
 
 	if err := dv.deleteVolume(volId); err != nil {

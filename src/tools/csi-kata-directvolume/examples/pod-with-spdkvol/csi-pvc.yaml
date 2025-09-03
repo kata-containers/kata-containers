@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kata-spdk-directvolume-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: spdk-test-adapted  
+  resources:
+    requests:
+      storage: 2Gi

@@ -27,7 +27,13 @@ const (
 	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
 	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
 	DirectVolumeTypeName           = "directvol"
+	SpdkVolumeTypeName             = "spdkvol"
 	IsDirectVolume                 = "is_directvolume"
+)
+
+const (
+	SpdkRawDiskDir = "/var/lib/spdk/rawdisks"
+	SpdkVhostDir   = "/var/lib/spdk/vhost"
 )
 
 const (

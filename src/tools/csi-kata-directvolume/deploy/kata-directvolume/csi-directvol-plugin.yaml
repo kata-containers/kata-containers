@@ -87,7 +87,7 @@ spec:
 
         - name: kata-directvolume
           # build and push it into registry
-          image: localhost/kata-directvolume:v1.0.18
+          image: localhost/kata-directvolume:v1.0.19
           args:
             - --drivername=directvolume.csi.katacontainers.io
             - --v=5
@@ -95,6 +95,7 @@ spec:
             - --statedir=$(STATE_DIR)
             - --storagepath=$(STORAGE_POOL)
             - --nodeid=$(KUBE_NODE_NAME)
+            - --spdk-rpc-timeout=10s
           env:
             - name: CSI_ENDPOINT
               value: unix:///csi/csi.sock
@@ -140,6 +141,15 @@ spec:
             # direct volume mountInfo.json stored at shared-directvols
             - mountPath: /run/kata-containers/shared/direct-volumes
               name: shared-directvols
+            # vhost-user socket
+            - mountPath: /var/lib/spdk/vhost
+              name: vhost-dir
+            # rawdisks
+            - mountPath: /var/lib/spdk/rawdisks
+              name: rawdisks-dir
+            # spdk socket
+            - mountPath: /var/tmp
+              name: spdk-dir
 
         - name: liveness-probe
           volumeMounts:
@@ -149,7 +159,6 @@ spec:
           args:
           - --csi-address=/csi/csi.sock
           - --health-port=9898
-
       volumes:
         - hostPath:
             path: /var/lib/kubelet/plugins/csi-kata-directvolume
@@ -187,4 +196,20 @@ spec:
             path: /run/kata-containers/shared/direct-volumes/
             type: DirectoryOrCreate
           name: shared-directvols
+        # vhost there.
+        - hostPath:
+            path: /var/lib/spdk/vhost
+            type: Directory
+          name: vhost-dir
+        # rawdisk there.
+        - hostPath:
+            path: /var/lib/spdk/rawdisks
+            type: DirectoryOrCreate
+          name: rawdisks-dir
+        # spdk socket stored there.
+        - hostPath:
+            path: /var/tmp
+            type: Directory
+          name: spdk-dir
+
 
