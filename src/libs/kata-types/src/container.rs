@@ -7,13 +7,13 @@
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-// a container running within a pod
-pub(crate) const POD_CONTAINER: &str = "pod_container";
+/// a container running within a pod
+pub const POD_CONTAINER: &str = "pod_container";
 // cri containerd/crio/docker: a container running within a pod
 pub(crate) const CONTAINER: &str = "container";
 
-// a pod sandbox container
-pub(crate) const POD_SANDBOX: &str = "pod_sandbox";
+/// a pod sandbox container
+pub const POD_SANDBOX: &str = "pod_sandbox";
 // cri containerd/crio: a pod sandbox container
 pub(crate) const SANDBOX: &str = "sandbox";
 // docker: a sandbox sandbox container
