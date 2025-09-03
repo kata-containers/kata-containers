@@ -994,7 +994,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 
 	// Pass SELinux label for the container process to the agent.
 	if !disableGuestSeLinux {
-		k.Logger().Info("SELinux label will be applied to the container process inside guest")
 
 		var label string
 		if guestSeLinuxLabel != "" {
@@ -1014,6 +1013,8 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 			processContext["type"] = defaultSeLinuxContainerType
 		}
 		grpcSpec.Process.SelinuxLabel = processContext.Get()
+		k.Logger().Info("SELinux label will be applied to the container process inside guest: ",
+			grpcSpec.Process.SelinuxLabel)
 	} else {
 		k.Logger().Info("Empty SELinux label for the process and the mount because guest SELinux is disabled")
 		grpcSpec.Process.SelinuxLabel = ""
