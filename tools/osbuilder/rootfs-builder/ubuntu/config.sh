@@ -13,7 +13,7 @@ PACKAGES="chrony iptables dbus"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
 [ "$(uname -m)" = "s390x" ] && PACKAGES+=" libcurl4 libnghttp2-14"
-[ "$SELINUX" = yes ] && PACKAGES+=" selinux-basics selinux-policy-default auditd setools selinux-utils policycoreutils-python-utils"
+[ "$SELINUX" = yes ] && PACKAGES+=" selinux-basics selinux-policy-default auditd"
 REPO_COMPONENTS=${REPO_COMPONENTS:-main}
 [ "$SELINUX" = yes ] && REPO_COMPONENTS+=" universe"
 
