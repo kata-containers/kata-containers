@@ -10,7 +10,7 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
-SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se")
+SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
 
 function setup_unencrypted_confidential_pod() {
@@ -35,6 +35,7 @@ function get_remote_command_per_hypervisor() {
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-tdx]="cpuid | grep TDX_GUEST"
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
+	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se-runtime-rs]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
 
 	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
 }
