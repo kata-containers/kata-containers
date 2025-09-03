@@ -593,15 +593,11 @@ fn amend_spec(
     disable_guest_selinux: bool,
 ) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
-    let start_container_hooks = if let Some(hooks) = spec.hooks().as_ref() {
-        hooks.start_container().clone()
-    } else {
-        None
-    };
-
-    let mut oci_hooks = oci::Hooks::default();
-    oci_hooks.set_start_container(start_container_hooks);
-    spec.set_hooks(Some(oci_hooks));
+    if let Some(hooks) = spec.hooks().as_ref() {
+        let mut oci_hooks = oci::Hooks::default();
+        oci_hooks.set_start_container(hooks.start_container().clone());
+        spec.set_hooks(Some(oci_hooks));
+    }
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);
