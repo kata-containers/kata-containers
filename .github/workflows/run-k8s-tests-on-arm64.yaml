@@ -31,6 +31,7 @@ jobs:
       matrix:
         vmm:
           - qemu
+          - qemu-runtime-rs
         k8s:
           - kubeadm
     runs-on: arm64-k8s

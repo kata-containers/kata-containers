@@ -547,6 +547,12 @@ impl ToQemuParams for Machine {
         if let Some(mem_backend) = &self.memory_backend {
             params.push(format!("memory-backend={}", mem_backend));
         }
+
+        #[cfg(target_arch = "aarch64")]
+        params.push(format!("usb=off"));
+        #[cfg(target_arch = "aarch64")]
+        params.push(format!("gic-version=host"));
+
         if !self.confidential_guest_support.is_empty() {
             params.push(format!(
                 "confidential-guest-support={}",
@@ -2631,6 +2637,11 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_seccomp_sandbox(&mut self, param: &str) {
         let seccomp_sandbox = SeccompSandbox::new(param);
         self.devices.push(Box::new(seccomp_sandbox));
+    }
+
+    pub fn add_bios(&mut self, path: &str) -> Result<()> {
+        self.devices.push(Box::new(Bios::new(path.to_string())));
+        Ok(())
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {
