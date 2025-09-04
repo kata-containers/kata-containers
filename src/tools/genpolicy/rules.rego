@@ -1032,6 +1032,9 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
 # Create container Storages
 
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) if {
+    print("allow_storages: p_storages =", p_storages)
+    print("allow_storages: i_storages =", i_storages)
+
     p_count := count(p_storages)
     i_count := count(i_storages)
     img_pull_count := count([s | s := i_storages[_]; s.driver == "image_guest_pull"])
