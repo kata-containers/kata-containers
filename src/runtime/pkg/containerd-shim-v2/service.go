@@ -153,6 +153,9 @@ type service struct {
 
 	// shim's pid
 	pid uint32
+
+	// kubernetes podNS+podName
+	kubePodID string
 }
 
 func newCommand(ctx context.Context, id, containerdBinary, containerdAddress string) (*sysexec.Cmd, error) {

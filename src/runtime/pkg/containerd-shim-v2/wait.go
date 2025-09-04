@@ -64,6 +64,10 @@ func wait(ctx context.Context, s *service, c *container, execID string) (int32, 
 
 	s.mu.Lock()
 	if execID == "" {
+		// clean up cdi resolver
+		if err = cleanupCDIResolver(s, c); err != nil {
+			shimLog.WithField("sandbox", s.sandbox.ID()).Errorf("failed to clean up resolver %v", err)
+		}
 		// Take care of the use case where it is a sandbox.
 		// Right after the container representing the sandbox has
 		// been deleted, let's make sure we stop and delete the

@@ -195,6 +195,7 @@ type runtime struct {
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
+	ProxyCDIResolvers         []oci.Resolver `toml:"experimental_proxy_cdi_resolvers"`
 }
 
 type agent struct {
@@ -1593,6 +1594,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	config.ForceGuestPull = tomlConf.Runtime.ForceGuestPull
+	config.ProxyCDIResolvers = tomlConf.Runtime.ProxyCDIResolvers
 
 	return resolved, config, nil
 }

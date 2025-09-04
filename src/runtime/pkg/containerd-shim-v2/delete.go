@@ -15,6 +15,10 @@ import (
 )
 
 func deleteContainer(ctx context.Context, s *service, c *container) error {
+	// clean up cdi resolver
+	if err := cleanupCDIResolver(s, c); err != nil {
+		shimLog.WithField("sandbox", s.sandbox.ID()).Errorf("failed to clean up resolver %v", err)
+	}
 	if !c.cType.IsSandbox() {
 		if c.status != task.Status_STOPPED {
 			if _, err := s.sandbox.StopContainer(ctx, c.id, false); err != nil && !isNotFound(err) {

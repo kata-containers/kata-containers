@@ -112,6 +112,8 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		if s.sandbox != nil {
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
+		s.config = runtimeConfig
+
 		// Here we deal with CDI devices that are cold-plugged (k8s) and
 		// for the single_container (nerdctl, podman, ...) use-case.
 		// We can provide additional directories where to search for
@@ -119,12 +121,19 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// directories where applications can write too. For instance /opt/cdi
 		//
 		// _, err = withCDI(ociSpec.Annotations, []string{"/opt/cdi"}, ociSpec)
+		err = resolveCDIAnnotations(ctx, s, ociSpec.Annotations)
+		if err != nil {
+			return nil, fmt.Errorf("resolving CDI devices failed: %w", err)
+		}
+		defer func() {
+			if err != nil {
+				cleanupCDIResolver(s, nil)
+			}
+		}()
 		_, err = config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
 		if err != nil {
 			return nil, fmt.Errorf("adding CDI devices failed: %w", err)
 		}
-
-		s.config = runtimeConfig
 
 		// create tracer
 		// This is the earliest location we can create the tracer because we must wait
@@ -209,6 +218,10 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 		if s.sandbox == nil {
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
+		}
+		err = updateCDIDevices(ctx, ociSpec, s.config)
+		if err != nil {
+			return nil, fmt.Errorf("adding CDI devices failed: %w", err)
 		}
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {

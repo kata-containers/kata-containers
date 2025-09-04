@@ -174,6 +174,21 @@ type RuntimeConfig struct {
 
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
+
+	// ProxyCDIResolvers specify grpc sockets that can dynamically
+	// resolve device annotations to correspondig CDI specs.
+	// This is necessary to support device cold-plug into the sandbox
+	// until kubelet is enhanced to provide this information
+	// prior to sandbox creation.
+	ProxyCDIResolvers []Resolver
+}
+
+type Resolver struct {
+	// SpecName is the name of the device as called out in the pod spec
+	// e.g. vendor.com/gpu
+	SpecName        string `toml:"spec_name"`
+	// socket is the grpc server socket of the resolver
+	Socket		string `toml:"socket"`
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
