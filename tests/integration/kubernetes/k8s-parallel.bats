@@ -52,9 +52,7 @@ teardown() {
 		rm -f ${pod_config_dir}/job-$i.yaml
 	done
 
-	delete_tmp_policy_settings_dir "${policy_settings_dir}"
-
-	teardown_common
+	teardown_common "${node}" "${node_start_time:-}" "${policy_settings_dir}"
 
 	# Delete jobs
 	kubectl delete jobs -l jobgroup=${job_name}

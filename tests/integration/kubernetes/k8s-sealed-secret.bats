@@ -115,7 +115,7 @@ teardown() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	confidential_teardown_common "${node}" "${node_start_time:-}"
+	confidential_teardown_common "${node}" "${node_start_time:-}" ""
 	kubectl delete secret sealed-secret --ignore-not-found
 	kubectl delete secret not-sealed-secret --ignore-not-found
 }

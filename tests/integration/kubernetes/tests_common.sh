@@ -379,13 +379,16 @@ pod_exec_blocked_command() {
 # Parameters:
 #	$1	- node name where kata is installed
 #	$2	- start time at the node for the sake of fetching logs
+#   $3  - policy settings dir (can be empty)
 #
 teardown_common() {
 	local node="$1"
 	local node_start_time="$2"
+	local policy_settings_dir="$3"
 
 	kubectl describe pods
 	k8s_delete_all_pods_if_any_exists || true
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 
 	# Print the node journal since the test start time if a bats test is not completed
 	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then

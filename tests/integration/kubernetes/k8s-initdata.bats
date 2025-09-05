@@ -192,5 +192,5 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    teardown_common "${node}" "${node_start_time:-}"
+    teardown_common "${node}" "${node_start_time:-}" ""
 }

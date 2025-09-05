@@ -58,5 +58,5 @@ setup() {
 teardown() {
 	check_and_skip
 
-	teardown_common "${node}" "${node_start_time:-}"
+	teardown_common "${node}" "${node_start_time:-}" ""
 }
