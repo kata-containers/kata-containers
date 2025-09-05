@@ -17,7 +17,6 @@ use crate::utils;
 use crate::yaml;
 
 use anyhow::Result;
-use base64::{engine::general_purpose, Engine as _};
 use log::debug;
 use oci_spec::runtime as oci;
 use protocols::agent;
@@ -536,11 +535,11 @@ impl AgentPolicy {
     pub fn export_policy(&mut self) {
         let mut yaml_string = String::new();
         for i in 0..self.resources.len() {
-            let policy = self.resources[i].generate_policy(self);
+            let annotation = self.resources[i].generate_initdata_anno(self);
             if self.config.base64_out {
-                println!("{}", policy);
+                println!("{}", annotation);
             }
-            yaml_string += &self.resources[i].serialize(&policy);
+            yaml_string += &self.resources[i].serialize(&annotation);
         }
 
         if let Some(yaml_file) = &self.config.yaml_file {
@@ -558,7 +557,7 @@ impl AgentPolicy {
         }
     }
 
-    pub fn generate_policy(&self, resource: &dyn yaml::K8sResource) -> String {
+    pub fn generate_initdata_anno(&self, resource: &dyn yaml::K8sResource) -> String {
         let yaml_containers = resource.get_containers();
         let mut policy_containers = Vec::new();
 
@@ -578,7 +577,10 @@ impl AgentPolicy {
         if self.config.raw_out {
             std::io::stdout().write_all(policy.as_bytes()).unwrap();
         }
-        general_purpose::STANDARD.encode(policy.as_bytes())
+        let mut initdata = kata_types::initdata::InitData::new("sha256", "0.1.0");
+        initdata.insert_data("policy.rego", policy);
+
+        kata_types::initdata::encode_initdata(&initdata)
     }
 
     pub fn get_container_policy(
