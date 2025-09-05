@@ -43,6 +43,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils/retry"
 )
 
 // clhTracingTags defines tags for the trace span
@@ -1136,13 +1137,31 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	defer cancel()
 	resize := *chclient.NewVmResize()
 	resize.DesiredVcpus = func(i int32) *int32 { return &i }(int32(reqVCPUs))
-	if _, err = cl.VmResizePut(ctx, resize); err != nil {
-		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
-	}
+
+	// Since the cloud hypervisor's resize vCPU is an asynchronous operation,
+	// it's possible that the previous resize operation hasn't completed when
+	// the request is sent, causing the current call to return an error. Therefore,
+	// several retries can be performed to avoid this error.
+	ret := retry.Do(func() error {
+
+		if _, err = cl.VmResizePut(ctx, resize); err != nil {
+			errMsg := err.Error()
+			// see https://github.com/cloud-hypervisor/cloud-hypervisor/commit/d0225fe68fd14146bacc3be26f0b7e548ce9c239
+			if !strings.Contains(errMsg, "Too Many Requests") {
+				return retry.Unrecoverable(err)
+			}
+			return errors.Wrap(err, "[clh] VmResizePut failed")
+		} else {
+			return nil
+		}
+	},
+		retry.Attempts(20),
+		retry.LastErrorOnly(true),
+		retry.Delay(20*time.Millisecond))
 
 	newVCPUs = reqVCPUs
 
-	return currentVCPUs, newVCPUs, nil
+	return currentVCPUs, newVCPUs, ret
 }
 
 func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
