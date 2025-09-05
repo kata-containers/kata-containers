@@ -15,6 +15,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -23,6 +24,7 @@ import (
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/typeurl/v2"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/netmon"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -232,6 +234,27 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	container, err := newContainer(s, r, containerType, ociSpec, rootFs.Mounted)
 	if err != nil {
 		return nil, err
+	}
+
+	// start network monitor
+	re := regexp.MustCompile("moby")
+	if re.MatchString(container.bundle) {
+		errCh := make(chan error, 1)
+		go func() {
+			err := netmon.StartNetMon(s.ctx, s.sandbox)
+			errCh <- err
+		}()
+		go func() {
+			defer close(errCh)
+			if err := <-errCh; err != nil {
+				if err.Error() == "ttrpc: closed" || err.Error() == "Dead agent" {
+					shimLog.WithError(err).Info("agent has shutdown, return from stopping the container")
+					return
+				}
+				s.sandbox.StopContainer(ctx, container.id, false)
+				shimLog.WithField("container-id", container.id).WithError(err).Warn("failed to start network monitor container")
+			}
+		}()
 	}
 
 	return container, nil
