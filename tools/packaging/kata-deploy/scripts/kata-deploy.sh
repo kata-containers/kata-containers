@@ -140,10 +140,13 @@ function delete_runtimeclasses() {
 
 	for shim in "${shims[@]}"; do
 		echo "Deleting the kata-${shim} runtime class"
+		canonical_shim_name="kata-${shim}"
+		shim_name="${canonical_shim_name}"
 		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+			shim_name+="-${MULTI_INSTALL_SUFFIX}"
+			sed -i -e "s|${canonical_shim_name}|${shim_name}|g" /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
 		fi
-		kubectl delete -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+		kubectl delete --ignore-not-found -f /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
 	done
 
 
@@ -157,7 +160,7 @@ function delete_runtimeclasses() {
 		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
 		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
-		kubectl delete -f /tmp/kata.yaml
+		kubectl delete --ignore-not-found -f /tmp/kata.yaml
 		rm -f /tmp/kata.yaml
 	fi
 }
