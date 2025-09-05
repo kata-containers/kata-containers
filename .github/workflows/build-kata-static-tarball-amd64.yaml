@@ -132,7 +132,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
