@@ -363,6 +363,9 @@ pub struct AddARPNeighborsRequestDefaults {
     /// Explicitly blocked IP address ranges.
     /// Should include loopback addresses and other CIDRs that should not be routed outside the VM.
     forbidden_cidrs_regex: Vec<String>,
+
+    /// Allowed neighbor states. See https://www.man7.org/linux/man-pages/man8/ip-neighbour.8.html
+    allowed_states: Vec<u32>,
 }
 
 /// Settings specific to each kata agent endpoint, loaded from
