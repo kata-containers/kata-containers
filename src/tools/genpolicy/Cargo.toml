@@ -69,6 +69,9 @@ containerd-client = "0.4.0"
 # username to UID:GID mapping support
 tar = "0.4.41"
 
+# init data support
+kata-types = { path = "../../libs/kata-types" }
+
 [dev-dependencies]
 kata-agent-policy = { path = "../../agent/policy" }
 slog = "2.5.2"

@@ -104,7 +104,7 @@ impl yaml::K8sResource for ConfigMap {
         self.doc_mapping = doc_mapping.clone();
     }
 
-    fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
+    fn generate_initdata_anno(&self, _agent_policy: &policy::AgentPolicy) -> String {
         "".to_string()
     }
 

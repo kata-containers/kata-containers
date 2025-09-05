@@ -26,6 +26,7 @@ use crate::volume;
 
 use async_trait::async_trait;
 use core::fmt::Debug;
+use kata_types::annotations::KATA_ANNO_CFG_HYPERVISOR_INIT_DATA;
 use log::debug;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ pub trait K8sResource {
         silent_unsupported_fields: bool,
     );
 
-    fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
+    fn generate_initdata_anno(&self, _agent_policy: &policy::AgentPolicy) -> String {
         panic!("Unsupported");
     }
 
@@ -318,7 +319,7 @@ pub fn get_container_mounts_and_storages(
     }
 }
 
-/// Add the "io.katacontainers.config.agent.policy" annotation into
+/// Add the [`KATA_ANNO_CFG_HYPERVISOR_INIT_DATA`] into
 /// a serde representation of a K8s resource YAML.
 pub fn add_policy_annotation(
     mut ancestor: &mut serde_yaml::Value,
@@ -326,7 +327,7 @@ pub fn add_policy_annotation(
     policy: &str,
 ) {
     let annotations_key = serde_yaml::Value::String("annotations".to_string());
-    let policy_key = serde_yaml::Value::String("io.katacontainers.config.agent.policy".to_string());
+    let policy_key = serde_yaml::Value::String(KATA_ANNO_CFG_HYPERVISOR_INIT_DATA.to_string());
     let policy_value = serde_yaml::Value::String(policy.to_string());
 
     if !metadata_path.is_empty() {
@@ -367,8 +368,9 @@ pub fn add_policy_annotation(
     }
 }
 
+/// Remove [`KATA_ANNO_CFG_HYPERVISOR_INIT_DATA`] annotation
 pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
-    annotations.remove("io.katacontainers.config.agent.policy");
+    annotations.remove(KATA_ANNO_CFG_HYPERVISOR_INIT_DATA);
 }
 
 /// Report a fatal error if this app encounters an unsupported input YAML field,
