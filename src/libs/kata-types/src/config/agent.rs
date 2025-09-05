@@ -6,6 +6,7 @@
 use std::io::Result;
 
 use crate::config::{ConfigOps, TomlConfig};
+use serde::{Deserialize, Deserializer};
 
 pub use vendor::AgentVendor;
 
@@ -117,7 +118,8 @@ pub struct Agent {
     /// have sufficient time to complete.
     #[serde(
         default = "default_request_timeout",
-        rename = "create_container_timeout"
+        rename = "create_container_timeout",
+        deserialize_with = "deserialize_secs_to_millis"
     )]
     pub request_timeout_ms: u32,
 
@@ -203,6 +205,15 @@ fn default_request_timeout() -> u32 {
 fn default_health_check_timeout() -> u32 {
     // ms
     90_000
+}
+
+fn deserialize_secs_to_millis<'de, D>(deserializer: D) -> std::result::Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let secs = u32::deserialize(deserializer)?;
+
+    Ok(secs.saturating_mul(1000))
 }
 
 impl Agent {
