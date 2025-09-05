@@ -17,7 +17,8 @@ use common::{
 use hypervisor::Param;
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
-    annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
+    annotations::{Annotation, BUNDLE_PATH_KEY},
+    config::{default::DEFAULT_GUEST_DNS_FILE, TomlConfig},
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
@@ -304,7 +305,7 @@ impl RuntimeHandlerManager {
     #[instrument]
     async fn task_init_runtime_instance(
         &self,
-        spec: &oci::Spec,
+        spec: &mut oci::Spec,
         state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
@@ -349,6 +350,17 @@ impl RuntimeHandlerManager {
                 break;
             }
         }
+
+        // A nerdctl network namespace to let nerdctl know which namespace to use when calling the
+        // selected CNI plugin.
+        let annotations = HashMap::from([
+            (
+                "nerdctl/network-namespace".to_string(),
+                netns.clone().unwrap(),
+            ),
+            (BUNDLE_PATH_KEY.to_string(), state.clone().bundle), // OCI bundle path
+        ]);
+        spec.annotations_mut().as_mut().unwrap().extend(annotations);
 
         let network_env = SandboxNetworkEnv {
             netns,
@@ -405,7 +417,7 @@ impl RuntimeHandlerManager {
                 container_config.bundle,
                 spec::OCI_SPEC_CONFIG_FILE_NAME
             );
-            let spec = oci::Spec::load(&bundler_path).context("load spec")?;
+            let mut spec = oci::Spec::load(&bundler_path).context("load spec")?;
             let state = spec::State {
                 version: spec.version().clone(),
                 id: container_config.container_id.to_string(),
@@ -415,7 +427,7 @@ impl RuntimeHandlerManager {
                 annotations: spec.annotations().clone().unwrap_or_default(),
             };
 
-            self.task_init_runtime_instance(&spec, &state, &container_config.options)
+            self.task_init_runtime_instance(&mut spec, &state, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self

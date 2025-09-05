@@ -4,16 +4,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::hash::RandomState;
 use std::str::FromStr;
 
-// a container running within a pod
-pub(crate) const POD_CONTAINER: &str = "pod_container";
+/// a container running within a pod
+pub const POD_CONTAINER: &str = "pod_container";
 // cri containerd/crio/docker: a container running within a pod
 pub(crate) const CONTAINER: &str = "container";
 
-// a pod sandbox container
-pub(crate) const POD_SANDBOX: &str = "pod_sandbox";
+/// a pod sandbox container
+pub const POD_SANDBOX: &str = "pod_sandbox";
 // cri containerd/crio: a pod sandbox container
 pub(crate) const SANDBOX: &str = "sandbox";
 // docker: a sandbox sandbox container
@@ -136,6 +138,41 @@ impl State {
     }
 }
 
+/// Update annotations: Remove specified keys or add new key-value pairs.
+pub fn update_ocispec_annotations(
+    annotations: &HashMap<String, String, RandomState>,
+    keys_to_remove: &[&str],
+    keys_to_add: &[(String, String)],
+    allow_overwrite: bool,
+) -> Result<HashMap<String, String, RandomState>, String> {
+    // 1. Validate input parameters
+    if keys_to_remove.is_empty() && keys_to_add.is_empty() {
+        return Ok(annotations.clone());
+    }
+
+    // Pre-allocate capacity: Original size - number of deletions + number of additions
+    let mut updated = HashMap::with_capacity_and_hasher(
+        annotations.len().saturating_sub(keys_to_remove.len()) + keys_to_add.len(),
+        RandomState::new(),
+    );
+
+    // 2. Copy retained key-value pairs (use `contains` directly)
+    for (k, v) in annotations {
+        if !keys_to_remove.iter().any(|&rm| rm == k) {
+            updated.insert(k.clone(), v.clone());
+        }
+    }
+
+    // 3. Add new key-value pairs
+    for (key, value) in keys_to_add {
+        if allow_overwrite || !updated.contains_key(key) {
+            updated.insert(key.clone(), value.clone());
+        }
+    }
+
+    Ok(updated)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,5 +247,31 @@ mod tests {
         assert!(Stopped.check_transition(Ready).is_err());
         assert!(Stopped.check_transition(Running).is_ok());
         assert!(Stopped.check_transition(Stopped).is_err());
+    }
+
+    #[test]
+    fn test_update_annotations_combined_operations() {
+        // Initial annotations
+        let mut annotations = HashMap::new();
+        annotations.insert("key1".to_string(), "val1".to_string());
+        annotations.insert("key2".to_string(), "val2".to_string());
+
+        // Keys to remove and add
+        let keys_to_remove = ["key2"];
+        let keys_to_add = vec![
+            ("key3".to_string(), "val3".to_string()),
+            ("key1".to_string(), "new_val1".to_string()), // Attempt to overwrite
+        ];
+
+        // Call the function with allow_overwrite = false
+        let result = update_ocispec_annotations(&annotations, &keys_to_remove, &keys_to_add, false);
+
+        // Assert the result
+        assert!(result.is_ok());
+        let updated = result.unwrap();
+        assert_eq!(updated.len(), 2);
+        assert_eq!(updated.get("key1"), Some(&"val1".to_string())); // Not overwritten
+        assert!(!updated.contains_key("key2")); // Removed
+        assert_eq!(updated.get("key3"), Some(&"val3".to_string())); // Added
     }
 }
