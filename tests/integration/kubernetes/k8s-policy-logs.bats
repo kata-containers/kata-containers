@@ -33,5 +33,5 @@ setup() {
 
 teardown() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled"
-    teardown_common "${node}" "${node_start_time:-}"
+    teardown_common "${node}" "${node_start_time:-}" "${policy_settings_dir}"
 }

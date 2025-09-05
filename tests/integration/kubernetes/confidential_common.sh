@@ -210,9 +210,10 @@ function create_coco_pod_yaml_with_annotations() {
 confidential_teardown_common() {
 	local node="$1"
 	local node_start_time="$2"
+	local policy_settings_dir="$3"
 
 	# Run common teardown
-	teardown_common "${node}" ${node_start_time}
+	teardown_common "${node}" ${node_start_time} "${policy_settings_dir}"
 
 	# Also try and print the kbs logs on failure
 	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
