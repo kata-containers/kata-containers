@@ -147,6 +147,13 @@ jobs:
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
+      - name: Refresh OIDC token in case access token expired
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZ_APPID }}
+          tenant-id: ${{ secrets.AZ_TENANT_ID }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+
       - name: Delete AKS cluster
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
