@@ -125,6 +125,7 @@ impl AgentPolicy {
 
     /// Ask regorus if an API call should be allowed or not.
     pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+        info!(sl!(), "policy check: {ep}, request: {ep_input}");
         debug!(sl!(), "policy check: {ep}");
         self.log_eval_input(ep, ep_input).await;
 

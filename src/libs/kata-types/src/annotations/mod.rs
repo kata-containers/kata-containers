@@ -80,6 +80,9 @@ pub const KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE: &str =
 /// An annotation key to specify the size of the pipes created for containers.
 pub const CONTAINER_PIPE_SIZE_KERNEL_PARAM: &str = "agent.container_pipe_size";
 
+/// Policy is an annotation containing the contents of an agent policy file, base64 encoded.
+pub const KATA_ANNO_CFG_AGENT_POLICY: &str = "io.katacontainers.config.agent.policy";
+
 // Hypervisor related annotations
 /// Prefix for Hypervisor configurations.
 pub const KATA_ANNO_CFG_HYPERVISOR_PREFIX: &str = "io.katacontainers.config.hypervisor.";
@@ -990,6 +993,25 @@ impl Annotation {
                             return Err(u32_err);
                         }
                     },
+                    KATA_ANNO_CFG_AGENT_POLICY => {
+                        // Base64 decode the annotation value
+                        if let Ok(b64_decoded) = base64::decode_config(&value, base64::STANDARD) {
+                            match String::from_utf8(b64_decoded) {
+                                Ok(policy) => ag.policy = policy,
+                                Err(_e) => {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::InvalidData,
+                                        format!(
+                                            "agent policy {:?} specified in annotation",
+                                            &value
+                                        ),
+                                    ))
+                                }
+                            }
+                        } else {
+                            ag.policy = "".to_string()
+                        }
+                    }
                     KATA_ANNO_CFG_RUNTIME_CREATE_CONTAINTER_TIMEOUT => {
                         match self.get_value::<u32>(key) {
                             Ok(v) => {
