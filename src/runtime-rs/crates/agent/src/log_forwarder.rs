@@ -44,7 +44,7 @@ impl LogForwarder {
         let logger = sl!().clone();
         let address = address.to_string();
         let task_handler = tokio::spawn(async move {
-            let sock = match sock::new(&address, port) {
+            let sock = match sock::new(&address, Some(port)) {
                 Ok(sock) => sock,
                 Err(err) => {
                     error!(
@@ -77,6 +77,61 @@ impl LogForwarder {
                 }
                 Err(err) => {
                     warn!(logger, "failed to connect agent-log, err: {:?}", err);
+                }
+            };
+        });
+        self.task_handler = Some(task_handler);
+        Ok(())
+    }
+
+    // start connect to console via Unix domain socket and copy data to guest log stream
+    pub(crate) async fn start_console(
+        &mut self,
+        config: sock::ConnectConfig,
+        console_addr: &str,
+    ) -> Result<()> {
+        // Construct console address starting with "unix://"
+        let console_addr = format!("unix://{}", console_addr);
+        let task_handler = tokio::spawn(async move {
+            info!(sl!(), "try to connect to console at {:?}", console_addr);
+
+            // Use the sock module to create a Unix socket connection
+            let sock = match sock::new(&console_addr, None) {
+                Ok(sock) => sock,
+                Err(err) => {
+                    error!(
+                        sl!(),
+                        "failed to create unix sock for address {:?} error {:?}", console_addr, err
+                    );
+                    return;
+                }
+            };
+
+            match sock.connect(&config).await {
+                Ok(stream) => {
+                    info!(sl!(), "connected to console successfully");
+                    let stream = BufReader::new(stream);
+                    let mut lines = stream.lines();
+                    while let Ok(Some(l)) = lines.next_line().await {
+                        let text = l.trim();
+                        if !text.is_empty() {
+                            let log_message = format!("reading guest console: {}", text);
+                            match parse_agent_log_level(text) {
+                                LOG_LEVEL_TRACE => trace!(sl!(), "{}", log_message),
+                                LOG_LEVEL_DEBUG => debug!(sl!(), "{}", log_message),
+                                LOG_LEVEL_WARNING => warn!(sl!(), "{}", log_message),
+                                LOG_LEVEL_ERROR => error!(sl!(), "{}", log_message),
+                                LOG_LEVEL_CRITICAL => crit!(sl!(), "{}", log_message),
+                                _ => info!(sl!(), "{}", log_message),
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!(
+                        sl!(),
+                        "Failed to read guest console logs from {:?}, err: {:?}", console_addr, err
+                    );
                 }
             };
         });

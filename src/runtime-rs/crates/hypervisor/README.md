@@ -87,6 +87,7 @@ pub trait Hypervisor: Send + Sync {
     
     // utils
     async fn get_agent_socket(&self) -> Result<String>;
+    async fn get_console_address(&self) -> Result<String>;
     async fn disconnect(&self);
     async fn hypervisor_config(&self) -> HypervisorConfig;
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds>;

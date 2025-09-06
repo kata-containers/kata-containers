@@ -254,6 +254,10 @@ impl RemoteInner {
         Ok(format!("{}://{}", REMOTE_SCHEME, &self.agent_socket_path))
     }
 
+    pub(crate) async fn get_console_address(&self) -> Result<String> {
+        Ok(String::new())
+    }
+
     pub(crate) async fn disconnect(&mut self) {
         warn!(sl!(), "RemoteInner::disconnect(): NOT YET IMPLEMENTED");
         todo!()

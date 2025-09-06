@@ -160,6 +160,11 @@ impl Hypervisor for Dragonball {
         inner.get_agent_socket().await
     }
 
+    async fn get_console_address(&self) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner.get_console_address().await
+    }
+
     async fn disconnect(&self) {
         let mut inner = self.inner.write().await;
         inner.disconnect().await
