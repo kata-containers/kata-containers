@@ -4,7 +4,7 @@
 //SPDX-License-Identifier: Apache-2.0
 
 use crate::firecracker::{sl, FcInner};
-use crate::{VcpuThreadIds, VmmState, HYPERVISOR_FIRECRACKER};
+use crate::{selinux, VcpuThreadIds, VmmState, HYPERVISOR_FIRECRACKER};
 use anyhow::{anyhow, Context, Result};
 use kata_types::capabilities::Capabilities;
 use kata_types::config::KATA_PATH;
@@ -19,7 +19,12 @@ pub const ROOT: &str = "root";
 const HYBRID_VSOCK_SCHEME: &str = "hvsock";
 
 impl FcInner {
-    pub(crate) async fn prepare_vm(&mut self, id: &str, _netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(
+        &mut self,
+        id: &str,
+        _netns: Option<String>,
+        selinux_label: Option<String>,
+    ) -> Result<()> {
         debug!(sl(), "Preparing Firecracker");
 
         self.id = id.to_string();
@@ -55,6 +60,14 @@ impl FcInner {
             .context(format!("failed to create directory {:?}", self.vm_path));
 
         self.netns = _netns.clone();
+
+        if !self.hypervisor_config().disable_selinux {
+            if let Some(label) = selinux_label.as_ref() {
+                self.config.security_info.selinux_label = Some(label.to_string());
+                selinux::set_exec_label(label).context("failed to set SELinux process label")?;
+            }
+        }
+
         self.prepare_vmm(self.netns.clone()).await?;
         self.state = VmmState::VmmServerReady;
         self.prepare_vmm_resources().await?;

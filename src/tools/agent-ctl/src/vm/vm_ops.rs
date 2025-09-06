@@ -91,7 +91,7 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
     // we do not pass any network namesapce since we dont want any
     let empty_anno_map: HashMap<String, String> = HashMap::new();
     hypervisor
-        .prepare_vm(VM_NAME, None, &empty_anno_map)
+        .prepare_vm(VM_NAME, None, &empty_anno_map, None)
         .await
         .context(" prepare test vm")?;
 

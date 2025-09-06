@@ -942,6 +942,10 @@ pub struct SecurityInfo {
     /// Another note: enabling this feature may reduce performance, you may enable
     /// /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
     pub seccomp_sandbox: Option<String>,
+
+    /// selinux_label defines SELinux label for the guest
+    #[serde(default)]
+    pub selinux_label: Option<String>,
 }
 
 fn default_qgs_port() -> u32 {
@@ -1281,6 +1285,10 @@ pub struct Hypervisor {
     /// Disables applying SELinux on the container process within the guest.
     #[serde(default = "yes")]
     pub disable_guest_selinux: bool,
+
+    /// Disable applying SELinux on the VMM process.
+    #[serde(default)]
+    pub disable_selinux: bool,
 }
 
 fn yes() -> bool {

@@ -7,8 +7,8 @@ use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE}
 use super::qmp::Qmp;
 use crate::device::topology::PCIePort;
 use crate::{
-    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, HypervisorConfig,
-    MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, selinux,
+    HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
 
 use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
@@ -62,10 +62,22 @@ impl QemuInner {
         }
     }
 
-    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(
+        &mut self,
+        id: &str,
+        netns: Option<String>,
+        selinux_label: Option<String>,
+    ) -> Result<()> {
         info!(sl!(), "Preparing QEMU VM");
         self.id = id.to_string();
         self.netns = netns;
+
+        if !self.hypervisor_config().disable_selinux {
+            if let Some(label) = selinux_label.as_ref() {
+                self.config.security_info.selinux_label = Some(label.to_string());
+                selinux::set_exec_label(label).context("failed to set SELinux process label")?;
+            }
+        }
 
         let vm_path = [KATA_PATH, self.id.as_str()].join("/");
         std::fs::create_dir_all(vm_path)?;
@@ -193,11 +205,23 @@ impl QemuInner {
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
-        // we need move the qemu process into Network Namespace.
+        // we need move the qemu process into Network Namespace and set SELinux label.
         unsafe {
+            let selinux_label = self.config.security_info.selinux_label.clone();
             let _pre_exec = command.pre_exec(move || {
                 let _ = enter_netns(&netns);
-
+                if let Some(label) = selinux_label.as_ref() {
+                    if let Err(e) = selinux::set_exec_label(label) {
+                        error!(sl!(), "Failed to set SELinux label in child process: {}", e);
+                        // Don't return error here to avoid breaking the process startup
+                        // Log the error and continue
+                    } else {
+                        info!(
+                            sl!(),
+                            "Successfully set SELinux label in child process: {}", &label
+                        );
+                    }
+                }
                 Ok(())
             });
         }
