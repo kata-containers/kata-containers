@@ -484,7 +484,7 @@ function helm_helper() {
 	# like kata-deploy on CI. So wait for pods being Running in the "traditional" way.
 	local cmd
 	cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "${cmd}"
+	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 20 "${cmd}"
 
 	# FIXME: This is needed as the kata-deploy pod will be set to "Ready"
 	# when it starts running, which may cause issues like not having the

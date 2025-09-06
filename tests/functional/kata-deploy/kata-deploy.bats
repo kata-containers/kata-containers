@@ -64,7 +64,7 @@ setup() {
 	popd
 }
 
-@test "Test runtimeclasses are being properly created and container runtime not broken" {
+@test "Test runtimeclasses are being properly created and container runtime is not broken" {
 	# We filter `kata-mshv-vm-isolation` out as that's present on AKS clusters, but that's not coming from kata-deploy
 	current_runtime_classes=$(kubectl get runtimeclasses | grep -v "kata-mshv-vm-isolation" | grep "kata" | wc -l)
 	[[ ${current_runtime_classes} -eq ${expected_runtime_classes} ]]
@@ -92,7 +92,7 @@ teardown() {
 	pushd "${repo_root_dir}"
 
 	helm uninstall --namespace=kube-system kata-deploy
-	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+	kubectl -n kube-system wait --timeout=20m --for=delete -l name=kata-deploy pod
 
 	popd
 }
