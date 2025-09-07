@@ -11,7 +11,7 @@ pub mod convert;
 pub mod net_util;
 mod virtio_devices;
 
-use crate::virtio_devices::RateLimiterConfig;
+pub use crate::virtio_devices::RateLimiterConfig;
 use kata_sys_util::protection::GuestProtection;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 pub use net_util::MacAddr;

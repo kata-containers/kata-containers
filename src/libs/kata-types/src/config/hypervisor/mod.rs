@@ -173,6 +173,19 @@ pub struct BlockDeviceInfo {
     /// The default if not set is empty (all annotations rejected.)
     #[serde(default)]
     pub valid_vhost_user_store_paths: Vec<String>,
+
+    /// controls disk I/O bandwidth (size in bits/sec)
+    #[serde(default)]
+    pub disk_rate_limiter_bw_max_rate: u64,
+    /// increases the initial max rate
+    #[serde(default)]
+    pub disk_rate_limiter_bw_one_time_burst: Option<u64>,
+    /// controls disk I/O bandwidth (size in ops/sec)
+    #[serde(default)]
+    pub disk_rate_limiter_ops_max_rate: u64,
+    /// increases the initial max rate
+    #[serde(default)]
+    pub disk_rate_limiter_ops_one_time_burst: Option<u64>,
 }
 
 impl BlockDeviceInfo {
