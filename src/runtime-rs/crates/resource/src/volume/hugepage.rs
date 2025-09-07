@@ -11,7 +11,7 @@ use std::{
 };
 
 use super::{Volume, BIND};
-use crate::share_fs::EPHEMERAL_PATH;
+use crate::share_fs::ephemeral_path;
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
@@ -63,7 +63,7 @@ impl Hugepage {
         let mut mount = mount.clone();
         // Set the mount source path to a path that resides inside the VM
         mount.set_source(Some(
-            format!("{}{}{}", EPHEMERAL_PATH, "/", base_name).into(),
+            format!("{}{}{}", ephemeral_path(), "/", base_name).into(),
         ));
         // Set the mount type to "bind"
         mount.set_typ(Some(BIND.to_string()));
