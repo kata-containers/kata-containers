@@ -24,7 +24,9 @@ use ch_config::ch_api::{
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
-use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
+use ch_config::{
+    net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, RateLimiterConfig, VsockConfig,
+};
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -321,6 +323,18 @@ impl CloudHypervisorInner {
             .config
             .is_direct
             .unwrap_or(self.config.blockdev_info.block_device_cache_direct);
+
+        let block_rate_limit = RateLimiterConfig::new(
+            self.config.blockdev_info.disk_rate_limiter_bw_max_rate,
+            self.config.blockdev_info.disk_rate_limiter_ops_max_rate,
+            self.config
+                .blockdev_info
+                .disk_rate_limiter_bw_one_time_burst,
+            self.config
+                .blockdev_info
+                .disk_rate_limiter_ops_one_time_burst,
+        );
+        disk_config.rate_limiter_config = block_rate_limit;
 
         let response = cloud_hypervisor_vm_blockdev_add(
             socket.try_clone().context("failed to clone socket")?,
