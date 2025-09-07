@@ -138,7 +138,7 @@ impl RuntimeHandler for VirtContainer {
             );
             let vm = factory::get_vm(&mut vm_config, PathBuf::from(template_path)).await?;
             info!(sl!(), "lib::new_instance(): sleep 300s start");
-            thread::sleep(Duration::from_secs(300));
+            // thread::sleep(Duration::from_secs(300));
             info!(sl!(), "lib::new_instance(): sleep 300s awake");
             info!(sl!(), "lib::new_instance(): get vm from template.  vm: new_vm() VM id={}, cpu={}, memory={}", vm.id, vm.cpu, vm.memory  );
             // vm.resume().await?;

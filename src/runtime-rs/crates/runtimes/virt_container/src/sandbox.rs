@@ -595,7 +595,6 @@ impl Sandbox for VirtSandbox {
         
          if <std::option::Option<Factory> as Clone>::clone(&self.factory).unwrap().template  {
             info!(sl!(), "sandbox::start(): start template vm");
-            // vm::resume(self);
         } else {
             self.hypervisor.start_vm(10_000).await.context("start vm")?;
             info!(sl!(), "sandbox::start(): start normal vm");

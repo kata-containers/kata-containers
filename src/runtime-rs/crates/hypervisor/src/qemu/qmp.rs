@@ -20,6 +20,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use qapi_qmp::query_migrate;
+use qapi_qmp::{migrate, migrate_incoming, MigrationInfo};
+use qapi_qmp::{migrate_set_capabilities, MigrationCapability, MigrationCapabilityStatus};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,

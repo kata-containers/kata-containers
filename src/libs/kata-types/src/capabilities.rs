@@ -76,7 +76,8 @@ impl Capabilities {
 
     /// is_fs_sharing_supported tells if an hypervisor supports host filesystem sharing.
     pub fn is_fs_sharing_supported(&self) -> bool {
-        self.flags.and(CapabilityBits::FsSharingSupport) != 0
+        return false;
+        // self.flags.and(CapabilityBits::FsSharingSupport) != 0
     }
 
     /// is_mem_hotplug_probe_supported tells if the hypervisor supports hotplug probe interface

@@ -44,7 +44,7 @@ pub struct VM {
     pub id: String,
 
     /// Number of vCPUs assigned to the VM.
-    pub cpu: i32,
+    pub cpu: f32,
 
     /// Amount of memory (in MB) assigned to the VM.
     pub memory: u32,
@@ -115,8 +115,8 @@ impl VMConfig {
         // }
 
         // 5. num_vcpus_f 填默认值
-        if conf.cpu_info.default_vcpus == 0 {
-            conf.cpu_info.default_vcpus = default::DEFAULT_GUEST_VCPUS as i32;
+        if conf.cpu_info.default_vcpus == 0.0 {
+            conf.cpu_info.default_vcpus = default::DEFAULT_GUEST_VCPUS as f32;
         }
 
         // 6. memory_size 填默认值
