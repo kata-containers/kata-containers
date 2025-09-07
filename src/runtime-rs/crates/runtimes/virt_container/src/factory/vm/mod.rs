@@ -20,7 +20,8 @@ use common::{message::Message, types::SandboxConfig, Sandbox, SandboxNetworkEnv}
 use runtime_spec;
 use slog::error;
 use tokio::sync::mpsc::channel;
-use virt_container::sandbox::VirtSandbox;
+use crate::sandbox::VirtSandbox;
+use crate::factory;
 macro_rules! sl {
     () => {
         slog_scope::logger().new(o!("subsystem" => "vm"))
@@ -223,18 +224,22 @@ impl VM {
         //msg_sender
         const MESSAGE_BUFFER_SIZE: usize = 8;
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
-        // //hypervisor
+
+        // 这里从似乎要根据tobeTemplate来进行切换
+        // hypervisor
         let hypervisor = Self::new_hypervisor(&config)
             .await
             .context("new hypervisor")?;
-        // let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
+        // let hypervisor = crate::new_hypervisor(&toml_config).await.context("new hypervisor")?;
 
         //agent
         // get uds from hypervisor and get config from toml_config
         let agent = Self::new_agent(&config).context("new agent")?;
+        // let agent = crate::new_agent(&toml_config).context("new agent")?;
 
+        // sandbox_config
         let sandbox_config = Self::new_empty_sandbox_config();
-        info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sandbox_config));
+        // info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sandbox_config));
 
         let mut initial_size_manager = InitialSizeManager::new_from(&sandbox_config.annotations)
             .context("failed to construct static resource manager")?;
@@ -243,7 +248,9 @@ impl VM {
         //     .setup_config(&mut toml_config)
         //     .context("failed to setup static resource mgmt config")?;
 
-        info!(sl!(), "vm::new_vm"; "toml_config" => format!("{:#?}", toml_config));
+        // info!(sl!(), "vm::new_vm"; "toml_config" => format!("{:#?}", toml_config));
+
+        let factory = toml_config.factory.clone();
 
         let toml_config_arc = Arc::new(toml_config);
         // 这里toml_config的所有权就给了resource_manager
@@ -268,6 +275,7 @@ impl VM {
             hypervisor.clone(),
             resource_manager.clone(),
             sandbox_config,
+            factory,
         )
         .await;
 
@@ -277,7 +285,7 @@ impl VM {
 
         // info!(sl!(), "vm::new_vm"; "sandbox" => format!("{:?}", sb.sid));
         // 调用 start()
-        match sb.start().await {
+        match sb.start_template().await {
             Ok(_) => {
                 info!(sl!(), "vm::new_vm"; "sb" => format!("{:?}", sb));
             }
@@ -298,6 +306,23 @@ impl VM {
             // store,
         };
         Ok(vm)
+    }
+
+
+    // 把模板 VM 的 hypervisor（里面包含 agent socket 地址）复制给 sandbox，让 shim 在后续建立连接时，实际上连的就是模板 VM 内已经恢复的 agent。
+    pub async fn assign_sandbox(&self, sb: &VirtSandbox) -> Result<()>{
+        info!(sl!(), "vm::assign_sandbox(): assign_sandbox start");
+
+
+
+        // 把一个 VM 和 Sandbox 绑定起来，主要做了三件事：
+
+        // 复用 VM 内已存在的 agent；
+
+        // 通过符号链接把 Sandbox 的共享目录、socket 指向 VM 的实际目录；
+
+        // 更新 Sandbox 的 hypervisor 和 VM id 信息。
+        Ok(())
     }
 
     pub async fn stop(&self) -> Result<()> {
@@ -333,18 +358,18 @@ impl VM {
 
     // Pause pauses a VM.
     pub async fn pause(&self) -> Result<()> {
-        info!(sl!(), "pause vm");
+        info!(sl!(), "vm::pause(): start");
         self.hypervisor.pause_vm().await
     }
     // Save saves a VM to persistent disk.
     pub async fn save(&self) -> Result<()> {
-        info!(sl!(), "save vm");
+        info!(sl!(), "vm::save(): start");
         self.hypervisor.save_vm().await
     }
     
     // Resume resumes a paused VM.
     pub async fn resume(&self) -> Result<()> {
-        info!(sl!(), "resume vm");
+        info!(sl!(), "vm::resume(): start");
         self.hypervisor.resume_vm().await
     }
 }

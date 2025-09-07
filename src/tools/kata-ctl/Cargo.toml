@@ -36,10 +36,7 @@ kata-sys-util = { path = "../../../src/libs/kata-sys-util/" }
 safe-path = { path = "../../libs/safe-path" }
 agent = { path = "../../runtime-rs/crates/agent" }
 hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = ["cloud-hypervisor"] }
-resource = { path = "../../runtime-rs/crates/resource" }
 virt_container = { path = "../../runtime-rs/crates/runtimes/virt_container" }
-common = { path = "../../runtime-rs/crates/runtimes/common" }
-runtime-spec = { path = "../../libs/runtime-spec" }
 serial_test = "0.10.0"
 vmm-sys-util = "0.11.0"
 epoll = "4.0.1"

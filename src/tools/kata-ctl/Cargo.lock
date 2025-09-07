@@ -1944,7 +1944,6 @@ dependencies = [
  "base64 0.13.1",
  "chrono",
  "clap",
- "common",
  "containerd-shim-protos",
  "csv",
  "epoll",
@@ -1963,9 +1962,7 @@ dependencies = [
  "prometheus",
  "quick-xml",
  "reqwest",
- "resource",
  "ron",
- "runtime-spec",
  "safe-path 0.1.0",
  "semver",
  "serde",
@@ -3069,9 +3066,9 @@ dependencies = [
 
 [[package]]
 name = "qapi"
-version = "0.15.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b047adab56acc4948d4b9b58693c1f33fd13efef2d6bb5f0f66a47436ceada8"
+checksum = "c6412bdd014ebee03ddbbe79ac03a0b622cce4d80ba45254f6357c847f06fa38"
 dependencies = [
  "bytes",
  "futures",
@@ -3106,9 +3103,9 @@ dependencies = [
 
 [[package]]
 name = "qapi-qmp"
-version = "0.15.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45303cac879d89361cad0287ae15f9ae1e7799b904b474152414aeece39b9875"
+checksum = "e8b944db7e544d2fa97595e9a000a6ba5c62c426fa185e7e00aabe4b5640b538"
 dependencies = [
  "qapi-codegen",
  "qapi-spec",

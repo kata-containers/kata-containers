@@ -184,6 +184,7 @@ impl ResourceManagerInner {
                 }
                 ResourceConfig::VmRootfs(r) => {
                     info!(sl!(), "prepare_before_start_vm: handling VmRootfs {:?}", r);
+
                     do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(r))
                         .await
                         .context("do handle device failed.")?;

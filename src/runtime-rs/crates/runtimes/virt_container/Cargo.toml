@@ -38,7 +38,6 @@ logging = { workspace = true }
 runtime-spec = { workspace = true }
 persist = { workspace = true }
 resource = { workspace = true }
-
 [features]
 default = ["cloud-hypervisor"]
 

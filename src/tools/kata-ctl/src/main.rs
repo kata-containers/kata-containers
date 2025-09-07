@@ -12,7 +12,7 @@ extern crate slog;
 mod arch;
 mod args;
 mod check;
-mod factory;
+// mod factory;
 mod log_parser;
 mod monitor;
 mod ops;
@@ -35,7 +35,7 @@ use ops::exec_ops::handle_exec;
 use ops::volume_ops::handle_direct_volume;
 use ops::factory_ops::handle_factory;
 use slog::{error, o};
-
+// use virt_container::factory::Factory;
 macro_rules! sl {
     () => {
         slog_scope::logger().new(o!("subsystem" => "kata-ctl_main"))

@@ -101,7 +101,7 @@ pub trait ConfigObjectOps {
 }
 
 /// Factory is a structure to set the VM factory configuration.
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct Factory {
 	/// TemplatePath specifies the path of template.
     #[serde(default)]

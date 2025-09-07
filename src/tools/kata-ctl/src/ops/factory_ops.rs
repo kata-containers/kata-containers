@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::factory;
+use virt_container::factory;
 use crate::args::{FactoryArgs, FactorySubCommand};
 
 use slog::{info};

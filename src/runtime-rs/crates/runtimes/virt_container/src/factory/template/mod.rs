@@ -15,6 +15,8 @@ use std::time::Duration;
 // use std::{thread, os::unix::fs::PermissionsExt};
 
 use anyhow::{anyhow, Result};
+use anyhow::Context;
+
 // use async_trait::async_trait;
 use async_trait::async_trait;
 use nix::mount::{mount, MsFlags};
@@ -40,8 +42,8 @@ pub trait FactoryBase: Debug {}
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Template {
-    state_path: PathBuf,
-    config: VMConfig,
+    pub state_path: PathBuf,
+    pub config: VMConfig,
 }
 
 impl Template {
@@ -91,7 +93,7 @@ impl Template {
     //     &self.config
     // }
 
-    fn check_template_vm(&self) -> Result<()> {
+    pub fn check_template_vm(&self) -> Result<()> {
         let memory_path = self.state_path.join("memory");
         let state_path = self.state_path.join("state");
         if !memory_path.exists() || !state_path.exists() {
@@ -110,7 +112,7 @@ impl Template {
     //     Ok(())
     // }
 
-    fn prepare_template_files(&self) -> Result<()> {
+    pub fn prepare_template_files(&self) -> Result<()> {
         std::fs::create_dir_all(&self.state_path)?;
         let opts = format!(
             "size={}M",
@@ -131,7 +133,8 @@ impl Template {
         Ok(())
     }
 
-    async fn create_template_vm(&self, toml_config: TomlConfig) -> Result<()> {
+    pub async fn create_template_vm(&self, toml_config: TomlConfig) -> Result<()> {
+        info!(sl!(), "template::create_template_vm: start(): start");
         let mut config = self.config.clone();
         config.hypervisor_config.boot_to_be_template = true;
         config.hypervisor_config.boot_from_template = false;
@@ -148,8 +151,6 @@ impl Template {
             vm.cpu,
             vm.memory
         );
-
-
 
         vm.disconnect().await?;
         info!(sl!(), "template::create_template_vm: disconnect()");
@@ -175,11 +176,36 @@ impl Template {
 
         Ok(())
     }
+    
+    #[allow(dead_code)]
+    pub async fn create_from_template_vm(&self, new_config: &mut VMConfig) -> Result<VM> {
+        // 这里主要调用NewVM来实现这个从t.statePath + "/memory"和t.statePath + "/state"  恢复暂存的模版
+        info!(sl!(), "template::create_from_template_vm: start(): start");
+        let mut config = self.config.clone();
+        config.hypervisor_config.boot_to_be_template = false;
+        config.hypervisor_config.boot_from_template = true;
+        config.hypervisor_config.memory_path =
+            self.state_path.join("memory").to_string_lossy().to_string();
+        config.hypervisor_config.device_state_path =
+            self.state_path.join("state").to_string_lossy().to_string();
+        config.hypervisor_config.shared_path = new_config.hypervisor_config.shared_path.clone();
+        config.hypervisor_config.vm_store_path = new_config.hypervisor_config.vm_store_path.clone();
+        config.hypervisor_config.run_store_path = new_config.hypervisor_config.run_store_path.clone();
 
-    // fn create_from_template_vm(&self, ctx: &tokio::runtime::Handle, c: &VMConfig) -> Result<VM> {
-    //     let mut config = self.config.clone();
-    // }
-        
+        let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
+
+        let vm = VM::new_vm(config, toml_config).await?;
+        info!(sl!(),"template::get_base_vm():  vm: new_vm() VM id={}, cpu={}, memory={}", vm.id, vm.cpu, vm.memory);
+        Ok(vm)
+    }
+    
+    pub async fn get_base_vm(&self, config: &mut VMConfig) -> Result<VM>
+    {
+        info!(sl!(), "template::get_base_vm(): start");
+        let vm = self.create_from_template_vm(config).await?;
+        info!(sl!(),"template::get_base_vm():  vm: new_vm() VM id={}, cpu={}, memory={}", vm.id, vm.cpu, vm.memory);
+        Ok(vm)
+    }
 }
 
 #[async_trait]

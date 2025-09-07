@@ -36,7 +36,7 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
-use kata_types::config::TomlConfig;
+use kata_types::config::{Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
@@ -50,13 +50,15 @@ use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, Networ
 use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::path::Path;
+// use std::path::PathBuf;
 use std::sync::Arc;
+
 use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
-
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
-
+// use crate::factory;
+// use crate::factory::vm::VMConfig;
 pub struct SandboxRestoreArgs {
     pub sid: String,
     pub toml_config: TomlConfig,
@@ -93,6 +95,7 @@ pub struct VirtSandbox {
     pub hypervisor: Arc<dyn Hypervisor>,
     pub monitor: Arc<HealthCheck>,
     pub sandbox_config: Option<SandboxConfig>,
+    pub factory: Option<Factory>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -101,11 +104,12 @@ impl std::fmt::Debug for VirtSandbox {
             .field("sid", &self.sid)
             .field("msg_sender", &self.msg_sender)
             .field("inner", &"<SandboxInner>")
-            .field("resource_manager",  &self.resource_manager)
-            .field("agent",  &"<Agent>")
+            .field("resource_manager", &self.resource_manager)
+            .field("agent", &"<Agent>")
             .field("hypervisor", &self.hypervisor)
             .field("monitor", &"<HealthCheck>")
             .field("sandbox_config", &self.sandbox_config)
+            .field("factory", &self.factory)
             .finish()
     }
 }
@@ -118,6 +122,7 @@ impl VirtSandbox {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         sandbox_config: SandboxConfig,
+        factory: Factory,
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
@@ -130,6 +135,7 @@ impl VirtSandbox {
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             sandbox_config: Some(sandbox_config),
+            factory: Some(factory),
         })
     }
 
@@ -501,8 +507,10 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
-    #[instrument(name = "sb: start")]
+    // #[instrument(name = "sb: start")]
+
     async fn start(&self) -> Result<()> {
+        info!(sl!(), "sandbox::start()"; "sandbox:" => format!("{:?}", self));
         let id = &self.sid;
 
         if self.sandbox_config.is_none() {
@@ -539,10 +547,244 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
-        // start vm
+        // // 不管怎么启动的，都直接从VM里拿socket地址
+        // let mut agent_addr: Option<String> = None;
+        // // 如果有Factory设置，则从Factory里读取VM
+        // if let Some(factory) = self.factory.clone() {
+        //     if factory.template {
+        //         // Build vm_config
+        //         //load toml_config
+        //         // Step 1: Load Kata config
+        //         let (toml_config, _) =
+        //             TomlConfig::load_from_default().context("load toml config")?;
+        //         // Step 2: Build VMConfig
+        //         let mut vm_config = VMConfig {
+        //             hypervisor_name: toml_config.runtime.hypervisor_name.clone(),
+        //             agent_name: toml_config.runtime.agent_name.clone(),
+        //             hypervisor_config: toml_config
+        //                 .hypervisor
+        //                 .get(&toml_config.runtime.hypervisor_name)
+        //                 .cloned()
+        //                 .unwrap_or_default(),
+        //             agent_config: toml_config
+        //                 .agent
+        //                 .get(&toml_config.runtime.agent_name)
+        //                 .cloned()
+        //                 .unwrap_or_default(),
+        //         };
+        //         let template_path = toml_config.factory.template_path.clone();
+        //         info!(
+        //             sl!(),
+        //             "sandbox::start(): build VMConfig. VMConfig:{:?}", vm_config
+        //         );
+        //         let vm = factory::get_vm(&mut vm_config, PathBuf::from(template_path)).await?;
+        //         self.hypervisor = vm.hypervisor.clone();
+        //         info!(sl!(), "sandbox::start(): get vm from template.  vm: new_vm() VM id={}, cpu={}, memory={}", vm.id, vm.cpu, vm.memory);
+        //         // vm.assign_sandbox(self).await?;
+        //         let addr = vm.hypervisor.get_agent_socket().await?;
+        //         info!(sl!(), "sandbox::start(): template vm agent socket addr = {:?}", addr);
+        //         agent_addr = Some(addr);
+        //     } else {
+        //         self.hypervisor.start_vm(10_000).await.context("start vm")?;
+        //         let addr = self.hypervisor.get_agent_socket().await?;          
+        //         info!(sl!(), "sandbox::start(): normal vm agent socket addr = {:?}", addr);
+        //         agent_addr = Some(addr);
+        //         info!(sl!(), "start vm");
+        //     }
+        // }
+        
+         if <std::option::Option<Factory> as Clone>::clone(&self.factory).unwrap().template  {
+            info!(sl!(), "sandbox::start(): start template vm");
+            // vm::resume(self);
+        } else {
+            self.hypervisor.start_vm(10_000).await.context("start vm")?;
+            info!(sl!(), "sandbox::start(): start normal vm");
+        }
+
+        // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
+        let (prestart_hooks, create_runtime_hooks) =
+            if let Some(hooks) = sandbox_config.hooks.as_ref() {
+                (
+                    hooks.prestart().clone().unwrap_or_default(),
+                    hooks.create_runtime().clone().unwrap_or_default(),
+                )
+            } else {
+                (Vec::new(), Vec::new())
+            };
+        info!(sl!(), "sandbox::start(): let (prestart_hooks, create_runtime_hooks)");
+        
+        self.execute_oci_hook_functions(
+            &prestart_hooks,
+            &create_runtime_hooks,
+            &sandbox_config.state,
+        )
+        .await?;
+
+        info!(sl!(), "sandbox::start():  self.execute_oci_hook_functions");
+        // 1. if there are pre-start hook functions, network config might have been changed.
+        //    We need to rescan the netns to handle the change.
+        // 2. Do not scan the netns if we want no network for the VM.
+        // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
+        let config = self.resource_manager.config().await;
+        if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
+            && !config.runtime.disable_new_netns
+            && !dan_config_path(&config, &self.sid).exists()
+        {
+            if let Some(netns_path) = &sandbox_config.network_env.netns {
+                let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
+                    network_model: config.runtime.internetworking_model.clone(),
+                    netns_path: netns_path.to_owned(),
+                    queues: self
+                        .hypervisor
+                        .hypervisor_config()
+                        .await
+                        .network_info
+                        .network_queues as usize,
+                    network_created: sandbox_config.network_env.network_created,
+                });
+                self.resource_manager
+                    .handle_network(network_resource)
+                    .await
+                    .context("set up device after start vm")?;
+            }
+        }
+
+        info!(sl!(), "sandbox::start(): let config = self.resource_manager.config().");
+        // connect agent
+        // set agent socket
+
+        let address = self
+            .hypervisor
+            .get_agent_socket()
+            .await
+            .context("get agent socket")?;
+
+        // let address = agent_addr.expect("agent socket must exist");
+        
+        // info!(sl!(), "sandbox::get_agent_socket(): sandbox.hypervisor agent socket addr = {:?}", s_address);
+        info!(sl!(), "sandbox::get_agent_socket(): vm agent socket addr = {:?}", address);
+        self.agent
+            .start(&address)
+            .await
+            .context(format!("connect to address {:?}", &address))?;
+
+        self.resource_manager
+            .setup_after_start_vm()
+            .await
+            .context("setup device after start vm")?;
+
+        // create sandbox in vm
+        let agent_config = self.agent.agent_config().await;
+        let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
+        let req = agent::CreateSandboxRequest {
+            hostname: sandbox_config.hostname.clone(),
+            dns: sandbox_config.dns.clone(),
+            storages: self
+                .resource_manager
+                .get_storage_for_sandbox()
+                .await
+                .context("get storages for sandbox")?,
+            sandbox_pidns: false,
+            sandbox_id: id.to_string(),
+            guest_hook_path: self
+                .hypervisor
+                .hypervisor_config()
+                .await
+                .security_info
+                .guest_hook_path,
+            kernel_modules,
+        };
+
+        self.agent
+            .create_sandbox(req)
+            .await
+            .context("create sandbox")?;
+
+        inner.state = SandboxState::Running;
+
+        // get and store guest details
+        self.store_guest_details()
+            .await
+            .context("failed to store guest details")?;
+
+        let agent = self.agent.clone();
+        let sender = self.msg_sender.clone();
+        info!(sl!(), "oom watcher start");
+        tokio::spawn(async move {
+            loop {
+                match agent
+                    .get_oom_event(agent::Empty::new())
+                    .await
+                    .context("get oom event")
+                {
+                    Ok(resp) => {
+                        let cid = &resp.container_id;
+                        warn!(sl!(), "send oom event for container {}", &cid);
+                        let event = TaskOOM {
+                            container_id: cid.to_string(),
+                            ..Default::default()
+                        };
+                        let msg = Message::new(Action::Event(Arc::new(event)));
+                        let lock_sender = sender.lock().await;
+                        if let Err(err) = lock_sender.send(msg).await.context("send event") {
+                            error!(
+                                sl!(),
+                                "failed to send oom event for {} error {:?}", cid, err
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        warn!(sl!(), "failed to get oom event error {:?}", err);
+                        break;
+                    }
+                }
+            }
+        });
+        self.monitor.start(id, self.agent.clone());
+        self.save().await.context("save state")?;
+        Ok(())
+    }
+
+    async fn start_template(&self) -> Result<()> {
+        info!(sl!(), "sandbox::start_template()"; "sandbox:" => format!("{:?}", self));
+        let id = &self.sid;
+
+        if self.sandbox_config.is_none() {
+            return Err(anyhow!("sandbox config is missing"));
+        }
+        let sandbox_config = self.sandbox_config.as_ref().unwrap();
+
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
+
+        let mut inner = self.inner.write().await;
+        if inner.state != SandboxState::Init {
+            warn!(sl!(), "sandbox is started");
+            return Ok(());
+        }
+
+        self.hypervisor
+            .prepare_vm(
+                id,
+                sandbox_config.network_env.netns.clone(),
+                &sandbox_config.annotations,
+            )
+            .await
+            .context("prepare vm")?;
+
+        // generate device and setup before start vm
+        // should after hypervisor.prepare_vm
+        let resources = self
+            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
+            .await?;
+
+        self.resource_manager
+            .prepare_before_start_vm(resources)
+            .await
+            .context("set up device before start vm")?;
+
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
-
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
             if let Some(hooks) = sandbox_config.hooks.as_ref() {
@@ -930,6 +1172,7 @@ impl Persist for VirtSandbox {
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             sandbox_config: None,
+            factory: None,
         })
     }
 }

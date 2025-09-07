@@ -95,7 +95,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn resume_vm(&self) -> Result<()> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.resume_vm()
     }
 
