@@ -270,7 +270,7 @@ impl Compact {
                     for (order, &count_str) in parts[(index + 1)..].iter().enumerate() {
                         if order < order_limit {
                             if let Ok(count) = count_str.parse::<u64>() {
-                                total_free_movable_pages += count * 1 << order;
+                                total_free_movable_pages += count * (1 << order);
                             }
                         }
                     }
