@@ -35,7 +35,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
-	"github.com/opencontainers/selinux/go-selinux/label"
+	selinux "github.com/opencontainers/selinux/go-selinux"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -1210,10 +1210,10 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 	// the SELinux label. If these processes require privileged, we do
 	// notwant to run them under confinement.
 	if !q.config.DisableSeLinux {
-		if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
+		if err := selinux.SetExecLabel(q.config.SELinuxProcessLabel); err != nil {
 			return err
 		}
-		defer label.SetProcessLabel("")
+		defer selinux.SetExecLabel("")
 	}
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		err = q.setupVirtiofsDaemon(ctx)
