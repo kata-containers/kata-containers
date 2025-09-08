@@ -66,6 +66,9 @@ updates:
       rustix:
         patterns:
           - rustix
+      slab:
+        patterns:
+          - slab
       time:
         patterns:
           - time
