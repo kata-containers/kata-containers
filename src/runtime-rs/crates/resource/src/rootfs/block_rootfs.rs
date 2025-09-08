@@ -14,7 +14,7 @@ use hypervisor::{
         device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfig,
+    BlockConfig, BlockDeviceAio,
 };
 use kata_types::config::hypervisor::{
     VIRTIO_BLK_CCW, VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_PMEM, VIRTIO_SCSI,
@@ -50,13 +50,14 @@ impl BlockRootfs {
         fs::create_dir_all(&host_path)
             .map_err(|e| anyhow!("failed to create rootfs dir {}: {:?}", host_path, e))?;
 
-        let block_driver = get_block_device_info(d).await.block_device_driver;
-
+        let blkdev_info = get_block_device_info(d).await;
+        let block_driver = blkdev_info.block_device_driver.clone();
         let block_device_config = &mut BlockConfig {
             major: stat::major(dev_id) as i64,
             minor: stat::minor(dev_id) as i64,
             driver_option: block_driver.clone(),
             path_on_host: rootfs.source.clone(),
+            blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             ..Default::default()
         };
 
