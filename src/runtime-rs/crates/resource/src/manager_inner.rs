@@ -15,7 +15,7 @@ use hypervisor::{
         util::{get_host_path, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
-    BlockConfig, Hypervisor, VfioConfig,
+    BlockConfig, BlockDeviceAio, Hypervisor, VfioConfig,
 };
 use kata_types::mount::Mount;
 use kata_types::{
@@ -395,10 +395,14 @@ impl ResourceManagerInner {
                     let block_driver = get_block_device(&self.device_manager)
                         .await
                         .block_device_driver;
+                    let aio = get_block_device(&self.device_manager)
+                        .await
+                        .block_device_aio;
                     let dev_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major(),
                         minor: d.minor(),
                         driver_option: block_driver,
+                        blkdev_aio: BlockDeviceAio::new(&aio),
                         ..Default::default()
                     });
 
