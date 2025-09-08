@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig,
     },
     BlockConfig,
@@ -39,7 +39,7 @@ impl BlockVolume {
             Some(path) => path,
             None => return Err(anyhow!("mount source path is empty")),
         };
-        let block_driver = get_block_driver(d).await;
+        let block_driver = get_block_device_info(d).await.block_device_driver;
         let fstat = stat::stat(mnt_src).context(format!("stat {}", mnt_src.display()))?;
         let block_device_config = BlockConfig {
             major: stat::major(fstat.st_rdev) as i64,
