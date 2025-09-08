@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
     BlockConfig,
@@ -50,7 +50,7 @@ impl BlockRootfs {
         fs::create_dir_all(&host_path)
             .map_err(|e| anyhow!("failed to create rootfs dir {}: {:?}", host_path, e))?;
 
-        let block_driver = get_block_driver(d).await;
+        let block_driver = get_block_device_info(d).await.block_device_driver;
 
         let block_device_config = &mut BlockConfig {
             major: stat::major(dev_id) as i64,
