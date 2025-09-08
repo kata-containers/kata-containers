@@ -26,7 +26,7 @@ type grpccache struct {
 
 // New returns a new direct vm factory.
 func New(ctx context.Context, endpoint string) (base.FactoryBase, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", endpoint), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(fmt.Sprintf("unix://%s", endpoint), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to connect %q", endpoint)
 	}
