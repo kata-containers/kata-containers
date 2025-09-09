@@ -23,6 +23,10 @@ use kata_types::mount::Mount;
 use oci_spec::runtime as oci;
 use strum::Display;
 
+// DEFAULT_SHM_SIZE is the default shm size to be used in case host
+// IPC is used.
+pub const DEFAULT_SHM_SIZE: u64 = 65536 * 1024;
+
 /// TaskRequest: TaskRequest from shim
 /// TaskRequest and TaskResponse messages need to be paired
 #[derive(Debug, Clone, Display)]
@@ -176,6 +180,7 @@ pub struct SandboxConfig {
     pub annotations: HashMap<String, String, RandomState>,
     pub hooks: Option<oci::Hooks>,
     pub state: runtime_spec::State,
+    pub shm_size: u64,
 }
 
 #[derive(Clone, Debug)]

@@ -11,7 +11,6 @@
 
 use kata_types::mount;
 use oci_spec::runtime::{Mount, Spec};
-use std::path::Path;
 
 use crate::mount::get_linux_mount_info;
 
@@ -34,9 +33,8 @@ pub fn is_ephemeral_volume(mount: &Mount) -> bool {
             mount.destination(),
 
         ),
-        (Some("bind"), Some(source), dest) if get_linux_mount_info(source).is_ok_and(|info| info.fs_type == "tmpfs") &&
-            (is_empty_dir(source) || dest.as_path() == Path::new("/dev/shm"))
-    )
+        (Some("bind"), Some(source), _dest) if get_linux_mount_info(source).is_ok_and(|info| info.fs_type == "tmpfs") &&
+            is_empty_dir(source))
 }
 
 /// Check whether the given path is a kubernetes empty-dir volume of medium "default".
