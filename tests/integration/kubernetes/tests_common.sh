@@ -361,7 +361,7 @@ add_allow_all_policy_to_yaml() {
 		;;
 
 	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
-		die "Policy is not required for ${resource_kind} from ${yaml_file}"
+		info "Policy is not required for ${resource_kind} from ${yaml_file}"
 		;;
 
 	*)
