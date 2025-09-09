@@ -251,6 +251,8 @@ function run_tests() {
 		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 		echo "containerd config has been set to default"
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
+		sudo apt install -y auditd
+		sudo systemctl restart auditd
 
 		# Allow genpolicy to access the containerd image pull APIs without sudo.
 		local socket_wait_time

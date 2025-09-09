@@ -155,6 +155,15 @@ do
 	fi
 done
 
+
+seccomp_audit_logs=$(sudo ausearch -m SECCOMP 2>/dev/null || true)
+if [ -n "$seccomp_audit_logs" ]; then
+	info "Seccomp audit logs found:"
+	info "$seccomp_audit_logs"
+else
+	info "No seccomp audit logs found"
+fi
+
 [ ${#tests_fail[@]} -ne 0 ] && die "Tests FAILED from suites: ${tests_fail[*]}"
 
 info "All tests SUCCEEDED"
