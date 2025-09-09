@@ -375,7 +375,11 @@ mod tests {
         fn build_oci_hook(self) -> oci::Hook {
             let mut hook = oci::Hook::default();
             hook.set_path(PathBuf::from(self.path));
-            hook.set_args(Some(self.args));
+            if self.args.is_empty() {
+                hook.set_args(None);
+            } else {
+                hook.set_args(Some(self.args));
+            }
             hook.set_env(Some(self.env));
             hook.set_timeout(self.timeout);
 
