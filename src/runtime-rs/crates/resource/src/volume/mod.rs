@@ -9,6 +9,7 @@ mod default_volume;
 mod ephemeral_volume;
 pub mod hugepage;
 mod share_fs_volume;
+mod shm_volume;
 pub mod utils;
 
 pub mod direct_volume;
@@ -67,10 +68,15 @@ impl VolumeResource {
         // handle mounts
         for m in oci_mounts {
             let read_only = get_mount_options(m.options()).iter().any(|opt| opt == "ro");
-            let volume: Arc<dyn Volume> = if ephemeral_volume::is_ephemeral_volume(m) {
+            let volume: Arc<dyn Volume> = if shm_volume::is_shm_volume(m) {
+                Arc::new(
+                    shm_volume::ShmVolume::new(m)
+                        .with_context(|| format!("new shm volume {:?}", m))?,
+                )
+            } else if ephemeral_volume::is_ephemeral_volume(m) {
                 Arc::new(
                     ephemeral_volume::EphemeralVolume::new(m)
-                        .with_context(|| format!("new shm volume {:?}", m))?,
+                        .with_context(|| format!("new ephemeral volume {:?}", m))?,
                 )
             } else if is_block_volume(m) {
                 // handle block volume

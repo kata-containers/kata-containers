@@ -7,11 +7,11 @@
 use std::path::{Path, PathBuf};
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{get_mount_path, get_mount_type};
+use kata_types::mount::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
 use nix::sys::stat::stat;
 use oci_spec::runtime as oci;

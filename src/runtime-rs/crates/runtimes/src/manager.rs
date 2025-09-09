@@ -9,7 +9,7 @@ use common::{
     message::Message,
     types::{
         ContainerProcess, PlatformInfo, SandboxConfig, SandboxRequest, SandboxResponse,
-        SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
+        SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
@@ -17,12 +17,15 @@ use common::{
 use hypervisor::Param;
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
-    annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
+    annotations::Annotation,
+    config::{default::DEFAULT_GUEST_DNS_FILE, TomlConfig},
+    mount::SHM_DEVICE,
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
 use netns_rs::NetNs;
+use nix::sys::statfs;
 use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use resource::{
@@ -355,6 +358,8 @@ impl RuntimeHandlerManager {
             network_created,
         };
 
+        let shm_size = get_shm_size(spec)?;
+
         let sandbox_config = SandboxConfig {
             sandbox_id: inner.id.clone(),
             dns,
@@ -363,6 +368,7 @@ impl RuntimeHandlerManager {
             annotations: spec.annotations().clone().unwrap_or_default(),
             hooks: spec.hooks().clone(),
             state: state.clone(),
+            shm_size,
         };
 
         inner.try_init(sandbox_config, Some(spec), options).await
@@ -713,4 +719,27 @@ fn update_component_log_level(config: &TomlConfig) {
         );
         updated_inner
     });
+}
+
+fn get_shm_size(spec: &oci::Spec) -> Result<u64> {
+    let mut shm_size = DEFAULT_SHM_SIZE;
+
+    if let Some(mounts) = spec.mounts() {
+        for m in mounts {
+            if m.destination().as_path() != Path::new(SHM_DEVICE) {
+                continue;
+            }
+
+            if m.typ().eq(&Some("bind".to_string()))
+                && !m.source().eq(&Some(PathBuf::from(SHM_DEVICE)))
+            {
+                if let Some(src) = m.source() {
+                    let statfs = statfs::statfs(src)?;
+                    shm_size = statfs.blocks() * statfs.block_size() as u64;
+                }
+            }
+        }
+    }
+
+    Ok(shm_size)
 }

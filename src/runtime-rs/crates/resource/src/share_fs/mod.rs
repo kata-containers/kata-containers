@@ -40,8 +40,6 @@ const KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 /// share fs (for example virtio-fs) mount path in the guest
 pub const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
-pub(crate) const DEFAULT_KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox/";
-
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
 
