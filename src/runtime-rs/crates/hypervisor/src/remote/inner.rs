@@ -153,19 +153,21 @@ impl RemoteInner {
         if let Some(netns_path) = &netns {
             debug!(sl!(), "set netns for vmm master {:?}", &netns_path);
             std::fs::metadata(netns_path).context("check netns path")?;
+        } else {
+            debug!(sl!(), "No netns specified (likely hostNetwork scenario)");
         }
 
         let client = self.get_ttrpc_client()?;
 
         let ctx = context::Context::default();
-        let req = CreateVMRequest {
+        let create_vm_req = CreateVMRequest {
             id: id.to_string(),
-            annotations: self.prepare_annotations(annotations),
             networkNamespacePath: netns.clone().unwrap_or_default(),
+            annotations: annotations.clone(),
             ..Default::default()
         };
-        info!(sl!(), "Preparing REMOTE VM req: {:?}", req.clone());
-        let resp = client.create_vm(ctx, &req).await?;
+        info!(sl!(), "Preparing REMOTE VM req: {:?}", create_vm_req.clone());
+        let resp = client.create_vm(ctx, &create_vm_req).await?;
         info!(sl!(), "Preparing REMOTE VM resp: {:?}", resp.clone());
         self.agent_socket_path = resp.agentSocketPath;
         self.netns = netns;
@@ -312,8 +314,7 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
-        warn!(sl!(), "RemoteInner::get_jailer_root(): NOT YET IMPLEMENTED");
-        Ok("".into())
+        Ok(crate::utils::get_jailer_root(&self.id))
     }
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {

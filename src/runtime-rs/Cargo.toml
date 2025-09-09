@@ -8,6 +8,7 @@ members = [
     "crates/service",
     "crates/shim",
     "crates/shim-ctl",
+    "crates/nydusd",
 
     "tests/utils",
 ]
@@ -25,6 +26,7 @@ resource = { path = "crates/resource" }
 runtimes = { path = "crates/runtimes" }
 service = { path = "crates/service" }
 tests_utils = { path = "tests/utils" }
+nydusd = { path = "crates/nydusd" }
 
 ch-config = { path = "crates/hypervisor/ch-config" }
 common = { path = "crates/runtimes/common" }

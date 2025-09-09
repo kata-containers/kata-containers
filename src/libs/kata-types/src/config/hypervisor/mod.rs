@@ -73,6 +73,7 @@ const NO_VIRTIO_FS: &str = "none";
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
+const VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const MAX_BRIDGE_SIZE: u32 = 5;
 
 const KERNEL_PARAM_DELIMITER: &str = " ";
@@ -1021,6 +1022,21 @@ pub struct SharedFsInfo {
     pub valid_virtio_fs_daemon_paths: Vec<String>,
 
     /// Extra arguments for the `virtiofsd` daemon.
+    /// Path to nydus daemon.
+    #[serde(default)]
+    pub nydusd_path: String,
+
+    /// List of valid annotations values for the virtiofs daemon
+    /// The default if not set is empty (all annotations rejected.)
+    #[serde(default)]
+    pub valid_virtio_fs_daemon_paths: Vec<String>,
+
+    /// List of valid annotations values for the nydus daemon
+    /// The default if not set is empty (all annotations rejected.)
+    #[serde(default)]
+    pub valid_nydusd_paths: Vec<String>,
+
+    /// Extra args for virtiofsd daemon
     ///
     /// Format example: `["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]`
     ///
@@ -1072,6 +1088,7 @@ impl SharedFsInfo {
         match self.shared_fs.as_deref() {
             Some(VIRTIO_FS) => self.adjust_virtio_fs(false)?,
             Some(VIRTIO_FS_INLINE) => self.adjust_virtio_fs(true)?,
+            Some(VIRTIO_FS_NYDUS) => self.adjust_virtio_fs(false)?, // adjust nydus as standard virtio-fs
             Some(VIRTIO_9P) => {
                 if self.msize_9p == 0 {
                     self.msize_9p = default::DEFAULT_SHARED_9PFS_SIZE_MB;
@@ -1092,6 +1109,7 @@ impl SharedFsInfo {
             None => Ok(()),
             Some(VIRTIO_FS) => self.validate_virtio_fs(false),
             Some(VIRTIO_FS_INLINE) => self.validate_virtio_fs(true),
+            Some(VIRTIO_FS_NYDUS) => self.validate_virtio_fs(false), // validate nydus as standard virtio-fs
             Some(VIRTIO_9P) => {
                 if self.msize_9p < default::MIN_SHARED_9PFS_SIZE_MB
                     || self.msize_9p > default::MAX_SHARED_9PFS_SIZE_MB

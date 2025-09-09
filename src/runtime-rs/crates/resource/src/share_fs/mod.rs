@@ -43,6 +43,8 @@ pub const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/"
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
 
+use nydusd::Nydusd;
+
 #[async_trait]
 pub trait ShareFs: Send + Sync {
     fn get_share_fs_mount(&self) -> Arc<dyn ShareFsMount>;
@@ -58,6 +60,7 @@ pub trait ShareFs: Send + Sync {
     ) -> Result<()>;
     async fn get_storages(&self) -> Result<Vec<Storage>>;
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
+    async fn get_nydusd(&self) -> Option<Arc<dyn Nydusd>>;
 }
 
 #[derive(Debug, Clone)]
@@ -154,7 +157,7 @@ pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
         INLINE_VIRTIO_FS => Ok(Arc::new(
             ShareVirtioFsInline::new(id, config).context("new inline virtio fs")?,
         )),
-        VIRTIO_FS => Ok(Arc::new(
+        VIRTIO_FS | _VIRTIO_FS_NYDUS => Ok(Arc::new(
             ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,
         )),
         _ => Err(anyhow!("unsupported shred fs {:?}", &shared_fs)),

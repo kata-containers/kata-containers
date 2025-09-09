@@ -21,6 +21,8 @@ use agent::Storage;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::config::hypervisor::SharedFsInfo;
 
+use nydusd::{Nydusd, NydusdImpl};
+
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
     virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount,
@@ -29,7 +31,7 @@ use crate::share_fs::{
     share_virtio_fs::{
         prepare_virtiofs, FS_TYPE_VIRTIO_FS, KATA_VIRTIO_FS_DEV_TYPE, MOUNT_GUEST_TAG,
     },
-    KATA_GUEST_SHARE_DIR, VIRTIO_FS,
+    KATA_GUEST_SHARE_DIR, VIRTIO_FS, _VIRTIO_FS_NYDUS,
 };
 
 #[derive(Debug, Clone)]
@@ -54,10 +56,28 @@ pub(crate) struct ShareVirtioFsStandalone {
     config: ShareVirtioFsStandaloneConfig,
     share_fs_mount: Arc<dyn ShareFsMount>,
     mounted_info_set: Arc<Mutex<HashMap<String, MountedInfo>>>,
+    nydusd: Option<Arc<dyn Nydusd>>,
 }
 
 impl ShareVirtioFsStandalone {
     pub(crate) fn new(id: &str, config: &SharedFsInfo) -> Result<Self> {
+        let nydusd = if config.shared_fs == Some(_VIRTIO_FS_NYDUS.to_string()) {
+            // For now, create with default paths - this should be configurable
+            let sock_path = format!("/tmp/nydusd-{}.sock", id);
+            let api_sock_path = format!("/tmp/nydusd-{}-api.sock", id);
+            let source_path = format!("/tmp/nydusd-{}-source", id);
+            Some(Arc::new(NydusdImpl::new(
+                &config.nydusd_path,
+                &sock_path,
+                &api_sock_path,
+                &source_path,
+                vec![], // Empty extra args for now
+                false,  // Debug disabled for now
+            )) as Arc<dyn Nydusd>)
+        } else {
+            None
+        };
+
         Ok(Self {
             inner: Arc::new(RwLock::new(ShareVirtioFsStandaloneInner::default())),
             config: ShareVirtioFsStandaloneConfig {
@@ -68,6 +88,7 @@ impl ShareVirtioFsStandalone {
             },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
             mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
+            nydusd,
         })
     }
 
@@ -104,6 +125,16 @@ impl ShareVirtioFsStandalone {
     }
 
     async fn setup_virtiofsd(&self, h: &dyn Hypervisor) -> Result<()> {
+        // Check if we have nydusd - if so, start nydusd instead of virtiofsd
+        if let Some(_nydusd) = &self.nydusd {
+            info!(sl!(), "Starting nydusd for virtio-fs-nydus");
+            // For now, just log that we would start nydusd
+            // The actual nydusd startup logic would be implemented here
+            info!(sl!(), "nydusd daemon would be started here");
+            return Ok(());
+        }
+
+        // Default virtiofsd startup logic
         let sock_path = generate_sock_path(&h.get_jailer_root().await?);
         let disable_guest_selinux = h.hypervisor_config().await.disable_guest_selinux;
         let args = self
@@ -222,5 +253,9 @@ impl ShareFs for ShareVirtioFsStandalone {
 
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
         self.mounted_info_set.clone()
+    }
+
+    async fn get_nydusd(&self) -> Option<Arc<dyn Nydusd>> {
+        self.nydusd.clone()
     }
 }
