@@ -234,7 +234,7 @@ function kbs_k8s_delete() {
 	pushd "${COCO_KBS_DIR}"
 	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
 		kubectl delete -k config/kubernetes/ita
-	elif [[ "${KATA_HYPERVISOR}" = "qemu-se" ]]; then
+	elif [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
 		kubectl delete -k config/kubernetes/overlays/ibm-se
 	else
 		kubectl delete -k config/kubernetes/overlays/
@@ -304,8 +304,8 @@ function kbs_k8s_deploy() {
 	# expects at least one secret served at install time.
 	echo "somesecret" > overlays/key.bin
 
-	# For qemu-se runtime, prepare the necessary resources
-	if [[ "${KATA_HYPERVISOR}" == "qemu-se" ]]; then
+	# For qemu-se* runtime, prepare the necessary resources
+	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
 		mv overlays/key.bin overlays/ibm-se/key.bin
 		prepare_credentials_for_qemu_se
 		# SE_SKIP_CERTS_VERIFICATION should be set to true
