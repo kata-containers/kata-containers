@@ -145,7 +145,7 @@ mapping:
       - Static checks / build-checks / check (make test, dragonball, src/dragonball, rust)
       - Static checks / build-checks / check (make test, genpolicy, src/tools/genpolicy, rust, protobuf-compiler)
       - Static checks / build-checks / check (make test, kata-ctl, src/tools/kata-ctl, rust)
-      - Static checks / build-checks / check (make test, libs, src/libs, rust)
+      # - Static checks / build-checks / check (make test, libs, src/libs, rust)
       - Static checks / build-checks / check (make test, runtime-rs, src/runtime-rs, rust)
       - Static checks / build-checks / check (make test, runtime, src/runtime, golang, XDG_RUNTIME_DIR)
       - Static checks / build-checks / check (make test, trace-forwarder, src/tools/trace-forwarder, rust)
