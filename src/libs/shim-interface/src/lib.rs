@@ -158,21 +158,20 @@ mod tests {
 
     #[test]
     fn test_get_uds_with_sid_with_zero() {
-        let result = get_uds_with_sid("acdsdfe", KATA_PATH);
-        assert!(result.is_err());
-        if let Err(err) = result {
-            let left = format!("{:?}", err.to_string());
-            let left_unquoted = &left[1..left.len() - 1];
-            let left_unescaped = left_unquoted.replace("\\\"", "\"");
-
-            assert_eq!(
-                left_unescaped,
-                format!(
-                    "sandbox with the provided prefix {:?} is not found",
-                    "acdsdfe"
-                )
+        let run_path = tempdir().unwrap();
+        let result = get_uds_with_sid("acdsdfe", &run_path.path().display().to_string());
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            format!(
+                "unix://{}",
+                run_path
+                    .path()
+                    .join("acdsdfe")
+                    .join(SHIM_MGMT_SOCK_NAME)
+                    .display()
             )
-        }
+        )
     }
 
     #[test]
