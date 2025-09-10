@@ -104,7 +104,9 @@ func (m *mockHypervisor) ResizeMemory(ctx context.Context, memMB uint32, memoryS
 func (m *mockHypervisor) ResizeVCPUs(ctx context.Context, cpus uint32) (uint32, uint32, error) {
 	return 0, 0, nil
 }
-
+func (m *mockHypervisor) ResizeBlock(ctx context.Context, deviceID string, size uint64) error {
+	return nil
+}
 func (m *mockHypervisor) GetTotalMemoryMB(ctx context.Context) uint32 {
 	return m.config.MemorySize
 }
