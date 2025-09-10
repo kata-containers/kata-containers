@@ -1203,8 +1203,15 @@ match_caps(p_caps, i_caps) if {
     count(p_caps) == 1
     p_caps[0] == "$(default_caps)"
 
+    print("match_caps 2: i_caps =", i_caps)
     print("match_caps 2: default_caps =", policy_data.common.default_caps)
-    policy_data.common.default_caps == i_caps
+
+    norm_defaults := { strip_cap_prefix(c) | c := policy_data.common.default_caps[_] }
+    norm_input := { strip_cap_prefix(c) | c := i_caps[_] }
+    print("match_caps 2: norm_defaults =", norm_defaults)
+    print("match_caps 2: norm_input    =", norm_input)
+
+    norm_defaults == norm_input
 
     print("match_caps 2: true")
 }
@@ -1214,13 +1221,27 @@ match_caps(p_caps, i_caps) if {
     count(p_caps) == 1
     p_caps[0] == "$(privileged_caps)"
 
+    print("match_caps 3: i_caps =", i_caps)
     print("match_caps 3: privileged_caps =", policy_data.common.privileged_caps)
-    policy_data.common.privileged_caps == i_caps
+
+    norm_defaults := { strip_cap_prefix(c) | c := policy_data.common.privileged_caps[_] }
+    norm_input    := { strip_cap_prefix(c) | c := i_caps[_] }
+    print("match_caps 3: norm_defaults =", norm_defaults)
+    print("match_caps 3: norm_input    =", norm_input)
+
+    norm_defaults == norm_input
 
     print("match_caps 3: true")
 }
 
 ######################################################################
+
+strip_cap_prefix(s) := result if {
+    startswith(s, "CAP_")
+    result := substring(s, 4, count(s) - 4)
+} else := result if {
+    result := s
+}
 
 check_directory_traversal(i_path) if {
     not regex.match("(^|/)..($|/)", i_path)
