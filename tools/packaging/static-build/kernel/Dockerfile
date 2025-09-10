@@ -23,6 +23,7 @@ RUN apt-get update && \
 	    libdw-dev \
 	    libelf-dev \
 	    libssl-dev \
+	    python3 \
 	    gettext \
 	    rsync \
 	    cpio \
