@@ -2410,6 +2410,10 @@ impl<'a> QemuCmdLine<'a> {
         console_socket_chardev.set_server(true);
         console_socket_chardev.set_wait(false);
         self.devices.push(Box::new(console_socket_chardev));
+
+        self.kernel
+            .params
+            .append(&mut KernelParams::from_string("console=hvc0"));
     }
 
     pub fn add_virtio_balloon(&mut self) {
