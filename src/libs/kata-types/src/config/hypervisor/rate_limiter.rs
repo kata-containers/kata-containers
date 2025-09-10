@@ -1,5 +1,7 @@
 // Copyright (c) 2022-2023 Intel Corporation
 //
+// Copyright (c) 2024-2025 Ant Group
+//
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
@@ -16,10 +18,13 @@ pub struct TokenBucketConfig {
     pub refill_time: u64,
 }
 
+/// Rate limiter configuration for rust vmm hypervisor
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RateLimiterConfig {
+    /// Bandwidth rate limiter options
     pub bandwidth: Option<TokenBucketConfig>,
+    /// Operations rate limiter options
     pub ops: Option<TokenBucketConfig>,
 }
 

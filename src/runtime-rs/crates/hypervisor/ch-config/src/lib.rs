@@ -9,11 +9,10 @@ use std::path::PathBuf;
 pub mod ch_api;
 pub mod convert;
 pub mod net_util;
-mod virtio_devices;
 
-pub use crate::virtio_devices::RateLimiterConfig;
 use kata_sys_util::protection::GuestProtection;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+use kata_types::config::hypervisor::RateLimiterConfig;
 pub use net_util::MacAddr;
 
 pub const MAX_NUM_PCI_SEGMENTS: u16 = 16;

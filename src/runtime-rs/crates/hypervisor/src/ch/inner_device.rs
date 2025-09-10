@@ -24,9 +24,8 @@ use ch_config::ch_api::{
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
-use ch_config::{
-    net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, RateLimiterConfig, VsockConfig,
-};
+use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
+use kata_types::config::hypervisor::RateLimiterConfig;
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;

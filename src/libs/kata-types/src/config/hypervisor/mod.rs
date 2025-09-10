@@ -48,6 +48,9 @@ pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
 mod remote;
 pub use self::remote::{RemoteConfig, HYPERVISOR_NAME_REMOTE};
 
+mod rate_limiter;
+pub use self::rate_limiter::RateLimiterConfig;
+
 /// Virtual PCI block device driver.
 pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 
