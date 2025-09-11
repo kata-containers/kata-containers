@@ -159,33 +159,13 @@ impl VirtSandbox {
 
         // prepare sharefs device config
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        if hypervisor_config.shared_fs.shared_fs.as_deref() == Some("virtio-fs-nydus") {
-            let nydusd_path = hypervisor_config.shared_fs.virtio_fs_daemon.clone();
-            if nydusd_path.is_empty() {
-                return Err(anyhow!("nydusd_path is not set in hypervisor config"));
-            }
-
-            let jailer_root = get_jailer_root(&self.sid);
-            let nydusd_sock_path = format!("{}/nydusd.sock", jailer_root);
-            let nydusd_api_sock_path = format!("{}/nydusd-api.sock", jailer_root);
-            // The source path for nydus is the root of the shared directory
-            let nydusd_source_path = jailer_root;
-
-            info!(sl!(), "starting nydusd daemon with path: {}", nydusd_path);
-            let nydusd = NydusdImpl::new(
-                &nydusd_path,
-                &nydusd_sock_path,
-                &nydusd_api_sock_path,
-                &nydusd_source_path,
-                vec![], // No extra args for now
-                false,  // Debug disabled by default
-            );
-            let on_quit = Box::new(|| {
-                info!(sl!(), "nydusd daemon has quit");
-            });
-            nydusd.start(on_quit).await.context("failed to start nydusd")?;
-            *self.nydusd.write().await = Some(Arc::new(nydusd) as Arc<dyn Nydusd>);
-        }
+        // Note: Sandbox-level nydusd is not needed as Container-level nydusd
+        // is already handled by nydus snapshotter. We'll use the existing
+        // fuse mode nydusd instances started by nydus snapshotter.
+        info!(sl!(), "Skipping sandbox-level nydusd startup - using container-level nydusd from snapshotter");
+        
+        // TODO: If needed, we can add logic here to verify that nydus snapshotter
+        // is available and properly configured.
         let virtio_fs_config =
             ResourceConfig::ShareFs(hypervisor_config.shared_fs);
         resource_configs.push(virtio_fs_config);

@@ -190,6 +190,15 @@ impl ShareFsMount for VirtiofsShareMount {
         // remove the host share directory
         let host_path = get_host_shared_path(sid);
         fs::remove_dir_all(host_path).context("failed to remove host shared path")?;
+        
+        // Clean up nydusd socket files
+        let short_id = &sid[..8.min(sid.len())]; // Use first 8 chars of ID
+        let stable_sock_dir = "/run/kata";
+        let stable_sock_path = format!("{}/n{}.sock", stable_sock_dir, short_id);
+        let stable_api_sock_path = format!("{}/a{}.sock", stable_sock_dir, short_id);
+        let _ = std::fs::remove_file(&stable_sock_path);
+        let _ = std::fs::remove_file(&stable_api_sock_path);
+        
         Ok(())
     }
 }

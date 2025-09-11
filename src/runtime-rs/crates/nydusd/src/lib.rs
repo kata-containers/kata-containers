@@ -13,6 +13,7 @@ use nix::unistd::Pid;
 use oci_spec::runtime as oci;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -49,8 +50,9 @@ pub struct NydusdImpl {
     sock_path: PathBuf,
     api_sock_path: PathBuf,
     source_path: PathBuf,
+    bootstrap_path: Option<PathBuf>,
     extra_args: Vec<String>,
-    pid: Option<u32>,
+    pid: Arc<tokio::sync::RwLock<Option<u32>>>,
     debug: bool,
 }
 
@@ -68,6 +70,7 @@ impl NydusdImpl {
         sock_path: &str,
         api_sock_path: &str,
         source_path: &str,
+        bootstrap_path: Option<&str>,
         extra_args: Vec<String>,
         debug: bool,
     ) -> Self {
@@ -76,8 +79,9 @@ impl NydusdImpl {
             sock_path: PathBuf::from(sock_path),
             api_sock_path: PathBuf::from(api_sock_path),
             source_path: PathBuf::from(source_path),
+            bootstrap_path: bootstrap_path.map(PathBuf::from),
             extra_args,
-            pid: None,
+            pid: Arc::new(tokio::sync::RwLock::new(None)),
             debug,
         }
     }
@@ -91,8 +95,9 @@ impl NydusdImpl {
     }
 
     #[allow(dead_code)]
-    async fn kill(&mut self) -> Result<()> {
-        if let Some(pid) = self.pid {
+    async fn kill(&self) -> Result<()> {
+        let pid_lock = self.pid.read().await;
+        if let Some(pid) = *pid_lock {
             println!("Stopping nydusd daemon: pid={}", pid);
             let pid = Pid::from_raw(pid as i32);
             if let Err(e) = kill(pid, Signal::SIGTERM) {
@@ -100,8 +105,8 @@ impl NydusdImpl {
             }
             // Simple wait, a more robust implementation would check if the process is still alive.
             sleep(Duration::from_secs(NYDUSD_STOP_TIMEOUT_SECS)).await;
-            self.pid = None;
         }
+        *self.pid.write().await = None;
         Ok(())
     }
 
@@ -112,20 +117,33 @@ impl NydusdImpl {
             .to_str()
             .ok_or(anyhow!("Invalid api sock path string"))?;
 
-        for _ in 0..20 {
+        println!("Checking nydusd API server readiness at: {}", api_sock_str);
+        
+        for i in 0..20 {
+            println!("API readiness check attempt {}/20", i + 1);
             match NydusClient::new(api_sock_str).await {
-                Ok(client) => match client.check_status().await {
-                    Ok(info) if info.state == NYDUSD_DAEMON_STATE_RUNNING => {
-                        return Ok(());
+                Ok(client) => {
+                    println!("Successfully created NydusClient, checking status...");
+                    match client.check_status().await {
+                        Ok(info) => {
+                            println!("API status response: state={}", info.state);
+                            if info.state == NYDUSD_DAEMON_STATE_RUNNING {
+                                println!("Nydusd API server is ready!");
+                                return Ok(());
+                            }
+                        }
+                        Err(e) => {
+                            println!("Failed to check status: {}", e);
+                        }
                     }
-                    _ => sleep(Duration::from_millis(100)).await,
-                },
-                Err(_) => {
-                    sleep(Duration::from_millis(100)).await;
+                }
+                Err(e) => {
+                    println!("Failed to create NydusClient: {}", e);
                 }
             }
+            sleep(Duration::from_millis(100)).await;
         }
-        Err(anyhow!("Failed to wait for nydusd API server to be ready"))
+        Err(anyhow!("Failed to wait for nydusd API server to be ready after 20 attempts"))
     }
 
     #[allow(dead_code)]
@@ -143,12 +161,9 @@ impl NydusdImpl {
     // Corresponds to nydusd.valid()
     #[allow(dead_code)]
     fn valid(&self) -> Result<()> {
-        check_path_valid_is_dir(self.path.parent().ok_or(anyhow!("Invalid nydusd path"))?)
-            .context("nydusd path's parent directory does not exist")?;
-        check_path_valid_is_dir(self.sock_path.parent().ok_or(anyhow!("Invalid sock path"))?)
-            .context("sock path's parent directory does not exist")?;
         check_path_valid_is_dir(
-            self.api_sock_path
+            &self
+                .api_sock_path
                 .parent()
                 .ok_or(anyhow!("Invalid api sock path"))?,
         )
@@ -163,7 +178,7 @@ impl NydusdImpl {
     fn args(&self) -> Result<Vec<String>> {
         let log_level = if self.debug { "debug" } else { "info" };
         let mut args = vec![
-            "virtiofs".to_string(),
+            "virtiofs".to_string(),  // Back to virtiofs mode like runtime-go
             "--log-level".to_string(),
             log_level.to_string(),
             "--apisock".to_string(),
@@ -171,12 +186,14 @@ impl NydusdImpl {
                 .to_str()
                 .ok_or(anyhow!("Invalid api sock path string"))?
                 .to_string(),
-            "--sock".to_string(),
+            "--sock".to_string(),  // virtiofs mode uses --sock parameter
             self.sock_path
                 .to_str()
                 .ok_or(anyhow!("Invalid sock path string"))?
                 .to_string(),
         ];
+        
+        // Note: In virtiofs mode, bootstrap is provided via API calls, not command line
         args.extend_from_slice(&self.extra_args);
         Ok(args)
     }
@@ -185,16 +202,100 @@ impl NydusdImpl {
 #[async_trait]
 impl Nydusd for NydusdImpl {
     async fn start(&self, _on_quit: Box<dyn FnOnce() + Send + Sync>) -> Result<u32> {
-        // For this simplified version, we'll just return a fake PID
-        println!("Starting nydusd daemon: path={:?}", self.path);
-        println!("Nydusd daemon started");
-        Ok(12345) // Return a fake PID
+        // Create necessary directories before validation with enhanced error handling
+        // For fuse mode, we only need API socket parent directory and mountpoint (source_path)
+        if let Some(parent) = self.api_sock_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                return Err(anyhow::anyhow!("failed to create API socket path parent directory {:?}: {}", parent, e));
+            }
+            // Set directory permissions to allow socket creation
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(parent)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(parent, perms)?;
+        }
+        if let Err(e) = std::fs::create_dir_all(&self.source_path) {
+            return Err(anyhow::anyhow!("failed to create source path directory {:?}: {}", self.source_path, e));
+        }
+
+        // Verify directories exist before proceeding
+        if !self.source_path.exists() {
+            return Err(anyhow::anyhow!("source path directory does not exist after creation: {:?}", self.source_path));
+        }
+
+        // Validate paths and configuration
+        self.valid().context("nydusd validation failed")?;
+
+        // Build arguments for nydusd
+        let args = self.args().context("failed to build nydusd arguments")?;
+        
+        // Write debug info to a file
+        let debug_file = format!("/tmp/nydusd-debug-{}.log", std::process::id());
+        let mut debug_info = format!(
+            "Starting nydusd daemon (virtiofs mode):\nPath: {:?}\nArgs: {:?}\nSock path: {:?}\nAPI sock path: {:?}\nSource path: {:?}\nSource path exists: {}\n",
+            self.path, args, self.sock_path, self.api_sock_path, self.source_path, self.source_path.exists()
+        );
+        std::fs::write(&debug_file, &debug_info).unwrap_or_default();
+        
+        // Start nydusd process
+        let mut cmd = tokio::process::Command::new(&self.path);
+        cmd.args(&args);
+        
+        let mut child = cmd.spawn().context("failed to spawn nydusd process")?;
+        let pid = child.id().ok_or_else(|| anyhow!("failed to get nydusd PID"))?;
+        
+        debug_info.push_str(&format!("Nydusd process spawned with PID: {}\n", pid));
+        debug_info.push_str(&format!("Source path exists after spawn: {}\n", self.source_path.exists()));
+        std::fs::write(&debug_file, &debug_info).unwrap_or_default();
+        
+        // Store the PID
+        *self.pid.write().await = Some(pid);
+        
+        // Wait for API server to be ready
+        debug_info.push_str("Waiting for nydusd API server to be ready...\n");
+        std::fs::write(&debug_file, &debug_info).unwrap_or_default();
+        self.wait_until_api_server_ready().await
+            .context("nydusd API server failed to become ready")?;
+        
+        // Setup passthrough filesystem
+        self.setup_passthrough_fs().await
+            .context("failed to setup passthrough filesystem")?;
+        
+        println!("Nydusd daemon started successfully with PID: {}", pid);
+        
+        // Spawn a task to monitor the process
+        let pid_ref = self.pid.clone();
+        tokio::spawn(async move {
+            let _result = child.wait().await;
+            println!("Nydusd daemon has quit");
+            *pid_ref.write().await = None;
+            // Note: In a real implementation, we'd call the on_quit callback here
+        });
+        
+        Ok(pid)
     }
 
     async fn stop(&self) -> Result<()> {
-        // For this simplified version, we'll just log that stop was called
-        // In a real implementation, you'd need proper process management
-        println!("Stopping nydusd daemon");
+        let pid_lock = self.pid.read().await;
+        if let Some(pid) = *pid_lock {
+            drop(pid_lock); // Release the read lock before calling kill
+            self.kill().await?;
+        }
+        
+        // Clean up socket files
+        if self.sock_path.exists() {
+            if let Err(e) = std::fs::remove_file(&self.sock_path) {
+                eprintln!("Failed to remove socket file {:?}: {}", self.sock_path, e);
+            }
+        }
+        
+        if self.api_sock_path.exists() {
+            if let Err(e) = std::fs::remove_file(&self.api_sock_path) {
+                eprintln!("Failed to remove API socket file {:?}: {}", self.api_sock_path, e);
+            }
+        }
+        
+        println!("Nydusd daemon stopped");
         Ok(())
     }
 
@@ -315,7 +416,7 @@ pub struct NydusClient {
 
 impl NydusClient {
     pub async fn new(sock_path: &str) -> Result<Self> {
-        wait_until_socket_ready(sock_path, 3, Duration::from_millis(100)).await?;
+        wait_until_socket_ready(sock_path, 20, Duration::from_millis(100)).await?;
         let connector = UnixConnector;
         let client = Client::builder().build(connector);
         Ok(NydusClient { client })
@@ -369,10 +470,13 @@ impl NydusClient {
 }
 
 async fn wait_until_socket_ready(sock: &str, attempts: u32, delay: Duration) -> Result<()> {
-    for _ in 0..attempts {
+    println!("Waiting for socket {} to be ready, attempts: {}", sock, attempts);
+    for i in 0..attempts {
         if Path::new(sock).exists() {
+            println!("Socket {} is ready after {} attempts", sock, i + 1);
             return Ok(());
         }
+        println!("Socket {} not ready, attempt {}/{}", sock, i + 1, attempts);
         sleep(delay).await;
     }
     Err(anyhow!("Nydus socket not ready after {} attempts", attempts))

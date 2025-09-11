@@ -20,8 +20,9 @@ use tokio::{
 use agent::Storage;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::config::hypervisor::SharedFsInfo;
-
 use nydusd::{Nydusd, NydusdImpl};
+
+use hypervisor::utils::get_jailer_root;
 
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
@@ -61,16 +62,24 @@ pub(crate) struct ShareVirtioFsStandalone {
 
 impl ShareVirtioFsStandalone {
     pub(crate) fn new(id: &str, config: &SharedFsInfo) -> Result<Self> {
-        let nydusd = if config.shared_fs == Some(_VIRTIO_FS_NYDUS.to_string()) {
-            // For now, create with default paths - this should be configurable
-            let sock_path = format!("/tmp/nydusd-{}.sock", id);
-            let api_sock_path = format!("/tmp/nydusd-{}-api.sock", id);
-            let source_path = format!("/tmp/nydusd-{}-source", id);
+        let nydusd = if config.virtio_fs_daemon == "nydusd" {
+            let jailer_root = get_jailer_root(id);
+            let source_path = format!("{}/nydusd-{}-source", jailer_root, id);
+            
+            // Use a stable directory for sockets that won't be cleaned up
+            // Use shorter socket names to avoid Unix socket path length limit (108 chars)
+            let stable_sock_dir = "/run/kata";
+            std::fs::create_dir_all(stable_sock_dir).ok();
+            let short_id = &id[..8]; // Use first 8 chars of ID to keep paths short
+            let stable_sock_path = format!("{}/n{}.sock", stable_sock_dir, short_id);
+            let stable_api_sock_path = format!("{}/a{}.sock", stable_sock_dir, short_id);
+            
             Some(Arc::new(NydusdImpl::new(
-                &config.nydusd_path,
-                &sock_path,
-                &api_sock_path,
+                &config.virtio_fs_daemon, // Use virtio_fs_daemon for nydusd path
+                &stable_sock_path,         // Use stable socket path
+                &stable_api_sock_path,     // Use stable API socket path
                 &source_path,
+                None, // No bootstrap path for passthrough mode
                 vec![], // Empty extra args for now
                 false,  // Debug disabled for now
             )) as Arc<dyn Nydusd>)

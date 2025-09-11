@@ -19,7 +19,6 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::mount::{Mount, NydusExtraOptions};
-use nydusd::Nydusd;
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 // Used for nydus rootfs
@@ -33,7 +32,6 @@ const NYDUS_PREFETCH_FILE_LIST: &str = "prefetch_file.list";
 pub(crate) struct NydusRootfs {
     guest_path: String,
     rootfs: Storage,
-    nydusd: Arc<dyn Nydusd>,
     source: String,
     share_fs_mount: Arc<dyn ShareFsMount>,
 }
@@ -52,12 +50,12 @@ impl NydusRootfs {
             NydusExtraOptions::new(rootfs).context("failed to parse nydus extra options")?;
         info!(sl!(), "extra_option {:?}", &extra_options);
 
-        let nydusd = share_fs
-            .get_nydusd()
-            .await
-            .ok_or_else(|| anyhow!("nydusd not found"))?;
-
-        let rafs_mount_path = nydusd.mount(&extra_options.source).await?;
+        // Instead of starting our own nydusd and calling mount API,
+        // we directly use the snapshot directory that nydus snapshotter has already prepared.
+        // The nydus snapshotter handles the fuse mode nydusd and RAFS mounting.
+        let rafs_mount_path = extra_options.snapshot_dir.clone();
+        
+        info!(sl!(), "Using nydus snapshotter prepared mount path: {}", rafs_mount_path);
 
         let volume_config = ShareFsVolumeConfig {
             cid: cid.to_string(),
@@ -126,8 +124,7 @@ impl NydusRootfs {
         Ok(NydusRootfs {
             guest_path: rootfs_guest_path,
             rootfs: rootfs_storage,
-            nydusd: nydusd.clone(),
-            source: extra_options.source.clone(),
+            source: rafs_mount_path,
             share_fs_mount: share_fs_mount.clone(),
         })
     }
@@ -153,7 +150,10 @@ impl Rootfs for NydusRootfs {
 
     async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         self.share_fs_mount.umount_volume(&self.source).await?;
-        self.nydusd.umount(&self.source).await
+        // Note: We don't need to umount nydusd here because the nydus snapshotter
+        // manages the lifecycle of fuse mode nydusd instances.
+        info!(sl!(), "Nydus rootfs cleanup completed for source: {}", self.source);
+        Ok(())
     }
 }
 
