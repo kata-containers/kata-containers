@@ -35,10 +35,6 @@ const DEFAULT_VIRTIO_FS_QUEUE_SIZE: i32 = 1024;
 const VIRTIO_FS: &str = "virtio-fs";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 
-pub(crate) fn drive_index_to_id(index: u64) -> String {
-    format!("drive_{}", index)
-}
-
 impl DragonballInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         if self.state == VmmState::NotReady {
@@ -133,11 +129,9 @@ impl DragonballInner {
 
                 Ok(())
             }
-            DeviceType::Block(block) => {
-                let drive_id = drive_index_to_id(block.config.index);
-                self.remove_block_drive(drive_id.as_str())
-                    .context("remove block drive")
-            }
+            DeviceType::Block(block) => self
+                .remove_block_drive(block.device_id.as_str())
+                .context("remove block drive"),
             DeviceType::Vfio(hostdev) => {
                 let primary_device = hostdev.devices.first().unwrap().clone();
                 let hostdev_id = primary_device.hostdev_id;
@@ -248,7 +242,7 @@ impl DragonballInner {
 
     fn remove_block_drive(&mut self, id: &str) -> Result<()> {
         self.vmm_instance
-            .remove_block_device(id)
+            .remove_block_device(id, Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT))
             .context("remove block device")?;
 
         if self.cached_block_devices.contains(id) && self.jailed {
