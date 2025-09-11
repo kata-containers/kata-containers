@@ -12,6 +12,7 @@ use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::io::AsRawFd;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::{
     collections::{vec_deque, VecDeque},
@@ -20,7 +21,7 @@ use std::{
 
 use dbs_device::DeviceIo;
 use dbs_pci::VirtioPciDevice;
-use dbs_upcall::UpcallClientResponse;
+use dbs_upcall::{DevMgrResponse, UpcallClientResponse};
 use dbs_virtio_devices as virtio;
 use dbs_virtio_devices::block::{aio::Aio, io_uring::IoUring, Block, LocalFile, Ufile};
 #[cfg(feature = "vhost-user-blk")]
@@ -572,6 +573,62 @@ impl BlockDeviceMgr {
             Some(index) => self.info_list.remove(index),
             None => None,
         }
+    }
+
+    /// prepare to remove device
+    pub fn prepare_remove_device(
+        &self,
+        ctx: &DeviceOpContext,
+        blockdev_id: &str,
+        result_sender: Sender<Option<i32>>,
+    ) -> Result<(), BlockDeviceError> {
+        if !cfg!(feature = "hotplug") {
+            return Err(BlockDeviceError::UpdateNotAllowedPostBoot);
+        }
+
+        info!(ctx.logger(), "prepare remove block device");
+
+        let callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>> =
+            Some(Box::new(move |result| match result {
+                UpcallClientResponse::DevMgr(response) => {
+                    if let DevMgrResponse::Other(resp) = response {
+                        if let Err(e) = result_sender.send(Some(resp.result)) {
+                            log::error!("send upcall result failed, due to {:?}!", e);
+                        }
+                    }
+                }
+                UpcallClientResponse::UpcallReset => {
+                    if let Err(e) = result_sender.send(None) {
+                        log::error!("send upcall result failed, due to {:?}!", e);
+                    }
+                }
+                #[allow(unreachable_patterns)]
+                _ => {
+                    log::debug!("this arm should only be triggered under test");
+                }
+            }));
+
+        let device_index = self
+            .get_index_of_drive_id(blockdev_id)
+            .ok_or(BlockDeviceError::InvalidDeviceId(blockdev_id.to_string()))?;
+
+        let info = &self.info_list[device_index];
+        if let Some(device) = info.device.as_ref() {
+            if let Some(_mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
+                if callback.is_some() {
+                    ctx.remove_hotplug_mmio_device(device, callback)?;
+                }
+            } else if let Some(_pci_dev) = device.as_any().downcast_ref::<VirtioPciDevice<
+                GuestAddressSpaceImpl,
+                QueueSync,
+                GuestRegionMmap,
+            >>() {
+                if callback.is_some() {
+                    ctx.remove_hotplug_pci_device(device, callback)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     /// remove a block device, it basically is the inverse operation of `insert_device``
