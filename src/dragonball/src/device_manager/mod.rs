@@ -24,6 +24,7 @@ use dbs_legacy_devices::ConsoleHandler;
 use dbs_pci::CAPABILITY_BAR_SIZE;
 use dbs_utils::epoll_manager::EpollManager;
 use kvm_ioctls::VmFd;
+use log::error;
 use virtio_queue::QueueSync;
 
 #[cfg(feature = "dbs-virtio-devices")]
