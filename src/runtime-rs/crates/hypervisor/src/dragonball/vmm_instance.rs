@@ -255,8 +255,19 @@ impl VmmInstance {
         Ok(None)
     }
 
-    pub fn remove_block_device(&self, id: &str) -> Result<()> {
+    pub fn remove_block_device(&self, id: &str, timeout: Duration) -> Result<()> {
         info!(sl!(), "remove block device {}", id);
+
+        let vmmdata = self
+            .handle_request(Request::Sync(VmmAction::PrepareRemoveBlockDevice(
+                id.to_string(),
+            )))
+            .with_context(|| format!("Failed to prepare remove block device {:?}", id))?;
+
+        if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
+            let _ = receiver.recv_timeout(timeout)?;
+        }
+
         self.handle_request(Request::Sync(VmmAction::RemoveBlockDevice(id.to_string())))
             .with_context(|| format!("Failed to remove block device {:?}", id))?;
         Ok(())
