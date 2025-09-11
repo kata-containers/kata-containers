@@ -2,7 +2,6 @@ name: GHA security analysis
 
 on:
   push:
-    branches: ["main"]
   pull_request:
 
 permissions: {}
