@@ -239,14 +239,9 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	// start network monitor
 	re := regexp.MustCompile("moby")
 	if re.MatchString(container.bundle) {
-		errCh := make(chan error, 1)
 		go func() {
 			err := netmon.StartNetMon(s.ctx, s.sandbox)
-			errCh <- err
-		}()
-		go func() {
-			defer close(errCh)
-			if err := <-errCh; err != nil {
+			if err != nil {
 				if err.Error() == "ttrpc: closed" || err.Error() == "Dead agent" {
 					shimLog.WithError(err).Info("agent has shutdown, return from stopping the container")
 					return
