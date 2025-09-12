@@ -17,7 +17,9 @@ use hypervisor::{
     },
     BlockConfig, Hypervisor, VfioConfig,
 };
-use kata_types::mount::Mount;
+use kata_types::mount::{
+    Mount, DEFAULT_KATA_GUEST_SANDBOX_DIR, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR,
+};
 use kata_types::{
     config::{hypervisor::TopologyConfigInfo, TomlConfig},
     mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
@@ -326,12 +328,33 @@ impl ResourceManagerInner {
         Ok(())
     }
 
-    pub async fn get_storage_for_sandbox(&self) -> Result<Vec<Storage>> {
+    pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
         let mut storages = vec![];
         if let Some(d) = self.share_fs.as_ref() {
             let mut s = d.get_storages().await.context("get storage")?;
             storages.append(&mut s);
         }
+
+        let shm_size_option = format!("size={}", shm_size);
+        let mount_point = format!("{}/{}", DEFAULT_KATA_GUEST_SANDBOX_DIR, SHM_DIR);
+
+        let shm_storage = Storage {
+            driver: KATA_EPHEMERAL_VOLUME_TYPE.to_string(),
+            mount_point,
+            source: "shm".to_string(),
+            fs_type: "tmpfs".to_string(),
+            options: vec![
+                "noexec".to_string(),
+                "nosuid".to_string(),
+                "nodev".to_string(),
+                "mode=1777".to_string(),
+                shm_size_option,
+            ],
+            ..Default::default()
+        };
+
+        storages.push(shm_storage);
+
         Ok(storages)
     }
 

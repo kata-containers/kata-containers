@@ -12,9 +12,12 @@ use agent::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use common::message::{Action, Message};
 use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
+use common::{
+    message::{Action, Message},
+    types::DEFAULT_SHM_SIZE,
+};
 use common::{
     types::{SandboxConfig, SandboxExitInfo, SandboxStatus},
     ContainerManager, Sandbox, SandboxNetworkEnv,
@@ -92,6 +95,7 @@ pub struct VirtSandbox {
     hypervisor: Arc<dyn Hypervisor>,
     monitor: Arc<HealthCheck>,
     sandbox_config: Option<SandboxConfig>,
+    shm_size: u64,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -122,6 +126,7 @@ impl VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
         })
     }
@@ -607,7 +612,7 @@ impl Sandbox for VirtSandbox {
             dns: sandbox_config.dns.clone(),
             storages: self
                 .resource_manager
-                .get_storage_for_sandbox()
+                .get_storage_for_sandbox(self.shm_size)
                 .await
                 .context("get storages for sandbox")?,
             sandbox_pidns: false,
@@ -923,6 +928,7 @@ impl Persist for VirtSandbox {
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             sandbox_config: None,
+            shm_size: DEFAULT_SHM_SIZE,
         })
     }
 }
