@@ -1338,9 +1338,11 @@ impl MemCG {
 mod tests {
     #[allow(unused_imports)]
     use super::*;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_memcg_swap_not_available() {
+        skip_if_not_root!();
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
         assert!(m.swap_not_available().is_ok());
@@ -1348,6 +1350,7 @@ mod tests {
 
     #[test]
     fn test_memcg_get_swappiness() {
+        skip_if_not_root!();
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
         assert_eq!(m.get_swappiness(100, 50), 133);
@@ -1355,6 +1358,7 @@ mod tests {
 
     #[test]
     fn test_memcg_get_timeout_list() {
+        skip_if_not_root!();
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
         assert!(!m.get_timeout_list().is_empty());

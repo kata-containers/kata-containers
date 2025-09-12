@@ -344,9 +344,11 @@ impl MemAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_agent() {
+        skip_if_not_root!();
         let mut memcg_config = memcg::Config::default();
         memcg_config.default.disabled = true;
         let compact_config = compact::Config {
@@ -379,6 +381,7 @@ mod tests {
 
     #[test]
     fn test_agent_memcg_status() {
+        skip_if_not_root!();
         let mut memcg_config = memcg::Config::default();
         memcg_config.default.disabled = true;
         let compact_config = compact::Config {
