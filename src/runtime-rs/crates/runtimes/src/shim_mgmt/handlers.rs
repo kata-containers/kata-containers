@@ -12,12 +12,12 @@ use agent::ResizeVolumeRequest;
 use anyhow::{anyhow, Context, Result};
 use common::Sandbox;
 use hyper::{Body, Method, Request, Response, StatusCode};
-use std::sync::Arc;
+use std::{str, sync::Arc};
 use url::Url;
 
 use shim_interface::shim_mgmt::{
-    AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
-    IP6_TABLE_URL, IP_TABLE_URL, METRICS_URL,
+    AGENT_POLICY_URL, AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL,
+    DIRECT_VOLUME_STATS_URL, IP6_TABLE_URL, IP_TABLE_URL, METRICS_URL,
 };
 
 // main router for response, this works as a multiplexer on
@@ -45,6 +45,7 @@ pub(crate) async fn handler_mux(
             direct_volume_resize_handler(sandbox, req).await
         }
         (&Method::GET, METRICS_URL) => metrics_url_handler(sandbox, req).await,
+        (&Method::PUT, AGENT_POLICY_URL) => set_agent_policy_handler(sandbox, req).await,
         _ => Ok(not_found(req).await),
     }
 }
@@ -163,4 +164,23 @@ async fn metrics_url_handler(
         "{}{}{}",
         agent_metrics, hypervisor_metrics, shim_metrics
     ))))
+}
+
+/// The set agent policy handler, for setting agent policy
+async fn set_agent_policy_handler(
+    sandbox: Arc<dyn Sandbox>,
+    req: Request<Body>,
+) -> Result<Response<Body>> {
+    match *req.method() {
+        Method::PUT => {
+            let data = hyper::body::to_bytes(req.into_body()).await?;
+            let policy: &str = str::from_utf8(&data)?;
+            sandbox
+                .set_policy(policy)
+                .await
+                .context("set agent policy handler failed")?;
+            Ok(Response::new(Body::from("")))
+        }
+        _ => Err(anyhow!("Set agent policy only takes PUT method")),
+    }
 }
