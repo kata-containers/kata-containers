@@ -55,5 +55,5 @@ teardown() {
 		kubectl logs ${pod}
 	done
 
-	teardown_common "${node}" "${node_start_time:-}"
+	teardown_common "${node}" "${node_start_time:-}" ""
 }
