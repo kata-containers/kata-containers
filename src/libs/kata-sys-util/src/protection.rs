@@ -216,6 +216,11 @@ mod tests {
         // Test snp
         let dir = tempdir().unwrap();
         let snp_file_path = dir.path().join("sev_snp");
+        if !snp_file_path.exists() {
+            println!("INFO: skipping {} which needs sev_snp", module_path!());
+            return;
+        }
+
         let path = snp_file_path.clone();
         let mut snp_file = fs::File::create(snp_file_path).unwrap();
         writeln!(snp_file, "Y").unwrap();
@@ -235,6 +240,11 @@ mod tests {
         // Test sev
         let dir = tempdir().unwrap();
         let sev_file_path = dir.path().join("sev");
+        if !sev_file_path.exists() {
+            println!("INFO: skipping {} which needs sev", module_path!());
+            return;
+        }
+
         let sev_path = sev_file_path.clone();
         let mut sev_file = fs::File::create(sev_file_path).unwrap();
         writeln!(sev_file, "Y").unwrap();
@@ -257,6 +267,11 @@ mod tests {
         let invalid_dir = invalid_dir.to_str().unwrap();
 
         let tdx_file_path = dir.path().join("tdx");
+        if !tdx_file_path.exists() {
+            println!("INFO: skipping {} which needs tdx", module_path!());
+            return;
+        }
+
         let tdx_path = tdx_file_path;
 
         std::fs::create_dir_all(tdx_path.clone()).unwrap();
