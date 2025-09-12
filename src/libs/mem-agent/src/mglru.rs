@@ -26,7 +26,8 @@ fn lru_gen_head_parse(line: &str) -> Result<(usize, String)> {
         return Err(anyhow!("line {} format is not right", line));
     }
 
-    let id = usize::from_str_radix(words[1], 10)
+    let id = words[1]
+        .parse::<usize>()
         .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
 
     Ok((id, words[2].to_string()))
@@ -77,7 +78,7 @@ impl MGenLRU {
 fn lru_gen_lines_parse(reader: &mut BufReader<File>) -> Result<(String, HashMap<usize, MGenLRU>)> {
     let mut line = String::new();
     let mut ret_hash = HashMap::new();
-    while line.len() > 0
+    while !line.is_empty()
         || reader
             .read_line(&mut line)
             .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
@@ -86,7 +87,8 @@ fn lru_gen_lines_parse(reader: &mut BufReader<File>) -> Result<(String, HashMap<
         let words: Vec<&str> = line.split_whitespace().map(|word| word.trim()).collect();
         if words.len() == 2 && words[0] == "node" {
             // Got a new node
-            let node_id = usize::from_str_radix(words[1], 10)
+            let node_id = words[1]
+                .parse::<usize>()
                 .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
             let (ret_line, node_size) = lru_gen_seq_lines_parse(reader)
                 .map_err(|e| anyhow!("lru_gen_seq_lines_parse failed: {}", e))?;
@@ -108,7 +110,7 @@ fn str_to_u64(str: &str) -> Result<u64> {
         warn!("{} format {} is not right", LRU_GEN_PATH, str);
         return Ok(0);
     }
-    Ok(u64::from_str_radix(str, 10)?)
+    Ok(str.parse::<u64>()?)
 }
 
 //result:
@@ -129,7 +131,8 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
             break;
         }
 
-        let msecs = i64::from_str_radix(words[1], 10)
+        let msecs = words[1]
+            .parse::<i64>()
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
         // Use milliseconds because will got build error with try_milliseconds.
         #[allow(deprecated)]
@@ -138,11 +141,12 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
         let mut gen = GenLRU::new();
         gen.birth = birth;
 
-        gen.seq = u64::from_str_radix(words[0], 10)
+        gen.seq = words[0]
+            .parse::<u64>()
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
-        gen.anon = str_to_u64(&words[2 + WORKINGSET_ANON])
+        gen.anon = str_to_u64(words[2 + WORKINGSET_ANON])
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
-        gen.file = str_to_u64(&words[2 + WORKINGSET_FILE])
+        gen.file = str_to_u64(words[2 + WORKINGSET_FILE])
             .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
 
         if !got {
@@ -173,14 +177,15 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 // HashMap<node_id, MGenLRU> will be empty.
 //result:
 // HashMap<path, (id, HashMap<node_id, MGenLRU>)>
+#[allow(clippy::type_complexity)]
 fn lru_gen_file_parse(
-    mut reader: &mut BufReader<File>,
+    reader: &mut BufReader<File>,
     target_patchs: &HashSet<String>,
     parse_line: bool,
 ) -> Result<HashMap<String, (usize, HashMap<usize, MGenLRU>)>> {
     let mut line = String::new();
     let mut ret_hash = HashMap::new();
-    while line.len() > 0
+    while !line.is_empty()
         || reader
             .read_line(&mut line)
             .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
@@ -189,9 +194,9 @@ fn lru_gen_file_parse(
         let mut clear_line = true;
         // Not handle the Err of lru_gen_head_parse because all lines of file will be checked.
         if let Ok((id, path)) = lru_gen_head_parse(&line) {
-            if target_patchs.len() == 0 || target_patchs.contains(&path) {
+            if target_patchs.is_empty() || target_patchs.contains(&path) {
                 let seq_data = if parse_line {
-                    let (ret_line, data) = lru_gen_lines_parse(&mut reader).map_err(|e| {
+                    let (ret_line, data) = lru_gen_lines_parse(reader).map_err(|e| {
                         anyhow!(
                             "lru_gen_seq_lines_parse file {} failed: {}",
                             LRU_GEN_PATH,
@@ -222,6 +227,7 @@ fn lru_gen_file_parse(
     Ok(ret_hash)
 }
 
+#[allow(clippy::type_complexity)]
 fn file_parse(
     target_patchs: &HashSet<String>,
     parse_line: bool,
@@ -236,6 +242,7 @@ fn file_parse(
 
 //result:
 // HashMap<path, (id, ino, HashMap<node_id, MGenLRU>)>
+#[allow(clippy::type_complexity)]
 pub fn host_memcgs_get(
     target_patchs: &HashSet<String>,
     parse_line: bool,
@@ -276,8 +283,8 @@ pub fn check() -> Result<()> {
     let content = fs::read_to_string(LRU_GEN_ENABLED_PATH)
         .map_err(|e| anyhow!("open file {} failed: {}", LRU_GEN_ENABLED_PATH, e))?;
     let content = content.trim();
-    let r = if content.starts_with("0x") {
-        u32::from_str_radix(&content[2..], 16)
+    let r = if let Some(stripped) = content.strip_prefix("0x") {
+        u32::from_str_radix(stripped, 16)
     } else {
         content.parse()
     };
@@ -336,9 +343,7 @@ mod tests {
     use maplit::hashmap;
     use once_cell::sync::OnceCell;
     use slog::{Drain, Level, Logger};
-    use slog_async;
     use slog_scope::set_global_logger;
-    use slog_term;
     use std::collections::HashMap;
     use std::fs;
     use std::fs::File;
