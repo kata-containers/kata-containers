@@ -21,10 +21,14 @@ use kata_types::{
     config::KATA_PATH,
 };
 use persist::sandbox_persist::Persist;
+#[allow(unused_imports)]
+use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
+use std::time::Duration;
+use tokio::time::{sleep, timeout};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, Command},
@@ -77,14 +81,20 @@ impl QemuInner {
     }
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
-        info!(sl!(), "Starting QEMU VM");
+        info!(sl!(), "qemu inner::start_VM(): Starting QEMU VM");
         let netns = self.netns.clone().unwrap_or_default();
 
+        info!(sl!(), "qemu inner::start_VM(): 1");
         // CAUTION: since 'cmdline' contains file descriptors that have to stay
         // open until spawn() is called to launch qemu later in this function,
         // 'cmdline' has to live at least until spawn() is called
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
+        info!(sl!(), "qemu inner::start_VM(): 2");
+        info!(sl!(), "inner::start_vm(): devices={:#?}", self.devices);
 
+        for (idx, device) in self.devices.iter().enumerate() {
+            info!(sl!(), "inner::start_vm(): device[{}] = {:#?}", idx, device);
+        }
         for device in &mut self.devices {
             match device {
                 DeviceType::ShareFs(share_fs_dev) => {
@@ -101,30 +111,76 @@ impl QemuInner {
                     cmdline.add_vsock(fd, vsock_dev.config.guest_cid)?;
                 }
                 DeviceType::Block(block_dev) => {
+                    info!(
+        sl!(),
+        "inner::start_vm(): handling block device id={} driver={} path={} readonly={:?} direct={:?}",
+        block_dev.device_id,
+        block_dev.config.driver_option,
+        block_dev.config.path_on_host,
+        block_dev.config.is_readonly,
+        block_dev.config.is_direct
+    );
+
                     if block_dev.config.path_on_host == self.config.boot_info.initrd {
+                        info!(
+                            sl!(),
+                            "inner::start_vm(): skipping initrd block device id={} path={}",
+                            block_dev.device_id,
+                            block_dev.config.path_on_host
+                        );
                         // If this block device represents initrd we ignore it here, it
                         // will be handled elsewhere by adding `-initrd` to the qemu
                         // command line.
                         continue;
                     }
+
                     match block_dev.config.driver_option.as_str() {
-                        "nvdimm" => cmdline.add_nvdimm(
-                            &block_dev.config.path_on_host,
-                            block_dev.config.is_readonly,
-                        )?,
-                        "ccw" | "blk" => cmdline.add_block_device(
-                            block_dev.device_id.as_str(),
-                            &block_dev.config.path_on_host,
-                            block_dev
+                        "nvdimm" => {
+                            info!(
+                sl!(),
+                "inner::start_vm(): adding nvdimm device id={} path={} readonly={:?}",
+                block_dev.device_id,
+                block_dev.config.path_on_host,
+                block_dev.config.is_readonly
+            );
+                            cmdline.add_nvdimm(
+                                &block_dev.config.path_on_host,
+                                block_dev.config.is_readonly,
+                            )?;
+                        }
+                        "ccw" | "blk" => {
+                            let direct = block_dev
                                 .config
                                 .is_direct
-                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
-                        )?,
+                                .unwrap_or(self.config.blockdev_info.block_device_cache_direct);
+
+                            info!(
+                sl!(),
+                "inner::start_vm(): adding block device id={} path={} driver={} direct={}",
+                block_dev.device_id,
+                block_dev.config.path_on_host,
+                block_dev.config.driver_option,
+                direct
+            );
+
+                            cmdline.add_block_device(
+                                block_dev.device_id.as_str(),
+                                &block_dev.config.path_on_host,
+                                direct,
+                            )?;
+                        }
                         unsupported => {
-                            info!(sl!(), "unsupported block device driver: {}", unsupported)
+                            info!(
+                sl!(),
+                "inner::start_vm(): unsupported block device driver={} id={} path={}",
+                unsupported,
+                block_dev.device_id,
+                block_dev.config.path_on_host
+            )
                         }
                     }
                 }
+
                 DeviceType::Network(network) => {
                     // we need ensure add_network_device happens in netns.
                     let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
@@ -185,10 +241,14 @@ impl QemuInner {
         // line and replace its argument appropriately (open a terminal, run
         // `tty` in it to get its device file path and use it as the argument).
         //cmdline.add_serial_console("/dev/pts/23");
+        info!(sl!(), "qemu inner::start_VM(): 3");
 
         // Add a console to the devices of the cmdline
         let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
+
+        info!(sl!(), "qemu inner::start_VM(): 4");
         cmdline.add_console(console_socket_path.to_str().unwrap());
+        info!(sl!(), "qemu inner::start_VM(): 5");
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
         let mut command = Command::new(&self.config.path);
@@ -216,14 +276,23 @@ impl QemuInner {
             .take()
             .ok_or_else(|| anyhow!("no exit notify"))?;
 
+        info!(sl!(), "qemu inner::start_VM(): 6");
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
+        info!(sl!(), "qemu inner::start_VM(): 7");
         match Qmp::new(QMP_SOCKET_FILE) {
             Ok(qmp) => self.qmp = Some(qmp),
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
                 return Err(e);
             }
+        }
+
+        info!(sl!(), "qemu inner::start_VM(): 8");
+        info!(sl!(), "QemuInner::start_vm() config:{:?}", self.config);
+        //Start the virtual machine by restoring it from a VM template if enabled.
+        if self.config.boot_from_template {
+            self.boot_from_template().await?;
         }
 
         //When hypervisor debug is enabled, output the kernel boot messages for debugging.
@@ -233,6 +302,91 @@ impl QemuInner {
         }
 
         Ok(())
+    }
+
+    pub(crate) async fn boot_from_template(&mut self) -> Result<()> {
+        if let Some(ref mut qmp) = self.qmp {
+            info!(sl!(), "QemuInner::boot_from_template(): start");
+
+            // Set the migration capability to ignore shared memory regions during state restoration
+            if let Err(err) = qmp.set_ignore_shared_memory_capability() {
+                error!(
+                    sl!(),
+                    "QemuInner::set_ignore_shared_memory_capability(): {}", err
+                );
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
+            }
+
+            // Step 2: Build migration URI and execute migration
+            let uri = format!("exec:cat {}", self.config.device_state_path);
+            info!(sl!(), "QemuInner::device_state_path() = {}", uri);
+
+            if let Err(err) = qmp.execute_migration_incoming(&uri) {
+                error!(sl!(), "QemuInner::execute_migration_incoming(): {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::execute_migration_incoming() OK");
+            }
+
+            // Step 3: Wait for migration and check status
+            if let Err(err) = self.wait_for_migration().await {
+                error!(sl!(), "QemuInner::wait_for_migration() failed: {}", err);
+                return Err(err);
+            } else {
+                info!(
+                    sl!(),
+                    "QemuInner::boot_from_template():wait_for_migration() OK"
+                );
+            }
+
+            Ok(())
+        } else {
+            warn!(sl!(), "QMP not initialized, skip boot_from_template()");
+            Ok(())
+        }
+    }
+
+    #[allow(unused_variables)]
+    pub async fn wait_for_migration(&mut self) -> Result<()> {
+        let qmp = self
+            .qmp
+            .as_mut()
+            .ok_or_else(|| anyhow!("QMP not connected"))?;
+
+        // qemu的9.1.2版本在执行完后返回的结果格式和现有的qapi 0.14版本的接收格式不符合，而在qapi 0.15测试发现没有问题。故暂时跳过，
+        let timeout_duration = Duration::from_secs(5);
+        let result = timeout(timeout_duration, async {
+            // loop {
+            //     info!(sl!(), "inner::wait_for_migration(): query_migration start");
+            //     let status = qmp.query_migration()?;
+
+            //     info!(sl!(), "inner::wait_for_migration(): QEMU migration status: {:#?}", status);
+            //     if let Some(MigrationStatus::completed) = status.status {
+            //         info!(sl!(), "inner::wait_for_migration(): QEMU migration completed");
+            //         return Ok(());
+            //     } else if let Some(s) = status.status {
+            //         info!(sl!(), "inner::wait_for_migration(): QEMU migration status: {:?}", s);
+            //     } else {
+            //         info!(sl!(), "inner::wait_for_migration(): QEMU migration status: <unknown>");
+            //     }
+            //     sleep(Duration::from_millis(100)).await;
+            // }
+
+            info!(
+                sl!(),
+                "inner::wait_for_migration(): sleep 1s for migration complete"
+            );
+            sleep(Duration::from_secs(1)).await;
+            return Ok(());
+        })
+        .await;
+
+        match result {
+            Ok(inner_result) => inner_result,
+            Err(_) => Err(anyhow!("Timed out waiting for QEMU migration")),
+        }
     }
 
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
@@ -267,18 +421,84 @@ impl QemuInner {
         }
     }
 
-    pub(crate) fn pause_vm(&self) -> Result<()> {
-        info!(sl!(), "Pausing QEMU VM");
-        todo!()
+    pub fn toggle_pause_sandbox(&mut self, pause: bool) -> Result<()> {
+        info!(sl!(), "QemuInner::toggle_pause_sandbox()");
+
+        if let Some(ref mut qmp) = self.qmp {
+            info!(sl!(), "QemuInner::toggle_pause_sandbox(): start");
+            if pause {
+                // 相当于 Go 的 ExecuteStop
+                qmp.qmp_stop()?;
+            } else {
+                // 相当于 Go 的 ExecuteCont
+                let resp = qmp.qmp_cont()?;
+                info!(
+                    sl!(),
+                    "QemuInner::toggle_pause_sandbox(): qmp_cont resp = {:?}", resp
+                );
+            }
+            Ok(())
+        } else {
+            Err(anyhow!("qmp not initialized"))
+        }
     }
 
-    pub(crate) fn resume_vm(&self) -> Result<()> {
-        info!(sl!(), "Resuming QEMU VM");
-        todo!()
+    pub(crate) fn pause_vm(&mut self) -> Result<()> {
+        info!(sl!(), "QemuInner::pause_vm()");
+        let _ = self.toggle_pause_sandbox(true);
+        Ok(())
     }
 
-    pub(crate) async fn save_vm(&self) -> Result<()> {
-        todo!()
+    pub(crate) fn resume_vm(&mut self) -> Result<()> {
+        info!(sl!(), "QemuInner::resume_vm()");
+
+        let _ = self.toggle_pause_sandbox(false);
+        Ok(())
+    }
+
+    pub(crate) async fn save_vm(&mut self) -> Result<()> {
+        info!(sl!(), "QemuInner::save_vm()");
+        if let Some(ref mut qmp) = self.qmp {
+            info!(sl!(), "QemuInner::save_vm(): start");
+
+            // Step 2: If BootToBeTemplate, set migration capability
+            if self.config.boot_to_be_template {
+                if let Err(err) = qmp.set_ignore_shared_memory_capability() {
+                    error!(
+                        sl!(),
+                        "QemuInner::set_ignore_shared_memory_capability() failed: {}", err
+                    );
+                    return Err(err);
+                } else {
+                    info!(sl!(), "QemuInner::set_ignore_shared_memory_capability() OK");
+                }
+            }
+
+            // Step 3: Set migration arguments (exec:cat > DevicesStatePath)
+            let uri = format!("exec:cat >{}", self.config.device_state_path);
+            info!(sl!(), "QemuInner::device_state_path() = {}", uri);
+
+            // Step 4: Begin migration
+            if let Err(err) = qmp.execute_migration(&uri) {
+                error!(sl!(), "QemuInner::execute_migration() failed: {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::execute_migration() OK");
+            }
+
+            // Step 5: Wait for migration complete
+            if let Err(err) = self.wait_for_migration().await {
+                error!(sl!(), "QemuInner::wait_for_migration() failed: {}", err);
+                return Err(err);
+            } else {
+                info!(sl!(), "QemuInner::save_vm(): wait_for_migration() OK");
+            }
+
+            Ok(())
+        } else {
+            info!(sl!(), "QMP not initialized, skip save_vm()");
+            Ok(())
+        }
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {
@@ -309,6 +529,10 @@ impl QemuInner {
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
         info!(sl!(), "QemuInner::get_vmm_master_tid()");
         if let Some(qemu_process) = self.qemu_process.lock().await.as_ref() {
+            info!(
+                sl!(),
+                "QemuInner::get_vmm_master_tid(): before let Some(qemu_pid) = qemu_process.id()"
+            );
             if let Some(qemu_pid) = qemu_process.id() {
                 info!(
                     sl!(),
@@ -398,13 +622,19 @@ impl QemuInner {
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
+        // info!(sl!(),"inner::capabilities(): hypervisor_config = {:?}", self.hypervisor_config());
+        // info!(sl!(), "inner::capabilities(): shared_fs = {:?}", self.hypervisor_config().shared_fs.shared_fs);
 
         // Confidential Guest doesn't permit virtio-fs.
         let flags = if self.hypervisor_config().security_info.confidential_guest
             || self.hypervisor_config().shared_fs.shared_fs.is_none()
+            || matches!(self.hypervisor_config().shared_fs.shared_fs.as_deref(), Some("none") | Some(""))
         {
+            info!(sl!(),"inner::capabilities(): no FsSharingSupport");
             CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
         } else {
+            
+            info!(sl!(),"inner::capabilities(): have FsSharingSupport");
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
                 | CapabilityBits::FsSharingSupport

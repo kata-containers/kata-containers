@@ -1,0 +1,18 @@
+{
+  "crates": [
+    {
+      "root_module": "src/runtime-rs/src/main.rs",
+      "edition": "2021",
+      "deps": [],
+      "cfg": [],
+      "env": {}
+    },
+    {
+      "root_module": "src/tools/kata-ctl/src/main.rs",
+      "edition": "2021",
+      "deps": [],
+      "cfg": [],
+      "env": {}
+    }
+  ]
+}

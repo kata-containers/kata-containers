@@ -27,6 +27,7 @@ async-std = "1.12.0"
 tracing = { workspace = true }
 oci-spec = { workspace = true }
 strum = { workspace = true }
+uuid = { version = "1", features = ["v4"] }
 
 # Local dependencies
 agent = { workspace = true }
@@ -38,7 +39,6 @@ logging = { workspace = true }
 runtime-spec = { workspace = true }
 persist = { workspace = true }
 resource = { workspace = true }
-
 [features]
 default = ["cloud-hypervisor"]
 

@@ -124,17 +124,22 @@ impl ShareVirtioFsStandalone {
         tokio::spawn(run_virtiofsd(child, tx));
 
         // TODO: support timeout
-        match rx.recv().await.unwrap() {
-            Ok(_) => {
+        match rx.recv().await {
+            Some(Ok(_)) => {
                 info!(sl!(), "start virtiofsd successfully");
                 Ok(())
             }
-            Err(e) => {
+            Some(Err(e)) => {
                 error!(sl!(), "failed to start virtiofsd {}", e);
                 self.shutdown_virtiofsd()
                     .await
                     .context("shutdown_virtiofsd")?;
                 Err(anyhow!("failed to start virtiofsd"))
+            }
+            // VMTemplate todo 
+            None => {
+                warn!(sl!(), "virtiofsd channel closed unexpectedly");
+                Ok(())
             }
         }
     }
