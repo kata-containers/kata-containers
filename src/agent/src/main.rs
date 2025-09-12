@@ -404,16 +404,24 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
-    let initdata_return_value = initdata::initialize_initdata(logger).await?;
+    // Currently, just for demo here and it might be changed.
+    // 1. init guest service manager which will help connect all avaliable sockets
+    // 2. validate the guest service manager readiness.
+    init_guest_service_manager().await?;
+    #[allow(unused)]
+    let mut initdata_return_value: Option<InitdataReturnValue> = None;
+    if !is_guest_service_manager_ready() {
+        let initdata_return_value = initdata::initialize_initdata(logger).await?;
 
-    let gc_procs = config.guest_components_procs;
-    if !attestation_binaries_available(logger, &gc_procs) {
-        warn!(
-            logger,
-            "attestation binaries requested for launch not available"
-        );
-    } else {
-        init_attestation_components(logger, config, &initdata_return_value).await?;
+        let gc_procs = config.guest_components_procs;
+        if !attestation_binaries_available(logger, &gc_procs) {
+            warn!(
+                logger,
+                "attestation binaries requested for launch not available"
+            );
+        } else {
+            init_attestation_components(logger, config, &initdata_return_value).await?;
+        }
     }
 
     // if policy is given via initdata, use it
@@ -693,6 +701,7 @@ fn reset_sigpipe() {
     }
 }
 
+use crate::confidential_data_hub::{init_guest_service_manager, is_guest_service_manager_ready};
 use crate::config::AgentConfig;
 use std::os::unix::io::{FromRawFd, RawFd};
 
