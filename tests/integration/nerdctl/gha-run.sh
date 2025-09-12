@@ -25,6 +25,8 @@ function install_dependencies() {
         declare -a system_deps=(
 		wget
 		pip
+		auditd
+		audispd-plugins
 	)
 
 	sudo apt update
@@ -53,6 +55,8 @@ function install_dependencies() {
 	sudo mkdir -p /etc/containerd
 	containerd config default > sudo tee /etc/containerd/config.toml
 	sudo systemctl restart containerd
+	info "record for seccomp by auditd"
+	sudo systemctl restart auditd
 }
 
 function collect_artifacts() {
@@ -70,6 +74,9 @@ function collect_artifacts() {
 	local journalctl_log_filename="journalctl-$RANDOM.log"
 	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
 	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
+	local auditd_log_filename="auditd-$RANDOM.log"
+	local auditd_log_path="${artifacts_dir}/${auditd_log_filename}"
+	sudo ausearch -m SECCOMP  > "${auditd_log_path}"
 }
 
 function run() {
