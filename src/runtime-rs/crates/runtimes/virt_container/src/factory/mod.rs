@@ -76,13 +76,14 @@ pub async fn init_factory_command() -> Result<()> {
     // Template
     if toml_config.factory.template {
         // info!(sl!(), "create vm factory"; "factory_config" => format!("{:?}", factory_config));
-        info!(sl!(), "create vm factory");
+        info!(sl!(), "factory::init_factory_command(): create vm factory");
 
         match new_factory(&mut factory_config, toml_config, false).await {
             Ok(_) => {
+                info!(sl!(), "factory::init_factory_command(): create vm factory successfully");
             }
             Err(e) => {
-                error!(sl!(), "create vm factory failed: {}", e);
+                error!(sl!(), "factory::init_factory_command(): create vm factory failed: {}", e);
                 return Err(e);
             }
         }
@@ -108,20 +109,20 @@ pub fn status_factory_command() -> Result<()> {
 pub async fn new_factory(config: &mut FactoryConfig, toml_config: TomlConfig, fetch_only: bool) -> Result<()> {
     // 1. 校验 VMConfig
     if let Err(e) = config.vm_config.valid() {
-        error!(sl!(), "{:#?}", e);
+        error!(sl!(), "factory::new_factory(): VMConfig validate failed {:#?}", e);
         return Err(e);
     }
     else {
-        info!(sl!(), "VMConfig validate ok");
+        info!(sl!(), "factory::new_factory(): VMConfig validate ok");
     }
 
     // 2. 仅支持 template 模式
     if !config.template {
-        error!(sl!(), "template must be enabled");
+        error!(sl!(), "factory::new_factory(): template must be enabled");
     }
     else {
         if fetch_only {
-            info!(sl!(), "template.Fetch");
+            info!(sl!(), "factory::new_factory(): template fetch");
             // 构造 PathBuf
             let path: PathBuf = config.template_path.clone().into();
             let factory = Template::fetch(config.vm_config.clone(), path);
@@ -185,48 +186,4 @@ pub async fn get_vm(config: &mut VMConfig, template_path: PathBuf) -> Result<VM>
 
     //8.返回vm
     Ok(vm)
-
-//     检查配置
-
-// 验证传入的 VMConfig 是否有效。
-
-// 如果配置非法，直接返回错误。
-
-// 选择路径
-
-// 调用 checkConfig 检查工厂是否支持该配置。
-
-// 不支持时 → 回退到 direct factory，直接新建 VM。
-
-// 获取模版 VM
-
-// 调用 base.GetBaseVM() 从工厂模版中获取一台 VM 副本。从template调用createFromTemplateVM实现
-
-// 如果失败，返回错误。
-
-// 错误清理机制
-
-// 注册 defer，如果后续出错则调用 vm.Stop() 清理资源。
-
-// 恢复 VM 状态
-
-// vm.Resume()：恢复暂停的 VM。
-
-// vm.ReseedRNG()：重新播种随机数，避免 VM 间随机数冲突。
-
-// vm.SyncTime()：同步 guest 时间。
-
-// 动态扩展资源
-
-// 比较模版 VM 与目标配置：
-
-// 如果 CPU 不足 → 调用 vm.AddCPUs() 扩展。
-
-// 如果内存不足 → 调用 vm.AddMemory() 扩展。
-
-// 调用 vm.OnlineCPUMemory() 让扩展的资源上线。
-
-// 返回可用 VM
-
-// 返回一台 恢复完成 + 满足需求 的 VM，供 Sandbox 使用。
 }

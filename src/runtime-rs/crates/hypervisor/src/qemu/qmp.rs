@@ -18,8 +18,8 @@ use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::str::FromStr;
 use std::time::Duration;
-
-use qapi_qmp::query_migrate;
+#[allow(unused_imports)]
+use qapi_qmp::{query_migrate, query_migrate_parameters};
 use qapi_qmp::{migrate, migrate_incoming, MigrationInfo};
 use qapi_qmp::{migrate_set_capabilities, MigrationCapability, MigrationCapabilityStatus};
 use qapi_qmp::{
@@ -29,7 +29,6 @@ use qapi_qmp::{
 use qapi_qmp::{migrate, migrate_incoming, MigrationInfo};
 use qapi_qmp::{migrate_set_capabilities, MigrationCapability, MigrationCapabilityStatus};
 use qapi_spec::Dictionary;
-
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
 
@@ -121,16 +120,38 @@ impl Qmp {
     }
     #[allow(dead_code)]
     pub fn query_migration(&mut self) -> Result<MigrationInfo> {
-        let cmd = query_migrate {};
-        // let cmd = query_migrate_parameters{};
+        // 查询迁移参数 (query-migrate-parameters)
+        // let params_cmd = query_migrate_parameters {};
+        // match self.qmp.execute(&params_cmd) {
+        //     Ok(params_result) => {
+        //         println!("Got Migration Parameters: {:?}", params_result);
+        //     }
+        //     Err(e) => {
+        //         println!("QMP execute error (query-migrate-parameters): {:?}", e);
+        //     }
+        // }
+
+        let cmd = query_migrate{};
+        info!( sl!(),  "Qmp::query_migration(): will do execute");
         let result = self.qmp.execute(&cmd)?;
         //todo: 转换result
         info!(
             sl!(),
             "Qmp::query_migration(): query_migrate_result: {:#?}", result
         );
-
         Ok(result)
+
+        // match self.qmp.execute(&cmd) {
+        //     Ok(result) => {
+        //         println!("Got MigrationInfo: {:?}", result);
+        //         Ok(result)
+        //     }
+        //     Err(e) => {
+        //         println!("QMP execute error: {:?}", e);
+        //         Err(e.into())   // ✅ 转成 anyhow::Error
+        //     }
+        // }
+
     }
 
     pub fn hotplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {

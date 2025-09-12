@@ -376,9 +376,9 @@ impl QemuInner {
 
             info!(
                 sl!(),
-                "inner::wait_for_migration(): sleep 5s for migration complete"
+                "inner::wait_for_migration(): sleep 1s for migration complete"
             );
-            sleep(Duration::from_secs(5)).await;
+            sleep(Duration::from_secs(1)).await;
             return Ok(());
         })
         .await;
@@ -622,13 +622,19 @@ impl QemuInner {
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
+        // info!(sl!(),"inner::capabilities(): hypervisor_config = {:?}", self.hypervisor_config());
+        // info!(sl!(), "inner::capabilities(): shared_fs = {:?}", self.hypervisor_config().shared_fs.shared_fs);
 
         // Confidential Guest doesn't permit virtio-fs.
         let flags = if self.hypervisor_config().security_info.confidential_guest
             || self.hypervisor_config().shared_fs.shared_fs.is_none()
+            || matches!(self.hypervisor_config().shared_fs.shared_fs.as_deref(), Some("none") | Some(""))
         {
+            info!(sl!(),"inner::capabilities(): no FsSharingSupport");
             CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
         } else {
+            
+            info!(sl!(),"inner::capabilities(): have FsSharingSupport");
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
                 | CapabilityBits::FsSharingSupport

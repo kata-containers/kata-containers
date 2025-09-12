@@ -163,14 +163,15 @@ impl Template {
         // // come around and start listening again. The sleep is only done when
         // // creating new vm templates and saves time for every new vm that are
         // // created from template, so it worth the invest.
-        // sleep(TEMPLATE_WAIT_FOR_AGENT);
+        sleep(TEMPLATE_WAIT_FOR_AGENT);
 
         vm.pause().await?;
         info!(sl!(), "template::create_template_vm: pause()");
 
         vm.save().await?;
         info!(sl!(), "template::create_template_vm: save()");
-
+        
+        // 这里理论上是可以停止掉的
         // vm.stop().await?;
         // info!(sl!(), "template::create_template_vm: stop()");
 
