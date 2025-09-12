@@ -26,8 +26,7 @@ use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
 };
-use qapi_qmp::{migrate, migrate_incoming, MigrationInfo};
-use qapi_qmp::{migrate_set_capabilities, MigrationCapability, MigrationCapabilityStatus};
+
 use qapi_spec::Dictionary;
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
