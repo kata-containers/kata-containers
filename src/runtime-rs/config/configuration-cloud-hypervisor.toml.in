@@ -178,6 +178,36 @@ block_device_driver = "virtio-blk-pci"
 # Default false
 #block_device_cache_direct = true
 
+# Bandwidth rate limiter options
+#
+# disk_rate_limiter_bw_max_rate controls disk I/O bandwidth (size in bits/sec
+# for SB/VM).
+# The same value is used for inbound and outbound bandwidth.
+# Default 0-sized value means unlimited rate.
+#disk_rate_limiter_bw_max_rate = 0
+#
+# disk_rate_limiter_bw_one_time_burst increases the initial max rate and this
+# initial extra credit does *NOT* affect the overall limit and can be used for
+# an *initial* burst of data.
+# This is *optional* and only takes effect if disk_rate_limiter_bw_max_rate is
+# set to a non zero value.
+#disk_rate_limiter_bw_one_time_burst = 0
+#
+# Operation rate limiter options
+#
+# disk_rate_limiter_ops_max_rate controls disk I/O bandwidth (size in ops/sec
+# for SB/VM).
+# The same value is used for inbound and outbound bandwidth.
+# Default 0-sized value means unlimited rate.
+#disk_rate_limiter_ops_max_rate = 0
+#
+# disk_rate_limiter_ops_one_time_burst increases the initial max rate and this
+# initial extra credit does *NOT* affect the overall limit and can be used for
+# an *initial* burst of data.
+# This is *optional* and only takes effect if disk_rate_limiter_bw_max_rate is
+# set to a non zero value.
+#disk_rate_limiter_ops_one_time_burst = 0
+
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
 # as all of the memory will be allocated and locked
