@@ -455,11 +455,11 @@ func (n *netmon) handleEvents(ctx context.Context) (err error) {
 	for {
 		select {
 		case ev := <-n.linkUpdateCh:
-			if err = n.handleLinkEvent(ctx, ev); err != nil {
+			if err = n.handleLinkEvent(ctx, ev); err != nil && err.Error() != "ttrpc: closed" && err.Error() != "Dead agent" {
 				return err
 			}
 		case ev := <-n.rtUpdateCh:
-			if err = n.handleRouteEvent(ctx, ev); err != nil {
+			if err = n.handleRouteEvent(ctx, ev); err != nil && err.Error() != "ttrpc: closed" && err.Error() != "Dead agent" {
 				return err
 			}
 		}
