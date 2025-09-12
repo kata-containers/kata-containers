@@ -178,7 +178,7 @@ disable_guest_selinux = true
 #
 # Effective Timeout Determination:
 # The effective timeout for a CreateContainerRequest is determined by taking the minimum of the following two values:
-# - create_container_timeout: The timeout value configured for creating containers (default: 30,000 milliseconds).
+# - create_container_timeout: The timeout value configured for creating containers (default: 30 seconds).
 # - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
 # Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
