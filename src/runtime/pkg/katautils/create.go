@@ -167,6 +167,10 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	delete(ociSpec.Annotations, vcAnnotations.Policy)
 	delete(sandboxConfig.Annotations, vcAnnotations.Policy)
 
+	// The value of this annotation is sent to the sandbox using init data.
+	delete(ociSpec.Annotations, vcAnnotations.Initdata)
+	delete(sandboxConfig.Annotations, vcAnnotations.Initdata)
+
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, func(ctx context.Context) error {
 		// Run pre-start OCI hooks, in the runtime namespace.
 		if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
@@ -235,6 +239,9 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 
 	// The value of this annotation is sent to the sandbox using SetPolicy.
 	delete(ociSpec.Annotations, vcAnnotations.Policy)
+
+	// The value of this annotation is sent to the sandbox using init data.
+	delete(ociSpec.Annotations, vcAnnotations.Initdata)
 
 	ociSpec = SetEphemeralStorageType(ociSpec, disableGuestEmptyDir)
 
