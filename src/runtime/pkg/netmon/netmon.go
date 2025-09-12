@@ -455,11 +455,11 @@ func (n *netmon) handleEvents(ctx context.Context) (err error) {
 	for {
 		select {
 		case ev := <-n.linkUpdateCh:
-			if err = n.handleLinkEvent(ctx, ev); err != nil && err.Error() != "ttrpc: closed" && err.Error() != "Dead agent" {
+			if err = n.handleLinkEvent(ctx, ev); err != nil {
 				return err
 			}
 		case ev := <-n.rtUpdateCh:
-			if err = n.handleRouteEvent(ctx, ev); err != nil && err.Error() != "ttrpc: closed" && err.Error() != "Dead agent" {
+			if err = n.handleRouteEvent(ctx, ev); err != nil {
 				return err
 			}
 		}
@@ -470,23 +470,23 @@ func StartNetMon(ctx context.Context, Sandbox vc.VCSandbox) error {
 	sandbox = Sandbox
 	hid, err := sandbox.GetHypervisorPid()
 	if err != nil {
-		netmonLog.WithError(err).Fatal("GetHypervisorPid()")
+		netmonLog.WithError(err).Error("GetHypervisorPid()")
 		return err
 	}
 	f, err := os.OpenFile(fmt.Sprintf("/proc/%s/ns/net", strconv.Itoa(hid)), os.O_RDONLY, 0)
 	if err != nil {
-		netmonLog.WithError(err).Fatal("error get sandbox net namespacea")
+		netmonLog.WithError(err).Error("error get sandbox net namespacea")
 		return err
 	}
 	nsFD := f.Fd()
 	runtime.LockOSThread()
 	origns, err := netns.Get()
 	if err != nil {
-		netmonLog.WithError(err).Fatal("error get current net namespace")
+		netmonLog.WithError(err).Error("error get current net namespace")
 		return err
 	}
 	if err = netns.Set(netns.NsHandle(nsFD)); err != nil {
-		netmonLog.WithError(err).Fatal("error set current namespace")
+		netmonLog.WithError(err).Error("error set current namespace")
 		return err
 	}
 
@@ -494,7 +494,7 @@ func StartNetMon(ctx context.Context, Sandbox vc.VCSandbox) error {
 	n, err := newNetmon(sandbox)
 
 	if err != nil {
-		netmonLog.WithError(err).Fatal("newNetmon()")
+		netmonLog.WithError(err).Error("newNetmon()")
 		return err
 	}
 	defer func() {
@@ -507,24 +507,24 @@ func StartNetMon(ctx context.Context, Sandbox vc.VCSandbox) error {
 
 	// Init logger.
 	if err := n.setupLogger(); err != nil {
-		netmonLog.WithError(err).Fatal("setupLogger()")
+		netmonLog.WithError(err).Error("setupLogger()")
 		return err
 	}
 
 	// Scan the current interfaces.
 	if err := n.scanNetwork(); err != nil {
-		n.logger().WithError(err).Fatal("scanNetwork()")
+		n.logger().WithError(err).Error("scanNetwork()")
 		return err
 	}
 
 	//Subscribe to the link listener.
 	if err := n.listenNetlinkEvents(); err != nil {
-		n.logger().WithError(err).Fatal("listenNetlinkEvents()")
+		n.logger().WithError(err).Error("listenNetlinkEvents()")
 		return err
 	}
 	//Go into the main loop.
 	if err := n.handleEvents(ctx); err != nil {
-		n.logger().WithError(err).Fatal("handleEvents()")
+		n.logger().WithError(err).Error("handleEvents()")
 		return err
 	}
 	return nil
