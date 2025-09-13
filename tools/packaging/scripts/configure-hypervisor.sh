@@ -389,7 +389,9 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-relocatable)
 	qemu_options+=(size:--disable-rutabaga-gfx)
 	qemu_options+=(size:--disable-vmdk)
-	qemu_options+=(size:--disable-avx512bw)
+	if ! gt_eq "${qemu_version}" "10.1.0" ; then
+		qemu_options+=(size:--disable-avx512bw)
+	fi
 	qemu_options+=(size:--disable-vpc)
 	qemu_options+=(size:--disable-vhdx)
 	qemu_options+=(size:--disable-hv-balloon)
@@ -447,12 +449,21 @@ generate_qemu_options() {
 
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
-	if [ "$arch" == x86_64 ]; then
-		qemu_options+=(speed:--enable-avx2)
-		qemu_options+=(speed:--enable-avx512bw)
-	else
-		qemu_options+=(speed:--disable-avx2)
+	if ! gt_eq "${qemu_version}" "10.1.0" ; then
+		if [ "$arch" == x86_64 ]; then
+			qemu_options+=(speed:--enable-avx2)
+			qemu_options+=(speed:--enable-avx512bw)
+		else
+			qemu_options+=(speed:--disable-avx2)
+		fi
 	fi
+
+	# Disable passt support, as it'd bring glibc 2.40.x dependency,
+	# and it is only available on Ubuntu 25.04 or newer.
+	if gt_eq "${qemu_version}" "10.1.0" ; then
+		qemu_options+=(functionality:--disable-passt)
+	fi
+
 	# We're disabling pmem support, it is heavilly broken with
 	# Ubuntu's static build of QEMU
 	qemu_options+=(functionality:--disable-libpmem)
