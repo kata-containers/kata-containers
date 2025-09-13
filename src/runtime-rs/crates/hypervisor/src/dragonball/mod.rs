@@ -75,9 +75,18 @@ impl Hypervisor for Dragonball {
         id: &str,
         netns: Option<String>,
         _annotations: &HashMap<String, String>,
+        // Dragonball is a built-in VMM that runs as a thread inside containerd-shim-kata-v2.
+        // Because it is not a standalone process, Dragonball cannot independently set per-VM SELinux exec labels;
+        // any provided selinux_label will be ignored.
+        selinux_label: Option<String>,
     ) -> Result<()> {
+        if selinux_label.is_some() {
+            warn!(sl!(),
+                    "SELinux label is provided for Dragonball VM, but Dragonball does not support SELinux; the label will be ignored",
+            );
+        }
         let mut inner = self.inner.write().await;
-        inner.prepare_vm(id, netns).await
+        inner.prepare_vm(id, netns, selinux_label).await
     }
 
     #[instrument]

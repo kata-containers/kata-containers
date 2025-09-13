@@ -48,9 +48,18 @@ impl Hypervisor for Remote {
         id: &str,
         netns: Option<String>,
         annotations: &HashMap<String, String>,
+        // NOTE: SELinux label support for remote is currently not available due to developer reasons.
+        selinux_label: Option<String>,
     ) -> Result<()> {
+        if selinux_label.is_some() {
+            warn!(sl!(),
+                    "SELinux label is provided for Remote VM, but Remote does not support SELinux; the label will be ignored",
+            );
+        }
         let mut inner = self.inner.write().await;
-        inner.prepare_vm(id, netns, annotations).await
+        inner
+            .prepare_vm(id, netns, annotations, selinux_label)
+            .await
     }
 
     async fn start_vm(&self, timeout: i32) -> Result<()> {
