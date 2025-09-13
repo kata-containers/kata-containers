@@ -206,6 +206,10 @@ pub enum VmmAction {
     InsertBlockDevice(BlockDeviceConfigInfo),
 
     #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
+    /// Prepare to remove a block device that already exists
+    PrepareRemoveBlockDevice(String),
+
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Remove a new block device for according to given drive_id
     RemoveBlockDevice(String),
 
@@ -354,6 +358,10 @@ impl VmmService {
             #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
             VmmAction::InsertBlockDevice(block_device_config) => {
                 self.add_block_device(vmm, event_mgr, block_device_config)
+            }
+            #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
+            VmmAction::PrepareRemoveBlockDevice(blkdev_id) => {
+                self.prepare_remove_block_device(vmm, &blkdev_id)
             }
             #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
             VmmAction::UpdateBlockDevice(blk_update) => {
@@ -664,10 +672,17 @@ impl VmmService {
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
             })?;
 
+        let (sender, receiver) = mpsc::channel();
+        let vmm_data = if ctx.is_hotplug() {
+            VmmData::SyncHotplug((sender.clone(), receiver))
+        } else {
+            VmmData::Empty
+        };
+
         vm.device_manager_mut()
             .block_manager
-            .insert_device(ctx, config)
-            .map(|_| VmmData::Empty)
+            .insert_device(ctx, config, sender.clone())
+            .map(|_| vmm_data)
             .map_err(VmmActionError::Block)
     }
 
@@ -685,6 +700,38 @@ impl VmmService {
             .block_manager
             .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Block)
+    }
+
+    // using upcall to unplug the block device in the guest
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
+    fn prepare_remove_block_device(
+        &mut self,
+        vmm: &mut Vmm,
+        blockdev_id: &str,
+    ) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
+            VfioDeviceError::InvalidVMID,
+        ))?;
+
+        info!("prepare_remove_block_device: {:?}", blockdev_id);
+        let ctx = vm.create_device_op_context(None).map_err(|e| {
+            info!("create device op context error: {:?}", e);
+            if let StartMicroVmError::MicroVMAlreadyRunning = e {
+                VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
+            } else if let StartMicroVmError::UpcallServerNotReady = e {
+                VmmActionError::UpcallServerNotReady
+            } else {
+                VmmActionError::StartMicroVm(e)
+            }
+        })?;
+
+        let (sender, receiver) = mpsc::channel();
+
+        vm.device_manager_mut()
+            .block_manager
+            .prepare_remove_device(&ctx, blockdev_id, sender.clone())
+            .map(|_| VmmData::SyncHotplug((sender, receiver)))
             .map_err(VmmActionError::Block)
     }
 
@@ -1526,6 +1573,7 @@ mod tests {
                     queue_size: 256,
                     use_shared_irq: None,
                     use_generic_irq: None,
+                    use_pci_bus: Some(true),
                 }),
                 InstanceState::Uninitialized,
                 &|result| {

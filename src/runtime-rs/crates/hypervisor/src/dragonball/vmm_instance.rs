@@ -237,16 +237,37 @@ impl VmmInstance {
         Ok(())
     }
 
-    pub fn insert_block_device(&self, device_cfg: BlockDeviceConfigInfo) -> Result<()> {
-        self.handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
-            device_cfg.clone(),
-        )))
-        .with_context(|| format!("Failed to insert block device {:?}", device_cfg))?;
-        Ok(())
+    pub fn insert_block_device(
+        &self,
+        device_cfg: BlockDeviceConfigInfo,
+        timeout: Duration,
+    ) -> Result<Option<i32>> {
+        let vmmdata = self
+            .handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
+                device_cfg.clone(),
+            )))
+            .with_context(|| format!("Failed to insert block device {:?}", device_cfg))?;
+
+        if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
+            let guest_dev_id = receiver.recv_timeout(timeout)?;
+            return Ok(guest_dev_id);
+        }
+        Ok(None)
     }
 
-    pub fn remove_block_device(&self, id: &str) -> Result<()> {
+    pub fn remove_block_device(&self, id: &str, timeout: Duration) -> Result<()> {
         info!(sl!(), "remove block device {}", id);
+
+        let vmmdata = self
+            .handle_request(Request::Sync(VmmAction::PrepareRemoveBlockDevice(
+                id.to_string(),
+            )))
+            .with_context(|| format!("Failed to prepare remove block device {:?}", id))?;
+
+        if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
+            let _ = receiver.recv_timeout(timeout)?;
+        }
+
         self.handle_request(Request::Sync(VmmAction::RemoveBlockDevice(id.to_string())))
             .with_context(|| format!("Failed to remove block device {:?}", id))?;
         Ok(())

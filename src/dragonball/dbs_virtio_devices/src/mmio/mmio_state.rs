@@ -371,6 +371,7 @@ where
             }
 
             let _ = self.intr_mgr.reset();
+            self.unregister_ioevent_doorbell();
             self.unregister_ioevent();
             self.features_select = 0;
             self.acked_features_select = 0;

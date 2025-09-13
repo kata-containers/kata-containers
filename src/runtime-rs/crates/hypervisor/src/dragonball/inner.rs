@@ -18,6 +18,7 @@ use dragonball::{
     vm::VmConfigInfo,
 };
 
+use crate::DEFAULT_HOTPLUG_TIMEOUT;
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -37,8 +38,6 @@ const DRAGONBALL_INITRD: &str = "initrd";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 const BALLOON_DEVICE_ID: &str = "balloon0";
 const MEM_DEVICE_ID: &str = "memmr0";
-/// default hotplug timeout
-const DEFAULT_HOTPLUG_TIMEOUT: u64 = 250;
 
 #[derive(Debug)]
 pub struct DragonballInner {

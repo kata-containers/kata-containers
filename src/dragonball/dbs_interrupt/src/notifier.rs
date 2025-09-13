@@ -5,7 +5,9 @@
 
 use std::any::Any;
 use std::io::Error;
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use vmm_sys_util::eventfd::EventFd;
 
@@ -118,6 +120,77 @@ mod msi {
         fn as_any(&self) -> &dyn Any {
             self
         }
+    }
+}
+
+/// Vector value used to disable MSI for a queue.
+pub const VIRTQ_MSI_NO_VECTOR: u16 = 0xffff;
+
+#[derive(Clone, PartialEq, Debug, Copy)]
+pub enum VirtioInterruptType {
+    Config,
+    Queue(u16),
+}
+
+#[derive(Clone)]
+pub struct VirtioNotifierMsix {
+    pub(crate) config_vector: Arc<AtomicU16>,
+    pub(crate) queues_vectors: Arc<Mutex<Vec<u16>>>,
+    pub(crate) interrupt_source_group: Arc<Box<dyn InterruptSourceGroup>>,
+    pub(crate) interrupt_type: VirtioInterruptType,
+}
+
+impl VirtioNotifierMsix {
+    pub fn new(
+        config_vector: Arc<AtomicU16>,
+        queues_vectors: Arc<Mutex<Vec<u16>>>,
+        interrupt_source_group: Arc<Box<dyn InterruptSourceGroup>>,
+        interrupt_type: VirtioInterruptType,
+    ) -> Self {
+        VirtioNotifierMsix {
+            config_vector,
+            queues_vectors,
+            interrupt_source_group,
+            interrupt_type,
+        }
+    }
+}
+
+impl InterruptNotifier for VirtioNotifierMsix {
+    fn notify(&self) -> std::result::Result<(), std::io::Error> {
+        let vector = match self.interrupt_type {
+            VirtioInterruptType::Config => self.config_vector.load(Ordering::Acquire),
+            VirtioInterruptType::Queue(queue_index) => {
+                self.queues_vectors.lock().unwrap()[queue_index as usize]
+            }
+        };
+        if vector == VIRTQ_MSI_NO_VECTOR {
+            return Ok(());
+        }
+
+        self.interrupt_source_group
+            .trigger(vector as InterruptIndex)
+    }
+    fn notifier(&self) -> Option<&EventFd> {
+        let vector = match self.interrupt_type {
+            VirtioInterruptType::Config => self.config_vector.load(Ordering::Acquire),
+            VirtioInterruptType::Queue(queue_index) => {
+                self.queues_vectors.lock().unwrap()[queue_index as usize]
+            }
+        };
+        if vector == VIRTQ_MSI_NO_VECTOR {
+            return None;
+        }
+
+        self.interrupt_source_group
+            .notifier(vector as InterruptIndex)
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn clone_boxed(&self) -> Box<dyn InterruptNotifier> {
+        Box::new(self.clone())
     }
 }
 
