@@ -685,18 +685,6 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		return err
 	}
 
-	if clh.config.SGXEPCSize > 0 {
-		epcSection := chclient.NewSgxEpcConfig("kata-epc", clh.config.SGXEPCSize)
-		epcSection.Prefault = func(b bool) *bool { return &b }(true)
-
-		if clh.vmconfig.SgxEpc != nil {
-			*clh.vmconfig.SgxEpc = append(*clh.vmconfig.SgxEpc, *epcSection)
-		} else {
-			clh.vmconfig.SgxEpc = &[]chclient.SgxEpcConfig{*epcSection}
-		}
-
-	}
-
 	return nil
 }
 

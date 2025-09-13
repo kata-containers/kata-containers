@@ -20,7 +20,6 @@ Name | Type | Description | Notes
 **Devices** | Pointer to [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
 **Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
 **Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
-**SgxEpc** | Pointer to [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
 **Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **Watchdog** | Pointer to **bool** |  | [optional] [default to false]
@@ -444,31 +443,6 @@ SetVsock sets Vsock field to given value.
 `func (o *VmConfig) HasVsock() bool`
 
 HasVsock returns a boolean if a field has been set.
-
-### GetSgxEpc
-
-`func (o *VmConfig) GetSgxEpc() []SgxEpcConfig`
-
-GetSgxEpc returns the SgxEpc field if non-nil, zero value otherwise.
-
-### GetSgxEpcOk
-
-`func (o *VmConfig) GetSgxEpcOk() (*[]SgxEpcConfig, bool)`
-
-GetSgxEpcOk returns a tuple with the SgxEpc field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetSgxEpc
-
-`func (o *VmConfig) SetSgxEpc(v []SgxEpcConfig)`
-
-SetSgxEpc sets SgxEpc field to given value.
-
-### HasSgxEpc
-
-`func (o *VmConfig) HasSgxEpc() bool`
-
-HasSgxEpc returns a boolean if a field has been set.
 
 ### GetNuma
 

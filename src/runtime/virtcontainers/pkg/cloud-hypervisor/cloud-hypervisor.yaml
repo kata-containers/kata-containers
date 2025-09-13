@@ -607,10 +607,6 @@ components:
             $ref: "#/components/schemas/VdpaConfig"
         vsock:
           $ref: "#/components/schemas/VsockConfig"
-        sgx_epc:
-          type: array
-          items:
-            $ref: "#/components/schemas/SgxEpcConfig"
         numa:
           type: array
           items:
@@ -1143,21 +1139,6 @@ components:
         id:
           type: string
 
-    SgxEpcConfig:
-      required:
-        - id
-        - size
-      type: object
-      properties:
-        id:
-          type: string
-        size:
-          type: integer
-          format: int64
-        prefault:
-          type: boolean
-          default: false
-
     NumaDistance:
       required:
         - destination
@@ -1189,10 +1170,6 @@ components:
           items:
             $ref: "#/components/schemas/NumaDistance"
         memory_zones:
-          type: array
-          items:
-            type: string
-        sgx_epc_sections:
           type: array
           items:
             type: string

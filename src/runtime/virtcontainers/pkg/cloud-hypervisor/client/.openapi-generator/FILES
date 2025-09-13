@@ -35,7 +35,6 @@ docs/ReceiveMigrationData.md
 docs/RestoreConfig.md
 docs/RngConfig.md
 docs/SendMigrationData.md
-docs/SgxEpcConfig.md
 docs/TokenBucket.md
 docs/TpmConfig.md
 docs/VdpaConfig.md
@@ -81,7 +80,6 @@ model_receive_migration_data.go
 model_restore_config.go
 model_rng_config.go
 model_send_migration_data.go
-model_sgx_epc_config.go
 model_token_bucket.go
 model_tpm_config.go
 model_vdpa_config.go
