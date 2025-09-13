@@ -32,7 +32,6 @@ type VmConfig struct {
 	Devices         *[]DeviceConfig         `json:"devices,omitempty"`
 	Vdpa            *[]VdpaConfig           `json:"vdpa,omitempty"`
 	Vsock           *VsockConfig            `json:"vsock,omitempty"`
-	SgxEpc          *[]SgxEpcConfig         `json:"sgx_epc,omitempty"`
 	Numa            *[]NumaConfig           `json:"numa,omitempty"`
 	Iommu           *bool                   `json:"iommu,omitempty"`
 	Watchdog        *bool                   `json:"watchdog,omitempty"`
@@ -582,38 +581,6 @@ func (o *VmConfig) SetVsock(v VsockConfig) {
 	o.Vsock = &v
 }
 
-// GetSgxEpc returns the SgxEpc field value if set, zero value otherwise.
-func (o *VmConfig) GetSgxEpc() []SgxEpcConfig {
-	if o == nil || o.SgxEpc == nil {
-		var ret []SgxEpcConfig
-		return ret
-	}
-	return *o.SgxEpc
-}
-
-// GetSgxEpcOk returns a tuple with the SgxEpc field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *VmConfig) GetSgxEpcOk() (*[]SgxEpcConfig, bool) {
-	if o == nil || o.SgxEpc == nil {
-		return nil, false
-	}
-	return o.SgxEpc, true
-}
-
-// HasSgxEpc returns a boolean if a field has been set.
-func (o *VmConfig) HasSgxEpc() bool {
-	if o != nil && o.SgxEpc != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetSgxEpc gets a reference to the given []SgxEpcConfig and assigns it to the SgxEpc field.
-func (o *VmConfig) SetSgxEpc(v []SgxEpcConfig) {
-	o.SgxEpc = &v
-}
-
 // GetNuma returns the Numa field value if set, zero value otherwise.
 func (o *VmConfig) GetNuma() []NumaConfig {
 	if o == nil || o.Numa == nil {
@@ -951,9 +918,6 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Vsock != nil {
 		toSerialize["vsock"] = o.Vsock
-	}
-	if o.SgxEpc != nil {
-		toSerialize["sgx_epc"] = o.SgxEpc
 	}
 	if o.Numa != nil {
 		toSerialize["numa"] = o.Numa

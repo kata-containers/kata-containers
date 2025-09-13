@@ -469,7 +469,7 @@ components:
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 7
+        memory_actual_size: 4
         state: Created
         config:
           memory:
@@ -567,13 +567,6 @@ components:
             serial: serial
             vhost_user: false
             id: id
-          sgx_epc:
-          - prefault: false
-            size: 7
-            id: id
-          - prefault: false
-            size: 7
-            id: id
           fs:
           - pci_segment: 6
             num_queues: 6
@@ -595,10 +588,10 @@ components:
             cid: 3
           platform:
             iommu_segments:
-            - 1
-            - 1
-            num_pci_segments: 4
-            iommu_address_width: 4
+            - 4
+            - 4
+            num_pci_segments: 6
+            iommu_address_width: 1
             oem_strings:
             - oem_strings
             - oem_strings
@@ -754,41 +747,35 @@ components:
             id: id
           numa:
           - distances:
-            - distance: 5
-              destination: 7
-            - distance: 5
-              destination: 7
+            - distance: 7
+              destination: 3
+            - distance: 7
+              destination: 3
             pci_segments:
-            - 3
-            - 3
+            - 5
+            - 5
             cpus:
             - 3
             - 3
-            sgx_epc_sections:
-            - sgx_epc_sections
-            - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 3
+            guest_numa_id: 7
           - distances:
-            - distance: 5
-              destination: 7
-            - distance: 5
-              destination: 7
+            - distance: 7
+              destination: 3
+            - distance: 7
+              destination: 3
             pci_segments:
-            - 3
-            - 3
+            - 5
+            - 5
             cpus:
             - 3
             - 3
-            sgx_epc_sections:
-            - sgx_epc_sections
-            - sgx_epc_sections
             memory_zones:
             - memory_zones
             - memory_zones
-            guest_numa_id: 3
+            guest_numa_id: 7
           rng:
             iommu: false
             src: src
@@ -796,12 +783,12 @@ components:
             socket: socket
           watchdog: false
           pci_segments:
-          - pci_segment: 4
-            mmio32_aperture_weight: 0
-            mmio64_aperture_weight: 6
-          - pci_segment: 4
-            mmio32_aperture_weight: 0
-            mmio64_aperture_weight: 6
+          - pci_segment: 3
+            mmio32_aperture_weight: 4
+            mmio64_aperture_weight: 0
+          - pci_segment: 3
+            mmio32_aperture_weight: 4
+            mmio64_aperture_weight: 0
           landlock_enable: false
           serial:
             mode: "Off"
@@ -1010,13 +997,6 @@ components:
           serial: serial
           vhost_user: false
           id: id
-        sgx_epc:
-        - prefault: false
-          size: 7
-          id: id
-        - prefault: false
-          size: 7
-          id: id
         fs:
         - pci_segment: 6
           num_queues: 6
@@ -1038,10 +1018,10 @@ components:
           cid: 3
         platform:
           iommu_segments:
-          - 1
-          - 1
-          num_pci_segments: 4
-          iommu_address_width: 4
+          - 4
+          - 4
+          num_pci_segments: 6
+          iommu_address_width: 1
           oem_strings:
           - oem_strings
           - oem_strings
@@ -1197,41 +1177,35 @@ components:
           id: id
         numa:
         - distances:
-          - distance: 5
-            destination: 7
-          - distance: 5
-            destination: 7
+          - distance: 7
+            destination: 3
+          - distance: 7
+            destination: 3
           pci_segments:
-          - 3
-          - 3
+          - 5
+          - 5
           cpus:
           - 3
           - 3
-          sgx_epc_sections:
-          - sgx_epc_sections
-          - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 3
+          guest_numa_id: 7
         - distances:
-          - distance: 5
-            destination: 7
-          - distance: 5
-            destination: 7
+          - distance: 7
+            destination: 3
+          - distance: 7
+            destination: 3
           pci_segments:
-          - 3
-          - 3
+          - 5
+          - 5
           cpus:
           - 3
           - 3
-          sgx_epc_sections:
-          - sgx_epc_sections
-          - sgx_epc_sections
           memory_zones:
           - memory_zones
           - memory_zones
-          guest_numa_id: 3
+          guest_numa_id: 7
         rng:
           iommu: false
           src: src
@@ -1239,12 +1213,12 @@ components:
           socket: socket
         watchdog: false
         pci_segments:
-        - pci_segment: 4
-          mmio32_aperture_weight: 0
-          mmio64_aperture_weight: 6
-        - pci_segment: 4
-          mmio32_aperture_weight: 0
-          mmio64_aperture_weight: 6
+        - pci_segment: 3
+          mmio32_aperture_weight: 4
+          mmio64_aperture_weight: 0
+        - pci_segment: 3
+          mmio32_aperture_weight: 4
+          mmio64_aperture_weight: 0
         landlock_enable: false
         serial:
           mode: "Off"
@@ -1303,10 +1277,6 @@ components:
           type: array
         vsock:
           $ref: '#/components/schemas/VsockConfig'
-        sgx_epc:
-          items:
-            $ref: '#/components/schemas/SgxEpcConfig'
-          type: array
         numa:
           items:
             $ref: '#/components/schemas/NumaConfig'
@@ -1426,9 +1396,9 @@ components:
       type: object
     PciSegmentConfig:
       example:
-        pci_segment: 4
-        mmio32_aperture_weight: 0
-        mmio64_aperture_weight: 6
+        pci_segment: 3
+        mmio32_aperture_weight: 4
+        mmio64_aperture_weight: 0
       properties:
         pci_segment:
           format: int16
@@ -1445,10 +1415,10 @@ components:
     PlatformConfig:
       example:
         iommu_segments:
-        - 1
-        - 1
-        num_pci_segments: 4
-        iommu_address_width: 4
+        - 4
+        - 4
+        num_pci_segments: 6
+        iommu_address_width: 1
         oem_strings:
         - oem_strings
         - oem_strings
@@ -2058,28 +2028,10 @@ components:
       - cid
       - socket
       type: object
-    SgxEpcConfig:
-      example:
-        prefault: false
-        size: 7
-        id: id
-      properties:
-        id:
-          type: string
-        size:
-          format: int64
-          type: integer
-        prefault:
-          default: false
-          type: boolean
-      required:
-      - id
-      - size
-      type: object
     NumaDistance:
       example:
-        distance: 5
-        destination: 7
+        distance: 7
+        destination: 3
       properties:
         destination:
           format: int32
@@ -2094,23 +2046,20 @@ components:
     NumaConfig:
       example:
         distances:
-        - distance: 5
-          destination: 7
-        - distance: 5
-          destination: 7
+        - distance: 7
+          destination: 3
+        - distance: 7
+          destination: 3
         pci_segments:
-        - 3
-        - 3
+        - 5
+        - 5
         cpus:
         - 3
         - 3
-        sgx_epc_sections:
-        - sgx_epc_sections
-        - sgx_epc_sections
         memory_zones:
         - memory_zones
         - memory_zones
-        guest_numa_id: 3
+        guest_numa_id: 7
       properties:
         guest_numa_id:
           format: int32
@@ -2125,10 +2074,6 @@ components:
             $ref: '#/components/schemas/NumaDistance'
           type: array
         memory_zones:
-          items:
-            type: string
-          type: array
-        sgx_epc_sections:
           items:
             type: string
           type: array
