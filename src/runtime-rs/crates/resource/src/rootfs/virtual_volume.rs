@@ -24,7 +24,7 @@ use kata_types::{
 /// Image guest-pull related consts
 const KUBERNETES_CRI_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const KUBERNETES_CRIO_IMAGE_NAME: &str = "io.kubernetes.cri-o.ImageName";
-const KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS: &str = "overlayfs";
+const KATA_VIRTUAL_VOLUME_TYPE_OVERLAY_FS: &str = "overlay";
 const KATA_GUEST_ROOT_SHARED_FS: &str = "/run/kata-containers/";
 
 const CRI_CONTAINER_TYPE_KEY_LIST: &[&str] = &[
