@@ -482,7 +482,7 @@ allow_linux(state_ops, p_oci, i_oci) := {"ops": ops, "allowed": true} if {
 
     i_namespace_without_network_normalized := [
         {"Path": obj.Path, "Type": normalize_namespace_type(obj.Type)}
-        | obj := i_namespaces[_]; obj.Type != "network"
+        | obj := i_namespaces[_]; obj.Type != "network"; obj.Type != "cgroup"
     ]
 
     print("allow_linux: p_namespaces_normalized =", p_namespaces_normalized)
