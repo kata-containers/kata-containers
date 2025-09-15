@@ -2347,6 +2347,13 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 				// matching what is known to the orchestrator, i.e.
 				// 1G (container) +1G (container) +256M (overhead) = 2G (memory size) + added second time (256M)
 				hconfig.MemoryOverhead += deltaMB
+				// Note that while we are in this situation, the host-side cgroup OOM may still happen,
+				// because the host cgroup that will be specified will be smaller than the default VM size
+				s.Logger().
+					WithField("unaccounted", hostUnaccountedMB).
+					WithField("delta", deltaMB).
+					WithField("new overhead", hconfig.MemoryOverhead).
+					Warn("Host-side cgroup is smaller than VM default size, this may lead to OOM messages. Increase memory size request to fix it")
 				break
 			} else {
 				// This request is big enough to hide the overhead
