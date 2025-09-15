@@ -58,4 +58,10 @@ safe-path = { path = "../../libs/safe-path" }
 
 tokio = { version = "1.44.2", features = ["signal"] }
 
+[features]
+default = ["cloud-hypervisor"]
+
+# Enable the Cloud Hypervisor driver
+cloud-hypervisor = []
+
 [workspace]
