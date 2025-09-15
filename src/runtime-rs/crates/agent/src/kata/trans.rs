@@ -22,11 +22,11 @@ use crate::{
         MemHotplugByProbeRequest, MemoryData, MemoryStats, MetricsResponse, NetworkStats,
         OnlineCPUMemRequest, PidsStats, ReadStreamRequest, ReadStreamResponse,
         RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
-        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SharedMount,
-        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
-        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-        VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-        WriteStreamRequest,
+        SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SetPolicyRequest,
+        SharedMount, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
+        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
+        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+        WaitProcessRequest, WriteStreamRequest,
     },
     GetGuestDetailsRequest, OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -892,6 +892,15 @@ impl From<AddSwapPathRequest> for agent::AddSwapPathRequest {
     fn from(from: AddSwapPathRequest) -> Self {
         Self {
             path: from.path,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<SetPolicyRequest> for agent::SetPolicyRequest {
+    fn from(from: SetPolicyRequest) -> Self {
+        Self {
+            policy: from.policy,
             ..Default::default()
         }
     }

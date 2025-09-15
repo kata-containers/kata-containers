@@ -6,7 +6,7 @@
 
 use crate::health_check::HealthCheck;
 use agent::kata::KataAgent;
-use agent::types::KernelModule;
+use agent::types::{KernelModule, SetPolicyRequest};
 use agent::{
     self, Agent, GetGuestDetailsRequest, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest,
 };
@@ -490,6 +490,27 @@ impl VirtSandbox {
     ) -> bool {
         !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
     }
+
+    async fn set_agent_policy(&self) -> Result<()> {
+        let toml_config = self.resource_manager.config().await;
+        if let Some(agent_config) = toml_config.agent.get(&toml_config.runtime.agent_name) {
+            // If a Policy has been specified, send it to the agent.
+            if !agent_config.policy.is_empty() {
+                info!(
+                    sl!(),
+                    "Setting Agent Policy with {:?}.", &agent_config.policy
+                );
+                self.agent
+                    .set_policy(SetPolicyRequest {
+                        policy: agent_config.policy.clone(),
+                    })
+                    .await
+                    .context("sandbox: set policy failed")?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -593,6 +614,7 @@ impl Sandbox for VirtSandbox {
             .start(&address)
             .await
             .context(format!("connect to address {:?}", &address))?;
+        self.set_agent_policy().await.context("set agent policy")?;
 
         self.resource_manager
             .setup_after_start_vm()
@@ -839,6 +861,23 @@ impl Sandbox for VirtSandbox {
 
     async fn hypervisor_metrics(&self) -> Result<String> {
         self.hypervisor.get_hypervisor_metrics().await
+    }
+
+    async fn set_policy(&self, policy: &str) -> Result<()> {
+        if policy.is_empty() {
+            debug!(sl!(), "sb: set_policy skipped without policy");
+            return Ok(());
+        }
+
+        info!(sl!(), "sb: set_policy invoked");
+        self.agent
+            .set_policy(SetPolicyRequest {
+                policy: policy.to_string(),
+            })
+            .await
+            .context("sandbox: failed to set policy")?;
+
+        Ok(())
     }
 }
 
