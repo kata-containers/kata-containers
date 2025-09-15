@@ -200,7 +200,7 @@ assets:
     confidential:
       description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.16.1"
+      version: "v6.16.7"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
