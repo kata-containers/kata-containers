@@ -35,7 +35,7 @@ use crate::address_space_manager::{
 use crate::api::v1::{InstanceInfo, InstanceState};
 use crate::device_manager::console_manager::DmesgWriter;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
-use crate::error::{LoadInitrdError, Result, StartMicroVmError, StopMicrovmError};
+use crate::error::{Error, LoadInitrdError, Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::kvm_context::KvmContext;
 use crate::resource_manager::ResourceManager;
@@ -228,7 +228,8 @@ impl Vm {
             epoll_manager.clone(),
             &logger,
             api_shared_info.clone(),
-        );
+        )
+        .map_err(Error::DeviceMgrError)?;
 
         Ok(Vm {
             epoll_manager,

@@ -69,6 +69,10 @@ pub const HYPERVISOR_REMOTE: &str = "remote";
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
 
+/// default hotplug timeout
+#[allow(dead_code)]
+const DEFAULT_HOTPLUG_TIMEOUT: u64 = 250;
+
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {
     NotReady,

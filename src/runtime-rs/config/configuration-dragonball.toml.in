@@ -122,7 +122,7 @@ default_maxmemory = @DEFMAXMEMSZ@
 # is backed by a block device or a file. This driver facilitates attaching the
 # storage directly to the guest VM.
 #
-# DB only supports virtio-blk-mmio.
+# DB supports virtio-blk-mmio and virtio-blk-pci, virtio-blk-pci is prefered
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 
 # This option changes the default hypervisor and kernel parameters

@@ -310,7 +310,7 @@ impl MemDeviceMgr {
     pub fn remove_devices(&self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
         for info in self.info_list.iter() {
             if let Some(device) = &info.device {
-                DeviceManager::destroy_mmio_virtio_device(device.clone(), ctx)?;
+                DeviceManager::destroy_mmio_device(device.clone(), ctx)?;
             }
         }
 

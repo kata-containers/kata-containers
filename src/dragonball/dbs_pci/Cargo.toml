@@ -16,6 +16,8 @@ thiserror = "1"
 dbs-allocator = { workspace = true }
 dbs-boot = { workspace = true }
 dbs-device = { workspace = true }
+dbs-address-space = { workspace = true }
+dbs-virtio-devices = { workspace = true }
 dbs-interrupt = { workspace = true, features = [
     "kvm-irq",
     "kvm-legacy-irq",
@@ -23,12 +25,18 @@ dbs-interrupt = { workspace = true, features = [
 ] }
 downcast-rs = "1.2.0"
 byteorder = "1.4.3"
+serde = "1.0.27"
+
 vm-memory = {workspace = true}
 kvm-ioctls = {workspace = true}
 kvm-bindings = {workspace = true}
 vfio-ioctls = {workspace = true}
 vfio-bindings = {workspace = true}
 libc = "0.2.39"
+vmm-sys-util = {workspace = true}
+virtio-queue = {workspace = true}
+dbs-utils = {workspace = true}
+
 
 [dev-dependencies]
 dbs-arch = { workspace = true }
