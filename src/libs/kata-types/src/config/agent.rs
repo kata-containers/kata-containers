@@ -148,6 +148,10 @@ pub struct Agent {
     /// Memory agent configuration
     #[serde(default)]
     pub mem_agent: MemAgent,
+
+    /// Agent policy
+    #[serde(default)]
+    pub policy: String,
 }
 
 fn deserialize_secs_to_millis<'de, D>(deserializer: D) -> std::result::Result<u32, D::Error>
@@ -176,6 +180,7 @@ impl std::default::Default for Agent {
             kernel_modules: Default::default(),
             container_pipe_size: 0,
             mem_agent: MemAgent::default(),
+            policy: Default::default(),
         }
     }
 }
