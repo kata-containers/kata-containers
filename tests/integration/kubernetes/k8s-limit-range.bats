@@ -9,6 +9,10 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
+		skip "see: https://github.com/kata-containers/kata-containers/issues/11810"
+	fi
+
 	get_pod_config_dir
 	namespace_name="default-cpu-example"
 	pod_name="default-cpu-test"
@@ -37,6 +41,10 @@ setup() {
 }
 
 teardown() {
+	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
+		skip "see: https://github.com/kata-containers/kata-containers/issues/11810"
+	fi
+
 	# Debugging information
 	kubectl describe "pod/$pod_name" -n "$namespace_name"
 

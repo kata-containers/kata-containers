@@ -9,6 +9,9 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
+	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
+		skip "see: https://github.com/kata-containers/kata-containers/issues/11810"
+	fi
 
 	get_pod_config_dir
 
@@ -37,6 +40,9 @@ setup() {
 
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
+	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
+		skip "see: https://github.com/kata-containers/kata-containers/issues/11810"
+	fi
 
 	# Debugging information
 	kubectl describe deployment ${deployment_name}
