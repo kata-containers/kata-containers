@@ -1,18 +1,35 @@
+version: "2"
 linters:
   enable:
-    - gosimple
-    - gci
-    - gofmt
+    - gocritic
     - misspell
-    - goimports
     - staticcheck
     - errcheck
-    - govet
-    - misspell
-    - gocritic
-linters-settings:
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/safchain/ethtool)
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/safchain/ethtool)
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
