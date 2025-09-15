@@ -6,8 +6,12 @@
 
 use crate::vm::{vm_utils, TestVm};
 use anyhow::{anyhow, Context, Result};
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+use hypervisor::ch::CloudHypervisor;
 use hypervisor::{
-    ch::CloudHypervisor,
     device::{
         device_manager::{do_handle_device, DeviceManager},
         DeviceConfig,
@@ -17,14 +21,22 @@ use hypervisor::{
 };
 use kata_types::config::{
     hypervisor::register_hypervisor_plugin, hypervisor::TopologyConfigInfo,
-    hypervisor::HYPERVISOR_NAME_CH, hypervisor::HYPERVISOR_NAME_QEMU, CloudHypervisorConfig,
-    QemuConfig,
+    hypervisor::HYPERVISOR_NAME_QEMU, QemuConfig,
 };
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // Clh specific configuration path
+#[cfg(all(
+    feature = "cloud-hypervisor",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
 const CLH_CONFIG_PATH: &str =
     "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-cloud-hypervisor.toml";
 
@@ -45,11 +57,17 @@ const VM_START_TIMEOUT: i32 = 10_000;
 // - calls start_vm to boot pod vm
 // - retrieves the agent ttrpc server socket address
 pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
+    #[allow(clippy::needless_late_init)]
     let config_path;
+    #[allow(unused_mut)]
     let mut is_hybrid_vsock = false;
 
     // Register the hypervisor config plugin
     match name {
+        #[cfg(all(
+            feature = "cloud-hypervisor",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         HYPERVISOR_NAME_CH => {
             register_hypervisor_plugin(HYPERVISOR_NAME_CH, Arc::new(CloudHypervisorConfig::new()));
             config_path = CLH_CONFIG_PATH;
@@ -71,6 +89,10 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
         .context("get hypervisor config")?;
 
     let hypervisor: Arc<dyn Hypervisor> = match name {
+        #[cfg(all(
+            feature = "cloud-hypervisor",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        ))]
         HYPERVISOR_NAME_CH => {
             let hyp_ch = Arc::new(CloudHypervisor::new());
             hyp_ch
