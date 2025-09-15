@@ -30,11 +30,7 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - clh #cloud-hypervisor
-          - dragonball
-          - fc #firecracker
           - qemu
-          - cloud-hypervisor
         container_runtime:
           - containerd
         snapshotter:
