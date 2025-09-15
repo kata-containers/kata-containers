@@ -126,49 +126,101 @@ impl DeviceManager {
     }
 
     async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
-        // find the device
+        // Find the device
+        info!(
+            sl!(),
+            "device_manager::try_add_device() - Searching for device with ID: {}", device_id
+        );
         let device = self
             .devices
             .get(device_id)
             .context("failed to find device")?;
 
+        // Log the device found
+        info!(
+            sl!(),
+            "device_manager::try_add_device() - Device found: {:?}", device
+        );
+
+        // Lock the device asynchronously
+        info!(
+            sl!(),
+            "device_manager::try_add_device() - Locking device for modification: {}", device_id
+        );
         let mut device_guard = device.lock().await;
-        // attach device
+
+        // Attach the device
+        info!(
+            sl!(),
+            "device_manager::try_add_device() - Attaching device: {}", device_id
+        );
         let result = device_guard
             .attach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
             .await;
-        // handle attach error
+
+        // Handle attach error
         if let Err(e) = result {
+            // Log the error that occurred during device attachment
+            info!(
+                sl!(),
+                "device_manager::try_add_device() - Failed to attach device: {}. Error: {:?}",
+                device_id,
+                e
+            );
+
+            // Handle specific device types after failure
+            info!(sl!(), "device_manager::try_add_device() - Attempting to release device resources based on device type for device: {}", device_id);
             match device_guard.get_device_info().await {
                 DeviceType::Block(device) => {
+                    info!(sl!(), "device_manager::try_add_device() - Releasing device index for Block device: {:?}", device);
                     self.shared_info.release_device_index(
                         device.config.index,
                         device.config.driver_option == *KATA_NVDIMM_DEV_TYPE,
                     );
                 }
                 DeviceType::Vfio(device) => {
-                    // safe here:
-                    // Only when vfio dev_type is `b`, virt_path MUST be Some(X),
-                    // and needs do release_device_index. otherwise, let it go.
+                    info!(sl!(), "device_manager::try_add_device() - Releasing device index for VFIO device: {:?}", device);
+                    // Only release device index if dev_type is `b` and virt_path is Some(X)
                     if device.config.dev_type == DEVICE_TYPE_BLOCK {
+                        info!(
+                            sl!(),
+                            "device_manager::try_add_device() - Releasing VFIO device index: {:?}",
+                            device
+                        );
                         self.shared_info
                             .release_device_index(device.config.virt_path.unwrap().0, false);
                     }
                 }
                 DeviceType::VhostUserBlk(device) => {
+                    info!(sl!(), "device_manager::try_add_device() - Releasing device index for VhostUserBlk device: {:?}", device);
                     self.shared_info
                         .release_device_index(device.config.index, false);
                 }
                 _ => {
-                    debug!(sl!(), "no need to do release device index.");
+                    info!(sl!(), "device_manager::try_add_device() - No need to release device index for this device type.");
                 }
             }
 
+            // Drop the device lock to release resources
+            info!(
+                sl!(),
+                "device_manager::try_add_device() - Dropping device lock and removing device: {}",
+                device_id
+            );
             drop(device_guard);
+
+            // Remove device from the devices map
             self.devices.remove(device_id);
 
+            // Log that we are returning the error after failing to attach
             return Err(e);
         }
+
+        // Log that the attachment was successful
+        info!(
+            sl!(),
+            "device_manager::try_add_device() - Successfully attached device: {}", device_id
+        );
 
         Ok(())
     }
