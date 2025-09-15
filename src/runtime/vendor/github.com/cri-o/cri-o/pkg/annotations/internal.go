@@ -31,11 +31,15 @@ const (
 	// SeccompProfilePath is the node seccomp profile path.
 	SeccompProfilePath = "io.kubernetes.cri-o.SeccompProfilePath"
 
-	// Image is the container image ID annotation.
-	Image = "io.kubernetes.cri-o.Image"
+	// UserRequestedImage is an annotation containing the image specified in the container spec
+	// and used to look up the image when creating the container.
+	// It might evaluate to a different image (or to a different kind of reference!) at any future time.
+	UserRequestedImage = "io.kubernetes.cri-o.Image"
 
-	// ImageName is the container image name annotation.
-	ImageName = "io.kubernetes.cri-o.ImageName"
+	// SomeNameOfTheImage is an annotation containing _some_ name of the image used to create the container.
+	// May be "" if the image was referenced by ID and has no names.
+	// It also has NO RELATIONSHIP to user input used to find the image.
+	SomeNameOfTheImage = "io.kubernetes.cri-o.ImageName"
 
 	// ImageRef is the container image ref annotation.
 	ImageRef = "io.kubernetes.cri-o.ImageRef"
@@ -108,7 +112,7 @@ const (
 	ContainerManager = "io.container.manager"
 )
 
-// ContainerType values
+// ContainerType values.
 const (
 	// ContainerTypeSandbox represents a pod sandbox container.
 	ContainerTypeSandbox = "sandbox"

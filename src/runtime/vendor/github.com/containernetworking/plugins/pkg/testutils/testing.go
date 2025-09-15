@@ -19,7 +19,7 @@ import (
 )
 
 // AllSpecVersions contains all CNI spec version numbers
-var AllSpecVersions = [...]string{"0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0"}
+var AllSpecVersions = [...]string{"0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0", "1.0.0", "1.1.0"}
 
 // SpecVersionHasIPVersion returns true if the given CNI specification version
 // includes the "version" field in the IP address elements
@@ -36,6 +36,13 @@ func SpecVersionHasIPVersion(ver string) bool {
 // supports the CHECK command
 func SpecVersionHasCHECK(ver string) bool {
 	ok, _ := version.GreaterThanOrEqualTo(ver, "0.4.0")
+	return ok
+}
+
+// SpecVersionHasSTATUS returns true if the given CNI specification version
+// supports the STATUS command
+func SpecVersionHasSTATUS(ver string) bool {
+	ok, _ := version.GreaterThanOrEqualTo(ver, "1.1.0")
 	return ok
 }
 

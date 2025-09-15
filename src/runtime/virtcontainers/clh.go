@@ -32,7 +32,7 @@ import (
 
 	"github.com/containerd/console"
 	chclient "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cloud-hypervisor/client"
-	"github.com/opencontainers/selinux/go-selinux/label"
+	selinux "github.com/opencontainers/selinux/go-selinux"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
@@ -708,10 +708,10 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	// notwant to run them under confinement.
 	if !clh.config.DisableSeLinux {
 
-		if err := label.SetProcessLabel(clh.config.SELinuxProcessLabel); err != nil {
+		if err := selinux.SetExecLabel(clh.config.SELinuxProcessLabel); err != nil {
 			return err
 		}
-		defer label.SetProcessLabel("")
+		defer selinux.SetExecLabel("")
 	}
 
 	err = clh.setupVirtiofsDaemon(ctx)

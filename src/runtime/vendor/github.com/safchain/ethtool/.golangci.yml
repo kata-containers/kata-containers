@@ -1,11 +1,15 @@
 linters:
-  disable:
-    - gosimple
-    - unused
   enable:
+    - gosimple
     - gci
     - gofmt
     - misspell
+    - goimports
+    - staticcheck
+    - errcheck
+    - govet
+    - misspell
+    - gocritic
 linters-settings:
   gci:
     sections:
