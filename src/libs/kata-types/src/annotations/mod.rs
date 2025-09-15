@@ -995,7 +995,7 @@ impl Annotation {
                     },
                     KATA_ANNO_CFG_AGENT_POLICY => {
                         // Base64 decode the annotation value
-                        if let Ok(b64_decoded) = base64::decode_config(&value, base64::STANDARD) {
+                        if let Ok(b64_decoded) = base64::decode_config(value, base64::STANDARD) {
                             match String::from_utf8(b64_decoded) {
                                 Ok(policy) => ag.policy = policy,
                                 Err(_e) => {
