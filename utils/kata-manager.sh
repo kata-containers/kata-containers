@@ -823,7 +823,11 @@ install_kata()
 		info "Installing $project release $version from $file"
 	fi
 
-	sudo tar -C / -xvf "${file}"
+	if [[ "${file}" == *.tar.zst ]]; then
+		sudo tar --zstd -xvf "${file}"
+	else
+		sudo tar -C / -xvf "${file}"
+	fi
 
 	[ -d "$from_dir" ] || die "$project does not exist in expected directory $from_dir"
 
