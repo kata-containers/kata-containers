@@ -6,7 +6,6 @@
 #[cfg(test)]
 mod tests {
     use anyhow::Context;
-    use base64::prelude::*;
     use std::fmt::{self, Display};
     use std::fs::{self, File};
     use std::path;
@@ -112,12 +111,12 @@ mod tests {
 
         // The container repos/network calls can be unreliable, so retry
         // a few times before giving up.
-        let mut policy = String::new();
+        let mut initdata_anno = String::new();
         for i in 0..6 {
-            policy = match genpolicy::policy::AgentPolicy::from_files(&config).await {
+            initdata_anno = match genpolicy::policy::AgentPolicy::from_files(&config).await {
                 Ok(policy) => {
                     assert_eq!(policy.resources.len(), 1);
-                    policy.resources[0].generate_policy(&policy)
+                    policy.resources[0].generate_initdata_anno(&policy)
                 }
                 Err(e) => {
                     if i == 5 {
@@ -131,7 +130,7 @@ mod tests {
             };
             break;
         }
-        let policy = BASE64_STANDARD.decode(&policy).unwrap();
+        let policy = decode_policy(&initdata_anno);
 
         // write policy to a file
         fs::write(workdir.join("policy.rego"), &policy).unwrap();
@@ -176,6 +175,15 @@ mod tests {
                 logs, results.1
             );
         }
+    }
+
+    fn decode_policy(initdata_anno: &str) -> String {
+        let initdata = kata_types::initdata::decode_initdata(initdata_anno)
+            .expect("should decode initdata anno");
+        initdata
+            .get_coco_data("policy.rego")
+            .expect("should read policy from initdata")
+            .to_string()
     }
 
     fn prepare_workdir(

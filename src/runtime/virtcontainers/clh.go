@@ -686,6 +686,25 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		return err
 	}
 
+	if err := setupInitdata(clh, hypervisorConfig); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// setupInitdata prepares and attaches the initdata disk if present.
+func setupInitdata(clh *cloudHypervisor, hypervisorConfig *HypervisorConfig) error {
+	if len(hypervisorConfig.Initdata) == 0 {
+		return nil
+	}
+
+	if err := prepareInitdataMount(clh.Logger(), clh.id, hypervisorConfig); err != nil {
+		return err
+	}
+
+	clh.addInitdataDisk(hypervisorConfig.InitdataImage)
+
 	return nil
 }
 
@@ -851,6 +870,44 @@ func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (types.PciPath, error) {
 	}
 
 	return types.PciPathFromString(tokens[0])
+}
+
+// addInitdataDisk attaches initdataImage to the CLH VM as a read-only virtio-blk disk.
+// It builds a DiskConfig (Readonly=true, VhostUser=false), sets one queue per vCPU
+// with queue size 1024, applies Direct-I/O/IOMMU/rate-limiter from clh.config, and
+// appends the disk to the pending VM config (no hotplug).
+func (clh *cloudHypervisor) addInitdataDisk(initdataImage string) {
+	disk := chclient.NewDiskConfig()
+	disk.Path = &initdataImage
+
+	ro := true
+	disk.Readonly = &ro
+
+	// Use virtio-blk
+	vu := false
+	disk.VhostUser = &vu
+
+	// Reasonable queues; mirror your hotplug path
+	queues := int32(clh.config.NumVCPUs())
+	qsz := int32(1024)
+	disk.NumQueues = &queues
+	disk.QueueSize = &qsz
+
+	// Honor runtime settings
+	if clh.config.BlockDeviceCacheSet {
+		disk.Direct = &clh.config.BlockDeviceCacheDirect
+	}
+	disk.SetIommu(clh.config.IOMMU)
+
+	if rl := clh.getDiskRateLimiterConfig(); rl != nil {
+		disk.SetRateLimiterConfig(*rl)
+	}
+
+	if clh.vmconfig.Disks != nil {
+		*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, *disk)
+	} else {
+		clh.vmconfig.Disks = &[]chclient.DiskConfig{*disk}
+	}
 }
 
 func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) error {
@@ -1808,6 +1865,15 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 				"user": clh.config.User,
 				"uid":  clh.config.Uid,
 			}).Debug("successfully removed the non root user")
+	}
+
+	// If we have initdata, we should drop initdata image path
+	hypervisorConfig := clh.HypervisorConfig()
+	if len(hypervisorConfig.Initdata) > 0 {
+		initdataWorkdir := filepath.Join(string(filepath.Separator), "/run/kata-containers/shared/initdata", clh.id)
+		if err := os.RemoveAll(initdataWorkdir); err != nil {
+			clh.Logger().WithError(err).Warnf("failed to remove initdata work dir %s", initdataWorkdir)
+		}
 	}
 
 	clh.reset()

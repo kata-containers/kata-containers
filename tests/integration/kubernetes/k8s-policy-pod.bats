@@ -211,7 +211,7 @@ test_pod_policy_error() {
 		"--runtime-class-names=other-${runtime_class_name}"
 
 	# Check that the pod yaml does not contain a policy annotation.
-	run ! grep -q "io.katacontainers.config.agent.policy" "${testcase_pre_generate_pod_yaml}"
+	run ! grep -q "io.katacontainers.config.hypervisor.cc_init_data" "${testcase_pre_generate_pod_yaml}"
 }
 
 @test "ExecProcessRequest tests" {
