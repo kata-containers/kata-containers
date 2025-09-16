@@ -202,7 +202,7 @@ macro_rules! config_override {
         }
     };
 
-    ($builder:ident, $config:ident, $field:ident, $func: ident) => {
+    ($builder:ident, $config:ident, $field:ident, $func:ident) => {
         if let Some(v) = $builder.$field {
             $config.$field = $func(&v)?;
         }
@@ -661,8 +661,8 @@ impl AgentConfig {
             self.server_addr = addr;
         }
 
-        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
-            if let Ok(level) = logrus_to_slog_level(&addr) {
+        if let Ok(level) = env::var(LOG_LEVEL_ENV_VAR) {
+            if let Ok(level) = logrus_to_slog_level(&level) {
                 self.log_level = level;
             }
         }
