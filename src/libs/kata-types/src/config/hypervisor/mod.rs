@@ -849,6 +849,15 @@ pub struct MemoryInfo {
     /// Threshold in seconds before creating swap device.
     #[serde(default = "default_guest_swap_create_threshold_secs")]
     pub guest_swap_create_threshold_secs: u64,
+
+    /// Default memory overhead in MiB for the VM.
+    /// This represents the expected host-side overhead (VMM + base guest)
+    /// that an orchestrator may account for via pod overhead.
+    ///
+    /// Exposed via annotation `io.katacontainers.config.hypervisor.memory_overhead`.
+    /// When unset, defaults to 0 (no explicit overhead specified).
+    #[serde(default)]
+    pub memory_overhead: u32,
 }
 
 fn default_guest_swap_size_percent() -> u64 {
