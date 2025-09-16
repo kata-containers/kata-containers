@@ -17,7 +17,11 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
-use kata_types::k8s;
+use kata_types::{
+    annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY},
+    container::{update_ocispec_annotations, POD_CONTAINER, POD_SANDBOX},
+    k8s::{self, container_type},
+};
 use oci_spec::runtime::{self as oci, LinuxDeviceCgroup};
 
 use oci::{LinuxResources, Process as OCIProcess};
@@ -111,6 +115,17 @@ impl Container {
             None => true,
         };
         let annotations = spec.annotations().clone().unwrap_or_default();
+        let container_typ = container_type(&spec);
+        let pod_type_anno = if container_typ.is_pod_container() {
+            (CONTAINER_TYPE_KEY.to_string(), POD_CONTAINER.to_string())
+        } else {
+            (CONTAINER_TYPE_KEY.to_string(), POD_SANDBOX.to_string())
+        };
+
+        let bund_path_anno = (BUNDLE_PATH_KEY.to_string(), config.bundle.clone());
+        let updated_annotations =
+            update_ocispec_annotations(&annotations, &[], &[pod_type_anno, bund_path_anno]);
+        spec.set_annotations(Some(updated_annotations.clone()));
 
         amend_spec(
             &mut spec,
