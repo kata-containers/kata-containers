@@ -161,7 +161,6 @@ impl ResourceManagerInner {
                             )
                             .await
                             .context("setup share fs device before start vm")?;
-
                         // setup sandbox bind mounts: setup = true
                         self.handle_sandbox_bindmounts(true)
                             .await
