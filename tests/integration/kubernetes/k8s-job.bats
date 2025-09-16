@@ -19,6 +19,11 @@ setup() {
 }
 
 @test "Run a job to completion" {
+	local cmd
+	local logs
+	local pi_number
+	local pod_name
+
 	# Create job
 	kubectl apply -f "${yaml_file}"
 
@@ -33,8 +38,12 @@ setup() {
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Verify the output of the pod
+	bats_unbuffered_info "Getting logs for $pod_name"
+	logs=$(kubectl logs "$pod_name")
+	bats_unbuffered_info "Logs: $logs"
+
 	pi_number="3.14"
-	kubectl logs "$pod_name" | grep "$pi_number"
+	echo "$logs" | grep "$pi_number"
 }
 
 teardown() {
