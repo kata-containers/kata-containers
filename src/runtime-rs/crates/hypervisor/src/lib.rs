@@ -138,3 +138,6 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn guest_memory_block_size(&self) -> u32;
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)>;
 }
+
+#[cfg(test)]
+mod memory_overhead_tests;
