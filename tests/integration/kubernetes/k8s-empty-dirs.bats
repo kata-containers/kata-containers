@@ -43,6 +43,15 @@ setup() {
 }
 
 @test "Empty dir volume when FSGroup is specified with non-root container" {
+	local agnhost_name
+	local agnhost_version
+	local gid
+	local image
+	local logs
+	local pod_file
+	local pod_logs_file
+	local uid
+
 	[[ "${KATA_HYPERVISOR}" = qemu-se* ]] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	# This is a reproducer of k8s e2e "[sig-storage] EmptyDir volumes when FSGroup is specified [LinuxOnly] [NodeFeature:FSGroup] new files should be created with FSGroup ownership when container is non-root" test
@@ -59,7 +68,11 @@ setup() {
 
 	pod_logs_file="$(mktemp)"
 	for container in mounttest-container mounttest-container-2; do
+		bats_unbuffered_info "Getting logs for $container"
 		kubectl logs "$pod_name" "$container" > "$pod_logs_file"
+		logs=$(cat $pod_logs_file)
+		bats_unbuffered_info "Logs: $logs"
+
 		# Check owner UID of file
 		uid=$(cat $pod_logs_file | grep 'owner UID of' | sed 's/.*:\s//')
 		assert_equal "1001" "$uid"
