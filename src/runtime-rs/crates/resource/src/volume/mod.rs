@@ -13,7 +13,7 @@ mod shm_volume;
 pub mod utils;
 
 pub mod direct_volume;
-use crate::volume::direct_volume::is_direct_volume;
+use crate::volume::{direct_volume::is_direct_volume, share_fs_volume::VolumeManager};
 pub mod direct_volumes;
 
 use std::{sync::Arc, vec::Vec};
@@ -46,11 +46,19 @@ pub struct VolumeResourceInner {
 #[derive(Default)]
 pub struct VolumeResource {
     inner: Arc<RwLock<VolumeResourceInner>>,
+    // The core purpose of introducing `volume_manager` to `VolumeResource` is to centralize the management of shared file system volumes.
+    // By creating a single VolumeManager instance within VolumeResource, all shared file volumes are managed by one central entity.
+    // This single volume_manager can accurately track the references of all ShareFsVolume instances to the shared volumes,
+    // ensuring correct reference counting, proper volume lifecycle management, and preventing issues like volumes being overwritten.
+    volume_manager: Arc<VolumeManager>,
 }
 
 impl VolumeResource {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            inner: Arc::new(RwLock::new(VolumeResourceInner::default())),
+            volume_manager: Arc::new(VolumeManager::new()),
+        }
     }
 
     pub async fn handler_volumes(
@@ -107,9 +115,16 @@ impl VolumeResource {
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
-                    share_fs_volume::ShareFsVolume::new(share_fs, m, cid, read_only, agent.clone())
-                        .await
-                        .with_context(|| format!("new share fs volume {:?}", m))?,
+                    share_fs_volume::ShareFsVolume::new(
+                        share_fs,
+                        m,
+                        cid,
+                        read_only,
+                        agent.clone(),
+                        self.volume_manager.clone(),
+                    )
+                    .await
+                    .with_context(|| format!("new share fs volume {:?}", m))?,
                 )
             } else if is_skip_volume(m) {
                 info!(sl!(), "skip volume {:?}", m);
