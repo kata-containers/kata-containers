@@ -141,3 +141,6 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
 
 #[cfg(test)]
 mod memory_overhead_tests;
+
+#[cfg(test)]
+mod memory_overhead_sequence_tests;
