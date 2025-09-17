@@ -11,7 +11,8 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
     # Getting following error for nydus scenarios for the init container (which is a runc pod!)
     # Cannot pull alpine image, error unpacking image: failed to extract layer sha256:<XXX>: failed to get reader from content store: content digest sha256:<XXX>: not found
-    [ "${SNAPSHOTTER:-}" == "nydus" ] && skip "openvpn tests not supported with nydus snapshotter"
+    # TODO: retry and raise nydus issue...
+    #[ "${SNAPSHOTTER:-}" == "nydus" ] && skip "openvpn tests not supported with nydus snapshotter"
     # ERROR: unable to select packages: easy-rsa (no such package) ...
     [ "$(uname -m)" == "ppc64le" ] && skip "required packages for openvpn test not available for ppc64le"
 
@@ -70,7 +71,7 @@ setup() {
 }
 
 teardown() {
-    [ "${SNAPSHOTTER:-}" == "nydus" ] && skip "openvpn tests not supported with nydus snapshotter"
+    #[ "${SNAPSHOTTER:-}" == "nydus" ] && skip "openvpn tests not supported with nydus snapshotter"
     [ "$(uname -m)" == "ppc64le" ] && skip "required packages for openvpn test not available for ppc64le"
 
     # Debugging information
