@@ -54,7 +54,13 @@ pub(crate) struct ShareFsVolume {
     share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
-    monitor_task: Option<JoinHandle<()>>,
+
+    // Add volume manager reference
+    volume_manager: Option<Arc<VolumeManager>>,
+    // Record the source path for cleanup
+    source_path: Option<String>,
+    // Record the container ID
+    container_id: String,
 }
 
 /// Directory Monitor Config
@@ -410,6 +416,9 @@ impl ShareFsVolume {
         readonly: bool,
         agent: Arc<dyn Agent>,
     ) -> Result<Self> {
+        // TODO: The volume manager should be passed by ShareFsVolume::new(...,volume_manager)
+        let volume_manager: Arc<VolumeManager> = Arc::new(VolumeManager::new());
+
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
         let file_name = Path::new(&source_path)
@@ -423,8 +432,11 @@ impl ShareFsVolume {
             share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
-            monitor_task: None,
+            volume_manager: Some(volume_manager.clone()),
+            source_path: Some(source_path.clone()),
+            container_id: cid.to_string(),
         };
+
         match share_fs {
             None => {
                 let src = match std::fs::canonicalize(&source_path) {
@@ -474,14 +486,20 @@ impl ShareFsVolume {
                     oci_mount.set_source(Some(PathBuf::from(&dest)));
                     volume.mounts.push(oci_mount);
 
-                    // start monitoring
+                    // Start monitoring (only for watchable volumes)
+                    let mut monitor_task = None;
                     if is_watchable_volume(&src) {
                         let watcher = FsWatcher::new(&src).await?;
-                        let monitor_task = watcher
-                            .start_monitor(agent.clone(), src.clone(), dest.into())
+                        let handle = watcher
+                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&dest))
                             .await;
-                        volume.monitor_task = Some(monitor_task);
+                        monitor_task = Some(handle);
                     }
+
+                    // Register monitor into Volume Manager
+                    volume_manager
+                        .register_monitor(&src.to_string_lossy(), monitor_task)
+                        .await?;
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
@@ -669,7 +687,26 @@ impl Volume for ShareFsVolume {
     async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
-            None => return Ok(()),
+            None => {
+                return {
+                    // Release volume reference
+                    if let (Some(manager), Some(source)) = (&self.volume_manager, &self.source_path)
+                    {
+                        let should_cleanup =
+                            manager.release_volume(source, &self.container_id).await?;
+
+                        if should_cleanup {
+                            info!(
+                                sl!(),
+                                "Volume {:?} has no more references, can be cleaned up", source
+                            );
+                            // NOTE: We cannot delete files from the guest because there is no corresponding API
+                            // Files will be cleaned up automatically when the sandbox is destroyed
+                        }
+                    }
+                    Ok(())
+                };
+            }
         };
 
         let mounted_info_set = share_fs.mounted_info_set();
