@@ -458,6 +458,7 @@ func (object Object) QemuParams(config *Config) []string {
 			personalizationValue := base64.StdEncoding.EncodeToString(personalizationValueSlice)
 			objectParams = append(objectParams, fmt.Sprintf("personalization-value=%s", personalizationValue))
 		}
+		config.Bios = object.File
 	}
 
 	if len(deviceParams) > 0 {
