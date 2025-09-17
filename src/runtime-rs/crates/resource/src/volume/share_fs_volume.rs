@@ -415,10 +415,8 @@ impl ShareFsVolume {
         cid: &str,
         readonly: bool,
         agent: Arc<dyn Agent>,
+        volume_manager: Arc<VolumeManager>,
     ) -> Result<Self> {
-        // TODO: The volume manager should be passed by ShareFsVolume::new(...,volume_manager)
-        let volume_manager: Arc<VolumeManager> = Arc::new(VolumeManager::new());
-
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
         let file_name = Path::new(&source_path)
@@ -449,15 +447,6 @@ impl ShareFsVolume {
                     Ok(src) => src,
                 };
 
-                // This is where we set the value for the guest path
-                let dest = [KATA_GUEST_SHARE_DIR, file_name.clone().as_str()].join("/");
-                debug!(
-                    sl!(),
-                    "copy local file {:?} to guest {:?}",
-                    &source_path,
-                    dest.clone()
-                );
-
                 // append oci::Mount structure to volume mounts
                 let mut oci_mount = oci::Mount::default();
                 oci_mount.set_destination(m.destination().clone());
@@ -466,24 +455,33 @@ impl ShareFsVolume {
 
                 // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
+                    // Generate guest path
+                    let guest_path = generate_guest_path(cid, m.destination())
+                        .context("generate path failed")?;
                     // Copy a single file
-                    Self::copy_file_to_guest(&src, &dest, &agent)
+                    Self::copy_file_to_guest(&src, &guest_path, &agent)
                         .await
                         .context("copy file to guest")?;
 
-                    oci_mount.set_source(Some(PathBuf::from(&dest)));
+                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
                     volume.mounts.push(oci_mount);
                 } else if src.is_dir() {
                     // We allow directory copying wildly
                     // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
                     info!(sl!(), "copying directory {:?} to guest", &src);
 
+                    // Get or create the guest path
+                    let guest_path = volume_manager
+                        .get_or_create_volume(&src.to_string_lossy(), cid, m.destination())
+                        .await
+                        .context("get or create volume")?;
+
                     // Create directory
-                    Self::copy_directory_to_guest(&src, &dest, &agent)
+                    Self::copy_directory_to_guest(&src, &guest_path, &agent)
                         .await
                         .context("copy directory to guest")?;
 
-                    oci_mount.set_source(Some(PathBuf::from(&dest)));
+                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
                     volume.mounts.push(oci_mount);
 
                     // Start monitoring (only for watchable volumes)
@@ -491,7 +489,7 @@ impl ShareFsVolume {
                     if is_watchable_volume(&src) {
                         let watcher = FsWatcher::new(&src).await?;
                         let handle = watcher
-                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&dest))
+                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&guest_path))
                             .await;
                         monitor_task = Some(handle);
                     }
