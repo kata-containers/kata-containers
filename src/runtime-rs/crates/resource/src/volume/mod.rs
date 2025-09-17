@@ -119,6 +119,7 @@ impl VolumeResource {
                         share_fs,
                         m,
                         cid,
+                        spec,
                         read_only,
                         agent.clone(),
                         self.volume_manager.clone(),

@@ -44,6 +44,11 @@ const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
 const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
 
+/// Directory permission mode for Kubernetes fsGroup volumes
+/// Sets setgid bit to ensure new files inherit the directory's group
+/// Permission: rwxrwsr-x (2775 in octal)
+const FSGROUP_DIR_PERM: u32 = 0o2775;
+
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
 // Ignore /dev, directories and all other device files. We handle
@@ -423,6 +428,7 @@ impl ShareFsVolume {
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
         cid: &str,
+        spec: &oci::Spec,
         readonly: bool,
         agent: Arc<dyn Agent>,
         volume_manager: Arc<VolumeManager>,
@@ -486,7 +492,7 @@ impl ShareFsVolume {
                         .context("get or create volume")?;
 
                     // Create directory
-                    Self::copy_directory_to_guest(&src, &guest_path, &agent)
+                    Self::copy_directory_to_guest(&src, &guest_path, &agent, spec)
                         .await
                         .context("copy directory to guest")?;
 
@@ -640,36 +646,76 @@ impl ShareFsVolume {
         src: &Path,
         guest_path: &str,
         agent: &Arc<dyn Agent>,
+        spec: &oci::Spec,
     ) -> Result<()> {
-        // create directory
-        let dir_metadata =
-            std::fs::metadata(src).context(format!("read metadata from directory: {:?}", src))?;
+        let (uid, gid, mode) = {
+            let metadata = std::fs::metadata(src)?;
 
-        // ttRPC request for creating directory
+            let process = spec.process().as_ref();
+            info!(sl!(), "OCI Spec Process : {:?}", process);
+
+            let user = process.map(|p| p.user());
+            // Get fsGroup and dirMode
+            let (uid, fs_group, dir_mode) = if let Some(user) = user {
+                debug!(
+                    sl!(),
+                    "User info: uid={}, gid={}, additional_gids={:?}",
+                    user.uid(),
+                    user.gid(),
+                    user.additional_gids()
+                );
+                match user.additional_gids() {
+                    Some(gids) if !gids.is_empty() => {
+                        // Typically, the fsGroup is the last non-zero value from additional_gids
+                        // For example, if additional_gids = [0, 123], so fsGroup = 123
+                        let fs_gid = gids
+                            .iter()
+                            .rev()
+                            .find(|&&g| g != 0)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                // If all are 0 or there's no non-zero value, use the last one
+                                gids.last().copied().unwrap_or(user.gid())
+                            });
+
+                        (user.uid(), fs_gid, FSGROUP_DIR_PERM)
+                    }
+                    _ => {
+                        info!(
+                            sl!(),
+                            "No additional_gids, using primary gid={}",
+                            user.gid()
+                        );
+                        (user.uid(), user.gid(), FSGROUP_DIR_PERM)
+                    }
+                }
+            } else {
+                (metadata.uid(), metadata.gid(), metadata.mode())
+            };
+
+            (uid as i32, fs_group as i32, dir_mode)
+        };
+
+        info!(
+            sl!(),
+            "Creating directory {:?} with uid={}/gid={}/mode={:o}", guest_path, uid, gid, mode
+        );
+
         let dir_request = agent::CopyFileRequest {
-            path: guest_path.to_owned(),
-            file_size: 0, // useless for dir
-            uid: dir_metadata.uid() as i32,
-            gid: dir_metadata.gid() as i32,
-            dir_mode: dir_metadata.mode(),
-            file_mode: SFlag::S_IFDIR.bits(),
-            data: vec![], // no files
+            path: guest_path.to_string(),
+            file_size: 0,
+            uid,
+            gid,
+            dir_mode: mode,
+            file_mode: SFlag::S_IFDIR.bits() | FSGROUP_DIR_PERM,
+            data: vec![],
             ..Default::default()
         };
 
-        // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
-        info!(
-            sl!(),
-            "creating directory: {:?} in sandbox with file_mode: {:?}",
-            guest_path,
-            dir_request.file_mode
-        );
-
-        // send request for creating directory
         agent
             .copy_file(dir_request)
             .await
-            .context(format!("create directory in sandbox: {:?}", guest_path))?;
+            .with_context(|| format!("Failed to create directory {:?} in guest", guest_path))?;
 
         // recursively copy files from this directory
         // similar to `scp -r $source_dir $target_dir`
