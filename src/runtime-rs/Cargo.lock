@@ -3871,6 +3871,7 @@ dependencies = [
  "cgroups-rs 0.4.0",
  "flate2",
  "futures 0.3.28",
+ "hex",
  "hypervisor",
  "inotify",
  "kata-sys-util",

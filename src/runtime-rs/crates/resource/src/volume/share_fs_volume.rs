@@ -5,7 +5,7 @@
 //
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs::File,
     io::Read,
     os::unix::fs::MetadataExt,
@@ -22,6 +22,7 @@ use hypervisor::device::device_manager::DeviceManager;
 use inotify::{EventMask, Inotify, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
+use rand::{thread_rng, RngCore};
 use tokio::{
     io::AsyncReadExt,
     sync::{Mutex, RwLock},
@@ -266,6 +267,141 @@ impl FsWatcher {
     }
 }
 
+//==========volume manager==============
+/// Sandbox-level volume state manager
+/// Tracks which paths have been copied to the guest on the runtime side
+#[derive(Clone, Default)]
+pub struct VolumeManager {
+    // Mapping of source path -> volume state
+    volume_states: Arc<RwLock<HashMap<String, VolumeState>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct VolumeState {
+    // Source path (on the host)
+    source_path: String,
+    // Guest path
+    guest_path: String,
+    // Reference count (how many containers are using it)
+    ref_count: usize,
+    // List of container IDs using this volume
+    containers: HashSet<String>,
+    // Monitor task handle (if any)
+    monitor_task: Option<Arc<JoinHandle<()>>>,
+}
+
+#[allow(dead_code)]
+impl VolumeManager {
+    pub fn new() -> Self {
+        Self {
+            volume_states: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Gets or creates the volume's guest path
+    pub async fn get_or_create_volume(
+        &self,
+        canonical_source: &str,
+        container_id: &str,
+        mount_destination: &Path,
+    ) -> Result<String> {
+        let mut states = self.volume_states.write().await;
+
+        if let Some(state) = states.get_mut(canonical_source) {
+            // Existing volume and update reference
+            state.ref_count += 1;
+            state.containers.insert(container_id.to_string());
+
+            info!(
+                sl!(),
+                "Existing volume: source={:?}, guest={:?}, ref_count={}",
+                canonical_source,
+                state.guest_path,
+                state.ref_count,
+            );
+
+            // Return guest path
+            return Ok(state.guest_path.clone());
+        }
+
+        // Create a new volume state
+        let guest_path =
+            generate_guest_path(container_id, mount_destination).context("generate path failed")?;
+
+        let mut containers = HashSet::new();
+        containers.insert(container_id.to_string());
+
+        let state = VolumeState {
+            source_path: canonical_source.to_string(),
+            guest_path: guest_path.clone(),
+            ref_count: 1,
+            containers,
+            monitor_task: None,
+        };
+
+        states.insert(state.source_path.clone(), state.clone());
+
+        info!(
+            sl!(),
+            "Created new volume state: source={:?}, guest={:?}",
+            state.source_path,
+            state.guest_path,
+        );
+
+        // Return guest path
+        Ok(guest_path)
+    }
+
+    /// Register monitor task into the volume manager
+    pub async fn register_monitor(
+        &self,
+        canonical_source: &str,
+        monitor_task: Option<JoinHandle<()>>,
+    ) -> Result<()> {
+        let mut states = self.volume_states.write().await;
+
+        if let Some(state) = states.get_mut(canonical_source) {
+            if let Some(handle) = monitor_task {
+                state.monitor_task = Some(Arc::new(handle));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Releases a volume reference
+    pub async fn release_volume(&self, source_path: &str, container_id: &str) -> Result<bool> {
+        let mut states = self.volume_states.write().await;
+
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            state.containers.remove(container_id);
+            state.ref_count = state.ref_count.saturating_sub(1);
+
+            if state.ref_count == 0 {
+                // Abort the monitor task
+                if let Some(handle) = &state.monitor_task {
+                    handle.abort();
+                }
+
+                info!(
+                    sl!(),
+                    "Volume has no more references, source={:?}, guest={:?}",
+                    canonical_source,
+                    state.guest_path
+                );
+
+                return Ok(true); // Can be cleaned up
+            }
+        }
+
+        Ok(false)
+    }
+}
+
 impl ShareFsVolume {
     pub(crate) async fn new(
         share_fs: &Option<Arc<dyn ShareFs>>,
@@ -327,8 +463,8 @@ impl ShareFsVolume {
                     volume.mounts.push(oci_mount);
                 } else if src.is_dir() {
                     // We allow directory copying wildly
-                    // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
-                    info!(sl!(), "copying directory {:?} to guest", &source_path);
+                    // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
+                    info!(sl!(), "copying directory {:?} to guest", &src);
 
                     // Create directory
                     Self::copy_directory_to_guest(&src, &dest, &agent)
@@ -340,7 +476,7 @@ impl ShareFsVolume {
 
                     // start monitoring
                     if is_watchable_volume(&src) {
-                        let watcher = FsWatcher::new(Path::new(&source_path)).await?;
+                        let watcher = FsWatcher::new(&src).await?;
                         let monitor_task = watcher
                             .start_monitor(agent.clone(), src.clone(), dest.into())
                             .await;
@@ -797,6 +933,24 @@ pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
         || is_downward_api(source_path)
         || is_secret(source_path)
         || is_configmap(source_path)
+}
+
+/// Generates a guest path related to mount dest
+fn generate_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
+    let mut data = vec![0u8; 8];
+    let mut rng = thread_rng(); // Get a thread-local RNG
+    rng.fill_bytes(&mut data);
+
+    let hex_str = hex::encode(data);
+    let dest_base = mount_destination
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("get mount destination failed"))?;
+
+    Ok(format!(
+        "{}{}-{}-{}",
+        KATA_GUEST_SHARE_DIR, cid, hex_str, dest_base
+    ))
 }
 
 #[cfg(test)]
