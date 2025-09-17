@@ -24,7 +24,6 @@ use common::{
 };
 
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
-use hypervisor::PortDeviceConfig;
 use hypervisor::VsockConfig;
 use hypervisor::HYPERVISOR_FIRECRACKER;
 use hypervisor::HYPERVISOR_REMOTE;
@@ -33,6 +32,7 @@ use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
+use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
 use kata_sys_util::hooks::HookStates;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
@@ -481,6 +481,7 @@ impl VirtSandbox {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
             driver_option: block_driver.clone(),
+            blkdev_aio: BlockDeviceAio::Native,
             ..Default::default()
         };
         let initdata_config = InitDataConfig(block_config, initdata_digest);
