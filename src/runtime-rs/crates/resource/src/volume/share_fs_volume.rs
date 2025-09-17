@@ -301,125 +301,48 @@ impl ShareFsVolume {
                     Ok(src) => src,
                 };
 
+                // This is where we set the value for the guest path
+                let dest = [KATA_GUEST_SHARE_DIR, file_name.clone().as_str()].join("/");
+                debug!(
+                    sl!(),
+                    "copy local file {:?} to guest {:?}",
+                    &source_path,
+                    dest.clone()
+                );
+
+                // append oci::Mount structure to volume mounts
+                let mut oci_mount = oci::Mount::default();
+                oci_mount.set_destination(m.destination().clone());
+                oci_mount.set_typ(Some("bind".to_string()));
+                oci_mount.set_options(m.options().clone());
+
                 // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
-                    // This is where we set the value for the guest path
-                    let dest = [KATA_GUEST_SHARE_DIR, file_name.clone().as_str()].join("/");
+                    // Copy a single file
+                    Self::copy_file_to_guest(&src, &dest, &agent)
+                        .await
+                        .context("copy file to guest")?;
 
-                    debug!(
-                        sl!(),
-                        "copy local file {:?} to guest {:?}",
-                        &source_path,
-                        dest.clone()
-                    );
-
-                    // Read file metadata
-                    let file_metadata = std::fs::metadata(src.clone())
-                        .with_context(|| format!("Failed to read metadata from file: {:?}", src))?;
-
-                    // Open file
-                    let mut file = File::open(&src)
-                        .with_context(|| format!("Failed to open file: {:?}", src))?;
-
-                    // Open read file contents to buffer
-                    let mut buffer = Vec::new();
-                    file.read_to_end(&mut buffer)
-                        .with_context(|| format!("Failed to read file: {:?}", src))?;
-
-                    // Create gRPC request
-                    let r = agent::CopyFileRequest {
-                        path: dest.clone(),
-                        file_size: file_metadata.len() as i64,
-                        uid: file_metadata.uid() as i32,
-                        gid: file_metadata.gid() as i32,
-                        file_mode: file_metadata.mode(),
-                        data: buffer,
-                        ..Default::default()
-                    };
-
-                    debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, dest.clone());
-
-                    // Issue gRPC request to agent
-                    agent.copy_file(r).await.with_context(|| {
-                        format!(
-                            "copy file request failed: src: {:?}, dest: {:?}",
-                            file_name, dest
-                        )
-                    })?;
-
-                    // append oci::Mount structure to volume mounts
-                    let mut oci_mount = oci::Mount::default();
-                    oci_mount.set_destination(m.destination().clone());
-                    oci_mount.set_typ(Some("bind".to_string()));
                     oci_mount.set_source(Some(PathBuf::from(&dest)));
-                    oci_mount.set_options(m.options().clone());
                     volume.mounts.push(oci_mount);
                 } else if src.is_dir() {
                     // We allow directory copying wildly
                     // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
                     info!(sl!(), "copying directory {:?} to guest", &source_path);
 
-                    // create target path in guest
-                    let dest_dir = [KATA_GUEST_SHARE_DIR, file_name.clone().as_str()].join("/");
-
-                    // create directory
-                    let dir_metadata = std::fs::metadata(src.clone())
-                        .context(format!("read metadata from directory: {:?}", src))?;
-
-                    // ttRPC request for creating directory
-                    let dir_request = agent::CopyFileRequest {
-                        path: dest_dir.clone(),
-                        file_size: 0, // useless for dir
-                        uid: dir_metadata.uid() as i32,
-                        gid: dir_metadata.gid() as i32,
-                        dir_mode: dir_metadata.mode(),
-                        file_mode: SFlag::S_IFDIR.bits(),
-                        data: vec![], // no files
-                        ..Default::default()
-                    };
-
-                    // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
-                    info!(
-                        sl!(),
-                        "creating directory: {:?} in sandbox with file_mode: {:?}",
-                        dest_dir,
-                        dir_request.file_mode
-                    );
-
-                    // send request for creating directory
-                    agent
-                        .copy_file(dir_request)
+                    // Create directory
+                    Self::copy_directory_to_guest(&src, &dest, &agent)
                         .await
-                        .context(format!("create directory in sandbox: {:?}", dest_dir))?;
+                        .context("copy directory to guest")?;
 
-                    // recursively copy files from this directory
-                    // similar to `scp -r $source_dir $target_dir`
-                    copy_dir_recursively(src.clone(), &dest_dir, &agent)
-                        .await
-                        .context(format!("failed to copy directory contents: {:?}", src))?;
-
-                    // handle special mount options
-                    let mut options = m.options().clone().unwrap_or_default();
-                    if !options.iter().any(|x| x == "rbind") {
-                        options.push("rbind".into());
-                    }
-                    if !options.iter().any(|x| x == "rprivate") {
-                        options.push("rprivate".into());
-                    }
-
-                    // add OCI Mount
-                    let mut oci_mount = oci::Mount::default();
-                    oci_mount.set_destination(m.destination().clone());
-                    oci_mount.set_typ(Some("bind".to_string()));
-                    oci_mount.set_source(Some(PathBuf::from(&dest_dir)));
-                    oci_mount.set_options(Some(options));
+                    oci_mount.set_source(Some(PathBuf::from(&dest)));
                     volume.mounts.push(oci_mount);
 
                     // start monitoring
                     if is_watchable_volume(&src) {
                         let watcher = FsWatcher::new(Path::new(&source_path)).await?;
                         let monitor_task = watcher
-                            .start_monitor(agent.clone(), src.clone(), dest_dir.into())
+                            .start_monitor(agent.clone(), src.clone(), dest.into())
                             .await;
                         volume.monitor_task = Some(monitor_task);
                     }
@@ -509,6 +432,91 @@ impl ShareFsVolume {
             }
         }
         Ok(volume)
+    }
+
+    async fn copy_file_to_guest(
+        src: &Path,
+        guest_path: &str,
+        agent: &Arc<dyn Agent>,
+    ) -> Result<()> {
+        // Read file metadata
+        let file_metadata = std::fs::metadata(src)
+            .with_context(|| format!("Failed to read metadata from file: {:?}", src))?;
+
+        // Open file
+        let mut file =
+            File::open(src).with_context(|| format!("Failed to open file: {:?}", src))?;
+
+        // Open read file contents to buffer
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)
+            .with_context(|| format!("Failed to read file: {:?}", src))?;
+
+        // Create gRPC request
+        let r = agent::CopyFileRequest {
+            path: guest_path.to_owned(),
+            file_size: file_metadata.len() as i64,
+            uid: file_metadata.uid() as i32,
+            gid: file_metadata.gid() as i32,
+            file_mode: file_metadata.mode(),
+            data: buffer,
+            ..Default::default()
+        };
+
+        debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, guest_path);
+
+        // Issue gRPC request to agent
+        agent.copy_file(r).await.with_context(|| {
+            format!(
+                "copy file request failed: src: {:?}, dest: {:?}",
+                src, guest_path
+            )
+        })?;
+        Ok(())
+    }
+
+    async fn copy_directory_to_guest(
+        src: &Path,
+        guest_path: &str,
+        agent: &Arc<dyn Agent>,
+    ) -> Result<()> {
+        // create directory
+        let dir_metadata =
+            std::fs::metadata(src).context(format!("read metadata from directory: {:?}", src))?;
+
+        // ttRPC request for creating directory
+        let dir_request = agent::CopyFileRequest {
+            path: guest_path.to_owned(),
+            file_size: 0, // useless for dir
+            uid: dir_metadata.uid() as i32,
+            gid: dir_metadata.gid() as i32,
+            dir_mode: dir_metadata.mode(),
+            file_mode: SFlag::S_IFDIR.bits(),
+            data: vec![], // no files
+            ..Default::default()
+        };
+
+        // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
+        info!(
+            sl!(),
+            "creating directory: {:?} in sandbox with file_mode: {:?}",
+            guest_path,
+            dir_request.file_mode
+        );
+
+        // send request for creating directory
+        agent
+            .copy_file(dir_request)
+            .await
+            .context(format!("create directory in sandbox: {:?}", guest_path))?;
+
+        // recursively copy files from this directory
+        // similar to `scp -r $source_dir $target_dir`
+        copy_dir_recursively(src, guest_path, agent)
+            .await
+            .context(format!("failed to copy directory contents: {:?}", src))?;
+
+        Ok(())
     }
 }
 
