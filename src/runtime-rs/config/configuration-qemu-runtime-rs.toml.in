@@ -509,7 +509,7 @@ disable_selinux=@DEFDISABLESELINUX@
 disable_guest_selinux=@DEFDISABLEGUESTSELINUX@
 
 
-[factory]
+[hypervisor.qemu.factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
 # agent memory by mapping it readonly. It helps speeding up new container
