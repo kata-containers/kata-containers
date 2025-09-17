@@ -2316,6 +2316,16 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 			maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
 		}
 
+		// We cannot accept a request below what we currently have
+		if finalMemoryMB < currentMemoryMB {
+			s.Logger().
+				WithField("curent", currentMemoryMB).
+				WithField("final", finalMemoryMB).
+				Error("Cannot set memory size below current value")
+			return errors.New("requesting memory size reduction")
+
+		}
+
 		deltaMB := finalMemoryMB - currentMemoryMB
 
 		// The first time we hotplug memory, only add what is above the documented overhead if there is any.
@@ -2333,7 +2343,15 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		// However, if the guest uses kernel resources, e.g. doing intensive I/O, that memory is not accounted in the guest cgroup.
 		// So the guest could end up using up to 6G of actual memory, exceeeding the host-side cgroup, and the pod gets killed.
 		// Therefore, the first time we hotplug memory, we need to hotplug only 4G - (2G - 256M).
-		if hconfig.MemoryOverhead != 0 && hconfig.MemoryOverhead <= hconfig.MemorySize {
+		if hconfig.MemoryOverhead > hconfig.MemorySize {
+			s.Logger().
+				WithField("overhead", hconfig.MemoryOverhead).
+				WithField("memory", hconfig.MemorySize).
+				WithField("delta", deltaMB).
+				Warn("Overhead is larger than configured memory, ignoring")
+			hconfig.MemoryOverhead = 0
+		}
+		if hconfig.MemoryOverhead != 0 {
 			hostUnaccountedMB := hconfig.MemorySize - hconfig.MemoryOverhead
 			s.Logger().
 				WithField("memory overhead", hconfig.MemoryOverhead).
@@ -2347,13 +2365,14 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 				// matching what is known to the orchestrator, i.e.
 				// 1G (container) +1G (container) +256M (overhead) = 2G (memory size) + added second time (256M)
 				hconfig.MemoryOverhead += deltaMB
-				// Note that while we are in this situation, the host-side cgroup OOM may still happen,
+
+				// While we are in this situation, the host-side cgroup OOM may still happen,
 				// because the host cgroup that will be specified will be smaller than the default VM size
 				s.Logger().
 					WithField("unaccounted", hostUnaccountedMB).
 					WithField("delta", deltaMB).
 					WithField("new overhead", hconfig.MemoryOverhead).
-					Warn("Host-side cgroup is smaller than VM default size, this may lead to OOM messages. Increase memory size request to fix it")
+					Warn("Host-side cgroup is smaller than VM default size, this may lead to OOM messages. Increase memory request to fix it")
 				break
 			} else {
 				// This request is big enough to hide the overhead
