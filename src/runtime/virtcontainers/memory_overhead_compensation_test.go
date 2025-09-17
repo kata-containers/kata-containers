@@ -46,7 +46,7 @@ func TestMemoryOverheadCompensation(t *testing.T) {
 			currentMemory:       512,
 			requestedMemory:     1024,
 			expectedDelta:       512,
-			expectedNewOverhead: 1024,
+			expectedNewOverhead: 0, // Overhead is ignored when larger than memory size
 			shouldHotplug:       true,
 		},
 		{
@@ -115,8 +115,11 @@ func TestMemoryOverheadCompensation(t *testing.T) {
 			newOverhead := tc.memoryOverhead
 			shouldHotplug := true
 
-			// Apply compensation logic exactly as in sandbox.go lines 2329-2356
-			if hconfig.MemoryOverhead != 0 && hconfig.MemoryOverhead <= hconfig.MemorySize {
+			// Apply compensation logic exactly as in sandbox.go lines 2339-2375
+			if hconfig.MemoryOverhead > hconfig.MemorySize {
+				// Overhead is larger than configured memory, ignore it
+				newOverhead = 0
+			} else if hconfig.MemoryOverhead != 0 {
 				if hostUnaccountedMB > deltaMB {
 					// Defer to next hotplug
 					newOverhead += deltaMB
