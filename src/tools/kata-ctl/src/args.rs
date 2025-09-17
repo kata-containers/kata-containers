@@ -59,7 +59,7 @@ pub enum Commands {
     Exec(ExecArguments),
 
     /// Manage VM factory
-    Factory,
+    Factory(FactoryArgs),
 
     /// Manage guest VM iptables
     Iptables(IptablesCommand),
@@ -103,6 +103,24 @@ pub enum CheckSubCommand {
 
     /// List all available checks
     List,
+}
+
+#[derive(Parser, Debug)]
+pub struct FactoryArgs {
+    #[command(subcommand)]
+    pub command: FactorySubCommand,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum FactorySubCommand {
+    /// Initialize a VM factory based on kata-runtime configuration
+    Init,
+
+    /// Destroy the VM factory
+    Destroy,
+
+    /// Query the status of VM factory
+    Status,
 }
 
 #[derive(Debug, Args)]
