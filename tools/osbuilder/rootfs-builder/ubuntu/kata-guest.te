@@ -1,0 +1,71 @@
+module kata-guest 1.0;
+#============= +++++++++ ==============
+# SELinux module for Ubuntu Kata guest
+# Provides allow rules for base OS,
+# kata-agent and basic workload.
+#============= +++++++++ ==============
+
+require {
+	type chronyd_t;
+	type container_t;
+	type debugfs_t;
+	type device_t;
+	type devpts_t;
+	type dmesg_t;
+	type dockerd_t;
+	type init_t;
+	type locale_t;
+	type mount_t;
+	type systemd_sysctl_t;
+	type systemd_binfmt_t;
+	type systemd_tmpfiles_t;
+	type tmp_t;
+	type tmpfs_t;
+	type unlabeled_t;
+	class capability sys_rawio;
+	class blk_file getattr;
+	class chr_file { create getattr ioctl open read write };
+	class dir { add_name create getattr mounton open read relabelto search write };
+	class file { entrypoint execute execute_no_trans getattr map open read relabelfrom relabelto };
+	class filesystem { associate mount relabelfrom relabelto };
+	class lnk_file { create getattr read };
+	class system start;
+	class process transition;
+}
+
+#============= chronyd_t ==============
+allow chronyd_t debugfs_t:dir search;
+#============= container_t ==============
+allow container_t devpts_t:chr_file { getattr ioctl read write };
+allow container_t container_t:chr_file { open read write };
+allow container_t self:filesystem associate;
+# without mount labeling, /dev falls under tmpfs_t
+allow container_t tmpfs_t:chr_file { getattr open read write };
+allow container_t tmpfs_t:filesystem associate;
+allow container_t tmpfs_t:lnk_file read;
+# workload rootfs may not be labeled, so allow unlabeled
+# this carries the risk of exposing anything else not properly labeled
+allow container_t unlabeled_t:dir { open getattr read search };
+allow container_t unlabeled_t:file { entrypoint execute execute_no_trans getattr map open read };
+allow container_t unlabeled_t:lnk_file { getattr read };
+#============= dmesg_t ==============
+# necessary for dmesg to function
+allow dmesg_t devpts_t:chr_file { read write };
+#============= init_t ==============
+allow init_t container_t:chr_file { create write };
+allow init_t container_t:dir { add_name create mounton relabelto write };
+allow init_t container_t:filesystem { mount relabelfrom relabelto };
+allow init_t container_t:lnk_file create;
+allow init_t container_t:process transition;
+allow init_t dockerd_t:file { execute execute_no_trans map };
+allow init_t self:system start;
+#============= mount_t ==============
+allow mount_t device_t:blk_file getattr;
+#============= systemd_binfmt_t ==============
+allow systemd_binfmt_t locale_t:dir { getattr open read search };
+allow systemd_binfmt_t locale_t:file { read open getattr map };
+#============= systemd_sysctl_t ==============
+allow systemd_sysctl_t self:capability sys_rawio;
+#============= systemd_tmpfiles_t ==============
+allow systemd_tmpfiles_t locale_t:file { read map };
+allow systemd_tmpfiles_t tmp_t:lnk_file read;
