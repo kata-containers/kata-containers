@@ -44,7 +44,7 @@ RESOURCE_PROVIDER="kbs,sev"
 # snp-attester and tdx-attester crates require packages only available on x86
 # se-attester crate requires packages only available on s390x
 case "$(uname -m)" in
-	x86_64) ATTESTER="snp-attester,tdx-attester" ;;
+	x86_64) ATTESTER="snp-attester,tdx-attester,nvidia-attester" ;;
 	s390x) ATTESTER="se-attester" ;;
 	*) ATTESTER="none" ;;
 esac
