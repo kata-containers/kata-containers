@@ -232,6 +232,7 @@ type RuntimeConfigOptions struct {
 	DefaultMaxVCPUCount  uint32
 	DefaultMemSize       uint32
 	DefaultMaxMemorySize uint64
+	DefaultMemOverhead   uint32
 	DefaultMsize9p       uint32
 	DisableBlock         bool
 	EnableIOThreads      bool
@@ -316,6 +317,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	default_vcpus = ` + strconv.FormatUint(uint64(config.DefaultVCPUCount), 10) + `
 	default_maxvcpus = ` + strconv.FormatUint(uint64(config.DefaultMaxVCPUCount), 10) + `
 	default_memory = ` + strconv.FormatUint(uint64(config.DefaultMemSize), 10) + `
+	memory_overhead = ` + strconv.FormatUint(uint64(config.DefaultMemOverhead), 10) + `
 	disable_block_device_use =  ` + strconv.FormatBool(config.DisableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(config.EnableIOThreads) + `
 	cold_plug_vfio =  "` + config.ColdPlugVFIO.String() + `"
