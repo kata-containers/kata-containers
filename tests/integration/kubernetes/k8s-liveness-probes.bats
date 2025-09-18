@@ -95,5 +95,5 @@ teardown() {
 	# Debugging information
 	rm -f "${yaml_file}"
 
-	teardown_common "${node}" "${node_start_time:-}"
+	teardown_common "${node}" "${node_start_time:-}" ""
 }
