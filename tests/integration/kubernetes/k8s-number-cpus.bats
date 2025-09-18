@@ -29,19 +29,19 @@ setup() {
 
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
+	local -r retries="10"
+	local -r max_number_cpus="3"
+	local number_cpus=""
+
 	# Create pod
 	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
-	retries="10"
-	max_number_cpus="3"
-
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
-		number_cpus=$(kubectl exec pod/"$pod_name" -c "$container_name" \
-			-- "${exec_command[@]}")
+		number_cpus=$(container_exec_with_retries "$pod_name" "$container_name" "${exec_command[@]}")
 		if [[ "$number_cpus" =~ ^[0-9]+$ ]]; then
 			# Verify number of cpus
 			[ "$number_cpus" -le "$max_number_cpus" ]
