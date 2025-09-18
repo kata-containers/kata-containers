@@ -32,7 +32,7 @@ use crate::share_fs::{
     share_virtio_fs::{
         prepare_virtiofs, FS_TYPE_VIRTIO_FS, KATA_VIRTIO_FS_DEV_TYPE, MOUNT_GUEST_TAG,
     },
-    KATA_GUEST_SHARE_DIR, VIRTIO_FS, _VIRTIO_FS_NYDUS,
+    KATA_GUEST_SHARE_DIR, VIRTIO_FS,
 };
 
 #[derive(Debug, Clone)]

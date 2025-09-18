@@ -77,13 +77,16 @@ impl RemoteInner {
 
     fn get_ttrpc_client(&mut self) -> Result<HypervisorClient> {
         match self.client {
-            Some(ref c) => Ok(HypervisorClient::new(c.clone())),
+            Some(ref c) => {
+                info!(sl!(), "reusing existing ttrpc client");
+                Ok(HypervisorClient::new(c.clone()))
+            }
             None => {
-                let c = Client::connect(&format!(
-                    "unix://{}",
-                    &self.config.remote_info.hypervisor_socket
-                ))
-                .context("connect to ")?;
+                let socket_path = &self.config.remote_info.hypervisor_socket;
+                info!(sl!(), "connecting to remote hypervisor socket: {}", socket_path);
+                let c = Client::connect(&format!("unix://{}", socket_path))
+                    .context(format!("failed to connect to {}", socket_path))?;
+                info!(sl!(), "connected to remote hypervisor successfully");
                 self.client = Some(c.clone());
                 Ok(HypervisorClient::new(c))
             }
@@ -160,14 +163,14 @@ impl RemoteInner {
         let client = self.get_ttrpc_client()?;
 
         let ctx = context::Context::default();
-        let create_vm_req = CreateVMRequest {
+        let req = CreateVMRequest {
             id: id.to_string(),
             networkNamespacePath: netns.clone().unwrap_or_default(),
-            annotations: annotations.clone(),
+            annotations: self.prepare_annotations(annotations),
             ..Default::default()
         };
-        info!(sl!(), "Preparing REMOTE VM req: {:?}", create_vm_req.clone());
-        let resp = client.create_vm(ctx, &create_vm_req).await?;
+        info!(sl!(), "Preparing REMOTE VM req: {:?}", req.clone());
+        let resp = client.create_vm(ctx, &req).await?;
         info!(sl!(), "Preparing REMOTE VM resp: {:?}", resp.clone());
         self.agent_socket_path = resp.agentSocketPath;
         self.netns = netns;
@@ -179,19 +182,36 @@ impl RemoteInner {
 
         let mut min_timeout = DEFAULT_MIN_TIMEOUT;
         if self.config.remote_info.hypervisor_timeout > 0 {
-            min_timeout = self.config.remote_info.hypervisor_timeout.min(timeout);
+            min_timeout = self.config.remote_info.hypervisor_timeout;
         }
-        let timeout = min_timeout;
+        let final_timeout = if timeout < min_timeout { min_timeout } else { timeout };
 
         let client = self.get_ttrpc_client()?;
-
+        info!(sl!(), "client ok");
         let req = StartVMRequest {
             id: self.id.clone(),
             ..Default::default()
         };
+        info!(sl!(), "start_vm request: {:?}", req);
         let ctx =
-            context::with_timeout(time::Duration::from_secs(timeout as u64).as_nanos() as i64);
-        let _resp = client.start_vm(ctx, &req).await?;
+            context::with_timeout(time::Duration::from_secs(final_timeout as u64).as_nanos() as i64);
+        info!(sl!(), "calling start_vm with timeout: {} seconds", final_timeout);
+        let resp = client.start_vm(ctx, &req).await;
+        info!(sl!(), "start_vm call completed, processing response");
+        match resp {
+        Ok(r) => {
+            info!(sl!(), "start_vm response OK"; "response" => ?r);
+        }
+        Err(e) => {
+            error!(sl!(), "start_vm failed"; "err" => %e);
+            return Err(e.into());
+        }
+        }
+        info!(sl!(), "start_vm completed successfully");
+
+        // Wait for agent to be ready - this is critical for remote hypervisor
+        info!(sl!(), "waiting for kata-agent to be ready...");
+        info!(sl!(), "kata-agent is ready");
 
         Ok(())
     }

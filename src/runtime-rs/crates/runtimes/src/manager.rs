@@ -21,7 +21,6 @@ use kata_types::{
     config::{default::DEFAULT_GUEST_DNS_FILE, TomlConfig},
     mount::SHM_DEVICE,
 };
-use nix::libc;
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
@@ -189,7 +188,9 @@ impl RuntimeHandlerManagerInner {
 
         let dan_path = dan_config_path(&config, &self.id);
         // set netns to None if we want no network for the VM
-        if config.runtime.disable_new_netns || dan_path.exists() {
+        if (config.runtime.disable_new_netns || dan_path.exists())
+            && config.runtime.hypervisor_name != "remote"
+        {
             sandbox_config.network_env.netns = None;
         }
 

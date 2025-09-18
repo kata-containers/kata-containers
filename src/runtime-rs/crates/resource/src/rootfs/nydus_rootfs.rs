@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, sync::Arc};
 
 use super::{Rootfs, TYPE_OVERLAY_FS};
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
     share_fs::{ShareFsMount, ShareFsVolumeConfig},
 };
 use agent::Storage;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::mount::{Mount, NydusExtraOptions};
@@ -26,8 +26,6 @@ pub(crate) const NYDUS_ROOTFS_TYPE: &str = "fuse.nydus-overlayfs";
 
 const SNAPSHOT_DIR: &str = "snapshotdir";
 const KATA_OVERLAY_DEV_TYPE: &str = "overlayfs";
-// nydus prefetch file list name
-const NYDUS_PREFETCH_FILE_LIST: &str = "prefetch_file.list";
 
 pub(crate) struct NydusRootfs {
     guest_path: String,
@@ -154,70 +152,5 @@ impl Rootfs for NydusRootfs {
         // manages the lifecycle of fuse mode nydusd instances.
         info!(sl!(), "Nydus rootfs cleanup completed for source: {}", self.source);
         Ok(())
-    }
-}
-
-// Check prefetch files list path, and if invalid, discard it directly.
-// As the result of caller `rafs_mount`, it returns `Option<String>`.
-#[allow(dead_code)]
-async fn get_nydus_prefetch_files(nydus_prefetch_path: String) -> Option<String> {
-    // nydus_prefetch_path is an annotation and pod with it will indicate
-    // that prefetch_files will be included.
-    if nydus_prefetch_path.is_empty() {
-        info!(sl!(), "nydus prefetch files path not set, just skip it.");
-
-        return None;
-    }
-
-    // Ensure the string ends with "/prefetch_files.list"
-    if !nydus_prefetch_path.ends_with(format!("/{}", NYDUS_PREFETCH_FILE_LIST).as_str()) {
-        info!(
-            sl!(),
-            "nydus prefetch file path no {:?} file exist.", NYDUS_PREFETCH_FILE_LIST
-        );
-
-        return None;
-    }
-
-    // ensure the prefetch_list_path is a regular file.
-    let prefetch_list_path = Path::new(nydus_prefetch_path.as_str());
-    if !prefetch_list_path.is_file() {
-        info!(
-            sl!(),
-            "nydus prefetch list file {:?} not a regular file", &prefetch_list_path
-        );
-
-        return None;
-    }
-
-    Some(prefetch_list_path.display().to_string())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::{fs::File, path::PathBuf};
-    use tempfile::tempdir;
-
-    #[tokio::test]
-    async fn test_get_nydus_prefetch_files() {
-        let temp_dir = tempdir().unwrap();
-        let prefetch_list_path01 = temp_dir.path().join("nydus_prefetch_files");
-        // /tmp_dir/nydus_prefetch_files/
-        std::fs::create_dir_all(prefetch_list_path01.clone()).unwrap();
-        // /tmp_dir/nydus_prefetch_files/prefetch_file.list
-        let prefetch_list_path02 = prefetch_list_path01
-            .as_path()
-            .join(NYDUS_PREFETCH_FILE_LIST);
-        let file = File::create(prefetch_list_path02.clone());
-        assert!(file.is_ok());
-
-        let prefetch_file =
-            get_nydus_prefetch_files(prefetch_list_path02.as_path().display().to_string()).await;
-        assert!(prefetch_file.is_some());
-        assert_eq!(PathBuf::from(prefetch_file.unwrap()), prefetch_list_path02);
-
-        drop(file);
-        temp_dir.close().unwrap_or_default();
     }
 }

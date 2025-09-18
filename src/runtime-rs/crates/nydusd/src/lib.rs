@@ -277,7 +277,7 @@ impl Nydusd for NydusdImpl {
 
     async fn stop(&self) -> Result<()> {
         let pid_lock = self.pid.read().await;
-        if let Some(pid) = *pid_lock {
+        if let Some(_pid) = *pid_lock {
             drop(pid_lock); // Release the read lock before calling kill
             self.kill().await?;
         }

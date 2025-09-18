@@ -31,7 +31,7 @@ use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
-use hypervisor::utils::{get_hvsock_path, get_jailer_root};
+use hypervisor::utils::get_hvsock_path;
 use hypervisor::{HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
@@ -42,7 +42,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
-use nydusd::{Nydusd, NydusdImpl};
+use nydusd::Nydusd;
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use protobuf::SpecialFields;
@@ -339,9 +339,17 @@ impl VirtSandbox {
     }
 
     async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
-        let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
-        let security_info = self.hypervisor.hypervisor_config().await.security_info;
-
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        let boot_info = hypervisor_config.boot_info;
+        let security_info = hypervisor_config.security_info;
+        
+        // For remote hypervisor, we don't need to check image/initrd
+        // because the VM is managed by cloud-api-adaptor
+        let hypervisor_state = self.hypervisor.save_state().await?;
+        if hypervisor_state.hypervisor_type.as_str() == HYPERVISOR_REMOTE {
+            info!(sl!(), "Skipping rootfs config for remote hypervisor");
+            return Ok(None);
+        }
         if !boot_info.initrd.is_empty() {
             return Ok(None);
         }
@@ -549,8 +557,8 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
-        // start vm
-        self.hypervisor.start_vm(10_000).await.context("start vm")?;
+        // start vm - use 60 second timeout like runtime-go
+        self.hypervisor.start_vm(60).await.context("start vm")?;
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks

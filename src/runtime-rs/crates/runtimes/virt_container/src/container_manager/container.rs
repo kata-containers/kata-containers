@@ -98,6 +98,7 @@ impl Container {
     }
 
     pub async fn create(&self, mut spec: oci::Spec) -> Result<()> {
+        info!(self.logger, "Container::create start");
         // process oci spec
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
@@ -141,6 +142,7 @@ impl Container {
         };
 
         // handler rootfs
+        info!(self.logger, "Container::create handling rootfs");
         let rootfs = self
             .resource_manager
             .handler_rootfs(
@@ -152,6 +154,7 @@ impl Container {
             )
             .await
             .context("handler rootfs")?;
+        info!(self.logger, "Container::create rootfs handled");
 
         // update rootfs
         root.set_path(
@@ -169,11 +172,13 @@ impl Container {
         inner.rootfs.push(rootfs);
 
         // handler volumes
+        info!(self.logger, "Container::create handling volumes");
         let volumes = self
             .resource_manager
             .handler_volumes(&config.container_id, &spec)
             .await
             .context("handler volumes")?;
+        info!(self.logger, "Container::create volumes handled");
         let mut oci_mounts = vec![];
         for v in volumes {
             let mut volume_mounts = v.get_volume_mount().context("get volume mount")?;
@@ -194,14 +199,17 @@ impl Container {
             .as_ref()
             .context("OCI spec missing linux field")?;
 
+        info!(self.logger, "Container::create handling devices");
         let container_devices = self
             .resource_manager
             .handler_devices(&config.container_id, linux)
             .await?;
         let devices_agent = annotate_container_devices(&mut spec, container_devices)
             .context("annotate container devices failed")?;
+        info!(self.logger, "Container::create devices handled");
 
         // update vcpus, mems and host cgroups
+        info!(self.logger, "Container::create updating linux resources");
         let resources = self
             .resource_manager
             .update_linux_resource(
@@ -213,6 +221,7 @@ impl Container {
         if let Some(linux) = &mut spec.linux_mut() {
             linux.set_resources(resources);
         }
+        info!(self.logger, "Container::create linux resources updated");
 
         let container_name = k8s::container_name(&spec);
         let mut shared_mounts = Vec::new();
@@ -266,11 +275,14 @@ impl Container {
             ..Default::default()
         };
 
+        info!(self.logger, "Container::create sending CreateContainerRequest to agent");
         self.agent
             .create_container(r)
             .await
             .context("agent create container")?;
+        info!(self.logger, "Container::create CreateContainerRequest sent");
         self.resource_manager.dump().await;
+        info!(self.logger, "Container::create end");
         Ok(())
     }
 
