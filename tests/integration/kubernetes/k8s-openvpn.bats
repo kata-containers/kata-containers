@@ -23,21 +23,27 @@ setup() {
     server_pod_name="openvpn-server"
     client_pod_name="openvpn-client"
 
-    init_pod_yaml="${pod_config_dir}/pod-openvpn-init-secrets.yaml"
-    server_pod_template_yaml="${pod_config_dir}/pod-openvpn-server.yaml"
-    server_pod_instance_yaml="${pod_config_dir}/pod-openvpn-server-instance.yaml"
-    client_pod_template_yaml="${pod_config_dir}/pod-openvpn-client.yaml"
-    client_pod_instance_yaml="${pod_config_dir}/pod-openvpn-client-instance.yaml"
+    init_pod_yaml="${pod_config_dir}/openvpn/pod-openvpn-init-secrets.yaml"
+
+    server_pod_yaml="${pod_config_dir}/openvpn/openvpn-server-pod.yaml"
+    server_service_yaml="${pod_config_dir}/openvpn/openvpn-server-service.yaml"
+    server_configmap_yaml="${pod_config_dir}/openvpn/openvpn-server-configmap.yaml"
+    server_secret_template_yaml="${pod_config_dir}/openvpn/openvpn-server-secret.yaml.in"
+    server_secret_instance_yaml="${pod_config_dir}/openvpn/openvpn-server-secret-instance.yaml"
+
+    client_pod_yaml="${pod_config_dir}/openvpn/openvpn-client-pod.yaml"
+    client_configmap_yaml="${pod_config_dir}/openvpn/openvpn-client-configmap.yaml"
+    client_secret_template_yaml="${pod_config_dir}/openvpn/openvpn-client-secret.yaml.in"
+    client_secret_instance_yaml="${pod_config_dir}/openvpn/openvpn-client-secret-instance.yaml"
 
     # TODO: workaround for issue 11777: https://github.com/kata-containers/kata-containers/issues/11777
-    # remove allow-all configuration and uncomment below when resolved
-    add_allow_all_policy_to_yaml "$server_pod_template_yaml"
-    add_allow_all_policy_to_yaml "$client_pod_template_yaml"
-    # Policy can be generated as to be populated Secrets are out of scope for policy
+    # remove allow-all configuration and uncomment below when resolved (or loop over files under openvpn folder)
+    add_allow_all_policy_to_yaml "$server_pod_yaml"
+    add_allow_all_policy_to_yaml "$client_pod_yaml"
     #policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
     #add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
-    #auto_generate_policy "${policy_settings_dir}" "$server_pod_template_yaml"
-    #auto_generate_policy "${policy_settings_dir}" "$client_pod_template_yaml"
+    #auto_generate_policy "${policy_settings_dir}" "$server_pod_yaml"
+    #auto_generate_policy "${policy_settings_dir}" "$client_pod_yaml"
 }
 
 @test "Pods establishing a VPN connection using openvpn" {
@@ -60,14 +66,19 @@ setup() {
     [ -n "$BASE64_DH_PEM" ]
 
     # Step 3: Substitute environment variables in template files, write to instance files
-    envsubst < "$server_pod_template_yaml" > "$server_pod_instance_yaml"
-    envsubst < "$client_pod_template_yaml" > "$client_pod_instance_yaml"
+    envsubst < "$server_secret_template_yaml" > "$server_secret_instance_yaml"
+    envsubst < "$client_secret_template_yaml" > "$client_secret_instance_yaml"
 
     # Step 4: Deploy the OpenVPN server and wait for it to be ready (uses readiness probe)
-    kubectl apply -f "$server_pod_instance_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$server_pod_name
+    kubectl apply -f "$server_service_yaml"
+    kubectl apply -f "$server_configmap_yaml"
+    kubectl apply -f "$server_secret_instance_yaml"
+    kubectl apply -f "$server_pod_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$server_pod_name
 
     # Step 5: Deploy the OpenVPN client and wait for it to be ready (uses readiness probe)
-    kubectl apply -f "$client_pod_instance_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$client_pod_name
+    kubectl apply -f "$client_configmap_yaml"
+    kubectl apply -f "$client_secret_instance_yaml"
+    kubectl apply -f "$client_pod_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$client_pod_name
 }
 
 teardown() {
@@ -88,6 +99,9 @@ teardown() {
 
     # Clean up resources using the YAML files to ensure resources other than pods are deleted
     kubectl delete -f "$init_pod_yaml" --ignore-not-found=true
-    kubectl delete -f "$client_pod_instance_yaml" --ignore-not-found=true
-    kubectl delete -f "$server_pod_instance_yaml" --ignore-not-found=true
+    kubectl delete -f "$client_secret_instance_yaml" --ignore-not-found=true
+    kubectl delete -f "$client_configmap_yaml" --ignore-not-found=true
+    kubectl delete -f "$server_secret_instance_yaml" --ignore-not-found=true
+    kubectl delete -f "$server_configmap_yaml" --ignore-not-found=true
+    kubectl delete -f "$server_service_yaml" --ignore-not-found=true
 }
