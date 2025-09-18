@@ -96,7 +96,7 @@ jobs:
           echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
-      - uses: oras-project/setup-oras@5c0b487ce3fe0ce3ab0d034e63669e426e294e4d # v1.2.2
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           version: "1.2.0"
