@@ -1235,6 +1235,37 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		return err
 	}
 
+	// Copy termination message file from guest if running on NoSharedFS
+	if c.sandbox.config.HypervisorConfig.SharedFS == config.NoSharedFS && c.config.Annotations["io.kubernetes.container.terminationMessagePolicy"] == "File" {
+		terminationMessagePath := c.config.Annotations["io.kubernetes.container.terminationMessagePath"]
+		c.Logger().Infof("reading termination message for NoSharedFS. container: %s path: %s", c.id, terminationMessagePath)
+		found := false
+		for i := range c.mounts {
+			if c.mounts[i].Destination == terminationMessagePath {
+				found = true
+				contents, err := c.sandbox.agent.readTerminationMessage(ctx, c, terminationMessagePath)
+				if err != nil {
+					c.Logger().Warnf("failed to read termination message container: %s  err: %v", c.id, err)
+					if !force {
+						return err
+					}
+				}
+				if contents != "" {
+					if err := os.MkdirAll(filepath.Dir(c.mounts[i].Source), os.FileMode(0755)); err != nil && !force {
+						return err
+					}
+					if err := os.WriteFile(c.mounts[i].Source, []byte(contents), os.FileMode(0644)); err != nil && !force {
+						return err
+					}
+				}
+				break
+			}
+		}
+		if !found {
+			c.Logger().Warnf("termination message path mount not found for container: %s path: %s", c.id, terminationMessagePath)
+		}
+	}
+
 	// Force the container to be killed. For most of the cases, this
 	// should not matter and it should return an error that will be
 	// ignored.
