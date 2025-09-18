@@ -6,12 +6,15 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common
 	get_pod_config_dir
 	job_name="job-pi-test"
 	yaml_file="${pod_config_dir}/job.yaml"
+	set_node "${yaml_file}" "${node}"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
@@ -61,8 +64,10 @@ teardown() {
 	kubectl delete jobs/"$job_name"
 	# Verify that the job is not running
 	run kubectl get jobs
-	echo "$output"
-	[[ "$output" =~ "No resources found" ]]
+	echo "${output}"
+	[[ "${output}" =~ "No resources found" ]]
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+
+	teardown_common "${node}" "${node_start_time:-}"
 }
