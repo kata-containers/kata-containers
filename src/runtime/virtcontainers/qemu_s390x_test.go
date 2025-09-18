@@ -56,6 +56,12 @@ func TestQemuS390xMemoryTopology(t *testing.T) {
 
 	m := s390x.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
+
+	// test when hostMem is set to 0 (no hotplug memory)
+	hostMem = 0
+	expectedMemory.MaxMem = fmt.Sprintf("%dM", mem)
+	m = s390x.memoryTopology(mem, hostMem, slots)
+	assert.Equal(expectedMemory, m)
 }
 
 func TestQemuS390xAppendVhostUserDevice(t *testing.T) {

@@ -424,3 +424,21 @@ func (q *qemuS390x) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPa
 	hvLogger.Warnf("qomGetPciPath not implemented for s390x")
 	return types.PciPath{}, nil
 }
+
+func (q *qemuS390x) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
+	// For no hotplug memory, set hostMemoryMb to memoryMb, otherwise will cause
+	// `invalid value of maxmem: maximum memory size (0x0) must be at least the initial memory size`
+	if hostMemoryMb == 0 {
+		hostMemoryMb = memoryMb
+	}
+
+	memMax := fmt.Sprintf("%dM", hostMemoryMb)
+	mem := fmt.Sprintf("%dM", memoryMb)
+	memory := govmmQemu.Memory{
+		Size:   mem,
+		Slots:  slots,
+		MaxMem: memMax,
+	}
+
+	return memory
+}
