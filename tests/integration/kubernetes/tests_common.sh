@@ -416,35 +416,56 @@ teardown_common() {
 	fi
 }
 
-# Invoke "kubectl exec", log its output, and check that a grep pattern is present in the output.
+# Execute a command in a pod and grep kubectl's output.
 #
-# Retry "kubectl exec" several times in case it unexpectedly returns an empty output string,
-# in an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
+# This function retries "kubectl exec" several times, if:
+# - kubectl returns a failure exit code, or
+# - kubectl exits successfully but produces empty console output.
+# These retries are an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
 #
 # Parameters:
 #	$1	- pod name
 #	$2	- the grep pattern
 #	$3+	- the command to execute using "kubectl exec"
 #
+# Exit code:
+#	Equal to grep's exit code
 grep_pod_exec_output() {
 	local -r pod_name="$1"
 	shift
 	local -r grep_arg="$1"
 	shift
-	local grep_out=""
+	pod_exec_with_retries "${pod_name}" "$@" | grep "${grep_arg}"
+}
+
+# Execute a command in a pod and echo kubectl's output to stdout.
+#
+# This function retries "kubectl exec" several times, if:
+# - kubectl returns a failure exit code, or
+# - kubectl exits successfully but produces empty console output.
+# These retries are an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
+#
+# Parameters:
+#	$1	- pod name
+#	$2+	- the command to execute using "kubectl exec"
+#
+# Exit code:
+#	0
+pod_exec_with_retries() {
+	local -r pod_name="$1"
+	shift
 	local cmd_out=""
 
 	for _ in {1..10}; do
-		info "Executing in pod ${pod_name}: $*"
-		cmd_out=$(kubectl exec "${pod_name}" -- "$@")
+		bats_unbuffered_info "Executing in pod ${pod_name}: $*"
+		cmd_out=$(kubectl exec "${pod_name}" -- "$@") || (bats_unbuffered_info "kubectl exec failed" ; cmd_out="")
 		if [[ -n "${cmd_out}" ]]; then
-			info "command output: ${cmd_out}"
-			grep_out=$(echo "${cmd_out}" | grep "${grep_arg}")
-			info "grep output: ${grep_out}"
+			bats_unbuffered_info "command output: ${cmd_out}"
 			break
 		fi
-		warn "Empty output from kubectl exec"
+		bats_unbuffered_info "Warning: empty output from kubectl exec"
 		sleep 1
 	done
-	[[ -n "${grep_out}" ]]
+
+	echo "${cmd_out}"
 }
