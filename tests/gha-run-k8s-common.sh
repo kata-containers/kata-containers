@@ -191,19 +191,7 @@ function get_nodes_and_pods_info() {
 }
 
 function deploy_k0s() {
-	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
-		url=$(get_from_kata_deps ".externals.k0s.url")
-	
-		k0s_version_param=""
-		version=$(get_from_kata_deps ".externals.k0s.version")
-		if [[ -n "${version}" ]]; then
-			k0s_version_param="K0S_VERSION=${version}"
-		fi
-	
-		curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
-	else
-		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
-	fi
+	curl -sSLf -sSLf https://get.k0s.sh | sudo sh
 
 	# In this case we explicitly want word splitting when calling k0s
 	# with extra parameters.
@@ -344,7 +332,7 @@ function _get_k0s_kubernetes_version_for_crio() {
 	#
 	# The CRI-O repo for such version of Kubernetes expects something like:
 	# 1.27
-	k0s_version=$(get_from_kata_deps ".externals.k0s.version")
+	k0s_version=$(curl -sSLf "https://docs.k0sproject.io/stable.txt")
 
 	# Remove everything after the second '.'
 	crio_version=${k0s_version%\.*+*}
