@@ -48,9 +48,12 @@ impl Hypervisor for Remote {
         id: &str,
         netns: Option<String>,
         annotations: &HashMap<String, String>,
+        selinux_label: Option<String>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.prepare_vm(id, netns, annotations).await
+        inner
+            .prepare_vm(id, netns, annotations, selinux_label)
+            .await
     }
 
     async fn start_vm(&self, timeout: i32) -> Result<()> {
