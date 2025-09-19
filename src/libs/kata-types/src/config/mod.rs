@@ -103,18 +103,22 @@ pub trait ConfigObjectOps {
 /// Factory is a structure to set the VM factory configuration.
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 pub struct Factory {
-	/// TemplatePath specifies the path of template.
+    /// Specifies the path of template.
     #[serde(default)]
     pub template_path: String,
-    /// VMCacheEndpoint specifies the endpoint of transport VM from the VM cache server to runtime.
-    #[serde(default)]
-    pub vm_cache_endpoint: String,
-    /// VMCacheNumber specifies the the number of caches of VMCache.
-    #[serde(default)]
-    pub vm_cache_number: u32,
-    /// Template enables VM templating support in VM factory.
+    /// template enables VM templating support in VM factory.
     #[serde(default)]
     pub template: bool,
+}
+
+impl Factory {
+    /// Creates a new Factory instance.
+    pub fn new(template: bool, template_path: String) -> Self {
+        Factory {
+            template,
+            template_path,
+        }
+    }
 }
 
 /// Kata configuration information.
@@ -182,6 +186,7 @@ impl TomlConfig {
             file_path.to_string_lossy()
         );
         let config = drop_in::load(&file_path)?;
+
         Ok((config, file_path))
     }
 

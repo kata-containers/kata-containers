@@ -2724,7 +2724,7 @@ impl<'a> QemuCmdLine<'a> {
 
         result.append(&mut self.knobs.qemu_params().await?);
 
-        if self.config.boot_from_template {
+        if self.config.vm_template.boot_from_template {
             result.push("-incoming".to_string());
             result.push("defer".to_string());
         }
