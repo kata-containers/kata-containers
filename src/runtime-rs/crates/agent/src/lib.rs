@@ -42,6 +42,7 @@ pub trait AgentManager: Send + Sync {
 
     async fn agent_sock(&self) -> Result<String>;
     async fn agent_config(&self) -> AgentConfig;
+    async fn disconnect(&self) -> Result<()>;
 }
 
 #[async_trait]

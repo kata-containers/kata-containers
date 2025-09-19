@@ -2,11 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-#![allow(unused_variables, unused_imports)]
+
 use std::fmt::Debug;
 use std::fs::File;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use std::thread::sleep;
 use std::time::Duration;
@@ -20,19 +19,11 @@ use nix::mount::{mount, MsFlags};
 use crate::factory::vm::{VMConfig, VM};
 use kata_types::config::TomlConfig;
 
-#[allow(dead_code)]
 const TEMPLATE_WAIT_FOR_AGENT: Duration = Duration::from_secs(2);
 const TEMPLATE_DEVICE_STATE_SIZE_MB: u32 = 8; // as in Go templateDeviceStateSize
-use hypervisor::{qemu::Qemu, Hypervisor, HYPERVISOR_QEMU};
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "factory"))
-    };
-}
 
 pub trait FactoryBase: Debug {}
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Template {
     pub state_path: PathBuf,
@@ -47,10 +38,8 @@ impl Template {
         };
 
         // Call check_template_vm to validate the template's files
-        if let Err(e) = t.check_template_vm() {
-            // If check_template_vm returns an error, log the error and return a detailed error message
-            return Err(anyhow!(e));
-        }
+        t.check_template_vm()
+            .context("failed to check template VM")?;
 
         // If there is no error, return a Boxed instance of the Template
         Ok(Box::new(t))
@@ -66,24 +55,21 @@ impl Template {
             config,
         };
 
-        match t.check_template_vm() {
-            Ok(_) => {
-                return Err(anyhow!(
-                    "There is already a VM template in {:?}",
-                    t.state_path
-                ));
-            }
-            Err(e) => {
-                info!(sl!(), "check_template_vm failed as expected: {}", e);
-            }
+        if t.check_template_vm().is_ok() {
+            return Err(anyhow!(
+                "There is already a VM template in {:?}",
+                t.state_path
+            ));
         }
+
+        info!(
+            sl!(),
+            "No existing template (check_template_vm failed as expected)"
+        );
 
         t.prepare_template_files()?;
 
-        if let Err(e) = t.create_template_vm(toml_config).await {
-            // t.close()?;
-            return Err(e);
-        }
+        t.create_template_vm(toml_config).await?;
 
         Ok(Box::new(t))
     }
@@ -93,7 +79,6 @@ impl Template {
         let state_path = self.state_path.join("state");
 
         if !memory_path.exists() || !state_path.exists() {
-            info!(sl!(), "Template VM memory or state file missing");
             return Err(anyhow!("template VM memory or state file missing"));
         }
 
@@ -132,13 +117,6 @@ impl Template {
             self.state_path.join("state").to_string_lossy().to_string();
         // config.new_vm();
         let vm = VM::new_vm(config, toml_config).await?;
-        info!(
-            sl!(),
-            "template::create_template_vm: new_vm() VM id={}, cpu={}, memory={}",
-            vm.id,
-            vm.cpu,
-            vm.memory
-        );
 
         vm.disconnect().await?;
         info!(sl!(), "template::create_template_vm: disconnect()");
@@ -158,13 +136,9 @@ impl Template {
         vm.save().await?;
         info!(sl!(), "template::create_template_vm: save()");
 
-        // vm.stop().await?;
-        // info!(sl!(), "template::create_template_vm: stop()");
-
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn create_from_template_vm(&self, new_config: &mut VMConfig) -> Result<VM> {
         info!(sl!(), "template::create_from_template_vm: start(): start");
 
@@ -183,31 +157,16 @@ impl Template {
         let (toml_config, _) = TomlConfig::load_from_default().context("load toml config")?;
 
         let vm = VM::new_vm(config, toml_config).await?;
-        info!(
-            sl!(),
-            "template::get_base_vm():  vm: new_vm() VM id={}, cpu={}, memory={}",
-            vm.id,
-            vm.cpu,
-            vm.memory
-        );
+
         Ok(vm)
     }
 
     pub async fn get_base_vm(&self, config: &mut VMConfig) -> Result<VM> {
         info!(sl!(), "template::get_base_vm(): start");
         let vm = self.create_from_template_vm(config).await?;
-        info!(
-            sl!(),
-            "template::get_base_vm():  vm: new_vm() VM id={}, cpu={}, memory={}",
-            vm.id,
-            vm.cpu,
-            vm.memory
-        );
         Ok(vm)
     }
 }
 
 #[async_trait]
-impl FactoryBase for Template {
-
-}
+impl FactoryBase for Template {}

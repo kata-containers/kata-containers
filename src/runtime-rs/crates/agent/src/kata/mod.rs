@@ -14,6 +14,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use kata_types::config::Agent as AgentConfig;
+use nix::libc;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use tokio::sync::RwLock;
 use ttrpc::asynchronous::Client;
@@ -160,5 +161,36 @@ impl KataAgent {
     pub(crate) async fn agent_config(&self) -> AgentConfig {
         let inner = self.inner.read().await;
         inner.config.clone()
+    }
+
+    /// Disconnect from the agent gRPC server and clean up related resources.
+    pub async fn disconnect(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+
+        info!(sl!(), "kata_agent::disconnect(): begin");
+
+        // Stop the log forwarder first to release the log socket
+        inner.log_forwarder.stop();
+        info!(sl!(), "kata_agent::disconnect(): stopped log forwarder");
+
+        // If there is a valid client, drop it
+        if let Some(_) = inner.client.take() {
+            info!(sl!(), "kata_agent::disconnect(): closing ttrpc client");
+        }
+
+        // If fd is valid (> 0), close it
+        if inner.client_fd >= 0 {
+            unsafe {
+                let _ = libc::close(inner.client_fd);
+            }
+            info!(
+                sl!(),
+                "kata_agent::disconnect(): closed fd {}", inner.client_fd
+            );
+            inner.client_fd = -1;
+        }
+
+        info!(sl!(), "kata_agent::disconnect(): done");
+        Ok(())
     }
 }

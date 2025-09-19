@@ -182,6 +182,7 @@ impl TomlConfig {
             file_path.to_string_lossy()
         );
         let config = drop_in::load(&file_path)?;
+        
         Ok((config, file_path))
     }
 
