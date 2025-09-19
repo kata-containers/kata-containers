@@ -557,8 +557,8 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
-        // start vm - use 60 second timeout like runtime-go
-        self.hypervisor.start_vm(60).await.context("start vm")?;
+        // start vm
+        self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks

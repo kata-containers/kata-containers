@@ -1026,10 +1026,6 @@ pub struct SharedFsInfo {
     #[serde(default)]
     pub nydusd_path: String,
 
-    /// List of valid annotations values for the virtiofs daemon
-    /// The default if not set is empty (all annotations rejected.)
-    #[serde(default)]
-    pub valid_virtio_fs_daemon_paths: Vec<String>,
 
     /// List of valid annotations values for the nydus daemon
     /// The default if not set is empty (all annotations rejected.)
