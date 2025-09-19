@@ -21,7 +21,7 @@ thiserror = { workspace = true }
 # Note that the version specified is not necessarily the version of CH
 # being used. This version is used to pin the CH config structure
 # which is relatively static.
-api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", crate = "api_client", tag = "v27.0" }
+api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", tag = "v27.0" }
 
 # Local dependencies
 kata-types = { workspace = true }

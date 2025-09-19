@@ -5,6 +5,7 @@
 //
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -13,6 +14,7 @@ use tokio::sync::{Mutex, RwLock};
 use agent::Storage;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::config::hypervisor::SharedFsInfo;
+use nydusd::Nydusd;
 
 use super::{
     share_virtio_fs::{
@@ -97,5 +99,9 @@ impl ShareFs for ShareVirtioFsInline {
 
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>> {
         self.mounted_info_set.clone()
+    }
+
+    async fn get_nydusd(&self) -> Option<Arc<dyn Nydusd>> {
+        None // Inline virtio-fs doesn't use nydusd
     }
 }

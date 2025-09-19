@@ -24,7 +24,6 @@ use crate::share_fs::ShareFs;
 use oci_spec::runtime as oci;
 
 const ROOTFS: &str = "rootfs";
-const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";
 const TYPE_OVERLAY_FS: &str = "overlay";
 
 #[async_trait]
