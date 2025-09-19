@@ -150,7 +150,7 @@ allow_create_container_input if {
 
 allow_namespace(p_namespace, i_namespace) = add_namespace if {
     p_namespace == i_namespace
-    add_namespace := null
+    add_namespace := state_allows("namespace", i_namespace)
     print("allow_namespace 1: input namespace matches policy data")
 }
 

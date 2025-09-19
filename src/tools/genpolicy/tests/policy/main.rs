@@ -286,6 +286,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_state_exec_process_deployment() {
+        runtests("state/execprocessdeployment").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_security_context() {
         runtests("createcontainer/security_context/runas").await;
     }
