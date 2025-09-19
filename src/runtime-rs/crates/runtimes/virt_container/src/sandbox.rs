@@ -39,7 +39,7 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
-use kata_types::config::TomlConfig;
+use kata_types::config::{Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
@@ -54,12 +54,11 @@ use resource::{ResourceConfig, ResourceManager};
 use runtime_spec as spec;
 use std::path::Path;
 use std::sync::Arc;
+
 use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
-
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
-
 pub struct SandboxRestoreArgs {
     pub sid: String,
     pub toml_config: TomlConfig,
@@ -73,7 +72,7 @@ pub enum SandboxState {
     Stopped,
 }
 
-struct SandboxInner {
+pub struct SandboxInner {
     state: SandboxState,
 }
 
@@ -85,17 +84,19 @@ impl SandboxInner {
     }
 }
 
+//VMTemplate::Todo
 #[derive(Clone)]
 pub struct VirtSandbox {
-    sid: String,
-    msg_sender: Arc<Mutex<Sender<Message>>>,
-    inner: Arc<RwLock<SandboxInner>>,
-    resource_manager: Arc<ResourceManager>,
-    agent: Arc<dyn Agent>,
-    hypervisor: Arc<dyn Hypervisor>,
-    monitor: Arc<HealthCheck>,
-    sandbox_config: Option<SandboxConfig>,
+    pub sid: String,
+    pub msg_sender: Arc<Mutex<Sender<Message>>>,
+    pub inner: Arc<RwLock<SandboxInner>>,
+    pub resource_manager: Arc<ResourceManager>,
+    pub agent: Arc<dyn Agent>,
+    pub hypervisor: Arc<dyn Hypervisor>,
+    pub monitor: Arc<HealthCheck>,
+    pub sandbox_config: Option<SandboxConfig>,
     shm_size: u64,
+    pub factory: Option<Factory>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -103,6 +104,13 @@ impl std::fmt::Debug for VirtSandbox {
         f.debug_struct("VirtSandbox")
             .field("sid", &self.sid)
             .field("msg_sender", &self.msg_sender)
+            .field("inner", &"<SandboxInner>")
+            .field("resource_manager", &self.resource_manager)
+            .field("agent", &"<Agent>")
+            .field("hypervisor", &self.hypervisor)
+            .field("monitor", &"<HealthCheck>")
+            .field("sandbox_config", &self.sandbox_config)
+            .field("factory", &self.factory)
             .finish()
     }
 }
@@ -115,6 +123,7 @@ impl VirtSandbox {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         sandbox_config: SandboxConfig,
+        factory: Factory,
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
@@ -128,6 +137,7 @@ impl VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
+            factory: Some(factory),
         })
     }
 
@@ -501,6 +511,7 @@ impl VirtSandbox {
 impl Sandbox for VirtSandbox {
     #[instrument(name = "sb: start")]
     async fn start(&self) -> Result<()> {
+        info!(sl!(), "sandbox::start()"; "sandbox:" => format!("{:?}", self));
         let id = &self.sid;
 
         if self.sandbox_config.is_none() {
@@ -537,9 +548,15 @@ impl Sandbox for VirtSandbox {
             .await
             .context("set up device before start vm")?;
 
-        // start vm
-        self.hypervisor.start_vm(10_000).await.context("start vm")?;
-        info!(sl!(), "start vm");
+        if <std::option::Option<Factory> as Clone>::clone(&self.factory)
+            .unwrap()
+            .template
+        {
+            info!(sl!(), "sandbox::start(): start template vm");
+        } else {
+            self.hypervisor.start_vm(10_000).await.context("start vm")?;
+            info!(sl!(), "sandbox::start(): start normal vm");
+        }
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
         let (prestart_hooks, create_runtime_hooks) =
@@ -594,6 +611,7 @@ impl Sandbox for VirtSandbox {
             .get_agent_socket()
             .await
             .context("get agent socket")?;
+        
         self.agent
             .start(&address)
             .await
@@ -673,6 +691,51 @@ impl Sandbox for VirtSandbox {
         });
         self.monitor.start(id, self.agent.clone());
         self.save().await.context("save state")?;
+        Ok(())
+    }
+    #[allow(unused_mut)]
+    async fn start_template(&self) -> Result<()> {
+        info!(sl!(), "sandbox::start_template()"; "sandbox:" => format!("{:?}", self));
+        let id = &self.sid;
+
+        if self.sandbox_config.is_none() {
+            return Err(anyhow!(
+                "sandbox::start_template(): sandbox config is missing"
+            ));
+        }
+        let sandbox_config = self.sandbox_config.as_ref().unwrap();
+
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
+
+        let mut inner = self.inner.write().await;
+        if inner.state != SandboxState::Init {
+            warn!(sl!(), "sandbox is started");
+            return Ok(());
+        }
+
+        self.hypervisor
+            .prepare_vm(
+                id,
+                sandbox_config.network_env.netns.clone(),
+                &sandbox_config.annotations,
+            )
+            .await
+            .context("prepare vm")?;
+
+        // generate device and setup before start vm
+        // should after hypervisor.prepare_vm
+        let resources = self
+            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
+            .await?;
+
+        self.resource_manager
+            .prepare_before_start_vm(resources)
+            .await
+            .context("set up device before start vm")?;
+
+        self.hypervisor.start_vm(10_000).await.context("start vm")?;
+        info!(sl!(), "sandbox::start_template(): start vm");
         Ok(())
     }
 
@@ -929,6 +992,7 @@ impl Persist for VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             sandbox_config: None,
             shm_size: DEFAULT_SHM_SIZE,
+            factory: None,
         })
     }
 }
