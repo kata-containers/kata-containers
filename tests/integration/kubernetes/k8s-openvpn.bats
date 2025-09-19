@@ -13,8 +13,10 @@ setup() {
     # Cannot pull alpine image, error unpacking image: failed to extract layer sha256:<XXX>: failed to get reader from content store: content digest sha256:<XXX>: not found
     # TODO: retry and raise nydus issue...
     #[ "${SNAPSHOTTER:-}" == "nydus" ] && skip "openvpn tests not supported with nydus snapshotter"
-    # ERROR: unable to select packages: easy-rsa (no such package) ...
+    # cannot build the container image: ERROR: unable to select packages: easy-rsa (no such package) ...
     [ "$(uname -m)" == "ppc64le" ] && skip "required packages for openvpn test not available for ppc64le"
+    # built the container image only for x86 and arm64 so far
+    [ "$(uname -m)" == "s390x" ] && skip "container image not built for s390x"
 
     setup_common
     get_pod_config_dir
@@ -84,6 +86,7 @@ setup() {
 teardown() {
     #[ "${SNAPSHOTTER:-}" == "nydus" ] && skip "openvpn tests not supported with nydus snapshotter"
     [ "$(uname -m)" == "ppc64le" ] && skip "required packages for openvpn test not available for ppc64le"
+    [ "$(uname -m)" == "s390x" ] && skip "container image not built for s390x"
 
     # Debugging information
     echo "=== OpenVPN Init Pod Logs ==="
