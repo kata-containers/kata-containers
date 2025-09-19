@@ -19,6 +19,7 @@ pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
 pub mod remote;
+pub mod selinux;
 pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
@@ -102,6 +103,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
         id: &str,
         netns: Option<String>,
         annotations: &HashMap<String, String>,
+        selinux_label: Option<String>,
     ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
