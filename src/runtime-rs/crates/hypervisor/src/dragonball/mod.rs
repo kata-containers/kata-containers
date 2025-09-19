@@ -75,9 +75,10 @@ impl Hypervisor for Dragonball {
         id: &str,
         netns: Option<String>,
         _annotations: &HashMap<String, String>,
+        selinux_label: Option<String>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.prepare_vm(id, netns).await
+        inner.prepare_vm(id, netns, selinux_label).await
     }
 
     #[instrument]
