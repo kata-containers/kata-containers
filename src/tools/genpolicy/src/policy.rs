@@ -960,7 +960,7 @@ fn get_container_annotations(
     if let Some(name) = resource.get_sandbox_name() {
         annotations
             .entry("io.kubernetes.cri.sandbox-name".to_string())
-            .or_insert(name);
+            .or_insert(format!("^{name}$"));
     }
 
     if !is_pause_container {

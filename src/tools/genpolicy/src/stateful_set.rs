@@ -102,7 +102,8 @@ impl yaml::K8sResource for StatefulSet {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/statefulset/stateful_set_utils.go#L113
+        yaml::name_regex_from_meta(&self.metadata).map(|prefix| format!("{prefix}-[0-9]+"))
     }
 
     fn get_namespace(&self) -> Option<String> {

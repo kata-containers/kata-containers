@@ -14,6 +14,7 @@ use crate::job;
 use crate::list;
 use crate::mount_and_storage;
 use crate::no_policy;
+use crate::obj_meta::ObjectMeta;
 use crate::pod;
 use crate::policy;
 use crate::replica_set;
@@ -442,3 +443,18 @@ pub fn get_sysctls(security_context: &Option<pod::PodSecurityContext>) -> Vec<po
     }
     vec![]
 }
+
+/// Constructs a non-anchored regex for an object according to k8s naming conventions:
+/// 1. If the name field is set, return that literally.
+/// 2. If name is unset but generateName is set, return regex that matches generateName and a random suffix.
+/// 3. Otherwise, return None. This object is not considered valid by the k8s API server!
+pub fn name_regex_from_meta(meta: &ObjectMeta) -> Option<String> {
+    meta.name.clone().or_else(|| {
+        meta.generateName
+            .as_ref()
+            .map(|p| format!("{}{}", regex::escape(p), GENERATE_NAME_SUFFIX_REGEX))
+    })
+}
+
+// https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/staging/src/k8s.io/apimachinery/pkg/util/rand/rand.go#L81-L83
+pub const GENERATE_NAME_SUFFIX_REGEX: &str = "[bcdfghjklmnpqrstvwxz2456789]+";

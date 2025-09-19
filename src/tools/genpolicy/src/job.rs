@@ -54,7 +54,8 @@ impl yaml::K8sResource for Job {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        let job_name = yaml::name_regex_from_meta(&self.metadata);
+        job_name.map(pod_name_regex)
     }
 
     fn get_namespace(&self) -> Option<String> {
@@ -122,4 +123,14 @@ impl yaml::K8sResource for Job {
     fn get_sysctls(&self) -> Vec<pod::Sysctl> {
         yaml::get_sysctls(&self.spec.template.spec.securityContext)
     }
+}
+
+pub fn pod_name_regex(job_name: String) -> String {
+    // Job name - optional index - generateNameSuffix
+    // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/job/job_controller.go#L1767
+    // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/job/indexed_job_utils.go#L501
+    // Very long job names are handled incorrectly (job_name would need to be truncated, but
+    // index/suffix len are unknown here)
+    let suffix = yaml::GENERATE_NAME_SUFFIX_REGEX;
+    format!("{job_name}(-[0-9]+)?-{suffix}")
 }

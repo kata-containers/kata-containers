@@ -1,18 +1,18 @@
 [
   {
-    "description": "generated name with valid prefix (dummyxyz)",
+    "description": "generated name with valid prefix (dummysfx)",
     "allowed": true,
     "request": {
       "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
-          "io.kubernetes.cri.sandbox-name": "dummyxyz",
+          "io.kubernetes.cri.sandbox-name": "dummysfx",
           "io.kubernetes.cri.sandbox-namespace": "default",
           "io.kubernetes.cri.container-type": "sandbox",
           "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
           "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
-          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummyxyz_00000000-0000-0000-0000-000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummysfx_00000000-0000-0000-0000-000000000000",
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
           "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
         },

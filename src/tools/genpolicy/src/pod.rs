@@ -857,11 +857,7 @@ impl yaml::K8sResource for Pod {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        let name = self.metadata.get_name();
-        if !name.is_empty() {
-            return Some(name);
-        }
-        panic!("No pod name.");
+        yaml::name_regex_from_meta(&self.metadata)
     }
 
     fn get_namespace(&self) -> Option<String> {
