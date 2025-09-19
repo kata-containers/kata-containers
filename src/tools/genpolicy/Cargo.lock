@@ -957,6 +957,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "fs2",
+ "json-patch",
  "k8s-cri",
  "kata-agent-policy",
  "kata-types",
