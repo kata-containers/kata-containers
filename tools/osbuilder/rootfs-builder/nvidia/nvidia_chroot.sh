@@ -189,7 +189,7 @@ prepare_run_file_drivers() {
 
 prepare_distribution_drivers() {
 	if [[ "${driver_version}" == "latest" ]]; then
-		driver_version=$(apt-cache search --names-only 'nvidia-headless-no-dkms-.?.?.?-open' | awk '{ print $1 }' | tail -n 1 | cut -d'-' -f5)
+		driver_version=$(apt-cache search --names-only 'nvidia-headless-no-dkms-.?.?.?-open' | sort | awk '{ print $1 }' | tail -n 1 | cut -d'-' -f5)
 	elif [[ "${driver_version}" == "lts" ]]; then
 		driver_version="550"
 	fi
