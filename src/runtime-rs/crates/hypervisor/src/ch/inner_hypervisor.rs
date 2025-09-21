@@ -7,6 +7,7 @@ use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
+use crate::selinux;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
 use crate::VM_ROOTFS_DRIVER_BLK;
@@ -369,11 +370,24 @@ impl CloudHypervisorInner {
         }
 
         unsafe {
+            let selinux_label = self.config.security_info.selinux_label.clone();
             let _pre = cmd.pre_exec(move || {
                 if let Some(netns_path) = &netns {
                     let netns_fd = std::fs::File::open(netns_path);
                     let _ = setns(netns_fd?.as_raw_fd(), CloneFlags::CLONE_NEWNET)
                         .context("set netns failed");
+                }
+                if let Some(label) = selinux_label.as_ref() {
+                    if let Err(e) = selinux::set_exec_label(label) {
+                        error!(sl!(), "Failed to set SELinux label in child process: {}", e);
+                        // Don't return error here to avoid breaking the process startup
+                        // Log the error and continue
+                    } else {
+                        info!(
+                            sl!(),
+                            "Successfully set SELinux label in child process: {}", &label
+                        );
+                    }
                 }
                 Ok(())
             });
@@ -531,7 +545,12 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(
+        &mut self,
+        id: &str,
+        netns: Option<String>,
+        selinux_label: Option<String>,
+    ) -> Result<()> {
         self.id = id.to_string();
         self.state = VmmState::NotReady;
 
@@ -540,6 +559,13 @@ impl CloudHypervisorInner {
         self.handle_guest_protection().await?;
 
         self.netns = netns;
+
+        if !self.hypervisor_config().disable_selinux {
+            if let Some(label) = selinux_label.as_ref() {
+                self.config.security_info.selinux_label = Some(label.to_string());
+                selinux::set_exec_label(label).context("failed to set SELinux process label")?;
+            }
+        }
 
         Ok(())
     }

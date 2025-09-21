@@ -19,13 +19,28 @@ use crate::{
 };
 
 impl DragonballInner {
-    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(
+        &mut self,
+        id: &str,
+        netns: Option<String>,
+        selinux_label: Option<String>,
+    ) -> Result<()> {
         self.id = id.to_string();
         self.state = VmmState::NotReady;
 
         self.vm_path = get_sandbox_path(id);
         self.jailer_root = get_jailer_root(id);
         self.netns = netns;
+
+        // Dragonball is a built-in VMM that runs as a thread inside the
+        // runtime. Because it is not a standalone process, Dragonball cannot
+        // independently set per-VM SELinux exec labels; any provided
+        // selinux_label will be ignored.
+        if selinux_label.is_some() {
+            warn!(sl!(),
+                    "SELinux label is provided for Dragonball VM, but Dragonball does not support SELinux; the label will be ignored",
+            );
+        }
 
         Ok(())
     }
