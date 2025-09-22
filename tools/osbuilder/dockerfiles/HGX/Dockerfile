@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 ENV ARCH="x86_64"
 ENV DEBUG="1"
 ENV VARIANT="nvidia-gpu"
-ENV NVIDIA_GPU_STACK="compute,driver,nvswitch,version=575.57.08"
+ENV NVIDIA_GPU_STACK="compute,driver,nvswitch,version=580"
 ENV ROOTFS_OS="ubuntu"
 ENV OS_VERSION="noble"
 
