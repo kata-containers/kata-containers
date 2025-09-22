@@ -411,9 +411,11 @@ function collect_artifacts() {
 function cleanup_kata_deploy() {
 	ensure_helm
 
-	# Do not return after deleting only the parent object cascade=foreground
-	# means also wait for child/dependent object deletion
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
+	kubectl -n kube-system describe pod -l name=kata-deploy
+	helm uninstall kata-deploy --ignore-not-found --cascade foreground --namespace kube-system --debug
+	kubectl -n kube-system describe pod -l name=kata-deploy
+	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
+	kubectl -n kube-system describe pod -l name=kata-deploy
 }
 
 function cleanup() {

@@ -247,12 +247,6 @@ externals:
     ita_image_tag: "beb4ce9346bc7f9a7ff0f686eb868472767ad8fb-x86_64"
     toolchain: "1.85.1"
 
-  crio:
-    description: |
-      OCI-based Kubernetes Container Runtime Interface implementation
-    url: "https://github.com/cri-o/cri-o"
-    branch: "release-1.23"
-
   containerd:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
@@ -300,13 +294,6 @@ externals:
     description: "LVM2 and device-mapper tools and libraries"
     url: "https://github.com/lvmteam/lvm2"
     version: "v2_03_16"
-
-  # This is only used for CRI-O.
-  # kata-deploy tests rely on the latest version of k0s.
-  k0s:
-    description: "K0s Kubernetes distribution, used in cri-o testing"
-    url: "https://get.k0s.sh"
-    version: "v1.31.5+k0s.0"
 
   kubernetes:
     description: "Kubernetes project container manager"
