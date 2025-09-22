@@ -8,10 +8,10 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig,
     },
-    BlockConfig,
+    BlockConfig, BlockDeviceAio,
 };
 use kata_types::mount::DirectVolumeMountInfo;
 use nix::sys::{stat, stat::SFlag};
@@ -36,7 +36,7 @@ impl RawblockVolume {
         read_only: bool,
         sid: &str,
     ) -> Result<Self> {
-        let block_driver = get_block_driver(d).await;
+        let blkdev_info = get_block_device_info(d).await;
 
         // check volume type
         if mount_info.volume_type != KATA_DIRECT_VOLUME_TYPE {
@@ -60,7 +60,8 @@ impl RawblockVolume {
 
         let block_config = BlockConfig {
             path_on_host: mount_info.device.clone(),
-            driver_option: block_driver,
+            driver_option: blkdev_info.block_device_driver,
+            blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             ..Default::default()
         };
 

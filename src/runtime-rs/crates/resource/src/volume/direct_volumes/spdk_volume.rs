@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
     VhostUserConfig, VhostUserType,
@@ -74,7 +74,7 @@ impl SPDKVolume {
             }
         }
 
-        let block_driver = get_block_driver(d).await;
+        let block_driver = get_block_device_info(d).await.block_device_driver;
 
         let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
