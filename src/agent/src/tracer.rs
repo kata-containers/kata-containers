@@ -35,7 +35,7 @@ pub fn setup_tracing(name: &'static str, logger: &Logger) -> Result<()> {
 
     let _global_provider = global::set_tracer_provider(provider);
 
-    let layer = OpenTelemetryLayer::new(tracer);
+    let layer = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let subscriber = Registry::default().with(layer);
 
