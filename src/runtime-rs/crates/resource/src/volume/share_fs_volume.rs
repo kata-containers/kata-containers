@@ -44,6 +44,11 @@ const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
 const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
 
+// Corresponds to os.FileMode(0750) | os.ModeDir in Go
+// So, it's (permission bits 0o750) ORed with (file type bit S_IFDIR).
+// We use u32 here because `file_mode` in CopyFileRequest is u32
+const DIR_MODE_PERMS: u32 = SFlag::S_IFDIR.bits() | 0o750;
+
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
 // Ignore /dev, directories and all other device files. We handle
@@ -642,13 +647,12 @@ impl ShareFsVolume {
             file_size: 0, // useless for dir
             uid: dir_metadata.uid() as i32,
             gid: dir_metadata.gid() as i32,
-            dir_mode: dir_metadata.mode(),
-            file_mode: SFlag::S_IFDIR.bits(),
+            dir_mode: DIR_MODE_PERMS,
+            file_mode: dir_metadata.mode(),
             data: vec![], // no files
             ..Default::default()
         };
 
-        // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
         info!(
             sl!(),
             "creating directory: {:?} in sandbox with file_mode: {:?}",
