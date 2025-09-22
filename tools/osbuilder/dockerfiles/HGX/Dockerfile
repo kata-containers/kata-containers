@@ -18,6 +18,8 @@ RUN apt install -y mmdebstrap
 RUN apt install -y makedev
 RUN apt install -y curl
 RUN apt install -y musl musl-dev musl-tools
+RUN apt install -y golang-go
+RUN apt install -y zstd
 
 # Pull in our local files
 COPY ./run.sh /input/
