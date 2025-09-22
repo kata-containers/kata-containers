@@ -2061,7 +2061,7 @@ dependencies = [
  "netlink-sys 0.7.0",
  "nix 0.26.4",
  "oci-spec",
- "opentelemetry 0.14.0",
+ "opentelemetry",
  "procfs 0.12.0",
  "prometheus",
  "protobuf",
@@ -2789,9 +2789,9 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
 name = "opentelemetry"
-version = "0.14.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "492848ff47f11b7f9de0443b404e2c5775f695e1af6b7076ca25f999581d547a"
+checksum = "ff27b33e30432e7b9854936693ca103d8591b0501f7ae9f633de48cda3bf2a67"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
@@ -2805,23 +2805,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
-]
-
-[[package]]
-name = "opentelemetry"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff27b33e30432e7b9854936693ca103d8591b0501f7ae9f633de48cda3bf2a67"
-dependencies = [
- "async-trait",
- "crossbeam-channel",
- "futures",
- "js-sys",
- "lazy_static",
- "percent-encoding",
- "pin-project",
- "rand",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -4616,7 +4599,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c47440f2979c4cd3138922840eec122e3c0ba2148bc290f756bd7fd60fc97fff"
 dependencies = [
- "opentelemetry 0.15.0",
+ "opentelemetry",
  "tracing",
  "tracing-core",
  "tracing-log 0.1.4",
@@ -4863,7 +4846,7 @@ dependencies = [
  "bincode",
  "byteorder",
  "libc",
- "opentelemetry 0.14.0",
+ "opentelemetry",
  "slog",
  "thiserror 1.0.69",
  "tokio",
