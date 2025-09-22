@@ -469,8 +469,15 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 
 		// Ignore /dev, directories and all other device files. We handle
 		// only regular files in /dev. It does not make sense to pass the host
-		// device nodes to the guest.
-		if isHostDevice(m.Destination) {
+		// device nodes to the guest. We also ignore inaccessible host
+		// devices in case we're mounting a device that is only
+		// accessible in the guest.
+		//
+		// Note: K8s/containerd seems to create the source path as a
+		// directory on the host if it does not already exist.
+		// isHostDevice() will still return true in that case, so the
+		// above contract holds.
+		if isDevice, err := isHostDevice(m.Source); isDevice || err != nil {
 			continue
 		}
 
