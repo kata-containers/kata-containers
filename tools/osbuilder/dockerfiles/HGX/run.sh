@@ -59,20 +59,6 @@ build_rootfs()
 	sudo -E SECCOMP=no EXTRA_PKGS='kmod' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS
 }
 
-build_qat_drivers()
-{
-	/bin/echo -e "\n\e[1;42mCompile driver modules\e[0m"
-	cd ${kata_repo_path}
-	linux_kernel_path=${kata_repo_path}/${LINUX_VER}
-	KERNEL_MAJOR_VERSION=$(awk '/^VERSION =/{print $NF}' ${linux_kernel_path}/Makefile)
-	KERNEL_PATHLEVEL=$(awk '/^PATCHLEVEL =/{print $NF}' ${linux_kernel_path}/Makefile)
-	KERNEL_SUBLEVEL=$(awk '/^SUBLEVEL =/{print $NF}' ${linux_kernel_path}/Makefile)
-	KERNEL_EXTRAVERSION=$(awk '/^EXTRAVERSION =/{print $NF}' ${linux_kernel_path}/Makefile)
- 	KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
- 	cd $QAT_SRC
-	KERNEL_SOURCE_ROOT=${linux_kernel_path} ./configure ${QAT_CONFIGURE_OPTIONS}
-	make all -j $(nproc)
-}
 
 copy_outputs()
 {
