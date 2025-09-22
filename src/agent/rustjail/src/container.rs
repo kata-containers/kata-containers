@@ -1045,8 +1045,8 @@ impl BaseContainer for LinuxContainer {
                 .map_err(|e| warn!(logger, "fcntl pseudo.slave {:?}", e));
 
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stdout = unsafe { std::process::Stdio::from_raw_fd(unistd::dup(pseudo.slave)?) };
+            child_stderr = unsafe { std::process::Stdio::from_raw_fd(unistd::dup(pseudo.slave)?) };
 
             if let Some(proc_io) = &mut p.proc_io {
                 // A reference count used to clean up the term master fd.
