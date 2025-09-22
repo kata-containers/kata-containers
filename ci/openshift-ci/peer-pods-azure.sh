@@ -116,33 +116,44 @@ az network vnet subnet update \
 for NODE_NAME in $(kubectl get nodes -o jsonpath='{.items[*].metadata.name}'); do [[ "${NODE_NAME}" =~ 'worker' ]] && kubectl label node "${NODE_NAME}" node.kubernetes.io/worker=; done
 
 # CAA artifacts
-CAA_IMAGE="quay.io/confidential-containers/cloud-api-adaptor"
-TAGS="$(curl https://quay.io/api/v1/repository/confidential-containers/cloud-api-adaptor/tag/?onlyActiveTags=true)"
-DIGEST=$(echo "${TAGS}" | jq -r '.tags[] | select(.name | contains("latest-amd64")) | .manifest_digest')
-CAA_TAG="$(echo "${TAGS}" | jq -r '.tags[] | select(.manifest_digest | contains("'"${DIGEST}"'")) | .name' | grep -v "latest")"
+if [[ -z "${CAA_TAG}" ]]; then
+	if [[ -n "${CAA_IMAGE}" ]]; then
+		echo "CAA_IMAGE (${CAA_IMAGE}) is set but CAA_TAG isn't, which is not supported. Please specify both or none"
+		exit 1
+	fi
+	TAGS="$(curl https://quay.io/api/v1/repository/confidential-containers/cloud-api-adaptor/tag/?onlyActiveTags=true)"
+	DIGEST=$(echo "${TAGS}" | jq -r '.tags[] | select(.name | contains("latest-amd64")) | .manifest_digest')
+	CAA_TAG="$(echo "${TAGS}" | jq -r '.tags[] | select(.manifest_digest | contains("'"${DIGEST}"'")) | .name' | grep -v "latest")"
+fi
+if [[ -z "${CAA_IMAGE}" ]]; then
+	CAA_IMAGE="quay.io/confidential-containers/cloud-api-adaptor"
+fi
 
 # Get latest PP image
-SUCCESS_TIME=$(curl -s \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/confidential-containers/cloud-api-adaptor/actions/workflows/azure-nightly-build.yml/runs?status=success" \
-  | jq -r '.workflow_runs[0].updated_at')
-PP_IMAGE_ID="/CommunityGalleries/cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85/Images/podvm_image0/Versions/$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${SUCCESS_TIME}" "+%Y.%m.%d" 2>/dev/null || date -d "${SUCCESS_TIME}" +%Y.%m.%d)"
+if [[ -z "${PP_IMAGE_ID}" ]]; then
+	SUCCESS_TIME=$(curl -s \
+	  -H "Accept: application/vnd.github+json" \
+	  "https://api.github.com/repos/confidential-containers/cloud-api-adaptor/actions/workflows/azure-nightly-build.yml/runs?status=success" \
+	  | jq -r '.workflow_runs[0].updated_at')
+	PP_IMAGE_ID="/CommunityGalleries/cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85/Images/podvm_image0/Versions/$(date -u -jf "%Y-%m-%dT%H:%M:%SZ" "${SUCCESS_TIME}" "+%Y.%m.%d" 2>/dev/null || date -d "${SUCCESS_TIME}" +%Y.%m.%d)"
+fi
 
-echo "AZURE_REGION: \"${AZURE_REGION}\""
-echo "PP_REGION: \"${PP_REGION}\""
-echo "AZURE_RESOURCE_GROUP: \"${AZURE_RESOURCE_GROUP}\""
-echo "PP_RESOURCE_GROUP: \"${PP_RESOURCE_GROUP}\""
-echo "PP_SUBNET_ID: \"${PP_SUBNET_ID}\""
-echo "CAA_TAG: \"${CAA_TAG}\""
-echo "PP_IMAGE_ID: \"${PP_IMAGE_ID}\""
+echo "AZURE_REGION=\"${AZURE_REGION}\""
+echo "PP_REGION=\"${PP_REGION}\""
+echo "AZURE_RESOURCE_GROUP=\"${AZURE_RESOURCE_GROUP}\""
+echo "PP_RESOURCE_GROUP=\"${PP_RESOURCE_GROUP}\""
+echo "PP_SUBNET_ID=\"${PP_SUBNET_ID}\""
+echo "CAA_IMAGE=\"${CAA_IMAGE}\""
+echo "CAA_TAG=\"${CAA_TAG}\""
+echo "PP_IMAGE_ID=\"${PP_IMAGE_ID}\""
 
 # Clone and configure caa
-git clone --depth 1 --no-checkout https://github.com/confidential-containers/cloud-api-adaptor.git
+git clone --revision "${CAA_GIT_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/cloud-api-adaptor.git
 pushd cloud-api-adaptor
 git sparse-checkout init --cone
 git sparse-checkout set src/cloud-api-adaptor/install/
 git checkout
-echo "CAA_GIT_SHA: \"$(git rev-parse HEAD)\""
+echo "CAA_GIT_SHA=\"$(git rev-parse HEAD)\""
 pushd src/cloud-api-adaptor
 cat <<EOF > install/overlays/azure/workload-identity.yaml
 apiVersion: apps/v1
@@ -208,12 +219,12 @@ echo "AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}" >> install/overlays/azure/serv
 echo "AZURE_TENANT_ID=${AZURE_TENANT_ID}" >> install/overlays/azure/service-principal.env
 
 # Deploy Operator
-git clone --depth 1 --no-checkout https://github.com/confidential-containers/operator
+git clone --revision "${OPERATOR_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/operator
 pushd operator
 git sparse-checkout init --cone
 git sparse-checkout set "config/"
 git checkout
-echo "OPERATOR_SHA: \"$(git rev-parse HEAD)\""
+echo "OPERATOR_SHA=\"$(git rev-parse HEAD)\""
 oc apply -k "config/release"
 oc apply -k "config/samples/ccruntime/peer-pods"
 popd
@@ -227,7 +238,7 @@ popd
 SECONDS=0
 ( while [[ "${SECONDS}" -lt 360 ]]; do
     kubectl get runtimeclass | grep -q kata-remote && exit 0
-done; exit 1 ) || { echo "kata-remote runtimeclass not initialized in 60s"; kubectl -n confidential-containers-system get all; echo; echo CAA; kubectl -n confidential-containers-system logs daemonset.apps/cloud-api-adaptor-daemonset; echo pre-install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-pre-install-daemon; echo install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-daemon-install; exit 1; }
+done; exit 1 ) || { echo "kata-remote runtimeclass not initialized in 60s"; kubectl -n confidential-containers-system get all; echo; echo "kubectl -n confidential-containers-system describe all"; kubectl -n confidential-containers-system describe all; echo; echo CAA; kubectl -n confidential-containers-system logs daemonset.apps/cloud-api-adaptor-daemonset; echo pre-install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-pre-install-daemon; echo install; kubectl -n confidential-containers-system logs daemonset.apps/cc-operator-daemon-install; exit 1; }
 
 
 ################
