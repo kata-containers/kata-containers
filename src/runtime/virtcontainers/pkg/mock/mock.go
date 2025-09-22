@@ -249,6 +249,10 @@ func (p *HybridVSockTTRPCMockImp) RemoveStaleVirtiofsShareMounts(ctx context.Con
 	return &gpb.Empty{}, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) ReadContainerTerminationMessage(ctx context.Context, req *pb.ReadContainerTerminationMessageRequest) (*pb.ReadContainerTerminationMessageResponse, error) {
+	return &pb.ReadContainerTerminationMessageResponse{}, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) GetIPTables(ctx context.Context, req *pb.GetIPTablesRequest) (*pb.GetIPTablesResponse, error) {
 	return &pb.GetIPTablesResponse{}, nil
 }
