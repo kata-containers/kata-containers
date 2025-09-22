@@ -6,7 +6,7 @@
 
 #!/bin/bash
 set -euo pipefail
-[[ -n "${DEBUG}" ]] && set -x
+set -x
 
 shopt -s nullglob
 shopt -s extglob
