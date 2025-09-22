@@ -15,7 +15,7 @@ build_rootfs() {
 		PACKAGES=$(echo "$PACKAGES" | tr ' ' ',')
 		EXTRA_PKGS=$(echo "$EXTRA_PKGS" | tr ' ' ',')
 	fi
-	if ! mmdebstrap --mode auto --arch "$DEB_ARCH" --variant important \
+	if ! mmdebstrap --mode auto --arch "$DEB_ARCH" --variant required \
 			--components="$REPO_COMPONENTS" \
 			--include "$PACKAGES,$EXTRA_PKGS" "$OS_VERSION" "$rootfs_dir" "$REPO_URL"; then
 		echo "ERROR: mmdebstrap failed, cannot proceed" && exit 1
