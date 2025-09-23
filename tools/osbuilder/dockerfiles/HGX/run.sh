@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -u
+set -euo pipefail
 
 # NOTE: Some env variables are set in the Dockerfile - those that are
 # intended to be over-rideable.
