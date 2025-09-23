@@ -142,11 +142,11 @@ tests_fail=()
 for K8S_TEST_ENTRY in "${K8S_TEST_UNION[@]}"
 do
 	K8S_TEST_ENTRY=$(echo "$K8S_TEST_ENTRY" | tr -d '[:space:][:cntrl:]')
-	info "$(kubectl get pods --all-namespaces 2>&1)"
+	time info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
 	# Output file will be prefixed with "ok" or "not_ok" based on the result
 	out_file="${report_dir}/${K8S_TEST_ENTRY}.out"
-	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "${out_file}"; then
+	if ! bats --timing --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "${out_file}"; then
 		tests_fail+=("${K8S_TEST_ENTRY}")
 		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
 		[ "${K8S_TEST_FAIL_FAST}" = "yes" ] && break
