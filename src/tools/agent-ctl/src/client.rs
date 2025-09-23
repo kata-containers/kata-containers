@@ -704,6 +704,12 @@ fn handle_vm(cfg: &mut Config) -> Result<Option<vm::TestVm>> {
         }
     }
 
+    // set the fs share path in config
+    if vm_instance.share_fs.pid != 0 {
+        debug!(sl!(), "share path: {}", cfg.shared_fs_host_path);
+        cfg.shared_fs_host_path = vm_instance.share_fs.shared_path.clone();
+    }
+
     info!(sl!(), "socket server addr: {}", cfg.server_address);
     Ok(Some(vm_instance))
 }
@@ -732,8 +738,7 @@ fn run_commands(cfg: &Config, commands: Vec<&str>) -> Result<()> {
 
     if !cfg.no_auto_values {
         ttrpc_ctx.add(METADATA_CFG_NS.into(), AUTO_VALUES_CFG_NAME.to_string());
-
-        debug!(sl!(), "Automatic value generation disabled");
+        debug!(sl!(), "Automatic value generation enabled");
     }
 
     // Special-case loading the OCI config file so it is accessible
@@ -743,6 +748,11 @@ fn run_commands(cfg: &Config, commands: Vec<&str>) -> Result<()> {
 
     // Convenience option
     options.insert("bundle-dir".to_string(), cfg.bundle_dir.clone());
+
+    // when running with `--vm`, add host path for fs share to options
+    if !cfg.shared_fs_host_path.is_empty() {
+        options.insert("shared-path".to_string(), cfg.shared_fs_host_path.clone());
+    }
 
     info!(sl!(), "client setup complete";
         "server-address" => cfg.server_address.to_string());
@@ -1063,7 +1073,7 @@ fn agent_cmd_container_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    _options: &mut Options,
+    options: &mut Options,
     args: &str,
 ) -> Result<()> {
     let input: CreateContainerInput = utils::make_request(args)?;
@@ -1075,7 +1085,13 @@ fn agent_cmd_container_create(
 
     let ctx = clone_context(ctx);
 
-    let req = utils::make_create_container_request(input)?;
+    // setup host/guest fs sharing for container rootfs
+    let share_fs_path = match options.get("shared-path") {
+        Some(p) => p.to_string(),
+        None => "".to_string(),
+    };
+
+    let req = utils::make_create_container_request(input, share_fs_path)?;
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1093,7 +1109,7 @@ fn agent_cmd_container_remove(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    _options: &mut Options,
+    options: &mut Options,
     args: &str,
 ) -> Result<()> {
     let req: RemoveContainerRequest = utils::make_request(args)?;
@@ -1109,8 +1125,14 @@ fn agent_cmd_container_remove(
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
 
-    // Un-mount the rootfs mount point.
-    utils::remove_container_image_mount(req.container_id())?;
+    // Unmount the share fs
+    let share_fs_path = match options.get("shared-path") {
+        Some(p) => p.to_string(),
+        None => "".to_string(),
+    };
+
+    // Unmount the rootfs mount point.
+    utils::remove_container_image_mount(req.container_id(), &share_fs_path)?;
 
     Ok(())
 }

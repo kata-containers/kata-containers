@@ -4,7 +4,7 @@
 //
 // Description: Boot UVM for testing container storages/volumes.
 
-use crate::vm::{vm_utils, TestVm};
+use crate::vm::{share_fs_utils, vm_utils, TestVm};
 use anyhow::{anyhow, Context, Result};
 #[cfg(all(
     feature = "cloud-hypervisor",
@@ -132,6 +132,7 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
         add_vsock_device(dev_manager.clone())
             .await
             .context("qemu::adding vsock device")?;
+
         if !hypervisor_config.boot_info.image.is_empty() {
             let blk_config = BlockConfig {
                 path_on_host: hypervisor_config.boot_info.image.clone(),
@@ -145,11 +146,16 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
         }
     }
 
+    // setup filesystem sharing using virtio-fs
+    let fs_info =
+        share_fs_utils::setup_virtio_fs(hypervisor.clone(), dev_manager.clone(), name).await?;
+
     // start vm
-    hypervisor
-        .start_vm(VM_START_TIMEOUT)
-        .await
-        .context("start pod vm")?;
+    if let Err(e) = hypervisor.start_vm(VM_START_TIMEOUT).await {
+        // shutdown the virtiofs daemon
+        let _ = share_fs_utils::shutdown_virtiofsd(fs_info).await;
+        return Err(anyhow!("start_vm error: {:?}", e));
+    }
 
     let agent_socket_addr = hypervisor
         .get_agent_socket()
@@ -162,11 +168,17 @@ pub(crate) async fn boot_vm(name: &str) -> Result<TestVm> {
         hypervisor_instance: hypervisor,
         socket_addr: agent_socket_addr,
         hybrid_vsock: is_hybrid_vsock,
+        share_fs: fs_info,
     })
 }
 
-pub(crate) async fn stop_vm(instance: Arc<dyn Hypervisor>) -> Result<()> {
-    instance.stop_vm().await.context("stopping pod vm")
+pub(crate) async fn stop_vm(instance: TestVm) -> Result<()> {
+    share_fs_utils::shutdown_virtiofsd(instance.share_fs).await?;
+    instance
+        .hypervisor_instance
+        .stop_vm()
+        .await
+        .context("stopping pod vm")
 }
 
 async fn add_block_device(dev_mgr: Arc<RwLock<DeviceManager>>, cfg: BlockConfig) -> Result<()> {
