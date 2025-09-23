@@ -12,6 +12,33 @@
 
 SCRIPT_DIR=$(dirname "$0")
 
+##################
+# Helper functions
+##################
+
+# Sparse "git clone" supporting old git version
+# $1  - origin
+# $2  - revision
+# $3- - sparse checkout paths
+# Note: uses pushd to change into the clonned directory!
+git_sparse_clone() {
+  local origin="$1"
+  local revision="$2"
+  shift 2
+  local sparse_paths=("$@")
+
+  local repo
+  repo=$(basename -s .git "${origin}")
+
+  git init "${repo}"
+  pushd "${repo}" || exit 1
+  git remote add origin "${origin}"
+  git fetch --depth 1 origin "${revision}"
+  git sparse-checkout init --cone
+  git sparse-checkout set "${sparse_paths[@]}"
+  git checkout FETCH_HEAD
+}
+
 ###############################
 # Disable security to allow e2e
 ###############################
@@ -148,11 +175,7 @@ echo "CAA_TAG=\"${CAA_TAG}\""
 echo "PP_IMAGE_ID=\"${PP_IMAGE_ID}\""
 
 # Clone and configure caa
-git clone --revision "${CAA_GIT_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/cloud-api-adaptor.git
-pushd cloud-api-adaptor
-git sparse-checkout init --cone
-git sparse-checkout set src/cloud-api-adaptor/install/
-git checkout
+git_sparse_clone "https://github.com/confidential-containers/cloud-api-adaptor.git" "${CAA_GIT_SHA:-main}" "src/cloud-api-adaptor/install/"
 echo "CAA_GIT_SHA=\"$(git rev-parse HEAD)\""
 pushd src/cloud-api-adaptor
 cat <<EOF > install/overlays/azure/workload-identity.yaml
@@ -219,11 +242,7 @@ echo "AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}" >> install/overlays/azure/serv
 echo "AZURE_TENANT_ID=${AZURE_TENANT_ID}" >> install/overlays/azure/service-principal.env
 
 # Deploy Operator
-git clone --revision "${OPERATOR_SHA:-main}" --depth 1 --no-checkout https://github.com/confidential-containers/operator
-pushd operator
-git sparse-checkout init --cone
-git sparse-checkout set "config/"
-git checkout
+git_sparse_clone "https://github.com/confidential-containers/operator" "${OPERATOR_SHA:-main}" "config/"
 echo "OPERATOR_SHA=\"$(git rev-parse HEAD)\""
 oc apply -k "config/release"
 oc apply -k "config/samples/ccruntime/peer-pods"
