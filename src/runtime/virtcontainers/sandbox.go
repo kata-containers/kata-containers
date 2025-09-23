@@ -1852,6 +1852,8 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createContainers", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
+	var err error
+
 	for i := range s.config.Containers {
 		c, err := newContainer(ctx, s, &s.config.Containers[i])
 		if err != nil {
@@ -1866,20 +1868,30 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 		}
 	}
 
+	defer func() {
+		if err != nil {
+			s.Logger().WithError(err).Error("rollback failing container creation")
+			for _, c := range s.containers {
+				c.rollbackFailingContainerCreation(ctx)
+				s.removeContainer(c.id)
+			}
+		}
+	}()
+
 	// Update resources after having added containers to the sandbox, since
 	// container status is required to know if more resources should be added.
-	if err := s.updateResources(ctx); err != nil {
+	if err = s.updateResources(ctx); err != nil {
 		return err
 	}
-	if err := s.resourceControllerUpdate(ctx); err != nil {
-		return err
-	}
-
-	if err := s.checkVCPUsPinning(ctx); err != nil {
+	if err = s.resourceControllerUpdate(ctx); err != nil {
 		return err
 	}
 
-	if err := s.storeSandbox(ctx); err != nil {
+	if err = s.checkVCPUsPinning(ctx); err != nil {
+		return err
+	}
+
+	if err = s.storeSandbox(ctx); err != nil {
 		return err
 	}
 	return nil
