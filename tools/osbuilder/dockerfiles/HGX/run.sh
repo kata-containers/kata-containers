@@ -12,9 +12,9 @@ set -x
 export ROOTFS_DIR=~/src/rootfs
 export GOPATH=~/src/go
 export PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin
-KATA_REPO_VERSION=${KATA_REPO_VERSION:-main}
+KATA_REPO_VERSION=${KATA_REPO_VERSION:-hgx_rootfs}
 
-kata_repo=github.com/kata-containers/kata-containers
+kata_repo=github.com/LandonTClipp/kata-containers
 kata_repo_path=/kata-containers
 
 log_header() {

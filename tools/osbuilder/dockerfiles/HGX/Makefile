@@ -7,7 +7,7 @@ gpu_kernel:
 	@if [ ! -d ./kernel/ ] || [ -z "$$(ls -A ./kernel/)" ]; then \
 		cd ../../../packaging/kata-deploy/local-build/ && make kernel-nvidia-gpu-tarball; \
 		mkdir -p ./kernel/; \
-		cp -r ../../../packaging/kata-deploy/local-build/build/ ./kernel/; \
+		cp -r ../../../packaging/kata-deploy/local-build/build/* ./kernel/; \
 	else \
 		echo "Skipping gpu_kernel: ./kernel/ already populated."; \
 	fi

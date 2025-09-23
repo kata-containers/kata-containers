@@ -177,6 +177,7 @@ chisseled_iptables() {
 }
 
 chisseled_nvswitch() {
+	find ${stage_one}
 	echo "nvidia: chisseling NVSwitch"
 	echo "nvidia: not implemented yet"
 	exit 1

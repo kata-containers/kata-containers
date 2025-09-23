@@ -7,7 +7,6 @@ ENV NVIDIA_GPU_STACK="compute,driver,nvswitch,version=580"
 ENV ROOTFS_OS="ubuntu"
 ENV OS_VERSION="noble"
 
-ENV KATA_REPO_VERSION="main"
 ENV OUTPUT_DIR="/output"
 
 RUN apt update
