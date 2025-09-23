@@ -35,7 +35,7 @@ copy_kernel()
 	# We assume in this script that the kernel has already been built
 	# and has been provided in the /input/kernel directory.
 	cd ${kata_repo_path}/tools/packaging/kata-deploy/local-build/
-	cp -r /input/kernel/ . 
+	cp -r /input/kernel/* . 
 }
 
 build_rootfs()
