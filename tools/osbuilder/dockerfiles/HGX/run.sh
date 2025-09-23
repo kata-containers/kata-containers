@@ -40,6 +40,7 @@ copy_kernel()
 	cd ${kata_repo_path}/tools/packaging/kata-deploy/local-build/
 	mkdir -p build/
 	cp -r /input/kernel/* ./build/
+	mv ./build/busybox/builddir/kata-static-busybox.tar.zst ./build/
 }
 
 build_rootfs()
