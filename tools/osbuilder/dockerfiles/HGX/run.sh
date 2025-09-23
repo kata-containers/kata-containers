@@ -12,6 +12,7 @@ set -x
 export ROOTFS_DIR=~/src/rootfs
 export GOPATH=~/src/go
 export PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin
+KATA_REPO_VERSION=${KATA_REPO_VERSION:-main}
 
 kata_repo=github.com/kata-containers/kata-containers
 kata_repo_path=/kata-containers
@@ -26,7 +27,7 @@ grab_kata_repos()
 	# Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
 	# Use a green prompt with white text for easy viewing
 	log_header "Clone and checkout Kata repo"
-	[ -d "${kata_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
+	git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
 }
 
 build_kernel()
