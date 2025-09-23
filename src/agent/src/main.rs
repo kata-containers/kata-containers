@@ -466,15 +466,15 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
         _ => vec![],
     };
     for binary in binaries.iter() {
-        let exists = Path::new(binary).try_exists().unwrap_or_else(|error| {
-            match error.kind() {
+        let exists = Path::new(binary)
+            .try_exists()
+            .unwrap_or_else(|error| match error.kind() {
                 ErrorKind::NotFound => {
                     warn!(logger, "{} not found", binary);
                     false
-                },
-                _ => panic!("Path existence check failed for '{}': {}", binary, error)
-            }
-        });
+                }
+                _ => panic!("Path existence check failed for '{}': {}", binary, error),
+            });
 
         if !exists {
             return false;
