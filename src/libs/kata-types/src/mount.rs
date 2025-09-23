@@ -69,7 +69,7 @@ pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
 /// In CoCo scenario, we support force_guest_pull to enforce container image guest pull without remote snapshotter.
 pub const KATA_IMAGE_FORCE_GUEST_PULL: &str = "force_guest_pull";
 /// kata default guest sandbox dir.
-pub const DEFAULT_KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox/";
+pub const DEFAULT_KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox";
 /// default shm directory name.
 pub const SHM_DIR: &str = "shm";
 /// shm device path.
