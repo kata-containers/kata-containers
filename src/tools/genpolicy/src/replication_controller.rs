@@ -54,7 +54,10 @@ impl yaml::K8sResource for ReplicationController {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/controller_utils.go#L541
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/replication/replication_controller.go#L47-L50
+        let suffix = yaml::GENERATE_NAME_SUFFIX_REGEX;
+        yaml::name_regex_from_meta(&self.metadata).map(|prefix| format!("{prefix}-{suffix}"))
     }
 
     fn get_namespace(&self) -> Option<String> {

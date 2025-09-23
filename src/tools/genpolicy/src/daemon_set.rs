@@ -82,7 +82,9 @@ impl yaml::K8sResource for DaemonSet {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/daemon/daemon_controller.go#L1045
+        let suffix = yaml::GENERATE_NAME_SUFFIX_REGEX;
+        yaml::name_regex_from_meta(&self.metadata).map(|prefix| format!("{prefix}-{suffix}"))
     }
 
     fn get_namespace(&self) -> Option<String> {

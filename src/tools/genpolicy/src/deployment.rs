@@ -80,7 +80,11 @@ impl yaml::K8sResource for Deployment {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        // Deployment name - pod template hash - suffix
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/deployment/sync.go#L201
+        let suffix = yaml::GENERATE_NAME_SUFFIX_REGEX;
+        yaml::name_regex_from_meta(&self.metadata)
+            .map(|prefix| format!("{prefix}-{suffix}-{suffix}"))
     }
 
     fn get_namespace(&self) -> Option<String> {
