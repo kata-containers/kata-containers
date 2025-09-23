@@ -397,7 +397,7 @@ func TestCloudHypervisorBootVM(t *testing.T) {
 	clh.APIClient = &clhClientMock{}
 
 	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
-	vmAddNetPutRequest = func(clh *cloudHypervisor) error { return nil }
+	vmAddNetPutRequest = func(clh *cloudHypervisor) ([]chclient.PciDeviceInfo, error) { return nil, nil }
 	defer func() {
 		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
 	}()
@@ -526,7 +526,7 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 	assert.NoError(err)
 
 	savedVmAddNetPutRequestFunc := vmAddNetPutRequest
-	vmAddNetPutRequest = func(clh *cloudHypervisor) error { return nil }
+	vmAddNetPutRequest = func(clh *cloudHypervisor) ([]chclient.PciDeviceInfo, error) { return nil, nil }
 	defer func() {
 		vmAddNetPutRequest = savedVmAddNetPutRequestFunc
 	}()

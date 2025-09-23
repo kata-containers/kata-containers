@@ -159,20 +159,21 @@ func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chc
 
 // This is done in order to be able to override such a function as part of
 // our unit tests, as when testing bootVM we're on a mocked scenario already.
-var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
+var vmAddNetPutRequest = func(clh *cloudHypervisor) ([]chclient.PciDeviceInfo, error) {
+	var netDevicesPciInfo []chclient.PciDeviceInfo
 	if clh.netDevices == nil {
 		clh.Logger().Info("No network device has been configured by the upper layer")
-		return nil
+		return nil, nil
 	}
 
 	addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	conn, err := net.DialUnix("unix", nil, addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Close()
 
@@ -181,13 +182,13 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 
 		netDeviceAsJson, err := json.Marshal(netDevice)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		netDeviceAsIoReader := bytes.NewBuffer(netDeviceAsJson)
 
 		req, err := http.NewRequest(http.MethodPut, "http://localhost/api/v1/vm.add-net", netDeviceAsIoReader)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		req.Header.Set("Accept", "application/json")
@@ -196,7 +197,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 
 		payload, err := httputil.DumpRequest(req, true)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		files := clh.netDevicesFiles[*netDevice.Mac]
@@ -207,33 +208,45 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) error {
 		oob := syscall.UnixRights(fds...)
 		payloadn, oobn, err := conn.WriteMsgUnix([]byte(payload), oob, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if payloadn != len(payload) || oobn != len(oob) {
-			return fmt.Errorf("Failed to send all the request to Cloud Hypervisor. %d bytes expect to send as payload, %d bytes expect to send as oob date,  but only %d sent as payload, and %d sent as oob", len(payload), len(oob), payloadn, oobn)
+			return nil, fmt.Errorf("Failed to send all the request to Cloud Hypervisor. %d bytes expect to send as payload, %d bytes expect to send as oob date,  but only %d sent as payload, and %d sent as oob", len(payload), len(oob), payloadn, oobn)
 		}
 
 		reader := bufio.NewReader(conn)
 		resp, err := http.ReadResponse(reader, req)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		resp.Body.Close()
 		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
-
 		if resp.StatusCode != 200 && resp.StatusCode != 204 {
 			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
-			return fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
+			return nil, fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
+		}
+
+		// Parse the pci info received in response
+		var pciInfo chclient.PciDeviceInfo
+		decoder := json.NewDecoder(resp.Body)
+		err = decoder.Decode(&pciInfo)
+		if err != nil && err.Error() != "EOF" {
+			return nil, err
+		}
+		// PciInfo is received in response after the
+		// vm is booted.
+		if err == nil {
+			netDevicesPciInfo = append(netDevicesPciInfo, pciInfo)
 		}
 	}
 
-	return nil
+	return netDevicesPciInfo, nil
 }
 
 // Cloud hypervisor state
@@ -1008,7 +1021,28 @@ func (clh *cloudHypervisor) hotplugAddNetDevice(e Endpoint) error {
 		return err
 	}
 
-	return clh.vmAddNetPut()
+	pciInfo, err := clh.vmAddNetPut()
+
+	if err != nil || len(pciInfo) == 0 {
+		return err
+	}
+
+	// Set the pci Path for the network endpoint
+	for i, netdev := range *clh.netDevices {
+		if e.HardwareAddr() == *netdev.Mac {
+			if i >= len(pciInfo) {
+				continue
+			}
+			pciPath, err := clhPciInfoToPath(pciInfo[i])
+			if err != nil {
+				return err
+			}
+			e.SetPciPath(pciPath)
+			break
+		}
+	}
+
+	return nil
 }
 
 func (clh *cloudHypervisor) HotplugAddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) (interface{}, error) {
@@ -1615,7 +1649,7 @@ func openAPIClientError(err error) error {
 	return fmt.Errorf("error: %v reason: %s", err, reason)
 }
 
-func (clh *cloudHypervisor) vmAddNetPut() error {
+func (clh *cloudHypervisor) vmAddNetPut() ([]chclient.PciDeviceInfo, error) {
 	return vmAddNetPutRequest(clh)
 }
 
@@ -1646,7 +1680,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
 	}
 
-	err = clh.vmAddNetPut()
+	_, err = clh.vmAddNetPut()
 	if err != nil {
 		return err
 	}
