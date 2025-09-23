@@ -13,7 +13,7 @@ export GOPATH=~/src/go
 export PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin
 
 kata_repo=github.com/kata-containers/kata-containers
-kata_repo_path=/
+kata_repo_path=/kata-containers
 
 log_header() {
 	/bin/echo -e "\n\e[1;42m${1}\e[0m"
