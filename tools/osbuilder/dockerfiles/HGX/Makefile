@@ -4,11 +4,14 @@ docker_build:
 
 .PHONY: gpu_kernel
 gpu_kernel:
-	cd ../../../packaging/kata-deploy/local-build/ && make kernel-nvidia-gpu-tarball
-	mkdir -p ./kernel/
-	cp -r ../../../packaging/kata-deploy/local-build/build/ ./kernel/
+	@if [ ! -d ./kernel/ ] || [ -z "$$(ls -A ./kernel/)" ]; then \
+		cd ../../../packaging/kata-deploy/local-build/ && make kernel-nvidia-gpu-tarball; \
+		mkdir -p ./kernel/; \
+		cp -r ../../../packaging/kata-deploy/local-build/build/ ./kernel/; \
+	else \
+		echo "Skipping gpu_kernel: ./kernel/ already populated."; \
+	fi
 
 .PHONY: all
 all: gpu_kernel docker_build
-	docker run -it -v /dev:/dev -v $(PWD)/output:/output hgx -v ./kernel/:/kata-containers/tools/packaging/kata-deploy/local-build/build/
-
+	docker run -it -v /dev:/dev -v $(PWD)/output:/output -v ./kernel/:/kata-containers/tools/packaging/kata-deploy/local-build/build/ hgx
