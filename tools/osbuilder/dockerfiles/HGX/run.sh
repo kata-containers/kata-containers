@@ -53,7 +53,7 @@ build_rootfs()
 		cd /proc
 	fi
 	log_header "Build ${ROOTFS_OS} rootfs"
-	sudo -E SECCOMP=no EXTRA_PKGS='kmod' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS
+	sudo -E SECCOMP=no EXTRA_PKGS='kmod,apt' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS
 }
 
 
