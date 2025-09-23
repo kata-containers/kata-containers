@@ -30,10 +30,12 @@ grab_kata_repos()
 	git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
 }
 
-build_kernel()
+copy_kernel()
 {
+	# We assume in this script that the kernel has already been built
+	# and has been provided in the /input/kernel directory.
 	cd ${kata_repo_path}/tools/packaging/kata-deploy/local-build/
-	make kernel-nvidia-gpu-tarball
+	cp -r /input/kernel/ . 
 }
 
 build_rootfs()
@@ -102,7 +104,7 @@ main()
 
 	grab_kata_repos
 	#configure_kernel
-	#build_kernel
+	copy_kernel
 	build_rootfs
 	#build_qat_drivers
 	#add_qat_to_rootfs

@@ -23,6 +23,7 @@ RUN apt install -y zstd
 
 # Pull in our local files
 COPY ./run.sh /input/
+COPY ./kernel/ /input/kernel/
 
 # Output is placed in the /output directory.
 # We could make this a VOLUME to force it to be attached to the host, but let's

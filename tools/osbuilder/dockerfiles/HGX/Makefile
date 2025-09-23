@@ -14,4 +14,4 @@ gpu_kernel:
 
 .PHONY: all
 all: gpu_kernel docker_build
-	docker run -it -v /dev:/dev -v $(PWD)/output:/output -v ./kernel/:/kata-containers/tools/packaging/kata-deploy/local-build/build/ hgx
+	docker run -it -v /dev:/dev -v $(PWD)/output:/output hgx
