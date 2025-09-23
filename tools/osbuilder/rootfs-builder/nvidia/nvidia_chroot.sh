@@ -394,7 +394,7 @@ echo "chroot: Setup NVIDIA GPU rootfs stage one"
 
 set_driver_version_type
 setup_apt_repositories
-#install_kernel_dependencies
+install_kernel_dependencies
 install_build_dependencies
 prepare_nvidia_drivers
 build_nvidia_drivers
