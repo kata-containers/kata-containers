@@ -1037,6 +1037,12 @@ impl BaseContainer for LinuxContainer {
         let child_stderr: std::process::Stdio;
 
         if tty {
+            // NOTE(#11842): This code will require changes if we upgrade to nix 0.27+:
+            // - `pseudo` will contain OwnedFds instead of RawFds.
+            // - We'll have to use `OwnedFd::into_raw_fd()` which will
+            //   transfer the ownership to the caller.
+            // - The duplication strategy will not change.
+
             let pseudo = pty::openpty(None, None)?;
             p.term_master = Some(pseudo.master);
             let _ = fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
