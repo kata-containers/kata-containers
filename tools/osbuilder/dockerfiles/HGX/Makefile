@@ -14,4 +14,4 @@ gpu_kernel:
 
 .PHONY: all
 all: gpu_kernel docker_build
-	docker run --privileged --rm -it -v /dev:/dev -v $(PWD)/output:/output hgx
+	docker run --privileged -it -v /dev:/dev -v $(PWD)/output:/output hgx
