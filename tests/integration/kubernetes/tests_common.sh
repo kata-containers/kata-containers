@@ -303,7 +303,7 @@ encode_policy_in_init_data() {
     POLICY="$input"
   fi
 
-  cat <<EOF | gzip -c | base64
+  cat <<EOF | gzip -c | base64 -w0
 version = "0.1.0"
 algorithm = "sha256"
 
