@@ -178,6 +178,7 @@ chisseled_iptables() {
 
 chisseled_nvswitch() {
 	find ${stage_one}
+	cp "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" "/output"
 	echo "nvidia: chisseling NVSwitch"
 	echo "nvidia: not implemented yet"
 	exit 1
