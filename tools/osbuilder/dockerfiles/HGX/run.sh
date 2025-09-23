@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
+set -x
 
 # NOTE: Some env variables are set in the Dockerfile - those that are
 # intended to be over-rideable.
@@ -100,7 +101,7 @@ main()
 
 	grab_kata_repos
 	#configure_kernel
-	build_kernel
+	#build_kernel
 	build_rootfs
 	#build_qat_drivers
 	#add_qat_to_rootfs
