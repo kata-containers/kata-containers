@@ -33,9 +33,13 @@ grab_kata_repos()
 copy_kernel()
 {
 	# We assume in this script that the kernel has already been built
-	# and has been provided in the /input/kernel directory.
+	# and has been provided in the /input/kernel directory. We have
+	# to trick the nvidia rootfs builder into thinking it built the
+	# kernel, so we copy the kernel files into the expected location.
+	log_header "Copy pre-built kernel to the expected location"
 	cd ${kata_repo_path}/tools/packaging/kata-deploy/local-build/
-	cp -r /input/kernel/* . 
+	mkdir -p build/
+	cp -r /input/kernel/* ./build/
 }
 
 build_rootfs()
