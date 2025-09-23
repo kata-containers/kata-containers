@@ -5,6 +5,7 @@ docker_build:
 .PHONY: gpu_kernel
 gpu_kernel:
 	cd ../../../packaging/kata-deploy/local-build/ && make kernel-nvidia-gpu-tarball
+	mkdir -p ./kernel/
 	cp -r ../../../packaging/kata-deploy/local-build/build/ ./kernel/
 
 .PHONY: all
