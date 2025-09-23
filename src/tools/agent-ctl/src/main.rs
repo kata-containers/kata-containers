@@ -215,6 +215,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
         ignore_errors,
         no_auto_values,
         hypervisor_name,
+        shared_fs_host_path: String::new(),
     };
 
     let result = rpc::run(&logger, &mut cfg, commands);

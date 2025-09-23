@@ -7,11 +7,13 @@
 use anyhow::{anyhow, Context, Result};
 use hypervisor::Hypervisor;
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, hypervisor::HYPERVISOR_NAME_QEMU};
+use share_fs_utils::SharedFs;
 use slog::info;
 use std::sync::Arc;
 
+mod share_fs_utils;
 mod vm_ops;
-mod vm_utils;
+pub mod vm_utils;
 
 lazy_static! {
     pub(crate) static ref SUPPORTED_VMMS: Vec<&'static str> =
@@ -24,6 +26,7 @@ pub struct TestVm {
     pub hypervisor_instance: Arc<dyn Hypervisor>,
     pub socket_addr: String,
     pub hybrid_vsock: bool,
+    pub share_fs: SharedFs,
 }
 
 // Helper method to boot a test pod VM
@@ -51,6 +54,6 @@ pub fn remove_vm(instance: TestVm) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
-        .block_on(vm_ops::stop_vm(instance.hypervisor_instance))
+        .block_on(vm_ops::stop_vm(instance))
         .context("stopping the test vm")
 }

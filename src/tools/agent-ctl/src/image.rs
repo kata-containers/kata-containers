@@ -61,5 +61,9 @@ pub fn remove_image_mount(cid: &str) -> Result<()> {
     let bundle_path = scoped_join(CONTAINER_BASE_TEST, cid)?;
     let rootfs_path = scoped_join(bundle_path, "rootfs")?;
     umount(&rootfs_path)?;
+
+    fs::remove_dir_all(CONTAINER_BASE_TEST)?;
+    fs::remove_dir_all(IMAGE_WORK_DIR)?;
+
     Ok(())
 }

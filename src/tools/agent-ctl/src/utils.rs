@@ -5,6 +5,7 @@
 
 use crate::image;
 use crate::types::*;
+use crate::vm::vm_utils;
 use anyhow::{anyhow, Result};
 use oci::{Root as ociRoot, Spec as ociSpec};
 use oci_spec::runtime as oci;
@@ -514,13 +515,14 @@ fn fix_oci_process_args(spec: &mut ttrpcSpec, bundle: &str) -> Result<()> {
         }
     };
 
-    spec.take_Process().set_Args(process.take_Args());
+    spec.mut_Process().set_Args(process.take_Args());
     Ok(())
 }
 
 // Helper function to generate create container request
 pub fn make_create_container_request(
     input: CreateContainerInput,
+    shared_path: String,
 ) -> Result<CreateContainerRequest> {
     // read in the oci configuration template
     if !Path::new(OCI_CONFIG_TEMPLATE).exists() {
@@ -545,13 +547,26 @@ pub fn make_create_container_request(
     );
 
     // Pull and unpack the container image
-    let bundle = image::pull_image(&input.image, &c_id)?;
+    let image_bundle = image::pull_image(&input.image, &c_id)?;
+
+    let bundle = match shared_path.as_str() {
+        "" => image_bundle.clone(),
+        _ => {
+            debug!(
+                sl!(),
+                "make_create_container_request: setting up fs sharing path"
+            );
+            let share_bundle = vm_utils::share_rootfs(&image_bundle, &shared_path, &c_id)?;
+            req.mut_storages().push(vm_utils::get_virtiofs_storage());
+            share_bundle
+        }
+    };
 
     let mut ttrpc_spec = oci_to_ttrpc(&bundle, &c_id, &spec)?;
 
     // Rootfs has been handled with bundle after pulling image
     // Fix the container process argument.
-    fix_oci_process_args(&mut ttrpc_spec, &bundle)?;
+    fix_oci_process_args(&mut ttrpc_spec, &image_bundle)?;
 
     req.set_container_id(c_id);
     req.set_OCI(ttrpc_spec);
@@ -561,6 +576,9 @@ pub fn make_create_container_request(
     Ok(req)
 }
 
-pub fn remove_container_image_mount(c_id: &str) -> Result<()> {
+pub fn remove_container_image_mount(c_id: &str, share_fs: &str) -> Result<()> {
+    if !share_fs.is_empty() {
+        vm_utils::unshare_rootfs(share_fs, c_id)?;
+    }
     image::remove_image_mount(c_id)
 }
