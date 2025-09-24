@@ -151,7 +151,7 @@ impl Container {
                 root,
                 &config.bundle,
                 &config.rootfs_mounts,
-                &annotations,
+                &updated_annotations,
             )
             .await
             .context("handler rootfs")?;
