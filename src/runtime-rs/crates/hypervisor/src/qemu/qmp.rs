@@ -4,11 +4,13 @@
 //
 
 use crate::device::pci_path::PciPath;
-use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
+use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
+use crate::utils::get_jailer_root;
 use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::config::hypervisor::VIRTIO_SCSI;
+use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -825,4 +827,12 @@ pub fn get_pci_path_by_qdev_id(
         path.pop();
     }
     None
+}
+
+pub fn get_qmp_socket_path(sid: &str) -> String {
+    if is_rootless() {
+        [get_jailer_root(sid).as_str(), QMP_SOCKET_FILE].join("/")
+    } else {
+        QMP_SOCKET_FILE.to_string()
+    }
 }
