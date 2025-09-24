@@ -315,7 +315,7 @@ ifeq ($(ARCH), s390x)
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-ccw
 else
     VMROOTFSDRIVER_QEMU := virtio-pmem
-    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-pci
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
 endif
     DEFVCPUS_QEMU := 1
     DEFMAXVCPUS_QEMU := 0
