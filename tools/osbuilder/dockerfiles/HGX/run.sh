@@ -61,7 +61,7 @@ build_image()
 {
 	log_header "Build rootfs image"
 	cd ${kata_repo_path}/tools/osbuilder/image-builder
-	sudo -E ./image_builder.sh ${ROOTFS_DIR}
+	sudo -E AGENT_INIT=yes ./image_builder.sh ${ROOTFS_DIR}
 }
 
 copy_outputs()
