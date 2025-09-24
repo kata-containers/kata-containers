@@ -18,7 +18,7 @@ use common::{
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::{
-    annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY},
+    annotations::{BUNDLE_PATH_KEY, CONTAINER_TYPE_KEY, KATA_ANNO_CFG_HYPERVISOR_INIT_DATA},
     container::{update_ocispec_annotations, POD_CONTAINER, POD_SANDBOX},
     k8s::{self, container_type},
 };
@@ -123,8 +123,11 @@ impl Container {
         };
 
         let bund_path_anno = (BUNDLE_PATH_KEY.to_string(), config.bundle.clone());
-        let updated_annotations =
-            update_ocispec_annotations(&annotations, &[], &[pod_type_anno, bund_path_anno]);
+        let updated_annotations = update_ocispec_annotations(
+            &annotations,
+            &[KATA_ANNO_CFG_HYPERVISOR_INIT_DATA],
+            &[pod_type_anno, bund_path_anno],
+        );
         spec.set_annotations(Some(updated_annotations.clone()));
 
         amend_spec(
