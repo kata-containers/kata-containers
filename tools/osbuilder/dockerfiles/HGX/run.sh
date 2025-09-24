@@ -57,13 +57,20 @@ build_rootfs()
 	sudo -E SECCOMP=no EXTRA_PKGS='kmod,apt' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS
 }
 
+build_image()
+{
+	log_header "Build rootfs image"
+	cd ${kata_repo_path}/tools/osbuilder/image-builder
+	sudo -E ./image_builder.sh ${ROOTFS_DIR}
+}
 
 copy_outputs()
 {
-	log_header "Copy kernel and rootfs to the output directory and provide sample configuration files"
+	log_header "Copy kernel and rootfs to the output directory"
 	mkdir -p ${OUTPUT_DIR} || true
 	sudo cp -r ${kata_repo_path}/tools/packaging/kata-deploy/local-build/build/ $OUTPUT_DIR
 	sudo cp -r ${ROOTFS_DIR} $OUTPUT_DIR/rootfs
+	sudo cp  ${kata_repo_path}/tools/osbuilder/image-builder/kata-containers.img $OUTPUT_DIR
 	/bin/echo -e "Check the ./output directory for the kernel and rootfs\n"
 	
 }
@@ -113,6 +120,7 @@ main()
 	#configure_kernel
 	copy_kernel
 	build_rootfs
+	build_image
 	#build_qat_drivers
 	#add_qat_to_rootfs
 	copy_outputs
