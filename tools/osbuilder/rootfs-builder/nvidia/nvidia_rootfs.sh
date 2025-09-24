@@ -184,10 +184,6 @@ chisseled_nvswitch() {
 	cp -a "${stage_one}/usr/share/nvidia/nvswitch/fabricmanager.cfg" etc/nvidia/nvswitch/fabricmanager.cfg
 	cp -a "${stage_one}/usr/bin/nvidia-fabricmanager-start.sh" usr/bin/nvidia-fabricmanager-start.sh
 	
-
-	echo "nvidia: chisseling NVSwitch"
-	echo "nvidia: not implemented yet"
-	exit 1
 }
 
 chisseled_dcgm() {
