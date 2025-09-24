@@ -178,7 +178,9 @@ chisseled_iptables() {
 
 chisseled_nvswitch() {
 	find ${stage_one}
+	mkdir -p usr/bin/
 	cp -a "${stage_one}/usr/bin/nv-fabricmanager" usr/bin/nv-fabricmanager
+	mkdir -p etc/nvidia/nvswitch
 	cp -a "${stage_one}/usr/share/nvidia/nvswitch/fabricmanager.cfg" etc/nvidia/nvswitch/fabricmanager.cfg
 	cp -a "${stage_one}/usr/bin/nvidia-fabricmanager-start.sh" usr/bin/nvidia-fabricmanager-start.sh
 	
