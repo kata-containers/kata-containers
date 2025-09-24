@@ -45,7 +45,7 @@ setup_nvidia-nvrc() {
 	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
 
 	rm -rf "${PROJECT}"
-	git clone https://github.com/NVIDIA/"${PROJECT}".git
+	git clone --branch fabricmanager --single-branch https://github.com/LandonTClipp/"${PROJECT}".git
 
 	pushd "${PROJECT}" > /dev/null || exit 1
 
@@ -178,6 +178,11 @@ chisseled_iptables() {
 
 chisseled_nvswitch() {
 	find ${stage_one}
+	cp -a "${stage_one}/usr/bin/nv-fabricmanager" usr/bin/nv-fabricmanager
+	cp -a "${stage_one}/usr/share/nvidia/nvswitch/fabricmanager.cfg" etc/nvidia/nvswitch/fabricmanager.cfg
+	cp -a "${stage_one}/usr/bin/nvidia-fabricmanager-start.sh" usr/bin/nvidia-fabricmanager-start.sh
+	
+
 	echo "nvidia: chisseling NVSwitch"
 	echo "nvidia: not implemented yet"
 	exit 1
