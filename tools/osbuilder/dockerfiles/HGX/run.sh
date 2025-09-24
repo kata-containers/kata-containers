@@ -63,7 +63,9 @@ copy_outputs()
 	log_header "Copy kernel and rootfs to the output directory and provide sample configuration files"
 	mkdir -p ${OUTPUT_DIR} || true
 	sudo cp -r ${kata_repo_path}/tools/packaging/kata-deploy/local-build/build/ $OUTPUT_DIR
+	sudo cp -r ${ROOTFS_DIR} $OUTPUT_DIR/rootfs
 	/bin/echo -e "Check the ./output directory for the kernel and rootfs\n"
+	
 }
 
 help() {
