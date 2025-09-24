@@ -278,7 +278,7 @@ compress_rootfs() {
 		strip "${file}"
 	done
 
-	find . -type f -executable | while IFS= read -r file; do
+	find . -type f -executable ! -name '*.sh' | while IFS= read -r file; do
 		strip "${file}"
 		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
 	done
