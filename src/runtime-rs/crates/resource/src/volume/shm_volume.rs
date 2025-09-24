@@ -11,9 +11,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{get_mount_path, get_mount_type};
-use kata_types::mount::{
-    DEFAULT_KATA_GUEST_SANDBOX_DIR, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DEVICE, SHM_DIR,
-};
+use kata_types::mount::{kata_guest_sandbox_dir, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DEVICE, SHM_DIR};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
@@ -27,9 +25,7 @@ impl ShmVolume {
         let mut mount = oci::Mount::default();
         mount.set_destination(m.destination().clone());
         mount.set_typ(Some("bind".to_string()));
-        mount.set_source(Some(
-            PathBuf::from(DEFAULT_KATA_GUEST_SANDBOX_DIR).join(SHM_DIR),
-        ));
+        mount.set_source(Some(PathBuf::from(kata_guest_sandbox_dir()).join(SHM_DIR)));
         mount.set_options(Some(vec!["rbind".to_string()]));
 
         Ok(Self { mount })

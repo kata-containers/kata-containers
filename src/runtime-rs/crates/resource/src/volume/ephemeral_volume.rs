@@ -11,8 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{get_mount_path, get_mount_type};
-use kata_types::mount::DEFAULT_KATA_GUEST_SANDBOX_DIR;
-use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
+use kata_types::mount::{kata_guest_sandbox_dir, KATA_EPHEMERAL_VOLUME_TYPE};
 use nix::sys::stat::stat;
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
@@ -51,7 +50,7 @@ impl EphemeralVolume {
         let file_name = Path::new(source)
             .file_name()
             .context(format!("get file name from {:?}", &m.source()))?;
-        let source = Path::new(DEFAULT_KATA_GUEST_SANDBOX_DIR)
+        let source = Path::new(kata_guest_sandbox_dir().as_str())
             .join(KATA_EPHEMERAL_VOLUME_TYPE)
             .join(file_name)
             .into_os_string()

@@ -6,6 +6,7 @@
 //! Constants and Data Types shared by Kata Containers components.
 
 #![deny(missing_docs)]
+
 #[macro_use]
 extern crate slog;
 #[macro_use]
@@ -46,6 +47,13 @@ pub mod fs;
 /// The Initdata specification defines the key data structures and algorithms for injecting
 /// any well-defined data from an untrusted host into a TEE (Trusted Execution Environment).
 pub mod initdata;
+
+/// rootless vmm
+pub mod rootless;
+
+use std::path::Path;
+
+use crate::rootless::{is_rootless, rootless_dir};
 
 /// Common error codes.
 #[derive(thiserror::Error, Debug)]
@@ -106,4 +114,22 @@ macro_rules! validate_path {
             Ok(())
         }
     }};
+}
+
+/// Helper function that builds paths based on the vmm's rootless state.
+pub fn build_path(path: &str) -> String {
+    if is_rootless() {
+        let path = Path::new(path);
+        let path = if path.is_absolute() {
+            path.strip_prefix("/").unwrap_or(path)
+        } else {
+            path
+        };
+        Path::new(&rootless_dir())
+            .join(path)
+            .to_string_lossy()
+            .to_string()
+    } else {
+        path.to_string()
+    }
 }

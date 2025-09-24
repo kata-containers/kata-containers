@@ -8,7 +8,7 @@ use crate::args::{DirectVolSubcommand, DirectVolumeCommand};
 use anyhow::{anyhow, Ok, Result};
 use futures::executor;
 use kata_types::mount::{
-    get_volume_mount_info, join_path, DirectVolumeMountInfo, KATA_DIRECT_VOLUME_ROOT_PATH,
+    get_volume_mount_info, join_path, kata_direct_volume_root_path, DirectVolumeMountInfo,
     KATA_MOUNT_INFO_FILE_NAME,
 };
 use nix;
@@ -100,8 +100,8 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
 
 // add writes the mount info (json string) of a direct volume into a filesystem path known to Kata Containers.
 pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
-    fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)?;
-    let mount_info_dir_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
+    fs::create_dir_all(kata_direct_volume_root_path())?;
+    let mount_info_dir_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
 
     // create directory if missing
     fs::create_dir_all(&mount_info_dir_path)?;
@@ -120,7 +120,7 @@ pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
 
 // remove deletes the direct volume path including all the files inside it.
 pub fn remove(volume_path: &str) -> Result<Option<String>> {
-    let path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
+    let path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     // removes path and any children it contains.
     fs::remove_dir_all(path)?;
 
@@ -130,7 +130,7 @@ pub fn remove(volume_path: &str) -> Result<Option<String>> {
 // get_sandbox_id_for_volume finds the id of the first sandbox found in the dir.
 // We expect a direct-assigned volume is associated with only a sandbox at a time.
 pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
-    let dir_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
+    let dir_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     let paths = fs::read_dir(dir_path)?;
     for path in paths {
         let path = path?;
@@ -169,15 +169,15 @@ mod tests {
         // this test has to run as root, so has to manually cleanup afterwards
         skip_if_not_root!();
 
-        // create KATA_DIRECT_VOLUME_ROOT_PATH first as safe_path::scoped_join
+        // create kata_direct_volume_root_path() first as safe_path::scoped_join
         // requires prefix dir to exist
-        fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)
+        fs::create_dir_all(kata_direct_volume_root_path())
             .expect("create kata direct volume root path failed");
 
         let test_sandbox_id = "sandboxid_test_file";
         let test_volume_path = String::from("a/b/c");
         let joined_volume_path =
-            join_path(KATA_DIRECT_VOLUME_ROOT_PATH, &test_volume_path).unwrap();
+            join_path(kata_direct_volume_root_path().as_str(), &test_volume_path).unwrap();
 
         let test_file_dir = joined_volume_path.join(test_sandbox_id);
         fs::create_dir_all(&joined_volume_path).expect("failed to mkdir -p");
@@ -260,7 +260,7 @@ mod tests {
         // testing with isn't really viable here since the path is then b64 encoded,
         // so this test had to run as root and call `remove()` to manully cleanup afterwards.
 
-        fs::create_dir_all(KATA_DIRECT_VOLUME_ROOT_PATH)
+        fs::create_dir_all(kata_direct_volume_root_path())
             .expect("create kata direct volume root path failed");
 
         let base_dir = tempdir().expect("failed to create tmpdir");
