@@ -216,6 +216,7 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionRaw<B> {
                 (self.addr as usize + offset) as *mut _,
                 count,
                 self.bitmap.slice_at(offset),
+                None,
             )
         })
     }

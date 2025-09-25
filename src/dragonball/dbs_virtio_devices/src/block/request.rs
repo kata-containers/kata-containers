@@ -8,7 +8,7 @@ use std::result;
 
 use log::error;
 use virtio_bindings::bindings::virtio_blk::*;
-use virtio_queue::{Descriptor, DescriptorChain};
+use virtio_queue::{desc::split::Descriptor, DescriptorChain};
 use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemory, GuestMemoryError};
 
 use crate::{
