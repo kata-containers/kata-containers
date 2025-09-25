@@ -88,7 +88,7 @@ vsock-exporter = { path = "vsock-exporter" }
 mem-agent = { path = "../mem-agent", package = "mem-agent-lib" }
 
 kata-sys-util = { path = "../libs/kata-sys-util" }
-kata-types = { path = "../libs/kata-types" }
+kata-types = { path = "../libs/kata-types", features = ["safe-path"] }
 # Note: this crate sets the slog 'max_*' features which allows the log level
 # to be modified at runtime.
 logging = { path = "../libs/logging" }

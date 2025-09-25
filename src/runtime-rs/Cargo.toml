@@ -34,7 +34,7 @@ wasm_container = { path = "crates/runtimes/wasm_container" }
 
 # Local dependencies from `src/libs`
 kata-sys-util = { path = "../libs/kata-sys-util" }
-kata-types = { path = "../libs/kata-types" }
+kata-types = { path = "../libs/kata-types", features = ["safe-path"] }
 logging = { path = "../libs/logging" }
 protocols = { path = "../libs/protocols", features = ["async"] }
 runtime-spec = { path = "../libs/runtime-spec" }
