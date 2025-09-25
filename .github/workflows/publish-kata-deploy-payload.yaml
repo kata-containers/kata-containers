@@ -38,6 +38,7 @@ permissions: {}
 
 jobs:
   kata-payload:
+    name: kata-payload
     permissions:
       contents: read
       packages: write

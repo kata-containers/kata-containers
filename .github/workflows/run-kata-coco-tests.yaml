@@ -40,6 +40,7 @@ permissions: {}
 
 jobs:
   run-k8s-tests-on-tdx:
+    name: run-k8s-tests-on-tdx
     strategy:
       fail-fast: false
       matrix:
@@ -125,6 +126,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   run-k8s-tests-sev-snp:
+    name: run-k8s-tests-sev-snp
     strategy:
       fail-fast: false
       matrix:
@@ -211,6 +213,7 @@ jobs:
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
+    name: run-k8s-tests-coco-nontee
     strategy:
       fail-fast: false
       matrix:

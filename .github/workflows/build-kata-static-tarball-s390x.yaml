@@ -31,6 +31,7 @@ permissions: {}
 
 jobs:
   build-asset:
+    name: build-asset
     runs-on: s390x
     permissions:
       contents: read
@@ -119,6 +120,7 @@ jobs:
           if-no-files-found: error
 
   build-asset-rootfs:
+    name: build-asset-rootfs
     runs-on: s390x
     needs: build-asset
     permissions:
@@ -186,6 +188,7 @@ jobs:
           if-no-files-found: error
 
   build-asset-boot-image-se:
+    name: build-asset-boot-image-se
     runs-on: s390x
     needs: [build-asset, build-asset-rootfs]
     permissions:
@@ -235,6 +238,7 @@ jobs:
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
+    name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
     needs: [build-asset-rootfs, build-asset-boot-image-se]
     strategy:
@@ -250,6 +254,7 @@ jobs:
           name: kata-artifacts-s390x-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
+    name: build-asset-shim-v2
     runs-on: s390x
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
@@ -311,6 +316,7 @@ jobs:
           if-no-files-found: error
 
   create-kata-tarball:
+    name: create-kata-tarball
     runs-on: s390x
     needs:
       - build-asset

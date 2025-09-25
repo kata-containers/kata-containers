@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   shellcheck-required:
+    name: shellcheck-required
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout the code

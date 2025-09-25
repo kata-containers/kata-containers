@@ -29,6 +29,7 @@ permissions: {}
 
 jobs:
   run-nvidia-gpu-tests-on-amd64:
+    name: run-nvidia-gpu-tests-on-amd64
     strategy:
       fail-fast: false
       matrix:

@@ -30,6 +30,7 @@ permissions: {}
 
 jobs:
   build-asset:
+    name: build-asset
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -157,6 +158,7 @@ jobs:
           if-no-files-found: error
 
   build-asset-rootfs:
+    name: build-asset-rootfs
     runs-on: ubuntu-22.04
     needs: build-asset
     permissions:
@@ -229,6 +231,7 @@ jobs:
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
+    name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
     needs: build-asset-rootfs
     strategy:
@@ -246,6 +249,7 @@ jobs:
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts-for-release:
+    name: remove-rootfs-binary-artifacts-for-release
     runs-on: ubuntu-22.04
     needs: build-asset-rootfs
     strategy:
@@ -259,6 +263,7 @@ jobs:
           name: kata-artifacts-amd64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
+    name: build-asset-shim-v2
     runs-on: ubuntu-22.04
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts, remove-rootfs-binary-artifacts-for-release]
     permissions:
@@ -320,6 +325,7 @@ jobs:
           if-no-files-found: error
 
   create-kata-tarball:
+    name: create-kata-tarball
     runs-on: ubuntu-22.04
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:

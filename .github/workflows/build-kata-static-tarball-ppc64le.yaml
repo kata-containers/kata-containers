@@ -28,6 +28,7 @@ permissions: {}
 
 jobs:
   build-asset:
+    name: build-asset
     permissions:
       contents: read
       packages: write
@@ -87,6 +88,7 @@ jobs:
           if-no-files-found: error
 
   build-asset-rootfs:
+    name: build-asset-rootfs
     runs-on: ppc64le
     needs: build-asset
     permissions:
@@ -153,6 +155,7 @@ jobs:
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
+    name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
     needs: build-asset-rootfs
     strategy:
@@ -166,6 +169,7 @@ jobs:
           name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
+    name: build-asset-shim-v2
     runs-on: ppc64le
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
@@ -225,6 +229,7 @@ jobs:
           if-no-files-found: error
 
   create-kata-tarball:
+    name: create-kata-tarball
     runs-on: ppc64le
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:

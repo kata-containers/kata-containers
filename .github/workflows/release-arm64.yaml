@@ -26,6 +26,7 @@ jobs:
       attestations: write
 
   kata-deploy:
+    name: kata-deploy
     needs: build-kata-static-tarball-arm64
     permissions:
       contents: read

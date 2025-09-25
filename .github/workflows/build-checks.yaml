@@ -11,6 +11,7 @@ permissions: {}
 name: Build checks
 jobs:
   check:
+    name: check
     runs-on: ${{ inputs.instance }}
     strategy:
       fail-fast: false

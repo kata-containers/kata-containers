@@ -26,6 +26,7 @@ permissions: {}
 
 jobs:
   run-kata-deploy-tests:
+    name: run-kata-deploy-tests
     strategy:
       fail-fast: false
       matrix:

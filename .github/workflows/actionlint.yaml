@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   run-actionlint:
+    name: run-actionlint
     env:
       GH_TOKEN: ${{ github.token }}
     runs-on: ubuntu-24.04

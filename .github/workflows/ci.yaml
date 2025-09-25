@@ -183,6 +183,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-publish-tee-confidential-unencrypted-image:
+    name: build-and-publish-tee-confidential-unencrypted-image
     permissions:
       contents: read
       packages: write
@@ -224,6 +225,7 @@ jobs:
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   publish-csi-driver-amd64:
+    name: publish-csi-driver-amd64
     needs: build-kata-static-tarball-amd64
     permissions:
       contents: read

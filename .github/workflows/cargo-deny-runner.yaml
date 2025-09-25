@@ -15,6 +15,7 @@ permissions: {}
 
 jobs:
   cargo-deny-runner:
+    name: cargo-deny-runner
     runs-on: ubuntu-22.04
 
     steps:

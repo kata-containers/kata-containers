@@ -17,6 +17,7 @@ permissions: {}
 
 jobs:
   run-containerd-sandboxapi:
+    name: run-containerd-sandboxapi
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -65,6 +66,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
+    name: run-containerd-stability
     strategy:
       fail-fast: false
       matrix:
@@ -106,6 +108,7 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-docker-tests:
+    name: run-docker-tests
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them

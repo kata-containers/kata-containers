@@ -1,3 +1,5 @@
+name: kata-runtime-classes-sync
+
 on:
   pull_request:
     types:
@@ -14,6 +16,7 @@ concurrency:
 
 jobs:
   kata-deploy-runtime-classes-check:
+    name: kata-deploy-runtime-classes-check
     runs-on: ubuntu-22.04
     steps:
     - name: Checkout code

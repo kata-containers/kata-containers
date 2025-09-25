@@ -8,6 +8,7 @@ permissions: {}
 
 jobs:
   check-internal-test-result:
+    name: check-internal-test-result
     runs-on: s390x
     strategy:
       fail-fast: false

@@ -8,6 +8,7 @@ permissions: {}
 
 jobs:
   cleanup-resources:
+    name: cleanup-resources
     runs-on: ubuntu-22.04
     permissions:
       id-token: write # Used for OIDC access to log into Azure
