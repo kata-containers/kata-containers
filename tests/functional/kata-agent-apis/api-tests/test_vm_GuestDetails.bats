@@ -9,15 +9,17 @@ load "${BATS_TEST_DIRNAME}/../setup_common.sh"
 
 setup_file() {
     info "setup"
-    sudo rm qmp.sock console.sock || echo "No existing qmp.sock/console.sock"
 }
 
 @test "Test GetGuestDetails: Boot qemu pod vm and run GetGuestDetails" {
     info "Boot qemu vm, establish connection with agent inside the vm and send GetGuestDetails command"
+    local test_dir=$(mktemp -d)
+    pushd $test_dir
     local cmds=()
     cmds+=("--vm qemu -c GetGuestDetails")
     run_agent_ctl "${cmds[@]}"
-    sudo rm qmp.sock console.sock
+    popd
+    rm -rf $test_dir
 }
 
 @test "Test GetGuestDetails: Boot cloud hypervisor pod vm and run GetGuestDetails" {
