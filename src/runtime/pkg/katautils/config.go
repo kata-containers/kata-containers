@@ -393,10 +393,8 @@ func (h hypervisor) machineType() string {
 }
 
 func (h hypervisor) qgsPort() uint32 {
-	if h.QgsPort == 0 {
-		return defaultQgsPort
-	}
-
+	// TOML parser guarantees that only integers >= 0 are accepted. Any
+	// value from the parser is OK, including 0.
 	return h.QgsPort
 }
 
