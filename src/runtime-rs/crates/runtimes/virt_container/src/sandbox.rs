@@ -46,7 +46,7 @@ use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use protobuf::SpecialFields;
 use resource::coco_data::initdata::{
-    InitDataConfig, KATA_INIT_DATA_IMAGE, KATA_SHARED_INIT_DATA_PATH,
+    kata_shared_init_data_path, InitDataConfig, KATA_INIT_DATA_IMAGE,
 };
 use resource::coco_data::initdata_block;
 use resource::manager::ManagerArgs;
@@ -468,7 +468,7 @@ impl VirtSandbox {
         );
 
         // initdata within compressed rawblock
-        let image_path = Path::new(KATA_SHARED_INIT_DATA_PATH)
+        let image_path = Path::new(kata_shared_init_data_path().as_str())
             .join(&self.sid)
             .join(KATA_INIT_DATA_IMAGE);
         initdata_block::push_data(&image_path, &initdata)?;

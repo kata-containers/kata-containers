@@ -16,8 +16,8 @@ pub use utils::{
     do_get_guest_path, do_get_guest_share_path, do_get_host_path, get_host_rw_shared_path,
 };
 mod virtio_fs_share_mount;
+pub use virtio_fs_share_mount::ephemeral_path;
 use virtio_fs_share_mount::VirtiofsShareMount;
-pub use virtio_fs_share_mount::EPHEMERAL_PATH;
 pub mod sandbox_bind_mounts;
 
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
@@ -25,7 +25,7 @@ use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use kata_types::config::hypervisor::SharedFsInfo;
+use kata_types::{build_path, config::hypervisor::SharedFsInfo};
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
 
@@ -35,13 +35,21 @@ const VIRTIO_FS: &str = "virtio-fs";
 const _VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 
-const KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
+const DEFAULT_KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 
-/// share fs (for example virtio-fs) mount path in the guest
-pub const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+/// default share fs (for example virtio-fs) mount path in the guest
+const DEFAULT_KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
+
+pub fn kata_host_shared_dir() -> String {
+    build_path(DEFAULT_KATA_HOST_SHARED_DIR)
+}
+
+pub fn kata_guest_share_dir() -> String {
+    build_path(DEFAULT_KATA_GUEST_SHARE_DIR)
+}
 
 #[async_trait]
 pub trait ShareFs: Send + Sync {

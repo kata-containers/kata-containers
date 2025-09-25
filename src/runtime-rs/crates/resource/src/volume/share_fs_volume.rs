@@ -32,7 +32,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::KATA_GUEST_SHARE_DIR;
+use crate::share_fs::kata_guest_share_dir;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
@@ -988,7 +988,10 @@ fn generate_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
 
     Ok(format!(
         "{}{}-{}-{}",
-        KATA_GUEST_SHARE_DIR, cid, hex_str, dest_base
+        kata_guest_share_dir(),
+        cid,
+        hex_str,
+        dest_base
     ))
 }
 

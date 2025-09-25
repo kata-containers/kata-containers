@@ -88,7 +88,7 @@ impl ShareFs for ShareVirtioFsInline {
             fs_type: String::from(FS_TYPE_VIRTIO_FS),
             fs_group: None,
             options: SHARED_DIR_VIRTIO_FS_OPTIONS.clone(),
-            mount_point: String::from(KATA_GUEST_SHARE_DIR),
+            mount_point: kata_guest_share_dir(),
         };
 
         storages.push(shared_volume);

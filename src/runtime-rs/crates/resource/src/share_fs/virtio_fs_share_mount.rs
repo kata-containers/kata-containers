@@ -8,13 +8,15 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::mount::{bind_remount, umount_all, umount_timeout};
-use kata_types::k8s::is_watchable_mount;
+use kata_types::{build_path, k8s::is_watchable_mount};
 use std::fs;
 use std::path::Path;
 
 const WATCHABLE_PATH_NAME: &str = "watchable";
 const WATCHABLE_BIND_DEV_TYPE: &str = "watchable-bind";
-pub const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
+const DEFAULT_EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
+
+use crate::share_fs::kata_guest_share_dir;
 
 use super::{
     get_host_rw_shared_path,
@@ -22,9 +24,12 @@ use super::{
         self, do_get_host_path, get_host_ro_shared_path, get_host_shared_path,
         mkdir_with_permissions,
     },
-    ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig, ShareFsVolumeConfig,
-    KATA_GUEST_SHARE_DIR, PASSTHROUGH_FS_DIR,
+    ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig, ShareFsVolumeConfig, PASSTHROUGH_FS_DIR,
 };
+
+pub fn ephemeral_path() -> String {
+    build_path(DEFAULT_EPHEMERAL_PATH)
+}
 
 #[derive(Debug)]
 pub struct VirtiofsShareMount {
@@ -88,7 +93,7 @@ impl ShareFsMount for VirtiofsShareMount {
             let file_name = Path::new(&guest_path)
                 .file_name()
                 .context("get file name from guest path")?;
-            let watchable_guest_mount = Path::new(KATA_GUEST_SHARE_DIR)
+            let watchable_guest_mount = Path::new(kata_guest_share_dir().as_str())
                 .join(PASSTHROUGH_FS_DIR)
                 .join(WATCHABLE_PATH_NAME)
                 .join(file_name)

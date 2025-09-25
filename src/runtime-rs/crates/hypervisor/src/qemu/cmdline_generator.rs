@@ -4,13 +4,17 @@
 //
 
 use crate::device::topology::{PCIePortBusPrefix, TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
-use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap, SocketAddress};
+use crate::qemu::qmp::get_qmp_socket_path;
+use crate::utils::{
+    chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, SocketAddress,
+};
 
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::VIRTIO_SCSI;
+use kata_types::rootless::is_rootless;
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::collections::HashMap;
@@ -1638,12 +1642,15 @@ pub struct QmpSocket {
 }
 
 impl QmpSocket {
-    fn new(proto: MonitorProtocol) -> Result<Self> {
+    fn new(sid: &str, proto: MonitorProtocol) -> Result<Self> {
         let qmp_socket = match proto {
             MonitorProtocol::Qmp | MonitorProtocol::QmpPretty => {
-                // let sock_path = root_path.join(QMP_SOCKET_FILE);
+                let sock_path = PathBuf::from(get_qmp_socket_path(sid));
                 let listener =
-                    UnixListener::bind(QMP_SOCKET_FILE).context("unix listener bind failed.")?;
+                    UnixListener::bind(&sock_path).context("unix listener bind failed.")?;
+                if is_rootless() {
+                    chown_to_parent(sock_path.as_path()).context("chown qmp socket failed")?;
+                }
                 let raw_fd = listener.into_raw_fd();
                 clear_cloexec(raw_fd).context("clearing unix listenser O_CLOEXEC failed")?;
                 let sock_file = unsafe { File::from_raw_fd(raw_fd) };
@@ -2150,7 +2157,7 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
-            qmp_socket: QmpSocket::new(MonitorProtocol::Qmp)?,
+            qmp_socket: QmpSocket::new(id, MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
             devices: Vec::new(),
             ccw_subchannel,
@@ -2194,7 +2201,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {
-        let monitor = QmpSocket::new(MonitorProtocol::new(proto))?;
+        let monitor = QmpSocket::new(self.id.as_str(), MonitorProtocol::new(proto))?;
         self.devices.push(Box::new(monitor));
 
         Ok(())

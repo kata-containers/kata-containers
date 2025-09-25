@@ -3,23 +3,31 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
+use super::cmdline_generator::{get_network_device, QemuCmdLine};
 use super::qmp::Qmp;
 use crate::device::topology::PCIePort;
+use crate::qemu::qmp::get_qmp_socket_path;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, selinux,
     HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
 
-use crate::utils::{bytes_to_megs, enter_netns, megs_to_bytes};
+use crate::utils::{
+    bytes_to_megs, create_dir_all_with_inherit_owner, enter_netns, get_jailer_root, megs_to_bytes,
+    set_groups, vm_cleanup,
+};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
+use kata_types::build_path;
+use kata_types::config::hypervisor::RootlessUser;
+use kata_types::rootless::is_rootless;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
 };
+use nix::unistd::{setgid, setuid, Gid, Uid};
 use persist::sandbox_persist::Persist;
 use std::cmp::Ordering;
 use std::convert::TryInto;
@@ -82,8 +90,8 @@ impl QemuInner {
             }
         }
 
-        let vm_path = [KATA_PATH, self.id.as_str()].join("/");
-        std::fs::create_dir_all(vm_path)?;
+        let vm_path = Path::new(build_path(KATA_PATH).as_str()).join(self.id.as_str());
+        create_dir_all_with_inherit_owner(vm_path, 0o750)?;
 
         Ok(())
     }
@@ -208,6 +216,23 @@ impl QemuInner {
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
+        let user: Option<RootlessUser> = if is_rootless() {
+            Some(
+                self.config
+                    .security_info
+                    .rootless_user
+                    .clone()
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "rootless user must be specified for rootless qemu",
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+
         // we need move the qemu process into Network Namespace and set SELinux label.
         unsafe {
             let selinux_label = self.config.security_info.selinux_label.clone();
@@ -225,6 +250,16 @@ impl QemuInner {
                         );
                     }
                 }
+                if let Some(user) = &user {
+                    let groups = user.groups.clone();
+                    let gid = Gid::from_raw(user.gid);
+                    let uid = Uid::from_raw(user.uid);
+
+                    let _ = set_groups(&groups);
+                    let _ = setgid(gid).context("setgid failed");
+                    let _ = setuid(uid).context("setuid failed");
+                }
+
                 Ok(())
             });
         }
@@ -242,7 +277,9 @@ impl QemuInner {
 
         tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
-        match Qmp::new(QMP_SOCKET_FILE) {
+        let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
+
+        match Qmp::new(&qmp_socket_path) {
             Ok(qmp) => self.qmp = Some(qmp),
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
@@ -358,9 +395,8 @@ impl QemuInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "QemuInner::cleanup()");
-        let vm_path = [KATA_PATH, self.id.as_str()].join("/");
-        std::fs::remove_dir_all(vm_path)?;
-        Ok(())
+        let vm_path = [build_path(KATA_PATH).as_str(), self.id.as_str()].join("/");
+        vm_cleanup(&self.config, vm_path.as_str())
     }
 
     pub(crate) async fn resize_vcpu(
@@ -417,7 +453,9 @@ impl QemuInner {
     }
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
-        Ok("".into())
+        let root_path = get_jailer_root(self.id.as_str());
+        create_dir_all_with_inherit_owner(&root_path, 0o750)?;
+        Ok(root_path)
     }
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
