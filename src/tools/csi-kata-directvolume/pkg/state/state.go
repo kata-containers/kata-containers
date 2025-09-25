@@ -37,6 +37,8 @@ type Volume struct {
 	// Published contains the target paths where the volume
 	// was published.
 	Published Strings
+
+	Metadata map[string]string
 }
 
 // State is the interface that the rest of the code has to use to
