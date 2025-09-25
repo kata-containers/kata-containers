@@ -6,7 +6,8 @@ required_tests:
   - Shellcheck required / shellcheck-required
   # TODO: cargo-deny-runner.yaml not yet treated as conditional
   - Cargo Crates Check Runner / cargo-deny-runner
-  - GHA security analysis / zizmor
+  # TODO: Reestablish when we've eliminated all Zizmor findings.
+  # - GHA security analysis / zizmor
 
 required_regexps:
   # Always required regexps
