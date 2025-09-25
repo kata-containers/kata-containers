@@ -11,6 +11,7 @@ logging::logger_with_subsystem!(sl, "virt-container");
 
 mod container_manager;
 pub mod health_check;
+pub mod rootfs;
 pub mod sandbox;
 pub mod sandbox_persist;
 

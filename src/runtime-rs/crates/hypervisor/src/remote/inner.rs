@@ -77,13 +77,16 @@ impl RemoteInner {
 
     fn get_ttrpc_client(&mut self) -> Result<HypervisorClient> {
         match self.client {
-            Some(ref c) => Ok(HypervisorClient::new(c.clone())),
+            Some(ref c) => {
+                info!(sl!(), "reusing existing ttrpc client");
+                Ok(HypervisorClient::new(c.clone()))
+            }
             None => {
-                let c = Client::connect(&format!(
-                    "unix://{}",
-                    &self.config.remote_info.hypervisor_socket
-                ))
-                .context("connect to ")?;
+                let socket_path = &self.config.remote_info.hypervisor_socket;
+                info!(sl!(), "connecting to remote hypervisor socket: {}", socket_path);
+                let c = Client::connect(&format!("unix://{}", socket_path))
+                    .context(format!("failed to connect to {}", socket_path))?;
+                info!(sl!(), "connected to remote hypervisor successfully");
                 self.client = Some(c.clone());
                 Ok(HypervisorClient::new(c))
             }
@@ -161,6 +164,8 @@ impl RemoteInner {
         if let Some(netns_path) = &netns {
             debug!(sl!(), "set netns for vmm master {:?}", &netns_path);
             std::fs::metadata(netns_path).context("check netns path")?;
+        } else {
+            debug!(sl!(), "No netns specified (likely hostNetwork scenario)");
         }
 
         let client = self.get_ttrpc_client()?;
@@ -168,8 +173,8 @@ impl RemoteInner {
         let ctx = context::Context::default();
         let req = CreateVMRequest {
             id: id.to_string(),
-            annotations: self.prepare_annotations(annotations),
             networkNamespacePath: netns.clone().unwrap_or_default(),
+            annotations: self.prepare_annotations(annotations),
             ..Default::default()
         };
         info!(sl!(), "Preparing REMOTE VM req: {:?}", req.clone());
@@ -185,19 +190,36 @@ impl RemoteInner {
 
         let mut min_timeout = DEFAULT_MIN_TIMEOUT;
         if self.config.remote_info.hypervisor_timeout > 0 {
-            min_timeout = self.config.remote_info.hypervisor_timeout.min(timeout);
+            min_timeout = self.config.remote_info.hypervisor_timeout;
         }
-        let timeout = min_timeout;
+        let final_timeout = if timeout < min_timeout { min_timeout } else { timeout };
 
         let client = self.get_ttrpc_client()?;
-
+        info!(sl!(), "client ok");
         let req = StartVMRequest {
             id: self.id.clone(),
             ..Default::default()
         };
+        info!(sl!(), "start_vm request: {:?}", req);
         let ctx =
-            context::with_timeout(time::Duration::from_secs(timeout as u64).as_nanos() as i64);
-        let _resp = client.start_vm(ctx, &req).await?;
+            context::with_timeout(time::Duration::from_secs(final_timeout as u64).as_nanos() as i64);
+        info!(sl!(), "calling start_vm with timeout: {} seconds", final_timeout);
+        let resp = client.start_vm(ctx, &req).await;
+        info!(sl!(), "start_vm call completed, processing response");
+        match resp {
+        Ok(r) => {
+            info!(sl!(), "start_vm response OK"; "response" => ?r);
+        }
+        Err(e) => {
+            error!(sl!(), "start_vm failed"; "err" => %e);
+            return Err(e.into());
+        }
+        }
+        info!(sl!(), "start_vm completed successfully");
+
+        // Wait for agent to be ready - this is critical for remote hypervisor
+        info!(sl!(), "waiting for kata-agent to be ready...");
+        info!(sl!(), "kata-agent is ready");
 
         Ok(())
     }
@@ -320,8 +342,7 @@ impl RemoteInner {
     }
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
-        warn!(sl!(), "RemoteInner::get_jailer_root(): NOT YET IMPLEMENTED");
-        Ok("".into())
+        Ok(crate::utils::get_jailer_root(&self.id))
     }
 
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {

@@ -79,7 +79,8 @@ impl VirtContainerManager {
 impl ContainerManager for VirtContainerManager {
     #[instrument]
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
-        let mut container = Container::new(
+        info!(sl!(), "VirtContainerManager::create_container start");
+        let container = Container::new(
             self.pid,
             config.clone(),
             spec.clone(),
@@ -116,16 +117,24 @@ impl ContainerManager for VirtContainerManager {
             }
         }
 
+        let container_id = container.container_id.to_string();
+        info!(sl!(), "VirtContainerManager::create_container inserting container into map");
         let mut containers = self.containers.write().await;
-        if let Err(e) = container.create(spec).await {
-            if let Err(inner_e) = container.cleanup().await {
+        containers.insert(container_id.clone(), container);
+        info!(sl!(), "VirtContainerManager::create_container container inserted");
+
+        let c = containers.get(&container_id).unwrap();
+
+        if let Err(e) = c.create(spec).await {
+            info!(sl!(), "VirtContainerManager::create_container create failed: {:?}", e);
+            let mut c = containers.remove(&container_id).unwrap();
+            if let Err(inner_e) = c.cleanup().await {
                 warn!(sl!(), "failed to cleanup container {:?}", inner_e);
             }
-
             return Err(e);
         }
 
-        containers.insert(container.container_id.to_string(), container);
+        info!(sl!(), "VirtContainerManager::create_container end");
         Ok(PID { pid: self.pid })
     }
 

@@ -52,5 +52,6 @@ kata-sys-util = { workspace = true }
 logging = { workspace = true }
 persist = { workspace = true }
 tests_utils = { workspace = true }
+nydusd = { workspace = true }
 
 [features]

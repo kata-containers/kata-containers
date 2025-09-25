@@ -30,7 +30,8 @@ use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
-use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
+use hypervisor::utils::get_hvsock_path;
+use hypervisor::{HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
@@ -42,6 +43,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
+use nydusd::Nydusd;
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use protobuf::SpecialFields;
@@ -97,6 +99,7 @@ pub struct VirtSandbox {
     monitor: Arc<HealthCheck>,
     sandbox_config: Option<SandboxConfig>,
     shm_size: u64,
+    nydusd: Arc<RwLock<Option<Arc<dyn Nydusd>>>>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -129,6 +132,7 @@ impl VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
+            nydusd: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -155,8 +159,16 @@ impl VirtSandbox {
         }
 
         // prepare sharefs device config
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        // Note: Sandbox-level nydusd is not needed as Container-level nydusd
+        // is already handled by nydus snapshotter. We'll use the existing
+        // fuse mode nydusd instances started by nydus snapshotter.
+        info!(sl!(), "Skipping sandbox-level nydusd startup - using container-level nydusd from snapshotter");
+        
+        // TODO: If needed, we can add logic here to verify that nydus snapshotter
+        // is available and properly configured.
         let virtio_fs_config =
-            ResourceConfig::ShareFs(self.hypervisor.hypervisor_config().await.shared_fs);
+            ResourceConfig::ShareFs(hypervisor_config.shared_fs);
         resource_configs.push(virtio_fs_config);
 
         // prepare VM rootfs device config
@@ -328,9 +340,17 @@ impl VirtSandbox {
     }
 
     async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
-        let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
-        let security_info = self.hypervisor.hypervisor_config().await.security_info;
-
+        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        let boot_info = hypervisor_config.boot_info;
+        let security_info = hypervisor_config.security_info;
+        
+        // For remote hypervisor, we don't need to check image/initrd
+        // because the VM is managed by cloud-api-adaptor
+        let hypervisor_state = self.hypervisor.save_state().await?;
+        if hypervisor_state.hypervisor_type.as_str() == HYPERVISOR_REMOTE {
+            info!(sl!(), "Skipping rootfs config for remote hypervisor");
+            return Ok(None);
+        }
         if !boot_info.initrd.is_empty() {
             return Ok(None);
         }
@@ -707,6 +727,11 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn stop(&self) -> Result<()> {
+        if let Some(nydusd) = self.nydusd.read().await.as_ref() {
+            info!(sl!(), "begin stop nydusd daemon");
+            nydusd.stop().await.context("stop nydusd")?;
+        }
+
         let mut sandbox_inner = self.inner.write().await;
 
         if sandbox_inner.state != SandboxState::Stopped {
@@ -937,6 +962,7 @@ impl Persist for VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             sandbox_config: None,
             shm_size: DEFAULT_SHM_SIZE,
+            nydusd: Arc::new(RwLock::new(None)),
         })
     }
 }

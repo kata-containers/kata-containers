@@ -11,7 +11,7 @@ use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DRAGONBALL_VCPUS;
 use crate::config::default::MIN_DRAGONBALL_MEMORY_SIZE_MB;
 use crate::config::hypervisor::{
-    VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
+    VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_FS_NYDUS, VIRTIO_PMEM,
 };
 use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
@@ -173,7 +173,7 @@ impl ConfigPlugin for DragonballConfig {
             }
 
             if let Some(v) = db.shared_fs.shared_fs.as_ref() {
-                if v != VIRTIO_FS && v != VIRTIO_FS_INLINE {
+                if v != VIRTIO_FS && v != VIRTIO_FS_INLINE && v != VIRTIO_FS_NYDUS {
                     return Err(eother!("dragonball hypervisor doesn't support {}", v));
                 }
             }

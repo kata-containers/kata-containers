@@ -188,7 +188,9 @@ impl RuntimeHandlerManagerInner {
 
         let dan_path = dan_config_path(&config, &self.id);
         // set netns to None if we want no network for the VM
-        if config.runtime.disable_new_netns || dan_path.exists() {
+        if (config.runtime.disable_new_netns || dan_path.exists())
+            && config.runtime.hypervisor_name != "remote"
+        {
             sandbox_config.network_env.netns = None;
         }
 
@@ -359,6 +361,14 @@ impl RuntimeHandlerManager {
             "nerdctl/network-namespace".to_string(),
             netns.clone().unwrap(),
         );
+            // If no network namespace is specified (e.g., hostNetwork: true case),
+            // use the host's network namespace for remote hypervisor
+            if netns.is_none() {
+                // For remote hypervisor with hostNetwork, use init process's network namespace
+            // This is more stable than using the current process's netns
+            let host_netns = "/proc/1/ns/net".to_string();
+            netns = Some(host_netns);
+        }
 
         let network_env = SandboxNetworkEnv {
             netns,

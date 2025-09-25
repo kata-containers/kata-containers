@@ -2878,6 +2878,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "nydusd"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "hyper",
+ "hyperlocal",
+ "kata-types",
+ "nix 0.26.4",
+ "oci-spec 0.8.1",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "objc2-core-foundation"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3883,6 +3899,7 @@ dependencies = [
  "netlink-sys",
  "netns-rs",
  "nix 0.26.4",
+ "nydusd",
  "oci-spec 0.8.1",
  "persist",
  "rand 0.8.5",
@@ -5331,16 +5348,21 @@ dependencies = [
  "async-std",
  "async-trait",
  "awaitgroup",
+ "base64 0.13.1",
  "common",
  "containerd-shim-protos",
  "futures 0.3.28",
+ "hyper",
+ "hyperlocal",
  "hypervisor",
  "kata-sys-util",
  "kata-types",
  "lazy_static",
  "libc",
+ "log",
  "logging",
  "nix 0.26.4",
+ "nydusd",
  "oci-spec 0.8.1",
  "persist",
  "protobuf",
