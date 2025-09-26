@@ -1088,7 +1088,7 @@ mod tests {
         assert!(parse_mount_options(&options).is_err());
 
         let idx = options.len() - 1;
-        options[idx] = " ".repeat(4097);
+        options[idx] = " ".repeat(*MAX_MOUNT_PARAM_SIZE+1);
         assert!(parse_mount_options(&options).is_err());
     }
 
