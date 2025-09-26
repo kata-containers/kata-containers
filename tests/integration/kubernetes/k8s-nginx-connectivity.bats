@@ -24,7 +24,7 @@ setup() {
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
 		"${pod_config_dir}/${deployment}.yaml" > "${yaml_file}"
 	
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }
 
 @test "Verify nginx connectivity between pods" {
