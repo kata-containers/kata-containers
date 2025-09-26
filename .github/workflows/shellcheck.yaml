@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   shellcheck:
+    name: shellcheck
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout the code

@@ -6,6 +6,7 @@ permissions: {}
 
 jobs:
   release:
+    name: release
     runs-on: ubuntu-22.04
     permissions:
       contents: write # needed for the `gh release create` command
@@ -77,6 +78,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-multi-arch-images:
+    name: publish-multi-arch-images
     runs-on: ubuntu-22.04
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
@@ -114,6 +116,7 @@ jobs:
           KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy ghcr.io/kata-containers/kata-deploy"
 
   upload-multi-arch-static-tarball:
+    name: upload-multi-arch-static-tarball
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: write # needed for the `gh release` commands
@@ -178,6 +181,7 @@ jobs:
           ARCHITECTURE: ppc64le
 
   upload-versions-yaml:
+    name: upload-versions-yaml
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -195,6 +199,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   upload-cargo-vendored-tarball:
+    name: upload-cargo-vendored-tarball
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -212,6 +217,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   upload-libseccomp-tarball:
+    name: upload-libseccomp-tarball
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -229,6 +235,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   upload-helm-chart-tarball:
+    name: upload-helm-chart-tarball
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -265,6 +272,7 @@ jobs:
           helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
 
   publish-release:
+    name: publish-release
     needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
     runs-on: ubuntu-22.04
     permissions:

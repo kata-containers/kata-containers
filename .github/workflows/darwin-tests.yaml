@@ -15,6 +15,7 @@ concurrency:
 name: Darwin tests
 jobs:
   test:
+    name: test
     runs-on: macos-latest
     steps:
     - name: Checkout code

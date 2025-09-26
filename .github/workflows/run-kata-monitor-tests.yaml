@@ -17,6 +17,7 @@ permissions: {}
 
 jobs:
   run-monitor:
+    name: run-monitor
     strategy:
       fail-fast: false
       matrix:

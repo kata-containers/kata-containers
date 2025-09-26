@@ -30,6 +30,7 @@ jobs:
 
 
   kata-deploy:
+    name: kata-deploy
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read

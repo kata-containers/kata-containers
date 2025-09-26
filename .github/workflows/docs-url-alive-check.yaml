@@ -7,6 +7,7 @@ permissions: {}
 name: Docs URL Alive Check
 jobs:
   test:
+    name: test
     runs-on: ubuntu-22.04
     # don't run this action on forks
     if: github.repository_owner == 'kata-containers'

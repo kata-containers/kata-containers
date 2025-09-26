@@ -26,6 +26,7 @@ permissions: {}
 
 jobs:
   run-metrics:
+    name: run-metrics
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail

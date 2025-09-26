@@ -136,6 +136,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-manifest:
+    name: publish-manifest
     runs-on: ubuntu-22.04
     permissions:
       contents: read

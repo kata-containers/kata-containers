@@ -26,6 +26,7 @@ permissions: {}
 
 jobs:
   run-k8s-tests:
+    name: run-k8s-tests
     strategy:
       fail-fast: false
       matrix:

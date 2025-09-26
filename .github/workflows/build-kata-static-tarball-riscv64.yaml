@@ -28,6 +28,7 @@ permissions: {}
 
 jobs:
   build-asset:
+    name: build-asset
     runs-on: riscv-builder
     permissions:
       contents: read

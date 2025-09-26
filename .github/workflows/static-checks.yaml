@@ -22,6 +22,7 @@ jobs:
       target-branch: ${{ github.event.pull_request.base.ref }}
 
   check-kernel-config-version:
+    name: check-kernel-config-version
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     runs-on: ubuntu-22.04
@@ -54,6 +55,7 @@ jobs:
       instance: ubuntu-22.04
 
   build-checks-depending-on-kvm:
+    name: build-checks-depending-on-kvm
     runs-on: ubuntu-22.04
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
@@ -95,6 +97,7 @@ jobs:
           RUST_LIB_BACKTRACE: "0"
 
   static-checks:
+    name: static-checks
     runs-on: ubuntu-22.04
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
@@ -151,6 +154,7 @@ jobs:
     uses: ./.github/workflows/govulncheck.yaml
 
   codegen:
+    name: codegen
     runs-on: ubuntu-22.04
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}

@@ -26,6 +26,7 @@ permissions: {}
 
 jobs:
   run-k8s-tests-amd64:
+    name: run-k8s-tests-amd64
     strategy:
       fail-fast: false
       matrix:
