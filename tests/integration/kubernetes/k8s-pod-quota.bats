@@ -13,7 +13,7 @@ setup() {
 	get_pod_config_dir
 
 	deployment_yaml="${pod_config_dir}/pod-quota-deployment.yaml"
-	add_allow_all_policy_to_yaml "${deployment_yaml}"
+	auto_generate_policy "${pod_config_dir}" "${deployment_yaml}"
 }
 
 @test "Pod quota" {
