@@ -175,7 +175,7 @@ fn adjust_digest(digest: &[u8], platform: ProtectedPlatform) -> Vec<u8> {
 }
 
 /// Parse initdata
-fn parse_initdata(initdata_str: &str) -> Result<InitData> {
+pub fn parse_initdata(initdata_str: &str) -> Result<InitData> {
     let initdata: InitData = toml::from_str(initdata_str)?;
     initdata.validate()?;
 
