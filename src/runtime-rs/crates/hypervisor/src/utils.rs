@@ -359,6 +359,16 @@ pub fn megs_to_bytes(bytes: u32) -> u64 {
     bytes as u64 * (1 << 20)
 }
 
+#[allow(dead_code)]
+pub fn get_cmd_output(cmd: &str, args: &[&str]) -> Result<String> {
+    let mut cmd = std::process::Command::new(cmd);
+    if !args.is_empty() {
+        cmd.args(args);
+    }
+    let result = cmd.output()?;
+    Ok(String::from_utf8(result.stdout)?)
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
