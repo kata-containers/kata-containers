@@ -14,7 +14,7 @@ use page_size;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::Duration as TokioDuration;
@@ -113,22 +113,11 @@ impl SingleConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct CgroupConfig {
     pub no_subdir: bool,
     pub numa_id: Vec<u32>,
     pub config: SingleConfig,
-}
-
-impl Default for CgroupConfig {
-    fn default() -> Self {
-        Self {
-            no_subdir: false,
-            // empty numa_id means this config not limit numa
-            numa_id: vec![],
-            config: SingleConfig::default(),
-        }
-    }
 }
 
 impl CgroupConfig {
@@ -222,7 +211,7 @@ impl Config {
 
         // make sure the empty numa_id CgroupConfig at the end of Cgroup
         for vec in self.cgroups.values_mut() {
-            let (keep, moved) = vec.drain(..).partition(|c| c.numa_id.len() > 0);
+            let (keep, moved) = vec.drain(..).partition(|c| !c.numa_id.is_empty());
             *vec = keep;
             vec.extend(moved);
         }
@@ -300,7 +289,7 @@ pub struct Numa {
 }
 
 impl Numa {
-    fn new(mglru: &MGenLRU, path: &str, psi_path: &PathBuf) -> Self {
+    fn new(mglru: &MGenLRU, path: &str, psi_path: &Path) -> Self {
         Self {
             max_seq: mglru.max_seq,
             min_seq: mglru.min_seq,
@@ -362,9 +351,9 @@ impl MemCgroup {
         id: &usize,
         ino: &usize,
         path: &str,
-        numa: &Vec<u32>,
+        numa: &[u32],
         hmg: &HashMap<usize, MGenLRU>,
-        psi_path: &PathBuf,
+        psi_path: &Path,
     ) -> Self {
         let m = Self {
             id: *id as u16,
@@ -372,11 +361,8 @@ impl MemCgroup {
             numa: numa
                 .iter()
                 .filter_map(|numa_id| {
-                    if let Some(hmg) = hmg.get(&(*numa_id as usize)) {
-                        Some((*numa_id, Numa::new(hmg, path, psi_path)))
-                    } else {
-                        None
-                    }
+                    hmg.get(&(*numa_id as usize))
+                        .map(|hmg| (*numa_id, Numa::new(hmg, path, psi_path)))
                 })
                 .collect(),
         };
@@ -389,7 +375,7 @@ impl MemCgroup {
         &mut self,
         numa: &Vec<u32>,
         path: &str,
-        psi_path: &PathBuf,
+        psi_path: &Path,
         hmg: &HashMap<usize, MGenLRU>,
     ) {
         for numa_id in numa {
@@ -452,7 +438,7 @@ impl Info {
     fn new(path: &str, memcg_id: usize, numa_id: usize, numa: &Numa) -> Self {
         Self {
             memcg_id,
-            numa_id: numa_id,
+            numa_id,
             path: path.to_string(),
             min_seq: numa.min_seq,
             max_seq: numa.max_seq,
@@ -534,9 +520,9 @@ impl MemCgroups {
                     }
                     should_keep
                 });
-                path_cgs.len() != 0
+                !path_cgs.is_empty()
             });
-            period_cgs.cgs.len() != 0
+            !period_cgs.cgs.is_empty()
         });
 
         self.cgroups.retain(|path, cgroup| {
@@ -574,7 +560,7 @@ impl MemCgroups {
             let need_insert = if update_cgroups {
                 if let Some(mg) = self.cgroups.get_mut(path) {
                     // Update current
-                    mg.update_from_hostmemcg(&hmg);
+                    mg.update_from_hostmemcg(hmg);
                     false
                 } else {
                     true
@@ -594,8 +580,8 @@ impl MemCgroups {
                     loop {
                         if let Some(secs_config_map) = self.config_map.get_mut(&config.period_secs)
                         {
-                            if let Some(config_map) = secs_config_map.cgs.get_mut(&config) {
-                                if let Some(_) = config_map.get_mut(path) {
+                            if let Some(config_map) = secs_config_map.cgs.get_mut(config) {
+                                if config_map.get_mut(path).is_some() {
                                     error!(
                                         "update_and_add found an memcg {:?} {} existed",
                                         config, path
@@ -624,7 +610,7 @@ impl MemCgroups {
                                             );
 
                                             cgroups.add_numa(
-                                                &numa_id,
+                                                numa_id,
                                                 path,
                                                 &self.config.psi_path,
                                                 hmg,
@@ -641,7 +627,7 @@ impl MemCgroups {
                                                     id,
                                                     ino,
                                                     path,
-                                                    &numa_id,
+                                                    numa_id,
                                                     hmg,
                                                     &self.config.psi_path,
                                                 ),
@@ -682,7 +668,7 @@ impl MemCgroups {
                 for (path, numa_map) in path_map {
                     if let Some(mcg) = self.cgroups.get_mut(path) {
                         for numa_id in &numa_map.numa {
-                            if let Some(numa) = mcg.numa.get_mut(&numa_id) {
+                            if let Some(numa) = mcg.numa.get_mut(numa_id) {
                                 let pass = match numa
                                     .check_psi(single_config.period_psi_percent_limit as u64)
                                 {
@@ -702,7 +688,7 @@ impl MemCgroups {
                                 }
 
                                 info_ret.push(Info::new(
-                                    &path,
+                                    path,
                                     mcg.id as usize,
                                     *numa_id as usize,
                                     numa,
@@ -718,7 +704,7 @@ impl MemCgroups {
                     }
                 }
 
-                if info_ret.len() > 0 {
+                if !info_ret.is_empty() {
                     infos_ret.push((single_config.clone(), info_ret));
                 }
             }
@@ -809,7 +795,7 @@ impl MemCgroups {
     pub fn get_remaining_tokio_duration(&self) -> TokioDuration {
         let mut ret = TokioDuration::MAX;
 
-        for (_, secs_map) in &self.config_map {
+        for secs_map in self.config_map.values() {
             let cur = secs_map.timeout.remaining_tokio_duration();
 
             trace!(
@@ -822,7 +808,7 @@ impl MemCgroups {
                 // check secs_map, make sure it has enabled config
                 let mut has_enable_config = false;
 
-                for (single_config, _) in &secs_map.cgs {
+                for single_config in secs_map.cgs.keys() {
                     if !single_config.disabled {
                         has_enable_config = true;
                         break;
@@ -855,11 +841,7 @@ impl MemCgroups {
             let cur_path = format_path(&path);
             let should_del = if let Some(configs) = self.config.cgroups.get_mut(&cur_path) {
                 configs.retain(|cfg| cfg.numa_id != numa);
-                if configs.is_empty() {
-                    true
-                } else {
-                    false
-                }
+                configs.is_empty()
             } else {
                 false
             };
@@ -888,8 +870,10 @@ impl MemCgroups {
                         }
                     }
 
-                    let mut numa_cg = CgroupConfig::default();
-                    numa_cg.numa_id = numa;
+                    let mut numa_cg = CgroupConfig {
+                        numa_id: numa,
+                        ..Default::default()
+                    };
                     numa_cg.set(&oc);
 
                     numa_cgs.push(numa_cg);
@@ -1024,7 +1008,7 @@ impl MemCG {
 
         let mut mgs = self.memcgs.blocking_write();
 
-        if target_paths.len() == 0 {
+        if target_paths.is_empty() {
             mgs.remove_changed(&mg_hash);
         }
         mgs.update_and_add(&mg_hash, true);
@@ -1032,7 +1016,7 @@ impl MemCG {
         Ok(())
     }
 
-    fn run_aging(&mut self, config_infov: &mut Vec<(SingleConfig, Vec<Info>)>) {
+    fn run_aging(&mut self, config_infov: &mut [(SingleConfig, Vec<Info>)]) {
         for (config, infov) in config_infov.iter_mut() {
             debug!("run_aging_single_config {:?}", config);
             self.run_aging_single_config(infov, config.swap);
@@ -1094,10 +1078,10 @@ impl MemCG {
         c as u8
     }
 
-    fn run_eviction(&mut self, config_infov: &mut Vec<(SingleConfig, Vec<Info>)>) -> Result<()> {
+    fn run_eviction(&mut self, config_infov: &mut [(SingleConfig, Vec<Info>)]) -> Result<()> {
         for (config, infov) in config_infov.iter_mut() {
             debug!("run_eviction_single_config {:?}", config);
-            self.run_eviction_single_config(infov, &config)?;
+            self.run_eviction_single_config(infov, config)?;
         }
 
         Ok(())
@@ -1119,7 +1103,7 @@ impl MemCG {
         }
 
         let psi_path = self.memcgs.blocking_read().config.psi_path.clone();
-        for info in infov.into_iter() {
+        for info in infov.iter_mut() {
             info.eviction = Some(EvictionInfo {
                 psi: psi::Period::new(&psi_path.join(info.path.trim_start_matches('/')), false),
                 last_min_lru_file: 0,
@@ -1135,7 +1119,7 @@ impl MemCG {
 
         let mut ret = Ok(());
 
-        'main_loop: while infov.len() != 0 {
+        'main_loop: while !infov.is_empty() {
             // update infov
             let path_set: HashSet<String> = infov.iter().map(|info| info.path.clone()).collect();
             match self.refresh(&path_set) {
@@ -1212,16 +1196,14 @@ impl MemCG {
                         );
                         ei.file_page_count += released;
 
-                        if !ei.only_swap_mode {
-                            if ci.min_lru_file == 0 {
-                                info!(
-                                "{} {} run_eviction stop because min_lru_file is 0, release {} {} pages",
-                                ci.path, ci.numa_id, ei.anon_page_count, ei.file_page_count,
-                            );
-                                ei.stop_reason = EvictionStopReason::NoMinLru;
-                                removed_infov.push(infov.remove(i));
-                                continue;
-                            }
+                        if !ei.only_swap_mode && ci.min_lru_file == 0 {
+                            info!(
+                            "{} {} run_eviction stop because min_lru_file is 0, release {} {} pages",
+                            ci.path, ci.numa_id, ei.anon_page_count, ei.file_page_count,
+                        );
+                            ei.stop_reason = EvictionStopReason::NoMinLru;
+                            removed_infov.push(infov.remove(i));
+                            continue;
                         }
 
                         let percent = match ei.psi.get_percent() {
@@ -1314,7 +1296,7 @@ impl MemCG {
         }
 
         let mut mgs = self.memcgs.blocking_write();
-        mgs.record_eviction(&infov);
+        mgs.record_eviction(infov);
         mgs.record_eviction(&removed_infov);
 
         ret
@@ -1353,12 +1335,15 @@ impl MemCG {
     }
 }
 
+#[cfg(test)]
 mod tests {
     #[allow(unused_imports)]
     use super::*;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_memcg_swap_not_available() {
+        skip_if_not_root!();
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
         assert!(m.swap_not_available().is_ok());
@@ -1366,6 +1351,7 @@ mod tests {
 
     #[test]
     fn test_memcg_get_swappiness() {
+        skip_if_not_root!();
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
         assert_eq!(m.get_swappiness(100, 50), 133);
@@ -1373,8 +1359,9 @@ mod tests {
 
     #[test]
     fn test_memcg_get_timeout_list() {
+        skip_if_not_root!();
         let is_cg_v2 = crate::cgroup::is_cgroup_v2().unwrap();
         let m = MemCG::new(is_cg_v2, Config::default()).unwrap();
-        assert_eq!(m.get_timeout_list().len() > 0, true);
+        assert!(!m.get_timeout_list().is_empty());
     }
 }
