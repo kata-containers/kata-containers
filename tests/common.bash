@@ -822,7 +822,7 @@ function install_docker() {
 
 # Convert architecture to the name used by golang
 function arch_to_golang() {
-	local arch="$(uname -m)"
+	local -r arch="$(uname -m)"
 
 	case "${arch}" in
 		aarch64|arm64) echo "arm64";;
@@ -839,7 +839,7 @@ function arch_to_rust() {
 	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "${arch}";;
+		aarch64|arm64) echo "aarch64";;
 		ppc64le) echo "powerpc64le";;
 		riscv64) echo "riscv64gc";;
 		x86_64) echo "${arch}";;
@@ -853,7 +853,7 @@ function arch_to_kernel() {
 	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "arm64";;
+		aarch64|arm64) echo "arm64";;
 		ppc64le) echo "powerpc";;
 		x86_64) echo "${arch}";;
 		s390x) echo "s390x";;
