@@ -17,7 +17,7 @@ nvidia_gpu_stack="$5"
 driver_version=""
 driver_type="-open"
 supported_gpu_devids="/supported-gpu.devids"
-base_os="jammy"
+base_os="noble"
 
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
@@ -195,19 +195,17 @@ prepare_distribution_drivers() {
 	fi
 
 	echo "chroot: Prepare NVIDIA distribution drivers"
+
+	eval "${APT_INSTALL}" nvidia-utils-"${driver_version}"
+
 	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
-		libnvidia-cfg1-"${driver_version}"       \
-		nvidia-compute-utils-"${driver_version}" \
-		nvidia-utils-"${driver_version}"         \
-		nvidia-kernel-common-"${driver_version}" \
-		nvidia-imex-"${driver_version}"          \
-		libnvidia-compute-"${driver_version}"    \
-		libnvidia-compute-"${driver_version}"    \
-		libnvidia-gl-"${driver_version}"         \
-		libnvidia-extra-"${driver_version}"      \
-		libnvidia-decode-"${driver_version}"     \
-		libnvidia-fbc1-"${driver_version}"       \
-		libnvidia-encode-"${driver_version}"
+        nvidia-imex-"${driver_version}"      \
+		libnvidia-cfg1-"${driver_version}"   \
+        libnvidia-gl-"${driver_version}"     \
+        libnvidia-extra-"${driver_version}"  \
+        libnvidia-decode-"${driver_version}" \
+        libnvidia-fbc1-"${driver_version}"   \
+        libnvidia-encode-"${driver_version}"
 }
 
 prepare_nvidia_drivers() {
@@ -242,7 +240,7 @@ prepare_nvidia_drivers() {
 
 install_build_dependencies() {
 	echo "chroot: Install NVIDIA drivers build dependencies"
-	eval "${APT_INSTALL}" make gcc gawk kmod libvulkan1 pciutils jq zstd linuxptp
+	eval "${APT_INSTALL}" make gcc gawk kmod libvulkan1 pciutils jq zstd linuxptp xz-utils
 }
 
 setup_apt_repositories() {
@@ -257,28 +255,54 @@ setup_apt_repositories() {
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
 
-	# Changing the reference here also means changes needed for cuda_keyring
-	# and cuda apt repository see install_dcgm for details
-	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
-		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
-		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
-		deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
+	if [[ "${arch_target}" == "x86_64" ]]; then
+		cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
+			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
+			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
+			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
+			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
+		CHROOT_EOF
+	fi
 
-		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
-		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
-		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
-		deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
+	if [[ "${arch_target}" == "aarch64" ]]; then
+		cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
+			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
+			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
+			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
+			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
+		CHROOT_EOF
+	fi
+
+	local arch="${arch_target}"
+	[[ ${arch_target} == "aarch64" ]] && arch="sbsa"
+	# shellcheck disable=SC2015
+	[[ ${base_os} == "noble" ]] && osver="ubuntu2404" || die "Unknown base_os ${base_os} used"
+
+	keyring="cuda-keyring_1.1-1_all.deb"
+    curl -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
+    dpkg -i "${keyring}" && rm -f "${keyring}"
+
+	# Set repository priorities, prefere NVIDIA repositories over Ubuntu ones
+	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-priority
+        # Prioritize NVIDIA CUDA repository
+        Package: *
+        Pin: origin developer.download.nvidia.com
+        Pin-Priority: 1000
+
+        # Prioritize NVIDIA Container Toolkit repository
+        Package: *
+        Pin: origin nvidia.github.io
+        Pin-Priority: 950
+
+        # Lower priority for Ubuntu repositories
+        Package: *
+        Pin: origin us.archive.ubuntu.com
+        Pin-Priority: 500
+
+        Package: *
+        Pin: origin ports.ubuntu.com
+        Pin-Priority: 500
 	CHROOT_EOF
-
-	apt update
-
-	eval "${APT_INSTALL}" curl gpg ca-certificates
-
-	curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-	curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list |
-		sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' |
-		tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
 	apt update
 }
@@ -295,9 +319,19 @@ get_supported_gpus_from_run_file() {
 }
 
 get_supported_gpus_from_distro_drivers() {
-	local supported_gpus_json=/usr/share/doc/nvidia-kernel-common-"${driver_version}"/supported-gpus.json
+	local supported_gpus_json=./usr/share/doc/nvidia-driver-"${driver_version}"/supported-gpus.json
+
+	mkdir _tmp
+	pushd _tmp >> /dev/null
+
+	apt download nvidia-driver-"${driver_version}"
+	ar -x nvidia-driver-"${driver_version}"*.deb
+	tar -xvf data.tar.xz
 
 	jq . < "${supported_gpus_json}"  | grep '"devid"' | awk '{ print $2 }' | tr -d ',"'  > "${supported_gpu_devids}"
+
+	popd >> /dev/null
+	rm -rf _tmp
 }
 
 export_driver_version() {
@@ -314,31 +348,23 @@ install_nvidia_dcgm() {
 		return
 	}
 
-	arch="x86_64"
-	[[ ${arch_target} == "aarch64" ]] && arch="sbsa"
-	# shellcheck disable=SC2015
-	[[ ${base_os} == "jammy" ]] && osver="ubuntu2204" || die "Unknown base_os ${base_os} used"
-
-	keyring="cuda-keyring_1.1-1_all.deb"
-        curl -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
-        dpkg -i "${keyring}" && rm -f "${keyring}"
 
 	apt update
 	eval "${APT_INSTALL}" datacenter-gpu-manager
+
 }
 
 cleanup_rootfs() {
 	echo "chroot: Cleanup NVIDIA GPU rootfs"
 
-	apt-mark hold libstdc++6 libzstd1 libgnutls30 pciutils
-	# noble=libgnutls30t64
+	apt-mark hold libstdc++6 libzstd1 libgnutls30t64 pciutils
 
 	if [[ -n "${driver_version}" ]]; then
 		apt-mark hold libnvidia-cfg1-"${driver_version}" \
 			nvidia-compute-utils-"${driver_version}" \
 			nvidia-utils-"${driver_version}"         \
-			nvidia-kernel-common-"${driver_version}" \
 			nvidia-imex-"${driver_version}"          \
+			nvidia-firmware-"${driver_version}"      \
 			libnvidia-compute-"${driver_version}"    \
 			libnvidia-compute-"${driver_version}"    \
 			libnvidia-gl-"${driver_version}"         \
