@@ -615,6 +615,11 @@ pub struct AddSwapPathRequest {
     pub path: String,
 }
 
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct SetPolicyRequest {
+    pub policy: String,
+}
+
 #[cfg(test)]
 mod test {
     use std::convert::TryFrom;

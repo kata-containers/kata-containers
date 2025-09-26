@@ -241,7 +241,16 @@ pub fn add_hypervisor_initdata_overrides(initdata_annotation: &str) -> Result<St
         return Ok("".to_string());
     }
 
-    decode_initdata(initdata_annotation)?.to_string()
+    // Sanitizes a Base64 string by removing all whitespace characters.
+    // This makes the string safe to decode using the Standard configuration.
+    // We use a filter to iterate over characters and collect only those that are not whitespace.
+    // This is often more efficient and robust than chaining multiple replace calls.
+    let initdata_annotation = initdata_annotation
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>();
+
+    decode_initdata(&initdata_annotation)?.to_string()
 }
 
 use std::io::Write;
