@@ -173,7 +173,10 @@ impl RemoteInner {
             ..Default::default()
         };
         info!(sl!(), "Preparing REMOTE VM req: {:?}", req.clone());
-        let resp = client.create_vm(ctx, &req).await?;
+        let resp = client
+            .create_vm(ctx, &req)
+            .await
+            .map_err(|e| anyhow::anyhow!("error creating VM: {e}"))?;
         info!(sl!(), "Preparing REMOTE VM resp: {:?}", resp.clone());
         self.agent_socket_path = resp.agentSocketPath;
         self.netns = netns;
