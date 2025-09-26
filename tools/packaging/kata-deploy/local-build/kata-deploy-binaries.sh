@@ -590,6 +590,13 @@ install_initrd_nvidia_gpu() {
 	install_initrd "nvidia-gpu"
 }
 
+install_initrd_nvidia_gpu_hgx() {
+	export AGENT_POLICY
+	EXTRA_PKGS="apt ${EXTRA_PKGS}"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm,nvswitch"}
+	install_initrd "nvidia-gpu-hgx"
+}
+
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
@@ -1308,6 +1315,8 @@ handle_build() {
 	rootfs-image-nvidia-gpu) install_image_nvidia_gpu ;;
 
 	rootfs-initrd-nvidia-gpu) install_initrd_nvidia_gpu ;;
+
+	rootfs-initrd-nvidia-gpu-hgx) install_initrd_nvidia_gpu_hgx ;;
 
 	rootfs-image-nvidia-gpu-confidential) install_image_nvidia_gpu_confidential ;;
 

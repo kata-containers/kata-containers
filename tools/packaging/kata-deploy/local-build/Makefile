@@ -182,6 +182,9 @@ rootfs-image-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu
 rootfs-initrd-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
+rootfs-initrd-nvidia-gpu-hgx-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
+	${MAKE} $@-build
+
 rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
 	${MAKE} $@-build
 
