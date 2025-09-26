@@ -358,7 +358,13 @@ impl VirtSandbox {
         }
 
         if boot_info.image.is_empty() {
-            if boot_info.vm_rootfs_driver.ends_with("ccw") && security_info.confidential_guest {
+            let is_remote_hypervisor = Arc::clone(&self.resource_manager.config().await)
+                .runtime
+                .hypervisor_name
+                == "remote";
+            if (boot_info.vm_rootfs_driver.ends_with("ccw") && security_info.confidential_guest)
+                || is_remote_hypervisor
+            {
                 return Ok(None);
             } else {
                 return Err(anyhow!("both of image and initrd isn't set"));
