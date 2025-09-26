@@ -348,10 +348,10 @@ install_nvidia_dcgm() {
 		return
 	}
 
+	echo "chroot: Install NVIDIA DCGM"
 
-	apt update
-	eval "${APT_INSTALL}" datacenter-gpu-manager
-
+	eval "${APT_INSTALL}" datacenter-gpu-manager \
+		datacenter-gpu-manager-exporter
 }
 
 cleanup_rootfs() {
