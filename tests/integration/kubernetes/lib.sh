@@ -6,7 +6,7 @@
 #
 # This provides generic functions to use in the tests.
 #
-set -e
+set -euo pipefail
 
 wait_time=60
 sleep_time=3
@@ -17,8 +17,6 @@ k8s_delete_all_pods_if_any_exists() {
 	[ -z "$(kubectl get --no-headers pods)" ] || \
 		kubectl delete --all pods
 }
-
-FIXTURES_DIR="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 
 # Wait until the pod is not 'Ready'. Fail if it hits the timeout.
 #
@@ -258,6 +256,7 @@ assert_rootfs_count() {
 # 	directory.
 #
 new_pod_config() {
+	local FIXTURES_DIR="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	local base_config="${FIXTURES_DIR}/pod-config.yaml.in"
 	local image="$1"
 	local runtimeclass="$2"

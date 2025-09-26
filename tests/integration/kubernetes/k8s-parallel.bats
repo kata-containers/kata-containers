@@ -54,7 +54,7 @@ teardown() {
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 
-	teardown_common
+	teardown_common "${node}" "${node_start_time:-}"
 
 	# Delete jobs
 	kubectl delete jobs -l jobgroup=${job_name}

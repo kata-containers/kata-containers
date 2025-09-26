@@ -325,7 +325,7 @@ add_allow_all_policy_to_yaml() {
 	# By default was changing only the first object.
 	# With yq>4 we need to make it explicit during the read and write.
 	local resource_kind
-	resource_kind=$(yq .kind "${yaml_file}" | head -1)
+	resource_kind=$(yq eval 'select(documentIndex == 0) | .kind' "${yaml_file}")
 
 	case "${resource_kind}" in
 	Pod)
