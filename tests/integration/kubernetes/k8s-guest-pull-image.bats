@@ -110,7 +110,7 @@ setup() {
 
 
     # Set CreateContainerRequest timeout for qemu-coco-dev
-    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+    if [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" || "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ]]; then
         create_container_timeout=300
         set_metadata_annotation "$pod_config" \
             "io.katacontainers.config.runtime.create_container_timeout" \
@@ -133,7 +133,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$pod_config"
     local wait_time=120
-    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && wait_time=300
+    [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" || "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ]] && wait_time=300
     k8s_create_pod "$pod_config" "$wait_time"
 }
 
@@ -187,7 +187,7 @@ setup() {
     [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
 
-    if [ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] && [ "${KBS_INGRESS}" = "aks" ]; then
+    if [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" || "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ]] && [ "${KBS_INGRESS}" = "aks" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10299"
     fi
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
@@ -206,7 +206,7 @@ setup() {
 
     # Set CreateContainerRequest timeout in the annotation to pull large image in guest
     create_container_timeout=120
-    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && create_container_timeout=600
+    [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" || "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ]] && create_container_timeout=600
     set_metadata_annotation "$pod_config" \
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
@@ -227,7 +227,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$pod_config"
     local wait_time=120
-    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && wait_time=600
+    [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" || "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ]] && wait_time=600
     k8s_create_pod "$pod_config" "$wait_time"
 }
 
