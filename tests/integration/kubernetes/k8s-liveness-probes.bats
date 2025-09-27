@@ -24,7 +24,7 @@ setup() {
 	yaml_file="${pod_config_dir}/probe-pod-liveness.yaml"
 	cp "${pod_config_dir}/pod-liveness.yaml" "${yaml_file}"
 	set_node "${yaml_file}" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -49,7 +49,7 @@ setup() {
 	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-http-liveness.yaml" > "${yaml_file}"
 	set_node "${yaml_file}" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -75,7 +75,7 @@ setup() {
 	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-tcp-liveness.yaml" > "${yaml_file}"
 	set_node "${yaml_file}" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
