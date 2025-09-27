@@ -60,37 +60,6 @@ setup_nvidia-nvrc() {
 	popd > /dev/null || exit 1
 }
 
-setup_nvidia-dcgm-exporter() {
-	local TARGET="nvidia-dcgm-exporter"
-	local TARGET_VERSION="3.3.9-3.6.1"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
-
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/bin"
-	mkdir -p "${TARGET_DEST_DIR}/etc"
-
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
-
-	local dex="dcgm-exporter"
-
-	rm -rf "${dex}"
-	git clone --branch "${TARGET_VERSION}" https://github.com/NVIDIA/"${dex}"
-	make -C "${dex}" binary
-
-	mkdir -p ../destdir/bin
-	mkdir -p ../destdir/etc/"${dex}"
-
-	cp "${dex}"/cmd/"${dex}"/"${dex}" ../destdir/bin/.
-	cp "${dex}"/etc/*.csv ../destdir/etc/"${dex}"/.
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
-}
-
 setup_nvidia_gpu_rootfs_stage_one() {
 	if [[ -e "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" ]]; then
 		info "nvidia: GPU rootfs stage one already exists"
@@ -103,11 +72,9 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
 
-	for component in "nvidia-dcgm-exporter" "nvidia-nvrc"; do
-		if [[ ! -e "${BUILD_DIR}/kata-static-${component}.tar.zst" ]]; then
-			setup_"${component}"
-		fi
-	done
+	if [[ ! -e "${BUILD_DIR}/kata-static-nvidia-nvrc.tar.zst" ]]; then
+		setup_nvidia-nvrc
+	fi
 
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" ./nvidia_chroot.sh
 
@@ -191,8 +158,6 @@ chisseled_dcgm() {
 	cp -a "${stage_one}"/usr/"${libdir}"/libdcgm.*     "${libdir}"/.
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 	cp -a "${stage_one}"/usr/bin/nv-hostengine   bin/.
-
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-dcgm-exporter.tar.zst -C .
 }
 
 # copute always includes utility per default
