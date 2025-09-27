@@ -900,7 +900,7 @@ func (s *stratovirt) hotplugBlk(ctx context.Context, drive *config.BlockDrive, o
 		}
 
 		devAddr := fmt.Sprintf("%d", slot)
-		if err := s.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(s.qmpMonitorCh.ctx, drive.ID, drive.ID, driver, devAddr, "", "", 0, false, false); err != nil {
+		if err := s.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(s.qmpMonitorCh.ctx, drive.ID, drive.ID, driver, devAddr, "", "", 0, false, false, ""); err != nil {
 			return err
 		}
 	case RemoveDevice:
