@@ -219,6 +219,9 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Disable the 'seccomp' feature from Cloud Hypervisor, firecracker or dragonball, default false
+# disable_seccomp = true
+
 # Enable swap in the guest. Default false.
 # When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
 #enable_guest_swap = true

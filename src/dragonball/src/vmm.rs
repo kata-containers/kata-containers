@@ -6,6 +6,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::os::unix::io::RawFd;
 use std::sync::{Arc, Mutex, RwLock};
@@ -41,8 +42,22 @@ pub struct Vmm {
     // Will change to a HashMap when enabling 1 VMM with multiple VMs.
     vm: Vm,
 
-    vcpu_seccomp_filter: BpfProgram,
-    vmm_seccomp_filter: BpfProgram,
+    seccomp_filters: HashMap<ThreadType, BpfProgram>,
+}
+
+/// Thread types to which the seccomp restrictions apply
+/// Currently the restrictions are applied to the whole process
+/// The enum structure and corresponding rules can be refined later for more granular limits
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ThreadType {
+    /// Union of restrictions for all threads;
+    /// The corresponding restrictions are applied to the whole process
+    /// This type should be used with any other thread type which has specific restrictions
+    All,
+    /// VMM thread
+    Vmm,
+    /// Vcpu thread
+    Vcpu,
 }
 
 impl Vmm {
@@ -50,8 +65,7 @@ impl Vmm {
     pub fn new(
         api_shared_info: Arc<RwLock<InstanceInfo>>,
         api_event_fd: EventFd,
-        vmm_seccomp_filter: BpfProgram,
-        vcpu_seccomp_filter: BpfProgram,
+        seccomp_filters: HashMap<ThreadType, BpfProgram>,
         kvm_fd: Option<RawFd>,
     ) -> Result<Self> {
         let epoll_manager = EpollManager::default();
@@ -59,8 +73,7 @@ impl Vmm {
             api_shared_info,
             api_event_fd,
             epoll_manager,
-            vmm_seccomp_filter,
-            vcpu_seccomp_filter,
+            seccomp_filters,
             kvm_fd,
         )
     }
@@ -70,8 +83,7 @@ impl Vmm {
         api_shared_info: Arc<RwLock<InstanceInfo>>,
         api_event_fd: EventFd,
         epoll_manager: EpollManager,
-        vmm_seccomp_filter: BpfProgram,
-        vcpu_seccomp_filter: BpfProgram,
+        seccomp_filters: HashMap<ThreadType, BpfProgram>,
         kvm_fd: Option<RawFd>,
     ) -> Result<Self> {
         let vm = Vm::new(kvm_fd, api_shared_info, epoll_manager.clone())?;
@@ -81,8 +93,7 @@ impl Vmm {
             event_ctx,
             epoll_manager,
             vm,
-            vcpu_seccomp_filter,
-            vmm_seccomp_filter,
+            seccomp_filters,
         })
     }
 
@@ -96,14 +107,9 @@ impl Vmm {
         Some(&mut self.vm)
     }
 
-    /// Get the seccomp rules for vCPU threads.
-    pub fn vcpu_seccomp_filter(&self) -> BpfProgram {
-        self.vcpu_seccomp_filter.clone()
-    }
-
-    /// Get the seccomp rules for VMM threads.
-    pub fn vmm_seccomp_filter(&self) -> BpfProgram {
-        self.vmm_seccomp_filter.clone()
+    /// Get all seccomp rules.
+    pub fn seccomp_filters(&self) -> HashMap<ThreadType, BpfProgram> {
+        self.seccomp_filters.clone()
     }
 
     /// Run the event loop to service API requests.
@@ -206,14 +212,15 @@ impl std::fmt::Debug for Vmm {
         f.debug_struct("Vmm")
             .field("event_ctx", &self.event_ctx)
             .field("vm", &self.vm.shared_info())
-            .field("vcpu_seccomp_filter", &self.vcpu_seccomp_filter)
-            .field("vmm_seccomp_filter", &self.vmm_seccomp_filter)
+            .field("seccomp_filters", &self.seccomp_filters)
             .finish()
     }
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
+    use std::collections::HashMap;
+
     use test_utils::skip_if_not_root;
 
     use super::*;
@@ -221,17 +228,8 @@ pub(crate) mod tests {
     pub fn create_vmm_instance(epoll_manager: EpollManager) -> Vmm {
         let info = Arc::new(RwLock::new(InstanceInfo::default()));
         let event_fd = EventFd::new(libc::EFD_NONBLOCK).unwrap();
-        let seccomp_filter: BpfProgram = Vec::new();
 
-        Vmm::new_with_epoll_manager(
-            info,
-            event_fd,
-            epoll_manager,
-            seccomp_filter.clone(),
-            seccomp_filter,
-            None,
-        )
-        .unwrap()
+        Vmm::new_with_epoll_manager(info, event_fd, epoll_manager, HashMap::new(), None).unwrap()
     }
 
     #[test]

@@ -479,14 +479,13 @@ impl VmmService {
         use self::StartMicroVmError::MicroVMAlreadyRunning;
         use self::VmmActionError::StartMicroVm;
 
-        let vmm_seccomp_filter = vmm.vmm_seccomp_filter();
-        let vcpu_seccomp_filter = vmm.vcpu_seccomp_filter();
+        let seccomp_filters = vmm.seccomp_filters();
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
             return Err(StartMicroVm(MicroVMAlreadyRunning));
         }
 
-        vm.start_microvm(event_mgr, vmm_seccomp_filter, vcpu_seccomp_filter)
+        vm.start_microvm(event_mgr, seccomp_filters)
             .map(|_| VmmData::Empty)
             .map_err(StartMicroVm)
     }

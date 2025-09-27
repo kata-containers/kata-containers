@@ -14,9 +14,12 @@ use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
 use crate::{
+    dragonball::seccomp::get_seccomp_filter,
     utils::{self, get_hvsock_path, get_jailer_root, get_sandbox_path},
     VcpuThreadIds, VmmState,
 };
+
+use dragonball::ThreadType;
 
 impl DragonballInner {
     pub(crate) async fn prepare_vm(
@@ -40,6 +43,11 @@ impl DragonballInner {
             warn!(sl!(),
                     "SELinux label is provided for Dragonball VM, but Dragonball does not support SELinux; the label will be ignored",
             );
+        }
+
+        if !self.config.security_info.disable_seccomp {
+            let seccomp = HashMap::from([(ThreadType::All, get_seccomp_filter(&ThreadType::All))]);
+            self.vmm_instance.set_seccomp(seccomp);
         }
 
         Ok(())
