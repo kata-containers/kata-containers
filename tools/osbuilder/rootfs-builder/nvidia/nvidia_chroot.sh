@@ -6,6 +6,7 @@
 
 #!/bin/bash
 set -euo pipefail
+set -x
 
 shopt -s nullglob
 shopt -s extglob
