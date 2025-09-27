@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvpn-client-config
+  labels:
+    app: openvpn-client
+data:
+  client.ovpn: |
+    client
+    dev tap
+    proto udp
+    remote openvpn-server 1194
+    resolv-retry infinite
+    nobind
+    persist-key
+    persist-tun
+    ca /vpn/keys/ca.crt
+    cert /vpn/keys/client.crt
+    key /vpn/keys/client.key
+    remote-cert-tls server
+    cipher AES-256-GCM
+    tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384
+    verb 3

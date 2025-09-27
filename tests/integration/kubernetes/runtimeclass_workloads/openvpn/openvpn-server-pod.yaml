@@ -1,0 +1,62 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: openvpn-server
+  labels:
+    app: openvpn-server
+spec:
+  containers:
+  - name: openvpn-server
+    image: quay.io/kata-containers/alpine:3.22.1-openvpn
+    command:
+    - /bin/sh
+    - -c
+    - |
+      openvpn --config /etc/openvpn/server.conf
+    securityContext:
+      # without capabilities for both client and server:
+      # ERROR: Cannot ioctl TUNSETIFF tap: Operation not permitted (errno=1)
+      # note: without proper kernel support for both client and server:
+      # ERROR: Cannot open TUN/TAP dev /dev/net/tun: No such device (errno=19)
+      privileged: false
+      capabilities:
+        add:
+          - NET_ADMIN
+    ports:
+    - containerPort: 1194
+      protocol: UDP
+    volumeMounts:
+    - name: openvpn-server-secrets
+      mountPath: /etc/openvpn/keys
+      readOnly: true
+    - name: openvpn-config
+      mountPath: /etc/openvpn/
+      readOnly: true
+    - name: dev-net-tun
+      mountPath: /dev/net/tun
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - "netstat -anu | grep 1194"
+      initialDelaySeconds: 5
+      periodSeconds: 5
+  volumes:
+  - name: openvpn-server-secrets
+    secret:
+      secretName: openvpn-server-secrets
+  - name: openvpn-config
+    configMap:
+      name: openvpn-server-config
+  - name: dev-net-tun
+    hostPath:
+      path: /dev/net/tun
+      type: CharDevice
+  runtimeClassName: kata
