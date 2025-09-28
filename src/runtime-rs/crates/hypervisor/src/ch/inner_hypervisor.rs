@@ -8,6 +8,9 @@ use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
 use crate::selinux;
+use crate::utils::create_dir_all_with_inherit_owner;
+use crate::utils::set_groups;
+use crate::utils::vm_cleanup;
 use crate::utils::{bytes_to_megs, get_jailer_root, get_sandbox_path, megs_to_bytes};
 use crate::MemoryConfig;
 use crate::VM_ROOTFS_DRIVER_BLK;
@@ -27,17 +30,25 @@ use futures::future::join_all;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
+use kata_types::config::hypervisor::RootlessUser;
+use kata_types::rootless::is_rootless;
+use kata_types::rootless::rootless_dir;
 use lazy_static::lazy_static;
 use nix::sched::{setns, CloneFlags};
+use nix::unistd::setgid;
+use nix::unistd::setuid;
+use nix::unistd::Gid;
+use nix::unistd::Uid;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs;
-use std::fs::create_dir_all;
+use std::fs::remove_dir_all;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, RwLock};
 use tokio::io::BufReader;
@@ -195,7 +206,8 @@ impl CloudHypervisorInner {
 
         let sandbox_path = get_sandbox_path(&self.id);
 
-        std::fs::create_dir_all(sandbox_path.clone()).context("failed to create sandbox path")?;
+        create_dir_all_with_inherit_owner(sandbox_path.clone(), 0o750)
+            .context("failed to create sandbox path")?;
 
         let vsock_socket_path = get_vsock_path(&self.id)?;
 
@@ -369,6 +381,23 @@ impl CloudHypervisorInner {
             );
         }
 
+        let user: Option<RootlessUser> = if is_rootless() {
+            Some(
+                self.config
+                    .security_info
+                    .rootless_user
+                    .clone()
+                    .ok_or_else(|| {
+                        std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "rootless user must be specified for rootless qemu",
+                        )
+                    })?,
+            )
+        } else {
+            None
+        };
+
         unsafe {
             let selinux_label = self.config.security_info.selinux_label.clone();
             let _pre = cmd.pre_exec(move || {
@@ -389,6 +418,16 @@ impl CloudHypervisorInner {
                         );
                     }
                 }
+                if let Some(user) = &user {
+                    let groups = user.groups.clone();
+                    let gid = Gid::from_raw(user.gid);
+                    let uid = Uid::from_raw(user.uid);
+
+                    let _ = set_groups(&groups);
+                    let _ = setgid(gid).context("setgid failed");
+                    let _ = setuid(uid).context("setuid failed");
+                }
+
                 Ok(())
             });
         }
@@ -621,11 +660,11 @@ impl CloudHypervisorInner {
         self.run_dir = get_sandbox_path(&self.id);
         self.vm_path = self.run_dir.to_string();
 
-        create_dir_all(&self.run_dir)
+        create_dir_all_with_inherit_owner(&self.run_dir, 0o750)
             .with_context(|| anyhow!("failed to create sandbox directory {}", self.run_dir))?;
 
         if !self.jailer_root.is_empty() {
-            create_dir_all(self.jailer_root.as_str())
+            create_dir_all_with_inherit_owner(self.jailer_root.as_str(), 0o750)
                 .map_err(|e| anyhow!("Failed to create dir {} err : {:?}", self.jailer_root, e))?;
         }
 
@@ -704,7 +743,11 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
-        Ok(())
+        info!(sl!(), "CloudHypervisor::cleanup()");
+        if is_rootless() {
+            remove_dir_all(PathBuf::from(rootless_dir()).join(self.id.as_str()))?;
+        }
+        vm_cleanup(&self.config, self.vm_path.as_str())
     }
 
     pub(crate) async fn resize_vcpu(
@@ -783,7 +826,7 @@ impl CloudHypervisorInner {
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
         let root_path = get_jailer_root(&self.id);
 
-        std::fs::create_dir_all(&root_path)?;
+        create_dir_all_with_inherit_owner(&root_path, 0o750)?;
 
         Ok(root_path)
     }
