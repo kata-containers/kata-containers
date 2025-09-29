@@ -175,7 +175,7 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_FC@"
 # result in memory pre allocation
 #enable_hugepages = true
 
-# Disable the 'seccomp' feature from Cloud Hypervisor or firecracker, default false
+# Disable the 'seccomp' feature from Cloud Hypervisor, firecracker or dragonball, default false
 # disable_seccomp = true
 
 # Enable vIOMMU, default false
