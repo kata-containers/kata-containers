@@ -18,7 +18,10 @@ import (
 
 // variables rather than consts to allow tests to modify them
 var (
-	kvmDevice = "/dev/kvm"
+	kvmDevice      = "/dev/kvm"
+	syscallSyscall = syscall.Syscall
+	syscallOpen    = syscall.Open
+	syscallClose   = syscall.Close
 )
 
 func availableGuestProtection() (guestProtection, error) {
@@ -36,18 +39,18 @@ func availableGuestProtection() (guestProtection, error) {
 // checkKVMExtensionsRME allows to query about the specific kvm extensions
 func checkKVMExtensionsRME() (bool, error) {
 	flags := syscall.O_RDWR | syscall.O_CLOEXEC
-	kvm, err := syscall.Open(kvmDevice, flags, 0)
+	kvm, err := syscallOpen(kvmDevice, flags, 0)
 	if err != nil {
 		return false, err
 	}
-	defer syscall.Close(kvm)
+	defer syscallClose(kvm)
 
 	logger := hvLogger.WithFields(logrus.Fields{
 		"type":        "kvm extension",
 		"description": "Realm Management Extension",
 		"id":          C.KVM_CAP_ARM_RME_ID,
 	})
-	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+	ret, _, errno := syscallSyscall(syscall.SYS_IOCTL,
 		uintptr(kvm),
 		uintptr(C.KVM_CHECK_EXTENSION),
 		uintptr(C.KVM_CAP_ARM_RME_ID))
