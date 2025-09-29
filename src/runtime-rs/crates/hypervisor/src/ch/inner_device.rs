@@ -108,7 +108,10 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         match device {
-            DeviceType::Vfio(vfiodev) => self.remove_vfio_device(&vfiodev).await,
+            DeviceType::Vfio(vfiodev) => self.inner_remove_device(vfiodev.device_id.as_str()).await,
+            DeviceType::Block(blockdev) => {
+                self.inner_remove_device(blockdev.device_id.as_str()).await
+            }
             _ => Ok(()),
         }
     }
@@ -226,8 +229,8 @@ impl CloudHypervisorInner {
         Ok(DeviceType::Vfio(vfio_device))
     }
 
-    async fn remove_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
-        let clh_device_id = self.device_ids.get(&device.device_id);
+    async fn inner_remove_device(&mut self, device_id: &str) -> Result<()> {
+        let clh_device_id = self.device_ids.get(device_id);
 
         if clh_device_id.is_none() {
             return Err(anyhow!(
@@ -253,7 +256,7 @@ impl CloudHypervisorInner {
         .await?;
 
         if let Some(detail) = response {
-            debug!(sl!(), "vfio remove response: {:?}", detail);
+            debug!(sl!(), "device remove response: {:?}", detail);
         }
 
         Ok(())
