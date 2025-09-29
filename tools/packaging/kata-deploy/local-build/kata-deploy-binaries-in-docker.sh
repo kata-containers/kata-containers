@@ -14,8 +14,8 @@ set -o errtrace
 script_dir=$(dirname "$(readlink -f "$0")")
 kata_dir=$(realpath "${script_dir}/../../../../")
 kata_deploy_create="${script_dir}/kata-deploy-binaries.sh"
-uid=$(id -u ${USER})
-gid=$(id -g ${USER})
+uid=$(id -u ${USER:-})
+gid=$(id -g ${USER:-})
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 
