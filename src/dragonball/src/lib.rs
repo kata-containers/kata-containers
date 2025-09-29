@@ -48,7 +48,7 @@ mod vmm;
 
 pub use self::error::StartMicroVmError;
 pub use self::io_manager::IoManagerCached;
-pub use self::vmm::Vmm;
+pub use self::vmm::{Vmm, ALL_THREADS, VCPU_THREAD, VMM_THREAD};
 
 /// Success exit code.
 pub const EXIT_CODE_OK: u8 = 0;

@@ -219,6 +219,10 @@ pub enum StartMicroVmError {
     /// Failed to register DMA memory address range.
     #[error("failure while registering DMA address range: {0:?}")]
     RegisterDMAAddress(#[source] VfioDeviceError),
+
+    /// Cannot build seccomp filters.
+    #[error("failure while configuring seccomp filters: {0}")]
+    SeccompFilters(#[source] seccompiler::Error),
 }
 
 /// Errors associated with starting the instance.
