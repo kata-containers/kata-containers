@@ -65,7 +65,7 @@ jobs:
             vmm: qemu
           - snapshotter: nydus
             vmm: qemu-runtime-rs
-    runs-on: s390x-large
+    runs-on: ubuntu-24.04-s390x
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
