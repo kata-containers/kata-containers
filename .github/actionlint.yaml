@@ -16,6 +16,7 @@ self-hosted-runner:
     - garm-ubuntu-2304-smaller
     - garm-ubuntu-2204-smaller
     - k8s-ppc64le
+    - ubuntu-24.04-ppc64le
     - metrics
     - ppc64le
     - riscv-builder

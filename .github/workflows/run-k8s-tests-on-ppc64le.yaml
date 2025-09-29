@@ -34,7 +34,7 @@ jobs:
           - qemu
         k8s:
           - kubeadm
-    runs-on: k8s-ppc64le
+    runs-on: ubuntu-24.04-ppc64le
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
