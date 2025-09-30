@@ -1,7 +1,7 @@
 include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-delivery.yml
 
 variables:
-  CI_IMAGE: 1
+  CI_IMAGE: 2
   KERNEL_VERSION: 6.8
 
 stages:
@@ -109,4 +109,4 @@ publish-oci-image:
     IMAGE_TAG: "$CI_COMMIT_TAG"
   only:
     - tags
-    
+

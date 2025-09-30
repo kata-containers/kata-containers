@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     flex \
     bison \
     libelf-dev \
+    libssl-dev \
     xz-utils \
     gcc \
     make \
