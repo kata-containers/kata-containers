@@ -5,6 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::uid_t;
+use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 #[cfg(not(test))]
 use nix::mount;
@@ -336,25 +337,19 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
 
     if mount_dest == PROC_PATH {
         // only allow a mount on-top of proc if it's source is "proc"
-        unsafe {
-            let mut stats = MaybeUninit::<libc::statfs>::uninit();
-            let mount_source = m.source().as_ref().unwrap().display().to_string();
-            if mount_source
-                .with_nix_path(|path| libc::statfs(path.as_ptr(), stats.as_mut_ptr()))
-                .is_ok()
-            {
-                if stats.assume_init().f_type == PROC_SUPER_MAGIC {
-                    return Ok(());
-                }
-            } else {
-                return Ok(());
-            }
+        let mount_source = m.source().as_ref().unwrap().display().to_string();
 
-            return Err(anyhow!(format!(
+        let mut stats = MaybeUninit::<libc::statfs>::uninit();
+        let statfs_ret = mount_source
+            .with_nix_path(|path| unsafe { libc::statfs(path.as_ptr(), stats.as_mut_ptr()) })?;
+
+        return match Errno::result(statfs_ret) {
+            Ok(_) if unsafe { stats.assume_init().f_type } == PROC_SUPER_MAGIC => Ok(()),
+            Ok(_) | Err(_) => Err(anyhow!(format!(
                 "{} cannot be mounted to {} because it is not of type proc",
                 &mount_source, &mount_dest
-            )));
-        }
+            ))),
+        };
     }
 
     if mount_dest.starts_with(PROC_PATH) {
