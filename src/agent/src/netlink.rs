@@ -1108,9 +1108,9 @@ mod tests {
             .output()
             .expect("failed to add dummy interface");
 
-        // ip addr add 192.168.0.2/16 dev dummy
+        // ip addr add 192.0.2.2/24 dev dummy
         Command::new("ip")
-            .args(["addr", "add", "192.168.0.2/16", "dev", dummy_name])
+            .args(["addr", "add", "192.0.2.2/24", "dev", dummy_name])
             .output()
             .expect("failed to add ip for dummy");
 
@@ -1126,7 +1126,7 @@ mod tests {
         skip_if_not_root!();
 
         let mac = "6a:92:3a:59:70:aa";
-        let to_ip = "169.254.1.1";
+        let to_ip = "192.0.2.127";
         let dummy_name = "dummy_for_arp";
 
         prepare_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
