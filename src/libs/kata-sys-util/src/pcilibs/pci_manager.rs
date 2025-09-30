@@ -297,18 +297,16 @@ mod tests {
     use super::*;
     use std::fs;
     use std::io::Write;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
-    const MOCK_PCI_DEVICES_ROOT: &str = "tests/mock_devices";
     // domain number
     const TEST_PCI_DEV_DOMAIN: &str = "0000";
-    // sysfs path
-    const MOCK_SYS_BUS_PCI_DEVICES: &str = "/tmp/bus/pci/devices";
 
     // Mock data
-    fn setup_mock_device_files() {
+    fn setup_mock_device_files() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("tempdir should not fail");
         // Create mock path and files for PCI devices
-        let device_path = PathBuf::from(MOCK_PCI_DEVICES_ROOT).join("0000:ff:1f.0");
+        let device_path = dir.path().join("0000:ff:1f.0");
         fs::create_dir_all(&device_path).unwrap();
         fs::write(device_path.join("vendor"), "0x8086").unwrap();
         fs::write(device_path.join("device"), "0x1234").unwrap();
@@ -319,13 +317,7 @@ mod tests {
             "0x00000000 0x0000ffff 0x00000404\n",
         )
         .unwrap();
-    }
-    // Mock data
-    fn cleanup_mock_device_files() {
-        // Create mock path and files for PCI devices
-        let device_path = PathBuf::from(MOCK_PCI_DEVICES_ROOT).join("0000:ff:1f.0");
-        // Clean up
-        let _ = fs::remove_file(device_path);
+        dir
     }
 
     #[test]
@@ -380,10 +372,10 @@ mod tests {
     #[test]
     fn test_get_all_devices() {
         // Setup mock data
-        setup_mock_device_files();
+        let tmpdir = setup_mock_device_files();
 
         // Initialize PCI device manager with the mock path
-        let manager = PCIDeviceManager::new(MOCK_PCI_DEVICES_ROOT);
+        let manager = PCIDeviceManager::new(&tmpdir.path().to_string_lossy());
 
         // Get all devices
         let devices_result = manager.get_all_devices(None);
@@ -396,17 +388,14 @@ mod tests {
         assert_eq!(device.vendor, 0x8086);
         assert_eq!(device.device, 0x1234);
         assert_eq!(device.class, 0x060100);
-
-        // Cleanup mock data
-        cleanup_mock_device_files()
     }
 
     #[test]
     fn test_parse_resources() {
-        setup_mock_device_files();
+        let tmpdir = setup_mock_device_files();
 
-        let manager = PCIDeviceManager::new(MOCK_PCI_DEVICES_ROOT);
-        let device_path = PathBuf::from(MOCK_PCI_DEVICES_ROOT).join("0000:ff:1f.0");
+        let manager = PCIDeviceManager::new(&tmpdir.path().to_string_lossy());
+        let device_path = tmpdir.path().join("0000:ff:1f.0");
 
         let resources_result = manager.parse_resources(&device_path);
         assert!(resources_result.is_ok());
@@ -418,17 +407,14 @@ mod tests {
         assert_eq!(resource.start, 0x00000000);
         assert_eq!(resource.end, 0x0000ffff);
         assert_eq!(resource.flags, 0x00000404);
-
-        cleanup_mock_device_files();
     }
 
     #[test]
     fn test_is_pcie_device() {
         // Create a mock PCI device config file
         let bdf = format!("{}:ff:00.0", TEST_PCI_DEV_DOMAIN);
-        let config_path = Path::new(MOCK_SYS_BUS_PCI_DEVICES)
-            .join(&bdf)
-            .join("config");
+        let tmpdir = tempfile::tempdir().expect("tempdir should not fail");
+        let config_path = tmpdir.path().join(&bdf).join("config");
         let _ = fs::create_dir_all(config_path.parent().unwrap());
 
         // Write a file with a size larger than PCI_CONFIG_SPACE_SZ
@@ -437,9 +423,6 @@ mod tests {
         file.write_all(&vec![0; 512]).unwrap();
 
         // It should be true
-        assert!(is_pcie_device("ff:00.0", MOCK_SYS_BUS_PCI_DEVICES));
-
-        // Clean up
-        let _ = fs::remove_file(config_path);
+        assert!(is_pcie_device("ff:00.0", &tmpdir.path().to_string_lossy()));
     }
 }
