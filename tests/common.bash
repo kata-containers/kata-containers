@@ -563,9 +563,16 @@ function get_from_kata_deps() {
 
 # project: org/repo format
 # base_version: ${major}.${minor}
+# allow_unstable: Whether alpha / beta releases should be considered (default: false)
 function get_latest_patch_release_from_a_github_project() {
         project="${1}"
         base_version="${2}"
+        allow_unstable="${3:-false}"
+
+        regex="^${base_version}.[0-9]*$"
+        if [[ "${allow_unstable}" == "true" ]]; then
+                regex="^${base_version}.[0-9]*"
+        fi
 
         curl \
           ${GH_TOKEN:+--header "Authorization: Bearer ${GH_TOKEN:-}"} \
@@ -574,7 +581,7 @@ function get_latest_patch_release_from_a_github_project() {
           --silent \
           "https://api.github.com/repos/${project}/releases" \
           | jq -r .[].tag_name \
-          | grep "^${base_version}.[0-9]*$" -m1
+          | grep "${regex}" -m1
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format
@@ -674,7 +681,7 @@ function install_cri_containerd() {
 	base_version="${1}"
 
 	project="containerd/containerd"
-	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}" "true")
 
 	tarball_name="containerd-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
 
