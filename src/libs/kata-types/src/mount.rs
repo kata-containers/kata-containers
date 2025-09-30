@@ -6,7 +6,7 @@
 
 use anyhow::{anyhow, Context, Error, Result};
 use std::convert::TryFrom;
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::build_path;
 use crate::handler::HandlerManager;
@@ -483,6 +483,8 @@ pub trait StorageDevice: Send + Sync {
 /// Joins a user-provided volume path with the Kata direct-volume root path.
 ///
 /// The `volume_path` is base64-url-encoded and then safely joined to the `prefix`.
+/// `safe_path` is OS-specific.
+#[cfg(feature = "safe-path")]
 pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!(std::io::ErrorKind::NotFound));
@@ -493,10 +495,12 @@ pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
 }
 
 /// Gets `DirectVolumeMountInfo` from `mountinfo.json`.
+/// `safe_path` is OS-specific.
+#[cfg(feature = "safe-path")]
 pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
     let volume_path = join_path(kata_direct_volume_root_path().as_str(), volume_path)?;
     let mount_info_file_path = volume_path.join(KATA_MOUNT_INFO_FILE_NAME);
-    let mount_info_file = fs::read_to_string(mount_info_file_path)?;
+    let mount_info_file = std::fs::read_to_string(mount_info_file_path)?;
     let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
 
     Ok(mount_info)

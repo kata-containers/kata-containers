@@ -32,7 +32,8 @@ flate2 = { version = "1.0", features = ["zlib"] }
 hex = "0.4"
 
 oci-spec = { version = "0.8.1", features = ["runtime"] }
-safe-path = { path = "../safe-path" }
+
+safe-path = { path = "../safe-path", optional = true }
 
 [dev-dependencies]
 tempfile = "3.19.1"
@@ -42,3 +43,4 @@ nix = "0.26.4"
 [features]
 default = []
 enable-vendor = []
+safe-path = ["dep:safe-path"] # safe-path is platform-specific

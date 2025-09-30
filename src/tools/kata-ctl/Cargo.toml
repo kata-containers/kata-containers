@@ -29,7 +29,7 @@ toml = "0.5.8"
 sys-info = "0.9.1"
 
 shim-interface = { path = "../../libs/shim-interface" }
-kata-types = { path = "../../libs/kata-types" }
+kata-types = { path = "../../libs/kata-types", features = ["safe-path"] }
 kata-sys-util = { path = "../../../src/libs/kata-sys-util/" }
 safe-path = { path = "../../libs/safe-path" }
 agent = { path = "../../runtime-rs/crates/agent" }
