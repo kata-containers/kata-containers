@@ -30,7 +30,7 @@ rand = "0.8.4"
 protobuf = "3.2.0"
 log = "0.4.22"
 
-nix = "0.24.2"
+nix = "0.26.4"
 libc = "0.2.112"
 # XXX: Must be the same as the version used by the agent
 ttrpc = "0.8.4"
@@ -53,7 +53,7 @@ kata-types = { path = "../../libs/kata-types" }
 
 # hypervisor crate from runtime-rs
 hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = ["cloud-hypervisor"]}
-
+kata-sys-util = { path = "../../libs/kata-sys-util" }
 safe-path = { path = "../../libs/safe-path" }
 
 tokio = { version = "1.44.2", features = ["signal"] }
