@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     bison \
     libelf-dev \
     libssl-dev \
+    pahole \
     xz-utils \
     gcc \
     make \

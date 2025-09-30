@@ -23,7 +23,7 @@ jobs:
         with:
           go-version: ">=1.24.0"
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison libssl-dev pahole
       - name: Build Ubuntu image ${{ matrix.arch }}
         run: cd tools/osbuilder && sudo make USE_DOCKER=true OS_VERSION=jammy image-ubuntu
       - name: Build Kernel ${{ matrix.kernel_version }}
