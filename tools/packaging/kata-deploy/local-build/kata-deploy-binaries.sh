@@ -586,7 +586,7 @@ install_image_nvidia_gpu() {
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm,nvswitch"}
 	install_initrd "nvidia-gpu"
 }
 

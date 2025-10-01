@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+#
+# Copyright (c) 2021 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+set -euo pipefail
+set -x
+
+# NOTE: Some env variables are set in the Dockerfile - those that are
+# intended to be over-rideable.
+export ROOTFS_DIR=~/src/rootfs
+export GOPATH=~/src/go
+export PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin
+KATA_REPO_VERSION=${KATA_REPO_VERSION:-hgx_rootfs}
+
+kata_repo=github.com/LandonTClipp/kata-containers
+kata_repo_path=/kata-containers
+
+log_header() {
+	/bin/echo -e "\n\e[1;42m${1}\e[0m"
+}
+
+grab_kata_repos()
+{
+	# Check out all the repos we will use now, so we can try and ensure they use the specified branch
+	# Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
+	# Use a green prompt with white text for easy viewing
+	log_header "Clone and checkout Kata repo"
+	git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
+}
+
+copy_kernel()
+{
+	# We assume in this script that the kernel has already been built
+	# and has been provided in the /input/kernel directory. We have
+	# to trick the nvidia rootfs builder into thinking it built the
+	# kernel, so we copy the kernel files into the expected location.
+	log_header "Copy pre-built kernel to the expected location"
+	cd ${kata_repo_path}/tools/packaging/kata-deploy/local-build/
+	mkdir -p build/
+	cp -r /input/kernel/* ./build/
+	mv ./build/busybox/builddir/kata-static-busybox.tar.zst ./build/
+}
+
+build_rootfs()
+{
+	# Due to an issue with debootstrap unmounting /proc when running in a
+	# --privileged container, change into /proc to keep it from being umounted.
+	# This should only be done for Ubuntu and Debian based OS's. Other OS
+	# distributions had issues if building the rootfs from /proc
+
+	if [ "${ROOTFS_OS}" == "ubuntu" ]; then
+		cd /proc
+	fi
+	log_header "Build ${ROOTFS_OS} rootfs"
+	sudo -E SECCOMP=no EXTRA_PKGS='kmod,apt' ${kata_repo_path}/tools/osbuilder/rootfs-builder/rootfs.sh $ROOTFS_OS
+}
+
+build_image()
+{
+	log_header "Build rootfs image"
+	cd ${kata_repo_path}/tools/osbuilder/image-builder
+	sudo -E AGENT_INIT=yes ./image_builder.sh ${ROOTFS_DIR}
+}
+
+copy_outputs()
+{
+	log_header "Copy kernel and rootfs to the output directory"
+	mkdir -p ${OUTPUT_DIR} || true
+	sudo cp -r ${kata_repo_path}/tools/packaging/kata-deploy/local-build/build/ $OUTPUT_DIR
+	sudo cp -r ${ROOTFS_DIR} $OUTPUT_DIR/rootfs
+	sudo cp  ${kata_repo_path}/tools/osbuilder/image-builder/kata-containers.img $OUTPUT_DIR
+	/bin/echo -e "Check the ./output directory for the kernel and rootfs\n"
+	
+}
+
+help() {
+cat << EOF
+Usage: $0 [-h] [options]
+   Description:
+        This script builds kernel and rootfs artifacts for Kata Containers,
+        configured and built to support QAT hardware.
+   Options:
+        -d,         Enable debug mode
+        -h,         Show this help
+EOF
+}
+
+main()
+{
+	local check_in_container=${OUTPUT_DIR:-}
+	if [ -z "${check_in_container}" ]; then
+		echo "Error: 'OUTPUT_DIR' not set" >&2
+		echo "$0 should be run using the Dockerfile supplied." >&2
+		exit 1
+	fi
+
+	local OPTIND
+	while getopts "dh" opt;do
+		case ${opt} in
+		d)
+		    set -x
+		    ;;
+		h)
+		    help
+		    exit 0;
+		    ;;
+		?)
+		    # parse failure
+		    help
+		    echo "ERROR: Failed to parse arguments"
+		    exit 1
+		    ;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	grab_kata_repos
+	#configure_kernel
+	copy_kernel
+	build_rootfs
+	build_image
+	#build_qat_drivers
+	#add_qat_to_rootfs
+	copy_outputs
+}
+
+main "$@"

@@ -45,7 +45,7 @@ setup_nvidia-nvrc() {
 	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
 
 	rm -rf "${PROJECT}"
-	git clone https://github.com/NVIDIA/"${PROJECT}".git
+	git clone --branch fabricmanager --single-branch https://github.com/LandonTClipp/"${PROJECT}".git
 
 	pushd "${PROJECT}" > /dev/null || exit 1
 
@@ -177,9 +177,13 @@ chisseled_iptables() {
 }
 
 chisseled_nvswitch() {
-	echo "nvidia: chisseling NVSwitch"
-	echo "nvidia: not implemented yet"
-	exit 1
+	find ${stage_one}
+	mkdir -p usr/bin/
+	cp -a "${stage_one}/usr/bin/nv-fabricmanager" usr/bin/nv-fabricmanager
+	mkdir -p etc/nvidia/nvswitch
+	cp -a "${stage_one}/usr/share/nvidia/nvswitch/fabricmanager.cfg" etc/nvidia/nvswitch/fabricmanager.cfg
+	cp -a "${stage_one}/usr/bin/nvidia-fabricmanager-start.sh" usr/bin/nvidia-fabricmanager-start.sh
+	
 }
 
 chisseled_dcgm() {
@@ -278,7 +282,7 @@ compress_rootfs() {
 		strip "${file}"
 	done
 
-	find . -type f -executable | while IFS= read -r file; do
+	find . -type f -executable ! -name '*.sh' | while IFS= read -r file; do
 		strip "${file}"
 		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
 	done
