@@ -40,6 +40,7 @@ filesystem/AB
 freeform
 goroutine/AB
 hostname/AB
+hostPath
 hotplug/ACD
 howto/AB
 HugePage/AB
