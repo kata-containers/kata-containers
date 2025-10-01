@@ -301,11 +301,12 @@ fn get_shared_bind_mount(
     propagation: &str,
     access: &str,
 ) {
-    let mount_path = if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
-        str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..]).unwrap()
-    } else {
-        &yaml_mount.mountPath
-    };
+    // The Kata Shim filepath.Base() to extract the last element of this path, in
+    // https://github.com/kata-containers/kata-containers/blob/5e46f814dd79ab6b34588a83825260413839735a/src/runtime/virtcontainers/fs_share_linux.go#L305
+    // In Rust, Path::file_name() has a similar behavior.
+    let path = Path::new(&yaml_mount.mountPath);
+    let mount_path = path.file_name().unwrap().to_str().unwrap();
+
     let source = format!("$(sfprefix){mount_path}$");
 
     let dest = yaml_mount.mountPath.clone();
