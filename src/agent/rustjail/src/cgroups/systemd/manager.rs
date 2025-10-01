@@ -37,13 +37,15 @@ pub struct Manager {
     fs_manager: FsManager,
     // cgroup version for different dbus properties
     cg_hierarchy: CgroupHierarchy,
+    // pid of first process in container
+    init_pid: pid_t,
 }
 
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
         if self.dbus_client.unit_exists()? {
-            let subcgroup = self.fs_manager.subcgroup();
-            self.dbus_client.add_process(pid, subcgroup)?;
+            let subcgroup = self.fs_manager.subcgroup(self.init_pid, &self.cpath)?;
+            self.dbus_client.add_process(pid, subcgroup.as_str())?;
         } else {
             self.dbus_client.start_unit(
                 (pid as u32).try_into().unwrap(),
@@ -52,6 +54,13 @@ impl CgroupManager for Manager {
             )?;
         }
 
+        Ok(())
+    }
+
+    fn set_init_pid(&mut self, pid: pid_t) -> Result<()> {
+        if self.init_pid == 0 {
+            self.init_pid = pid;
+        }
         Ok(())
     }
 
@@ -130,6 +139,7 @@ impl Manager {
             } else {
                 CgroupHierarchy::Legacy
             },
+            init_pid: 0,
         })
     }
 }
