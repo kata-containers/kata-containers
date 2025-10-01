@@ -574,7 +574,7 @@ function get_latest_patch_release_from_a_github_project() {
           --silent \
           "https://api.github.com/repos/${project}/releases" \
           | jq -r .[].tag_name \
-          | grep "^${base_version}.[0-9]*$" -m1
+          | grep "^${base_version}.[0-9]*" -m1
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format

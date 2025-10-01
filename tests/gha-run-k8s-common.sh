@@ -375,6 +375,7 @@ function deploy_k8s() {
 		k3s) deploy_k3s ;;
 		rke2) deploy_rke2 ;;
 		microk8s) deploy_microk8s ;;
+		vanilla-erofs) deploy_vanilla_erofs ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
@@ -500,4 +501,101 @@ function helm_helper() {
 	echo "::group::Runtime classes"
 	kubectl_retry get runtimeclass
 	echo "::endgroup::"
+}
+
+function deploy_vanilla_erofs() {
+#    docker --version || true
+#    minikube version || true
+#    kind version || true
+#    k3s --version || true
+#    which kubelet || true
+#    systemctl list-units --type=service --state=running | grep -i kube || true
+
+	# Install dependencies:
+	# * runc
+	# * erofs-utils
+	# * fsverity
+	sudo apt-get -y install erofs-utils fsverity runc
+
+	# Ensure the erofs module is loaded
+	sudo modprobe erofs
+
+	# Ensure fsverity is enabled on the disk
+	root_device="$(findmnt -v -n -o SOURCE /)"
+	# This command is not destructive, at all, and that's
+	# the way we should enable verity support on a live disk.
+	sudo tune2fs -O verity "${root_device}"
+
+	# Ensure overlay and br-netfilter modules are loaded
+	sudo modprobe overlay
+	sudo modprobe br_netfilter
+
+#	sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+#    	sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
+
+	# Correctly set all the network parameters
+	sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
+	sudo sysctl -w net.ipv4.ip_forward=1
+	sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=1
+
+	# Install the very latest containerd version, even if it's
+	# a beta version, as it's the one that currently has the
+	# best support for erofs-snapshotter.
+	containerd_version=$(get_from_kata_deps ".externals.containerd.latest")
+	install_cri_containerd "${containerd_version}"
+	sudo systemctl daemon-reload
+	sudo systemctl restart containerd
+
+#	whereis containerd
+#
+#	# Download fidencio's fork of toml-cli
+#	git clone https://github.com/fidencio/toml-cli.git /tmp/toml-cli
+#	cd /tmp/toml-cli
+#	cargo build --release
+#	sudo mv target/release/toml /usr/local/bin/toml
+#	cd -
+#	rm -rf /tmp/toml-cli
+#
+#	# Create default containerd config
+#	sudo mkdir -p /etc/containerd
+#	containerd config default | sudo tee /etc/containerd/config.toml
+#
+#	# Configure the erofs-snapshotter on containerd
+#	sudo toml set -w /etc/containerd/config.toml plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity true
+#	sudo toml set -w /etc/containerd/config.toml plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable true
+#	sudo toml set -w /etc/containerd/config.toml plugins.\"io.containerd.differ.v1.erofs\".enable_tar_index true
+#	sudo toml set -w /etc/containerd/config.toml plugins.\"io.containerd.service.v1.diff-service\".default [\"erofs\",\"walking\"]
+#
+#	# Print the new containerd configuration file
+#	cat /etc/containerd/config.toml
+#
+#	# Restart containerd to apply the changes
+#	sudo systemctl restart containerd
+	
+	# Disable swap
+	sudo swapoff -a
+
+	# Install k8s
+	curl -fsSL https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/Release.key | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+	echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+	cat <<EOF | sudo tee /etc/apt/preferences.d/kubernetes
+Package: kubelet kubeadm kubectl cri-tools kubernetes-cni
+Pin: origin pkgs.k8s.io
+Pin-Priority: 1000
+EOF
+	sudo apt update
+   	sudo apt -y install kubeadm kubelet kubectl
+   	sudo apt-mark hold kubeadm kubelet kubectl
+
+   	sudo kubeadm init --pod-network-cidr=10.244.0.0/16 --v=5
+	mkdir -p $HOME/.kube
+	sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+	sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+	# Install flannel
+	kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml	
+
+	# Untaint the node
+	kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 }
