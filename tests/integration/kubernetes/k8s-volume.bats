@@ -58,7 +58,7 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	cmd="cat /mnt/index.html"
-	kubectl exec $pod_name -- sh -c "$cmd" | grep "$msg"
+	grep_pod_exec_output "$pod_name" "$msg" sh -c "$cmd"
 }
 
 teardown() {
