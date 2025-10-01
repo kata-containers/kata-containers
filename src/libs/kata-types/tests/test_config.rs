@@ -13,11 +13,11 @@ mod tests {
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_HUGEPAGES, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
         KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
         KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC,
-        KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS, KATA_ANNO_CFG_HYPERVISOR_PATH,
-        KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON,
-        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM,
-        KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
+        KATA_ANNO_CFG_HYPERVISOR_KERNEL_PATH, KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD,
+        KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC, KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS,
+        KATA_ANNO_CFG_HYPERVISOR_PATH, KATA_ANNO_CFG_HYPERVISOR_VHOSTUSER_STORE_PATH,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_DAEMON, KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS,
+        KATA_ANNO_CFG_HYPERVISOR_VIRTIO_MEM, KATA_ANNO_CFG_KERNEL_MODULES, KATA_ANNO_CFG_RUNTIME_NAME,
     };
     use kata_types::config::KataConfig;
     use kata_types::config::{QemuConfig, TomlConfig};
@@ -145,6 +145,10 @@ mod tests {
             "100".to_string(),
         );
         anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD.to_string(),
+            "50".to_string(),
+        );
+        anno_hash.insert(
             KATA_ANNO_CFG_HYPERVISOR_VIRTIO_FS_EXTRA_ARGS.to_string(),
             "rr,dg,er".to_string(),
         );
@@ -199,6 +203,7 @@ mod tests {
             assert_eq!(hv.jailer_path, "./test_jailer_path".to_string());
             assert_eq!(hv.boot_info.kernel, "./test_kernel_path");
             assert_eq!(hv.memory_info.memory_slots, 100);
+            assert_eq!(hv.memory_info.memory_overhead, 50);
             assert_eq!(hv.shared_fs.virtio_fs_extra_args[5], "rr");
             assert_eq!(hv.shared_fs.virtio_fs_extra_args[6], "dg");
             assert_eq!(hv.shared_fs.virtio_fs_extra_args[7], "er");
@@ -478,5 +483,90 @@ mod tests {
         let anno = Annotation::new(anno_hash);
         let mut config = TomlConfig::load(content).unwrap();
         assert!(anno.update_config_by_annotation(&mut config).is_err());
+    }
+
+    #[test]
+    fn test_memory_overhead_annotation_valid_values() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        // Test valid memory overhead values
+        let test_cases = vec![
+            ("0", 0),
+            ("10", 10),
+            ("100", 100),
+            ("512", 512),
+        ];
+
+        for (input_value, expected_value) in test_cases {
+            let mut anno_hash = HashMap::new();
+            anno_hash.insert(
+                KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD.to_string(),
+                input_value.to_string(),
+            );
+            let anno = Annotation::new(anno_hash);
+            let mut config = TomlConfig::load(content).unwrap();
+
+            assert!(anno.update_config_by_annotation(&mut config).is_ok());
+            if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
+                assert_eq!(hv.memory_info.memory_overhead, expected_value);
+            }
+        }
+    }
+
+    #[test]
+    fn test_memory_overhead_annotation_invalid_values() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        // Test invalid memory overhead values
+        let invalid_values = vec!["-1", "abc", "1.5", ""];
+
+        for invalid_value in invalid_values {
+            let mut anno_hash = HashMap::new();
+            anno_hash.insert(
+                KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD.to_string(),
+                invalid_value.to_string(),
+            );
+            let anno = Annotation::new(anno_hash);
+            let mut config = TomlConfig::load(content).unwrap();
+
+            assert!(anno.update_config_by_annotation(&mut config).is_err());
+        }
+    }
+
+    #[test]
+    fn test_memory_overhead_annotation_larger_than_default_memory() {
+        let content = include_str!("texture/configuration-anno-0.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        // Test memory overhead larger than default memory (should still be accepted)
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD.to_string(),
+            "1000".to_string(), // Larger than typical default memory
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
+            assert_eq!(hv.memory_info.memory_overhead, 1000);
+        }
     }
 }

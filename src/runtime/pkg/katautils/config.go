@@ -137,6 +137,7 @@ type hypervisor struct {
 	DefaultMaxVCPUs                uint32                    `toml:"default_maxvcpus"`
 	MemorySize                     uint32                    `toml:"default_memory"`
 	MemSlots                       uint32                    `toml:"memory_slots"`
+	MemoryOverhead                 uint32                    `toml:"memory_overhead"`
 	DefaultBridges                 uint32                    `toml:"default_bridges"`
 	Msize9p                        uint32                    `toml:"msize_9p"`
 	RemoteHypervisorTimeout        uint32                    `toml:"remote_hypervisor_timeout"`
@@ -488,6 +489,10 @@ func (h hypervisor) defaultMemSlots() uint32 {
 	return slots
 }
 
+func (h hypervisor) defaultMemOverhead() uint32 {
+	return h.MemoryOverhead
+}
+
 func (h hypervisor) defaultMemOffset() uint64 {
 	offset := h.MemOffset
 	if offset == 0 {
@@ -799,6 +804,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
+		MemoryOverhead:        h.defaultMemOverhead(),
 		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
 		EntropySource:         h.GetEntropySource(),
 		EntropySourceList:     h.EntropySourceList,
@@ -936,6 +942,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemSlots:                 h.defaultMemSlots(),
 		MemOffset:                h.defaultMemOffset(),
 		DefaultMaxMemorySize:     h.defaultMaxMemSz(),
+		MemoryOverhead:           h.defaultMemOverhead(),
 		VirtioMem:                h.VirtioMem,
 		EntropySource:            h.GetEntropySource(),
 		EntropySourceList:        h.EntropySourceList,
@@ -1073,6 +1080,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemSlots:                       h.defaultMemSlots(),
 		MemOffset:                      h.defaultMemOffset(),
 		DefaultMaxMemorySize:           h.defaultMaxMemSz(),
+		MemoryOverhead:                 h.defaultMemOverhead(),
 		VirtioMem:                      h.VirtioMem,
 		EntropySource:                  h.GetEntropySource(),
 		EntropySourceList:              h.EntropySourceList,
@@ -1149,6 +1157,7 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultMaxVCPUs: h.defaultMaxVCPUs(),
 		MemorySize:      h.defaultMemSz(),
 		MemSlots:        h.defaultMemSlots(),
+		MemoryOverhead:  h.defaultMemOverhead(),
 		EntropySource:   h.GetEntropySource(),
 		Debug:           h.Debug,
 	}, nil
@@ -1232,6 +1241,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemSlots:              h.defaultMemSlots(),
 		MemOffset:             h.defaultMemOffset(),
 		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
+		MemoryOverhead:        h.defaultMemOverhead(),
 		EntropySource:         h.GetEntropySource(),
 		DefaultBridges:        h.defaultBridges(),
 		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
@@ -1435,6 +1445,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		DefaultMaxVCPUs:          defaultMaxVCPUCount,
 		MemorySize:               defaultMemSize,
 		MemOffset:                defaultMemOffset,
+		MemoryOverhead:           defaultMemOverhead,
 		VirtioMem:                defaultVirtioMem,
 		DisableBlockDeviceUse:    defaultDisableBlockDeviceUse,
 		DefaultBridges:           defaultBridgesCount,
@@ -1948,6 +1959,14 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 	}
 
 	mb := int64(1024 * 1024)
+
+	memOverhead := int64(config.MemoryOverhead)
+	if memOverhead != 0 && memOverhead < vc.MinHypervisorMemoryOverhead {
+		return errors.New(fmt.Sprintf("VM memory overhead (%dMB) is below minimum (%dMB)", memOverhead, vc.MinHypervisorMemoryOverhead))
+	}
+	if memOverhead > int64(config.MemorySize) {
+		return errors.New(fmt.Sprintf("VM memory overhead (%dMB) is greater than memory size (%dMB)", memOverhead, config.MemorySize))
+	}
 
 	for _, image := range images {
 		if image.path == "" {
