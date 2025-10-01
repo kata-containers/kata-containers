@@ -12,7 +12,7 @@ use dbs_utils::epoll_manager::{EpollManager, EventOps, Events, MutEventSubscribe
 use dbs_utils::net::MacAddr;
 use log::{debug, error, info, trace, warn};
 use vhost_rs::vhost_user::{
-    Error as VhostUserError, Master, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
+    Error as VhostUserError, Frontend, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
 };
 use vhost_rs::Error as VhostError;
 use virtio_bindings::bindings::virtio_net::{
@@ -36,9 +36,9 @@ use crate::{
 const NET_DRIVER_NAME: &str = "vhost-user-net";
 // Epoll token for incoming connection on the Unix Domain Socket listener.
 const LISTENER_SLOT: u32 = 0;
-// Epoll token for monitoring the Unix Domain Socket between the master and
-// the slave.
-const MASTER_SLOT: u32 = 1;
+// Epoll token for monitoring the Unix Domain Socket between the frontend and
+// the backend.
+const FRONTEND_SLOT: u32 = 1;
 // Epoll token for control queue
 const CTRL_SLOT: u32 = 2;
 // Control queue count
@@ -49,17 +49,17 @@ struct VhostUserNetDevice {
     /// Fixed value: "vhost-user-net".
     id: String,
     device_info: VirtioDeviceInfo,
-    /// Unix domain socket connecting to the vhost-user slave.
+    /// Unix domain socket connecting to the vhost-user backend.
     endpoint: Endpoint,
-    /// Unix domain socket listener to accept incoming connection from the slave.
+    /// Unix domain socket listener to accept incoming connection from the backend.
     listener: Listener,
-    /// current enabled queues with vhost-user slave
+    /// current enabled queues with vhost-user backend
     curr_queues: u32,
 }
 
 impl VhostUserNetDevice {
     fn new(
-        master: Master,
+        frontend: Frontend,
         mut avail_features: u64,
         listener: Listener,
         guest_mac: Option<&MacAddr>,
@@ -67,7 +67,7 @@ impl VhostUserNetDevice {
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
         info!(
-            "{}: slave support features 0x{:x}",
+            "{}: backend support features 0x{:x}",
             NET_DRIVER_NAME, avail_features
         );
 
@@ -103,14 +103,14 @@ impl VhostUserNetDevice {
                 config_space,
                 epoll_mgr,
             ),
-            endpoint: Endpoint::new(master, MASTER_SLOT, NET_DRIVER_NAME.to_owned()),
+            endpoint: Endpoint::new(frontend, FRONTEND_SLOT, NET_DRIVER_NAME.to_owned()),
             listener,
             curr_queues: 2,
         })
     }
 
     /// Create a vhost-user-net server instance.
-    /// The function will hang on until a connection is established with a slave.
+    /// The function will hang on until a connection is established with a backend.
     fn new_server(
         path: &str,
         guest_mac: Option<&MacAddr>,
@@ -130,14 +130,14 @@ impl VhostUserNetDevice {
         )?;
 
         info!(
-            "{}: waiting for incoming connection from the slave...",
+            "{}: waiting for incoming connection from the backend...",
             NET_DRIVER_NAME
         );
-        let (master, avail_features) = listener.accept()?;
-        info!("{}: connection to slave is ready.", NET_DRIVER_NAME);
+        let (frontend, avail_features) = listener.accept()?;
+        info!("{}: connection to backend is ready.", NET_DRIVER_NAME);
 
         Self::new(
-            master,
+            frontend,
             avail_features,
             listener,
             guest_mac,
@@ -146,7 +146,7 @@ impl VhostUserNetDevice {
         )
     }
 
-    fn activate_slave<AS, Q, R>(
+    fn activate_backend<AS, Q, R>(
         &mut self,
         handler: &VhostUserNetHandler<AS, Q, R>,
     ) -> ActivateResult
@@ -155,7 +155,7 @@ impl VhostUserNetDevice {
         Q: QueueT + Send + 'static,
         R: GuestMemoryRegion + Sync + Send + 'static,
     {
-        trace!(target: "vhost-net", "{}: VhostUserNetDevice::activate_slave()", self.id);
+        trace!(target: "vhost-net", "{}: VhostUserNetDevice::activate_backend()", self.id);
         let mut config = EndpointParam {
             virtio_config: &handler.config,
             intr_evts: handler.config.get_queue_interrupt_eventfds(),
@@ -166,10 +166,10 @@ impl VhostUserNetDevice {
             reconnect: false,
             backend: None,
             init_queues: self.curr_queues,
-            slave_req_fd: None,
+            backend_req_fd: None,
         };
         config.set_protocol_mq();
-        // Do negotiate with the vhost-user slave
+        // Do negotiate with the vhost-user backend
         loop {
             match self.endpoint.negotiate(&config, None) {
                 Ok(_) => break,
@@ -196,13 +196,13 @@ impl VhostUserNetDevice {
             std::thread::sleep(delay);
             // The underlying communication channel has been disconnected,
             // recreate it again.
-            let (master, avail_features) = self.listener.accept()?;
+            let (frontend, avail_features) = self.listener.accept()?;
             if !avail_features & self.device_info.acked_features() != 0 {
                 error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.", 
                     self.id, avail_features, self.device_info.acked_features());
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
             }
-            self.endpoint.set_master(master);
+            self.endpoint.set_frontend(frontend);
         }
         Ok(())
     }
@@ -236,7 +236,7 @@ impl VhostUserNetDevice {
     {
         info!("{}: try to accept new socket for reconnect...", self.id);
         match self.listener.try_accept() {
-            Ok(Some((master, _avail_features))) => {
+            Ok(Some((frontend, _avail_features))) => {
                 let mut config = EndpointParam {
                     virtio_config: &handler.config,
                     intr_evts: handler.config.get_queue_interrupt_eventfds(),
@@ -247,10 +247,10 @@ impl VhostUserNetDevice {
                     reconnect: true,
                     backend: None,
                     init_queues: self.curr_queues,
-                    slave_req_fd: None,
+                    backend_req_fd: None,
                 };
                 config.set_protocol_mq();
-                self.endpoint.reconnect(master, &config, ops)?;
+                self.endpoint.reconnect(frontend, &config, ops)?;
                 info!("{}: communication channel has been recovered.", self.id);
                 Ok(())
             }
@@ -302,13 +302,13 @@ impl VhostUserNetDevice {
             std::thread::sleep(delay);
             // The underlying communication channel has been disconnected,
             // recreate it again.
-            let (master, avail_features) = self.listener.accept()?;
+            let (frontend, avail_features) = self.listener.accept()?;
             if !avail_features & self.device_info.acked_features() != 0 {
                 error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.", 
                     self.id, avail_features, self.device_info.acked_features());
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
             }
-            self.endpoint.set_master(master);
+            self.endpoint.set_frontend(frontend);
         }
         Ok(())
     }
@@ -417,7 +417,7 @@ where
             config,
             id: self.id.clone(),
         };
-        device.activate_slave(&handler)?;
+        device.activate_backend(&handler)?;
         let epoll_mgr = device.device_info.epoll_manager.clone();
         drop(device);
         self.subscriber_id = Some(epoll_mgr.add_subscriber(Box::new(handler)));
@@ -542,7 +542,7 @@ where
                     );
                 }
             }
-            MASTER_SLOT => {
+            FRONTEND_SLOT => {
                 if let Err(e) = self.device().handle_disconnect(ops) {
                     warn!("{}: failed to handle disconnect event, {:?}", self.id, e);
                 }
@@ -613,14 +613,14 @@ mod tests {
     use crate::tests::create_address_space;
     use crate::vhost::vhost_user::net::VhostUserNet;
     use crate::vhost::vhost_user::test_utils::{
-        negotiate_slave, Endpoint, MasterReq, VhostUserMsgHeader,
+        negotiate_backend, Endpoint, FrontendReq, VhostUserMsgHeader,
     };
     use crate::{VirtioDevice, VirtioDeviceConfig, VirtioQueueConfig, TYPE_NET};
 
-    fn connect_slave(path: &str) -> Option<Endpoint<MasterReq>> {
+    fn connect_backend(path: &str) -> Option<Endpoint<FrontendReq>> {
         let mut retry_count = 5;
         loop {
-            match Endpoint::<MasterReq>::connect(path) {
+            match Endpoint::<FrontendReq>::connect(path) {
                 Ok(endpoint) => return Some(endpoint),
                 Err(_) => {
                     if retry_count > 0 {
@@ -635,14 +635,14 @@ mod tests {
         }
     }
 
-    fn create_vhost_user_net_slave(slave: &mut Endpoint<MasterReq>) {
-        let (hdr, rfds) = slave.recv_header().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::GET_FEATURES);
+    fn create_vhost_user_net_backend(backend: &mut Endpoint<FrontendReq>) {
+        let (hdr, rfds) = backend.recv_header().unwrap();
+        assert_eq!(hdr.get_code(), FrontendReq::GET_FEATURES);
         assert!(rfds.is_none());
         let vfeatures = 0x15 | VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits();
-        let hdr = VhostUserMsgHeader::new(MasterReq::GET_FEATURES, 0x4, 8);
+        let hdr = VhostUserMsgHeader::new(FrontendReq::GET_FEATURES, 0x4, 8);
         let msg = VhostUserU64::new(vfeatures);
-        slave.send_message(&hdr, &msg, None).unwrap();
+        backend.send_message(&hdr, &msg, None).unwrap();
     }
 
     #[test]
@@ -651,8 +651,8 @@ mod tests {
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {
-            let mut slave = connect_slave(device_socket).unwrap();
-            create_vhost_user_net_slave(&mut slave);
+            let mut backend = connect_backend(device_socket).unwrap();
+            create_vhost_user_net_backend(&mut backend);
         });
         let mut dev: VhostUserNet<Arc<GuestMemoryMmap>> =
             VhostUserNet::new_server(device_socket, None, queue_sizes, epoll_mgr).unwrap();
@@ -701,13 +701,13 @@ mod tests {
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {
-            let mut slave = connect_slave(device_socket).unwrap();
-            create_vhost_user_net_slave(&mut slave);
+            let mut backend = connect_backend(device_socket).unwrap();
+            create_vhost_user_net_backend(&mut backend);
             let mut pfeatures = VhostUserProtocolFeatures::all();
             // A workaround for no support for `INFLIGHT_SHMFD`. File an issue to track
             // this: https://github.com/kata-containers/kata-containers/issues/8705.
             pfeatures -= VhostUserProtocolFeatures::INFLIGHT_SHMFD;
-            negotiate_slave(&mut slave, pfeatures, true, 1);
+            negotiate_backend(&mut backend, pfeatures, true, 1);
         });
         let mut dev: VhostUserNet<Arc<GuestMemoryMmap>> =
             VhostUserNet::new_server(device_socket, None, queue_sizes, epoll_mgr).unwrap();

@@ -10,10 +10,10 @@ use dbs_utils::epoll_manager::{EventOps, EventSet, Events};
 use log::*;
 use vhost_rs::vhost_user::message::{VhostUserProtocolFeatures, VhostUserVringAddrFlags};
 use vhost_rs::vhost_user::{
-    Error as VhostUserError, Listener as VhostUserListener, Master, VhostUserMaster,
+    Error as VhostUserError, Listener as VhostUserListener, Frontend, VhostUserFrontend,
 };
 use vhost_rs::{Error as VhostError, VhostBackend, VhostUserMemoryRegionInfo, VringConfigData};
-use virtio_bindings::bindings::virtio_net::VIRTIO_F_RING_PACKED;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_RING_PACKED;
 use virtio_queue::QueueT;
 use vm_memory::{
     Address, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryRegion, MemoryRegionAddress,
@@ -50,14 +50,14 @@ impl Listener {
     }
 
     // Wait for an incoming connection until success.
-    pub fn accept(&self) -> VirtioResult<(Master, u64)> {
+    pub fn accept(&self) -> VirtioResult<(Frontend, u64)> {
         loop {
             match self.try_accept() {
-                Ok(Some((master, mut feature))) => {
+                Ok(Some((frontend, mut feature))) => {
                     // Disable VIRTIO_F_RING_PACKED since the layout of packed virtqueue isn't
                     // supported by `Endpoint::negotiate()`.
                     feature &= !(1 << VIRTIO_F_RING_PACKED);
-                    return Ok((master, feature));
+                    return Ok((frontend, feature));
                 }
                 Ok(None) => continue,
                 Err(e) => return Err(e),
@@ -65,17 +65,17 @@ impl Listener {
         }
     }
 
-    pub fn try_accept(&self) -> VirtioResult<Option<(Master, u64)>> {
+    pub fn try_accept(&self) -> VirtioResult<Option<(Frontend, u64)>> {
         let sock = match self.listener.accept() {
             Ok(Some(conn)) => conn,
             Ok(None) => return Ok(None),
             Err(e) => return Err(e.into()),
         };
 
-        let mut master = Master::from_stream(sock, 1);
-        info!("{}: try to get virtio features from slave.", self.name);
-        match Endpoint::initialize(&mut master) {
-            Ok(Some(features)) => Ok(Some((master, features))),
+        let mut frontend = Frontend::from_stream(sock, 1);
+        info!("{}: try to get virtio features from backend.", self.name);
+        match Endpoint::initialize(&mut frontend) {
+            Ok(Some(features)) => Ok(Some((frontend, features))),
             // The new connection has been closed, try again.
             Ok(None) => {
                 warn!(
@@ -131,7 +131,7 @@ pub(super) struct EndpointParam<'a, AS: GuestAddressSpace, Q: QueueT, R: GuestMe
     #[allow(dead_code)]
     pub backend: Option<BackendInfo>,
     pub init_queues: u32,
-    pub slave_req_fd: Option<RawFd>,
+    pub backend_req_fd: Option<RawFd>,
 }
 
 impl<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'_, AS, Q, R> {
@@ -151,16 +151,16 @@ impl<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'_, A
     }
 }
 
-/// Communication channel from the master to the slave.
+/// Communication channel from the frontend to the backend.
 ///
-/// It encapsulates a low-level vhost-user master side communication endpoint, and provides
+/// It encapsulates a low-level vhost-user frontend side communication endpoint, and provides
 /// connection initialization, monitoring and reconnect functionalities for vhost-user devices.
 ///
 /// Caller needs to ensure mutual exclusive access to the object.
 pub(super) struct Endpoint {
     /// Underlying vhost-user communication endpoint.
-    conn: Option<Master>,
-    old: Option<Master>,
+    conn: Option<Frontend>,
+    old: Option<Frontend>,
     /// Token to register epoll event for the underlying socket.
     slot: u32,
     /// Identifier string for logs.
@@ -168,29 +168,29 @@ pub(super) struct Endpoint {
 }
 
 impl Endpoint {
-    pub fn new(master: Master, slot: u32, name: String) -> Self {
+    pub fn new(frontend: Frontend, slot: u32, name: String) -> Self {
         Endpoint {
-            conn: Some(master),
+            conn: Some(frontend),
             old: None,
             slot,
             name,
         }
     }
 
-    /// First state of the connection negotiation between the master and the slave.
+    /// First state of the connection negotiation between the frontend and the backend.
     ///
     /// If Ok(None) is returned, the underlying communication channel gets broken and the caller may
     /// try to recreate the communication channel and negotiate again.
     ///
     /// # Return
-    /// * - Ok(Some(avial_features)): virtio features from the slave
+    /// * - Ok(Some(avial_features)): virtio features from the backend
     /// * - Ok(None): underlying communicaiton channel gets broken during negotiation
     /// * - Err(e): error conditions
-    fn initialize(master: &mut Master) -> VirtioResult<Option<u64>> {
-        // 1. Seems that some vhost-user slaves depend on the get_features request to driver its
+    fn initialize(frontend: &mut Frontend) -> VirtioResult<Option<u64>> {
+        // 1. Seems that some vhost-user backends depend on the get_features request to driver its
         // internal state machine.
         // N.B. it's really TDD, we just found it works in this way. Any spec about this?
-        let features = match master.get_features() {
+        let features = match frontend.get_features() {
             Ok(val) => val,
             Err(VhostError::VhostUserProtocol(VhostUserError::SocketBroken(_e))) => {
                 return Ok(None)
@@ -203,10 +203,10 @@ impl Endpoint {
 
     #[cfg(feature = "vhost-user-fs")]
     pub fn update_memory<AS: GuestAddressSpace>(&mut self, vm_as: &AS) -> VirtioResult<()> {
-        let master = match self.conn.as_mut() {
+        let frontend = match self.conn.as_mut() {
             Some(conn) => conn,
             None => {
-                error!("vhost user master is None!");
+                error!("vhost user frontend is None!");
                 return Err(VirtioError::InternalError);
             }
         };
@@ -234,15 +234,15 @@ impl Endpoint {
                 mmap_handle: file_offset.file().as_raw_fd(),
             });
         }
-        master.set_mem_table(&regions)?;
+        frontend.set_mem_table(&regions)?;
         Ok(())
     }
 
-    /// Drive the negotiation and initialization process with the vhost-user slave.
+    /// Drive the negotiation and initialization process with the vhost-user backend.
     pub fn negotiate<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>(
         &mut self,
         config: &EndpointParam<AS, Q, R>,
-        mut old: Option<&mut Master>,
+        mut old: Option<&mut Frontend>,
     ) -> VirtioResult<()> {
         let guard = config.virtio_config.lock_guest_memory();
         let mem = guard.deref();
@@ -250,26 +250,26 @@ impl Endpoint {
         assert_eq!(queue_num, config.queue_sizes.len());
         assert_eq!(queue_num, config.intr_evts.len());
 
-        let master = match self.conn.as_mut() {
+        let frontend = match self.conn.as_mut() {
             Some(conn) => conn,
             None => return Err(VirtioError::InternalError),
         };
 
         info!("{}: negotiate()", self.name);
-        master.set_owner()?;
+        frontend.set_owner()?;
         info!("{}: set_owner()", self.name);
 
         // 3. query features again after set owner.
-        let features = master.get_features()?;
+        let features = frontend.get_features()?;
         info!("{}: get_features({:X})", self.name, features);
 
         // 4. set virtio features.
-        master.set_features(config.features)?;
+        frontend.set_features(config.features)?;
         info!("{}: set_features({:X})", self.name, config.features);
 
         // 5. set vhost-user protocol features
         // typical protocol features: 0x37
-        let mut protocol_features = master.get_protocol_features()?;
+        let mut protocol_features = frontend.get_protocol_features()?;
         info!(
             "{}: get_protocol_features({:X})",
             self.name, protocol_features
@@ -279,31 +279,31 @@ impl Endpoint {
             return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
         }
         protocol_features &= config.dev_protocol_features;
-        master.set_protocol_features(protocol_features)?;
+        frontend.set_protocol_features(protocol_features)?;
         info!(
             "{}: set_protocol_features({:X}), dev_protocol_features({:X})",
             self.name, protocol_features, config.dev_protocol_features
         );
 
-        // Setup slave channel if SLAVE_REQ protocol feature is set
-        if protocol_features.contains(VhostUserProtocolFeatures::SLAVE_REQ) {
-            match config.slave_req_fd {
-                Some(fd) => master.set_slave_request_fd(&fd)?,
+        // Setup backend channel if BACKEND_REQ protocol feature is set
+        if protocol_features.contains(VhostUserProtocolFeatures::BACKEND_REQ) {
+            match config.backend_req_fd {
+                Some(fd) => frontend.set_backend_request_fd(&fd)?,
                 None => {
                     error!(
-                        "{}: Protocol feature SLAVE_REQ is set but not slave channel fd",
+                        "{}: Protocol feature BACKEND_REQ is set but not backend channel fd",
                         self.name
                     );
                     return Err(VhostError::VhostUserProtocol(VhostUserError::InvalidParam).into());
                 }
             }
         } else {
-            info!("{}: has no SLAVE_REQ protocol feature set", self.name);
+            info!("{}: has no BACKEND_REQ protocol feature set", self.name);
         }
 
         // 6. check number of queues supported
         if config.has_protocol_mq() {
-            let queue_num = master.get_queue_num()?;
+            let queue_num = frontend.get_queue_num()?;
             info!("{}: get_queue_num({:X})", self.name, queue_num);
             if queue_num < config.queue_sizes.len() as u64 {
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
@@ -312,7 +312,7 @@ impl Endpoint {
 
         // 7. trigger the backend state machine.
         for queue_index in 0..queue_num {
-            master.set_vring_call(queue_index, config.intr_evts[queue_index])?;
+            frontend.set_vring_call(queue_index, config.intr_evts[queue_index])?;
         }
         info!("{}: set_vring_call()", self.name);
 
@@ -335,12 +335,12 @@ impl Endpoint {
                 mmap_handle: file_offset.file().as_raw_fd(),
             });
         }
-        master.set_mem_table(&regions)?;
+        frontend.set_mem_table(&regions)?;
         info!("{}: set_mem_table()", self.name);
 
         // 9. setup vrings
         for queue_cfg in config.virtio_config.queues.iter() {
-            master.set_vring_num(queue_cfg.index() as usize, queue_cfg.actual_size())?;
+            frontend.set_vring_num(queue_cfg.index() as usize, queue_cfg.actual_size())?;
             info!(
                 "{}: set_vring_num(idx: {}, size: {})",
                 self.name,
@@ -348,7 +348,7 @@ impl Endpoint {
                 queue_cfg.actual_size(),
             );
         }
-        // On reconnection, the slave may have processed some packets in virtque and queue
+        // On reconnection, the backend may have processed some packets in virtque and queue
         // base is not zero any more. So don't set queue base on reconnection.
         // N.B. it's really TDD, we just found it works in this way. Any spec about this?
         for queue_index in 0..queue_num {
@@ -364,7 +364,7 @@ impl Endpoint {
                 None
             };
             if let Some(val) = base {
-                master.set_vring_base(queue_index, val as u16)?;
+                frontend.set_vring_base(queue_index, val as u16)?;
                 info!(
                     "{}: set_vring_base(idx: {}, base: {})",
                     self.name, queue_index, val
@@ -380,7 +380,7 @@ impl Endpoint {
                 config.get_host_address(vm_memory::GuestAddress(queue.used_ring()), mem)?;
             let avail_addr =
                 config.get_host_address(vm_memory::GuestAddress(queue.avail_ring()), mem)?;
-            master.set_vring_addr(
+            frontend.set_vring_addr(
                 queue_index,
                 &VringConfigData {
                     queue_max_size: queue.max_size(),
@@ -398,7 +398,7 @@ impl Endpoint {
             );
         }
         for queue_index in 0..queue_num {
-            master.set_vring_kick(
+            frontend.set_vring_kick(
                 queue_index,
                 &config.virtio_config.queues[queue_index].eventfd,
             )?;
@@ -415,7 +415,7 @@ impl Endpoint {
             } else {
                 queue_index
             };
-            master.set_vring_call(queue_index, config.intr_evts[intr_index])?;
+            frontend.set_vring_call(queue_index, config.intr_evts[intr_index])?;
             info!(
                 "{}: set_vring_call(idx: {}, fd: {})",
                 self.name,
@@ -424,7 +424,7 @@ impl Endpoint {
             );
         }
         for queue_index in 0..queue_num {
-            master.set_vring_enable(queue_index, true)?;
+            frontend.set_vring_enable(queue_index, true)?;
             info!(
                 "{}: set_vring_enable(idx: {}, enable: {})",
                 self.name, queue_index, true
@@ -439,13 +439,13 @@ impl Endpoint {
     }
 
     pub fn set_queues_attach(&mut self, curr_queues: u32) -> VirtioResult<()> {
-        let master = match self.conn.as_mut() {
+        let frontend = match self.conn.as_mut() {
             Some(conn) => conn,
             None => return Err(VirtioError::InternalError),
         };
 
         for index in 0..curr_queues {
-            master.set_vring_enable(index as usize, true)?;
+            frontend.set_vring_enable(index as usize, true)?;
             info!(
                 "{}: set_vring_enable(idx: {}, enable: {})",
                 self.name, index, true
@@ -455,14 +455,14 @@ impl Endpoint {
         Ok(())
     }
 
-    /// Restore communication with the vhost-user slave on reconnect.
+    /// Restore communication with the vhost-user backend on reconnect.
     pub fn reconnect<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>(
         &mut self,
-        master: Master,
+        frontend: Frontend,
         config: &EndpointParam<AS, Q, R>,
         ops: &mut EventOps,
     ) -> VirtioResult<()> {
-        let mut old = self.conn.replace(master);
+        let mut old = self.conn.replace(frontend);
         if let Err(e) = self.negotiate(config, old.as_mut()) {
             error!("{}: failed to initialize connection: {}", self.name, e);
             self.conn = old;
@@ -477,18 +477,18 @@ impl Endpoint {
         Ok(())
     }
 
-    /// Teardown the communication channel to the vhost-user slave.
+    /// Teardown the communication channel to the vhost-user backend.
     pub fn disconnect(&mut self, ops: &mut EventOps) -> VirtioResult<()> {
         info!("vhost-user-net: disconnect communication channel.");
         match self.old.take() {
-            Some(master) => {
+            Some(frontend) => {
                 info!("close old connection");
-                self.deregister_epoll_event(&master, ops)
+                self.deregister_epoll_event(&frontend, ops)
             }
             None => match self.conn.take() {
-                Some(master) => {
+                Some(frontend) => {
                     info!("disconnect connection.");
-                    self.deregister_epoll_event(&master, ops)
+                    self.deregister_epoll_event(&frontend, ops)
                 }
                 None => {
                     info!("get disconnect notification when it's already disconnected.");
@@ -501,14 +501,14 @@ impl Endpoint {
     /// Register the underlying socket to be monitored for socket disconnect events.
     pub fn register_epoll_event(&self, ops: &mut EventOps) -> VirtioResult<()> {
         match self.conn.as_ref() {
-            Some(master) => {
+            Some(frontend) => {
                 info!(
                     "{}: monitor disconnect event for fd {}.",
                     self.name,
-                    master.as_raw_fd()
+                    frontend.as_raw_fd()
                 );
                 ops.add(Events::with_data(
-                    master,
+                    frontend,
                     self.slot,
                     EventSet::HANG_UP | EventSet::EDGE_TRIGGERED,
                 ))
@@ -519,22 +519,22 @@ impl Endpoint {
     }
 
     /// Deregister the underlying socket from the epoll controller.
-    pub fn deregister_epoll_event(&self, master: &Master, ops: &mut EventOps) -> VirtioResult<()> {
+    pub fn deregister_epoll_event(&self, frontend: &Frontend, ops: &mut EventOps) -> VirtioResult<()> {
         info!(
             "{}: unregister epoll event for fd {}.",
             self.name,
-            master.as_raw_fd()
+            frontend.as_raw_fd()
         );
         ops.remove(Events::with_data(
-            master,
+            frontend,
             self.slot,
             EventSet::HANG_UP | EventSet::EDGE_TRIGGERED,
         ))
         .map_err(VirtioError::EpollMgr)
     }
 
-    pub fn set_master(&mut self, master: Master) {
-        self.conn = Some(master);
+    pub fn set_frontend(&mut self, frontend: Frontend) {
+        self.conn = Some(frontend);
     }
 }
 

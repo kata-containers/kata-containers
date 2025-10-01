@@ -29,7 +29,7 @@ use nydus_api::ConfigV2;
 use nydus_rafs::blobfs::{BlobFs, Config as BlobfsConfig};
 use nydus_rafs::{fs::Rafs, RafsIoRead};
 use rlimit::Resource;
-use virtio_bindings::bindings::virtio_blk::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
 use virtio_queue::QueueT;
 use vm_memory::{
     FileOffset, GuestAddress, GuestAddressSpace, GuestRegionMmap, GuestUsize, MmapRegion,
@@ -565,7 +565,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 )));
             }
         };
-        let any_fs = rootfs.deref().as_any();
+        let any_fs = rootfs.0.deref().as_any();
         if let Some(fs_swap) = any_fs.downcast_ref::<Rafs>() {
             let mut file = <dyn RafsIoRead>::from_file(&source)
                 .map_err(|e| FsError::BackendFs(format!("RafsIoRead failed: {e:?}")))?;

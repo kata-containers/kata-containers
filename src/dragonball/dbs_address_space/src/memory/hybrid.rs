@@ -6,7 +6,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use vm_memory::bitmap::{Bitmap, BS};
-use vm_memory::guest_memory::GuestMemoryIterator;
 use vm_memory::mmap::{Error, NewBitmap};
 use vm_memory::{
     guest_memory, AtomicAccess, Bytes, FileOffset, GuestAddress, GuestMemory, GuestMemoryRegion,
@@ -336,14 +335,8 @@ impl<'a, B> Iterator for Iter<'a, B> {
     }
 }
 
-impl<'a, B: 'a> GuestMemoryIterator<'a, GuestRegionHybrid<B>> for GuestMemoryHybrid<B> {
-    type Iter = Iter<'a, B>;
-}
-
 impl<B: Bitmap + 'static> GuestMemory for GuestMemoryHybrid<B> {
     type R = GuestRegionHybrid<B>;
-
-    type I = Self;
 
     fn num_regions(&self) -> usize {
         self.regions.len()

@@ -27,18 +27,18 @@ pub(crate) trait Req:
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Type of requests sending from masters to slaves.
+/// Type of requests sending from frontends to backends.
 #[repr(u32)]
 #[allow(unused, non_camel_case_types)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum MasterReq {
+pub enum FrontendReq {
     /// Null operation.
     NOOP = 0,
     /// Get from the underlying vhost implementation the features bit mask.
     GET_FEATURES = 1,
     /// Enable features in the underlying vhost implementation using a bit mask.
     SET_FEATURES = 2,
-    /// Set the current Master as an owner of the session.
+    /// Set the current Frontend as an owner of the session.
     SET_OWNER = 3,
     /// No longer used.
     RESET_OWNER = 4,
@@ -103,15 +103,15 @@ pub enum MasterReq {
     MAX_CMD = 33,
 }
 
-impl Into<u32> for MasterReq {
+impl Into<u32> for FrontendReq {
     fn into(self) -> u32 {
         self as u32
     }
 }
 
-impl Req for MasterReq {
+impl Req for FrontendReq {
     fn is_valid(&self) -> bool {
-        (*self > MasterReq::NOOP) && (*self < MasterReq::MAX_CMD)
+        (*self > FrontendReq::NOOP) && (*self < FrontendReq::MAX_CMD)
     }
 }
 
@@ -608,31 +608,31 @@ impl<T: Req> AsRawFd for Endpoint<T> {
 
 // Negotiate process from slave.
 pub(crate) fn negotiate_slave(
-    slave: &mut Endpoint<MasterReq>,
+    slave: &mut Endpoint<FrontendReq>,
     pfeatures: VhostUserProtocolFeatures,
     has_protocol_mq: bool,
     queue_num: u64,
 ) {
     // set owner
     let (hdr, rfds) = slave.recv_header().unwrap();
-    assert_eq!(hdr.get_code(), MasterReq::SET_OWNER);
+    assert_eq!(hdr.get_code(), FrontendReq::SET_OWNER);
     assert!(rfds.is_none());
 
     // get features
     let vfeatures = 0x15 | VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits();
-    let hdr = VhostUserMsgHeader::new(MasterReq::GET_FEATURES, 0x4, 8);
+    let hdr = VhostUserMsgHeader::new(FrontendReq::GET_FEATURES, 0x4, 8);
     let msg = VhostUserU64::new(vfeatures);
     slave.send_message(&hdr, &msg, None).unwrap();
     let (hdr, _rfds) = slave.recv_header().unwrap();
-    assert_eq!(hdr.get_code(), MasterReq::GET_FEATURES);
+    assert_eq!(hdr.get_code(), FrontendReq::GET_FEATURES);
 
     // set features
     let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
-    assert_eq!(hdr.get_code(), MasterReq::SET_FEATURES);
+    assert_eq!(hdr.get_code(), FrontendReq::SET_FEATURES);
     assert!(rfds.is_none());
 
     // get vhost-user protocol features
-    let code = MasterReq::GET_PROTOCOL_FEATURES;
+    let code = FrontendReq::GET_PROTOCOL_FEATURES;
     let (hdr, rfds) = slave.recv_header().unwrap();
     assert_eq!(hdr.get_code(), code);
     assert!(rfds.is_none());
@@ -642,15 +642,15 @@ pub(crate) fn negotiate_slave(
 
     // set vhost-user protocol features
     let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
-    assert_eq!(hdr.get_code(), MasterReq::SET_PROTOCOL_FEATURES);
+    assert_eq!(hdr.get_code(), FrontendReq::SET_PROTOCOL_FEATURES);
     assert!(rfds.is_none());
 
     // set number of queues
     if has_protocol_mq {
         let (hdr, rfds) = slave.recv_header().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::GET_QUEUE_NUM);
+        assert_eq!(hdr.get_code(), FrontendReq::GET_QUEUE_NUM);
         assert!(rfds.is_none());
-        let hdr = VhostUserMsgHeader::new(MasterReq::GET_QUEUE_NUM, 0x4, 8);
+        let hdr = VhostUserMsgHeader::new(FrontendReq::GET_QUEUE_NUM, 0x4, 8);
         let msg = VhostUserU64::new(queue_num);
         slave.send_message(&hdr, &msg, None).unwrap();
     }
@@ -658,7 +658,7 @@ pub(crate) fn negotiate_slave(
     //  set vring call
     for _i in 0..queue_num {
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_VRING_CALL);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_VRING_CALL);
         assert!(rfds.is_some());
     }
 
@@ -667,13 +667,13 @@ pub(crate) fn negotiate_slave(
     let (hdr, _msg, _payload, rfds) = slave
         .recv_payload_into_buf::<VhostUserMemory>(&mut region_buf)
         .unwrap();
-    assert_eq!(hdr.get_code(), MasterReq::SET_MEM_TABLE);
+    assert_eq!(hdr.get_code(), FrontendReq::SET_MEM_TABLE);
     assert!(rfds.is_some());
 
     if pfeatures.contains(VhostUserProtocolFeatures::INFLIGHT_SHMFD) {
         // get inflight fd
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserInflight>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::GET_INFLIGHT_FD);
+        assert_eq!(hdr.get_code(), FrontendReq::GET_INFLIGHT_FD);
         assert!(rfds.is_none());
         let msg = VhostUserInflight {
             mmap_size: 0x100,
@@ -684,7 +684,7 @@ pub(crate) fn negotiate_slave(
         inflight_file.set_len(0x100).unwrap();
         let fds = [inflight_file.as_raw_fd()];
         let hdr = VhostUserMsgHeader::new(
-            MasterReq::GET_INFLIGHT_FD,
+            FrontendReq::GET_INFLIGHT_FD,
             VhostUserHeaderFlag::REPLY.bits(),
             std::mem::size_of::<VhostUserInflight>() as u32,
         );
@@ -692,10 +692,10 @@ pub(crate) fn negotiate_slave(
 
         // set inflight fd
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserInflight>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_INFLIGHT_FD);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_INFLIGHT_FD);
         assert!(rfds.is_some());
         let hdr = VhostUserMsgHeader::new(
-            MasterReq::GET_INFLIGHT_FD,
+            FrontendReq::GET_INFLIGHT_FD,
             VhostUserHeaderFlag::REPLY.bits(),
             std::mem::size_of::<VhostUserInflight>() as u32,
         );
@@ -714,7 +714,7 @@ pub(crate) fn negotiate_slave(
     // set vring base
     for _i in 0..queue_num {
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserVringState>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_VRING_BASE);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_VRING_BASE);
         assert!(rfds.is_none());
         slave.send_header(&hdr, None).unwrap();
     }
@@ -722,7 +722,7 @@ pub(crate) fn negotiate_slave(
     // set vring addr
     for _i in 0..queue_num {
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserVringAddr>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_VRING_ADDR);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_VRING_ADDR);
         assert!(rfds.is_none());
         slave.send_header(&hdr, None).unwrap();
     }
@@ -730,21 +730,21 @@ pub(crate) fn negotiate_slave(
     // set vring kick
     for _i in 0..queue_num {
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_VRING_KICK);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_VRING_KICK);
         assert!(rfds.is_some());
     }
 
     // set vring call
     for _i in 0..queue_num {
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_VRING_CALL);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_VRING_CALL);
         assert!(rfds.is_some());
     }
 
     // set vring enable
     for _i in 0..queue_num {
         let (hdr, _msg, rfds) = slave.recv_body::<VhostUserVringState>().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::SET_VRING_ENABLE);
+        assert_eq!(hdr.get_code(), FrontendReq::SET_VRING_ENABLE);
         assert!(rfds.is_none());
         slave.send_header(&hdr, None).unwrap();
     }

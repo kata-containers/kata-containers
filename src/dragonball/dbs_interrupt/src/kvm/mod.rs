@@ -214,8 +214,11 @@ impl KvmIrqRouting {
             irq_routing_entries[idx] = *entry;
         }
 
+        let final_irq_routing =
+            kvm_bindings::fam_wrappers::KvmIrqRouting::from_entries(irq_routing_entries).unwrap();
+
         self.vm_fd
-            .set_gsi_routing(irq_routing)
+            .set_gsi_routing(&final_irq_routing)
             .map_err(from_sys_util_errno)?;
 
         Ok(())
