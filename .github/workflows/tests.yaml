@@ -1,0 +1,33 @@
+# https://github.com/marketplace/actions/shellcheck
+name: Check what is using port 10250
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: what's on port 10250
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check processes
+        run: |
+          ss -ltnp 'sport = :10250'
+          pids=$(ss -ltnp 'sport = :10250' | awk 'NR>1 {split($NF,a,","); print a[2]}' | sort -u)
+          if [ -n "$pids" ]; then
+            echo "Force killing processes on port 10250: $pids"
+            kill -9 $pids
+          else
+            echo "No process found listening on port 10250"
+          fi
