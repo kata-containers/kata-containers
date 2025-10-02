@@ -11,6 +11,16 @@ kubernetes_dir=$(dirname "$(readlink -f "$0")")
 # shellcheck disable=SC1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
 
+# Enable NVRC trace logging for NVIDIA GPU runtime
+enable_nvrc_trace() {
+	if [[ ${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu} == "kata-qemu-nvidia-gpu" ]]; then
+		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
+	fi
+	if ! grep -q "nvrc.log=trace" "${config_file}"; then
+		sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 nvrc.log=trace"/g' "${config_file}"
+	fi
+}
+
 cleanup() {
 	true
 }
@@ -19,9 +29,22 @@ trap cleanup EXIT
 
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
-K8S_TEST_NV=("k8s-nvidia-nim.bats")
+
+# Enable NVRC trace logging by default for NVIDIA GPU tests
+ENABLE_NVRC_TRACE="${ENABLE_NVRC_TRACE:-true}"
+
+if [ -n "${K8S_TEST_NV:-}" ]; then
+	K8S_TEST_NV=($K8S_TEST_NV)
+else
+	K8S_TEST_NV=("k8s-nvidia-cuda.bats" \
+		"k8s-nvidia-nim.bats")
+fi
 
 ensure_yq
+
+if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
+	enable_nvrc_trace
+fi
 
 info "Running tests with bats version: $(bats --version)"
 
