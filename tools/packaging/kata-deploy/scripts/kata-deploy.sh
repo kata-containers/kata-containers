@@ -778,6 +778,23 @@ function containerd_snapshotter_version_check() {
 	fi
 }
 
+function containerd_erofs_snapshotter_version_check() {
+	local container_runtime_version=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}')
+	local containerd_prefix="containerd://"
+	local containerd_version=${container_runtime_version#$containerd_prefix}
+	local min_version_major="2"
+	local min_version_minor="2"
+
+	# Extract major.minor (strip patch and prerelease stuff)
+	local major=${containerd_version%%.*}
+	local rest=${containerd_version#*.}
+	local minor=${rest%%[^0-9]*}
+
+	if [ "${min_version_major}" -gt "${major}" ] || { [ "${min_version_major}" -eq "${major}" ] && [ "${min_version_minor}" -gt "${minor}" ]; }; then
+		die "In order to use erofs-snapshotter containerd must be 2.2.0 or newer"
+	fi
+}
+
 function snapshotter_handler_mapping_validation_check() {
 	echo "Validating the snapshotter-handler mapping: \"${SNAPSHOTTER_HANDLER_MAPPING}\""
 	if [ -z "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
@@ -806,6 +823,24 @@ function snapshotter_handler_mapping_validation_check() {
 			die "One, and only one, entry per shim is required"
 		fi
 	done
+}
+
+function configure_erofs_snapshotter() {
+	info "Configuring erofs-snapshotter"
+
+	# As it's only supported with containerd 2.2.0 or newer
+	# we don't even care about the config file format, as
+	# it'll always be 3 (at least till version 4 is out).
+	#
+	# Also, drop-in is always supported on containerd 2.x
+	configuration_file="${1}"
+
+	tomlq -i -t $(printf '.plugins."io.containerd.cri.v1.images".discard_unpacked_layers=false') ${configuration_file}
+
+	tomlq -i -t $(printf '.plugins."io.containerd.service.v1.diff-service".default=["erofs","walking"]') ${configuration_file}
+
+	tomlq -i -t $(printf '.plugins."io.containerd.snapshotter.v1.erofs".enable_fsverity=true') ${configuration_file}
+	tomlq -i -t $(printf '.plugins."io.containerd.snapshotter.v1.erofs".set_immutable=true') ${configuration_file}
 }
 
 function configure_nydus_snapshotter() {
@@ -846,6 +881,9 @@ function configure_snapshotter() {
 			configure_nydus_snapshotter "${configuration_file}" "${pluginid}"
 			host_systemctl restart nydus-snapshotter
 			;;
+		erofs)
+			configure_erofs_snapshotter "${configuration_file}"
+			;;
 	esac
 }
 
@@ -880,6 +918,7 @@ function install_snapshotter() {
 	snapshotter="${1}"
 
 	case "${snapshotter}" in
+		erofs) ;; # it's a containerd's built-in snapshotter
 		nydus) install_nydus_snapshotter ;;
 	esac
 }
@@ -974,6 +1013,9 @@ function main() {
 					warn "Snapshotter is a containerd specific option."
 				else
 					case "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" in
+						erofs)
+							containerd_erofs_snapshotter_version_check
+							;;
 						nydus)
 							;;
 						*)
