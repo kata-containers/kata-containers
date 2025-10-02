@@ -430,7 +430,7 @@ function install_artifacts() {
 			case ${ID} in
 				ubuntu)
 					case ${VERSION_ID} in
-						24.04|25.04)
+						24.04|25.04|25.10)
 							tdx_supported ${ID} ${VERSION_ID} ${kata_config_file}
 							;;
 						*)
