@@ -60,6 +60,7 @@ else
 		"k8s-exec.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-hostname.bats" \
+		"k8s-hostpath-volume.bats" \
 		"k8s-inotify.bats" \
 		"k8s-ip6tables.bats" \
 		"k8s-job.bats" \
