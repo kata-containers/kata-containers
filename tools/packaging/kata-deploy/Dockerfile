@@ -2,6 +2,29 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+#### Nydus snapshotter & nydus image
+
+FROM golang:1.24-alpine AS nydus-binary-downloader
+
+# Keep the version here aligned with "ndyus-snapshotter.version"
+# in versions.yaml
+ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.2
+ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
+
+ARG DESTINATION=/opt/nydus-snapshotter/
+
+RUN \
+	mkdir -p ${DESTINATION} && \
+	ARCH=$(uname -m) && \
+	if [[ "${ARCH}" == "x86_64" ]]; then ARCH=amd64 ; fi && \
+	if [[ "${ARCH}" == "aarch64" ]]; then ARCH=arm64; fi && \
+	apk add --no-cache curl && \
+	curl -fOL --progress-bar ${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz && \
+	tar xvzpf nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz -C ${DESTINATION} && \
+	rm nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz
+
+#### kata-deploy main image
+
 ARG BASE_IMAGE_NAME=alpine
 ARG BASE_IMAGE_TAG=3.22
 FROM $BASE_IMAGE_NAME:$BASE_IMAGE_TAG
@@ -37,4 +60,7 @@ RUN \
 	pip install --no-cache-dir yq==3.2.3 --break-system-packages
 
 COPY scripts ${DESTINATION}/scripts
+COPY nydus-snapshotter ${DESTINATION}/nydus-snapshotter
+COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
+COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
 COPY runtimeclasses ${DESTINATION}/runtimeclasses
