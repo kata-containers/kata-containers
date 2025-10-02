@@ -1,0 +1,10 @@
+[Unit]
+Description=Nydus snapshotter
+After=network.target local-fs.target
+Before=containerd.service
+
+[Service]
+ExecStart=/usr/local/bin/containerd-nydus-grpc --config /etc/nydus-snapshotter/config-guest-pulling.toml --log-to-stdout
+
+[Install]
+RequiredBy=containerd.service

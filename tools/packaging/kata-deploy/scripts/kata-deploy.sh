@@ -62,6 +62,8 @@ AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 
+EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
+
 INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
 dest_dir="${default_dest_dir}"
@@ -497,26 +499,33 @@ function wait_till_node_is_ready() {
 	done
 }
 
+function restart_runtime() {
+	local runtime="${1}"
+
+	if [ "${runtime}" == "k0s-worker" ] || [ "${runtime}" == "k0s-controller" ]; then
+		# do nothing, k0s will automatically load the config on the fly
+		:
+	elif [ "${runtime}" == "microk8s" ]; then
+		host_systemctl restart snap.microk8s.daemon-containerd.service
+	else
+		host_systemctl daemon-reload
+		host_systemctl restart "${runtime}"
+	fi
+
+	wait_till_node_is_ready
+}
+
 function configure_cri_runtime() {
-	case $1 in
+	local runtime="${1}"
+
+	case "${runtime}" in
 	crio)
 		configure_crio
 		;;
 	containerd | k3s | k3s-agent | rke2-agent | rke2-server | k0s-controller | k0s-worker | microk8s)
-		configure_containerd "$1"
+		configure_containerd "${runtime}"
 		;;
 	esac
-	if [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
-		# do nothing, k0s will automatically load the config on the fly
-		:
-	elif [ "$1" == "microk8s" ]; then
-		host_systemctl restart snap.microk8s.daemon-containerd.service
-	else
-		host_systemctl daemon-reload
-		host_systemctl restart "$1"
-	fi
-
-	wait_till_node_is_ready
 }
 
 function configure_crio_runtime() {
@@ -799,6 +808,90 @@ function snapshotter_handler_mapping_validation_check() {
 	done
 }
 
+function configure_nydus_snapshotter() {
+	info "Configuring nydus-snapshotter"
+
+	configuration_file="${1}"
+	pluginid="${2}"
+
+	tomlq -i -t $(printf '.plugins.%s.disable_snapshot_annotations=false' ${pluginid}) ${configuration_file}
+
+	tomlq -i -t $(printf '.proxy_plugins.nydus.type="snapshot"') ${configuration_file}
+	tomlq -i -t $(printf '.proxy_plugins.nydus.address="/run/containerd-nydus/containerd-nydus-grpc.sock"') ${configuration_file}
+}
+
+function configure_snapshotter() {
+	snapshotter="${1}"
+
+	local runtime="$(get_container_runtime)"
+	local pluginid="\"io.containerd.grpc.v1.cri\".containerd" # version = 2
+	local configuration_file="${containerd_conf_file}"
+
+	# Properly set the configuration file in case drop-in files are supported
+	if [[ ${use_containerd_drop_in_conf_file} == "true" ]]; then
+		configuration_file="/host${containerd_drop_in_conf_file}"
+	fi
+
+	local containerd_root_conf_file="${containerd_conf_file}"
+	if [[ "${runtime}" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+		containerd_root_conf_file="/etc/containerd/containerd.toml"
+	fi
+
+	if grep -q "version = 3\>" ${containerd_root_conf_file}; then
+		pluginid=\"io.containerd.cri.v1.images\"
+	fi
+
+	case "${snapshotter}" in
+		nydus)
+			configure_nydus_snapshotter "${configuration_file}" "${pluginid}"
+			host_systemctl restart nydus-snapshotter
+			;;
+	esac
+}
+
+function install_nydus_snapshotter() {
+	info "Deploying nydus-snapshotter"
+
+	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc /host/usr/local/bin/containerd-nydus-grpc
+	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs /host/usr/local/bin/nydus-overlayfs
+
+	mkdir -p /host/etc/nydus-snapshotter/
+	install -D -m 644 /opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml /host/etc/nydus-snapshotter/config-guest-pulling.toml
+	install -D -m 644 /opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service /host/etc/systemd/system/nydus-snapshotter.service
+
+	host_systemctl daemon-reload
+	host_systemctl enable nydus-snapshotter.service
+}
+
+function uninstall_nydus_snapshotter() {
+	info "Removing deployed nydus-snapshotter"
+	host_systemctl disable --now nydus-snapshotter.service
+
+	rm -f /host/etc/systemd/system/nydus-snapshotter.service
+	rm -f /host/etc/nydus-snapshotter/config-guest-pulling.toml
+
+	rm -f /host/usr/local/bin/nydus-overlayfs
+	rm -f /host/usr/local/bin/containerd-nydus-grpc
+
+	host_systemctl daemon-reload
+}
+
+function install_snapshotter() {
+	snapshotter="${1}"
+
+	case "${snapshotter}" in
+		nydus) install_nydus_snapshotter ;;
+	esac
+}
+
+function uninstall_snapshotter() {
+	snapshotter="${1}"
+
+	case "${snapshotter}" in
+		nydus) uninstall_nydus_snapshotter ;;
+	esac
+}
+
 function main() {
 	action=${1:-}
 	if [ -z "$action" ]; then
@@ -824,6 +917,7 @@ function main() {
 	echo "* INSTALLATION_PREFIX: ${INSTALLATION_PREFIX}"
 	echo "* MULTI_INSTALL_SUFFIX: ${MULTI_INSTALL_SUFFIX}"
 	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
+	echo "* EXPERIMENTAL_SETUP_SNAPSHOTTER: ${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 
 	# script requires that user is root
 	euid=$(id -u)
@@ -853,7 +947,6 @@ function main() {
 		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 	fi
 
-
 	# only install / remove / update if we are dealing with CRIO or containerd
 	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server|k0s-worker|k0s-controller|microk8s)$ ]]; then
 		if [ "$runtime" != "crio" ]; then
@@ -873,6 +966,23 @@ function main() {
 
 		case "$action" in
 		install)
+			# Let's fail early on this, so we don't need to do a rollback
+			# in case we reach this situation.
+			if [[ -n "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+				if [[ "${runtime}" == "cri-o" ]]; then
+					warn "EXPERIMENTAL_SETUP_SNAPSHOTTER is being ignored!"
+					warn "Snapshotter is a containerd specific option."
+				else
+					case "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" in
+						nydus)
+							;;
+						*)
+							die "${EXPERIMENTAL_SETUP_SNAPSHOTTER} is not a supported snapshotter by kata-deploy"
+							;;
+					esac
+				fi
+			fi
+
 			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 			       if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
 				       cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
@@ -897,6 +1007,12 @@ function main() {
 
 			install_artifacts
 			configure_cri_runtime "$runtime"
+			if [[ -n "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+				install_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+				configure_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+			fi
+
+			restart_runtime "${runtime}"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
@@ -916,6 +1032,13 @@ function main() {
 				if [ $kata_deploy_installations -eq 0 ]; then
 					kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 				fi
+			fi
+
+			if [[ -n "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+				# Here we don't need to do any cleanup on the config, as kata-deploy
+				# will revert the configuration to the state it was before the deployment,
+				# which is also before the snapshotter configuration. :-)
+				uninstall_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 			fi
 
 			cleanup_cri_runtime "$runtime"
