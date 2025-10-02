@@ -58,12 +58,6 @@ create_inference_embedqa_pods() {
     echo "# POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >&3
 }
 
-enable_nvrc_trace() {
-    if [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu" ]]; then
-        config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
-    fi
-    sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 nvrc.log=trace"/g' "${config_file}"
-}
 
 setup_file() {
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
@@ -89,7 +83,6 @@ setup_file() {
     export POD_INSTRUCT_YAML="${pod_instruct_yaml}"
     export POD_EMBEDQA_YAML="${pod_embedqa_yaml}"
 
-    enable_nvrc_trace
 
     setup_langchain_flow
     create_inference_embedqa_pods
@@ -292,7 +285,7 @@ embedding_path = "./data/nv_embedding"
 docsearch = FAISS.load_local(folder_path=embedding_path, embeddings=embedding_model, allow_dangerous_deserialization=True)
 EOF
 
-    # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell  
+    # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell
     cat <<EOF >>"${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
 llm = ChatNVIDIA(base_url="http://${POD_IP_INSTRUCT}:8000/v1", model="meta/llama3-8b-instruct", temperature=0.1, max_tokens=1000, top_p=1.0)
 
