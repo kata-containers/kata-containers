@@ -826,8 +826,16 @@ func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, blockDevice *Bloc
 		"direct":   direct,
 		"no-flush": noFlush,
 	}
-
 	return q.executeCommand(ctx, "blockdev-add", blockdevArgs, nil)
+}
+
+func (q *QMP) ExecuteBlockdevResize(ctx context.Context, blockDeviceID string, size uint64) error {
+	blockdevArgs := map[string]interface{}{
+		"node-name": blockDeviceID,
+		"size":      size,
+	}
+
+	return q.executeCommand(ctx, "block_resize", blockdevArgs, nil)
 }
 
 // ExecuteBlockdevAddWithDriverCache has three one parameter driver
