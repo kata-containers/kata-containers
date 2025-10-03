@@ -40,7 +40,7 @@ jobs:
       - name: Build runtime binaries
         run: |
           cd src/runtime
-          make ${MAKE_TARGET}
+          make "${MAKE_TARGET}"
         env:
           MAKE_TARGET: ${{ matrix.make_target }}
           SKIP_GO_VERSION_CHECK: "1"

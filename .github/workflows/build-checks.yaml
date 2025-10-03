@@ -128,7 +128,7 @@ jobs:
       - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
           cd "${COMPONENT_PATH}"
-          eval ${COMMAND}
+          eval "${COMMAND}"
         env:
           COMMAND: ${{ matrix.command }}
           COMPONENT_PATH: ${{ matrix.component.path }}

@@ -108,7 +108,7 @@ jobs:
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
         env:
           DEPLOY_CMD: ${{ matrix.deploy-cmd }}
-        run: bash tests/integration/kubernetes/gha-run.sh ${DEPLOY_CMD}
+        run: bash tests/integration/kubernetes/gha-run.sh "${DEPLOY_CMD}"
         if: ${{ matrix.snapshotter != 'overlayfs' }}
 
       - name: Deploy Kata

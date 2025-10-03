@@ -124,7 +124,7 @@ jobs:
           echo "GITHUB_RUNNER_CI_NON_VIRT=true" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
-          cd ${COMPONENT_PATH}
+          cd "${COMPONENT_PATH}"
           ${COMMAND}
         env:
           COMMAND: ${{ matrix.command }}
