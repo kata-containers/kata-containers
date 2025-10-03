@@ -589,7 +589,7 @@ function main() {
 		configure-snapshotter) configure_snapshotter ;;
 		setup-crio) setup_crio ;;
 		deploy-coco-kbs) deploy_coco_kbs ;;
-		deploy-k8s) deploy_k8s ;;
+		deploy-k8s) deploy_k8s ${CONTAINER_ENGINE:-} ${CONTAINER_ENGINE_VERSION:-};;
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools ;;
 		install-kbs-client) install_kbs_client ;;
