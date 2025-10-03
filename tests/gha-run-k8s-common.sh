@@ -26,6 +26,7 @@ HELM_K8S_DISTRIBUTION="${HELM_K8S_DISTRIBUTION:-}"
 HELM_PULL_TYPE_MAPPING="${HELM_PULL_TYPE_MAPPING:-}"
 HELM_SHIMS="${HELM_SHIMS:-}"
 HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
+HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
 KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-600}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
@@ -445,6 +446,7 @@ function helm_helper() {
 		[[ -n "${HELM_AGENT_NO_PROXY}" ]] && yq -i ".env.agentNoProxy = \"${HELM_AGENT_NO_PROXY}\"" "${values_yaml}"
 		[[ -n "${HELM_PULL_TYPE_MAPPING}" ]] && yq -i ".env.pullTypeMapping = \"${HELM_PULL_TYPE_MAPPING}\"" "${values_yaml}"
 		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
+		[[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]] && yq -i ".env._experimentalSetupSnapshotter=\"${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}\"" "${values_yaml}"
 	fi
 
 	echo "::group::Final kata-deploy manifests used in the test"

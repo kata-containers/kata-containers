@@ -25,3 +25,4 @@ env:
   installationPrefix: ""
   hostOS: ""
   multiInstallSuffix: ""
+  _experimentalSetupSnapshotter: ""

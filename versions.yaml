@@ -344,6 +344,8 @@ externals:
     url: "https://github.com/dragonflyoss/image-service"
     version: "v2.2.3"
 
+  # Keep the version here aligned with the NYDUS_SNAPSHOTTER_VERSION
+  # on tools/packaging/kata-deploy/Dockerfile
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
