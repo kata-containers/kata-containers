@@ -5,7 +5,7 @@ name: Gatekeeper
 # reporting the status.
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] See #11332.
     types:
       - opened
       - synchronize

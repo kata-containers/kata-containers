@@ -1,6 +1,6 @@
 name: Kata Containers CI
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] See #11332.
     branches:
       - 'main'
     types:
