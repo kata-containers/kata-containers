@@ -301,8 +301,9 @@ fn get_shared_bind_mount(
     propagation: &str,
     access: &str,
 ) {
-    let mount_path = if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
-        str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..]).unwrap()
+    let path = Path::new(&yaml_mount.mountPath);
+    let mount_path = if let Some(file_name) = path.file_name() {
+        file_name.to_str().unwrap()
     } else {
         &yaml_mount.mountPath
     };
