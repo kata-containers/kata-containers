@@ -14,7 +14,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -1116,7 +1115,7 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 		args["share-rw"] = true
 	}
 	if queues > 0 {
-		args["num-queues"] = strconv.Itoa(queues)
+		args["num-queues"] = queues
 	}
 
 	var transport VirtioTransport
