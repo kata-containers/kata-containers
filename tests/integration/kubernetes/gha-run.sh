@@ -196,6 +196,23 @@ function deploy_kata() {
 		HOST_OS="${KATA_HOST_OS}"
 	fi
 
+	EXPERIMENTAL_SETUP_SNAPSHOTTER=""
+	if [[ "${USE_EXPERIMENTAL_SETUP_SNAPSHOTTER:-false}" == "true" ]]; then
+		case "${SNAPSHOTTER}" in
+			nydus|erofs)
+				ARCH="$(uname -m)"
+				# We only want to tests this for the qemu-coco-dev runtime class
+				# as it's running on a GitHub runner (and not on a BM machine),
+				# and there the snapshotter is deployed on every run (rather than
+				# deployed when the machine is configured, as on the BM machines).
+				if [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]] && [[ ${ARCH} == "x86_64" ]]; then
+					EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}"
+				fi
+				;;
+			*) ;;
+		esac
+	fi
+
 	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
 	export HELM_IMAGE_REFERENCE="${DOCKER_REGISTRY}/${DOCKER_REPO}"
 	export HELM_IMAGE_TAG="${DOCKER_TAG}"
@@ -208,6 +225,7 @@ function deploy_kata() {
 	export HELM_AGENT_HTTPS_PROXY="${HTTPS_PROXY}"
 	export HELM_AGENT_NO_PROXY="${NO_PROXY}"
 	export HELM_PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING}"
+	export HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 	export HELM_HOST_OS="${HOST_OS}"
 	helm_helper
 }
