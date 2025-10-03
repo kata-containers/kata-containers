@@ -40,11 +40,14 @@ jobs:
       - name: Build runtime binaries
         run: |
           cd src/runtime
-          make ${{ matrix.make_target }}
+          make "${MAKE_TARGET}"
         env:
+          MAKE_TARGET: ${{ matrix.make_target }}
           SKIP_GO_VERSION_CHECK: "1"
 
       - name: Run govulncheck on ${{ matrix.binary }}
+        env:
+          BINARY: ${{ matrix.binary }}
         run: |
           cd src/runtime
-          bash ../../tests/govulncheck-runner.sh "./${{ matrix.binary }}"
+          bash ../../tests/govulncheck-runner.sh "./${BINARY}"

@@ -106,7 +106,9 @@ jobs:
       # qemu-runtime-rs only works with overlayfs
       # See: https://github.com/kata-containers/kata-containers/issues/10066
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
-        run: bash tests/integration/kubernetes/gha-run.sh ${{ matrix.deploy-cmd }}
+        env:
+          DEPLOY_CMD: ${{ matrix.deploy-cmd }}
+        run: bash tests/integration/kubernetes/gha-run.sh "${DEPLOY_CMD}"
         if: ${{ matrix.snapshotter != 'overlayfs' }}
 
       - name: Deploy Kata
