@@ -9,6 +9,10 @@ self-hosted-runner:
   labels:
     - amd64-nvidia-a100
     - arm64-k8s
+    - containerd-v1.7
+    - containerd-v2.0
+    - containerd-v2.1
+    - containerd-v2.2
     - garm-ubuntu-2004
     - garm-ubuntu-2004-smaller
     - garm-ubuntu-2204
