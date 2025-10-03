@@ -195,6 +195,27 @@ directly from the *guest* filesystem into the container.
 [k8s-hostpath]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
 [k8s-blockdevice]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath-volume-types
 
+### Mounting `procfs` and `sysfs`
+
+For security reasons, the following mounts are disallowed:
+
+| Type              | Source    | Destination                      | Rationale      |
+|-------------------|-----------|----------------------------------|----------------|
+| `bind`            | `!= proc` | `/proc`                          | CVE-2019-16884 |
+| `bind`            | `*`       | `/proc/*` (see exceptions below) | CVE-2019-16884 |
+| `proc \|\| sysfs` | `*`       | not a directory (e.g. symlink)   | CVE-2019-19921 |
+
+For bind mounts under /proc, these destinations are allowed:
+	
+ * `/proc/cpuinfo`
+ * `/proc/diskstats`
+ * `/proc/meminfo`
+ * `/proc/stat`
+ * `/proc/swaps`
+ * `/proc/uptime`
+ * `/proc/loadavg`
+ * `/proc/net/dev`
+
 ## Privileged containers
 
 Privileged support in Kata is essentially different from `runc` containers.
