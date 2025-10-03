@@ -91,8 +91,10 @@ jobs:
       - name: Parse OCI image name and digest
         id: parse-oci-segments
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        env:
+          ASSET: ${{ matrix.asset }}
         run: |
-          oci_image="$(<"build/${{ matrix.asset }}-oci-image")"
+          oci_image="$(<"build/${ASSET}-oci-image")"
           echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 

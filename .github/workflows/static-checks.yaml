@@ -90,9 +90,11 @@ jobs:
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
         run: |
           export PATH="$PATH:${HOME}/.cargo/bin"
-          cd ${{ matrix.component-path }}
-          ${{ matrix.command }}
+          cd "${COMPONENT_PATH}"
+          eval ${COMMAND}
         env:
+          COMMAND: ${{ matrix.command }}
+          COMPONENT_PATH: ${{ matrix.component-path }}
           RUST_BACKTRACE: "1"
           RUST_LIB_BACKTRACE: "0"
 
@@ -120,13 +122,13 @@ jobs:
           path: ./src/github.com/${{ github.repository }}
       - name: Install yq
         run: |
-          cd "${GOPATH}/src/github.com/${{ github.repository }}"
+          cd "${GOPATH}/src/github.com/${GITHUB_REPOSITORY}"
           ./ci/install_yq.sh
         env:
           INSTALL_IN_GOPATH: false
       - name: Install golang
         run: |
-          cd "${GOPATH}/src/github.com/${{ github.repository }}"
+          cd "${GOPATH}/src/github.com/${GITHUB_REPOSITORY}"
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
       - name: Install system dependencies
@@ -134,7 +136,7 @@ jobs:
           sudo apt-get update && sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
       - name: Install open-policy-agent
         run: |
-          cd "${GOPATH}/src/github.com/${{ github.repository }}"
+          cd "${GOPATH}/src/github.com/${GITHUB_REPOSITORY}"
           ./tests/install_opa.sh
       - name: Install regorus
         env:
@@ -142,11 +144,13 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: "${{ github.actor }}"
           ARTEFACT_REGISTRY_PASSWORD: "${{ secrets.GITHUB_TOKEN }}"
         run: |
-          "${GOPATH}/src/github.com/${{ github.repository }}/tests/install_regorus.sh"
+          "${GOPATH}/src/github.com/${GITHUB_REPOSITORY}/tests/install_regorus.sh"
       - name: Run check
+        env:
+          CMD: ${{ matrix.cmd }}
         run: |
           export PATH="${PATH}:${GOPATH}/bin"
-          cd "${GOPATH}/src/github.com/${{ github.repository }}" && ${{ matrix.cmd }}
+          cd "${GOPATH}/src/github.com/${GITHUB_REPOSITORY}" && ${CMD}
 
   govulncheck:
     needs: skipper
