@@ -368,6 +368,87 @@ function setup_crio() {
 	install_crio "${crio_version}"
 }
 
+function install_system_dependencies() {
+	dependencies="${1}"
+
+	sudo apt-get -y install "${dependencies}"
+}
+
+function load_k8s_needed_modules() {
+	sudo modprobe overlay
+	sudo modprobe br_netfilter
+}
+
+function set_k8s_network_parameters() {
+	sudo sysctl -w net.bridge.bridge-nf-call-iptables=1
+	sudo sysctl -w net.ipv4.ip_forward=1
+	sudo sysctl -w net.bridge.bridge-nf-call-ip6tables=1
+}
+
+function disable_swap() {
+	sudo swapoff -a
+}
+
+# Always deploys the latest k8s version
+function do_deploy_k8s() {
+	# Add the pkgs.k8s.io repo
+	curl -fsSL https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/Release.key | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+	echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+	# Pin the packages to ensure they'll be downloaded from the pkgs.k8s.io repo
+	#
+	# This is needed as the github runner uses the azure repo which already has
+	# kubernetes packages, and those packages simply don't work well with the
+	# runner.
+	cat <<EOF | sudo tee /etc/apt/preferences.d/kubernetes
+Package: kubelet kubeadm kubectl cri-tools kubernetes-cni
+Pin: origin pkgs.k8s.io
+Pin-Priority: 1000
+EOF
+
+	# Install the packages
+	sudo apt-get update
+   	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
+   	sudo apt-mark hold kubeadm kubelet kubectl
+
+	# Deploy k8s using kubeadm
+   	sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+	mkdir -p $HOME/.kube
+	sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+	sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+	# Deploy flannel
+	kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml	
+
+	# Untaint the node
+	kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+}
+
+# container_engine: containerd (only containerd is supported for now, support for crio is welcome)
+# container_engine_version: major.minor (and then we'll install the latest patch release matching that major.minor)
+function deploy_vanilla_k8s() {
+	container_engine="${1}"
+	container_engine_version="${2}"
+
+	[[ -z "${container_engine}" ]] && die "container_engine is required"
+	[[ -z "${container_engine_version}" ]] && die "container_engine_version is required"
+
+	install_system_dependencies "runc"
+	load_k8s_needed_modules
+	set_k8s_network_parameters
+	disable_swap
+	case "${container_engine}" in
+		containerd)
+			install_cri_containerd "${container_engine_version}"
+			sudo mkdir -p /etc/containerd
+			containerd config default | sed -e 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
+			;;
+		*) die "${container_engine} is not a container engine supported by this script" ;;
+	esac
+	sudo systemctl daemon-reload && sudo systemctl restart "${container_engine}"
+	do_deploy_k8s
+}
+
 function deploy_k8s() {
 	echo "::group::Deploying ${KUBERNETES}"
 
@@ -376,6 +457,7 @@ function deploy_k8s() {
 		k3s) deploy_k3s ;;
 		rke2) deploy_rke2 ;;
 		microk8s) deploy_microk8s ;;
+		vanilla) deploy_vanilla_k8s ${CONTAINER_ENGINE} ${CONTAINER_ENGINE_VERSION} ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
