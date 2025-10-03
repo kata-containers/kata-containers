@@ -45,7 +45,7 @@ setup() {
 
 teardown() {
     # Debugging information
-    kubectl describe pod "${pod_name}" || true
+    echo "=== CUDA vectoradd Pod Logs ==="
     kubectl logs "${pod_name}" || true
 
     teardown_common "${node}" "${node_start_time:-}"
