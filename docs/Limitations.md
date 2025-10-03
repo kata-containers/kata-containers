@@ -166,9 +166,45 @@ moment.
 See [this issue](https://github.com/kata-containers/runtime/issues/2812) for more details.
 [Another issue](https://github.com/kata-containers/kata-containers/issues/1728) focuses on the case of `emptyDir`.
 
-## Host resource sharing
+### Kubernetes [hostPath][k8s-hostpath] volumes
 
-### Privileged containers
+In some cases, the behavior of hostPath volumes is different compared
+to `runc` containers:
+
+**Mounting guest devices**: When the source path of a hostPath volume is
+under `/dev`, and the path either corresponds to a host device or is not
+accessible by the Kata shim, the Kata agent bind mounts the source path
+directly from the *guest* filesystem into the container.
+
+**Mounting host block devices**: When a hostPath volume is of type
+[`BlockDevice`](k8s-blockdevice), Kata hotplugs the host block device
+into the guest and exposes it directly to the container.
+
+### Mounting procfs and sysfs
+
+For security reasons, the following mounts are disallowed:
+
+| Type            | Source  | Destination                    | Rationale      |
+|-----------------|---------|--------------------------------|----------------|
+| bind            | != proc | /proc                          | CVE-2019-16884 |
+| bind            | *       | /proc/* (see exceptions below) | CVE-2019-16884 |
+| proc \|\| sysfs | *       | not a directory (e.g. symlink) | CVE-2019-19921 |
+
+For bind mounts under /proc, these destinations are allowed:
+	
+ * /proc/cpuinfo
+ * /proc/diskstats
+ * /proc/meminfo
+ * /proc/stat
+ * /proc/swaps
+ * /proc/uptime
+ * /proc/loadavg
+ * /proc/net/dev
+
+[k8s-hostpath]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
+[k8s-blockdevice]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath-volume-types
+
+## Privileged containers
 
 Privileged support in Kata is essentially different from `runc` containers.
 The container runs with elevated capabilities within the guest and is granted
