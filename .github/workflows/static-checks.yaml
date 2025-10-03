@@ -90,7 +90,7 @@ jobs:
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
         run: |
           export PATH="$PATH:${HOME}/.cargo/bin"
-          cd ${COMPONENT_PATH}
+          cd "${COMPONENT_PATH}"
           ${COMMAND}
         env:
           COMMAND: ${{ matrix.command }}

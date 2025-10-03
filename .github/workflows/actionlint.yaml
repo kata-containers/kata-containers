@@ -3,16 +3,8 @@ name: Lint GHA workflows
 on:
   workflow_dispatch:
   pull_request:
-    types:
-      - opened
-      - edited
-      - reopened
-      - synchronize
-    paths:
-      - '.github/workflows/**'
 
 permissions: {}
-
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
