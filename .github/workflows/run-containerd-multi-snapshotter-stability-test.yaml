@@ -1,8 +1,11 @@
 name: CI | Run containerd multi-snapshotter stability test
 on:
-  scheduled:
-    - cron: "0 */3 * * *" #run every three hours
-  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
 
 permissions: {}
 
@@ -67,7 +70,7 @@ jobs:
             echo "overlayfs | Using on image: ${img}"
             pod="$(echo ${img} | tr ':.' '-')"
             kubectl run ${pod} \
-              -it --rm \
+              -it \
               --restart=Never \
               --image=${img} \
               -- uname -r
@@ -97,3 +100,10 @@ jobs:
               }' \
               -- uname -r
           done
+
+      - name: Debug
+        if: always()
+        run: | 
+          kubectl describe pod
+          sudo journalctl -u containerd
+          sudo journalctl -u kubelet
