@@ -1057,6 +1057,11 @@ function main() {
 				configure_snapshotter "${snapshotter}"
 			done
 			restart_runtime "${runtime}"
+
+			host_systemctl status nydus-snapshotter
+			host_systemctl status "${runtime}"
+			ls -lha /run/containerd-nydus/containerd-nydus-grpc.sock
+
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)

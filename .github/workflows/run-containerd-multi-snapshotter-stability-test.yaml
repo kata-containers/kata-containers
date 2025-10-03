@@ -1,8 +1,11 @@
 name: CI | Run containerd multi-snapshotter stability test
 on:
-  scheduled:
-    - cron: "0 */3 * * *" #run every three hours
-  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
 
 permissions: {}
 
@@ -51,7 +54,9 @@ jobs:
           sudo rm -rf /usr/lib/firefox
 
       - name: Deploy k8s (kubeadm)
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+        run: |
+          bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+          sleep 180
         env:
           CONTAINER_ENGINE: containerd
           CONTAINER_ENGINE_VERSION: ${{ matrix.containerd }}
@@ -84,17 +89,29 @@ jobs:
 
       - name: Run a the same few containers using a different snapshotter
         run: |
+          sudo journalctl --rotate --vacuum-time=1s
           for img in alpine alpine:3.21 busybox busybox:1.36; do
-            echo "nydus | Using on image: ${img}"
             pod="kata-$(echo ${img} | tr ':.' '-')"
-            kubectl run ${pod} \
-              -it --rm \
-              --restart=Never \
-              --image=${img} \
-              --overrides='{
-                "spec": {
-                  "runtimeClassName": "kata-qemu-coco-dev"
-                }
-              }' \
-              -- uname -r
+
+            cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod}
+spec:
+  runtimeClassName: kata-qemu-coco-dev
+  restartPolicy: Never
+  containers:
+  - name: ${pod}
+    image: ${img}
+    command: ["sh", "-c", "uname -a"]
+'EOF'
+
           done
+
+      - name: Debug
+        if: always()
+        run: | 
+          kubectl describe pod
+          sudo journalctl -u containerd
+          sudo journalctl -u kubelet

@@ -25,13 +25,8 @@ RUN \
 
 #### kata-deploy main image
 
-ARG BASE_IMAGE_NAME=alpine
-ARG BASE_IMAGE_TAG=3.22
-FROM $BASE_IMAGE_NAME:$BASE_IMAGE_TAG
-ARG KATA_ARTIFACTS=./kata-static.tar.zst
+FROM quay.io/kata-containers/kata-deploy-ci:kata-containers-latest-amd64
 ARG DESTINATION=/opt/kata-artifacts
-
-COPY ${KATA_ARTIFACTS} ${WORKDIR}
 
 # I understand that in order to be on the safer side, it'd
 # be good to have the alpine packages pointing to a very
@@ -42,25 +37,9 @@ COPY ${KATA_ARTIFACTS} ${WORKDIR}
 # word splitting, which can also be ignored for now.
 # hadolint ignore=DL3018,SC2086
 RUN \
-	apk --no-cache add bash curl tar zstd && \
-	ARCH=$(uname -m) && \
-	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64; fi && \
-	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
-	DEBIAN_ARCH=${ARCH} && \
-	if [ "${DEBIAN_ARCH}" = "ppc64le" ]; then DEBIAN_ARCH=ppc64el; fi && \
-	curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl && \
-	chmod +x /usr/bin/kubectl && \
-	curl -fL --progress-bar -o /usr/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${DEBIAN_ARCH} && \
-	chmod +x /usr/bin/jq && \
-	mkdir -p ${DESTINATION} && \
-	tar --zstd -xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
-	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
-	apk del curl tar zstd && \
-	apk --no-cache add py3-pip && \
-	pip install --no-cache-dir yq==3.2.3 --break-system-packages
+	mkdir -p ${DESTINATION}
 
 COPY scripts ${DESTINATION}/scripts
 COPY nydus-snapshotter ${DESTINATION}/nydus-snapshotter
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
-COPY runtimeclasses ${DESTINATION}/runtimeclasses
