@@ -63,6 +63,7 @@ PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 
 EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
+IFS=',' read -a experimental_setup_snapshotter <<< "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 
 INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
@@ -1012,16 +1013,18 @@ function main() {
 					warn "EXPERIMENTAL_SETUP_SNAPSHOTTER is being ignored!"
 					warn "Snapshotter is a containerd specific option."
 				else
-					case "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" in
-						erofs)
-							containerd_erofs_snapshotter_version_check
-							;;
-						nydus)
-							;;
-						*)
-							die "${EXPERIMENTAL_SETUP_SNAPSHOTTER} is not a supported snapshotter by kata-deploy"
-							;;
-					esac
+					for snapshotter in "${experimental_setup_snapshotter[@]}"; do
+						case "${snapshotter}" in
+							erofs)
+								containerd_erofs_snapshotter_version_check
+								;;
+							nydus)
+								;;
+							*)
+								die "${EXPERIMENTAL_SETUP_SNAPSHOTTER} is not a supported snapshotter by kata-deploy"
+								;;
+						esac
+					done
 				fi
 			fi
 
@@ -1049,11 +1052,11 @@ function main() {
 
 			install_artifacts
 			configure_cri_runtime "$runtime"
-			if [[ -n "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
-				install_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
-				configure_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
-			fi
 
+			for snapshotter in "${experimental_setup_snapshotter[@]}"; do
+				install_snapshotter "${snapshotter}"
+				configure_snapshotter "${snapshotter}"
+			done
 			restart_runtime "${runtime}"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
@@ -1076,12 +1079,12 @@ function main() {
 				fi
 			fi
 
-			if [[ -n "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+			for snapshotter in "${experimental_setup_snapshotter[@]}"; do
 				# Here we don't need to do any cleanup on the config, as kata-deploy
 				# will revert the configuration to the state it was before the deployment,
 				# which is also before the snapshotter configuration. :-)
 				uninstall_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
-			fi
+			done
 
 			cleanup_cri_runtime "$runtime"
 			if [ "${HELM_POST_DELETE_HOOK}" == "false" ]; then
