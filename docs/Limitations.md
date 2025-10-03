@@ -168,16 +168,34 @@ See [this issue](https://github.com/kata-containers/runtime/issues/2812) for mor
 
 ### Kubernetes [hostPath][k8s-hostpath] volumes
 
-When the source path of a hostPath volume is under `/dev`, and the path
-either corresponds to a host device or is not accessible by the Kata
-shim, the Kata agent bind mounts the source path directly from the
-*guest* filesystem into the container.
+In Kata, Kubernetes hostPath volumes can mount host directories and
+regular files into the guest VM via filesystem sharing, if it is enabled
+through the `shared_fs` [configuration][runtime-config] flag.
 
+By default:
+
+ - Non-TEE environment: Filesystem sharing is used to mount host files.
+ - TEE environment: Filesystem sharing is disabled. Instead, host files
+   are copied into the guest VM when the container starts, and file
+   changes are *not* synchronized between the host and the guest.
+
+In some cases, the behavior of hostPath volumes in Kata is further
+different compared to `runc` containers:
+
+**Mounting host block devices**: When a hostPath volume is of type
+[`BlockDevice`][k8s-blockdevice], Kata hotplugs the host block device
+into the guest and exposes it directly to the container.
+
+**Mounting guest devices**: When the source path of a hostPath volume is
+under `/dev`, and the path either corresponds to a host device or is not
+accessible by the Kata shim, the Kata agent bind mounts the source path
+directly from the *guest* filesystem into the container.
+
+[runtime-config]: /src/runtime/README.md#configuration
 [k8s-hostpath]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
+[k8s-blockdevice]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath-volume-types
 
-## Host resource sharing
-
-### Privileged containers
+## Privileged containers
 
 Privileged support in Kata is essentially different from `runc` containers.
 The container runs with elevated capabilities within the guest.
