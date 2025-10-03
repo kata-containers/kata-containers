@@ -1,5 +1,5 @@
 ## Introduction
-To improve security, Kata Container supports running the VMM process (QEMU and cloud-hypervisor) as a non-`root` user. 
+To improve security, Kata Container supports running the VMM process (QEMU and cloud-hypervisor) as a non-`root` user, in both runtime-go and runtime-rs. 
 This document describes how to enable the rootless VMM mode and its limitations.
 
 ## Pre-requisites
@@ -31,3 +31,4 @@ Another necessary change is to move the hypervisor runtime files (e.g. `vhost-fs
 3. Certain features will not work when rootless VMM is enabled, including:
    1. Passing devices to the guest (`virtio-blk`, `virtio-scsi`) will not work if the non-privileged user does not have permission to access it (leading to a permission denied error). A more permissive permission (e.g. 666) may overcome this issue. However, you need to be aware of the potential security implications of reducing the security on such devices.
    2. `vfio` device will also not work because of permission denied error.
+4. In runtime-rs with cloud-hypervisor, creating a virtio-net device fails under rootless mode due to the missing CAP_NET_ADMIN capability. As a temporary workaround, you can set the CAP_NET_ADMIN capability on the cloud-hypervisor executable to bypass this restriction. This is not recommended in production environments due to security concerns, and the issue is expected to be improved in future releases.

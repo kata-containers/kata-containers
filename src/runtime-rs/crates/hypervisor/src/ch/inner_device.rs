@@ -7,6 +7,7 @@
 use super::inner::CloudHypervisorInner;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
+use crate::utils::create_dir_all_with_inherit_owner;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
@@ -26,8 +27,11 @@ use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_N
 use ch_config::DiskConfig;
 use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
 use kata_types::config::hypervisor::RateLimiterConfig;
+use kata_types::rootless::is_rootless;
+use kata_types::rootless::rootless_dir;
 use safe_path::scoped_join;
 use std::convert::TryFrom;
+use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
@@ -393,7 +397,39 @@ impl CloudHypervisorInner {
                 DeviceType::ShareFs(dev) => {
                     let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
-                    let fs_cfg = FsConfig::try_from(settings)?;
+                    let fs_cfg = if is_rootless() {
+                        // TODO: Replace this symlink workaround if a better approach for rootless socket paths appears.
+                        // In rootless mode the virtiofsd.sock lives under the rootless directory,
+                        // and its full path can exceed the 108-byte Unix domain socket limit.
+                        // To ensure the cloud-hypervisor VMM can connect to virtiofsd, create a
+                        // short symlink inside the rootless directory and point the VMM at it.
+                        let mut fs_cfg = FsConfig::try_from(settings)?;
+                        let rootless_path = PathBuf::from(rootless_dir())
+                            .join(self.id.as_str())
+                            .join("root")
+                            .join("virtiofsd.sock");
+
+                        create_dir_all_with_inherit_owner(rootless_path.parent().unwrap(), 0o750)
+                            .map_err(|e| {
+                            anyhow!(
+                                "failed to create rootless sharefs symlink parent dir: {}",
+                                e
+                            )
+                        })?;
+
+                        symlink(&fs_cfg.socket, &rootless_path).map_err(|e| {
+                            anyhow!(
+                                "failed to create symlink for rootless sharefs socket: {}",
+                                e
+                            )
+                        })?;
+
+                        fs_cfg.socket = rootless_path;
+
+                        fs_cfg
+                    } else {
+                        FsConfig::try_from(settings)?
+                    };
 
                     shared_fs_devices.push(fs_cfg);
                 }
