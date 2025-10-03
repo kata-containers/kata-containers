@@ -344,20 +344,26 @@ name = "dbs-pci"
 version = "0.1.0"
 dependencies = [
  "byteorder",
+ "dbs-address-space",
  "dbs-allocator",
  "dbs-arch",
  "dbs-boot",
  "dbs-device",
  "dbs-interrupt",
+ "dbs-utils",
+ "dbs-virtio-devices",
  "downcast-rs",
  "kvm-bindings",
  "kvm-ioctls",
  "libc",
  "log",
+ "serde",
  "thiserror 1.0.48",
  "vfio-bindings",
  "vfio-ioctls",
+ "virtio-queue",
  "vm-memory",
+ "vmm-sys-util",
 ]
 
 [[package]]
@@ -1810,9 +1816,9 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "seccompiler"
-version = "0.2.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e01d1292a1131b22ccea49f30bd106f1238b5ddeec1a98d39268dcc31d540e68"
+checksum = "a4ae55de56877481d112a559bbc12667635fdaf5e005712fd4e2b2fa50ffc884"
 dependencies = [
  "libc",
 ]
