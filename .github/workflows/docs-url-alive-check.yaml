@@ -15,8 +15,10 @@ jobs:
       target_branch: ${{ github.base_ref }}
     steps:
     - name: Set env
+      env:
+        GITHUB_WORKSPACE: ${{ github.workspace }}
       run: |
-        echo "GOPATH=${{ github.workspace }}" >> "$GITHUB_ENV"
+        echo "GOPATH=${GITHUB_WORKSPACE}" >> "$GITHUB_ENV"
     - name: Checkout code
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       with:
@@ -30,5 +32,7 @@ jobs:
         echo "/usr/local/go/bin" >> "${GITHUB_PATH}"
 
     - name: Docs URL Alive Check
+      env:
+        GITHUB_REPO: ${{ github.repository }}
       run: |
-        cd "${GOPATH}/src/github.com/${{ github.repository }}" && make docs-url-alive-check
+        cd "${GOPATH}/src/github.com/${GITHUB_REPO}" && make docs-url-alive-check
