@@ -18,6 +18,9 @@ export POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 
 export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
+SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
+export SKIP_MULTI_GPU_TESTS
+
 DOCKER_CONFIG_JSON=$(
     echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" |
         base64 -w0
@@ -36,29 +39,6 @@ setup_langchain_flow() {
     [[ "$(pip show beautifulsoup4 2>/dev/null | awk '/^Version:/{print $2}')" = "4.13.4" ]] || pip install beautifulsoup4==4.13.4
 }
 
-create_inference_embedqa_pods() {
-    kubectl apply -f "${POD_INSTRUCT_YAML}"
-    kubectl apply -f "${POD_EMBEDQA_YAML}"
-
-    kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME_INSTRUCT}"
-    kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME_EMBEDQA}"
-
-    # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
-    POD_IP_INSTRUCT=$(kubectl get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}')
-    [[ -n "${POD_IP_INSTRUCT}" ]]
-
-    # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
-    POD_IP_EMBEDQA=$(kubectl get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}')
-    [[ -n "${POD_IP_EMBEDQA}" ]]
-
-    echo "POD_IP_INSTRUCT=${POD_IP_INSTRUCT}" >"${BATS_SUITE_TMPDIR}/env"
-    echo "# POD_IP_INSTRUCT=${POD_IP_INSTRUCT}" >&3
-
-    echo "POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >>"${BATS_SUITE_TMPDIR}/env"
-    echo "# POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >&3
-}
-
-
 setup_file() {
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
@@ -68,6 +48,8 @@ setup_file() {
 
     # shellcheck disable=SC1091  # Virtual environment will be created during test execution
     python3 -m venv "${HOME}"/.cicd/venv
+
+    setup_langchain_flow
 
     get_pod_config_dir
 
@@ -83,9 +65,19 @@ setup_file() {
     export POD_INSTRUCT_YAML="${pod_instruct_yaml}"
     export POD_EMBEDQA_YAML="${pod_embedqa_yaml}"
 
+    touch "${BATS_SUITE_TMPDIR}/env"
+}
 
-    setup_langchain_flow
-    create_inference_embedqa_pods
+@test "Create and verify instruct pod startup" {
+    kubectl apply -f "${POD_INSTRUCT_YAML}"
+    kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME_INSTRUCT}"
+
+    # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
+    POD_IP_INSTRUCT=$(kubectl get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}')
+    [[ -n "${POD_IP_INSTRUCT}" ]]
+
+    echo "POD_IP_INSTRUCT=${POD_IP_INSTRUCT}" >"${BATS_SUITE_TMPDIR}/env"
+    echo "# POD_IP_INSTRUCT=${POD_IP_INSTRUCT}" >&3
 }
 
 @test "List of models available for inference" {
@@ -165,7 +157,30 @@ EOF
     echo "# ANSWER: ${ANSWER}" >&3
 }
 
+@test "Create and verify embedqa pod startup" {
+    [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
+
+    # shellcheck disable=SC1091  # File is created by previous test
+    source "${BATS_SUITE_TMPDIR}/env"
+    # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
+    [[ -n "${POD_IP_EMBEDQA}" ]]
+    # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
+    [[ -n "${POD_IP_INSTRUCT}" ]]
+
+    kubectl apply -f "${POD_EMBEDQA_YAML}"
+    kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME_EMBEDQA}"
+
+    # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
+    POD_IP_EMBEDQA=$(kubectl get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}')
+    [[ -n "${POD_IP_EMBEDQA}" ]]
+
+    echo "POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >>"${BATS_SUITE_TMPDIR}/env"
+    echo "# POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >&3
+}
+
 @test "Kata Documentation RAG" {
+    [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -325,6 +340,6 @@ EOF
 }
 
 teardown_file() {
-        kubectl delete -f "${POD_INSTRUCT_YAML}"
-        kubectl delete -f "${POD_EMBEDQA_YAML}"
+    kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
+    kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
 }
