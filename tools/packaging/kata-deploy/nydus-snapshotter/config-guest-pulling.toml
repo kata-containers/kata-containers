@@ -1,0 +1,15 @@
+version = 1
+
+# Snapshotter's own home directory where it stores and creates necessary resources
+root = "/var/lib/containerd-nydus"
+
+# The snapshotter's GRPC server socket, containerd will connect to plugin on this socket
+address = "/run/containerd-nydus/containerd-nydus-grpc.sock"
+
+[daemon]
+# Enable proxy mode
+fs_driver = "proxy"
+
+[snapshot]
+# Insert Kata volume information to `Mount.Options`
+enable_kata_volume = true
