@@ -673,7 +673,9 @@ function configure_containerd() {
 	fi
 
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
-		tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
+		if ! grep -q "${containerd_drop_in_conf_file}" ${containerd_conf_file}; then
+			tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
+		fi
 	fi
 
 	for shim in "${shims[@]}"; do
