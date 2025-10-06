@@ -568,7 +568,7 @@ function get_latest_patch_release_from_a_github_project() {
         base_version="${2}"
 
         curl \
-          --header "Authorization: Bearer "${GH_TOKEN:-}"" \
+          ${GH_TOKEN:+--header "Authorization: Bearer ${GH_TOKEN:-}"} \
           --fail-with-body \
           --show-error \
           --silent \
