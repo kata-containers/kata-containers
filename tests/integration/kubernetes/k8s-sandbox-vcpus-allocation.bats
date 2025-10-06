@@ -16,8 +16,8 @@ setup() {
 
 	setup_common
 	get_pod_config_dir
-	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
-	expected_vcpus=( 1 1 2 )
+	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" "vcpus-default-more-than-one" )
+	expected_vcpus=( 1 1 2 4 )
 
 	yaml_file="${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
 	set_node "$yaml_file" "$node"
@@ -35,7 +35,7 @@ setup() {
 	kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout=$timeout pod --all
 
 	# Check the pods
-	for i in {0..2}; do
+	for i in {0..3}; do
 		pod="${pods[$i]}"
 		bats_unbuffered_info "Getting log for pod: ${pod}"
 

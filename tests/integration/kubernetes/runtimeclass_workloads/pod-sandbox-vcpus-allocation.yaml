@@ -51,3 +51,17 @@ spec:
         cpu: "1.2"
     command: ['nproc', '--all']
   restartPolicy: Never
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vcpus-default-more-than-one
+  annotations:
+    io.katacontainers.config.hypervisor.default_vcpus: "4"
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: vcpus-default-more-than-one
+    image: quay.io/prometheus/busybox:latest
+    command: ['nproc', '--all']
+  restartPolicy: Never
