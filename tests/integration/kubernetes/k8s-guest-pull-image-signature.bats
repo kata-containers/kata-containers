@@ -74,6 +74,78 @@ EOF
     kbs_set_resource "default" "cosign-public-key" "test" "${public_key}"
 }
 
+function get_initdata_with_security_policy() {
+        CC_KBS_ADDRESS=$(kbs_k8s_svc_http_addr)
+
+    initdata_annotation=$(gzip -c << EOF | base64 -w0
+version = "0.1.0"
+algorithm = "sha256"
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.kbs]
+url = "${CC_KBS_ADDRESS}"
+'''
+
+"cdh.toml" = '''
+[kbc]
+name = "cc_kbc"
+url = "${CC_KBS_ADDRESS}"
+
+[image]
+image_security_policy_uri = "${SECURITY_POLICY_KBS_URI}"
+'''
+
+"policy.rego" = '''
+# Copyright (c) 2023 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+package agent_policy
+
+default AddARPNeighborsRequest := true
+default AddSwapRequest := true
+default CloseStdinRequest := true
+default CopyFileRequest := true
+default CreateContainerRequest := true
+default CreateSandboxRequest := true
+default DestroySandboxRequest := true
+default ExecProcessRequest := true
+default GetMetricsRequest := true
+default GetOOMEventRequest := true
+default GuestDetailsRequest := true
+default ListInterfacesRequest := true
+default ListRoutesRequest := true
+default MemHotplugByProbeRequest := true
+default OnlineCPUMemRequest := true
+default PauseContainerRequest := true
+default PullImageRequest := true
+default ReadStreamRequest := true
+default RemoveContainerRequest := true
+default RemoveStaleVirtiofsShareMountsRequest := true
+default ReseedRandomDevRequest := true
+default ResumeContainerRequest := true
+default SetGuestDateTimeRequest := true
+default SetPolicyRequest := true
+default SignalProcessRequest := true
+default StartContainerRequest := true
+default StartTracingRequest := true
+default StatsContainerRequest := true
+default StopTracingRequest := true
+default TtyWinResizeRequest := true
+default UpdateContainerRequest := true
+default UpdateEphemeralMountsRequest := true
+default UpdateInterfaceRequest := true
+default UpdateRoutesRequest := true
+default WaitProcessRequest := true
+default WriteStreamRequest := true
+'''
+EOF
+    )
+    echo "${initdata_annotation}"
+}
+
 @test "Create a pod from an unsigned image, on an insecureAcceptAnything registry works" {
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
@@ -131,6 +203,75 @@ EOF
     setup_kbs_image_policy "reject"
 
     create_coco_pod_yaml "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "" "" "resource" "$node"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    k8s_create_pod "${kata_pod}"
+    echo "Kata pod test-e2e from image security policy is running"
+}
+
+@test "Create a pod from an unsigned image, on an insecureAcceptAnything registry works (with initdata)" {
+    # We want to set the default policy to be reject to rule out false positives
+    setup_kbs_image_policy "reject"
+
+    initdata=$(get_initdata_with_security_policy)
+    create_coco_pod_yaml_with_annotations "${UNSIGNED_UNPROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    k8s_create_pod "${kata_pod}"
+    echo "Kata pod test-e2e from image security policy is running"
+}
+
+@test "Create a pod from an unsigned image, on a 'restricted registry' is rejected (with initdata)" {
+    # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
+    setup_kbs_image_policy
+
+    initdata=$(get_initdata_with_security_policy)
+    create_coco_pod_yaml_with_annotations "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    assert_pod_fail "${kata_pod}"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Image policy rejected: Denied by policy"
+}
+
+@test "Create a pod from a signed image, on a 'restricted registry' is successful (with initdata)" {
+    # We want to set the default policy to be reject to rule out false positives
+    setup_kbs_image_policy "reject"
+
+    initdata=$(get_initdata_with_security_policy)
+    create_coco_pod_yaml_with_annotations "${COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE}" "" "${initdata}" "${node}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    k8s_create_pod "${kata_pod}"
+    echo "Kata pod test-e2e from image security policy is running"
+}
+
+@test "Create a pod from a signed image, on a 'restricted registry', but with the wrong key is rejected (with initdata)" {
+    # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
+    setup_kbs_image_policy
+
+    initdata=$(get_initdata_with_security_policy)
+    create_coco_pod_yaml_with_annotations "${COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE}" "" "${initdata}" "${node}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    assert_pod_fail "${kata_pod}"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Image policy rejected: Denied by policy"
+}
+
+@test "Create a pod from an unsigned image, on a 'restricted registry' works if policy files isn't set (with initdata)" {
+    # We want to set the default policy to be reject to rule out false positives
+    setup_kbs_image_policy "reject"
+
+    create_coco_pod_yaml_with_annotations "${UNSIGNED_PROTECTED_REGISTRY_IMAGE}" "" "" "${node}"
 
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
