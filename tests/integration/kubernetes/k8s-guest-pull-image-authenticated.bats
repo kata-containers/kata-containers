@@ -20,6 +20,7 @@ setup() {
     AUTHENTICATED_IMAGE="${AUTHENTICATED_IMAGE:-quay.io/kata-containers/confidential-containers-auth:test}"
     AUTHENTICATED_IMAGE_USER=${AUTHENTICATED_IMAGE_USER:-}
     AUTHENTICATED_IMAGE_PASSWORD=${AUTHENTICATED_IMAGE_PASSWORD:-}
+    CREDENTIALS_KBS_URI="kbs:///default/credentials/test"
 
     if [[ -z ${AUTHENTICATED_IMAGE_USER} || -z ${AUTHENTICATED_IMAGE_PASSWORD} ]]; then
         if [[ -n ${GITHUB_ACTION:-} ]]; then
@@ -62,6 +63,17 @@ function setup_kbs_credentials() {
     kbs_set_resource "default" "credentials" "test" "${auth_json}"
 }
 
+function get_initdata_with_auth_registry_config() {
+
+    image_section_with_policy=$(cat << EOF
+[image]
+authenticated_registry_credentials_uri = "${CREDENTIALS_KBS_URI}"
+EOF
+    )
+
+    get_initdata_with_cdh_image_section "${image_section_with_policy}"
+}
+
 @test "Test that creating a container from an authenticated image, with correct credentials works" {
 
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} ${AUTHENTICATED_IMAGE_PASSWORD}
@@ -94,6 +106,50 @@ function setup_kbs_credentials() {
 
     # Create pod config, but don't add agent.image_registry_auth annotation
     create_coco_pod_yaml "${AUTHENTICATED_IMAGE}" "" "" "" "resource" "$node"
+    yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    assert_pod_fail "${kata_pod}"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Not authorized"
+}
+
+@test "Test that creating a container from an authenticated image, with correct credentials works (with initdata)" {
+
+    setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} ${AUTHENTICATED_IMAGE_PASSWORD}
+
+    initdata=$(get_initdata_with_auth_registry_config)
+    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
+    yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    k8s_create_pod "${kata_pod}"
+    echo "Kata pod test-e2e from authenticated image is running"
+}
+
+@test "Test that creating a container from an authenticated image, with incorrect credentials fails (with initdata)" {
+
+    setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} "junk"
+
+    initdata=$(get_initdata_with_auth_registry_config)
+    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
+    yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
+
+    # For debug sake
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
+
+    assert_pod_fail "${kata_pod}"
+    assert_logs_contain "${node}" kata "${node_start_time}" "Not authorized"
+}
+
+@test "Test that creating a container from an authenticated image, with no credentials fails (with initdata)" {
+
+    # Create pod config, but don't add image_registry_auth to initdata
+    initdata=$(get_initdata_with_cdh_image_section "")
+    create_coco_pod_yaml_with_annotations "${AUTHENTICATED_IMAGE}" "" "${initdata}" "${node}"
     yq -i ".spec.imagePullSecrets[0].name = \"cococred\"" "${kata_pod}"
 
     # For debug sake
