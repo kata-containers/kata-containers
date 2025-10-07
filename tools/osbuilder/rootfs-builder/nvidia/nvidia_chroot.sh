@@ -141,8 +141,6 @@ build_nvidia_drivers() {
 		# went wroing make sure the signing_key.pem is removed
 		[[ -e "${signing_key}" ]] && rm -f "${signing_key}"
 	done
-	# Save the modules for later so that a linux-image purge does not remove it
-	tar cvfa /lib/modules.save_from_purge.tar.zst /lib/modules
 	popd >> /dev/null
 }
 
@@ -341,7 +339,6 @@ export_driver_version() {
 	done
 }
 
-
 install_nvidia_dcgm() {
 	is_feature_enabled "dcgm" || {
 		echo "chroot: Skipping NVIDIA DCGM installation"
@@ -354,66 +351,6 @@ install_nvidia_dcgm() {
 		datacenter-gpu-manager-exporter
 }
 
-cleanup_rootfs() {
-	echo "chroot: Cleanup NVIDIA GPU rootfs"
-
-	apt-mark hold libstdc++6 libzstd1 libgnutls30t64 pciutils
-
-	if [[ -n "${driver_version}" ]]; then
-		apt-mark hold libnvidia-cfg1-"${driver_version}" \
-			nvidia-compute-utils-"${driver_version}" \
-			nvidia-utils-"${driver_version}"         \
-			nvidia-imex-"${driver_version}"          \
-			nvidia-firmware-"${driver_version}"      \
-			libnvidia-compute-"${driver_version}"    \
-			libnvidia-compute-"${driver_version}"    \
-			libnvidia-gl-"${driver_version}"         \
-			libnvidia-extra-"${driver_version}"      \
-			libnvidia-decode-"${driver_version}"     \
-			libnvidia-fbc1-"${driver_version}"       \
-			libnvidia-encode-"${driver_version}"	\
-			libnvidia-nscq-"${driver_version}"	\
-			linuxptp libnftnl11
-	fi
-
-	kernel_headers=$(dpkg --get-selections | cut -f1 | grep linux-headers)
-	linux_images=$(dpkg --get-selections | cut -f1 | grep linux-image)
-	for i in ${kernel_headers} ${linux_images}; do
-		apt purge -yqq "${i}"
-	done
-
-	apt purge -yqq jq make gcc wget libc6-dev git xz-utils curl gpg \
-		python3-pip software-properties-common ca-certificates  \
-		linux-libc-dev nuitka python3-minimal
-
-	if [[ -n "${driver_version}" ]]; then
-		apt purge -yqq nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
-			nvidia-kernel-source-"${driver_version}${driver_type}" -yqq
-	fi
-
-	apt autoremove -yqq
-
-	apt clean
-	apt autoclean
-
-	for modules_version in /lib/modules/*; do
-		ln -sf "${modules_version}" /lib/modules/"$(uname -r)"
-		touch  "${modules_version}"/modules.order
-		touch  "${modules_version}"/modules.builtin
-		depmod -a
-	done
-
-	rm -rf /etc/apt/sources.list* /var/lib/apt /var/log/apt /var/cache/debconf
-	rm -f /usr/bin/nvidia-ngx-updater /usr/bin/nvidia-container-runtime
-	rm -f /var/log/{nvidia-installer.log,dpkg.log,alternatives.log}
-
-	# Clear and regenerate the ld cache
-	rm -f /etc/ld.so.cache
-	ldconfig
-
-	tar xvf /lib/modules.save_from_purge.tar.zst -C /
-
-}
 # Start of script
 echo "chroot: Setup NVIDIA GPU rootfs stage one"
 
@@ -428,4 +365,3 @@ install_nvidia_fabricmanager
 install_nvidia_ctk
 export_driver_version
 install_nvidia_dcgm
-cleanup_rootfs

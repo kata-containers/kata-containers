@@ -168,13 +168,21 @@ chisseled_compute() {
 	cp -a "${stage_one}"/lib/modules/* lib/modules/.
 
 	libdir="lib/${machine_arch}-linux-gnu"
-	cp -a "${stage_one}/${libdir}"/libdl.so.2*        "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libz.so.1*         "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libpthread.so.0*   "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libresolv.so.2*    "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libc.so.6*         "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libm.so.6*         "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/librt.so.1*        "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libdl.so.2*        	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libz.so.1*         	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libpthread.so.0*   	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libresolv.so.2*    	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libc.so.6*         	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libm.so.6*         	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/librt.so.1*        	"${libdir}"/.
+	# nvidia-persitenced dependencies, needs to be vetted for v590
+	cp -a "${stage_one}/${libdir}"/libtirpc.so.3*    	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libgssapi_krb5.so.2*	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libkrb5.so.3*		"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libkrb5support.so.0*	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libk5crypto.so.3*	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*	    "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libkeyutils.so.1*	"${libdir}"/.
 
 	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
