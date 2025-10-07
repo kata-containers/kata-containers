@@ -75,75 +75,14 @@ EOF
 }
 
 function get_initdata_with_security_policy() {
-        CC_KBS_ADDRESS=$(kbs_k8s_svc_http_addr)
 
-    initdata_annotation=$(gzip -c << EOF | base64 -w0
-version = "0.1.0"
-algorithm = "sha256"
-[data]
-"aa.toml" = '''
-[token_configs]
-[token_configs.kbs]
-url = "${CC_KBS_ADDRESS}"
-'''
-
-"cdh.toml" = '''
-[kbc]
-name = "cc_kbc"
-url = "${CC_KBS_ADDRESS}"
-
+    image_section_with_policy=$(cat << EOF
 [image]
 image_security_policy_uri = "${SECURITY_POLICY_KBS_URI}"
-'''
-
-"policy.rego" = '''
-# Copyright (c) 2023 Microsoft Corporation
-#
-# SPDX-License-Identifier: Apache-2.0
-#
-
-package agent_policy
-
-default AddARPNeighborsRequest := true
-default AddSwapRequest := true
-default CloseStdinRequest := true
-default CopyFileRequest := true
-default CreateContainerRequest := true
-default CreateSandboxRequest := true
-default DestroySandboxRequest := true
-default ExecProcessRequest := true
-default GetMetricsRequest := true
-default GetOOMEventRequest := true
-default GuestDetailsRequest := true
-default ListInterfacesRequest := true
-default ListRoutesRequest := true
-default MemHotplugByProbeRequest := true
-default OnlineCPUMemRequest := true
-default PauseContainerRequest := true
-default PullImageRequest := true
-default ReadStreamRequest := true
-default RemoveContainerRequest := true
-default RemoveStaleVirtiofsShareMountsRequest := true
-default ReseedRandomDevRequest := true
-default ResumeContainerRequest := true
-default SetGuestDateTimeRequest := true
-default SetPolicyRequest := true
-default SignalProcessRequest := true
-default StartContainerRequest := true
-default StartTracingRequest := true
-default StatsContainerRequest := true
-default StopTracingRequest := true
-default TtyWinResizeRequest := true
-default UpdateContainerRequest := true
-default UpdateEphemeralMountsRequest := true
-default UpdateInterfaceRequest := true
-default UpdateRoutesRequest := true
-default WaitProcessRequest := true
-default WriteStreamRequest := true
-'''
 EOF
     )
-    echo "${initdata_annotation}"
+
+    get_initdata_with_cdh_image_section "${image_section_with_policy}"
 }
 
 @test "Create a pod from an unsigned image, on an insecureAcceptAnything registry works" {
