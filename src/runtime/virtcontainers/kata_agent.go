@@ -1277,7 +1277,7 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 	var err error
 	var endpoints []Endpoint
 	if c == nil || c.id == sandbox.id {
-		// TODO: VFIO network deivce has not been hotplugged when creating the Sandbox,
+		// TODO: VFIO network device has not been hotplugged when creating the Sandbox,
 		// so need to skip VFIO endpoint here.
 		// After KEP #4113(https://github.com/kubernetes/enhancements/pull/4113)
 		// is implemented, the VFIO network devices will be attached before container

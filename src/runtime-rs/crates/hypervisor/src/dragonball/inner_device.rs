@@ -260,7 +260,7 @@ impl DragonballInner {
             .context("insert network device")
     }
 
-    /// Add vhost-user-net deivce to Dragonball
+    /// Add vhost-user-net device to Dragonball
     fn add_vhost_user_net_device(&mut self, config: &VhostUserConfig) -> Result<()> {
         let guest_mac = MacAddr::parse_str(&config.mac_address).ok();
         let net_cfg = NetworkInterfaceConfig {

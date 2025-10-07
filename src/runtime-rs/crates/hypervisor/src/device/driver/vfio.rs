@@ -492,7 +492,7 @@ impl Device for VfioDevice {
             return Ok(());
         }
 
-        // do add device for vfio deivce
+        // do add device for vfio device
         match h.add_device(DeviceType::Vfio(self.clone())).await {
             Ok(dev) => {
                 // Update device info with the one received from device attach
