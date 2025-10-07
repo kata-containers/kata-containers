@@ -333,3 +333,95 @@ jobs:
       - name: Delete AKS cluster
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
+
+  # Generate jobs for testing CoCo on non-TEE environments with erofs-snapshotter
+  run-k8s-tests-coco-nontee-with-erofs-snapshotter:
+    name: run-k8s-tests-coco-nontee-with-erofs-snapshotter
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - qemu-coco-dev
+        snapshotter:
+          - erofs
+        pull-type:
+          - default
+    runs-on: ubuntu-24.04
+    environment: ci
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      # Some tests rely on that variable to run (or not)
+      KBS: "false"
+      # Set the KBS ingress handler (empty string disables handling)
+      KBS_INGRESS: ""
+      KUBERNETES: "vanilla"
+      CONTAINER_ENGINE: "containerd"
+      CONTAINER_ENGINE_VERSION: "v2.2"
+      PULL_TYPE: ${{ matrix.pull-type }}
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
+      K8S_TEST_HOST_TYPE: "all"
+      USING_NFD: "false"
+      # We are skipping the auto generated policy tests for now,
+      # but those should be enabled as soon as we work on that.
+      AUTO_GENERATE_POLICY: "no"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
+
+      - name: Deploy kubernetes
+        timeout-minutes: 15
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Deploy Kata
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
+      - name: Run tests
+        timeout-minutes: 80
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
