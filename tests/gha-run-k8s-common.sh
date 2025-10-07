@@ -457,7 +457,26 @@ function deploy_k8s() {
 		k3s) deploy_k3s ;;
 		rke2) deploy_rke2 ;;
 		microk8s) deploy_microk8s ;;
-		vanilla) deploy_vanilla_k8s ${CONTAINER_ENGINE} ${CONTAINER_ENGINE_VERSION} ;;
+		vanilla)
+			if [[ "${SNAPSHOTTER:-}" == "erofs" ]]; then
+				# Install erofs specific dependencies
+				sudo apt-get update
+				sudo apt-get -y install erofs-utils fsverity
+
+				# Load the erofs module
+				sudo modprobe erofs
+
+				# Ensure fsverity is enabled on the disk, otherwise
+				# fsverity won't work on the erofs-snapshotter side.
+				#
+				# Get the root device to enable fsverity on the disk.
+				root_device="$(findmnt -v -n -o SOURCE /)"
+				# This command is not destructive, at all, and that's
+				# the way we should enable verity support on a live disk.
+				sudo tune2fs -O verity "${root_device}"
+			fi
+			deploy_vanilla_k8s ${CONTAINER_ENGINE} ${CONTAINER_ENGINE_VERSION}
+			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
