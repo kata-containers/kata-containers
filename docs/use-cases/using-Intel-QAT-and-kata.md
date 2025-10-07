@@ -419,7 +419,7 @@ You might need to disable Docker before initializing Kubernetes. Be aware
 that the OpenSSL container image built above will need to be exported from
 Docker and imported into containerd.
 
-If Kata is installed through [`kata-deploy`](../../tools/packaging/kata-deploy/README.md)
+If Kata is installed through [`kata-deploy`](../../tools/packaging/kata-deploy/helm-chart/README.md)
 there will be multiple `configuration.toml` files associated with different
 hypervisors. Rather than add in the custom Kata kernel, Kata rootfs, and
 kernel modules to each `configuration.toml` as the default, instead use

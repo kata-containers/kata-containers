@@ -318,7 +318,7 @@ Finally, an operational kata container with IBM Secure Execution is now running.
 
 It is reasonable to expect that the manual steps mentioned above can be easily executed.
 Typically, you can use
-[kata-deploy](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/README.md)
+[kata-deploy](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/README.md)
 to install Kata Containers on a Kubernetes cluster. However, when leveraging IBM Secure Execution,
 you need to employ the confidential container's
 [operator](https://github.com/confidential-containers/operator).
