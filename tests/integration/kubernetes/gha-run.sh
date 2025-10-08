@@ -599,9 +599,6 @@ function main() {
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
 		deploy-kata-kubeadm) deploy_kata "kubeadm" ;;
-		deploy-kata-sev) deploy_kata "sev" ;;
-		deploy-kata-snp) deploy_kata "snp" ;;
-		deploy-kata-tdx) deploy_kata "tdx" ;;
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
 		deploy-snapshotter) deploy_snapshotter ;;
@@ -619,9 +616,6 @@ function main() {
 		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
 		cleanup-kubeadm) cleanup "kubeadm" ;;
-		cleanup-sev) cleanup "sev" ;;
-		cleanup-snp) cleanup "snp" ;;
-		cleanup-tdx) cleanup "tdx" ;;
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
