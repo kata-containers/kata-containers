@@ -85,6 +85,7 @@ else
 		"k8s-policy-pvc.bats" \
 		"k8s-policy-rc.bats" \
 		"k8s-port-forward.bats" \
+		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
 		"k8s-qos-pods.bats" \
 		"k8s-replication.bats" \
