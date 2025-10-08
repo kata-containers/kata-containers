@@ -145,10 +145,21 @@ chisseled_iptables() {
 	cp -a "${stage_one}/${libdir}"/libxtables.so.12* lib/.
 }
 
+# <= NVLINK4 nv-fabrimanager
+# >= NVLINK5 nv-fabricmanager + nvlsm (TODO)
 chisseled_nvswitch() {
 	echo "nvidia: chisseling NVSwitch"
-	echo "nvidia: not implemented yet"
-	exit 1
+
+	mkdir -p usr/share/nvidia/nvswitch
+
+	cp -a "${stage_one}"/usr/bin/nv-fabricmanager usr/bin/.
+	cp -a "${stage_one}"/usr/share/nvidia/nvswitch usr/share/nvidia/nvswitch
+
+	libdir=usr/lib/"${machine_arch}"-linux-gnu
+
+	cp -a "${stage_one}/${libdir}"/libnvidia-nscq.so.* lib/"${machine_arch}"-linux-gnu/.
+
+
 }
 
 chisseled_dcgm() {
