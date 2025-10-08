@@ -1,0 +1,109 @@
+name: CI | Run containerd multi-snapshotter stability test
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions: {}
+
+jobs:
+  run-containerd-multi-snapshotter-stability-tests:
+    name: run-containerd-multi-snapshotter-stability-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        containerd:
+          - v1.7
+          - v2.0
+          - v2.1
+          - v2.2
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
+
+      - name: Deploy k8s (kubeadm)
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+        env:
+          CONTAINER_ENGINE: containerd
+          CONTAINER_ENGINE_VERSION: ${{ matrix.containerd }}
+          GH_TOKEN: ${{ github.token }}
+          KUBERNETES: vanilla
+
+      - name: Pull the kata-deploy image to be used
+        run: sudo ctr -n k8s.io image pull quay.io/kata-containers/kata-deploy-ci:kata-containers-latest
+
+      - name: Run a few containers using overlayfs
+        run: |
+          for img in alpine alpine:3.21 busybox busybox:1.36; do
+            echo "overlayfs | Using on image: ${img}"
+            pod="$(echo ${img} | tr ':.' '-')"
+            kubectl run ${pod} \
+              -it \
+              --restart=Never \
+              --image=${img} \
+              -- uname -r
+          done
+          
+      - name: Deploy Kata Containers
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+        env:
+          KATA_HYPERVISOR: qemu-coco-dev
+          KUBERNETES: vanilla
+          SNAPSHOTTER: nydus
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: true
+
+      - name: Run a the same few containers using a different snapshotter
+        run: |
+          for img in alpine alpine:3.21 busybox busybox:1.36; do
+            echo "nydus | Using on image: ${img}"
+            pod="kata-$(echo ${img} | tr ':.' '-')"
+            kubectl run ${pod} \
+              -it --rm \
+              --restart=Never \
+              --image=${img} \
+              --overrides='{
+                "spec": {
+                  "runtimeClassName": "kata-qemu-coco-dev"
+                }
+              }' \
+              -- uname -r
+          done
+
+      - name: Debug
+        if: always()
+        run: | 
+          kubectl describe pod
+          sudo journalctl -u containerd
+          sudo journalctl -u kubelet
