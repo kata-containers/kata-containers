@@ -65,6 +65,9 @@ IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
 IFS=',' read -a experimental_setup_snapshotter <<< "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 
+EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
+IFS="," read -a experimental_force_guest_pull <<< "${EXPERIMENTAL_FORCE_GUEST_PULL}"
+
 INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
 dest_dir="${default_dest_dir}"
@@ -422,6 +425,10 @@ function install_artifacts() {
 
 		if [ -n "${allowed_hypervisor_annotations}" ]; then
 			sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, $allowed_hypervisor_annotations]/" "${kata_config_file}"
+		fi
+
+		if printf '%s\n' "${experimental_force_guest_pull[@]}" | grep -Fxq "${shim}"; then
+			sed -i -e 's/^\(experimental_force_guest_pull\).*=.*$/\1 = true/g' "${kata_config_file}"
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
@@ -958,6 +965,7 @@ function main() {
 	echo "* MULTI_INSTALL_SUFFIX: ${MULTI_INSTALL_SUFFIX}"
 	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
 	echo "* EXPERIMENTAL_SETUP_SNAPSHOTTER: ${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL: ${EXPERIMENTAL_FORCE_GUEST_PULL}"
 
 	# script requires that user is root
 	euid=$(id -u)
