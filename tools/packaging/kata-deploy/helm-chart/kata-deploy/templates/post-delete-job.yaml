@@ -127,6 +127,8 @@ spec:
           value: {{ .Values.env.multiInstallSuffix | quote }}
         - name: EXPERIMENTAL_SETUP_SNAPSHOTTER
           value: {{ .Values.env._experimentalSetupSnapshotter | quote }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL
+          value: {{ .Values.env._experimentalForceGuestPull | quote }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}
