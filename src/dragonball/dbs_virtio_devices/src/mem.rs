@@ -30,7 +30,7 @@ use dbs_utils::epoll_manager::{
 };
 use kvm_ioctls::VmFd;
 use log::{debug, error, info, trace, warn};
-use virtio_bindings::bindings::virtio_blk::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
 use virtio_queue::{DescriptorChain, QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{
     ByteValued, Bytes, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryError,

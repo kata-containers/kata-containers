@@ -25,7 +25,7 @@ use vhost_rs::vhost_user::message::{
     VhostUserConfigFlags, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
     VHOST_USER_CONFIG_OFFSET,
 };
-use vhost_rs::vhost_user::{Master, VhostUserMaster};
+use vhost_rs::vhost_user::{Frontend, VhostUserFrontend};
 use vhost_rs::{Error as VhostError, VhostBackend};
 use virtio_bindings::bindings::virtio_blk::{VIRTIO_BLK_F_MQ, VIRTIO_BLK_F_SEG_MAX};
 use virtio_queue::QueueT;
@@ -35,7 +35,7 @@ use vmm_sys_util::eventfd::EventFd;
 // The same with guest kernel virtio_blk_config
 const CONFIG_SPACE_SIZE: usize = 36;
 // Remote vhost user server may disconnect, track this event
-const MASTER_SLOT: u32 = 0;
+const FRONTEND_SLOT: u32 = 0;
 // Timer events for check spool server is ready
 const TIMER_SLOT: u32 = 1;
 // New descriptors are pending on the virtio queue.
@@ -107,7 +107,7 @@ where
         trace!(target: "vhost-blk", "{}: VhostUserBlockHandler::process({})", self.id, slot);
 
         match slot {
-            MASTER_SLOT => {
+            FRONTEND_SLOT => {
                 info!("{}: master disconnected, try to reconnect...", self.id);
                 // Do not expect poisoned lock.
                 let mut device = self.device.lock().unwrap();
@@ -139,7 +139,7 @@ where
                             reconnect: true,
                             backend: None,
                             init_queues: device.curr_queues,
-                            slave_req_fd: None,
+                            backend_req_fd: None,
                         };
 
                         config.set_protocol_mq();
@@ -231,27 +231,27 @@ impl VhostUserBlockDevice {
 
         info!("vhost-user-blk: try to connect to {:?}", vhost_socket);
         // Connect to the vhost-user socket.
-        let mut master = Master::connect(&vhost_socket, 1).map_err(VirtIoError::VhostError)?;
+        let mut frontend = Frontend::connect(&vhost_socket, 1).map_err(VirtIoError::VhostError)?;
 
         info!("vhost-user-blk: get features");
-        let avail_features = master.get_features().map_err(VirtIoError::VhostError)?;
+        let avail_features = frontend.get_features().map_err(VirtIoError::VhostError)?;
         info!(
             "vhost-user-blk: get features done, ret:{:?}, queue_size: {:?}",
             avail_features,
             queue_sizes.len()
         );
 
-        // for the standard vhost_user_blk device, get the device config from slave.
+        // for the standard vhost_user_blk device, get the device config from backend.
         let config_space = {
-            master.set_features(avail_features)?;
-            let protocol_featuers = master.get_protocol_features()?;
-            // set the config features to get the device's config from slave.
-            master.set_protocol_features(protocol_featuers)?;
+            frontend.set_features(avail_features)?;
+            let protocol_featuers = frontend.get_protocol_features()?;
+            // set the config features to get the device's config from backend.
+            frontend.set_protocol_features(protocol_featuers)?;
 
             let config_len = mem::size_of::<VirtioBlockConfig>();
             let config_space: Vec<u8> = vec![0u8; config_len];
 
-            let (_, mut config_space) = master
+            let (_, mut config_space) = frontend
                 .get_config(
                     VHOST_USER_CONFIG_OFFSET,
                     config_len as u32,
@@ -279,8 +279,8 @@ impl VhostUserBlockDevice {
                 event_mgr,
             ),
             endpoint: Endpoint::new(
-                master,
-                MASTER_SLOT,
+                frontend,
+                FRONTEND_SLOT,
                 VHOST_USER_BLOCK_DRIVER_NAME.to_string(),
             ),
             timer_fd: Some(TimerFd::new().map_err(VirtIoError::IOError)?),
@@ -290,13 +290,13 @@ impl VhostUserBlockDevice {
         })
     }
 
-    fn reconnect_to_server(&mut self) -> VirtIoResult<Master> {
+    fn reconnect_to_server(&mut self) -> VirtIoResult<Frontend> {
         if !Path::new(self.vhost_socket.as_str()).exists() {
             return Err(VirtIoError::InternalError);
         }
-        let master = Master::connect(&self.vhost_socket, 1).map_err(VirtIoError::VhostError)?;
+        let frontend = Frontend::connect(&self.vhost_socket, 1).map_err(VirtIoError::VhostError)?;
 
-        Ok(master)
+        Ok(frontend)
     }
 
     // vhost-user protocol features this device supports
@@ -312,7 +312,7 @@ impl VhostUserBlockDevice {
         features
     }
 
-    fn setup_slave<AS, Q, R>(&mut self, handler: &VhostUserBlockHandler<AS, Q, R>) -> ActivateResult
+    fn setup_backend<AS, Q, R>(&mut self, handler: &VhostUserBlockHandler<AS, Q, R>) -> ActivateResult
     where
         AS: DbsGuestAddressSpace,
         Q: QueueT + Send + 'static,
@@ -328,7 +328,7 @@ impl VhostUserBlockDevice {
             reconnect: false,
             backend: None,
             init_queues: self.curr_queues,
-            slave_req_fd: None,
+            backend_req_fd: None,
         };
         config.set_protocol_mq();
 
@@ -360,16 +360,16 @@ impl VhostUserBlockDevice {
             if !Path::new(self.vhost_socket.as_str()).exists() {
                 return Err(ActivateError::InternalError);
             }
-            let master = Master::connect(String::from(self.vhost_socket.as_str()), 1)
+            let frontend = Frontend::connect(String::from(self.vhost_socket.as_str()), 1)
                 .map_err(VirtIoError::VhostError)?;
 
-            self.endpoint.set_master(master);
+            self.endpoint.set_frontend(frontend);
         }
 
         Ok(())
     }
 
-    // monitor connection to the slave for disconnection/errors.
+    // monitor connection to the backend for disconnection/errors.
     fn register_timer_event(&self, ops: &mut EventOps, tfd: &TimerFd) -> VirtIoResult<()> {
         let event = Events::with_data(tfd, TIMER_SLOT, EventSet::IN);
 
@@ -388,11 +388,11 @@ impl VhostUserBlockDevice {
         R: GuestMemoryRegion + Send + Sync + 'static,
     >(
         &mut self,
-        master: Master,
+        frontend: Frontend,
         config: EndpointParam<AS, Q, R>,
         ops: &mut EventOps,
     ) -> std::result::Result<(), VirtIoError> {
-        self.endpoint.reconnect(master, &config, ops)
+        self.endpoint.reconnect(frontend, &config, ops)
     }
 
     fn handle_disconnect(&mut self, ops: &mut EventOps) -> std::result::Result<(), VirtIoError> {
@@ -519,7 +519,7 @@ where
             id: self.id.clone(),
         };
 
-        device.setup_slave(&handler)?;
+        device.setup_backend(&handler)?;
         let epoll_mgr = device.device_info.epoll_manager.clone();
         drop(device);
         self.subscriber_id = Some(epoll_mgr.add_subscriber(Box::new(handler)));
@@ -578,18 +578,18 @@ mod tests {
     use crate::vhost::vhost_user::test_utils::*;
     use crate::{GuestAddress, VirtioDevice, VirtioDeviceConfig, VirtioQueueConfig, TYPE_BLOCK};
 
-    fn create_vhost_user_block_slave(slave: &mut Endpoint<MasterReq>) {
+    fn create_vhost_user_block_backend(backend: &mut Endpoint<MasterReq>) {
         // get features
-        let (hdr, rfds) = slave.recv_header().unwrap();
+        let (hdr, rfds) = backend.recv_header().unwrap();
         assert_eq!(hdr.get_code(), MasterReq::GET_FEATURES);
         assert!(rfds.is_none());
         let vfeatures = 0x15 | VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits();
         let hdr = VhostUserMsgHeader::new(MasterReq::GET_FEATURES, 0x4, 8);
         let msg = VhostUserU64::new(vfeatures);
-        slave.send_message(&hdr, &msg, None).unwrap();
+        backend.send_message(&hdr, &msg, None).unwrap();
 
         // set features
-        let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
+        let (hdr, _msg, rfds) = backend.recv_body::<VhostUserU64>().unwrap();
         assert_eq!(hdr.get_code(), MasterReq::SET_FEATURES);
         assert!(rfds.is_none());
 
@@ -598,13 +598,13 @@ mod tests {
         pfeatures -= VhostUserProtocolFeatures::INFLIGHT_SHMFD; // TODO: need to support INFLIGHT_SHMFD later, https://github.com/kata-containers/kata-containers/issues/8705
         let hdr = VhostUserMsgHeader::new(MasterReq::GET_PROTOCOL_FEATURES, 0x4, 8);
         let msg = VhostUserU64::new(pfeatures.bits());
-        slave.send_message(&hdr, &msg, None).unwrap();
-        let (hdr, rfds) = slave.recv_header().unwrap();
+        backend.send_message(&hdr, &msg, None).unwrap();
+        let (hdr, rfds) = backend.recv_header().unwrap();
         assert_eq!(hdr.get_code(), MasterReq::GET_PROTOCOL_FEATURES);
         assert!(rfds.is_none());
 
         // set protocol features
-        let (hdr, _msg, rfds) = slave.recv_body::<VhostUserU64>().unwrap();
+        let (hdr, _msg, rfds) = backend.recv_body::<VhostUserU64>().unwrap();
         assert_eq!(hdr.get_code(), MasterReq::SET_PROTOCOL_FEATURES);
         assert!(rfds.is_none());
         let val = msg.value;
@@ -613,7 +613,7 @@ mod tests {
         // get config
         let config_len = mem::size_of::<VirtioBlockConfig>();
         let mut config_space: Vec<u8> = vec![0u8; config_len as usize];
-        let (hdr, _msg, _payload, rfds) = slave
+        let (hdr, _msg, _payload, rfds) = backend
             .recv_payload_into_buf::<VhostUserConfig>(&mut config_space)
             .unwrap();
         assert_eq!(hdr.get_code(), MasterReq::GET_CONFIG);
@@ -624,7 +624,7 @@ mod tests {
             config_len as u32,
             VhostUserConfigFlags::WRITABLE,
         );
-        slave
+        backend
             .send_message_with_payload(&hdr, &msg, config_space.as_slice(), None)
             .unwrap();
     }
@@ -635,8 +635,8 @@ mod tests {
 
         let handler = thread::spawn(move || {
             let listener = Listener::new(socket_path, true).unwrap();
-            let mut slave = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
-            create_vhost_user_block_slave(&mut slave);
+            let mut backend = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
+            create_vhost_user_block_backend(&mut backend);
         });
 
         thread::sleep(Duration::from_millis(20));
@@ -697,12 +697,12 @@ mod tests {
         let handler = thread::spawn(move || {
             // create vhost user block device
             let listener = Listener::new(socket_path, true).unwrap();
-            let mut slave = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
-            create_vhost_user_block_slave(&mut slave);
+            let mut backend = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
+            create_vhost_user_block_backend(&mut backend);
 
             let mut pfeatures = VhostUserProtocolFeatures::all();
             pfeatures -= VhostUserProtocolFeatures::INFLIGHT_SHMFD; // TODO: need to support INFLIGHT_SHMFD later, https://github.com/kata-containers/kata-containers/issues/8705
-            negotiate_slave(&mut slave, pfeatures, true, 2);
+            negotiate_backend(&mut backend, pfeatures, true, 2);
         });
 
         thread::sleep(Duration::from_millis(20));

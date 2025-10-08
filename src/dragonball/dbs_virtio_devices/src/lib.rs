@@ -64,7 +64,7 @@ use dbs_utils::metric::SharedIncMetric;
 #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 use serde::Serialize;
 use virtio_queue::Error as VqError;
-use vm_memory::{GuestAddress, GuestAddressSpace, GuestMemoryError};
+use vm_memory::{GuestAddress, guest_memory::GuestAddressSpace, GuestMemoryError};
 
 pub trait DbsGuestAddressSpace: GuestAddressSpace + 'static + Clone + Send + Sync {}
 

@@ -17,7 +17,7 @@
 /// backend.
 use std::ops::{Deref, DerefMut};
 
-use virtio_queue::{Descriptor, DescriptorChain};
+use virtio_queue::{desc::split::Descriptor, DescriptorChain};
 use vm_memory::{Address, GuestMemory};
 
 use super::defs;

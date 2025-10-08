@@ -18,10 +18,10 @@ use kvm_ioctls::VmFd;
 use libc::{c_void, off64_t, pread64, pwrite64};
 use log::*;
 use vhost_rs::vhost_user::message::{
-    VhostUserFSSlaveMsg, VhostUserFSSlaveMsgFlags, VhostUserProtocolFeatures,
-    VhostUserVirtioFeatures, VHOST_USER_FS_SLAVE_ENTRIES,
+    VhostUserProtocolFeatures,
+    VhostUserVirtioFeatures,
 };
-use vhost_rs::vhost_user::{HandlerResult, Master, MasterReqHandler, VhostUserMasterReqHandler};
+use vhost_rs::vhost_user::{HandlerResult, Frontend, FrontendReqHandler, VhostUserFrontendReqHandler};
 use vhost_rs::VhostBackend;
 use virtio_queue::QueueT;
 use vm_memory::{
@@ -47,305 +47,22 @@ const CONFIG_SPACE_SIZE: usize = CONFIG_SPACE_TAG_SIZE + CONFIG_SPACE_NUM_QUEUES
 // TODO: need documentation for this, why we need an extra queue?
 const NUM_QUEUE_OFFSET: usize = 1;
 
-const MASTER_SLOT: u32 = 0;
-const SLAVE_REQ_SLOT: u32 = 1;
+const FRONTEND_SLOT: u32 = 0;
+const BACKEND_REQ_SLOT: u32 = 1;
 
-struct SlaveReqHandler<AS: GuestAddressSpace> {
-    /// the address of memory region allocated for virtiofs
-    cache_offset: u64,
+struct BackendReqHandler {}
 
-    /// the size of memory region allocated for virtiofs
-    cache_size: u64,
-
-    /// the address of mmap region corresponding to the memory region
-    mmap_cache_addr: u64,
-
-    /// the guest memory mapping
-    mem: AS,
-
-    /// the device ID
-    id: String,
-}
-
-impl<AS: GuestAddressSpace> SlaveReqHandler<AS> {
-    // Make sure request is within cache range
-    fn is_req_valid(&self, offset: u64, len: u64) -> bool {
-        // TODO: do we need to validate alignment here?
-        match offset.checked_add(len) {
-            Some(n) => n <= self.cache_size,
-            None => false,
-        }
-    }
-}
-
-impl<AS: GuestAddressSpace> VhostUserMasterReqHandler for SlaveReqHandler<AS> {
-    fn handle_config_change(&self) -> HandlerResult<u64> {
-        trace!(target: "vhost-fs", "{}: SlaveReqHandler::handle_config_change()", self.id);
-        debug!("{}: unhandle device_config_change event", self.id);
-
-        Ok(0)
-    }
-
-    fn fs_slave_map(&self, fs: &VhostUserFSSlaveMsg, fd: &dyn AsRawFd) -> HandlerResult<u64> {
-        trace!(target: "vhost-fs", "{}: SlaveReqHandler::fs_slave_map()", self.id);
-
-        for i in 0..VHOST_USER_FS_SLAVE_ENTRIES {
-            let offset = fs.cache_offset[i];
-            let len = fs.len[i];
-
-            // Ignore if the length is 0.
-            if len == 0 {
-                continue;
-            }
-
-            debug!(
-                "{}: fs_slave_map: offset={:x} len={:x} cache_size={:x}",
-                self.id, offset, len, self.cache_size
-            );
-
-            if !self.is_req_valid(offset, len) {
-                debug!(
-                    "{}: fs_slave_map: Wrong offset or length, offset={:x} len={:x} cache_size={:x}",
-                    self.id, offset, len, self.cache_size
-                );
-                return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
-            }
-
-            let addr = self.mmap_cache_addr + offset;
-            let flags = fs.flags[i];
-            let ret = unsafe {
-                libc::mmap(
-                    addr as *mut libc::c_void,
-                    len as usize,
-                    flags.bits() as i32,
-                    libc::MAP_SHARED | libc::MAP_FIXED,
-                    fd.as_raw_fd(),
-                    fs.fd_offset[i] as libc::off_t,
-                )
-            };
-            if ret == libc::MAP_FAILED {
-                let e = std::io::Error::last_os_error();
-                error!("{}: fs_slave_map: mmap failed, {}", self.id, e);
-                return Err(e);
-            }
-
-            let ret = unsafe { libc::close(fd.as_raw_fd()) };
-            if ret == -1 {
-                let e = std::io::Error::last_os_error();
-                error!("{}: fs_slave_map: close failed, {}", self.id, e);
-                return Err(e);
-            }
-        }
-
-        Ok(0)
-    }
-
-    fn fs_slave_unmap(&self, fs: &VhostUserFSSlaveMsg) -> HandlerResult<u64> {
-        trace!(target: "vhost-fs", "{}: SlaveReqHandler::fs_slave_map()", self.id);
-
-        for i in 0..VHOST_USER_FS_SLAVE_ENTRIES {
-            let offset = fs.cache_offset[i];
-            let mut len = fs.len[i];
-
-            // Ignore if the length is 0.
-            if len == 0 {
-                continue;
-            }
-
-            debug!(
-                "{}: fs_slave_unmap: offset={:x} len={:x} cache_size={:x}",
-                self.id, offset, len, self.cache_size
-            );
-
-            // Need to handle a special case where the slave ask for the unmapping
-            // of the entire mapping.
-            if len == 0xffff_ffff_ffff_ffff {
-                len = self.cache_size;
-            }
-
-            if !self.is_req_valid(offset, len) {
-                error!(
-                    "{}: fs_slave_map: Wrong offset or length, offset={:x} len={:x} cache_size={:x}",
-                    self.id, offset, len, self.cache_size
-                );
-                return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
-            }
-
-            let addr = self.mmap_cache_addr + offset;
-            #[allow(clippy::unnecessary_cast)]
-            let ret = unsafe {
-                libc::mmap(
-                    addr as *mut libc::c_void,
-                    len as usize,
-                    libc::PROT_NONE,
-                    libc::MAP_ANONYMOUS | libc::MAP_PRIVATE | libc::MAP_FIXED,
-                    -1,
-                    0 as libc::off_t,
-                )
-            };
-            if ret == libc::MAP_FAILED {
-                let e = std::io::Error::last_os_error();
-                error!("{}: fs_slave_map: mmap failed, {}", self.id, e);
-                return Err(e);
-            }
-        }
-
-        Ok(0)
-    }
-
-    fn fs_slave_sync(&self, fs: &VhostUserFSSlaveMsg) -> HandlerResult<u64> {
-        trace!(target: "vhost-fs", "{}: SlaveReqHandler::fs_slave_sync()", self.id);
-
-        for i in 0..VHOST_USER_FS_SLAVE_ENTRIES {
-            let offset = fs.cache_offset[i];
-            let len = fs.len[i];
-
-            // Ignore if the length is 0.
-            if len == 0 {
-                continue;
-            }
-
-            debug!(
-                "{}: fs_slave_sync: offset={:x} len={:x} cache_size={:x}",
-                self.id, offset, len, self.cache_size
-            );
-
-            if !self.is_req_valid(offset, len) {
-                error!(
-                    "{}: fs_slave_map: Wrong offset or length, offset={:x} len={:x} cache_size={:x}",
-                    self.id, offset, len, self.cache_size
-                );
-                return Err(std::io::Error::from_raw_os_error(libc::EINVAL));
-            }
-
-            let addr = self.mmap_cache_addr + offset;
-            let ret =
-                unsafe { libc::msync(addr as *mut libc::c_void, len as usize, libc::MS_SYNC) };
-            if ret == -1 {
-                let e = std::io::Error::last_os_error();
-                error!("{}: fs_slave_sync: msync failed, {}", self.id, e);
-                return Err(e);
-            }
-        }
-
-        Ok(0)
-    }
-
-    fn fs_slave_io(&self, fs: &VhostUserFSSlaveMsg, fd: &dyn AsRawFd) -> HandlerResult<u64> {
-        trace!(target: "vhost-fs", "{}: SlaveReqHandler::fs_slave_io()", self.id);
-
-        let guard = self.mem.memory();
-        let mem = guard.deref();
-        let mut done: u64 = 0;
-        for i in 0..VHOST_USER_FS_SLAVE_ENTRIES {
-            // Ignore if the length is 0.
-            if fs.len[i] == 0 {
-                continue;
-            }
-
-            let mut foffset = fs.fd_offset[i];
-            let mut len = fs.len[i] as usize;
-            let gpa = fs.cache_offset[i];
-            let cache_end = self.cache_offset + self.cache_size;
-            let efault = libc::EFAULT;
-
-            debug!(
-                "{}: fs_slave_io: gpa={:x} len={:x} foffset={:x} cache_offset={:x} cache_size={:x}",
-                self.id, gpa, len, foffset, self.cache_offset, self.cache_size
-            );
-
-            let mut ptr = if gpa >= self.cache_offset && gpa < cache_end {
-                let offset = gpa
-                    .checked_sub(self.cache_offset)
-                    .ok_or_else(|| io::Error::from_raw_os_error(efault))?;
-                let end = gpa
-                    .checked_add(fs.len[i])
-                    .ok_or_else(|| io::Error::from_raw_os_error(efault))?;
-
-                if end >= cache_end {
-                    error!( "{}: fs_slave_io: Wrong gpa or len (gpa={:x} len={:x} cache_offset={:x}, cache_size={:x})", self.id, gpa, len, self.cache_offset, self.cache_size );
-                    return Err(io::Error::from_raw_os_error(efault));
-                }
-                self.mmap_cache_addr + offset
-            } else {
-                // gpa is a RAM addr.
-                mem.get_host_address(GuestAddress(gpa))
-                    .map_err(|e| {
-                        error!(
-                            "{}: fs_slave_io: Failed to find RAM region associated with gpa 0x{:x}: {:?}",
-                            self.id, gpa, e
-                        );
-                        io::Error::from_raw_os_error(efault)
-                    })? as u64
-            };
-
-            while len > 0 {
-                let ret = if (fs.flags[i] & VhostUserFSSlaveMsgFlags::MAP_W)
-                    == VhostUserFSSlaveMsgFlags::MAP_W
-                {
-                    debug!("{}: write: foffset={:x}, len={:x}", self.id, foffset, len);
-                    unsafe {
-                        pwrite64(
-                            fd.as_raw_fd(),
-                            ptr as *const c_void,
-                            len,
-                            foffset as off64_t,
-                        )
-                    }
-                } else {
-                    debug!("{}: read: foffset={:x}, len={:x}", self.id, foffset, len);
-                    unsafe { pread64(fd.as_raw_fd(), ptr as *mut c_void, len, foffset as off64_t) }
-                };
-
-                if ret < 0 {
-                    let e = std::io::Error::last_os_error();
-                    if (fs.flags[i] & VhostUserFSSlaveMsgFlags::MAP_W)
-                        == VhostUserFSSlaveMsgFlags::MAP_W
-                    {
-                        error!("{}: fs_slave_io: pwrite failed, {}", self.id, e);
-                    } else {
-                        error!("{}: fs_slave_io: pread failed, {}", self.id, e);
-                    }
-
-                    return Err(e);
-                }
-
-                if ret == 0 {
-                    // EOF
-                    let e = io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "failed to access whole buffer",
-                    );
-                    error!("{}: fs_slave_io: IO error, {}", self.id, e);
-                    return Err(e);
-                }
-                len -= ret as usize;
-                foffset += ret as u64;
-                ptr += ret as u64;
-                done += ret as u64;
-            }
-
-            let ret = unsafe { libc::close(fd.as_raw_fd()) };
-            if ret == -1 {
-                let e = std::io::Error::last_os_error();
-                error!("{}: fs_slave_io: close failed, {}", self.id, e);
-                return Err(e);
-            }
-        }
-
-        Ok(done)
-    }
-}
+impl VhostUserFrontendReqHandler for BackendReqHandler {}
 
 pub struct VhostUserFsHandler<
     AS: GuestAddressSpace,
     Q: QueueT,
     R: GuestMemoryRegion,
-    S: VhostUserMasterReqHandler,
+    S: VhostUserFrontendReqHandler,
 > {
     config: VirtioDeviceConfig<AS, Q, R>,
     device: Arc<Mutex<VhostUserFsDevice>>,
-    slave_req_handler: Option<MasterReqHandler<S>>,
+    backend_req_handler: Option<FrontendReqHandler<S>>,
     id: String,
 }
 
@@ -354,28 +71,28 @@ where
     AS: 'static + GuestAddressSpace + Send + Sync,
     Q: QueueT + Send + 'static,
     R: GuestMemoryRegion + Send + Sync + 'static,
-    S: 'static + Send + VhostUserMasterReqHandler,
+    S: 'static + Send + VhostUserFrontendReqHandler,
 {
     fn process(&mut self, events: Events, _ops: &mut EventOps) {
         trace!(target: "vhost-fs", "{}: VhostUserFsHandler::process({})", self.id, events.data());
 
         match events.data() {
-            MASTER_SLOT => {
+            FRONTEND_SLOT => {
                 // If virtiofsd crashes, vmm will exit too.
-                error!("{}: Master-slave disconnected, exiting...", self.id);
+                error!("{}: Frontend-Backend disconnected, exiting...", self.id);
                 // TODO: how to make dragonball crash here?
             }
-            SLAVE_REQ_SLOT => match self.slave_req_handler.as_mut() {
+            BACKEND_REQ_SLOT => match self.backend_req_handler.as_mut() {
                 Some(handler) => {
                     if let Err(e) = handler.handle_request() {
                         error!(
-                            "{}: failed to handle slave request failed, {:?}",
+                            "{}: failed to handle backend request failed, {:?}",
                             self.id, e
                         );
                     }
                 }
                 None => error!(
-                    "{}: no slave_req_handler setup but got event from slave",
+                    "{}: no backend_req_handler setup but got event from backend",
                     self.id
                 ),
             },
@@ -394,11 +111,11 @@ where
                 self.id, e
             );
         }
-        if let Some(slave_req_handler) = self.slave_req_handler.as_ref() {
-            let events = Events::with_data(slave_req_handler, SLAVE_REQ_SLOT, EventSet::IN);
+        if let Some(backend_req_handler) = self.backend_req_handler.as_ref() {
+            let events = Events::with_data(backend_req_handler, BACKEND_REQ_SLOT, EventSet::IN);
             if let Err(e) = ops.add(events) {
                 error!(
-                    "{}: failed to register epoll event for slave request handler, {:?}",
+                    "{}: failed to register epoll event for backend request handler, {:?}",
                     self.id, e
                 );
             }
@@ -425,10 +142,10 @@ impl VhostUserFsDevice {
         // Connect to the vhost-user socket.
         info!("{}: try to connect to {:?}", VHOST_USER_FS_NAME, path);
         let num_queues = NUM_QUEUE_OFFSET + req_num_queues;
-        let master = Master::connect(path, num_queues as u64).map_err(VirtioError::VhostError)?;
+        let frontend = Frontend::connect(path, num_queues as u64).map_err(VirtioError::VhostError)?;
 
         info!("{}: get features", VHOST_USER_FS_NAME);
-        let avail_features = master.get_features().map_err(VirtioError::VhostError)?;
+        let avail_features = frontend.get_features().map_err(VirtioError::VhostError)?;
 
         // Create virtio device config space.
         // First by adding the tag.
@@ -448,7 +165,7 @@ impl VhostUserFsDevice {
                 config_space,
                 epoll_mgr,
             ),
-            endpoint: Endpoint::new(master, MASTER_SLOT, VHOST_USER_FS_NAME.to_string()),
+            endpoint: Endpoint::new(frontend, FRONTEND_SLOT, VHOST_USER_FS_NAME.to_string()),
             curr_queues: num_queues as u32,
             cache_size,
         })
@@ -475,22 +192,22 @@ impl VhostUserFsDevice {
         let mut features = VhostUserProtocolFeatures::MQ | VhostUserProtocolFeatures::REPLY_ACK;
         if self.is_dax_on() {
             features |=
-                VhostUserProtocolFeatures::SLAVE_REQ | VhostUserProtocolFeatures::SLAVE_SEND_FD;
+                VhostUserProtocolFeatures::BACKEND_REQ | VhostUserProtocolFeatures::BACKEND_SEND_FD;
         }
         features
     }
 
-    fn setup_slave<
+    fn setup_backend<
         AS: GuestAddressSpace,
         Q: QueueT,
         R: GuestMemoryRegion,
-        S: VhostUserMasterReqHandler,
+        S: VhostUserFrontendReqHandler,
     >(
         &mut self,
         handler: &VhostUserFsHandler<AS, Q, R, S>,
     ) -> ActivateResult {
-        let slave_req_fd = handler
-            .slave_req_handler
+        let backend_req_fd = handler
+            .backend_req_handler
             .as_ref()
             .map(|h| h.get_tx_raw_fd());
         let config = EndpointParam {
@@ -503,7 +220,7 @@ impl VhostUserFsDevice {
             reconnect: false,
             backend: None,
             init_queues: self.curr_queues,
-            slave_req_fd,
+            backend_req_fd,
         };
 
         self.endpoint.negotiate(&config, None).map_err(|e| {
@@ -613,15 +330,15 @@ where
         let mut device = self.device.lock().unwrap();
         device.device_info.check_queue_sizes(&config.queues)?;
 
-        let slave_req_handler = if let Some((addr, guest_addr)) = config.get_shm_region_addr() {
-            let vu_master_req_handler = Arc::new(SlaveReqHandler {
+        let backend_req_handler = if let Some((addr, guest_addr)) = config.get_shm_region_addr() {
+            let vu_frontend_req_handler = Arc::new(BackendReqHandler {
                 cache_offset: guest_addr,
                 cache_size: device.cache_size,
                 mmap_cache_addr: addr,
                 mem: config.vm_as.clone(),
                 id: device.device_info.driver_name.clone(),
             });
-            let req_handler = MasterReqHandler::new(vu_master_req_handler)
+            let req_handler = FrontendReqHandler::new(vu_frontend_req_handler)
                 .map_err(|e| ActivateError::VhostActivate(vhost_rs::Error::VhostUserProtocol(e)))?;
 
             Some(req_handler)
@@ -632,10 +349,10 @@ where
         let handler = VhostUserFsHandler {
             config,
             device: self.device.clone(),
-            slave_req_handler,
+            backend_req_handler,
             id: device.device_info.driver_name.clone(),
         };
-        device.setup_slave(&handler)?;
+        device.setup_backend(&handler)?;
         let epoll_mgr = device.device_info.epoll_manager.clone();
         drop(device);
         self.subscriber_id = Some(epoll_mgr.add_subscriber(Box::new(handler)));
@@ -798,14 +515,14 @@ mod tests {
     use crate::vhost::vhost_user::test_utils::*;
     use crate::{GuestAddress, VirtioDeviceConfig, VirtioQueueConfig, TYPE_VIRTIO_FS};
 
-    fn create_vhost_user_fs_slave(slave: &mut Endpoint<MasterReq>) {
-        let (hdr, rfds) = slave.recv_header().unwrap();
-        assert_eq!(hdr.get_code(), MasterReq::GET_FEATURES);
+    fn create_vhost_user_fs_backend(backend: &mut Endpoint<FrontendReq>) {
+        let (hdr, rfds) = backend.recv_header().unwrap();
+        assert_eq!(hdr.get_code(), FrontendReq::GET_FEATURES);
         assert!(rfds.is_none());
         let vfeatures = 0x15 | VhostUserVirtioFeatures::PROTOCOL_FEATURES.bits();
-        let hdr = VhostUserMsgHeader::new(MasterReq::GET_FEATURES, 0x4, 8);
+        let hdr = VhostUserMsgHeader::new(FrontendReq::GET_FEATURES, 0x4, 8);
         let msg = VhostUserU64::new(vfeatures);
-        slave.send_message(&hdr, &msg, None).unwrap();
+        backend.send_message(&hdr, &msg, None).unwrap();
     }
 
     #[test]
@@ -815,8 +532,8 @@ mod tests {
 
         let handler = thread::spawn(move || {
             let listener = Listener::new(device_socket, true).unwrap();
-            let mut slave = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
-            create_vhost_user_fs_slave(&mut slave);
+            let mut backend = Endpoint::<FrontendReq>::from_stream(listener.accept().unwrap().unwrap());
+            create_vhost_user_fs_backend(&mut backend);
         });
 
         thread::sleep(Duration::from_millis(20));
@@ -884,11 +601,11 @@ mod tests {
 
         let handler = thread::spawn(move || {
             let listener = Listener::new(device_socket, true).unwrap();
-            let mut slave = Endpoint::<MasterReq>::from_stream(listener.accept().unwrap().unwrap());
-            create_vhost_user_fs_slave(&mut slave);
+            let mut backend = Endpoint::<FrontendReq>::from_stream(listener.accept().unwrap().unwrap());
+            create_vhost_user_fs_backend(&mut backend);
 
             let pfeatures = VhostUserProtocolFeatures::CONFIG;
-            negotiate_slave(&mut slave, pfeatures, false, 3);
+            negotiate_backend(&mut backend, pfeatures, false, 3);
         });
 
         thread::sleep(Duration::from_millis(20));
