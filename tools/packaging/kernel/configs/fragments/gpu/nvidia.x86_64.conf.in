@@ -2,10 +2,11 @@
 # It's used to enable the MMIO access method for PCIe devices.
 CONFIG_PCI_MMCONFIG=y
 
-# Support for loading modules.
+# Support for loading modules and firmware
 # It is used to support loading GPU drivers.
 CONFIG_MODULES=y
 CONFIG_MODULE_UNLOAD=y
+CONFIG_FW_LOADER=y
 
 # Linux kernel version suffix
 CONFIG_LOCALVERSION="-nvidia-gpu${CONF_GUEST_SUFFIX}"
