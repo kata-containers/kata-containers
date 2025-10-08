@@ -180,14 +180,12 @@ shim, the Kata agent bind mounts the source path directly from the
 ### Privileged containers
 
 Privileged support in Kata is essentially different from `runc` containers.
-The container runs with elevated capabilities within the guest and is granted
-access to guest devices instead of the host devices.
+The container runs with elevated capabilities within the guest.
 This is also true with using `securityContext privileged=true` with Kubernetes.
 
-The container may also be granted full access to a subset of host devices
-(https://github.com/kata-containers/runtime/issues/1568).
-
-See [Privileged Kata Containers](how-to/privileged.md) for how to configure some of this behavior.
+Importantly, the default behavior to pass the host devices to a
+privileged container is not supported in Kata Containers and needs to be
+disabled, see [Privileged Kata Containers](how-to/privileged.md).
 
 # Appendices
 
