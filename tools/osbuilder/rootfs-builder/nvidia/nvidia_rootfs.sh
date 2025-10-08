@@ -145,10 +145,24 @@ chisseled_iptables() {
 	cp -a "${stage_one}/${libdir}"/libxtables.so.12* lib/.
 }
 
+# <= NVLINK4 nv-fabrimanager
+# >= NVLINK5 nv-fabricmanager + nvlsm (TODO)
 chisseled_nvswitch() {
 	echo "nvidia: chisseling NVSwitch"
-	echo "nvidia: not implemented yet"
-	exit 1
+
+	mkdir -p usr/share/nvidia/nvswitch
+
+	cp -a "${stage_one}"/usr/bin/nv-fabricmanager 	bin/.
+	cp -a "${stage_one}"/usr/share/nvidia/nvswitch usr/share/nvidia/.
+
+	libdir=usr/lib/"${machine_arch}"-linux-gnu
+
+	cp -a "${stage_one}/${libdir}"/libnvidia-nscq.so.* lib/"${machine_arch}"-linux-gnu/.
+
+	# Logs will be redirected to console(stderr)
+	# if the specified log file can't be opened or the path is empty.
+	# LOG_FILE_NAME=/var/log/fabricmanager.log -> setting to empty for stderr -> kmsg
+	sed -i 's|^LOG_FILE_NAME=.*|LOG_FILE_NAME=|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 }
 
 chisseled_dcgm() {
