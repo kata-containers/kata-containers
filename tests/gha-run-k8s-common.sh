@@ -27,6 +27,7 @@ HELM_PULL_TYPE_MAPPING="${HELM_PULL_TYPE_MAPPING:-}"
 HELM_SHIMS="${HELM_SHIMS:-}"
 HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
 HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
+HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${HELM_EXPERIMENTAL_FORCE_GUEST_PULL:-}"
 KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-600}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
@@ -550,6 +551,7 @@ function helm_helper() {
 		[[ -n "${HELM_PULL_TYPE_MAPPING}" ]] && yq -i ".env.pullTypeMapping = \"${HELM_PULL_TYPE_MAPPING}\"" "${values_yaml}"
 		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
 		[[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]] && yq -i ".env._experimentalSetupSnapshotter=\"${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}\"" "${values_yaml}"
+		[[ -n "${HELM_EXPERIMENTAL_FORCE_GUEST_PULL}" ]] && yq -i ".env._experimentalForceGuestPull=\"${HELM_EXPERIMENTAL_FORCE_GUEST_PULL}\"" "${values_yaml}"
 	fi
 
 	echo "::group::Final kata-deploy manifests used in the test"
