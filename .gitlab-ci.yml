@@ -1,7 +1,7 @@
 include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-delivery.yml
 
 variables:
-  CI_IMAGE: 2
+  CI_IMAGE: 3
   KERNEL_VERSION: 6.8
 
 stages:
