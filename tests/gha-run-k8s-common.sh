@@ -33,6 +33,7 @@ KUBERNETES="${KUBERNETES:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
+SNAPSHOTTER="${SNAPSHOTTER:-}"
 
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
@@ -60,7 +61,7 @@ function _print_cluster_name() {
 		echo "${AKS_NAME}"
 	else
 		short_sha="$(git rev-parse --short=12 HEAD)"
-		metadata="${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
+		metadata="${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-${SNAPSHOTTER}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
 		# Compute the SHA1 digest of the metadata part to keep the name less
 		# than the limit of 63 chars of AKS
 		echo "${test_type}-$(sha1sum <<< "${metadata}" | cut -d' ' -f1)"
@@ -103,6 +104,7 @@ function create_cluster() {
 		"SHORT_SHA=${short_sha}" \
 		"KATA_HYPERVISOR=${KATA_HYPERVISOR}"\
 		"KATA_HOST_OS=${KATA_HOST_OS:-}" \
+		"SNAPSHOTTER=${SNAPSHOTTER}" \
 		"K8S_TEST_HOST_TYPE=${K8S_TEST_HOST_TYPE:0:1}" \
 		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
