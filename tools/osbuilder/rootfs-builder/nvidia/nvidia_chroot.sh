@@ -197,6 +197,7 @@ prepare_distribution_drivers() {
 	eval "${APT_INSTALL}" nvidia-utils-"${driver_version}"
 
 	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
+		nvidia-firmware-"${driver_version}"  \
         nvidia-imex-"${driver_version}"      \
 		libnvidia-cfg1-"${driver_version}"   \
         libnvidia-gl-"${driver_version}"     \

@@ -31,9 +31,11 @@ else
     die "Unsupported architecture: ${machine_arch}"
 fi
 
+# TODO: use only releases of NVRC
 setup_nvidia-nvrc() {
+	local rootfs_type=${1:-""}
+
 	local TARGET="nvidia-nvrc"
-	local TARGET_VERSION="main"
 	local PROJECT="nvrc"
 	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
 	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
@@ -49,7 +51,7 @@ setup_nvidia-nvrc() {
 
 	pushd "${PROJECT}" > /dev/null || exit 1
 
-	cargo build --release --target="${machine_arch}"-unknown-linux-musl
+	cargo build --release --target="${machine_arch}"-unknown-linux-musl --features="${rootfs_type}"
 	cp target/"${machine_arch}"-unknown-linux-musl/release/NVRC ../../destdir/bin/.
 
 	popd > /dev/null || exit 1
@@ -73,7 +75,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
 
 	if [[ ! -e "${BUILD_DIR}/kata-static-nvidia-nvrc.tar.zst" ]]; then
-		setup_nvidia-nvrc
+		setup_nvidia-nvrc "${rootfs_type}"
 	fi
 
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" ./nvidia_chroot.sh
