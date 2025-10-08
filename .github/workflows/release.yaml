@@ -260,10 +260,11 @@ jobs:
       - name: Login to the OCI registries
         env:
           QUAY_DEPLOYER_USERNAME: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          GITHUB_ACTOR: ${{ github.actor }}
+          QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo "${{ secrets.QUAY_DEPLOYER_PASSWORD }}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
-          echo "${{ github.token }}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          echo "${QUAY_DEPLOYER_PASSWORD}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
+          echo "${GITHUB_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
       - name: Push helm chart to the OCI registries
         run: |

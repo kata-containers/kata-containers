@@ -97,7 +97,7 @@ jobs:
       - name: Build ${{ matrix.asset }}
         id: build
         run: |
-          [[ "${KATA_ASSET}" == *"nvidia"* ]] && echo "KBUILD_SIGN_PIN=${{ secrets.KBUILD_SIGN_PIN }}" >> "${GITHUB_ENV}"
+          [[ "${KATA_ASSET}" == *"nvidia"* ]] && echo "GH_KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN}" >> "${GITHUB_ENV}"
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
@@ -111,12 +111,15 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          GH_KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
         run: |
-          oci_image="$(<"build/${{ matrix.asset }}-oci-image")"
+          oci_image="$(<"build/${KATA_ASSET}-oci-image")"
           echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
@@ -205,7 +208,7 @@ jobs:
       - name: Build ${{ matrix.asset }}
         id: build
         run: |
-          [[ "${KATA_ASSET}" == *"nvidia"* ]] && echo "KBUILD_SIGN_PIN=${{ secrets.KBUILD_SIGN_PIN }}" >> "${GITHUB_ENV}"
+          [[ "${KATA_ASSET}" == *"nvidia"* ]] && echo "KBUILD_SIGN_PIN=${GH_KBUILD_SIGN_PIN}" >> "${GITHUB_ENV}"
           ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
@@ -220,6 +223,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          GH_KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
