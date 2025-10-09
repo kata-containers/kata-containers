@@ -594,7 +594,7 @@ pub async fn do_handle_device(
         .await
         .try_add_device(&device_id)
         .await
-        .context("failed to add deivce")?;
+        .context("failed to add device")?;
 
     let device_info = d
         .read()

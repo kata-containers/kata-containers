@@ -18,7 +18,7 @@
 //!
 //! # Examples
 //!
-//! Creating a dummy deivce which implement DeviceIo trait, and register it to [IoManager] with
+//! Creating a dummy device which implement DeviceIo trait, and register it to [IoManager] with
 //! trapped MMIO/PIO address ranges:
 //!
 //! ```
