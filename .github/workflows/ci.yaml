@@ -159,7 +159,7 @@ jobs:
       tag: ${{ inputs.tag }}-s390x
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: s390x
+      runner: ubuntu-24.04-s390x
       arch: s390x
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
