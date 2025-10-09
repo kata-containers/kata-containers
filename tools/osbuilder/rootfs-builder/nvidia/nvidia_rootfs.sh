@@ -72,7 +72,7 @@ setup_nvidia-nvrc() {
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
-	if [[ -e "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" ]]; then
+	if [[ -e "${BUILD_DIR}/kata-static-rootfs-${VARIANT}-stage-one.tar.zst" ]]; then
 		info "nvidia: GPU rootfs stage one already exists"
 		return
 	fi
@@ -129,7 +129,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	rm ./nvidia_chroot.sh
 	rm ./*.deb
 
-	tar cfa "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst --remove-files -- *
+	tar cfa "${BUILD_DIR}"/kata-static-rootfs-"${VARIANT}"-stage-one.tar.zst --remove-files -- *
 
 	popd  >> /dev/null
 
@@ -332,7 +332,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
 	[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
 
-	tar -C "${stage_one}" -xf "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst
+	tar -C "${stage_one}" -xf "${BUILD_DIR}"/kata-static-rootfs-"${VARIANT}"-stage-one.tar.zst
 
 
 	pushd "${stage_two}" >> /dev/null
