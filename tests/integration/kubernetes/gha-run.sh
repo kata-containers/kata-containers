@@ -201,11 +201,12 @@ function deploy_kata() {
 		case "${SNAPSHOTTER}" in
 			nydus|erofs)
 				ARCH="$(uname -m)"
-				# We only want to tests this for the qemu-coco-dev runtime class
-				# as it's running on a GitHub runner (and not on a BM machine),
+				# We only want to tests this for the qemu-coco-dev and
+				# qemu-coco-dev-runtime-rs runtime classes
+				# as they are running on a GitHub runner (and not on a BM machine),
 				# and there the snapshotter is deployed on every run (rather than
 				# deployed when the machine is configured, as on the BM machines).
-				if [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]] && [[ ${ARCH} == "x86_64" ]]; then
+				if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [[ ${ARCH} == "x86_64" ]]; then
 					EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}"
 				fi
 				;;

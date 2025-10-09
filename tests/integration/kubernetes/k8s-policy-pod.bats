@@ -6,20 +6,21 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 issue="https://github.com/kata-containers/kata-containers/issues/10297"
 
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+    setup_common
 	configmap_name="policy-configmap"
 	pod_name="policy-pod"
 	priority_class_name="test-high-priority"
 
 	get_pod_config_dir
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
-	
+
 	exec_command=(printenv data-3)
 	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
@@ -43,7 +44,7 @@ setup() {
 		prometheus_image_supported || replace_prometheus_image
 
 		# Save pre-generated yaml files
-		cp "${correct_configmap_yaml}" "${pre_generate_configmap_yaml}" 
+		cp "${correct_configmap_yaml}" "${pre_generate_configmap_yaml}"
 		cp "${correct_pod_yaml}" "${pre_generate_pod_yaml}"
 
 		# Add policy to the correct pod yaml file
@@ -57,6 +58,9 @@ setup() {
 	# Also give each testcase a copy of the pre-generated yaml files.
 	cp "${pre_generate_configmap_yaml}" "${testcase_pre_generate_configmap_yaml}"
 	cp "${pre_generate_pod_yaml}" "${testcase_pre_generate_pod_yaml}"
+
+	set_node "${testcase_pre_generate_pod_yaml}" "${node}"
+	set_node "${correct_pod_yaml}" "${node}"
 }
 
 prometheus_image_supported() {
@@ -96,7 +100,7 @@ wait_for_pod_ready() {
 	runtime_class_name=$(yq ".spec.runtimeClassName" < "${testcase_pre_generate_pod_yaml}")
 
 	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
-		"--runtime-class-names=other-runtime-class-name --runtime-class-names=${runtime_class_name}" 
+		"--runtime-class-names=other-runtime-class-name --runtime-class-names=${runtime_class_name}"
 
 	kubectl create -f "${testcase_pre_generate_configmap_yaml}"
 	kubectl create -f "${testcase_pre_generate_pod_yaml}"
