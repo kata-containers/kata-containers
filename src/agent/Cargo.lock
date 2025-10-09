@@ -666,30 +666,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cdi"
-version = "0.1.0"
-source = "git+https://github.com/cncf-tags/container-device-interface-rs?rev=3b1e83dda5efcc83c7a4f134466ec006b37109c9#3b1e83dda5efcc83c7a4f134466ec006b37109c9"
-dependencies = [
- "anyhow",
- "clap",
- "const_format",
- "jsonschema",
- "lazy_static",
- "libc",
- "nix 0.24.3",
- "notify",
- "oci-spec",
- "once_cell",
- "path-clean",
- "regex",
- "semver",
- "serde",
- "serde_derive",
- "serde_json",
- "serde_yaml",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -806,6 +782,31 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
+]
+
+[[package]]
+name = "container-device-interface"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "653849f0c250f73d9afab4b2a9a6b07adaee1f34c44ffa6f2d2c3f9392002c1a"
+dependencies = [
+ "anyhow",
+ "clap",
+ "const_format",
+ "jsonschema",
+ "lazy_static",
+ "libc",
+ "nix 0.24.3",
+ "notify",
+ "oci-spec",
+ "once_cell",
+ "path-clean",
+ "regex",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -2049,11 +2050,11 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "capctl",
- "cdi",
  "cfg-if",
  "cgroups-rs",
  "clap",
  "const_format",
+ "container-device-interface",
  "derivative",
  "futures",
  "ipnetwork",
