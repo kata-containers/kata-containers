@@ -354,7 +354,7 @@ externals:
   opa:
     description: "Open Policy Agent"
     url: "https://github.com/open-policy-agent/opa"
-    version: "v1.6.0"
+    version: "v1.9.0"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
