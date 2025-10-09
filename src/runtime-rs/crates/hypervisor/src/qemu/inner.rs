@@ -132,13 +132,14 @@ impl QemuInner {
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "ccw" | "blk" => cmdline.add_block_device(
+                        "ccw" | "blk" | "scsi" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
                             block_dev
                                 .config
                                 .is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
+                            block_dev.config.driver_option.as_str() == "scsi",
                         )?,
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
