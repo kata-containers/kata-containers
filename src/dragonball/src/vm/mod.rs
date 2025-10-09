@@ -1,6 +1,7 @@
 // Copyright (C) 2021 Alibaba Cloud. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::ops::Deref;
 use std::os::unix::io::RawFd;
@@ -18,6 +19,7 @@ use dbs_utils::time::TimestampUs;
 use kvm_ioctls::VmFd;
 use linux_loader::loader::{KernelLoader, KernelLoaderResult};
 use seccompiler::BpfProgram;
+use seccompiler::{apply_filter_all_threads, Error as SecError};
 use serde_derive::{Deserialize, Serialize};
 use slog::{error, info};
 use vm_memory::{Bytes, GuestAddress, GuestAddressSpace};
@@ -42,6 +44,7 @@ use crate::resource_manager::ResourceManager;
 use crate::vcpu::{VcpuManager, VcpuManagerError};
 #[cfg(feature = "hotplug")]
 use crate::vcpu::{VcpuResizeError, VcpuResizeInfo};
+use crate::{ALL_THREADS, VCPU_THREAD, VMM_THREAD};
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::gic::Error as GICError;
 
@@ -709,10 +712,27 @@ impl Vm {
     pub fn start_microvm(
         &mut self,
         event_mgr: &mut EventManager,
-        vmm_seccomp_filter: BpfProgram,
-        vcpu_seccomp_filter: BpfProgram,
+        seccomp_filters: HashMap<String, BpfProgram>,
     ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: received instance start command");
+
+        if let Some(process_seccomp_filter) = seccomp_filters.get(ALL_THREADS) {
+            // Load seccomp filters for the whole process.
+            // Execution panics if filters cannot be loaded, use --seccomp-level=0 if skipping filters
+            // altogether is the desired behaviour.
+            if let Err(e) = apply_filter_all_threads(process_seccomp_filter) {
+                if !matches!(e, SecError::EmptyFilter) {
+                    error!(
+                        self.logger,
+                        "VM: failed to apply process-wide seccomp filters: {}", e
+                    );
+                    return Err(StartMicroVmError::SeccompFilters(e));
+                }
+            } else {
+                info!(self.logger, "VM: process-wide seccomp filters applied");
+            }
+        }
+
         if self.is_vm_initialized() {
             return Err(StartMicroVmError::MicroVMAlreadyRunning);
         }
@@ -738,8 +758,14 @@ impl Vm {
                 AddressManagerError::GuestMemoryNotInitialized,
             ))?;
 
-        self.init_vcpu_manager(vm_as.clone(), vcpu_seccomp_filter)
-            .map_err(StartMicroVmError::Vcpu)?;
+        self.init_vcpu_manager(
+            vm_as.clone(),
+            seccomp_filters
+                .get(VCPU_THREAD)
+                .cloned()
+                .unwrap_or_default(),
+        )
+        .map_err(StartMicroVmError::Vcpu)?;
         self.init_microvm(event_mgr.epoll_manager(), vm_as.clone(), request_ts)?;
         self.init_configure_system(&vm_as)?;
         #[cfg(feature = "dbs-upcall")]
@@ -751,7 +777,7 @@ impl Vm {
         info!(self.logger, "VM: start vcpus");
         self.vcpu_manager()
             .map_err(StartMicroVmError::Vcpu)?
-            .start_boot_vcpus(vmm_seccomp_filter)
+            .start_boot_vcpus(seccomp_filters.get(VMM_THREAD).cloned().unwrap_or_default())
             .map_err(StartMicroVmError::Vcpu)?;
 
         // Use expect() to crash if the other thread poisoned this lock.

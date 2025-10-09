@@ -10,6 +10,7 @@ mod inner_hypervisor;
 use super::HypervisorState;
 use inner::DragonballInner;
 use persist::sandbox_persist::Persist;
+mod seccomp;
 pub mod vmm_instance;
 
 use std::collections::HashMap;

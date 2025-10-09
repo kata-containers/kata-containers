@@ -4,19 +4,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    collections::{HashMap, HashSet},
-    iter::FromIterator,
-};
+use std::collections::{HashMap, HashSet};
+use std::iter::FromIterator;
 
 use anyhow::{anyhow, Context, Ok, Result};
+use dragonball::ALL_THREADS;
 use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
-use crate::{
-    utils::{self, get_hvsock_path, get_jailer_root, get_sandbox_path},
-    VcpuThreadIds, VmmState,
-};
+use crate::dragonball::seccomp::get_seccomp_filter;
+use crate::utils::{self, get_hvsock_path, get_jailer_root, get_sandbox_path};
+use crate::{VcpuThreadIds, VmmState};
 
 impl DragonballInner {
     pub(crate) async fn prepare_vm(
@@ -40,6 +38,12 @@ impl DragonballInner {
             warn!(sl!(),
                     "SELinux label is provided for Dragonball VM, but Dragonball does not support SELinux; the label will be ignored",
             );
+        }
+
+        if !self.config.security_info.disable_seccomp {
+            let seccomp =
+                HashMap::from([(ALL_THREADS.to_string(), get_seccomp_filter(ALL_THREADS))]);
+            self.vmm_instance.set_seccomp(seccomp);
         }
 
         Ok(())
