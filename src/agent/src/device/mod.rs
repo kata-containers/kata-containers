@@ -12,6 +12,7 @@ use crate::pci;
 use crate::sandbox::PciHostGuestMapping;
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Context, Result};
+use container_device_interface as cdi;
 use cdi::annotations::parse_annotations;
 use cdi::cache::{new_cache, with_auto_refresh, CdiOption};
 use cdi::spec_dirs::with_spec_dirs;

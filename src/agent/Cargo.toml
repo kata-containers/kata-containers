@@ -167,9 +167,6 @@ clap.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 
-# Agent Policy
-cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "3b1e83dda5efcc83c7a4f134466ec006b37109c9" }
-
 # Local dependencies
 kata-agent-policy = { workspace = true, optional = true }
 mem-agent.workspace = true
@@ -188,6 +185,8 @@ vsock-exporter.workspace = true
 base64 = "0.22"
 sha2 = "0.10.8"
 async-compression = { version = "0.4.22", features = ["tokio", "gzip"] }
+
+container-device-interface = "0.1.0"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
 pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", rev = "4942504a9a2977d49989a5e5b7c1c8e07dc0fa41", package = "s390_pv_core" }
