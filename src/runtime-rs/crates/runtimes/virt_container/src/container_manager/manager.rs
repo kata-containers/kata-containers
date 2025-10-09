@@ -192,8 +192,10 @@ impl ContainerManager for VirtContainerManager {
         if req.spec_type_url.is_empty() {
             return Err(anyhow!("invalid type url"));
         }
-        let oci_process: OCIProcess =
+        let mut oci_process: OCIProcess =
             serde_json::from_slice(&req.spec_value).context("serde from slice")?;
+
+        oci_process.set_apparmor_profile(None);
 
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
