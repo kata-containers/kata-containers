@@ -198,13 +198,14 @@ prepare_distribution_drivers() {
 
 	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
 		nvidia-firmware-"${driver_version}"  \
-        nvidia-imex-"${driver_version}"      \
+		nvidia-imex-"${driver_version}"      \
 		libnvidia-cfg1-"${driver_version}"   \
-        libnvidia-gl-"${driver_version}"     \
-        libnvidia-extra-"${driver_version}"  \
-        libnvidia-decode-"${driver_version}" \
-        libnvidia-fbc1-"${driver_version}"   \
-        libnvidia-encode-"${driver_version}"
+		libnvidia-gl-"${driver_version}"     \
+		libnvidia-extra-"${driver_version}"  \
+		libnvidia-decode-"${driver_version}" \
+		libnvidia-fbc1-"${driver_version}"   \
+		libnvidia-encode-"${driver_version}" \
+		libnvidia-nscq-"${driver_version}"
 }
 
 prepare_nvidia_drivers() {
