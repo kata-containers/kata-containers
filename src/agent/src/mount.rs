@@ -336,11 +336,17 @@ mod tests {
         let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
         let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
 
+        // Detect actual filesystem types mounted in this environment
+        // Z runners mount /dev as tmpfs, while normal systems use devtmpfs
+        let dev_fs_type = get_mount_fs_type("/dev").unwrap_or_else(|_| String::from("devtmpfs"));
+        let proc_fs_type = get_mount_fs_type("/proc").unwrap_or_else(|_| String::from("proc"));
+        let sys_fs_type = get_mount_fs_type("/sys").unwrap_or_else(|_| String::from("sysfs"));
+
         let test_cases = [
-            ("dev", "/dev", "devtmpfs"),
-            ("udev", "/dev", "devtmpfs"),
-            ("proc", "/proc", "proc"),
-            ("sysfs", "/sys", "sysfs"),
+            ("dev", "/dev", dev_fs_type.as_str()),
+            ("udev", "/dev", dev_fs_type.as_str()),
+            ("proc", "/proc", proc_fs_type.as_str()),
+            ("sysfs", "/sys", sys_fs_type.as_str()),
         ];
 
         for &(source, destination, fs_type) in &test_cases {
