@@ -6,9 +6,18 @@
 
 #!/bin/bash
 set -euo pipefail
+[[ -n "${DEBUG}" ]] && set -x
 
 shopt -s nullglob
 shopt -s extglob
+
+# Error helpers
+trap 'echo "chroot: ERROR at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
+die() {
+  local msg="${*:-fatal error}"
+  echo "chroot: ${msg}" >&2
+  exit 1
+}
 
 run_file_name=$2
 run_fm_file_name=$3
@@ -97,6 +106,19 @@ install_nvidia_fabricmanager_from_distribution() {
 	apt-mark hold nvidia-fabricmanager-"${driver_version}"  libnvidia-nscq-"${driver_version}"
 }
 
+check_kernel_sig_config() {
+	[[ -n ${kernel_version} ]] || die "kernel_version is not set"
+	[[ -e /lib/modules/"${kernel_version}"/build/scripts/config ]] || die  "Cannot find /lib/modules/${kernel_version}/build/scripts/config"
+	# make sure the used kernel has the proper CONFIG(s) set
+	readonly scripts_config=/lib/modules/"${kernel_version}"/build/scripts/config
+	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_MODULE_SIG)" == "y" ]] || die  "Kernel config CONFIG_MODULE_SIG must be =Y"
+	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_MODULE_SIG_FORCE)" == "y" ]] || die  "Kernel config CONFIG_MODULE_SIG_FORCE must be =Y"
+	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_MODULE_SIG_ALL)" == "y" ]] || die  "Kernel config CONFIG_MODULE_SIG_ALL must be =Y"
+	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_MODULE_SIG_SHA512)" == "y" ]] || die  "Kernel config CONFIG_MODULE_SIG_SHA512 must be =Y"
+	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_SYSTEM_TRUSTED_KEYS)" == "" ]] || die  "Kernel config CONFIG_SYSTEM_TRUSTED_KEYS must be =\"\""
+	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_SYSTEM_TRUSTED_KEYRING)" == "y" ]] || die  "Kernel config CONFIG_SYSTEM_TRUSTED_KEYRING must be =Y"
+}
+
 build_nvidia_drivers() {
 	is_feature_enabled "compute" || {
 		echo "chroot: Skipping NVIDIA drivers build"
@@ -133,6 +155,7 @@ build_nvidia_drivers() {
 
 		if [[ -n "${KBUILD_SIGN_PIN}" ]]; then
 			mkdir -p "${certs_dir}" && mv /signing_key.* "${certs_dir}"/.
+			check_kernel_sig_config
 		fi
 
 		make INSTALL_MOD_STRIP=1 -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build modules_install
