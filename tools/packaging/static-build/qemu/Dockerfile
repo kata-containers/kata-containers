@@ -70,3 +70,36 @@ RUN apt-get update && apt-get upgrade -y && \
     GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64le"; fi && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${GCC_ARCH}"-linux-gnu; fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/
+
+# Detect architecture and set appropriate Ubuntu mirror
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "${ARCH}" = "amd64" ]; then \
+        UBUNTU_MIRROR="http://archive.ubuntu.com/ubuntu/"; \
+    else \
+        UBUNTU_MIRROR="http://ports.ubuntu.com/ubuntu-ports/"; \
+    fi && \
+    echo "UBUNTU_MIRROR=${UBUNTU_MIRROR}" > /etc/ubuntu_mirror.env
+
+# Backup sources list and add Noble (24.04) repository
+RUN . /etc/ubuntu_mirror.env && \
+    cp /etc/apt/sources.list /etc/apt/sources.list.backup && \
+    echo "deb ${UBUNTU_MIRROR} noble main universe" > /etc/apt/sources.list.d/noble.list
+
+# Set up APT pinning to prefer Jammy packages by default, but allow liburing from Noble
+RUN mkdir -p /etc/apt/preferences.d && \
+    echo "Package: *\n\
+Pin: release n=jammy\n\
+Pin-Priority: 900\n\
+\n\
+Package: liburing*\n\
+Pin: release n=noble\n\
+Pin-Priority: 950" > /etc/apt/preferences.d/noble-pin
+
+# Update package list and install liburing-dev from Noble
+RUN apt-get update && \
+    apt-get install -y liburing-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Remove the Noble repository to prevent accidental upgrades
+RUN rm /etc/apt/sources.list.d/noble.list && \
+    apt-get update
