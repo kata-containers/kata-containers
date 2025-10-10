@@ -387,6 +387,18 @@ mod tests {
         let drain = slog::Discard;
         let logger = slog::Logger::root(drain, o!());
 
+        // Detect filesystem type of root directory
+        let tmp_fs_type = get_mount_fs_type("/").unwrap_or_else(|_| String::from("unknown"));
+
+        // Helper to select error message based on filesystem type (e.g. btrfs for s390x runners)
+        let get_error_msg = |default: &'static str, btrfs_specific: &'static str| -> &'static str {
+            if tmp_fs_type == "btrfs" && !btrfs_specific.is_empty() {
+                btrfs_specific
+            } else {
+                default
+            }
+        };
+
         let tests = &[
             TestData {
                 test_user: TestUserType::Any,
@@ -422,7 +434,7 @@ mod tests {
                 fs_type: "bind",
                 flags: MsFlags::empty(),
                 options: "bind",
-                error_contains: "Operation not permitted",
+                error_contains: get_error_msg("Operation not permitted", "No such device"),
             },
             TestData {
                 test_user: TestUserType::NonRootOnly,
@@ -502,7 +514,14 @@ mod tests {
 
             let err = result.unwrap_err();
             let error_msg = format!("{}", err);
-            assert!(error_msg.contains(d.error_contains), "{}", msg);
+
+            assert!(
+                error_msg.contains(d.error_contains),
+                "{}: expected error containing '{}', got '{}'",
+                msg,
+                d.error_contains,
+                error_msg
+            );
         }
     }
 
