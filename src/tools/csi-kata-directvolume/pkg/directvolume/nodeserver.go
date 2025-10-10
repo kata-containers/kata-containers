@@ -520,7 +520,7 @@ func (dv *directVolume) stageDirectVolume(req *csi.NodeStageVolumeRequest, volum
 	if isLoopDevice(req.VolumeContext) {
 		deviceLink := getDeviceSymlinkPath(stagingTargetPath)
 
-		losetupOut, err := exec.Command("losetup", "-f", "--show", *imagePath).Output()
+		losetupOut, err := exec.Command("losetup", "-f", "--show", "--direct-io=on", *imagePath).Output()
 		if err != nil {
 			var stderr []byte
 			if exitErr, isExitError := err.(*exec.ExitError); isExitError {
