@@ -586,12 +586,12 @@ function deploy_csi_driver() {
 	echo "::group::deploy_csi_driver"
 	ensure_yq
 
-	csi_image_selector="image: ghcr.io/kata-containers/csi-kata-directvolume:${GH_PR_NUMBER}"
+	csi_image="ghcr.io/kata-containers/csi-kata-directvolume:${GH_PR_NUMBER}"
 	csi_plugin="${csi_deploy_dir}/kata-directvolume/csi-directvol-plugin.yaml"
 
 	# Deploy the driver pods.
-	sed -i "s|image: localhost/kata-directvolume:v1.0.18|${csi_image_selector}|" "${csi_plugin}"
-	grep -q "${csi_image_selector}" "${csi_plugin}" # Ensure the substitution took place.
+	yq -i "(.spec.template.spec.containers[] | select(.name == \"kata-directvolume\") | .image) = \"${csi_image}\"" "${csi_plugin}"
+	grep -q "${csi_image}" "${csi_plugin}" || die "Could not set CSI image"
 	bash "${csi_deploy_dir}/deploy.sh"
 
 	# Deploy the storage class.
