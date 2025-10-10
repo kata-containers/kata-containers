@@ -476,11 +476,12 @@ impl VirtSandbox {
             sl!(),
             "initdata push data into compressed block: {:?}", &image_path
         );
-        let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
+        // let block_driver = &hypervisor_config.blockdev_info.block_device_driver;
         let block_config = BlockConfig {
             path_on_host: image_path.display().to_string(),
             is_readonly: true,
-            driver_option: block_driver.clone(),
+            // driver_option: block_driver.clone(),
+            driver_option: "virtio-blk-pci".to_string(),
             blkdev_aio: BlockDeviceAio::Native,
             ..Default::default()
         };
