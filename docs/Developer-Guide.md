@@ -27,7 +27,7 @@ to build the Kata Containers components from source.
 
 > **Note:**
 >
-> If you decide to build from sources, you should be aware of the
+> If you decide to build from source, you should be aware of the
 > implications of using an unpackaged system which will not be automatically
 > updated as new [releases](https://github.com/kata-containers/kata-containers/releases) are made available.
 
