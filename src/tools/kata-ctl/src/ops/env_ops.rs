@@ -467,7 +467,6 @@ pub fn get_env_info(toml_config: &TomlConfig) -> Result<EnvInfo> {
         host: host_info,
         agent: agent_info,
     };
-
     Ok(env_info)
 }
 
