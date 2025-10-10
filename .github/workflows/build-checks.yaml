@@ -47,6 +47,7 @@ jobs:
             path: src/libs
             needs:
               - rust
+              - protobuf-compiler
           - name: agent-ctl
             path: src/tools/agent-ctl
             needs:
@@ -57,6 +58,7 @@ jobs:
             path: src/tools/kata-ctl
             needs:
               - rust
+              - protobuf-compiler
           - name: trace-forwarder
             path: src/tools/trace-forwarder
             needs:
