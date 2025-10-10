@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_CUDA}
+  labels:
+    app: ${POD_NAME_CUDA}
+spec:
+  runtimeClassName: ${RUNTIME_CLASS_NAME}
+  restartPolicy: Never
+  containers:
+  - name: cuda-vectoradd
+    image: "nvcr.io/nvidia/k8s/cuda-sample:vectoradd-cuda12.5.0-ubuntu22.04"
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
+        memory: 16Gi
