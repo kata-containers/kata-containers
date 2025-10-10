@@ -108,7 +108,7 @@ install_nvidia_fabricmanager_from_distribution() {
 
 check_kernel_sig_config() {
 	[[ -n ${kernel_version} ]] || die "kernel_version is not set"
-	[[ -e /lib/modules/"${kernel_version}"/build/scripts/config ]] || die  "Cannot find /lib/modules/${kernel_version}/build/scripts/config"
+	[[ -e /lib/modules/"${kernel_version}"/build/scripts/config ]] || die "Cannot find /lib/modules/${kernel_version}/build/scripts/config"
 	# make sure the used kernel has the proper CONFIG(s) set
 	readonly scripts_config=/lib/modules/"${kernel_version}"/build/scripts/config
 	[[ "$("${scripts_config}" --file "/boot/config-${kernel_version}" --state CONFIG_MODULE_SIG)" == "y" ]] || die  "Kernel config CONFIG_MODULE_SIG must be =Y"
