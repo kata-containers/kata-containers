@@ -438,6 +438,8 @@ impl ResourceManagerInner {
                         // Once scsi support is added, need to handle scsi identifiers.
                         let id = if let Some(pci_path) = device.config.pci_path {
                             pci_path.to_string()
+                        } else if device.config.scsi_addr.is_some() {
+                            device.config.scsi_addr.unwrap()
                         } else {
                             device.config.virt_path.clone()
                         };
