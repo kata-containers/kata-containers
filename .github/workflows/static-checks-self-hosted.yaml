@@ -29,8 +29,8 @@ jobs:
       matrix:
         instance:
           - "ubuntu-22.04-arm"
-          - "s390x"
-          - "ppc64le"
+          - "ubuntu-24.04-s390x"
+          - "ubuntu-24.04-ppc64le"
     uses: ./.github/workflows/build-checks.yaml
     with:
       instance: ${{ matrix.instance }}

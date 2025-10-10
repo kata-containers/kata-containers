@@ -7,8 +7,8 @@
 self-hosted-runner:
   # Labels of self-hosted runner that linter should ignore
   labels:
+    - amd64-nvidia-a100
     - arm64-k8s
-    - ubuntu-22.04-arm
     - garm-ubuntu-2004
     - garm-ubuntu-2004-smaller
     - garm-ubuntu-2204
@@ -16,6 +16,7 @@ self-hosted-runner:
     - garm-ubuntu-2304-smaller
     - garm-ubuntu-2204-smaller
     - k8s-ppc64le
+    - ubuntu-24.04-ppc64le
     - metrics
     - ppc64le
     - riscv-builder
@@ -23,4 +24,5 @@ self-hosted-runner:
     - s390x
     - s390x-large
     - tdx
-    - amd64-nvidia-a100
+    - ubuntu-22.04-arm
+    - ubuntu-24.04-s390x
