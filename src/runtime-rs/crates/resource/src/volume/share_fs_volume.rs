@@ -23,6 +23,7 @@ use inotify::{EventMask, Inotify, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
 use rand::{thread_rng, RngCore};
+use sha2::{Digest, Sha256};
 use tokio::{
     io::AsyncReadExt,
     sync::{Mutex, RwLock},
@@ -32,7 +33,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::kata_guest_share_dir;
+use crate::share_fs::{kata_guest_share_dir, kata_host_shared_dir};
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
@@ -278,7 +279,7 @@ impl FsWatcher {
     }
 }
 
-//==========volume manager==============
+// ==================volume manager====================
 /// Sandbox-level volume state manager
 /// Tracks which paths have been copied to the guest on the runtime side
 #[derive(Clone, Default)]
@@ -310,57 +311,66 @@ impl VolumeManager {
     }
 
     /// Gets or creates the volume's guest path
+    /// Returns: (guest_path, need_copy)
     pub async fn get_or_create_volume(
         &self,
         canonical_source: &str,
-        container_id: &str,
+        sandbox_id: &str,
         mount_destination: &Path,
-    ) -> Result<String> {
+    ) -> Result<(String, bool)> {
         let mut states = self.volume_states.write().await;
 
         if let Some(state) = states.get_mut(canonical_source) {
             // Existing volume and update reference
             state.ref_count += 1;
-            state.containers.insert(container_id.to_string());
+            state.containers.insert(sandbox_id.to_string());
 
             info!(
                 sl!(),
-                "Existing volume: source={:?}, guest={:?}, ref_count={}",
+                "Reusing existing volume: source={:?}, guest={:?}, ref_count={}",
                 canonical_source,
                 state.guest_path,
                 state.ref_count,
             );
 
-            // Return guest path
-            return Ok(state.guest_path.clone());
+            // Return guest path and whether a copy is needed (false, as it's already copied)
+            return Ok((state.guest_path.clone(), false));
         }
 
-        // Create a new volume state
-        let guest_path =
-            generate_guest_path(container_id, mount_destination).context("generate path failed")?;
+        // Create a new deterministic path to store the copied contents from host.
+        // And it will be shared by containers inside the guest as below:
+        //                                              -> <ContainerA Volume Path>
+        //                                              |
+        // <Host Path> --> <Guest Deterministic Path> ->|-> <ContainerX Volume Path>
+        //                                              |
+        //                                              -> <ContainerB Volume Path>
+        let deterministic_path =
+            generate_deterministic_path(sandbox_id, canonical_source, mount_destination)
+                .context("generate path failed")?;
+        info!(
+            sl!(),
+            "Generate deterministic path: guest_path={:?}", deterministic_path,
+        );
 
         let mut containers = HashSet::new();
-        containers.insert(container_id.to_string());
+        containers.insert(sandbox_id.to_string());
 
         let state = VolumeState {
             source_path: canonical_source.to_string(),
-            guest_path: guest_path.clone(),
+            guest_path: deterministic_path.clone(),
             ref_count: 1,
             containers,
             monitor_task: None,
         };
-
         states.insert(state.source_path.clone(), state.clone());
 
         info!(
             sl!(),
-            "Created new volume state: source={:?}, guest={:?}",
-            state.source_path,
-            state.guest_path,
+            "Created new volume: source={:?}, guest={:?}", state.source_path, state.guest_path,
         );
 
-        // Return guest path
-        Ok(guest_path)
+        // Return deterministic guest path and whether a copy is needed (true, as it's new)
+        Ok((deterministic_path, true))
     }
 
     /// Register monitor task into the volume manager
@@ -418,6 +428,7 @@ impl ShareFsVolume {
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
         cid: &str,
+        sid: &str,
         readonly: bool,
         agent: Arc<dyn Agent>,
         volume_manager: Arc<VolumeManager>,
@@ -476,17 +487,24 @@ impl ShareFsVolume {
                     info!(sl!(), "copying directory {:?} to guest", &src);
 
                     // Get or create the guest path
-                    let guest_path = volume_manager
-                        .get_or_create_volume(&src.to_string_lossy(), cid, m.destination())
+                    let (guest_path, need_copy) = volume_manager
+                        .get_or_create_volume(&src.to_string_lossy(), sid, m.destination())
                         .await
                         .context("get or create volume")?;
 
                     // Create directory
-                    Self::copy_directory_to_guest(&src, &guest_path, &agent)
-                        .await
-                        .context("copy directory to guest")?;
+                    if need_copy {
+                        Self::copy_directory_to_guest(&src, &guest_path, &agent)
+                            .await
+                            .context("copy directory to guest")?;
+                    }
 
-                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
+                    let link_name_in_guest = generate_guest_path(cid, m.destination())
+                        .context("generate path failed")?;
+                    create_symlink_in_guest(&link_name_in_guest, &guest_path, &agent).await?;
+                    info!(sl!(), "link name in guest: {:?}", link_name_in_guest);
+
+                    oci_mount.set_source(Some(PathBuf::from(&link_name_in_guest)));
                     volume.mounts.push(oci_mount);
 
                     // Start monitoring (only for watchable volumes)
@@ -993,6 +1011,76 @@ fn generate_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
         hex_str,
         dest_base
     ))
+}
+
+/// Generates a deterministic guest path
+fn generate_deterministic_path(
+    sid: &str,
+    source_path: &str,
+    mount_destination: &Path,
+) -> Result<String> {
+    // Use a hash of the source path to generate a unique but deterministic identifier
+    let mut hasher = Sha256::new();
+    hasher.update(source_path.as_bytes());
+    let hash = hasher.finalize();
+    let hash_str = hex::encode(&hash[..8]);
+
+    info!(sl!(), "hasher string: {:?}", hash_str);
+
+    let dest_base = mount_destination
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("get mount destination failed"))?;
+
+    Ok(format!(
+        "{}{}-{}-{}",
+        kata_host_shared_dir(),
+        sid,
+        hash_str,
+        dest_base
+    ))
+}
+
+/// Multiple symbolic links pointing to the same target (A -> B and C -> B).
+///
+/// Suppose there is a target path "dirB" inside the guest.
+/// Create a link "dirA" -> "dirB"
+/// Create a link "dirC" -> "dirB"
+///
+/// Example usage:
+/// create_symlink_in_guest("dirA", "dirB", &agent).await?;
+/// create_symlink_in_guest("dirC", "dirB", &agent).await?;
+///
+pub async fn create_symlink_in_guest(
+    link_name_in_guest: &str,
+    target_in_guest: &str,
+    agent: &Arc<dyn Agent>,
+) -> Result<()> {
+    let current_uid = nix::unistd::Uid::current().as_raw();
+    let current_gid = nix::unistd::Gid::current().as_raw();
+    let link_target_bytes = target_in_guest.as_bytes();
+
+    let req = agent::CopyFileRequest {
+        path: link_name_in_guest.to_string(),
+        file_size: link_target_bytes.len() as i64,
+        uid: current_uid as i32,
+        gid: current_gid as i32,
+        file_mode: SFlag::S_IFLNK.bits(), // symlink
+        data: link_target_bytes.to_vec(), // target bytes
+        ..Default::default()
+    };
+
+    info!(
+        sl!(),
+        "Creating symlink in guest: {:?} -> {:?}", link_name_in_guest, target_in_guest
+    );
+
+    agent.copy_file(req).await.context(format!(
+        "Failed to create symlink in guest: {:?} -> {:?}",
+        link_name_in_guest, target_in_guest
+    ))?;
+
+    Ok(())
 }
 
 #[cfg(test)]
