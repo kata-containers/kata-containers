@@ -23,6 +23,8 @@ on:
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: false
+      KBUILD_SIGN_PIN:
+        required: true
 
 permissions: {}
 
@@ -89,6 +91,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
@@ -194,6 +197,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

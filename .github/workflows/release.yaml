@@ -49,6 +49,7 @@ jobs:
       target-arch: arm64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-and-push-assets-s390x:
     needs: release
