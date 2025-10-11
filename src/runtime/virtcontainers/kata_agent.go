@@ -1793,6 +1793,13 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 		}
 	}
 
+	if m.Confidential {
+		vol.DriverOptions = append(vol.DriverOptions, fmt.Sprintf("%s=true", volume.ConfidentialMetadataKey))
+	}
+	if m.Ephemeral {
+		vol.DriverOptions = append(vol.DriverOptions, fmt.Sprintf("%s=true", volume.EphemeralMetadataKey))
+	}
+
 	return vol, nil
 }
 
