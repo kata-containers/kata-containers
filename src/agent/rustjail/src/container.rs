@@ -1920,7 +1920,7 @@ mod tests {
         let cgroups_path = format!(
             "/{}/dummycontainer{}",
             CGROUP_PARENT,
-            since_the_epoch.as_millis()
+            since_the_epoch.as_micros()
         );
 
         let mut spec = SpecBuilder::default()
