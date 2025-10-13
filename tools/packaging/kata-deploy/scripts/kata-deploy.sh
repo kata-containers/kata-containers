@@ -899,7 +899,6 @@ function install_nydus_snapshotter() {
 	info "Deploying nydus-snapshotter"
 
 	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc /host/usr/local/bin/containerd-nydus-grpc
-	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs /host/usr/local/bin/nydus-overlayfs
 
 	mkdir -p /host/etc/nydus-snapshotter/
 	install -D -m 644 /opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml /host/etc/nydus-snapshotter/config-guest-pulling.toml
@@ -916,7 +915,6 @@ function uninstall_nydus_snapshotter() {
 	rm -f /host/etc/systemd/system/nydus-snapshotter.service
 	rm -f /host/etc/nydus-snapshotter/config-guest-pulling.toml
 
-	rm -f /host/usr/local/bin/nydus-overlayfs
 	rm -f /host/usr/local/bin/containerd-nydus-grpc
 
 	host_systemctl daemon-reload
