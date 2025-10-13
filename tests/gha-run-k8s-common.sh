@@ -374,6 +374,7 @@ function setup_crio() {
 function install_system_dependencies() {
 	dependencies="${1}"
 
+	sudo apt-get update
 	sudo apt-get -y install "${dependencies}"
 }
 
