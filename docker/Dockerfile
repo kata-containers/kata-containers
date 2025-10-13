@@ -6,7 +6,7 @@ ARG CI_COMMIT_TAG
 
 # Install packages
 RUN apt-get update && \
-    apt-get install -y curl wget unzip xz-utils ca-certificates && \
+    apt-get install -y curl wget unzip xz-utils zstd ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 # Create directory structure
@@ -19,10 +19,10 @@ RUN mkdir -p /kata-build/opt/kata/bin \
 # Download and extract kata package
 # Extract version from tag and construct URL
 ARG TARGETARCH
-RUN KATA_VERSION=${CI_COMMIT_TAG%-dd.*} && \
+RUN KATA_VERSION=${CI_COMMIT_TAG%%-dd.*} && \
     echo "Downloading kata ${KATA_VERSION} from tag ${CI_COMMIT_TAG}" && \
-    wget -q "https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}/kata-static-${KATA_VERSION}-${TARGETARCH}.tar.xz" -O /tmp/kata.tar.xz && \
-    tar -xJf /tmp/kata.tar.xz -C /kata-build --wildcards \
+    wget -q "https://github.com/kata-containers/kata-containers/releases/download/${KATA_VERSION}/kata-static-${KATA_VERSION}-${TARGETARCH}.tar.zst" -O /tmp/kata.tar.zst && \
+    tar --zstd -xf /tmp/kata.tar.zst -C /kata-build --wildcards \
         './opt/kata/bin/qemu-system-*' \
         './opt/kata/libexec/virtiofsd' \
         './opt/kata/lib/kata-qemu/libfdt.a' \
