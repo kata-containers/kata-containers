@@ -340,6 +340,7 @@ impl From<SignalProcessRequest> for agent::SignalProcessRequest {
             container_id: from.process_id.container_id(),
             exec_id: from.process_id.exec_id(),
             signal: from.signal,
+            all: from.all,
             ..Default::default()
         }
     }
