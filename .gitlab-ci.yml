@@ -3,6 +3,9 @@ include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-deliver
 variables:
   CI_IMAGE: 3
   KERNEL_VERSION: 6.8
+  KUBERNETES_CPU_REQUEST: "10"
+  KUBERNETES_MEMORY_REQUEST: "20Gi"
+  KUBERNETES_MEMORY_LIMIT: "40Gi"
 
 stages:
   - ci-image
