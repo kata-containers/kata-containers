@@ -67,3 +67,4 @@ COPY nydus-snapshotter ${DESTINATION}/nydus-snapshotter
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
 COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
 COPY runtimeclasses ${DESTINATION}/runtimeclasses
+COPY node-feature-rules ${DESTINATION}/node-feature-rules
