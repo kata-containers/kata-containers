@@ -231,6 +231,12 @@ assets:
 externals:
   description: "Third-party projects used by the system"
 
+  nvrc:
+    # yamllint disable-line rule:line-length
+    desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
+    version: "v0.0.1"
+    url: "https://github.com/NVIDIA/nvrc/releases/download/"
+
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
     version: "1.36.1"
