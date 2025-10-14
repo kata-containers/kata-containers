@@ -103,6 +103,12 @@ pub struct BlockConfig {
 
     /// device minor number
     pub minor: i64,
+
+    /// Virtio queue size. Size: byte
+    pub queue_size: u32,
+
+    /// Block device multi-queue
+    pub num_queues: usize,
 }
 
 #[derive(Debug, Clone, Default)]

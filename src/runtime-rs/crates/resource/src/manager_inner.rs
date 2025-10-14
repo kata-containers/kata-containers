@@ -413,17 +413,14 @@ impl ResourceManagerInner {
         for d in linux_devices.iter() {
             match d.typ() {
                 LinuxDeviceType::B => {
-                    let block_driver = get_block_device_info(&self.device_manager)
-                        .await
-                        .block_device_driver;
-                    let aio = get_block_device_info(&self.device_manager)
-                        .await
-                        .block_device_aio;
+                    let blkdev_info = get_block_device_info(&self.device_manager).await;
                     let dev_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major(),
                         minor: d.minor(),
-                        driver_option: block_driver,
-                        blkdev_aio: BlockDeviceAio::new(&aio),
+                        driver_option: blkdev_info.block_device_driver,
+                        blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                        num_queues: blkdev_info.num_queues,
+                        queue_size: blkdev_info.queue_size,
                         ..Default::default()
                     });
 
