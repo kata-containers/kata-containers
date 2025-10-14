@@ -44,18 +44,22 @@ setup_nvidia-nvrc() {
 	VER=$(get_package_version_from_kata_yaml "externals.nvrc.version")
 
 	if [[ ! -e "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" ]]; then
-		local URL="https://github.com/NVIDIA/nvrc/releases/download/v0.0.1/"
-	    curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" "${URL}${BIN}-${TARGET}.tar.xz"
-		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig" "${URL}${BIN}-${TARGET}.tar.xz.sig"
-		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" "${URL}${BIN}-${TARGET}.tar.xz.cert"
+		local DL="${URL}/${VER}"
+	    curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" "${DL}/${BIN}-${TARGET}.tar.xz"
+		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig" "${DL}/${BIN}-${TARGET}.tar.xz.sig"
+		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" "${DL}/${BIN}-${TARGET}.tar.xz.cert"
 	fi
 
-	cosign verify-blob                                                                                \
-	  --rekor-url https://rekor.sigstore.dev                                                          \
-	  --certificate "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert"                                       \
-	  --signature   "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig"                                        \
-	  --certificate-identity-regexp "^https://github.com/$REPO/.github/workflows/.+@refs/heads/main$" \
-	  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"                         \
+	ID="^https://github.com/NVIDIA/nvrc/.github/workflows/.+@refs/heads/main$"
+	OIDC="https://token.actions.githubusercontent.com"
+
+	# Only allow releases from the NVIDIA/nvrc main branch and build by github actions
+	cosign verify-blob                                          \
+	  --rekor-url https://rekor.sigstore.dev                    \
+	  --certificate "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" \
+	  --signature   "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig"  \
+	  --certificate-identity-regexp "${ID}"                     \
+	  --certificate-oidc-issuer "${OIDC}"                       \
 	  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz"
 }
 
@@ -243,13 +247,13 @@ chisseled_init() {
 	exe="NVRC${rootfs_type:+"-${rootfs_type}"}"
 	target=${machine_arch}-unknown-linux-musl
 
-	cp -a "${stage_one}/bin/${bin}-${target}"      bin/.
-	cp -a "${stage_one}/bin/${bin}-${target}".cert bin/.
-	cp -a "${stage_one}/bin/${bin}-${target}".sig  bin/.
+	cp -a "${stage_one}/bin/${exe}-${target}"      bin/.
+	cp -a "${stage_one}/bin/${exe}-${target}".cert bin/.
+	cp -a "${stage_one}/bin/${exe}-${target}".sig  bin/.
 
 	# make sure NVRC is the init process for the initrd and image case
-	ln -sf  /bin/"${bin}-${target}" init
-	ln -sf  /bin/"${bin}-${target}" sbin/init
+	ln -sf  /bin/"${exe}-${target}" init
+	ln -sf  /bin/"${exe}-${target}" sbin/init
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
