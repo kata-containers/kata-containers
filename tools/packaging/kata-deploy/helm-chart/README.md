@@ -141,6 +141,7 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.multiInstallSuffix` | Enable multiple Kata installation on the same node with suffix e.g. `/opt/kata-PR12232` | `""` |
 | `env._experimentalSetupSnapshotter` | Deploys (in the nydus snapshotter case) or sets up (in the erofs and nydus snapshotters case) the snapshotter passed as its argument (supports multiple snapshotters separated by comma, eg: "nydus,erofs") | `""` |
 | `env._experimentalForceGuestPull` | Enable `experimental_force_guest_pull` for the shims passed as its argument (supports multiple shims separated by comma, eg: "qemu-tdx,qemu-snp") | `""` |
+| `env.useDeployedNFD` | Creates the NodeFeatureRules related to the TEEs and adapts the TEE runtimeclasses to take into consideration the amount of keys in the node. It receives as its argument the namespace where NFD has been deployed, eg: "node-feature-discovery" | `""` |
 
 ## Example: only `qemu` shim and debug enabled
 

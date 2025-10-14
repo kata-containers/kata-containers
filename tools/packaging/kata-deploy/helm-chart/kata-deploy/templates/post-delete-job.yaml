@@ -125,6 +125,8 @@ spec:
           value: {{ .Values.env.installationPrefix | quote }}
         - name: MULTI_INSTALL_SUFFIX
           value: {{ .Values.env.multiInstallSuffix | quote }}
+        - name: USE_DEPLOYED_NFD 
+          value: {{ .Values.env.useDeployedNFD | quote }}
         - name: EXPERIMENTAL_SETUP_SNAPSHOTTER
           value: {{ .Values.env._experimentalSetupSnapshotter | quote }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL
