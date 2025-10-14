@@ -85,3 +85,19 @@ RUN ARCH=$(uname -m); \
     rustup target add "${rust_arch}-unknown-linux-${libc}"
 
 RUN pip install --no-cache-dir pyinstaller==6.9.0 || pip install --no-cache-dir pyinstaller==6.9.0 --break-system-packages
+
+# pin cosign to 3.0.2
+RUN ARCH=$(uname -m); \
+	cosign_arch=""; \
+	case "${ARCH}" in \
+		"aarch64") cosign_arch="arm64" ;; \
+		"x86_64") cosign_arch="amd64" ;; \
+		*) echo "Unsupported architecture for cosign: ${ARCH}" && exit 0 ;; \
+	esac; \
+	curl -O -L "https://github.com/sigstore/cosign/releases/download/v3.0.2/cosign_3.0.2_${cosign_arch}.deb" && \
+	# In order to avoid the chicken-egg problem of the need of cosign to verify the cosign binary, \
+	# let's verify the checksum instead. \
+	curl -O -L "https://github.com/sigstore/cosign/releases/download/v3.0.2/cosign_checksums.txt" && \
+	grep -F ${cosign_arch}.deb cosign_checksums.txt | sha256sum --check - && \
+	dpkg -i "cosign_3.0.2_${cosign_arch}.deb" && \
+	rm -f "cosign_3.0.2_${cosign_arch}.deb"* cosign_checksum*.txt
