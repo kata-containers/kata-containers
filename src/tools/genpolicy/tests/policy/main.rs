@@ -301,6 +301,12 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_container_security_context_fsgroup() {
+        runtests("createcontainer/security_context/fsgroup").await;
+    }
+
+
+    #[tokio::test]
     async fn test_create_container_volumes_empty_dir() {
         runtests("createcontainer/volumes/emptydir").await;
     }
