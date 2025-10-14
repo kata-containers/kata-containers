@@ -13,3 +13,4 @@ edition = "2018"
 
 [dependencies]
 nix = "0.26.4"
+libc = "0.2.94"
