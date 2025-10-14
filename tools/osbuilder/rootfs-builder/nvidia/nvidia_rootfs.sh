@@ -15,12 +15,6 @@ die() {
   exit 1
 }
 
-
-readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
-# catch errors and then assign
-script_dir="$(dirname "$(readlink -f "$0")")"
-readonly SCRIPT_DIR="${script_dir}/nvidia"
-
 # This will control how much output the inird/image will produce
 DEBUG=""
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
@@ -40,35 +34,29 @@ else
     die "Unsupported architecture: ${machine_arch}"
 fi
 
+readonly stage_one="${BUILD_DIR:?}/rootfs-${VARIANT:?}-stage-one"
+
 # TODO: use only releases of NVRC
 setup_nvidia-nvrc() {
-	local rootfs_type=${1:-""}
+	BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	TARGET=${machine_arch}-unknown-linux-musl
+	URL=$(get_package_version_from_kata_yaml "externals.nvrc.url")
+	VER=$(get_package_version_from_kata_yaml "externals.nvrc.version")
 
-	local TARGET="nvidia-nvrc"
-	local PROJECT="nvrc"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
+	if [[ ! -e "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" ]]; then
+		local URL="https://github.com/NVIDIA/nvrc/releases/download/v0.0.1/"
+	    curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" "${URL}${BIN}-${TARGET}.tar.xz"
+		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig" "${URL}${BIN}-${TARGET}.tar.xz.sig"
+		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" "${URL}${BIN}-${TARGET}.tar.xz.cert"
+	fi
 
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/bin"
-
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
-
-	rm -rf "${PROJECT}"
-	git clone https://github.com/NVIDIA/"${PROJECT}".git
-
-	pushd "${PROJECT}" > /dev/null || exit 1
-
-	cargo build --release --target="${machine_arch}"-unknown-linux-musl --features="${rootfs_type}"
-	cp target/"${machine_arch}"-unknown-linux-musl/release/NVRC ../../destdir/bin/.
-
-	popd > /dev/null || exit 1
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
+	cosign verify-blob                                                                                \
+	  --rekor-url https://rekor.sigstore.dev                                                          \
+	  --certificate "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert"                                       \
+	  --signature   "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig"                                        \
+	  --certificate-identity-regexp "^https://github.com/$REPO/.github/workflows/.+@refs/heads/main$" \
+	  --certificate-oidc-issuer "https://token.actions.githubusercontent.com"                         \
+	  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz"
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
@@ -81,22 +69,26 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	local rootfs_type=${1:-""}
 
+
+	info "nvidia: Setting up NVRC rootfs type=${rootfs_type}"
+	setup_nvidia-nvrc
+
 	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
-
-	if [[ ! -e "${BUILD_DIR}/kata-static-nvidia-nvrc.tar.zst" ]]; then
-		setup_nvidia-nvrc "${rootfs_type}"
-	fi
-
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" ./nvidia_chroot.sh
 
 	chmod +x ./nvidia_chroot.sh
 
-	local appendix=""
-	if [[ "${rootfs_type}" == "confidential" ]]; then
-		appendix="-${rootfs_type}"
+	local BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	local TARGET=${machine_arch}-unknown-linux-musl
+	if [[ ! -e  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" ]]; then
+		setup_nvidia-nvrc
+	else
+		tar -xvf "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" -C bin/
 	fi
+
+	local appendix="${rootfs_type:+"-${rootfs_type}"}"
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
-    		appendix="-dragonball-experimental"
+		local appendix="-dragonball-experimental"
 	fi
 
 	# We need the kernel packages for building the drivers cleanly will be
@@ -235,6 +227,7 @@ chisseled_gpudirect() {
 
 chisseled_init() {
 	echo "nvidia: chisseling init"
+
 	tar --zstd -xvf "${BUILD_DIR}"/kata-static-busybox.tar.zst -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
@@ -247,10 +240,16 @@ chisseled_init() {
 	libdir=lib/"${machine_arch}"-linux-gnu
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
+	exe="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	target=${machine_arch}-unknown-linux-musl
+
+	cp -a "${stage_one}/bin/${bin}-${target}"      bin/.
+	cp -a "${stage_one}/bin/${bin}-${target}".cert bin/.
+	cp -a "${stage_one}/bin/${bin}-${target}".sig  bin/.
+
 	# make sure NVRC is the init process for the initrd and image case
-	ln -sf  /bin/NVRC init
-	ln -sf  /bin/NVRC sbin/init
+	ln -sf  /bin/"${bin}-${target}" init
+	ln -sf  /bin/"${bin}-${target}" sbin/init
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
@@ -293,7 +292,7 @@ compress_rootfs() {
 }
 
 coco_guest_components() {
-	if [[ ${type} != "confidential" ]]; then
+	if [[ ${rootfs_type} != "confidential" ]]; then
 		return
 	fi
 
@@ -324,7 +323,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
 
-	readonly type=${1:-""}
+	readonly rootfs_type=${1:-""}
 
 	echo "nvidia: chisseling the following stack components: ${stack}"
 
