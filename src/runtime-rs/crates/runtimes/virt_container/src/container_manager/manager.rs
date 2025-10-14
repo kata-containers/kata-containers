@@ -196,6 +196,7 @@ impl ContainerManager for VirtContainerManager {
             serde_json::from_slice(&req.spec_value).context("serde from slice")?;
 
         oci_process.set_apparmor_profile(None);
+        oci_process.set_capabilities(None);
 
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
