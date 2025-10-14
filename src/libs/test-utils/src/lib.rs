@@ -95,6 +95,80 @@ macro_rules! skip_loop_by_user {
     };
 }
 
+#[macro_export]
+macro_rules! skip_if_rng_ioctl_restricted {
+    () => {
+        // Try the exact same ioctl operations as reseed_rng() to detect restrictions
+        use nix::errno::Errno;
+        use nix::fcntl::{self, OFlag};
+        use nix::sys::stat::Mode;
+        use std::os::unix::io::AsRawFd;
+
+        // Use architecture-specific ioctl values (same as random.rs)
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        const RNDADDTOENTCNT: libc::c_uint = 0x80045201;
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        const RNDRESEEDCRNG: libc::c_int = 0x20005207;
+        #[cfg(not(target_arch = "powerpc64"))]
+        const RNDADDTOENTCNT: libc::c_int = 0x40045201;
+        #[cfg(not(target_arch = "powerpc64"))]
+        const RNDRESEEDCRNG: libc::c_int = 0x5207;
+
+        // Handle the differing ioctl(2) request types for different targets (same as random.rs)
+        #[cfg(target_env = "musl")]
+        type IoctlRequestType = libc::c_int;
+        #[cfg(target_env = "gnu")]
+        type IoctlRequestType = libc::c_ulong;
+
+        match fcntl::open("/dev/random", OFlag::O_RDWR, Mode::from_bits_truncate(0o022)) {
+            Ok(fd) => {
+                let len: libc::c_long = 1; // Use minimal length for test
+
+                // Try RNDADDTOENTCNT ioctl (same as reseed_rng)
+                let ret = unsafe {
+                    libc::ioctl(
+                        fd,
+                        RNDADDTOENTCNT as IoctlRequestType,
+                        &len as *const libc::c_long,
+                    )
+                };
+
+                if let Err(e) = Errno::result(ret).map(drop) {
+                    let _ = nix::unistd::close(fd);
+                    if e == Errno::EPERM {
+                        println!(
+                            "INFO: skipping {} - RNG ioctls are restricted in this environment (EPERM)",
+                            module_path!()
+                        );
+                        return;
+                    }
+                }
+
+                // Try RNDRESEEDCRNG ioctl (same as reseed_rng)
+                let ret = unsafe { libc::ioctl(fd, RNDRESEEDCRNG as IoctlRequestType, 0) };
+                let _ = nix::unistd::close(fd);
+
+                if let Err(e) = Errno::result(ret).map(drop) {
+                    if e == Errno::EPERM {
+                        println!(
+                            "INFO: skipping {} - RNG ioctls are restricted in this environment (EPERM)",
+                            module_path!()
+                        );
+                        return;
+                    }
+                }
+            }
+            Err(_) => {
+                println!(
+                    "INFO: skipping {} - cannot open /dev/random for RNG ioctl test",
+                    module_path!()
+                );
+                return;
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::{skip_if_not_root, skip_if_root};
