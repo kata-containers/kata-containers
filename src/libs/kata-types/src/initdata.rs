@@ -209,12 +209,12 @@ pub fn calculate_initdata_digest(
 
 /// Encodes initdata as an annotation
 pub fn encode_initdata(init_data: &InitData) -> String {
-    let toml_str = toml::to_string(&init_data).unwrap();
+    let toml_str = toml::to_string_pretty(&init_data).unwrap();
     create_encoded_input(&toml_str)
 }
 
-/// Decodes initdata annotation
-pub fn decode_initdata(initdata_annotation: &str) -> Result<InitData> {
+/// Decodes a base64-encoded gzipped initdata document to its raw TOML representation.
+fn decode_raw_initdata(initdata_annotation: &str) -> Result<String> {
     // Base64 decode the annotation value
     let b64_decoded =
         base64::decode_config(initdata_annotation, base64::STANDARD).context("base64 decode")?;
@@ -225,7 +225,12 @@ pub fn decode_initdata(initdata_annotation: &str) -> Result<InitData> {
     gz_decoder
         .read_to_string(&mut initdata_str)
         .context("gz decoder failed")?;
+    Ok(initdata_str)
+}
 
+/// Decodes initdata annotation
+pub fn decode_initdata(initdata_annotation: &str) -> Result<InitData> {
+    let initdata_str = decode_raw_initdata(initdata_annotation)?;
     // Return parsed initdata
     let initdata = parse_initdata(&initdata_str).context("parse initdata overrides")?;
 
@@ -508,5 +513,32 @@ key = "value"
         // Invalid compression format
         let invalid_data = base64::encode("raw uncompressed data");
         assert!(add_hypervisor_initdata_overrides(&invalid_data).is_err());
+    }
+
+    #[test]
+    fn test_pretty_initdata() {
+        let nested_toml = r#"
+algorithm = "sha384"
+version = "0.1.0"
+
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.coco_as]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+
+[token_configs.kbs]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+'''
+        "#;
+        let init_data = parse_initdata(nested_toml).expect("canned initdata document should parse");
+
+        let doc = decode_raw_initdata(&encode_initdata(&init_data))
+            .expect("encoding and decoding again should work");
+        assert!(
+            !doc.contains("\\n"),
+            "the encoded initdata toml should not contain escaped newlines, but does:\n{}",
+            doc
+        )
     }
 }
