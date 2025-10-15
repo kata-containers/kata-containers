@@ -2481,6 +2481,26 @@ mod tests {
         // normally this module should eixsts...
         m.name = "bridge".to_string();
         let result = load_kernel_module(&m);
+
+        // Skip test if loading kernel modules is not permitted
+        // or kernel module is not found
+        if let Err(e) = &result {
+            let error_string = format!("{:?}", e);
+            // Let's print out the error message first
+            println!("DEBUG: error: {}", error_string);
+            if error_string.contains("Operation not permitted")
+                || error_string.contains("EPERM")
+                || error_string.contains("Permission denied")
+            {
+                println!("INFO: skipping test - loading kernel modules is not permitted in this environment");
+                return;
+            }
+            if error_string.contains("not found") {
+                println!("INFO: skipping test - kernel module is not found in this environment");
+                return;
+            }
+        }
+
         assert!(result.is_ok(), "load module should success");
     }
 
