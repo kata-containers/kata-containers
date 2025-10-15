@@ -43,19 +43,18 @@ WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
 # Leverage kata-deploy to install Kata Containers in the cluster.
 #
 apply_kata_deploy() {
-	local deploy_file="tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	pushd "${katacontainers_repo_dir}" || die
-	sed -ri "s#(\s+image:) .*#\1 ${KATA_DEPLOY_IMAGE}#" "${deploy_file}"
+	if ! command -v helm &>/dev/null; then
+		echo "Helm not installed, installing..."
+		curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+	fi
 
-	info "Applying kata-deploy"
-	oc apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
 	oc label --overwrite ns kube-system pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/warn=baseline pod-security.kubernetes.io/audit=baseline
-	oc apply -f "${deploy_file}"
-	oc -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+	local version chart
+	version=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq .tag_name | tr -d '"')
+	chart="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
 
-	info "Adding the kata runtime classes"
-	oc apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
-	popd || die
+	echo "Installing kata using helm ${chart} ${version}"
+	helm install kata-deploy --wait --namespace kube-system --set "image.reference=${KATA_DEPLOY_IMAGE%%:*},image.tag=${KATA_DEPLOY_IMAGE##*:}" "${chart}" --version "${version}"
 }
 
 
@@ -174,13 +173,13 @@ wait_for_app_pods_message() {
 	local namespace="$5"
 	[[ -z "${pod_count}" ]] && pod_count=1
 	[[ -z "${timeout}" ]] && timeout=60
-	[[ -n "${namespace}" ]] && namespace=" -n ${namespace} "
+	[[ -n "${namespace}" ]] && namespace=("-n" "${namespace}")
 	local pod
 	local pods
 	local i
 	SECONDS=0
 	while :; do
-		mapfile -t pods < <(oc get pods -l app="${app}" --no-headers=true "${namespace}" | awk '{print $1}')
+		mapfile -t pods < <(oc get pods -l app="${app}" --no-headers=true "${namespace[@]}" | awk '{print $1}')
 		[[ "${#pods}" -ge "${pod_count}" ]] && break
 		if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 			printf "Unable to find ${pod_count} pods for '-l app=\"${app}\"' in ${SECONDS}s (%s)" "${pods[@]}"
@@ -190,7 +189,7 @@ wait_for_app_pods_message() {
 	local log
 	for pod in "${pods[@]}"; do
 		while :; do
-			log=$(oc logs "${namespace}" "${pod}")
+			log=$(oc logs "${namespace[@]}" "${pod}")
 			echo "${log}" | grep "${message}" -q && echo "Found $(echo "${log}" | grep "${message}") in ${pod}'s log (${SECONDS})" && break;
 			if [[ "${SECONDS}" -gt "${timeout}" ]]; then
 				echo -n "Message '${message}' not present in '${pod}' pod of the '-l app=\"${app}\"' "

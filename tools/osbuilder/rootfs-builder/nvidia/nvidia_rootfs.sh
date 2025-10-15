@@ -7,6 +7,15 @@
 set -euo pipefail
 [[ -n "${DEBUG}" ]] && set -x
 
+# Error helpers
+trap 'echo "rootfs: ERROR at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
+die() {
+  local msg="${*:-fatal error}"
+  echo "rootfs: ${msg}" >&2
+  exit 1
+}
+
+
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 # catch errors and then assign
 script_dir="$(dirname "$(readlink -f "$0")")"

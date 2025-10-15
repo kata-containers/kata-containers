@@ -167,7 +167,8 @@ sha256sum_from_files() {
 calc_qemu_files_sha256sum() {
 	local files="${repo_root_dir}/tools/packaging/qemu \
 		${repo_root_dir}/tools/packaging/static-build/qemu.blacklist \
-		${repo_root_dir}/tools/packaging/static-build/scripts"
+		${repo_root_dir}/tools/packaging/static-build/scripts \
+		${repo_root_dir}/tools/packaging/static-build/qemu"
 
 	sha256sum_from_files "$files"
 }

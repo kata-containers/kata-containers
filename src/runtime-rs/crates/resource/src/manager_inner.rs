@@ -434,10 +434,11 @@ impl ResourceManagerInner {
                     // create block device for kata agent,
                     // if driver is virtio-blk-pci, the id will be pci address.
                     if let DeviceType::Block(device) = device_info {
-                        // The following would work for drivers virtio-blk-pci and mmio.
-                        // Once scsi support is added, need to handle scsi identifiers.
+                        // The following would work for drivers virtio-blk-pci and virtio-mmio and virtio-scsi.
                         let id = if let Some(pci_path) = device.config.pci_path {
                             pci_path.to_string()
+                        } else if let Some(scsi_address) = device.config.scsi_addr {
+                            scsi_address
                         } else {
                             device.config.virt_path.clone()
                         };

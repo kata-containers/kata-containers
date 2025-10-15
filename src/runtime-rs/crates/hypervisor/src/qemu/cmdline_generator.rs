@@ -980,6 +980,54 @@ impl ToQemuParams for BlockBackend {
 }
 
 #[derive(Debug)]
+struct DeviceScsiHd {
+    device: String,
+
+    bus: String,
+
+    drive: String,
+
+    devno: Option<String>,
+}
+
+impl DeviceScsiHd {
+    fn new(id: &str, bus: &str, devno: Option<String>) -> DeviceScsiHd {
+        DeviceScsiHd {
+            device: "scsi-hd".to_owned(),
+            bus: bus.to_owned(),
+            drive: id.to_owned(),
+            devno,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn set_scsi_bus(&mut self, bus: &str) -> &mut Self {
+        self.bus = bus.to_owned();
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_scsi_drive(&mut self, drive: &str) -> &mut Self {
+        self.drive = drive.to_owned();
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceScsiHd {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(self.device.clone());
+        params.push(format!("drive=image-{}", self.drive));
+        params.push(format!("bus={}", self.bus));
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
 struct DeviceVirtioBlk {
     bus_type: VirtioBusType,
     id: String,
@@ -2361,15 +2409,27 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
-    pub fn add_block_device(&mut self, device_id: &str, path: &str, is_direct: bool) -> Result<()> {
+    pub fn add_block_device(
+        &mut self,
+        device_id: &str,
+        path: &str,
+        is_direct: bool,
+        is_scsi: bool,
+    ) -> Result<()> {
         self.devices
             .push(Box::new(BlockBackend::new(device_id, path, is_direct)));
         let devno = get_devno_ccw(&mut self.ccw_subchannel, device_id);
-        self.devices.push(Box::new(DeviceVirtioBlk::new(
-            device_id,
-            bus_type(self.config),
-            devno,
-        )));
+        if is_scsi {
+            self.devices
+                .push(Box::new(DeviceScsiHd::new(device_id, "scsi0.0", devno)));
+        } else {
+            self.devices.push(Box::new(DeviceVirtioBlk::new(
+                device_id,
+                bus_type(self.config),
+                devno,
+            )));
+        }
+
         Ok(())
     }
 
