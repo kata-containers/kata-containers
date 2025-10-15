@@ -675,6 +675,10 @@ function configure_containerd_runtime() {
 			fi
 
 			value="${m#*$snapshotters_delimiter}"
+			if [[ "${value}" == "nydus" ]] && [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+				value="${value}-${MULTI_INSTALL_SUFFIX}"
+			fi
+
 			tomlq -i -t $(printf '%s.snapshotter="%s"' ${runtime_table} ${value}) ${configuration_file}
 			break
 		done
@@ -858,13 +862,20 @@ function configure_erofs_snapshotter() {
 function configure_nydus_snapshotter() {
 	info "Configuring nydus-snapshotter"
 
+	local nydus="nydus"
+	local containerd_nydus="nydus-snapshotter"
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+		nydus="${nydus}-${MULTI_INSTALL_SUFFIX}"
+		containerd_nydus="${containerd_nydus}-${MULTI_INSTALL_SUFFIX}"
+	fi
+
 	configuration_file="${1}"
 	pluginid="${2}"
 
 	tomlq -i -t $(printf '.plugins.%s.disable_snapshot_annotations=false' ${pluginid}) ${configuration_file}
 
-	tomlq -i -t $(printf '.proxy_plugins.nydus.type="snapshot"') ${configuration_file}
-	tomlq -i -t $(printf '.proxy_plugins.nydus.address="/run/containerd-nydus/containerd-nydus-grpc.sock"') ${configuration_file}
+	tomlq -i -t $(printf '.proxy_plugins."%s".type="snapshot"' ${nydus} ) ${configuration_file}
+	tomlq -i -t $(printf '.proxy_plugins."%s".address="/run/%s/containerd-nydus-grpc.sock"' ${nydus} ${containerd_nydus}) ${configuration_file}
 }
 
 function configure_snapshotter() {
@@ -891,7 +902,12 @@ function configure_snapshotter() {
 	case "${snapshotter}" in
 		nydus)
 			configure_nydus_snapshotter "${configuration_file}" "${pluginid}"
-			host_systemctl restart nydus-snapshotter
+
+			nydus_snapshotter="nydus-snapshotter"
+			if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+				nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
+			fi
+			host_systemctl restart "${nydus_snapshotter}"
 			;;
 		erofs)
 			configure_erofs_snapshotter "${configuration_file}"
@@ -902,26 +918,45 @@ function configure_snapshotter() {
 function install_nydus_snapshotter() {
 	info "Deploying nydus-snapshotter"
 
-	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc /host/usr/local/bin/containerd-nydus-grpc
-	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs /host/usr/local/bin/nydus-overlayfs
+	local nydus_snapshotter="nydus-snapshotter"
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+		nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
+	fi
 
-	mkdir -p /host/etc/nydus-snapshotter/
-	install -D -m 644 /opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml /host/etc/nydus-snapshotter/config-guest-pulling.toml
-	install -D -m 644 /opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service /host/etc/systemd/system/nydus-snapshotter.service
+	local config_guest_pulling="/opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml"
+	local nydus_snapshotter_service="/opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service"
+	
+	# Adjust the paths for the config-guest-pulling.toml and nydus-snapshotter.service
+	sed -i -e "s|@SNAPSHOTTER_ROOT_DIR@|/var/lib/${nydus_snapshotter}|g" "${config_guest_pulling}"
+	sed -i -e "s|@SNAPSHOTTER_GRPC_SOCKET_ADDRESS@|/run/${nydus_snapshotter}/containerd-nydus-grpc.sock|g" "${config_guest_pulling}"
+	sed -i -e "s|@NYDUS_OVERLAYFS_PATH@|${host_install_dir#/host}/nydus-snapshotter/nydus-overlayfs|g" "${config_guest_pulling}"
+
+	sed -i -e "s|@CONTAINERD_NYDUS_GRPC_BINARY@|${host_install_dir#/host}/nydus-snapshotter/containerd-nydus-grpc|g" "${nydus_snapshotter_service}"
+	sed -i -e "s|@CONFIG_GUEST_PULLING@|${host_install_dir#/host}/nydus-snapshotter/config-guest-pulling.toml|g" "${nydus_snapshotter_service}"
+
+	mkdir -p "${host_install_dir}/nydus-snapshotter"
+	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc "${host_install_dir}/nydus-snapshotter/containerd-nydus-grpc"
+	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs "${host_install_dir}/nydus-snapshotter/nydus-overlayfs"
+
+	install -D -m 644 "${config_guest_pulling}" "${host_install_dir}/nydus-snapshotter/config-guest-pulling.toml"
+	install -D -m 644 "${nydus_snapshotter_service}" "/host/etc/systemd/system/${nydus_snapshotter}.service"
 
 	host_systemctl daemon-reload
-	host_systemctl enable nydus-snapshotter.service
+	host_systemctl enable "${nydus_snapshotter}.service"
 }
 
 function uninstall_nydus_snapshotter() {
 	info "Removing deployed nydus-snapshotter"
-	host_systemctl disable --now nydus-snapshotter.service
 
-	rm -f /host/etc/systemd/system/nydus-snapshotter.service
-	rm -f /host/etc/nydus-snapshotter/config-guest-pulling.toml
+	local nydus_snapshotter="nydus-snapshotter"
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+		nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
+	fi
+	
+	host_systemctl disable --now "${nydus_snapshotter}.service"
 
-	rm -f /host/usr/local/bin/nydus-overlayfs
-	rm -f /host/usr/local/bin/containerd-nydus-grpc
+	rm -f "/host/etc/systemd/system/${nydus_snapshotter}.service"
+	rm -rf "${host_install_dir}/nydus-snapshotter"
 
 	host_systemctl daemon-reload
 }
