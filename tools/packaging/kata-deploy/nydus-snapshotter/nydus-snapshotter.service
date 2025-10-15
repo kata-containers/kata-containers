@@ -4,7 +4,7 @@ After=network.target local-fs.target
 Before=containerd.service
 
 [Service]
-ExecStart=/usr/local/bin/containerd-nydus-grpc --config /etc/nydus-snapshotter/config-guest-pulling.toml --log-to-stdout
+ExecStart=@CONTAINERD_NYDUS_GRPC_BINARY@ --config @CONFIG_GUEST_PULLING@ --log-to-stdout
 
 [Install]
 RequiredBy=containerd.service
