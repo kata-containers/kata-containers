@@ -12,7 +12,7 @@ name: Build checks
 jobs:
   check:
     name: check
-    runs-on: ${{ inputs.instance }}
+    runs-on: ${{ matrix.component.name == 'runtime' && inputs.instance == 'ubuntu-24.04-s390x' && 's390x' || matrix.component.name == 'runtime' && inputs.instance == 'ubuntu-24.04-ppc64le' && 'ppc64le' || inputs.instance }}
     strategy:
       fail-fast: false
       matrix:
