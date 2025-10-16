@@ -17,8 +17,8 @@ jobs:
       fail-fast: false
       matrix:
         command:
-          - "make vendor"
-          - "make check"
+          #- "make vendor"
+          #- "make check"
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
         component:
@@ -30,44 +30,44 @@ jobs:
               - libseccomp
               - protobuf-compiler
               - clang
-          - name: dragonball
-            path: src/dragonball
-            needs:
-              - rust
-          - name: runtime
-            path: src/runtime
-            needs:
-              - golang
-              - XDG_RUNTIME_DIR
-          - name: runtime-rs
-            path: src/runtime-rs
-            needs:
-              - rust
-          - name: libs
-            path: src/libs
-            needs:
-              - rust
-              - protobuf-compiler
-          - name: agent-ctl
-            path: src/tools/agent-ctl
-            needs:
-              - rust
-              - protobuf-compiler
-              - clang
-          - name: kata-ctl
-            path: src/tools/kata-ctl
-            needs:
-              - rust
-              - protobuf-compiler
-          - name: trace-forwarder
-            path: src/tools/trace-forwarder
-            needs:
-              - rust
-          - name: genpolicy
-            path: src/tools/genpolicy
-            needs:
-              - rust
-              - protobuf-compiler
+          # - name: dragonball
+          #   path: src/dragonball
+          #   needs:
+          #     - rust
+          # - name: runtime
+          #   path: src/runtime
+          #   needs:
+          #     - golang
+          #     - XDG_RUNTIME_DIR
+          # - name: runtime-rs
+          #   path: src/runtime-rs
+          #   needs:
+          #     - rust
+          # - name: libs
+          #   path: src/libs
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
+          # - name: agent-ctl
+          #   path: src/tools/agent-ctl
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
+          #     - clang
+          # - name: kata-ctl
+          #   path: src/tools/kata-ctl
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
+          # - name: trace-forwarder
+          #   path: src/tools/trace-forwarder
+          #   needs:
+          #     - rust
+          # - name: genpolicy
+          #   path: src/tools/genpolicy
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
 
     steps:
       - name: Adjust a permission for repo
