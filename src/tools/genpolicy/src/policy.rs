@@ -577,7 +577,7 @@ impl AgentPolicy {
         if self.config.raw_out {
             std::io::stdout().write_all(policy.as_bytes()).unwrap();
         }
-        let mut initdata = kata_types::initdata::InitData::new("sha256", "0.1.0");
+        let mut initdata = self.config.initdata.clone();
         initdata.insert_data("policy.rego", policy);
 
         kata_types::initdata::encode_initdata(&initdata)
