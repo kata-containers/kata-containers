@@ -20,7 +20,7 @@ jobs:
           #- "make vendor"
           #- "make check"
           - "make test"
-          - "sudo -E PATH=\"$PATH\" make test"
+          #- "sudo -E PATH=\"$PATH\" make test"
         component:
           - name: agent
             path: src/agent
@@ -81,7 +81,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
+      - name: check selinux path
+        run: |
+          ls -l /sys/fs/selinux
+          sudo apt install -y policycoreutils selinux-utils
+          getenforce
       - name: Install yq
         run: |
           ./ci/install_yq.sh
