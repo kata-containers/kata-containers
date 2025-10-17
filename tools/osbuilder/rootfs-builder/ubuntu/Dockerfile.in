@@ -85,3 +85,7 @@ RUN ARCH=$(uname -m); \
     rustup target add "${rust_arch}-unknown-linux-${libc}"
 
 RUN pip install --no-cache-dir pyinstaller==6.9.0 || pip install --no-cache-dir pyinstaller==6.9.0 --break-system-packages
+
+# pin cosign to 3.0.2
+RUN curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign_3.0.2_amd64.deb" && \
+    dpkg -i cosign_3.0.2_amd64.deb

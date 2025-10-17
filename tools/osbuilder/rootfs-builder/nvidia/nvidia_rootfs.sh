@@ -7,6 +7,12 @@
 set -euo pipefail
 [[ -n "${DEBUG}" ]] && set -x
 
+readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
+script_dir="$(dirname "$(readlink -f "$0")")"
+readonly SCRIPT_DIR="${script_dir}/nvidia"
+
+source "${SCRIPT_DIR}/../../scripts/lib.sh"
+
 # Error helpers
 trap 'echo "rootfs: ERROR at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
 die() {
@@ -15,11 +21,6 @@ die() {
   exit 1
 }
 
-
-readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
-# catch errors and then assign
-script_dir="$(dirname "$(readlink -f "$0")")"
-readonly SCRIPT_DIR="${script_dir}/nvidia"
 
 # This will control how much output the inird/image will produce
 DEBUG=""
@@ -40,35 +41,32 @@ else
     die "Unsupported architecture: ${machine_arch}"
 fi
 
-# TODO: use only releases of NVRC
 setup_nvidia-nvrc() {
-	local rootfs_type=${1:-""}
+	BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	TARGET=${machine_arch}-unknown-linux-musl
+	URL=$(get_package_version_from_kata_yaml "externals.nvrc.url")
+	VER=$(get_package_version_from_kata_yaml "externals.nvrc.version")
 
-	local TARGET="nvidia-nvrc"
-	local PROJECT="nvrc"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
+	if [[ ! -e "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" ]]; then
+		local DL="${URL}/${VER}"
+	    curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" "${DL}/${BIN}-${TARGET}.tar.xz"
+		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig" "${DL}/${BIN}-${TARGET}.tar.xz.sig"
+		curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" "${DL}/${BIN}-${TARGET}.tar.xz.cert"
+	fi
 
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/bin"
+	ID="^https://github.com/NVIDIA/nvrc/.github/workflows/.+@refs/heads/main$"
+	OIDC="https://token.actions.githubusercontent.com"
 
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
+	# Only allow releases from the NVIDIA/nvrc main branch and build by github actions
+	cosign verify-blob                                          \
+	  --rekor-url https://rekor.sigstore.dev                    \
+	  --certificate "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" \
+	  --signature   "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig"  \
+	  --certificate-identity-regexp "${ID}"                     \
+	  --certificate-oidc-issuer "${OIDC}"                       \
+	  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz"
 
-	rm -rf "${PROJECT}"
-	git clone https://github.com/NVIDIA/"${PROJECT}".git
-
-	pushd "${PROJECT}" > /dev/null || exit 1
-
-	cargo build --release --target="${machine_arch}"-unknown-linux-musl --features="${rootfs_type}"
-	cp target/"${machine_arch}"-unknown-linux-musl/release/NVRC ../../destdir/bin/.
-
-	popd > /dev/null || exit 1
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
+	tar -xvf "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" -C bin/
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
@@ -81,12 +79,11 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	local rootfs_type=${1:-""}
 
+
+	info "nvidia: Setting up NVRC rootfs type=${rootfs_type}"
+	setup_nvidia-nvrc
+
 	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
-
-	if [[ ! -e "${BUILD_DIR}/kata-static-nvidia-nvrc.tar.zst" ]]; then
-		setup_nvidia-nvrc "${rootfs_type}"
-	fi
-
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" ./nvidia_chroot.sh
 
 	chmod +x ./nvidia_chroot.sh
@@ -247,10 +244,16 @@ chisseled_init() {
 	libdir=lib/"${machine_arch}"-linux-gnu
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
+	exe="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	target=${machine_arch}-unknown-linux-musl
+
+	cp -a "${stage_one}/bin/${exe}-${target}"      bin/.
+	cp -a "${stage_one}/bin/${exe}-${target}".cert bin/.
+	cp -a "${stage_one}/bin/${exe}-${target}".sig  bin/.
+
 	# make sure NVRC is the init process for the initrd and image case
-	ln -sf  /bin/NVRC init
-	ln -sf  /bin/NVRC sbin/init
+	ln -sf  /bin/"${exe}-${target}" init
+	ln -sf  /bin/"${exe}-${target}" sbin/init
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
