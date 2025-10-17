@@ -100,6 +100,7 @@ const defaultDisableSeccomp = false
 const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
+const defaultMeasurementAlgo = "sha512"
 
 var defaultSGXEPCSize = int64(0)
 
