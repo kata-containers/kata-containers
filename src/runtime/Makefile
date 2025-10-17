@@ -222,8 +222,8 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"block_device_driver\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\", \"block_device_driver\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 #Default experimental features enabled

@@ -52,6 +52,7 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 
 	volumeCtx := make(map[string]string)
 	volumeCtx[utils.IsDirectVolume] = "False"
+	volumeCtx[utils.KataContainersDirectLoop] = "False"
 
 	for key, value := range req.GetParameters() {
 		switch strings.ToLower(key) {
@@ -60,11 +61,19 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 				volumeCtx[utils.IsDirectVolume] = "True"
 				volumeCtx[utils.KataContainersDirectVolumeType] = value
 			}
+			volumeCtx[utils.KataContainersDirectVolumeType] = value
 		case utils.KataContainersDirectFsType:
 			volumeCtx[utils.KataContainersDirectFsType] = value
+		case utils.KataContainersDirectLoop:
+			volumeCtx[utils.KataContainersDirectLoop] = value
+		case utils.KataContainersDirectCoCoEphemeral:
+			volumeCtx[utils.KataContainersDirectCoCoEphemeral] = value
 		default:
-			continue
+			klog.Warningf("unknown parameter: %s", key)
 		}
+	}
+	if isLoopDevice(volumeCtx) {
+		volumeCtx[utils.IsDirectVolume] = "True"
 	}
 
 	contentSrc := req.GetVolumeContentSource()
