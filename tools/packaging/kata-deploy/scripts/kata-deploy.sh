@@ -59,6 +59,8 @@ snapshotters_delimiter=':'
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 
+USE_DEPLOYED_NFD="${USE_DEPLOYED_NFD:-}"
+
 PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 
@@ -105,14 +107,38 @@ function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
 
+function adjust_shim_for_nfd() {
+	local shim="${1}"
+	local expand_runtime_classes_for_nfd="${2}"
+
+	if [[ "${expand_runtime_classes_for_nfd}" == "true" ]]; then
+		file="/opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml"
+		case "${shim}" in
+			*tdx*)
+				yq -yi --arg k "tdx.intel.com/keys" '.overhead.podFixed[$k] = 1' "${file}"
+				;;
+			*snp*)
+				yq -yi --arg k "sev-snp.amd.com/esids" '.overhead.podFixed[$k] = 1' "${file}"
+				;;
+			*)
+				;;
+		esac
+	fi
+}
+
 function create_runtimeclasses() {
 	echo "Creating the runtime classes"
+
+	local expand_runtime_classes_for_nfd="${1:-false}"
 
 	for shim in "${shims[@]}"; do
 		echo "Creating the kata-${shim} runtime class"
 		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
 			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
 		fi
+
+		adjust_shim_for_nfd "${shim}" "${expand_runtime_classes_for_nfd}"
+
 		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
 
 		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
@@ -144,6 +170,8 @@ function create_runtimeclasses() {
 function delete_runtimeclasses() {
 	echo "Deleting the runtime classes"
 
+	local expand_runtime_classes_for_nfd="${1:-false}"
+
 	for shim in "${shims[@]}"; do
 		echo "Deleting the kata-${shim} runtime class"
 		canonical_shim_name="kata-${shim}"
@@ -152,6 +180,9 @@ function delete_runtimeclasses() {
 			shim_name+="-${MULTI_INSTALL_SUFFIX}"
 			sed -i -e "s|${canonical_shim_name}|${shim_name}|g" /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
 		fi
+		
+		adjust_shim_for_nfd "${shim}" "${expand_runtime_classes_for_nfd}"
+
 		kubectl delete --ignore-not-found -f /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
 	done
 
@@ -493,9 +524,21 @@ function install_artifacts() {
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
 	fi
 
+	local expand_runtime_classes_for_nfd=false
+	local arch="$(uname -m)"
+	if [[ -n "${USE_DEPLOYED_NFD}" ]] && [[ ${arch} == "x86_64" ]]; then
+		kubectl get namespace "${USE_DEPLOYED_NFD}" || \
+			die "USE_DEPLOYED_NFD is set, but there's no ${USE_DEPLOYED_NFD} namespace in the cluster"
+
+		node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
+		yq -yi --arg ns "${USE_DEPLOYED_NFD}" '.metadata.namespace = $ns' "${node_feature_rule_file}"
+				
+		kubectl apply -f "${node_feature_rule_file}"
+		expand_runtime_classes_for_nfd=true
+	fi
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
-		create_runtimeclasses
+		create_runtimeclasses "${expand_runtime_classes_for_nfd}"
 	fi
 }
 
@@ -706,8 +749,21 @@ function remove_artifacts() {
 
 	rm -rf ${host_install_dir}
 
+	local expand_runtime_classes_for_nfd=false
+	local arch="$(uname -m)"
+	if [[ -n "${USE_DEPLOYED_NFD}" ]] && [[ ${arch} == "x86_64" ]]; then
+		kubectl get namespace "${USE_DEPLOYED_NFD}" || \
+			die "USE_DEPLOYED_NFD is set, but there's no ${USE_DEPLOYED_NFD} namespace in the cluster"
+
+		node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
+		yq -yi --arg ns "${USE_DEPLOYED_NFD}" '.metadata.namespace = $ns' "${node_feature_rule_file}"
+				
+		kubectl delete -f "${node_feature_rule_file}"
+		expand_runtime_classes_for_nfd=true
+	fi
+
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
-		delete_runtimeclasses
+		delete_runtimeclasses "${expand_runtime_classes_for_nfd}"
 	fi
 }
 
