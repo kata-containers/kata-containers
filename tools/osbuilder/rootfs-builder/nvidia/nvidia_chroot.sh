@@ -219,16 +219,19 @@ prepare_distribution_drivers() {
 
 	eval "${APT_INSTALL}" nvidia-utils-"${driver_version}"
 
+	# FIXME: the driver_version variable was removed from nvidia-imex and libnvidia-nscq
+	# because these packages in NVIDIA's repository do not contain the -580 version suffix
+	# despite currently being published in latest major version 580.
 	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
 		nvidia-firmware-"${driver_version}"  \
-		nvidia-imex-"${driver_version}"      \
+		nvidia-imex                          \
 		libnvidia-cfg1-"${driver_version}"   \
 		libnvidia-gl-"${driver_version}"     \
 		libnvidia-extra-"${driver_version}"  \
 		libnvidia-decode-"${driver_version}" \
 		libnvidia-fbc1-"${driver_version}"   \
 		libnvidia-encode-"${driver_version}" \
-		libnvidia-nscq-"${driver_version}"
+		libnvidia-nscq
 }
 
 prepare_nvidia_drivers() {
