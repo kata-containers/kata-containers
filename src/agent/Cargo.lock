@@ -2065,7 +2065,7 @@ dependencies = [
  "libc",
  "log",
  "logging",
- "mem-agent-lib",
+ "mem-agent",
  "netlink-packet-core",
  "netlink-packet-route",
  "netlink-sys 0.7.0",
@@ -2351,7 +2351,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mem-agent-lib"
+name = "mem-agent"
 version = "0.2.0"
 dependencies = [
  "anyhow",
