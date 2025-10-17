@@ -1111,7 +1111,7 @@ func (s *Sandbox) AddInterface(ctx context.Context, inf *pbTypes.Interface) (*pb
 	}()
 
 	// Add network for vm
-	inf.DevicePath = endpoints[0].PciPath().String()
+	inf.DevicePath = endpoints[len(endpoints)-1].PciPath().String()
 	result, err := s.agent.updateInterface(ctx, inf)
 	if err != nil {
 		return nil, err
