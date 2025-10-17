@@ -217,18 +217,60 @@ prepare_distribution_drivers() {
 
 	echo "chroot: Prepare NVIDIA distribution drivers"
 
+	# Note: Even with the temporary change described, the nvidia-utils package will be removed by the next APT_INSTALL command.
+	#This was already the case before this change:
+	# See: https://github.com/kata-containers/kata-containers/actions/runs/18361944076/job/52307294298?pr=11903#step:6:1922
 	eval "${APT_INSTALL}" nvidia-utils-"${driver_version}"
 
+	# FIXME: we temporarily removed the driver_version suffixes from the nvidia-imex and libnvidia-nscq packages to ensure we install
+	# these two packages from the NVIDIA repository.
+	# The NVIDIA repository does not publish these packages with a -580 version suffix, which made us fall back to the packages from the
+	# Ubuntu repository.
+	# These two packages were recently updated by Ubuntu to depend on nvidia-kernel-common-580-server (580.82.07-0ubuntu1 => 580.95.05-0ubuntu1),
+	# which conflicts with nvidia-kernel-common-580 (which gets installed by nvidia-headless-no-dkms-580-open), thus causing a build failure.
+	# See this recent CI run for the failure: https://github.com/kata-containers/kata-containers/actions/runs/18594469030/job/53021306970
+
+	# Here is what NVIDIA publishes as of today per:
+	#https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/Packages.gz
+
+	# Package: libnvidia-nscq
+	# Version: 580.95.05-1
+	# Provides: libnvidia-nscq-580, nscq2
+	# Maintainer: NVIDIA <cudatools@nvidia.com>
+
+	# Package: nvidia-imex
+	# Version: 580.95.05-1
+	# Provides: nvidia-imex-580
+	# Maintainer: NVIDIA <cudatools@nvidia.com>
+
+	# Package: nvidia-utils-580
+	# Version: 580.95.05-0ubuntu1
+	# Maintainer: NVIDIA <cudatools@nvidia.com>
+	# NOTE: The nvidia-utils package is not published in version -580 by Ubuntu!
+
+	# Here is what Ubuntu publishes as of today per:
+	# http://us.archive.ubuntu.com/ubuntu/dists/noble-updates/multiverse/binary-amd64/Packages.gz
+	# Package: nvidia-imex-580
+	# Version: 580.95.05-0ubuntu0.24.04.2
+	# Maintainer: Ubuntu Core Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+	# Provides: nvidia-imex
+	# Depends: nvidia-kernel-common-580-server (= 580.95.05-0ubuntu0.24.04.2)
+
+	# Package: libnvidia-nscq-580
+	# Version: 580.95.05-0ubuntu0.24.04.2
+	# Maintainer: Ubuntu Core Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+	# Provides: libnvidia-nscq, nscq2
+	# Depends: nvidia-kernel-common-580-server (= 580.95.05-0ubuntu0.24.04.2)
 	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
 		nvidia-firmware-"${driver_version}"  \
-		nvidia-imex-"${driver_version}"      \
+		nvidia-imex                          \
 		libnvidia-cfg1-"${driver_version}"   \
 		libnvidia-gl-"${driver_version}"     \
 		libnvidia-extra-"${driver_version}"  \
 		libnvidia-decode-"${driver_version}" \
 		libnvidia-fbc1-"${driver_version}"   \
 		libnvidia-encode-"${driver_version}" \
-		libnvidia-nscq-"${driver_version}"
+		libnvidia-nscq
 }
 
 prepare_nvidia_drivers() {
