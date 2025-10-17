@@ -388,10 +388,23 @@ impl RuntimeHandlerManager {
 
         // A nerdctl network namespace to let nerdctl know which namespace to use when calling the
         // selected CNI plugin.
-        spec.annotations_mut().as_mut().unwrap().insert(
-            "nerdctl/network-namespace".to_string(),
-            netns.clone().unwrap(),
-        );
+        // Only insert the annotation if `netns` is available and `annotations` exists.
+
+        if let Some(ns) = netns.clone() {
+            if let Some(ann) = spec.annotations_mut().as_mut() {
+                ann.insert("nerdctl/network-namespace".to_string(), ns);
+            } else {
+                warn!(
+                    sl!(),
+                    "annotations_mut() returned None, skip inserting nerdctl/network-namespace"
+                );
+            }
+        } else {
+            info!(
+                sl!(),
+                "netns is None, skip inserting nerdctl/network-namespace annotation"
+            );
+        }
 
         let network_env = SandboxNetworkEnv {
             netns,
