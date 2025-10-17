@@ -5,7 +5,7 @@
 
 syntax = "proto3";
 
-package remote;
+package hypervisor;
 
 service Hypervisor {
 	rpc CreateVM(CreateVMRequest) returns (CreateVMResponse) {}
