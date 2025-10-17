@@ -5,7 +5,7 @@ process that is run by the runtime manager (containerd/CRI-O), and controlled by
 sending gRPC requests to it.
 Starting the shim with a debugger then just gives you a process that waits for
 commands on its socket, and if the runtime manager doesn't start it, it won't
-send request to it.
+send requests to it.
 
 A first method is to attach a debugger to the process that was started by the
 runtime manager.
@@ -17,7 +17,7 @@ and the actual shim binary. This allows to start the shim with a debugger, and
 wait for a client debugger connection before execution, allowing debugging of the
 kata runtime from the very beginning.
 
-## Prerequisite
+## Prerequisites
 
 At the time of writing, a debugger was used only with the go shim, but a similar
 process should be doable with runtime-rs. This documentation will be enhanced
