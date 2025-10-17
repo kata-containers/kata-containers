@@ -61,11 +61,12 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::prelude::*;
-    use test_utils::skip_if_not_root;
+    use test_utils::{skip_if_not_root, skip_if_rng_ioctl_restricted};
 
     #[test]
     fn test_reseed_rng() {
         skip_if_not_root!();
+        skip_if_rng_ioctl_restricted!();
         const POOL_SIZE: usize = 512;
         let mut f = File::open("/dev/urandom").unwrap();
         let mut seed = [0; POOL_SIZE];
@@ -78,6 +79,7 @@ mod tests {
 
     #[test]
     fn test_reseed_rng_not_root() {
+        skip_if_rng_ioctl_restricted!();
         const POOL_SIZE: usize = 512;
         let mut f = File::open("/dev/urandom").unwrap();
         let mut seed = [0; POOL_SIZE];

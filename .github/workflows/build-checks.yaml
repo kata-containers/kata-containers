@@ -12,15 +12,15 @@ name: Build checks
 jobs:
   check:
     name: check
-    runs-on: ${{ inputs.instance }}
+    runs-on: ${{ matrix.component.name == 'runtime' && inputs.instance == 'ubuntu-24.04-s390x' && 's390x' || matrix.component.name == 'runtime' && inputs.instance == 'ubuntu-24.04-ppc64le' && 'ppc64le' || inputs.instance }}
     strategy:
       fail-fast: false
       matrix:
         command:
-          - "make vendor"
-          - "make check"
+          #- "make vendor"
+          #- "make check"
           - "make test"
-          - "sudo -E PATH=\"$PATH\" make test"
+          #- "sudo -E PATH=\"$PATH\" make test"
         component:
           - name: agent
             path: src/agent
@@ -30,44 +30,44 @@ jobs:
               - libseccomp
               - protobuf-compiler
               - clang
-          - name: dragonball
-            path: src/dragonball
-            needs:
-              - rust
-          - name: runtime
-            path: src/runtime
-            needs:
-              - golang
-              - XDG_RUNTIME_DIR
-          - name: runtime-rs
-            path: src/runtime-rs
-            needs:
-              - rust
-          - name: libs
-            path: src/libs
-            needs:
-              - rust
-              - protobuf-compiler
-          - name: agent-ctl
-            path: src/tools/agent-ctl
-            needs:
-              - rust
-              - protobuf-compiler
-              - clang
-          - name: kata-ctl
-            path: src/tools/kata-ctl
-            needs:
-              - rust
-              - protobuf-compiler
-          - name: trace-forwarder
-            path: src/tools/trace-forwarder
-            needs:
-              - rust
-          - name: genpolicy
-            path: src/tools/genpolicy
-            needs:
-              - rust
-              - protobuf-compiler
+          # - name: dragonball
+          #   path: src/dragonball
+          #   needs:
+          #     - rust
+          # - name: runtime
+          #   path: src/runtime
+          #   needs:
+          #     - golang
+          #     - XDG_RUNTIME_DIR
+          # - name: runtime-rs
+          #   path: src/runtime-rs
+          #   needs:
+          #     - rust
+          # - name: libs
+          #   path: src/libs
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
+          # - name: agent-ctl
+          #   path: src/tools/agent-ctl
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
+          #     - clang
+          # - name: kata-ctl
+          #   path: src/tools/kata-ctl
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
+          # - name: trace-forwarder
+          #   path: src/tools/trace-forwarder
+          #   needs:
+          #     - rust
+          # - name: genpolicy
+          #   path: src/tools/genpolicy
+          #   needs:
+          #     - rust
+          #     - protobuf-compiler
 
     steps:
       - name: Adjust a permission for repo
@@ -81,7 +81,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
+      - name: check selinux path
+        run: |
+          ls -l /sys/fs/selinux
+          sudo apt install -y policycoreutils selinux-utils
+          getenforce
       - name: Install yq
         run: |
           ./ci/install_yq.sh

@@ -4323,6 +4323,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "nix 0.26.4",
 ]
 
