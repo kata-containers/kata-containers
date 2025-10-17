@@ -1101,7 +1101,7 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 // disableModern indicates if virtio version 1.0 should be replaced by the
 // former version 0.9, as there is a KVM bug that occurs when using virtio
 // 1.0 in nested environments.
-func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern bool) error {
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern bool, iothreadID string) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -1126,6 +1126,10 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 		if disableModern {
 			args["disable-modern"] = disableModern
 		}
+	}
+
+	if iothreadID != "" {
+		args["iothread"] = iothreadID
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
