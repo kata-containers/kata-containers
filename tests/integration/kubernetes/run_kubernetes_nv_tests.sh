@@ -21,6 +21,12 @@ trap cleanup EXIT
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 K8S_TEST_NV=("k8s-nvidia-nim.bats")
 
+# KATA_HYPERVISOR is set in the CI workflow yaml file, and can be set by the user executing CI locally
+if [ -n "${KATA_HYPERVISOR:-}" ]; then
+	export RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
+	info "Set RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME} from KATA_HYPERVISOR=${KATA_HYPERVISOR}"
+fi
+
 ensure_yq
 
 info "Running tests with bats version: $(bats --version)"

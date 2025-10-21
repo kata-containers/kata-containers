@@ -35,9 +35,15 @@ jobs:
       matrix:
         vmm:
           - qemu-nvidia-gpu
+          - qemu-nvidia-gpu-snp
         k8s:
           - kubeadm
-    runs-on: amd64-nvidia-a100
+        include:
+          - vmm: qemu-nvidia-gpu
+            runner: amd64-nvidia-a100
+          - vmm: qemu-nvidia-gpu-snp
+            runner: amd64-nvidia-h100-snp
+    runs-on: ${{ matrix.runner }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -67,11 +73,12 @@ jobs:
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
-      - name: Run tests
+      - name: Run tests ${{ matrix.vmm }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-nv-tests
         env:
           NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+
       - name: Collect artifacts ${{ matrix.vmm }}
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
