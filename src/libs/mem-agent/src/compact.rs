@@ -2,6 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Enable precedence and identity_op check
+#![allow(clippy::precedence)]
+#![allow(clippy::identity_op)]
+
 use crate::cgroup::CGROUP_PATH;
 use crate::proc;
 use crate::psi;
