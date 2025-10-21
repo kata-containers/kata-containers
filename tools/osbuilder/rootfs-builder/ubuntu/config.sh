@@ -13,7 +13,9 @@ PACKAGES="chrony iptables dbus"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
 [ "$(uname -m)" = "s390x" ] && PACKAGES+=" libcurl4 libnghttp2-14"
+[ "$SELINUX" = yes ] && PACKAGES+=" selinux-basics selinux-policy-default"
 REPO_COMPONENTS=${REPO_COMPONENTS:-main}
+[ "$SELINUX" = yes ] && REPO_COMPONENTS+=" universe"
 
 case "$ARCH" in
 	aarch64) DEB_ARCH=arm64;;
