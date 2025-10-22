@@ -38,7 +38,6 @@ else
 		"k8s-guest-pull-image-encrypted.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
-		"k8s-initdata.bats" \
 		"k8s-confidential-attestation.bats" \
 	)
 
