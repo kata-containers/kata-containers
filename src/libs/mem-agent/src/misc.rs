@@ -9,35 +9,35 @@ pub fn sl() -> slog::Logger {
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => {
-        slog::error!(crate::misc::sl(), "{}", format_args!($($arg)*))
+        slog::error!($crate::misc::sl(), "{}", format_args!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! warn {
     ($($arg:tt)*) => {
-        slog::warn!(crate::misc::sl(), "{}", format_args!($($arg)*))
+        slog::warn!($crate::misc::sl(), "{}", format_args!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {
-        slog::info!(crate::misc::sl(), "{}", format_args!($($arg)*))
+        slog::info!($crate::misc::sl(), "{}", format_args!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! trace {
     ($($arg:tt)*) => {
-        slog::trace!(crate::misc::sl(), "{}", format_args!($($arg)*))
+        slog::trace!($crate::misc::sl(), "{}", format_args!($($arg)*))
     }
 }
 
 #[macro_export]
 macro_rules! debug {
     ($($arg:tt)*) => {
-        slog::debug!(crate::misc::sl(), "{}", format_args!($($arg)*))
+        slog::debug!($crate::misc::sl(), "{}", format_args!($($arg)*))
     }
 }
 

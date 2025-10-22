@@ -463,7 +463,10 @@ function install_artifacts() {
 		fi
 
 		if [ "${dest_dir}" != "${default_dest_dir}" ]; then
-			kernel_path=$(tomlq ".hypervisor.${shim}.path" ${kata_config_file} | tr -d \")
+			hypervisor="${shim}"
+			[[ "${shim}" == "qemu"* ]] && hypervisor="qemu"
+
+			kernel_path=$(tomlq ".hypervisor.${hypervisor}.path" ${kata_config_file} | tr -d \")
 			if echo $kernel_path | grep -q "${dest_dir}"; then
 				# If we got to this point here, it means that we're dealing with
 				# a kata containers configuration file that has already been changed
