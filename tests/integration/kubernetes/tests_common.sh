@@ -170,6 +170,7 @@ create_tmp_policy_settings_dir() {
 	tmp_settings_dir=$(mktemp -d --tmpdir="${common_settings_dir}" genpolicy.XXXXXXXXXX)
 	cp "${common_settings_dir}/rules.rego" "${tmp_settings_dir}"
 	cp "${common_settings_dir}/genpolicy-settings.json" "${tmp_settings_dir}"
+	cp "${common_settings_dir}/default-initdata.toml" "${tmp_settings_dir}"
 
 	echo "${tmp_settings_dir}"
 }
@@ -188,6 +189,17 @@ delete_tmp_policy_settings_dir() {
 
 # Execute genpolicy to auto-generate policy for a test YAML file.
 auto_generate_policy() {
+	declare -r settings_dir="$1"
+	declare -r yaml_file="$2"
+	declare -r config_map_yaml_file="${3:-""}"
+	declare additional_flags="${4:-""}"
+
+	additional_flags="${additional_flags} --initdata-path=${settings_dir}/default-initdata.toml"
+
+	auto_generate_policy_no_added_flags "${settings_dir}" "${yaml_file}" "${config_map_yaml_file}" "${additional_flags}"
+}
+
+auto_generate_policy_no_added_flags() {
 	declare -r settings_dir="$1"
 	declare -r yaml_file="$2"
 	declare -r config_map_yaml_file="${3:-""}"

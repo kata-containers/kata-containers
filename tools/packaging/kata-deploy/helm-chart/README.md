@@ -127,7 +127,7 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `k8sDistribution` | Set the k8s distribution to use: `k8s`, `k0s`, `k3s`, `rke2`, `microk8s` | `k8s` |
 | `nodeSelector` | Node labels for pod assignment. Allows restricting deployment to specific nodes | `{}` |
 | `env.debug` | Enable debugging in the `configuration.toml` | `false` |
-| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx` |
+| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca` |
 | `env.defaultShim` | The default shim to use if none specified | `qemu` |
 | `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
 | `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
@@ -139,6 +139,8 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.installationPrefix` | Prefix where to install the Kata artifacts | `/opt/kata` |
 | `env.hostOS` | Provide host-OS setting, e.g. `cbl-mariner` to do additional configurations | `""` |
 | `env.multiInstallSuffix` | Enable multiple Kata installation on the same node with suffix e.g. `/opt/kata-PR12232` | `""` |
+| `env._experimentalSetupSnapshotter` | Deploys (nydus) and/or sets up (erofs, nydus) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
+| `env._experimentalForceGuestPull` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value (supports multiple shims, separated by commas; e.g., `qemu-tdx,qemu-snp`) | `""` |
 
 ## Example: only `qemu` shim and debug enabled
 

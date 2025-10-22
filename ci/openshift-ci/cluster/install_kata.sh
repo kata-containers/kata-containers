@@ -44,8 +44,9 @@ WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
 #
 apply_kata_deploy() {
 	if ! command -v helm &>/dev/null; then
-		echo "Helm not installed, installing..."
-		curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+		echo "Helm not installed, installing in current location..."
+		PATH=".:${PATH}"
+		curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | HELM_INSTALL_DIR='.' bash -s -- --no-sudo
 	fi
 
 	oc label --overwrite ns kube-system pod-security.kubernetes.io/enforce=privileged pod-security.kubernetes.io/warn=baseline pod-security.kubernetes.io/audit=baseline

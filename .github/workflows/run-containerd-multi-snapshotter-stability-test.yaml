@@ -1,0 +1,164 @@
+name: CI | Run containerd multi-snapshotter stability test
+on:
+  schedule:
+    - cron: "0 */1 * * *" #run every hour
+
+permissions: {}
+
+# This job relies on k8s pre-installed using kubeadm
+jobs:
+  run-containerd-multi-snapshotter-stability-tests:
+    name: run-containerd-multi-snapshotter-stability-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        containerd:
+          - v1.7
+          - v2.0
+          - v2.1
+          - v2.2
+    env:
+      # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here.
+      IMAGES_LIST: quay.io/mongodb/mongodb-community-server@sha256:8b73733842da21b6bbb6df4d7b2449229bb3135d2ec8c6880314d88205772a11 ghcr.io/edgelesssys/redis@sha256:ecb0a964c259a166a1eb62f0eb19621d42bd1cce0bc9bb0c71c828911d4ba93d
+    runs-on: containerd-${{ matrix.containerd }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Rotate the journal
+        run: sudo journalctl --rotate --vacuum-time 1s
+
+      - name: Pull the kata-deploy image to be used
+        run: sudo ctr -n k8s.io image pull quay.io/kata-containers/kata-deploy-ci:kata-containers-latest
+
+      - name: Deploy Kata Containers
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+        env:
+          KATA_HYPERVISOR: qemu-coco-dev
+          KUBERNETES: vanilla
+          SNAPSHOTTER: nydus
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: true
+
+      # This is needed as we may hit the createContainerTimeout
+      - name: Adjust Kata Containers' create_container_timeout
+        run: |
+          sudo sed -i -e 's/^\(create_container_timeout\).*=.*$/\1 = 600/g' /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+          grep "create_container_timeout.*=" /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+
+      # This is needed in order to have enough tmpfs space inside the guest to pull the image
+      - name: Adjust Kata Containers' default_memory
+        run: |
+          sudo sed -i -e 's/^\(default_memory\).*=.*$/\1 = 4096/g' /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+          grep "default_memory.*=" /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+
+      - name: Run a few containers using overlayfs
+        run: |
+          # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here
+          # shellcheck disable=SC2086
+          for img in ${IMAGES_LIST}; do
+            echo "overlayfs | Using on image: ${img}"
+            pod="$(echo ${img} | tr ':.@/' '-' | awk '{print substr($0,1,56)}')"
+            kubectl run "${pod}" \
+              -it --rm \
+              --restart=Never \
+              --image="${img}" \
+              --image-pull-policy=Always \
+              --pod-running-timeout=10m \
+              -- uname -r
+          done
+          
+      - name: Run a the same few containers using a different snapshotter
+        run: |
+          # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here
+          # shellcheck disable=SC2086
+          for img in ${IMAGES_LIST}; do
+            echo "nydus | Using on image: ${img}"
+            pod="kata-$(echo ${img} | tr ':.@/' '-' | awk '{print substr($0,1,56)}')"
+            kubectl run "${pod}" \
+              -it --rm \
+              --restart=Never \
+              --image="${img}" \
+              --image-pull-policy=Always \
+              --pod-running-timeout=10m \
+              --overrides='{
+                "spec": {
+                  "runtimeClassName": "kata-qemu-coco-dev"
+                }
+              }' \
+              -- uname -r
+          done
+
+      - name: Uninstall Kata Containers
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup
+        env:
+          KATA_HYPERVISOR: qemu-coco-dev
+          KUBERNETES: vanilla
+          SNAPSHOTTER: nydus
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: true
+
+      - name: Run a few containers using overlayfs
+        run: |
+          # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here
+          # shellcheck disable=SC2086
+          for img in ${IMAGES_LIST}; do
+            echo "overlayfs | Using on image: ${img}"
+            pod="$(echo ${img} | tr ':.@/' '-' | awk '{print substr($0,1,56)}')"
+            kubectl run "${pod}" \
+              -it --rm \
+              --restart=Never \
+              --image=${img} \
+              --image-pull-policy=Always \
+              --pod-running-timeout=10m \
+              -- uname -r
+          done
+          
+      - name: Deploy Kata Containers
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+        env:
+          KATA_HYPERVISOR: qemu-coco-dev
+          KUBERNETES: vanilla
+          SNAPSHOTTER: nydus
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: true
+
+      # This is needed as we may hit the createContainerTimeout
+      - name: Adjust Kata Containers' create_container_timeout
+        run: |
+          sudo sed -i -e 's/^\(create_container_timeout\).*=.*$/\1 = 600/g' /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+          grep "create_container_timeout.*=" /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+
+      # This is needed in order to have enough tmpfs space inside the guest to pull the image
+      - name: Adjust Kata Containers' default_memory
+        run: |
+          sudo sed -i -e 's/^\(default_memory\).*=.*$/\1 = 4096/g' /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+          grep "default_memory.*=" /opt/kata/share/defaults/kata-containers/configuration-qemu-coco-dev.toml
+
+      - name: Run a the same few containers using a different snapshotter
+        run: |
+          # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here
+          # shellcheck disable=SC2086
+          for img in ${IMAGES_LIST}; do
+            echo "nydus | Using on image: ${img}"
+            pod="kata-$(echo ${img} | tr ':.@/' '-' | awk '{print substr($0,1,56)}')"
+            kubectl run "${pod}" \
+              -it --rm \
+              --restart=Never \
+              --image="${img}" \
+              --image-pull-policy=Always \
+              --pod-running-timeout=10m \
+              --overrides='{
+                "spec": {
+                  "runtimeClassName": "kata-qemu-coco-dev"
+                }
+              }' \
+              -- uname -r
+          done
+
+      - name: Uninstall Kata Containers
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup || true
+        if: always()
+        env:
+          KATA_HYPERVISOR: qemu-coco-dev
+          KUBERNETES: vanilla
+          SNAPSHOTTER: nydus
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: true

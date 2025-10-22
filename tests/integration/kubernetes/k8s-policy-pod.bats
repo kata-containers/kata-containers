@@ -47,7 +47,7 @@ setup() {
 		cp "${correct_pod_yaml}" "${pre_generate_pod_yaml}"
 
 		# Add policy to the correct pod yaml file
-		auto_generate_policy "${policy_settings_dir}" "${correct_pod_yaml}" "${correct_configmap_yaml}"
+		auto_generate_policy_no_added_flags "${policy_settings_dir}" "${correct_pod_yaml}" "${correct_configmap_yaml}"
 	fi
 
     # Start each test case with a copy of the correct yaml files.

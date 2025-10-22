@@ -189,6 +189,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
+		MeasurementAlgo:       defaultMeasurementAlgo,
 	}
 
 	if goruntime.GOARCH == "arm64" && len(hypervisorConfig.PFlash) == 0 && hypervisorConfig.FirmwarePath == "" {

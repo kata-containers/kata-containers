@@ -72,7 +72,7 @@ setup_nvidia-nvrc() {
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
-	if [[ -e "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" ]]; then
+	if [[ -e "${BUILD_DIR}/kata-static-rootfs-${VARIANT}-stage-one.tar.zst" ]]; then
 		info "nvidia: GPU rootfs stage one already exists"
 		return
 	fi
@@ -129,7 +129,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	rm ./nvidia_chroot.sh
 	rm ./*.deb
 
-	tar cfa "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst --remove-files -- *
+	tar cfa "${BUILD_DIR}"/kata-static-rootfs-"${VARIANT}"-stage-one.tar.zst --remove-files -- *
 
 	popd  >> /dev/null
 
@@ -239,7 +239,7 @@ chisseled_init() {
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
 		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
-		 usr/bin etc/modprobe.d
+		 usr/bin etc/modprobe.d etc/ssl/certs
 
 	ln -sf ../run var/run
 
@@ -261,6 +261,8 @@ chisseled_init() {
 
 	cp -a "${stage_one}"/lib/firmware/nvidia  lib/firmware/.
 	cp -a "${stage_one}"/sbin/ldconfig.real   sbin/ldconfig
+
+	cp -a "${stage_one}"/etc/ssl/certs/ca-certificates.crt etc/ssl/certs/.
 
 	local conf_file="etc/modprobe.d/0000-nvidia.conf"
 	echo 'options nvidia NVreg_DeviceFileMode=0660' > "${conf_file}"
@@ -293,22 +295,26 @@ compress_rootfs() {
 }
 
 coco_guest_components() {
-	if [[ ${type} != "confidential" ]]; then
+	if [[ "${type}" != "confidential" ]]; then
 		return
 	fi
 
-	readonly source="usr/local/bin"
-	readonly dest="${source}"
-
 	info "nvidia: installing the confidential containers guest components tarball"
 
-	mkdir -p "${dest}"
+	local -r coco_bin_dir="usr/local/bin"
+	local -r etc_dir="etc"
+	local -r pause_dir="pause_bundle"
 
-	cp -a "${stage_one}/${source}"/attestation-agent     "${dest}/."
-	cp -a "${stage_one}/${source}"/api-server-rest       "${dest}/."
-	cp -a "${stage_one}/${source}"/confidential-data-hub "${dest}/."
+	mkdir -p "${coco_bin_dir}"
+	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent     "${coco_bin_dir}/."
+	cp -a "${stage_one}/${coco_bin_dir}"/api-server-rest       "${coco_bin_dir}/."
+	cp -a "${stage_one}/${coco_bin_dir}"/confidential-data-hub "${coco_bin_dir}/."
 
-	cp -a "${stage_one}"/etc/ocicrypt_config.json etc/.
+	cp -a "${stage_one}/${etc_dir}"/ocicrypt_config.json "${etc_dir}/."
+
+	mkdir -p "${pause_dir}/rootfs"
+	cp -a "${stage_one}/${pause_dir}"/config.json  "${pause_dir}/."
+	cp -a "${stage_one}/${pause_dir}"/rootfs/pause "${pause_dir}/rootfs/."
 
 	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
 }
@@ -332,7 +338,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 	[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
 	[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
 
-	tar -C "${stage_one}" -xf "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst
+	tar -C "${stage_one}" -xf "${BUILD_DIR}"/kata-static-rootfs-"${VARIANT}"-stage-one.tar.zst
 
 
 	pushd "${stage_two}" >> /dev/null
