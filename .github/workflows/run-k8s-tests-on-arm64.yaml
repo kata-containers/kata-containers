@@ -42,7 +42,6 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: ${{ matrix.k8s }}
-      USING_NFD: "false"
       K8S_TEST_HOST_TYPE: all
       TARGET_ARCH: "aarch64"
     steps:
