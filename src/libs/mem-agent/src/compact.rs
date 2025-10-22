@@ -2,6 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Enable precedence and identity_op check
+#![allow(clippy::precedence)]
+#![allow(clippy::identity_op)]
+
 use crate::cgroup::CGROUP_PATH;
 use crate::proc;
 use crate::psi;
@@ -63,7 +67,7 @@ impl Default for Config {
             compact_sec_max: 5 * 60,
             compact_order: PAGE_REPORTING_MIN_ORDER,
             compact_threshold: 2 << PAGE_REPORTING_MIN_ORDER,
-            compact_force_times: std::u64::MAX,
+            compact_force_times: u64::MAX,
         }
     }
 }
@@ -129,7 +133,7 @@ impl CompactCore {
     }
 
     fn need_force_compact(&self) -> bool {
-        if self.config.compact_force_times == std::u64::MAX {
+        if self.config.compact_force_times == u64::MAX {
             return false;
         }
 
@@ -350,14 +354,12 @@ impl Compact {
                         } else {
                             debug!("compact killed and keep wait");
                         }
-                    } else {
-                        if rest_sec <= 0 {
-                            debug!("compact timeout");
-                            child
-                                .kill()
-                                .map_err(|e| anyhow!("child.kill failed: {}", e))?;
-                            killed = true;
-                        }
+                    } else if rest_sec <= 0 {
+                        debug!("compact timeout");
+                        child
+                            .kill()
+                            .map_err(|e| anyhow!("child.kill failed: {}", e))?;
+                        killed = true;
                     }
 
                     let percent = compact_psi

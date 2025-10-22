@@ -10,7 +10,7 @@ use std::fs;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const MEM_PSI: &str = "memory.pressure";
 const IO_PSI: &str = "io.pressure";
@@ -20,10 +20,8 @@ fn find_psi_subdirs() -> Result<PathBuf> {
         for entry in fs::read_dir(CGROUP_PATH)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() {
-                if path.join(MEM_PSI).is_file() && path.join(IO_PSI).is_file() {
-                    return Ok(path.clone());
-                }
+            if path.is_dir() && path.join(MEM_PSI).is_file() && path.join(IO_PSI).is_file() {
+                return Ok(path.clone());
             }
         }
 
@@ -33,15 +31,15 @@ fn find_psi_subdirs() -> Result<PathBuf> {
     }
 }
 
-pub fn check(psi_path: &PathBuf) -> Result<PathBuf> {
+pub fn check(psi_path: &Path) -> Result<PathBuf> {
     if crate::misc::is_test_environment() {
-        return Ok(psi_path.clone());
+        return Ok(psi_path.to_path_buf());
     }
 
     let p = if psi_path.as_os_str().is_empty() {
         find_psi_subdirs().map_err(|e| anyhow!("find_psi_subdirs failed: {}", e))?
     } else {
-        psi_path.clone()
+        psi_path.to_path_buf()
     };
 
     let mem_psi_path = p.join(MEM_PSI);
@@ -64,7 +62,7 @@ fn read_pressure_some_total(file_path: PathBuf) -> Result<u64> {
     if reader
         .read_line(&mut first_line)
         .map_err(|e| anyhow!("reader.read_line failed: {}", e))?
-        <= 0
+        == 0
     {
         return Err(anyhow!("File is empty"));
     }
