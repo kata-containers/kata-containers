@@ -48,6 +48,6 @@ RUN apt-get update && \
 RUN rustup target add x86_64-unknown-linux-musl
 
 RUN kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \
-    curl -OL "https://storage.googleapis.com/golang/go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
+    curl -fsSOL "https://go.dev/dl/go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
     tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
     rm "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz"

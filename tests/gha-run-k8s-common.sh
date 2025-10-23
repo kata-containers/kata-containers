@@ -563,6 +563,9 @@ function helm_helper() {
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
 	echo "::endgroup::"
 
+	# Ensure any potential leftover is cleaned up ... and this secret usually is not in case of previous failures
+	kubectl delete secret sh.helm.release.v1.kata-deploy.v1 -n kube-system || true
+
 	max_tries=3
 	interval=10
 	i=10
