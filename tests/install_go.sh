@@ -93,7 +93,7 @@ goarch=$(arch_to_golang)
 
 info "Download go version ${go_version}"
 kernel_name=$(uname -s | tr '[:upper:]' '[:lower:]')
-curl -OL  -w "http status: %{http_code}\n" "https://go.dev/dl/go${go_version}.${kernel_name}-${goarch}.tar.gz"
+curl -fsSOL "https://go.dev/dl/go${go_version}.${kernel_name}-${goarch}.tar.gz"
 info "Install go"
 mkdir -p "${install_dest}"
 sudo tar -C "${install_dest}" -xzf "go${go_version}.${kernel_name}-${goarch}.tar.gz"
