@@ -210,28 +210,24 @@ prepare_run_file_drivers() {
 
 prepare_distribution_drivers() {
 	if [[ "${driver_version}" == "latest" ]]; then
-		driver_version=$(apt-cache search --names-only 'nvidia-headless-no-dkms-.?.?.?-open' | sort | awk '{ print $1 }' | tail -n 1 | cut -d'-' -f5)
+		driver_version=$(apt-cache search --names-only 'nvidia-headless-no-dkms-.?.?.?-server-open' | sort | awk '{ print $1 }' | tail -n 1 | cut -d'-' -f5)
 	elif [[ "${driver_version}" == "lts" ]]; then
-		driver_version="550"
+		driver_version="580"
 	fi
 
 	echo "chroot: Prepare NVIDIA distribution drivers"
 
-	eval "${APT_INSTALL}" nvidia-utils-"${driver_version}"
-
-	# FIXME: the driver_version variable was removed from nvidia-imex and libnvidia-nscq
-	# because these packages in NVIDIA's repository do not contain the -580 version suffix
-	# despite currently being published in latest major version 580.
-	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" \
-		nvidia-firmware-"${driver_version}"  \
-		nvidia-imex                          \
-		libnvidia-cfg1-"${driver_version}"   \
-		libnvidia-gl-"${driver_version}"     \
-		libnvidia-extra-"${driver_version}"  \
-		libnvidia-decode-"${driver_version}" \
-		libnvidia-fbc1-"${driver_version}"   \
-		libnvidia-encode-"${driver_version}" \
-		libnvidia-nscq
+	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}-server${driver_type}" \
+		nvidia-kernel-common-"${driver_version}"-server \
+		nvidia-imex-"${driver_version}"                   \
+		nvidia-utils-"${driver_version}"-server           \
+		libnvidia-cfg1-"${driver_version}"-server       \
+		libnvidia-gl-"${driver_version}"-server         \
+		libnvidia-extra-"${driver_version}"-server      \
+		libnvidia-decode-"${driver_version}"-server     \
+		libnvidia-fbc1-"${driver_version}"-server       \
+		libnvidia-encode-"${driver_version}"-server     \
+		libnvidia-nscq-"${driver_version}"
 }
 
 prepare_nvidia_drivers() {
@@ -271,13 +267,15 @@ install_build_dependencies() {
 
 setup_apt_repositories() {
 	echo "chroot: Setup APT repositories"
+
 	mkdir -p /var/cache/apt/archives/partial
 	mkdir -p /var/log/apt
-        mkdir -p /var/lib/dpkg/info
-        mkdir -p /var/lib/dpkg/updates
-        mkdir -p /var/lib/dpkg/alternatives
-        mkdir -p /var/lib/dpkg/triggers
-        mkdir -p /var/lib/dpkg/parts
+	mkdir -p /var/lib/dpkg/info
+	mkdir -p /var/lib/dpkg/updates
+	mkdir -p /var/lib/dpkg/alternatives
+	mkdir -p /var/lib/dpkg/triggers
+	mkdir -p /var/lib/dpkg/parts
+
 	touch /var/lib/dpkg/status
 	rm -f /etc/apt/sources.list.d/*
 
@@ -305,29 +303,35 @@ setup_apt_repositories() {
 	[[ ${base_os} == "noble" ]] && osver="ubuntu2404" || die "Unknown base_os ${base_os} used"
 
 	keyring="cuda-keyring_1.1-1_all.deb"
-    curl -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
-    dpkg -i "${keyring}" && rm -f "${keyring}"
+	# Use consistent curl flags: -fsSL for download, -O for output
+	curl -fsSL -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
+	dpkg -i "${keyring}" && rm -f "${keyring}"
 
-	# Set repository priorities, prefere NVIDIA repositories over Ubuntu ones
+	# Set priorities: Ubuntu repos highest, NVIDIA Container Toolkit next, CUDA repo blocked for driver packages
 	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-priority
-        # Prioritize NVIDIA CUDA repository
-        Package: *
-        Pin: origin developer.download.nvidia.com
-        Pin-Priority: 1000
+		# Prioritize Ubuntu repositories (highest priority)
+		Package: *
+		Pin: origin us.archive.ubuntu.com
+		Pin-Priority: 1000
 
-        # Prioritize NVIDIA Container Toolkit repository
-        Package: *
-        Pin: origin nvidia.github.io
-        Pin-Priority: 950
+		Package: *
+		Pin: origin ports.ubuntu.com
+		Pin-Priority: 1000
 
-        # Lower priority for Ubuntu repositories
-        Package: *
-        Pin: origin us.archive.ubuntu.com
-        Pin-Priority: 500
+		# NVIDIA Container Toolkit (medium priority for toolkit only)
+		Package: nvidia-container-toolkit* libnvidia-container*
+		Pin: origin nvidia.github.io
+		Pin-Priority: 500
 
-        Package: *
-        Pin: origin ports.ubuntu.com
-        Pin-Priority: 500
+		# Block all nvidia and libnvidia packages from CUDA repository
+		Package: nvidia-* libnvidia-*
+		Pin: origin developer.download.nvidia.com
+		Pin-Priority: -1
+
+		# Allow non-driver CUDA packages from CUDA repository (low priority)
+		Package: *
+		Pin: origin developer.download.nvidia.com
+		Pin-Priority: 100
 	CHROOT_EOF
 
 	apt update
@@ -345,19 +349,9 @@ get_supported_gpus_from_run_file() {
 }
 
 get_supported_gpus_from_distro_drivers() {
-	local supported_gpus_json=./usr/share/doc/nvidia-driver-"${driver_version}"/supported-gpus.json
-
-	mkdir _tmp
-	pushd _tmp >> /dev/null
-
-	apt download nvidia-driver-"${driver_version}"
-	ar -x nvidia-driver-"${driver_version}"*.deb
-	tar -xvf data.tar.xz
+	local supported_gpus_json="./usr/share/doc/nvidia-kernel-common-${driver_version}-server/supported-gpus.json"
 
 	jq . < "${supported_gpus_json}"  | grep '"devid"' | awk '{ print $2 }' | tr -d ',"'  > "${supported_gpu_devids}"
-
-	popd >> /dev/null
-	rm -rf _tmp
 }
 
 export_driver_version() {
