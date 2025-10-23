@@ -50,7 +50,7 @@ build_busybox_from_source()
 	# we want CONFIG_PREFIX="${DESTDIR}"
 	sed -i "s|CONFIG_PREFIX=\"./_install\"|CONFIG_PREFIX=\"${DESTDIR}\"|g" .config
 
-	make
+	make -j "$(nproc)"
 	make install
 
 }
