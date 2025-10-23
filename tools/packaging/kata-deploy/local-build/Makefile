@@ -99,6 +99,10 @@ agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 BUSYBOX_CONF_FILE ?= busybox.nvidia.conf
+# Re-assign variable when debug is present in NVIDIA_GPU_STACK
+ifneq (,$(findstring debug,$(NVIDIA_GPU_STACK)))
+    BUSYBOX_CONF_FILE := busybox.debug.nvidia.conf
+endif
 busybox-tarball:
 	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
 
