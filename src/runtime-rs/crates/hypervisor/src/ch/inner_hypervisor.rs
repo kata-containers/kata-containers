@@ -17,6 +17,7 @@ use crate::VM_ROOTFS_DRIVER_BLK;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
+use ch_config::ch_api::cloud_hypervisor_vm_netdev_add_with_fds;
 use ch_config::{
     ch_api::{
         cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_resize,
@@ -230,7 +231,7 @@ impl CloudHypervisorInner {
             host_devices,
         };
 
-        let cfg = VmConfig::try_from(named_cfg)?;
+        let cfg = VmConfig::try_from(named_cfg.clone())?;
 
         let serialised = serde_json::to_string(&cfg)?;
 
@@ -245,6 +246,26 @@ impl CloudHypervisorInner {
 
         if let Some(detail) = response {
             debug!(sl!(), "vm boot response: {:?}", detail);
+        }
+
+        if let Some(network_devices) = named_cfg.network_devices {
+            let network_devices = network_devices.clone();
+            for net_dev in network_devices {
+                // info!(sl!(), "Adding network device {:?}", net_dev);
+                let vmfds = net_dev.fds.clone().unwrap_or_default();
+                info!(sl!(), "vmfds for netdev add: {:?}", vmfds);
+                info!(sl!(), "Adding network device {:?}", net_dev);
+                let response = cloud_hypervisor_vm_netdev_add_with_fds(
+                    socket.try_clone().context("failed to clone socket")?,
+                    net_dev,
+                    vmfds,
+                )
+                .await?;
+
+                if let Some(detail) = response {
+                    debug!(sl!(), "vm netdev add response: {:?}", detail);
+                }
+            }
         }
 
         let response =

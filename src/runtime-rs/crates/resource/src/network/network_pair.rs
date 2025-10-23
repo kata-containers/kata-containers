@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{convert::TryFrom, sync::Arc};
+use std::{convert::TryFrom, fs::File, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use futures::stream::TryStreamExt;
@@ -32,6 +32,7 @@ pub struct TapInterface {
     pub id: String,
     pub name: String,
     pub tap_iface: NetworkInterface,
+    pub vm_fds: Vec<File>,
 }
 #[derive(Debug)]
 pub struct NetworkPair {
@@ -53,7 +54,7 @@ impl NetworkPair {
         let model = network_model::new(model).context("new network model")?;
         let tap_iface_name = format!("tap{}{}", idx, TAP_SUFFIX);
         let virt_iface_name = format!("eth{}", idx);
-        let tap_link = create_link(handle, &tap_iface_name, queues)
+        let (tap_link, fds) = create_link(handle, &tap_iface_name, queues)
             .await
             .context("create link")?;
 
@@ -118,6 +119,7 @@ impl NetworkPair {
                     hard_addr: tap_hard_addr,
                     ..Default::default()
                 },
+                vm_fds: fds,
             },
             virt_iface: NetworkInterface {
                 name: virt_iface_name,
@@ -152,8 +154,8 @@ pub async fn create_link(
     handle: &rtnetlink::Handle,
     name: &str,
     queues: usize,
-) -> Result<Box<dyn link::Link>> {
-    link::create_link(name, link::LinkType::Tap, queues)?;
+) -> Result<(Box<dyn link::Link>, Vec<File>)> {
+    let fds = link::create_link(name, link::LinkType::Tap, queues)?;
 
     let link = get_link_by_name(handle, name)
         .await
@@ -172,7 +174,7 @@ pub async fn create_link(
             .await
             .context("set index")?;
     }
-    Ok(link)
+    Ok((link, fds))
 }
 
 pub async fn get_link_by_name(

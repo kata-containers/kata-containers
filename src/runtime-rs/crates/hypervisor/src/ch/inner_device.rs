@@ -434,7 +434,13 @@ impl CloudHypervisorInner {
                     shared_fs_devices.push(fs_cfg);
                 }
                 DeviceType::Network(net_device) => {
-                    let net_config = NetConfig::try_from(net_device.config)?;
+                    let net_config = NetConfig {
+                        num_queues: net_device.config.queue_num,
+                        queue_size: net_device.config.queue_size as u16,
+                        mac: MacAddr { bytes: net_device.config.guest_mac.unwrap().0 },
+                        fds: Some(net_device.config.vm_fds),
+                        ..Default::default()
+                    };
                     network_devices.push(net_config);
                 }
                 DeviceType::Vfio(vfio_device) => {
@@ -575,6 +581,7 @@ mod tests {
             allow_duplicate_mac: false,
             use_generic_irq: None,
             use_shared_irq: None,
+            vm_fds: vec![],
         };
 
         let net = NetConfig::try_from(cfg.clone());

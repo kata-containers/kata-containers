@@ -5,6 +5,7 @@
 //
 
 use std::io::{self, Error};
+use std::os::fd::AsRawFd;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -57,6 +58,13 @@ impl VethEndpoint {
             host_dev_name: iface.name.clone(),
             virt_iface_name: self.net_pair.virt_iface.name.clone(),
             guest_mac: Some(guest_mac),
+            vm_fds: self
+                .net_pair
+                .tap
+                .vm_fds
+                .iter()
+                .map(|f| f.as_raw_fd())
+                .collect(),
             ..Default::default()
         })
     }

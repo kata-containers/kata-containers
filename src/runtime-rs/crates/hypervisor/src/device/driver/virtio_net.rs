@@ -5,6 +5,7 @@
 //
 
 use std::fmt;
+use std::os::fd::RawFd;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -48,6 +49,8 @@ pub struct NetworkConfig {
     pub use_generic_irq: Option<bool>,
     /// Allow duplicate mac
     pub allow_duplicate_mac: bool,
+    /// Optional VM file descriptors for the tap/vhost devices
+    pub vm_fds: Vec<RawFd>,
 }
 
 #[derive(Clone, Debug, Default)]

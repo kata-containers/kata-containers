@@ -84,7 +84,7 @@ pub enum LinkType {
     Tap,
 }
 
-pub fn create_link(name: &str, link_type: LinkType, queues: usize) -> Result<()> {
+pub fn create_link(name: &str, link_type: LinkType, queues: usize) -> Result<Vec<File>> {
     let mut flags = libc::IFF_VNET_HDR;
     flags |= match link_type {
         LinkType::Tun => libc::IFF_TUN,
@@ -114,7 +114,7 @@ pub fn create_link(name: &str, link_type: LinkType, queues: usize) -> Result<()>
     }
 
     info!(sl!(), "create link with fds {:?}", files);
-    Ok(())
+    Ok(files)
 }
 
 fn create_queue(name: &str, flags: libc::c_int) -> Result<(File, String)> {
