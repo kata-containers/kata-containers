@@ -55,6 +55,6 @@ RUN ARCH=$(uname -m); \
         "s390x") goarch=${ARCH} ;; \
         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
     esac; \
-    curl -OL "https://storage.googleapis.com/golang/go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
+    curl -fsSOL "https://go.dev/dl/go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
     tar -C "${GO_HOME}" -xzf "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
     rm "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz"
