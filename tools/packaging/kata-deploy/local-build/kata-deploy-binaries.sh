@@ -595,7 +595,7 @@ install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu-confidential"
 }
 
@@ -604,7 +604,7 @@ install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_initrd "nvidia-gpu-confidential"
 }
 
