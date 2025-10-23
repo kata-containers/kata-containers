@@ -21,8 +21,7 @@ readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/bui
 script_dir="$(dirname "$(readlink -f "$0")")"
 readonly SCRIPT_DIR="${script_dir}/nvidia"
 
-# This will control how much output the inird/image will produce
-DEBUG=""
+DEBUG_ROOTFS="false"
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 AGENT_POLICY="${AGENT_POLICY:-no}"
 
@@ -235,7 +234,11 @@ chisseled_gpudirect() {
 
 chisseled_init() {
 	echo "nvidia: chisseling init"
-	tar --zstd -xvf "${BUILD_DIR}"/kata-static-busybox.tar.zst -C .
+	local busybox_tarball="kata-static-busybox.tar.zst"
+	if [[ "${DEBUG_ROOTFS}" == "true" ]]; then
+		busybox_tarball="kata-static-busybox-debug.tar.zst"
+	fi
+	tar --zstd -xvf "${BUILD_DIR}/${busybox_tarball}" -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
 		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
@@ -319,9 +322,9 @@ coco_guest_components() {
 	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
 }
 
-toggle_debug() {
+toggle_debug_rootfs() {
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<debug\>'; then
-		export DEBUG="true"
+		DEBUG_ROOTFS="true"
 	fi
 }
 
@@ -343,7 +346,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 	pushd "${stage_two}" >> /dev/null
 
-	toggle_debug
+	toggle_debug_rootfs
 	chisseled_init
 	chisseled_iptables
 
