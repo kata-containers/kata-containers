@@ -88,10 +88,12 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	chmod +x ./nvidia_chroot.sh
 
-	local appendix=""
-	if [[ "${rootfs_type}" == "confidential" ]]; then
-		appendix="-${rootfs_type}"
-	fi
+	#local appendix=""
+	#if [[ "${rootfs_type}" == "confidential" ]]; then
+#		appendix="-${rootfs_type}"
+	#fi
+
+	appendix="${rootfs_type:+"-${rootfs_type}"}"
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
     		appendix="-dragonball-experimental"
 	fi
