@@ -12,6 +12,10 @@ members = [
     "src/agent/policy",
     "src/agent/vsock-exporter",
 ]
+# TODO: Add all excluded crates to root workspace
+exclude = [
+    "src/tools",
+]
 
 [workspace.dependencies]
 oci-spec = { version = "0.8.1", features = ["runtime"] }
