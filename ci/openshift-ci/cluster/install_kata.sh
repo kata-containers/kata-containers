@@ -54,6 +54,9 @@ apply_kata_deploy() {
 	version=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq .tag_name | tr -d '"')
 	chart="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
 
+	# Ensure any potential leftover is cleaned up ... and this secret usually is not in case of previous failures
+	oc delete secret sh.helm.release.v1.kata-deploy.v1 -n kube-system || true
+
 	echo "Installing kata using helm ${chart} ${version}"
 	helm install kata-deploy --wait --namespace kube-system --set "image.reference=${KATA_DEPLOY_IMAGE%%:*},image.tag=${KATA_DEPLOY_IMAGE##*:}" "${chart}" --version "${version}"
 }
