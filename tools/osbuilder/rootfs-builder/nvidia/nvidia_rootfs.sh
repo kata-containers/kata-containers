@@ -319,12 +319,6 @@ coco_guest_components() {
 	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
 }
 
-toggle_debug() {
-	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<debug\>'; then
-		export DEBUG="true"
-	fi
-}
-
 setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
@@ -342,7 +336,6 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 	pushd "${stage_two}" >> /dev/null
 
-	toggle_debug
 	chisseled_init
 	chisseled_iptables
 
