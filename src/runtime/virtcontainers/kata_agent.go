@@ -1462,6 +1462,13 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	if isPauseContainer(ctrStorages) {
+		k.Logger().Debug("Normalizing pause container OCI spec for guest-embedded pause bundle")
+		if err := normalizePauseContainerSpec(grpcSpec); err != nil {
+			return nil, fmt.Errorf("normalizing pause container OCI spec: %w", err)
+		}
+	}
+
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
 		ExecId:       c.id,
@@ -1483,6 +1490,56 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 
 	return buildProcessFromExecID(req.ExecId)
+}
+
+func isPauseContainer(storages []*grpc.Storage) bool {
+	for _, s := range storages {
+		if s.Source == "pause" && s.Driver == "image_guest_pull" {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizePauseContainerSpec(spec *grpc.Spec) error {
+	capabilities := []string{
+		"CAP_CHOWN",
+		"CAP_DAC_OVERRIDE",
+		"CAP_FSETID",
+		"CAP_FOWNER",
+		"CAP_MKNOD",
+		"CAP_NET_RAW",
+		"CAP_SETGID",
+		"CAP_SETUID",
+		"CAP_SETFCAP",
+		"CAP_SETPCAP",
+		"CAP_NET_BIND_SERVICE",
+		"CAP_SYS_CHROOT",
+		"CAP_KILL",
+		"CAP_AUDIT_WRITE",
+	}
+	spec.Process = &grpc.Process{
+		User: &grpc.User{
+			UID:            65535,
+			GID:            65535,
+			AdditionalGids: []uint32{65535},
+		},
+		Args: []string{"/pause"},
+		Env: []string{
+			"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		},
+		Cwd: "/",
+		Capabilities: &grpc.LinuxCapabilities{
+			Bounding:  capabilities,
+			Effective: capabilities,
+			Permitted: capabilities,
+		},
+		NoNewPrivileges: true,
+		OOMScoreAdj:     -998,
+	}
+	spec.Root.Readonly = true
+
+	return nil
 }
 
 func buildProcessFromExecID(token string) (*Process, error) {
