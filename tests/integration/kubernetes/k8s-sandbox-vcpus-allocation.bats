@@ -21,7 +21,11 @@ setup() {
 
 	yaml_file="${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
 	set_node "$yaml_file" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+
+	# Add policy to yaml
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
 @test "Check the number vcpus are correctly allocated to the sandbox" {
@@ -56,4 +60,5 @@ teardown() {
 	done
 
 	teardown_common "${node}" "${node_start_time:-}"
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
