@@ -162,3 +162,41 @@ jobs:
         env:
           KATA_DEPLOY_IMAGE_TAGS: "kata-containers-latest"
           KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy-ci"
+
+  upload-helm-chart-tarball:
+    name: upload-helm-chart-tarball
+    needs: publish-manifest
+    runs-on: ubuntu-22.04
+    permissions:
+      packages: write # needed to push the helm chart to ghcr.io
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0
+        id: install
+
+      - name: Login to the OCI registries
+        env:
+          QUAY_DEPLOYER_USERNAME: ${{ vars.QUAY_DEPLOYER_USERNAME }}
+          QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          echo "${QUAY_DEPLOYER_PASSWORD}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
+          echo "${GITHUB_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+
+      - name: Push helm chart to the OCI registries
+        run: |
+          echo "Adjusting the Chart.yaml and values.yaml"
+          yq eval '.version = "0.0.0-dev" | .appVersion = "0.0.0-dev"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
+          yq eval '.image.reference = "quay.io/kata-containers/kata-deploy-ci" | .image.tag = "kata-containers-latest"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml
+
+          echo "Generating the chart package"
+          helm package tools/packaging/kata-deploy/helm-chart/kata-deploy
+
+          echo "Pushing the chart to the OCI registries"
+          helm push "kata-deploy-0.0.0-dev.tgz" oci://quay.io/kata-containers/kata-deploy-charts
+          helm push "kata-deploy-0.0.0-dev.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
