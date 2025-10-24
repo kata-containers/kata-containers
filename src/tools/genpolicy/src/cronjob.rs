@@ -104,7 +104,7 @@ impl yaml::K8sResource for CronJob {
             storages,
             container,
             settings,
-            &self.spec.jobTemplate.spec.template.spec.volumes,
+            &self.spec.jobTemplate.spec.template.spec,
         );
     }
 
