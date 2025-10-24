@@ -101,9 +101,7 @@ add_annotations_to_yaml() {
 
 add_cbl_mariner_specific_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and image path and annotations for cbl-mariner"
-		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
-		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
+		info "Add image path annotation for cbl-mariner"
 
 		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
 		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
@@ -113,7 +111,6 @@ add_cbl_mariner_specific_annotations() {
 
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_disable_image_nvdimm}" "${mariner_disable_image_nvdimm}"
 		done

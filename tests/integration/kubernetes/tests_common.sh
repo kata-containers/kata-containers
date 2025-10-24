@@ -125,25 +125,11 @@ adapt_common_policy_settings_for_non_coco() {
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
-# adapt common policy settings for CBL-Mariner Hosts
-adapt_common_policy_settings_for_cbl_mariner() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for KATA_HOST_OS=cbl-mariner"
-	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
 
 	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
-
-	case "${KATA_HOST_OS}" in
-		"cbl-mariner")
-			adapt_common_policy_settings_for_cbl_mariner "${settings_dir}"
-			;;
-	esac
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
