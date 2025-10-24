@@ -99,9 +99,18 @@ agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 BUSYBOX_CONF_FILE ?= busybox.nvidia.conf
-busybox-tarball: 
+BUSYBOX_TARBALL_NAME := busybox
+ifneq (,$(findstring debug,$(NVIDIA_GPU_STACK)))
+    BUSYBOX_CONF_FILE := busybox.debug.nvidia.conf
+    BUSYBOX_TARBALL_NAME := busybox-debug
+endif
+
+busybox-tarball:
 	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
-	
+ifneq (,$(findstring debug,$(NVIDIA_GPU_STACK)))
+	@mv $(MK_DIR)/build/kata-static-busybox.tar.zst $(MK_DIR)/build/kata-static-$(BUSYBOX_TARBALL_NAME).tar.zst
+endif
+
 coco-guest-components-tarball:
 	${MAKE} $@-build
 
