@@ -128,7 +128,7 @@ function create_cluster() {
 		--node-count 1 \
 		--generate-ssh-keys \
 		--tags "${tags[@]}" \
-		$([[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
+		$([[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && echo "--os-sku AzureLinux --workload-runtime KataVmIsolation")
 }
 
 function install_bats() {
