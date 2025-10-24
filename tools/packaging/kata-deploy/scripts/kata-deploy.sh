@@ -225,7 +225,7 @@ function is_containerd_capable_of_using_drop_in_files() {
 		echo "false"
 		return
 	fi
- 
+
 	local version_major=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | cut -d'.' -f1)
 	if [ $version_major -lt 2 ]; then
 		# Only containerd 2.0 does the merge of the plugins section from different snippets,
@@ -462,6 +462,13 @@ function install_artifacts() {
 			esac
 		fi
 
+		# TODO: this is a temporary change aiming to facilitate execution of CC-enabled GPU workloads in CI
+		# Next steps are to disable filesystem sharing and to use nydus guest pull for this handler.
+		# This will require adjustments to the pod manifest and deployment configuration.
+		if [[ "${shim}" == "qemu-nvidia-gpu-snp" ]]; then
+			sed -i -e 's/^shared_fs = "none"/shared_fs = "virtio-9p"/' "${kata_config_file}"
+		fi
+
 		if [ "${dest_dir}" != "${default_dest_dir}" ]; then
 			hypervisor="${shim}"
 			[[ "${shim}" == "qemu"* ]] && hypervisor="qemu"
@@ -659,7 +666,14 @@ function configure_containerd_runtime() {
 	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${configuration_file}
 	tomlq -i -t $(printf '%s.runtime_path=%s' ${runtime_table} ${runtime_path}) ${configuration_file}
 	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${configuration_file}
-	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+
+	# Add CDI annotation for NVIDIA GPU SNP runtime class
+	if [[ "${shim}" == *"nvidia-gpu-snp"* ]]; then
+		tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*","cdi.k8s.io/*"]' ${runtime_table}) ${configuration_file}
+	else
+		tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+	fi
+
 	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${configuration_file}
 
 	if [ "${DEBUG}" == "true" ]; then
@@ -925,7 +939,7 @@ function install_nydus_snapshotter() {
 
 	local config_guest_pulling="/opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml"
 	local nydus_snapshotter_service="/opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service"
-	
+
 	# Adjust the paths for the config-guest-pulling.toml and nydus-snapshotter.service
 	sed -i -e "s|@SNAPSHOTTER_ROOT_DIR@|/var/lib/${nydus_snapshotter}|g" "${config_guest_pulling}"
 	sed -i -e "s|@SNAPSHOTTER_GRPC_SOCKET_ADDRESS@|/run/${nydus_snapshotter}/containerd-nydus-grpc.sock|g" "${config_guest_pulling}"
@@ -952,7 +966,7 @@ function uninstall_nydus_snapshotter() {
 	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
 		nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
 	fi
-	
+
 	host_systemctl disable --now "${nydus_snapshotter}.service"
 
 	rm -f "/host/etc/systemd/system/${nydus_snapshotter}.service"
