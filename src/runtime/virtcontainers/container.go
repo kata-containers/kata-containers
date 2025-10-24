@@ -1095,7 +1095,13 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) {
 	for _, sibling := range siblings {
 		if sibling.Path == devPath {
-			vfioNum := filepath.Base(devPath)
+			// We have here either /dev/vfio/<num> or /dev/vfio/devices/vfio<num>
+			baseName := filepath.Base(devPath)
+			vfioNum := baseName
+			// For IOMMUFD format /dev/vfio/devices/vfio<num>, strip "vfio" prefix
+			if strings.HasPrefix(baseName, "vfio") {
+				vfioNum = strings.TrimPrefix(baseName, "vfio")
+			}
 			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
 			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
 			if c.config.CustomSpec.Annotations == nil {
