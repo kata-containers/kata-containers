@@ -21,7 +21,7 @@ setup() {
 	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	kubectl wait --for=condition=Ready --timeout=100s pod "$pod_name"
 
 	# Check if OOMKilled
     container_name=$(kubectl get pod "$pod_name" -o jsonpath='{.status.containerStatuses[0].name}')

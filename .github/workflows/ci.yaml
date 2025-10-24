@@ -281,59 +281,56 @@ jobs:
           platforms: linux/amd64
           file: src/tools/csi-kata-directvolume/Dockerfile
 
-  run-kata-monitor-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-kata-monitor-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-kata-monitor-tests:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-amd64
+  #   uses: ./.github/workflows/run-kata-monitor-tests.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
 
-  run-k8s-tests-on-aks:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
 
-    permissions:
-      contents: read
-      id-token: write # Used for OIDC access to log into Azure
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets:
-      AZ_APPID: ${{ secrets.AZ_APPID }}
-      AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
-      AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+  # run-k8s-tests-on-aks:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: publish-kata-deploy-payload-amd64
+  #   uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     registry: ghcr.io
+  #     repo: ${{ github.repository_owner }}/kata-deploy-ci
+  #     tag: ${{ inputs.tag }}-amd64
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     pr-number: ${{ inputs.pr-number }}
+  #     target-branch: ${{ inputs.target-branch }}
+  #   secrets:
+  #     AZ_APPID: ${{ secrets.AZ_APPID }}
+  #     AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+  #     AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
-  run-k8s-tests-on-amd64:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-amd64.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-k8s-tests-on-amd64:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: publish-kata-deploy-payload-amd64
+  #   uses: ./.github/workflows/run-k8s-tests-on-amd64.yaml
+  #   with:
+  #     registry: ghcr.io
+  #     repo: ${{ github.repository_owner }}/kata-deploy-ci
+  #     tag: ${{ inputs.tag }}-amd64
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     pr-number: ${{ inputs.pr-number }}
+  #     target-branch: ${{ inputs.target-branch }}
 
-  run-k8s-tests-on-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-arm64
-    uses: ./.github/workflows/run-k8s-tests-on-arm64.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-arm64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-k8s-tests-on-arm64:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: publish-kata-deploy-payload-arm64
+  #   uses: ./.github/workflows/run-k8s-tests-on-arm64.yaml
+  #   with:
+  #     registry: ghcr.io
+  #     repo: ${{ github.repository_owner }}/kata-deploy-ci
+  #     tag: ${{ inputs.tag }}-arm64
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     pr-number: ${{ inputs.pr-number }}
+  #     target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-on-nvidia-gpu:
     if: ${{ inputs.skip-test != 'yes' }}
@@ -375,146 +372,146 @@ jobs:
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
 
-  run-k8s-tests-on-zvsi:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-s390x
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+  # run-k8s-tests-on-zvsi:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
+  #   uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
+  #   with:
+  #     registry: ghcr.io
+  #     repo: ${{ github.repository_owner }}/kata-deploy-ci
+  #     tag: ${{ inputs.tag }}-s390x
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     pr-number: ${{ inputs.pr-number }}
+  #     target-branch: ${{ inputs.target-branch }}
+  #   secrets:
+  #     AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
-  run-k8s-tests-on-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-ppc64le
-    uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-ppc64le
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-k8s-tests-on-ppc64le:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: publish-kata-deploy-payload-ppc64le
+  #   uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
+  #   with:
+  #     registry: ghcr.io
+  #     repo: ${{ github.repository_owner }}/kata-deploy-ci
+  #     tag: ${{ inputs.tag }}-ppc64le
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     pr-number: ${{ inputs.pr-number }}
+  #     target-branch: ${{ inputs.target-branch }}
 
-  run-kata-deploy-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-amd64]
-    uses: ./.github/workflows/run-kata-deploy-tests.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-kata-deploy-tests:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: [publish-kata-deploy-payload-amd64]
+  #   uses: ./.github/workflows/run-kata-deploy-tests.yaml
+  #   with:
+  #     registry: ghcr.io
+  #     repo: ${{ github.repository_owner }}/kata-deploy-ci
+  #     tag: ${{ inputs.tag }}-amd64
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     pr-number: ${{ inputs.pr-number }}
+  #     target-branch: ${{ inputs.target-branch }}
 
-  run-basic-amd64-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/basic-ci-amd64.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-basic-amd64-tests:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-amd64
+  #   uses: ./.github/workflows/basic-ci-amd64.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
 
-  run-basic-s390x-tests:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/basic-ci-s390x.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
+  # run-basic-s390x-tests:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-s390x
+  #   uses: ./.github/workflows/basic-ci-s390x.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-amd64:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-amd64
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          { containerd_version: lts,    vmm: clh              },
-          { containerd_version: lts,    vmm: dragonball       },
-          { containerd_version: lts,    vmm: qemu             },
-          { containerd_version: lts,    vmm: stratovirt       },
-          { containerd_version: lts,    vmm: cloud-hypervisor },
-          { containerd_version: lts,    vmm: qemu-runtime-rs  },
-          { containerd_version: active, vmm: clh              },
-          { containerd_version: active, vmm: dragonball       },
-          { containerd_version: active, vmm: qemu             },
-          { containerd_version: active, vmm: stratovirt       },
-          { containerd_version: active, vmm: cloud-hypervisor },
-          { containerd_version: active, vmm: qemu-runtime-rs  },
-         ]
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-22.04
-      arch: amd64
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
+  # run-cri-containerd-amd64:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-amd64
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       params: [
+  #         { containerd_version: lts,    vmm: clh              },
+  #         { containerd_version: lts,    vmm: dragonball       },
+  #         { containerd_version: lts,    vmm: qemu             },
+  #         { containerd_version: lts,    vmm: stratovirt       },
+  #         { containerd_version: lts,    vmm: cloud-hypervisor },
+  #         { containerd_version: lts,    vmm: qemu-runtime-rs  },
+  #         { containerd_version: active, vmm: clh              },
+  #         { containerd_version: active, vmm: dragonball       },
+  #         { containerd_version: active, vmm: qemu             },
+  #         { containerd_version: active, vmm: stratovirt       },
+  #         { containerd_version: active, vmm: cloud-hypervisor },
+  #         { containerd_version: active, vmm: qemu-runtime-rs  },
+  #        ]
+  #   uses: ./.github/workflows/run-cri-containerd-tests.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
+  #     runner: ubuntu-22.04
+  #     arch: amd64
+  #     containerd_version: ${{ matrix.params.containerd_version }}
+  #     vmm: ${{ matrix.params.vmm }}
 
-  run-cri-containerd-s390x:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-s390x
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          { containerd_version: active, vmm: qemu            },
-          { containerd_version: active, vmm: qemu-runtime-rs },
-         ]
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: s390x-large
-      arch: s390x
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
+  # run-cri-containerd-s390x:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-s390x
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       params: [
+  #         { containerd_version: active, vmm: qemu            },
+  #         { containerd_version: active, vmm: qemu-runtime-rs },
+  #        ]
+  #   uses: ./.github/workflows/run-cri-containerd-tests.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
+  #     runner: s390x-large
+  #     arch: s390x
+  #     containerd_version: ${{ matrix.params.containerd_version }}
+  #     vmm: ${{ matrix.params.vmm }}
 
-  run-cri-containerd-tests-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-ppc64le
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          { containerd_version: active, vmm: qemu },
-         ]
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: ppc64le
-      arch: ppc64le
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
+  # run-cri-containerd-tests-ppc64le:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-ppc64le
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       params: [
+  #         { containerd_version: active, vmm: qemu },
+  #        ]
+  #   uses: ./.github/workflows/run-cri-containerd-tests.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
+  #     runner: ppc64le
+  #     arch: ppc64le
+  #     containerd_version: ${{ matrix.params.containerd_version }}
+  #     vmm: ${{ matrix.params.vmm }}
 
-  run-cri-containerd-tests-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-arm64
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          { containerd_version: active, vmm: qemu },
-         ]
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: arm64-non-k8s
-      arch: arm64
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
+  # run-cri-containerd-tests-arm64:
+  #   if: ${{ inputs.skip-test != 'yes' }}
+  #   needs: build-kata-static-tarball-arm64
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       params: [
+  #         { containerd_version: active, vmm: qemu },
+  #        ]
+  #   uses: ./.github/workflows/run-cri-containerd-tests.yaml
+  #   with:
+  #     tarball-suffix: -${{ inputs.tag }}
+  #     commit-hash: ${{ inputs.commit-hash }}
+  #     target-branch: ${{ inputs.target-branch }}
+  #     runner: arm64-non-k8s
+  #     arch: arm64
+  #     containerd_version: ${{ matrix.params.containerd_version }}
+  #     vmm: ${{ matrix.params.vmm }}

@@ -125,6 +125,7 @@ impl AgentPolicy {
 
     /// Ask regorus if an API call should be allowed or not.
     pub async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+        info!(sl!(), "policy check: {ep}, request: {ep_input}");
         debug!(sl!(), "policy check: {ep}");
         self.log_eval_input(ep, ep_input).await;
 
@@ -194,6 +195,7 @@ impl AgentPolicy {
 
     /// Replace the Policy in regorus.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
+        info!(sl!(), "DEBUG: set_policy: {}", policy);
         self.engine = Self::new_engine();
         self.engine
             .add_policy("agent_policy".to_string(), policy.to_string())?;

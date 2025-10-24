@@ -35,7 +35,8 @@ info() {
 
 DEBUG="${DEBUG:-"false"}"
 
-SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"}"
+SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca qemu-runtime-rs-coco-dev"}"
+
 IFS=' ' read -a shims <<< "$SHIMS"
 DEFAULT_SHIM="${DEFAULT_SHIM:-"qemu"}"
 default_shim="$DEFAULT_SHIM"
@@ -225,7 +226,7 @@ function is_containerd_capable_of_using_drop_in_files() {
 		echo "false"
 		return
 	fi
- 
+
 	local version_major=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | cut -d'.' -f1)
 	if [ $version_major -lt 2 ]; then
 		# Only containerd 2.0 does the merge of the plugins section from different snippets,
@@ -270,7 +271,7 @@ function get_kata_containers_config_path() {
 	# Map the runtime shim name to the appropriate configuration
 	# file directory.
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-runtime-rs-coco-dev | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
 		*) config_path="$golang_config_path" ;;
 	esac
 
@@ -282,7 +283,7 @@ function get_kata_containers_runtime_path() {
 
 	local runtime_path
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs)
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-runtime-rs-coco-dev | qemu-se-runtime-rs)
 			runtime_path="${dest_dir}/runtime-rs/bin/containerd-shim-kata-v2"
 			;;
 		*)

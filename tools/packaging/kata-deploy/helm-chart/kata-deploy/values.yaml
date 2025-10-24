@@ -13,7 +13,7 @@ k8sDistribution: "k8s"
 nodeSelector: {}
 env:
   debug: "false"
-  shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"
+  shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca qemu-runtime-rs-coco-dev "
   defaultShim: "qemu"
   createRuntimeClasses: "true"
   createDefaultRuntimeClass: "false"
