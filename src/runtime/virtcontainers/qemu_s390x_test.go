@@ -149,7 +149,7 @@ func TestQemuS390xAppendProtectionDevice(t *testing.T) {
 
 	// CCA protection
 	s390x.(*qemuS390x).protection = ccaProtection
-	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "", []byte(nil))
 	assert.Error(err)
 	assert.Empty(bios)
 
