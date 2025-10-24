@@ -34,7 +34,7 @@ jobs:
           - qemu
         k8s:
           - kubeadm
-    runs-on: k8s-ppc64le
+    runs-on: ppc64le-k8s
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -63,11 +63,11 @@ jobs:
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
 
-      - name: Prepare the runner for k8s cluster creation
-        run: bash "${HOME}/scripts/k8s_cluster_cleanup.sh"
+      - name: Prepare the runner for k8s test suite
+        run: bash "${HOME}/scripts/k8s_cluster_prepare.sh"
 
-      - name: Create k8s cluster using kubeadm
-        run: bash "${HOME}/scripts/k8s_cluster_create.sh"
+      - name: Check if cluster is healthy to run the tests
+        run: bash "${HOME}/scripts/k8s_cluster_check.sh"
 
       - name: Deploy Kata
         timeout-minutes: 10
@@ -76,6 +76,3 @@ jobs:
       - name: Run tests
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
-
-      - name: Delete cluster and post cleanup actions
-        run: bash "${HOME}/scripts/k8s_cluster_cleanup.sh"

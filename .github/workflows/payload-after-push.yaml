@@ -131,7 +131,7 @@ jobs:
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-ppc64le
       target-branch: ${{ github.ref_name }}
-      runner: ppc64le
+      runner: ppc64le-small
       arch: ppc64le
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}

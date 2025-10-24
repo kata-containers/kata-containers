@@ -19,10 +19,11 @@ self-hosted-runner:
     - garm-ubuntu-2304
     - garm-ubuntu-2304-smaller
     - garm-ubuntu-2204-smaller
-    - k8s-ppc64le
+    - ppc64le
+    - ppc64le-k8s
+    - ppc64le-small
     - ubuntu-24.04-ppc64le
     - metrics
-    - ppc64le
     - riscv-builder
     - sev-snp
     - s390x
