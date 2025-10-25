@@ -1,10 +1,8 @@
 [
   {
-    "description": "sysctls listed in yaml or settings",
     "allowed": true,
-    "state": {
-      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
-    },
+    "description": "sysctls listed in yaml or settings",
+    "kind": "CreateContainerRequest",
     "request": {
       "OCI": {
         "Annotations": {
@@ -85,9 +83,9 @@
           "RootfsPropagation": "",
           "Seccomp": null,
           "Sysctl": {
+            "net.ipv4.ip_forward": "1",
             "net.ipv4.ip_unprivileged_port_start": "0",
-            "net.ipv4.ping_group_range": "0 2147483647",
-            "net.ipv4.ip_forward": "1"
+            "net.ipv4.ping_group_range": "0 2147483647"
           },
           "UIDMappings": []
         },
@@ -275,14 +273,14 @@
       ],
       "string_user": null
     },
-    "kind": "CreateContainerRequest"
+    "state": {
+      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
+    }
   },
   {
-    "description": "sysctl not listed in yaml or settings",
     "allowed": false,
-    "state": {
-      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
-    },
+    "description": "sysctl not listed in yaml or settings",
+    "kind": "CreateContainerRequest",
     "request": {
       "OCI": {
         "Annotations": {
@@ -363,9 +361,9 @@
           "RootfsPropagation": "",
           "Seccomp": null,
           "Sysctl": {
+            "net.ipv4.conf.all.src_valid_mark": "1",
             "net.ipv4.ip_unprivileged_port_start": "0",
-            "net.ipv4.ping_group_range": "0 2147483647",
-            "net.ipv4.conf.all.src_valid_mark": "1"
+            "net.ipv4.ping_group_range": "0 2147483647"
           },
           "UIDMappings": []
         },
@@ -553,6 +551,8 @@
       ],
       "string_user": null
     },
-    "kind": "CreateContainerRequest"
+    "state": {
+      "sandbox_name": "policy-redis-deployment-6674f9448-xjrzf"
+    }
   }
 ]
