@@ -99,9 +99,9 @@ agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 BUSYBOX_CONF_FILE ?= busybox.nvidia.conf
-busybox-tarball: 
+busybox-tarball:
 	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
-	
+
 coco-guest-components-tarball:
 	${MAKE} $@-build
 
