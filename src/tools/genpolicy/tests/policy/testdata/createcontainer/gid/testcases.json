@@ -1,7 +1,8 @@
 [
   {
-    "description": "image with unusual group setup, see https://github.com/burgerdev/weird-images/tree/74b32e2/src/gid",
     "allowed": true,
+    "description": "image with unusual group setup, see https://github.com/burgerdev/weird-images/tree/74b32e2/src/gid",
+    "kind": "CreateContainerRequest",
     "request": {
       "OCI": {
         "Annotations": {
@@ -329,12 +330,12 @@
         }
       ],
       "string_user": null
-    },
-    "kind": "CreateContainerRequest"
+    }
   },
   {
-    "description": "image with unusual group setup, but bad additional group",
     "allowed": false,
+    "description": "image with unusual group setup, but bad additional group",
+    "kind": "CreateContainerRequest",
     "request": {
       "OCI": {
         "Annotations": {
@@ -662,7 +663,6 @@
         }
       ],
       "string_user": null
-    },
-    "kind": "CreateContainerRequest"
+    }
   }
 ]

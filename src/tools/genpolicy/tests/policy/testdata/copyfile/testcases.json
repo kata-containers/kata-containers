@@ -1,74 +1,74 @@
 [
   {
-    "description": "copy initiated by k8s mount",
     "allowed": true,
+    "description": "copy initiated by k8s mount",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-resolv.conf"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "a dirname can have trailing dots",
     "allowed": true,
+    "description": "a dirname can have trailing dots",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo../bar"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "attempt to copy outside of container root",
     "allowed": false,
+    "description": "attempt to copy outside of container root",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/etc/ssl/cert.pem"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "attempt to write into container root",
     "allowed": false,
+    "description": "attempt to write into container root",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "attempt to write into container root - guest pull",
     "allowed": false,
+    "description": "attempt to write into container root - guest pull",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/run/kata-containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc/rootfs/bin/sh"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "attempted directory traversal",
     "allowed": false,
+    "description": "attempted directory traversal",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/../../../../../etc/ssl/cert.pem"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "attempted directory traversal - parent directory",
     "allowed": false,
+    "description": "attempted directory traversal - parent directory",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "/run/kata-containers/shared/containers/81e5f43bc8599c5661e66f959ac28df5bfb30da23c5d583f2dcc6f9e0c5186dc-ce23cfeb91e75aaa-foo/.."
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "relative path",
     "allowed": false,
+    "description": "relative path",
+    "kind": "CopyFileRequest",
     "request": {
       "path": "etc/ssl/cert.pem"
-    },
-    "kind": "CopyFileRequest"
+    }
   },
   {
-    "description": "relative path - parent directory",
     "allowed": false,
+    "description": "relative path - parent directory",
+    "kind": "CopyFileRequest",
     "request": {
       "path": ".."
-    },
-    "kind": "CopyFileRequest"
+    }
   }
 ]

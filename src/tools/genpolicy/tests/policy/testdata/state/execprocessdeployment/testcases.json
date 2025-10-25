@@ -2,6 +2,7 @@
   {
     "allowed": true,
     "description": "create container request for deployment's only container",
+    "kind": "CreateContainerRequest",
     "request": {
       "OCI": {
         "Annotations": {
@@ -330,12 +331,12 @@
         }
       ],
       "string_user": null
-    },
-    "kind": "CreateContainerRequest"
+    }
   },
   {
     "allowed": true,
     "description": "test exec process in deployment's container with correct args",
+    "kind": "ExecProcessRequest",
     "request": {
       "container_id": "de22f4859da69a058e9d7f162d8e27244919c24d3ff2262e46cf56f695a34b5d",
       "exec_id": "cc5d171e-57fa-4b0d-995c-af55301e92e9",
@@ -377,7 +378,6 @@
       "stdin_port": 0,
       "stdout_port": 0,
       "string_user": null
-    },
-    "kind": "ExecProcessRequest"
+    }
   }
 ]
