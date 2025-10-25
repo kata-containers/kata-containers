@@ -100,6 +100,27 @@ pub trait ConfigObjectOps {
     }
 }
 
+/// Factory is a structure to set the VM factory configuration.
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct Factory {
+    /// Specifies the path of template.
+    #[serde(default)]
+    pub template_path: String,
+    /// template enables VM templating support in VM factory.
+    #[serde(default)]
+    pub template: bool,
+}
+
+impl Factory {
+    /// Creates a new Factory instance.
+    pub fn new(template: bool, template_path: String) -> Self {
+        Factory {
+            template,
+            template_path,
+        }
+    }
+}
+
 /// Kata configuration information.
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct TomlConfig {
@@ -112,6 +133,9 @@ pub struct TomlConfig {
     /// Kata runtime configuration information.
     #[serde(default)]
     pub runtime: Runtime,
+    /// Factory configuration information.
+    #[serde(default)]
+    pub factory: Factory,
 }
 
 macro_rules! mem_agent_kv_insert {

@@ -51,6 +51,9 @@ pub mod initdata;
 /// rootless vmm
 pub mod rootless;
 
+/// machine type
+pub mod machine_type;
+
 use std::path::Path;
 
 use crate::rootless::{is_rootless, rootless_dir};
