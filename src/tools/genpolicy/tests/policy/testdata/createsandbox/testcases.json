@@ -3,34 +3,38 @@
     "description": "no pidns",
     "allowed": true,
     "request": {
-      "type": "CreateSandbox",
       "sandbox_pidns": false
-    }
+    },
+    "kind": "CreateSandbox"
   },
   {
     "description": "pidns",
     "allowed": false,
     "request": {
-      "type": "CreateSandbox",
       "sandbox_pidns": true
-    }
+    },
+    "kind": "CreateSandbox"
   },
   {
     "description": "kernel modules",
     "allowed": false,
     "request": {
-      "type": "CreateSandbox",
       "sandbox_pidns": false,
-      "kernel_modules": [{"name": "evil.ko"}]
-    }
+      "kernel_modules": [
+        {
+          "name": "evil.ko"
+        }
+      ]
+    },
+    "kind": "CreateSandbox"
   },
   {
     "description": "guest hooks",
     "allowed": false,
     "request": {
-      "type": "CreateSandbox",
       "sandbox_pidns": false,
       "guest_hook_path": "/attacker/controlled/path"
-    }
+    },
+    "kind": "CreateSandbox"
   }
 ]
