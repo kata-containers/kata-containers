@@ -228,6 +228,7 @@
     },
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
+        "spath": "/run/kata-containers/sandbox/storage",
         "root_path": "/run/kata-containers/$(bundle-id)/rootfs",
         "sfprefix": "^$(cpath)/(watchable/)?$(bundle-id)-[a-z0-9]{16}-",
         "ip_p": "[0-9]{1,5}",
@@ -293,7 +294,18 @@
             "CAP_BPF",
             "CAP_CHECKPOINT_RESTORE"
         ],
-        "image_layer_verification" : "none"
+        "image_layer_verification" : "none",
+        "storage_classes": {
+            "csi-kata-directvolume-sc": {
+                "driver": "blk",
+                "driver_options": [
+                    "confidential=true",
+                    "ephemeral=true"
+                ],
+                "fs_type": "ext4",
+                "options": []
+            }
+        }
     },
     "kata_config": {
         "oci_version": "1.1.0",
