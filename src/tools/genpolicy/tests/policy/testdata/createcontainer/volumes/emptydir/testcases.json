@@ -3,7 +3,6 @@
     "description": "volumeMount: valid mount structure",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -210,13 +209,13 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid source",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -403,13 +402,13 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: valid mount destination(s)",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -606,13 +605,13 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid mount format",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -793,13 +792,13 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid mount destination(s) - duplicate",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -950,13 +949,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid mount destination(s) - mismatch",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -1107,13 +1106,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid mount - more mounts than allowed",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -1340,13 +1339,13 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid options",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -1533,13 +1532,13 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "volumeMount: invalid fstype",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -1726,6 +1725,7 @@
           "source": "local"
         }
       ]
-    }
+    },
+    "kind": "CreateContainerRequest"
   }
 ]

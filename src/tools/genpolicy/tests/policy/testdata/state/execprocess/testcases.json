@@ -3,7 +3,6 @@
     "description": "create container request for first container",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
@@ -300,13 +299,13 @@
       "shared_mounts": [],
       "storages": [],
       "string_user": null
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "create container request for second container",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
@@ -603,13 +602,13 @@
       "shared_mounts": [],
       "storages": [],
       "string_user": null
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "test exec process in first container with correct args",
     "allowed": true,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": null,
@@ -638,13 +637,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with incorrect args",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": null,
@@ -673,13 +672,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with Terminal=true",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b300",
       "string_user": null,
@@ -708,13 +707,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with non-empty capabilities",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b302",
       "string_user": null,
@@ -751,13 +750,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with different Cwd",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b303",
       "string_user": null,
@@ -786,13 +785,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with NoNewPrivileges=true",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b304",
       "string_user": null,
@@ -821,13 +820,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with non-null/different User",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b305",
       "string_user": null,
@@ -854,13 +853,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with additional environment variables",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b306",
       "string_user": null,
@@ -891,13 +890,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with multi-arg command",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b308",
       "string_user": null,
@@ -926,13 +925,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with non-null selinuxLabel",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": null,
@@ -954,13 +953,13 @@
         "SelinuxLabel": "system_u:system_r:container_t",
         "ApparmorProfile": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with random ApparmorProfile",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": null,
@@ -982,13 +981,13 @@
         "SelinuxLabel": "",
         "ApparmorProfile": "localhost/root-user"
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in first container with random string_user",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": {
@@ -1014,13 +1013,13 @@
         "SelinuxLabel": "",
         "ApparmorProfile": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process in second container with first container args",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": null,
@@ -1049,13 +1048,13 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "test exec process with invalid container_id",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "1070be4405d02db09ddaa02b73c0670f5fe5511d5efb45608da2366074dc4e08",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b24f",
       "string_user": null,
@@ -1084,22 +1083,22 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   },
   {
     "description": "remove first container",
     "allowed": true,
     "request": {
-      "type": "RemoveContainer",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "timeout": 0
-    }
+    },
+    "kind": "RemoveContainerRequest"
   },
   {
     "description": "test exec process fail for first container",
     "allowed": false,
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "string_user": null,
@@ -1128,6 +1127,7 @@
         "OOMScoreAdj": 0,
         "SelinuxLabel": ""
       }
-    }
+    },
+    "kind": "ExecProcessRequest"
   }
 ]

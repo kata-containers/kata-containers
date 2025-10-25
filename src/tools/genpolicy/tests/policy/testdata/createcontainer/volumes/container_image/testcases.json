@@ -3,7 +3,6 @@
     "description": "CreateContainer with a container image having volumes",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -122,6 +121,7 @@
         ]
       },
       "storages": []
-    }
+    },
+    "kind": "CreateContainerRequest"
   }
 ]

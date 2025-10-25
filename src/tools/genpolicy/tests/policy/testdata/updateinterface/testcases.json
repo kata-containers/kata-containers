@@ -2,8 +2,8 @@
   {
     "description": "no flags",
     "allowed": true,
+    "kind": "UpdateInterfaceRequest",
     "request": {
-      "type": "UpdateInterface",
       "interface": {
           "device": "eth0",
           "name": "eth0",
@@ -22,8 +22,8 @@
   {
     "description": "allowed arp flag",
     "allowed": true,
+    "kind": "UpdateInterfaceRequest",
     "request": {
-      "type": "UpdateInterface",
       "interface": {
           "device": "eth0",
           "name": "eth0",
@@ -42,8 +42,8 @@
   {
     "description": "forbidden flag",
     "allowed": false,
+    "kind": "UpdateInterfaceRequest",
     "request": {
-      "type": "UpdateInterface",
       "interface": {
           "device": "eth0",
           "name": "eth0",
@@ -62,8 +62,8 @@
   {
     "description": "forbidden name",
     "allowed": false,
+    "kind": "UpdateInterfaceRequest",
     "request": {
-      "type": "UpdateInterface",
       "interface": {
           "device": "eth0",
           "name": "lo",
@@ -82,8 +82,8 @@
   {
     "description": "forbidden hwAddr",
     "allowed": false,
+    "kind": "UpdateInterfaceRequest",
     "request": {
-      "type": "UpdateInterface",
       "interface": {
           "device": "eth0",
           "name": "eth0",
