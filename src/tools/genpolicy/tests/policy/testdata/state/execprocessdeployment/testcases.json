@@ -329,9 +329,9 @@
           "source": "quay.io/prometheus/busybox:latest"
         }
       ],
-      "string_user": null,
-      "type": "CreateContainer"
-    }
+      "string_user": null
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "allowed": true,
@@ -376,8 +376,8 @@
       "stderr_port": 0,
       "stdin_port": 0,
       "stdout_port": 0,
-      "string_user": null,
-      "type": "ExecProcess"
-    }
+      "string_user": null
+    },
+    "kind": "ExecProcessRequest"
   }
 ]

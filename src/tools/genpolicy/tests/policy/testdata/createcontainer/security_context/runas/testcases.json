@@ -2,8 +2,8 @@
     {
         "description": "Correct User for security context",
         "allowed": true,
+        "kind": "CreateContainerRequest",
         "request": {
-            "type": "CreateContainer",
             "OCI": {
                 "Annotations": {
                     "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4",
@@ -250,8 +250,8 @@
     {
         "description": "Correct user for security context: pod_container",
         "allowed": true,
+        "kind": "CreateContainerRequest",
         "request": {
-            "type": "CreateContainer",
             "OCI": {
                 "Annotations": {
                     "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/dummy",
@@ -583,8 +583,8 @@
     {
         "description": "Incorrect User.UID for security context",
         "allowed": false,
+        "kind": "CreateContainerRequest",
         "request": {
-            "type": "CreateContainer",
             "OCI": {
                 "Annotations": {
                     "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4",
@@ -831,8 +831,8 @@
     {
         "description": "Incorrect User.GID for security context",
         "allowed": false,
+        "kind": "CreateContainerRequest",
         "request": {
-            "type": "CreateContainer",
             "OCI": {
                 "Annotations": {
                     "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/a10abe57d2a2e47c30d5bd2427170e019fddc587a59d173544d87842f1905da4",

@@ -3,7 +3,6 @@
     "description": "one network namespace",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -133,13 +132,13 @@
           "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "same network namespace",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -269,13 +268,13 @@
           "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "no network namespace",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -401,13 +400,13 @@
           "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "different network namespace",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -537,6 +536,7 @@
           "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   }
 ]

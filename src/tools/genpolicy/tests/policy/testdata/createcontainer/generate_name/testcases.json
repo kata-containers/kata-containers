@@ -3,7 +3,6 @@
     "description": "generated name with valid prefix (dummysfx)",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -133,13 +132,13 @@
           "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "generated name with invalid prefix (xyzdummy)",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -269,6 +268,7 @@
           "Path": "/run/kata-containers/bundle-id/rootfs"
         }
       }
-    }
+    },
+    "kind": "CreateContainerRequest"
   }
 ]

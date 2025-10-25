@@ -3,7 +3,6 @@
     "description": "image with unusual group setup, see https://github.com/burgerdev/weird-images/tree/74b32e2/src/gid",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gid",
@@ -330,13 +329,13 @@
         }
       ],
       "string_user": null
-    }
+    },
+    "kind": "CreateContainerRequest"
   },
   {
     "description": "image with unusual group setup, but bad additional group",
     "allowed": false,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gid",
@@ -663,6 +662,7 @@
         }
       ],
       "string_user": null
-    }
+    },
+    "kind": "CreateContainerRequest"
   }
 ]

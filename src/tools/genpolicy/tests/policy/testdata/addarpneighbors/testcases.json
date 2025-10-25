@@ -3,7 +3,6 @@
     "description": "compliant neighbors",
     "allowed": true,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -19,13 +18,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   },
   {
     "description": "allowed flags: NTF_PROXY",
     "allowed": true,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -41,13 +40,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   },
   {
     "description": "allowed flags: NTF_ROUTER",
     "allowed": true,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -63,13 +62,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   },
   {
     "description": "bad interface",
     "allowed": false,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -85,13 +84,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   },
   {
     "description": "bad IP",
     "allowed": false,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -107,13 +106,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   },
   {
     "description": "bad state",
     "allowed": false,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -129,13 +128,13 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   },
   {
     "description": "bad flags",
     "allowed": false,
     "request": {
-      "type": "AddARPNeighbors",
       "neighbors": {
         "ARPNeighbors": [
           {
@@ -151,6 +150,7 @@
           }
         ]
       }
-    }
+    },
+    "kind": "AddARPNeighborsRequest"
   }
 ]

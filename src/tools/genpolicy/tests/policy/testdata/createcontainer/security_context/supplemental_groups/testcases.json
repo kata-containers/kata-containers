@@ -2,8 +2,8 @@
     {
         "description": "Correct additionalGIDs for security context fsGroup, supplementalGroups",
         "allowed": true,
+        "kind": "CreateContainerRequest",
         "request": {
-            "type": "CreateContainer",
             "OCI": {
                 "Annotations": {
                     "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/dummy",
@@ -336,8 +336,8 @@
     {
         "description": "Incorrect additionalGIDs for security context fsGroup, supplementalGroups",
         "allowed": false,
+        "kind": "CreateContainerRequest",
         "request": {
-            "type": "CreateContainer",
             "OCI": {
                 "Annotations": {
                     "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/dummy",

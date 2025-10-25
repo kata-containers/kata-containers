@@ -3,7 +3,6 @@
     "description": "CreateContainer with config map volume",
     "allowed": true,
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Version": "1.1.0",
         "Annotations": {
@@ -132,6 +131,7 @@
         }
       },
       "storages": []
-    }
+    },
+    "kind": "CreateContainerRequest"
   }
 ]
