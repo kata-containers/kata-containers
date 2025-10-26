@@ -103,8 +103,24 @@ spec:
           value: {{ .Values.env.debug | quote }}
         - name: SHIMS
           value: {{ .Values.env.shims | quote }}
+        - name: SHIMS_X86_64
+          value: {{ .Values.env.shims_x86_64 | quote }}
+        - name: SHIMS_AARCH64
+          value: {{ .Values.env.shims_aarch64 | quote }}
+        - name: SHIMS_S390X
+          value: {{ .Values.env.shims_s390x | quote }}
+        - name: SHIMS_PPC64LE
+          value: {{ .Values.env.shims_ppc64le | quote }}
         - name: DEFAULT_SHIM
           value: {{ .Values.env.defaultShim | quote }}
+        - name: DEFAULT_SHIM_X86_64
+          value: {{ .Values.env.defaultShim_x86_64 | quote }}
+        - name: DEFAULT_SHIM_AARCH64
+          value: {{ .Values.env.defaultShim_aarch64 | quote }}
+        - name: DEFAULT_SHIM_S390X
+          value: {{ .Values.env.defaultShim_s390x | quote }}
+        - name: DEFAULT_SHIM_PPC64LE
+          value: {{ .Values.env.defaultShim_ppc64le | quote }}
         - name: CREATE_RUNTIMECLASSES
           value: {{ .Values.env.createRuntimeClasses | quote }}
         - name: CREATE_DEFAULT_RUNTIMECLASS

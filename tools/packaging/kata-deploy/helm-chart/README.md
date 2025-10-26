@@ -128,7 +128,15 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `nodeSelector` | Node labels for pod assignment. Allows restricting deployment to specific nodes | `{}` |
 | `env.debug` | Enable debugging in the `configuration.toml` | `false` |
 | `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca` |
+| `env.shims_x86_64` | List of shims to deploy for x86_64 (if set, overrides `shims`) | `""` |
+| `env.shims_aarch64` | List of shims to deploy for aarch64 (if set, overrides `shims`) | `""` |
+| `env.shims_s390x` | List of shims to deploy for s390x (if set, overrides `shims`) | `""` |
+| `env.shims_ppc64le` | List of shims to deploy for ppc64le (if set, overrides `shims`) | `""` |
 | `env.defaultShim` | The default shim to use if none specified | `qemu` |
+| `env.defaultShim_x86_64` | The default shim to use if none specified for x86_64 (if set, overrides `defaultShim`) | `""` |
+| `env.defaultShim_aarch64` | The default shim to use if none specified for aarch64 (if set, overrides `defaultShim`) | `""` |
+| `env.defaultShim_s390x` | The default shim to use if none specified for s390x (if set, overrides `defaultShim`) | `""` |
+| `env.defaultShim_ppc64le` | The default shim to use if none specified for ppc64le (if set, overrides `defaultShim`) | `""` |
 | `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
 | `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
