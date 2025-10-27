@@ -201,6 +201,8 @@ jobs:
           retry_on: error
           retry_wait_seconds: 10
           command: bash tests/integration/kubernetes/gha-run.sh create-cluster
+        env:
+          AUTO_GENERATE_POLICY: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && 'no' || 'yes' }}
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
@@ -219,7 +221,6 @@ jobs:
         env:
           EXPERIMENTAL_FORCE_GUEST_PULL: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && env.KATA_HYPERVISOR || '' }}
           USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ env.SNAPSHOTTER == 'nydus' }}
-          AUTO_GENERATE_POLICY: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && 'no' || 'yes' }}
 
       - name: Deploy CoCo KBS
         timeout-minutes: 10
@@ -236,6 +237,8 @@ jobs:
       - name: Run tests
         timeout-minutes: 80
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
+        env:
+          AUTO_GENERATE_POLICY: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && 'no' || 'yes' }}
 
       - name: Report tests
         if: always()
