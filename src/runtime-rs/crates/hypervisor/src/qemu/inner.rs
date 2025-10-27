@@ -291,11 +291,42 @@ impl QemuInner {
             }
         }
 
+        // Start the virtual machine by restoring it from a VM template if enabled.
+        if self.config.vm_template.boot_from_template {
+            self.boot_from_template()
+                .await
+                .context("boot from template")?;
+            self.resume_vm().context("resume vm")?;
+        }
+
         // When hypervisor debug is enabled, output the kernel boot messages for debugging.
         if self.config.debug_info.enable_debug {
             let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
             tokio::spawn(log_qemu_console(stream));
         }
+
+        Ok(())
+    }
+
+    async fn boot_from_template(&mut self) -> Result<()> {
+        let qmp = self
+            .qmp
+            .as_mut()
+            .context("failed to get QMP connection for boot from template")?;
+
+        qmp.set_ignore_shared_memory_capability()
+            .context("failed to set ignore shared memory capability")?;
+
+        let uri = format!("exec:cat {}", self.config.vm_template.device_state_path);
+
+        qmp.execute_migration_incoming(&uri)
+            .context("failed to execute migration incoming")?;
+
+        self.wait_for_migration()
+            .await
+            .context("failed to wait for migration")?;
+
+        info!(sl!(), "migration complete");
 
         Ok(())
     }

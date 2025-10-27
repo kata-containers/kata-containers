@@ -15,9 +15,10 @@ pub mod health_check;
 pub mod sandbox;
 pub mod sandbox_persist;
 
+use std::path::Path;
 use std::sync::Arc;
 
-use agent::{kata::KataAgent, AGENT_KATA};
+use agent::{kata::KataAgent, Agent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, types::SandboxConfig, RuntimeHandler, RuntimeInstance};
@@ -44,6 +45,7 @@ use hypervisor::ch::CloudHypervisor;
 ))]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 
+use crate::factory::vm::VmConfig;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
@@ -106,11 +108,16 @@ impl RuntimeHandler for VirtContainer {
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
         let factory = config.get_factory();
-
-        let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
-
-        // get uds from hypervisor and get config from toml_config
-        let agent = new_agent(&config).context("new agent")?;
+        let (hypervisor, agent) = if factory.enable_template {
+            build_vm_from_template()
+                .await
+                .context("build vm from template")?
+        } else {
+            (
+                new_hypervisor(&config).await.context("new hypervisor")?,
+                new_agent(&config).context("new agent")? as Arc<dyn agent::Agent>,
+            )
+        };
 
         let resource_manager = Arc::new(
             ResourceManager::new(
@@ -152,6 +159,28 @@ impl RuntimeHandler for VirtContainer {
         // TODO
         Ok(())
     }
+}
+
+async fn build_vm_from_template() -> Result<(Arc<dyn Hypervisor>, Arc<dyn Agent>)> {
+    let (mut toml_config, _) =
+        TomlConfig::load_from_default().context("failed to load toml config")?;
+    let hypervisor_name = toml_config.runtime.hypervisor_name.clone();
+    if let Some(h) = toml_config.hypervisor.get_mut(&hypervisor_name) {
+        h.vm_template.boot_to_be_template = false;
+        h.vm_template.boot_from_template = true;
+        let path = Path::new(&h.factory.template_path);
+        h.vm_template.memory_path = path.join("memory").to_string_lossy().to_string();
+        h.vm_template.device_state_path = path.join("state").to_string_lossy().to_string();
+        let _ = VmConfig::validate_hypervisor_config(h);
+    } else {
+        return Err(anyhow!("hypervisor '{}' not found", hypervisor_name));
+    }
+    let hypervisor = new_hypervisor(&toml_config)
+        .await
+        .context("new hypervisor")?;
+    let agent = new_agent(&toml_config).context("new agent")? as Arc<dyn agent::Agent>;
+
+    Ok((hypervisor, agent))
 }
 
 async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {

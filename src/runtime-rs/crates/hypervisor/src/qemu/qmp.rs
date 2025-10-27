@@ -16,7 +16,7 @@ use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
     BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
 };
-use qapi_qmp::{migrate, migrate_set_capabilities};
+use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -106,6 +106,15 @@ impl Qmp {
             })
             .map(|_| ())
             .context("execute migration")
+    }
+
+    pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
+        self.qmp
+            .execute(&migrate_incoming {
+                uri: uri.to_string(),
+            })
+            .map(|_| ())
+            .context("execute migration incoming")
     }
 
     pub fn hotplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {
