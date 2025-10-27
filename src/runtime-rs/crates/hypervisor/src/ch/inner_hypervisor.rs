@@ -14,6 +14,7 @@ use crate::VM_ROOTFS_DRIVER_BLK;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
+use ch_config::ch_api::cloud_hypervisor_vm_netdev_add_with_fds;
 use ch_config::{
     ch_api::{
         cloud_hypervisor_vm_create, cloud_hypervisor_vm_info, cloud_hypervisor_vm_resize,
@@ -214,8 +215,8 @@ impl CloudHypervisorInner {
             cfg: self.config.clone(),
             guest_protection_to_use: self.guest_protection_to_use.clone(),
             shared_fs_devices,
-            network_devices,
             host_devices,
+            ..Default::default()
         };
 
         let cfg = VmConfig::try_from(named_cfg)?;
@@ -233,6 +234,28 @@ impl CloudHypervisorInner {
 
         if let Some(detail) = response {
             debug!(sl!(), "vm boot response: {:?}", detail);
+        }
+
+        if let Some(network_devices) = network_devices {
+            for net in network_devices {
+                let vm_fds = net.fds.clone().unwrap_or_default();
+                let response = cloud_hypervisor_vm_netdev_add_with_fds(
+                    socket.try_clone().context("failed to clone socket")?,
+                    net,
+                    vm_fds.clone(),
+                )
+                .await
+                .context("failed to add vm netdev with fds")?;
+
+                if let Some(detail) = response {
+                    debug!(sl!(), "vm netdev add response: {:?}", detail);
+                }
+
+                for fd in vm_fds {
+                    // Explicitly close the fd now that it has been sent to CLH.
+                    nix::unistd::close(fd).context("failed to close netdev fd")?;
+                }
+            }
         }
 
         let response =

@@ -7,6 +7,7 @@
 use super::inner::CloudHypervisorInner;
 use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
+use crate::utils::open_named_tuntap;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
@@ -19,15 +20,18 @@ use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
-    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add, cloud_hypervisor_vm_vsock_add,
-    PciDeviceInfo, VmRemoveDeviceData,
+    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add_with_fds,
+    cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
 use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
+use kata_sys_util::netns::NetnsGuard;
 use kata_types::config::hypervisor::RateLimiterConfig;
 use safe_path::scoped_join;
 use std::convert::TryFrom;
+use std::os::fd::AsRawFd;
+use std::os::fd::IntoRawFd;
 use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
@@ -365,11 +369,20 @@ impl CloudHypervisorInner {
             .ok_or("missing socket")
             .map_err(|e| anyhow!(e))?;
 
-        let clh_net_config = NetConfig::try_from(device.config)?;
+        let mut clh_net_config = NetConfig::try_from(device.config)?;
+        // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
+        clh_net_config.tap = None;
+        clh_net_config.id = None;
 
-        let response = cloud_hypervisor_vm_netdev_add(
+        let files = open_named_tuntap(&netdev.config.host_dev_name, netdev.config.queue_num as u32)
+            .context("open named tuntap")?;
+
+        let fds = files.iter().map(|f| f.as_raw_fd()).collect();
+
+        let response = cloud_hypervisor_vm_netdev_add_with_fds(
             socket.try_clone().context("failed to clone socket")?,
             clh_net_config,
+            fds,
         )
         .await?;
 
@@ -401,7 +414,23 @@ impl CloudHypervisorInner {
                     shared_fs_devices.push(fs_cfg);
                 }
                 DeviceType::Network(net_device) => {
-                    let net_config = NetConfig::try_from(net_device.config)?;
+                    let mut net_config = NetConfig::try_from(net_device.config.clone())?;
+                    // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
+                    net_config.tap = None;
+                    net_config.id = None;
+
+                    // we need ensure opening network device happens in netns.
+                    let netns = self.netns.clone().unwrap_or_default();
+                    let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
+                    let fds = open_named_tuntap(
+                        &net_device.config.host_dev_name,
+                        net_device.config.queue_num as u32,
+                    )
+                    .context("open named tuntap")?
+                    .into_iter()
+                    .map(|f| f.into_raw_fd())
+                    .collect();
+                    net_config.fds = Some(fds);
                     network_devices.push(net_config);
                 }
                 DeviceType::Vfio(vfio_device) => {
