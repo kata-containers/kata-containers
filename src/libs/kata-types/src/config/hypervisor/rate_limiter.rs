@@ -6,10 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
-// The DEFAULT_RATE_LIMITER_REFILL_TIME is used for calculating the rate at
-// which a TokenBucket is replinished, in cases where a RateLimiter is
-// applied to either network or disk I/O.
-pub(crate) const DEFAULT_RATE_LIMITER_REFILL_TIME: u64 = 1000;
+/// The DEFAULT_RATE_LIMITER_REFILL_TIME is used for calculating the rate at
+/// which a TokenBucket is replinished, in cases where a RateLimiter is
+/// applied to either network or disk I/O.
+pub const DEFAULT_RATE_LIMITER_REFILL_TIME: u64 = 1000;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TokenBucketConfig {
