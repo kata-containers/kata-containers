@@ -14,6 +14,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use kata_types::config::Agent as AgentConfig;
+use nix::unistd;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use tokio::sync::RwLock;
 use ttrpc::asynchronous::Client;
@@ -160,5 +161,22 @@ impl KataAgent {
     pub(crate) async fn agent_config(&self) -> AgentConfig {
         let inner = self.inner.read().await;
         inner.config.clone()
+    }
+
+    /// Disconnect from the agent gRPC server and clean up related resources.
+    pub(crate) async fn disconnect(&self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.log_forwarder.stop();
+
+        // If there is a valid client, drop it
+        inner.client.take();
+
+        // If fd is valid (> 0), close it
+        if inner.client_fd >= 0 {
+            unistd::close(inner.client_fd).context("failed to close agent client fd")?;
+            inner.client_fd = -1;
+        }
+
+        Ok(())
     }
 }

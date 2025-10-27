@@ -10,6 +10,7 @@ extern crate slog;
 logging::logger_with_subsystem!(sl, "virt-container");
 
 mod container_manager;
+pub mod factory;
 pub mod health_check;
 pub mod sandbox;
 pub mod sandbox_persist;
@@ -104,10 +105,13 @@ impl RuntimeHandler for VirtContainer {
         init_size_manager: InitialSizeManager,
         sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
+        let factory = config.get_factory();
+
         let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
 
         // get uds from hypervisor and get config from toml_config
         let agent = new_agent(&config).context("new agent")?;
+
         let resource_manager = Arc::new(
             ResourceManager::new(
                 sid,
@@ -127,6 +131,7 @@ impl RuntimeHandler for VirtContainer {
             hypervisor.clone(),
             resource_manager.clone(),
             sandbox_config,
+            factory,
         )
         .await
         .context("new virt sandbox")?;

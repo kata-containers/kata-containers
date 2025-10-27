@@ -178,6 +178,15 @@ impl TomlConfig {
         Ok(config)
     }
 
+    /// Get the `Factory` configuration from the active hypervisor.
+    pub fn get_factory(&self) -> Factory {
+        let hypervisor_name = self.runtime.hypervisor_name.as_str();
+        self.hypervisor
+            .get(hypervisor_name)
+            .map(|hv| hv.factory.clone())
+            .unwrap_or_default()
+    }
+
     /// Adjust Kata configuration information.
     pub fn adjust_config(&mut self) -> Result<()> {
         Hypervisor::adjust_config(self)?;
