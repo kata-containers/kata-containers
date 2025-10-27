@@ -215,6 +215,13 @@ impl Container {
             .await?;
         if let Some(linux) = &mut spec.linux_mut() {
             linux.set_resources(resources);
+
+            // In certain scenarios, particularly under CoCo/Agent Policy enforcement, the default initial value of `Linux.Resources.Devices`
+            // is considered non-compliant, leading to container creation failures. To address this issue and ensure consistency with the behavior
+            // in `runtime-go`, the default value of `Linux.Resources.Devices` from the OCI Spec should be removed.
+            if let Some(resource) = linux.resources_mut() {
+                clean_linux_resources_devices(resource);
+            }
         }
 
         let container_name = k8s::container_name(&spec);
@@ -242,6 +249,12 @@ impl Container {
                 .passfd_io_init(hvsock_uds_path, *passfd_port)
                 .await?;
         }
+
+        info!(
+            sl!(),
+            "OCI Spec {:?} within CreateContainerRequest.",
+            spec.clone()
+        );
 
         // create container
         let r = agent::CreateContainerRequest {
@@ -625,30 +638,6 @@ fn amend_spec(
             linux.set_seccomp(None);
         }
 
-        // In certain scenarios, particularly under CoCo/Agent Policy enforcement, the default initial value of `Linux.Resources.Devices`
-        // is considered non-compliant, leading to container creation failures. To address this issue and ensure consistency with the behavior
-        // in `runtime-go`, the default value of `Linux.Resources.Devices` from the OCI Spec should be removed.
-        if let Some(resources) = linux.resources_mut() {
-            if let Some(devices) = resources.devices_mut().take() {
-                let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
-                    .into_iter()
-                    .filter(|device| {
-                        !(!device.allow()
-                            && device.typ().is_none()
-                            && device.major().is_none()
-                            && device.minor().is_none()
-                            && device.access().as_deref() == Some("rwm"))
-                    })
-                    .collect();
-
-                resources.set_devices(if cleaned_devices.is_empty() {
-                    None
-                } else {
-                    Some(cleaned_devices)
-                });
-            }
-        }
-
         // Host pidns path does not make sense in kata. Let's just align it with
         // sandbox namespace whenever it is set.
         let ns: Vec<oci::LinuxNamespace> = linux
@@ -695,6 +684,30 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     }
 
     false
+}
+
+/// Cleans or filters specific device cgroup rules within the `devices` field of the `LinuxResources`.
+/// Specifically, it iterates through all `LinuxDeviceCgroup` rules in `resources`
+/// and removes those considered to be "default, all-access (rwm), and non-specific device" rules.
+fn clean_linux_resources_devices(resources: &mut LinuxResources) {
+    if let Some(devices) = resources.devices_mut().take() {
+        let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
+            .into_iter()
+            .filter(|device| {
+                !(!device.allow()
+                    && device.typ().is_none()
+                    && device.major().is_none()
+                    && device.minor().is_none()
+                    && device.access().as_deref() == Some("rwm"))
+            })
+            .collect();
+
+        resources.set_devices(if cleaned_devices.is_empty() {
+            None
+        } else {
+            Some(cleaned_devices)
+        });
+    }
 }
 
 #[cfg(test)]
