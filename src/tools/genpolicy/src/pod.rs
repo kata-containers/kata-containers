@@ -1056,7 +1056,20 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
         }),
         ..Default::default()
     };
-    pause_container.init(config).await;
+    if config.settings.cluster_config.guest_pull {
+        // For guest pull, the pause bundle is part of the guest's root FS
+        // and a fixed, well-known CreateContainer request is expected, so
+        // we don't need to pull a pause image in this case.
+        debug!("guest pull enabled, not pulling pause image");
+        pause_container.registry = registry::Container {
+            image: pause_container.image.clone(),
+            config_layer: registry::DockerConfigLayer::default(),
+            passwd: "".to_string(),
+            group: "".to_string(),
+        }
+    } else {
+        pause_container.init(config).await;
+    }
     containers.insert(0, pause_container);
     debug!("pause container added.");
 }
