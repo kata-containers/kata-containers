@@ -141,14 +141,26 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
 | `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim | `""` |
+| `env.snapshotterHandlerMapping_x86_64` | Provide the snapshotter handler for each shim for x86_64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
+| `env.snapshotterHandlerMapping_aarch64` | Provide the snapshotter handler for each shim for aarch64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
+| `env.snapshotterHandlerMapping_s390x` | Provide the snapshotter handler for each shim for s390x (if set, overrides `snapshotterHandlerMapping`) | `""` |
+| `env.snapshotterHandlerMapping_ppc64le` | Provide the snapshotter handler for each shim for ppc64le (if set, overrides `snapshotterHandlerMapping`) | `""` |
 | `evn.agentHttpsProxy` | HTTPS_PROXY=... | `""` |
 | `env.agentHttpProxy` |  specifies a list of addresses that should bypass a configured proxy server | `""` |
 | `env.pullTypeMapping` | Type of container image pulling, examples are guest-pull or default | `""` |
+| `env.pullTypeMapping_x86_64` | Type of container image pulling for x86_64 (if set, overrides `pullTypeMapping`) | `""` |
+| `env.pullTypeMapping_aarch64` | Type of container image pulling for aarch64 (if set, overrides `pullTypeMapping`) | `""` |
+| `env.pullTypeMapping_s390x` | Type of container image pulling for s390x (if set, overrides `pullTypeMapping`) | `""` |
+| `env.pullTypeMapping_ppc64le` | Type of container image pulling for ppc64le (if set, overrides `pullTypeMapping`) | `""` |
 | `env.installationPrefix` | Prefix where to install the Kata artifacts | `/opt/kata` |
 | `env.hostOS` | Provide host-OS setting, e.g. `cbl-mariner` to do additional configurations | `""` |
 | `env.multiInstallSuffix` | Enable multiple Kata installation on the same node with suffix e.g. `/opt/kata-PR12232` | `""` |
 | `env._experimentalSetupSnapshotter` | Deploys (nydus) and/or sets up (erofs, nydus) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
 | `env._experimentalForceGuestPull` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value (supports multiple shims, separated by commas; e.g., `qemu-tdx,qemu-snp`) | `""` |
+| `env._experimentalForceGuestPull_x86_64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for x86_64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
+| `env._experimentalForceGuestPull_aarch64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for aarch64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
+| `env._experimentalForceGuestPull_s390x` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for s390x (if set, overrides `_experimentalForceGuestPull`) | `""` |
+| `env._experimentalForceGuestPull_ppc64le` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for ppc64le (if set, overrides `_experimentalForceGuestPull`) | `""` |
 
 ## Example: only `qemu` shim and debug enabled
 

@@ -78,12 +78,28 @@ spec:
           value: {{ .Values.env.allowedHypervisorAnnotations | quote }}
         - name: SNAPSHOTTER_HANDLER_MAPPING
           value: {{ .Values.env.snapshotterHandlerMapping | quote }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_X86_64
+          value: {{ .Values.env.snapshotterHandlerMapping_x86_64 | quote }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_AARCH64
+          value: {{ .Values.env.snapshotterHandlerMapping_aarch64 | quote }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_S390X
+          value: {{ .Values.env.snapshotterHandlerMapping_s390x | quote }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_PPC64LE
+          value: {{ .Values.env.snapshotterHandlerMapping_ppc64le | quote }}
         - name: AGENT_HTTPS_PROXY
           value: {{ .Values.env.agentHttpsProxy | quote }}
         - name: AGENT_NO_PROXY
           value: {{ .Values.env.agentNoProxy | quote }}
         - name: PULL_TYPE_MAPPING
           value: {{ .Values.env.pullTypeMapping | quote }}
+        - name: PULL_TYPE_MAPPING_X86_64
+          value: {{ .Values.env.pullTypeMapping_x86_64 | quote }}
+        - name: PULL_TYPE_MAPPING_AARCH64
+          value: {{ .Values.env.pullTypeMapping_aarch64 | quote }}
+        - name: PULL_TYPE_MAPPING_S390X
+          value: {{ .Values.env.pullTypeMapping_s390x | quote }}
+        - name: PULL_TYPE_MAPPING_PPC64LE
+          value: {{ .Values.env.pullTypeMapping_ppc64le | quote }}
         - name: INSTALLATION_PREFIX
           value: {{ .Values.env.installationPrefix | quote }}
         - name: MULTI_INSTALL_SUFFIX
@@ -91,6 +107,14 @@ spec:
         - name: EXPERIMENTAL_SETUP_SNAPSHOTTER
           value: {{ .Values.env._experimentalSetupSnapshotter | quote }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL
+          value: {{ .Values.env._experimentalForceGuestPull | quote }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_X86_64
+          value: {{ .Values.env._experimentalForceGuestPull | quote }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64
+          value: {{ .Values.env._experimentalForceGuestPull | quote }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_S390X
+          value: {{ .Values.env._experimentalForceGuestPull | quote }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE
           value: {{ .Values.env._experimentalForceGuestPull | quote }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
