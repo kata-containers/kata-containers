@@ -1213,7 +1213,9 @@ allow_caps(p_caps, i_caps) if {
 match_caps(p_caps, i_caps) if {
     print("match_caps 1: start")
 
-    p_caps == i_caps
+    norm_p_caps := { strip_cap_prefix(c) | c := p_caps[_] }
+    norm_i_caps := { strip_cap_prefix(c) | c := i_caps[_] }
+    norm_p_caps == norm_i_caps
 
     print("match_caps 1: true")
 }
