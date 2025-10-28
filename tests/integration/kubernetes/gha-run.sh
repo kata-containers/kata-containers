@@ -33,7 +33,6 @@ export ITA_KEY="${ITA_KEY:-}"
 export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export PULL_TYPE="${PULL_TYPE:-default}"
-export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 
@@ -581,6 +580,18 @@ function cleanup_nydus_snapshotter() {
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
+
+	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
+
+	# Auto-generate policy on some Host types, if the caller didn't specify an AUTO_GENERATE_POLICY value.
+	if [[ -z "${AUTO_GENERATE_POLICY}" ]]; then
+		if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+			AUTO_GENERATE_POLICY="yes"
+		fi
+	fi
+
+	info "Exporting AUTO_GENERATE_POLICY=${AUTO_GENERATE_POLICY}"
+	export AUTO_GENERATE_POLICY
 
 	action="${1:-}"
 
