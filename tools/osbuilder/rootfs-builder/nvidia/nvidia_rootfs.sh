@@ -209,6 +209,8 @@ chisseled_compute() {
 	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*	    "${libdir}"/.
 	cp -a "${stage_one}/${libdir}"/libkeyutils.so.1*	"${libdir}"/.
 
+	[[ "${type}" == "confidential" ]] && cp -a "${stage_one}/${libdir}"/libnvidia-pkcs11* 	"${libdir}"/.
+
 	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
 
