@@ -8,6 +8,7 @@ self-hosted-runner:
   # Labels of self-hosted runner that linter should ignore
   labels:
     - amd64-nvidia-a100
+    - amd64-nvidia-h100-snp
     - arm64-k8s
     - containerd-v1.7
     - containerd-v2.0

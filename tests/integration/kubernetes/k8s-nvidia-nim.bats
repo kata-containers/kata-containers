@@ -59,8 +59,11 @@ create_inference_embedqa_pods() {
 }
 
 enable_nvrc_trace() {
+    local config_file=""
     if [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu" ]]; then
         config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
+    elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-snp" ]]; then
+        config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-snp.toml"
     fi
     sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 nvrc.log=trace"/g' "${config_file}"
 }
@@ -292,7 +295,7 @@ embedding_path = "./data/nv_embedding"
 docsearch = FAISS.load_local(folder_path=embedding_path, embeddings=embedding_model, allow_dangerous_deserialization=True)
 EOF
 
-    # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell  
+    # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell
     cat <<EOF >>"${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
 llm = ChatNVIDIA(base_url="http://${POD_IP_INSTRUCT}:8000/v1", model="meta/llama3-8b-instruct", temperature=0.1, max_tokens=1000, top_p=1.0)
 

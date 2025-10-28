@@ -473,6 +473,8 @@ ifneq (,$(QEMUCMD))
     KERNELTDXPARAMS_NV += "authorize_allow_devs=pci:ALL"
 
     KERNELSNPPARAMS_NV = $(KERNELPARAMS_NV)
+    #TODO: temporary until the attestation agent activates the device after successful attestation
+    KERNELSNPPARAMS_NV = "nvrc.smi.srs=1"
 
     # Setting this to false can lead to cgroup leakages in the host
     # Best practice for production is to set this to true
