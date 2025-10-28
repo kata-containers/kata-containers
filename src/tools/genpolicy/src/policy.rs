@@ -759,8 +759,10 @@ impl AgentPolicy {
         // The sandbox path does not respect the securityContext fsGroup/supplementalGroups
         if is_pause_container {
             process.User.AdditionalGids.clear();
+        } else {
+            // TODO(burgerdev): find some docs for why this is not needed for the pause container anymore.
+            process.User.AdditionalGids.insert(process.User.GID);
         }
-        process.User.AdditionalGids.insert(process.User.GID);
 
         process
     }
