@@ -138,7 +138,8 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.defaultShim_s390x` | The default shim to use if none specified for s390x (if set, overrides `defaultShim`) | `""` |
 | `env.defaultShim_ppc64le` | The default shim to use if none specified for ppc64le (if set, overrides `defaultShim`) | `""` |
 | `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
-| `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
+| `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` (if `createDefaultRuntimeClass` is set **OR** `defaultRuntimeClassName` is set, a default runtime class will be created, and its default  name is `kata`) | `false` |
+| `env.defaultRuntimeClassName` | The default k8s `runtimeClass` name (if `createDefaultRuntimeClass` is set **OR** `defaultRuntimeClassName` is set, a `default runtime class will be created, and its default name is `kata`) | "" |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
 | `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim | `""` |
 | `env.snapshotterHandlerMapping_x86_64` | Provide the snapshotter handler for each shim for x86_64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
