@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-    runs-on: ubuntu-24.04-ppc64le
+    runs-on: ppc64le-small
     strategy:
       matrix:
         asset:
@@ -89,7 +89,7 @@ jobs:
 
   build-asset-rootfs:
     name: build-asset-rootfs
-    runs-on: ubuntu-24.04-ppc64le
+    runs-on: ppc64le-small
     needs: build-asset
     permissions:
       contents: read
@@ -170,7 +170,7 @@ jobs:
 
   build-asset-shim-v2:
     name: build-asset-shim-v2
-    runs-on: ubuntu-24.04-ppc64le
+    runs-on: ppc64le-small
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
       contents: read
@@ -230,7 +230,7 @@ jobs:
 
   create-kata-tarball:
     name: create-kata-tarball
-    runs-on: ubuntu-24.04-ppc64le
+    runs-on: ppc64le-small
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:
       contents: read
