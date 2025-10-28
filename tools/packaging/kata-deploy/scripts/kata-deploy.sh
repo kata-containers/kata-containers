@@ -122,6 +122,7 @@ IFS="," read -a experimental_force_guest_pull <<< "${EXPERIMENTAL_FORCE_GUEST_PU
 
 CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
 CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
+DEFAULT_RUNTIMECLASS_NAME="${DEFAULT_RUNTIMECLASS_NAME:-}"
 
 ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
 
@@ -219,7 +220,7 @@ function create_runtimeclasses() {
 
 	done
 
-	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]] || [[ -n "${DEFAULT_RUNTIMECLASS_NAME}" ]]; then
 		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
 			warn "CREATE_DEFAULT_RUNTIMECLASS is being ignored!"
 			warn "multi installation does not support creating a default runtime class"
@@ -229,7 +230,7 @@ function create_runtimeclasses() {
 
 		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
+		sed -i -e 's/name: kata-'${default_shim}'/name: '${DEFAULT_RUNTIMECLASS_NAME:-kata}'/g' /tmp/kata.yaml
 		kubectl apply -f /tmp/kata.yaml
 		rm -f /tmp/kata.yaml
 	fi
@@ -251,7 +252,7 @@ function delete_runtimeclasses() {
 	done
 
 
-	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]] || [[ -n "${DEFAULT_RUNTIMECLASS_NAME}" ]]; then
 		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
 			# There's nothing to be done here, as a default runtime class is never created
 			# for multi installations
@@ -260,7 +261,7 @@ function delete_runtimeclasses() {
 
 		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
+		sed -i -e 's/name: kata-'${default_shim}'/name: '${DEFAULT_RUNTIMECLASS_NAME:-kata}'/g' /tmp/kata.yaml
 		kubectl delete --ignore-not-found -f /tmp/kata.yaml
 		rm -f /tmp/kata.yaml
 	fi
@@ -1121,6 +1122,7 @@ function main() {
 	echo "  * ppc64le: ${DEFAULT_SHIM_PPC64LE}"
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
+	echo "* DEFAULT_RUNTIMECLASS_NAME: ${DEFAULT_RUNTIMECLASS_NAME}"
 	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS}"
 	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
 	echo "  * x86_64: ${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"

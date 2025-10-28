@@ -131,6 +131,8 @@ spec:
           value: {{ .Values.env.createRuntimeClasses | quote }}
         - name: CREATE_DEFAULT_RUNTIMECLASS
           value: {{ .Values.env.createDefaultRuntimeClass | quote }}
+        - name: DEFAULT_RUNTIMECLASS_NAME
+          value: {{ .Values.env.defaultRuntimeClassName | quote }}
         - name: ALLOWED_HYPERVISOR_ANNOTATIONS
           value: {{ .Values.env.allowedHypervisorAnnotations | quote }}
         - name: SNAPSHOTTER_HANDLER_MAPPING
