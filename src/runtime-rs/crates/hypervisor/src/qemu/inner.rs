@@ -33,6 +33,9 @@ use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
+use std::time::Duration;
+
+use tokio::time::sleep;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, Command},
@@ -288,12 +291,56 @@ impl QemuInner {
             }
         }
 
-        //When hypervisor debug is enabled, output the kernel boot messages for debugging.
+        // Start the virtual machine by restoring it from a VM template if enabled.
+        if self.config.vm_template.boot_from_template {
+            self.boot_from_template()
+                .await
+                .context("boot from template")?;
+            self.resume_vm().context("resume vm")?;
+        }
+
+        // When hypervisor debug is enabled, output the kernel boot messages for debugging.
         if self.config.debug_info.enable_debug {
             let stream = UnixStream::connect(console_socket_path.as_os_str()).await?;
             tokio::spawn(log_qemu_console(stream));
         }
 
+        Ok(())
+    }
+
+    async fn boot_from_template(&mut self) -> Result<()> {
+        let qmp = self
+            .qmp
+            .as_mut()
+            .context("failed to get QMP connection for boot from template")?;
+
+        qmp.set_ignore_shared_memory_capability()
+            .context("failed to set ignore shared memory capability")?;
+
+        let uri = format!("exec:cat {}", self.config.vm_template.device_state_path);
+
+        qmp.execute_migration_incoming(&uri)
+            .context("failed to execute migration incoming")?;
+
+        self.wait_for_migration()
+            .await
+            .context("failed to wait for migration")?;
+
+        info!(sl!(), "migration complete");
+
+        Ok(())
+    }
+
+    pub async fn wait_for_migration(&mut self) -> Result<()> {
+        if self.qmp.is_none() {
+            return Err(anyhow!("QMP is not connected"));
+        }
+
+        // The result format returned by QEMU version 9.1.2 does not match
+        // the expected format of the existing QAPI version 0.14.
+        // However, no issues were found when tested with QAPI version 0.15.
+        // Therefore, we will temporarily skip this issue.
+        sleep(Duration::from_millis(280)).await;
         Ok(())
     }
 
@@ -329,18 +376,36 @@ impl QemuInner {
         }
     }
 
-    pub(crate) fn pause_vm(&self) -> Result<()> {
-        info!(sl!(), "Pausing QEMU VM");
-        todo!()
+    pub(crate) fn pause_vm(&mut self) -> Result<()> {
+        let qmp = self.qmp.as_mut().ok_or(anyhow!("qmp not initialized"))?;
+        qmp.qmp_stop().context("pause vm")
     }
 
-    pub(crate) fn resume_vm(&self) -> Result<()> {
-        info!(sl!(), "Resuming QEMU VM");
-        todo!()
+    pub(crate) fn resume_vm(&mut self) -> Result<()> {
+        let qmp = self.qmp.as_mut().ok_or(anyhow!("qmp not initialized"))?;
+        qmp.qmp_cont().context("resume vm")
     }
 
-    pub(crate) async fn save_vm(&self) -> Result<()> {
-        todo!()
+    pub(crate) async fn save_vm(&mut self) -> Result<()> {
+        let qmp = self.qmp.as_mut().ok_or(anyhow!("QMP not initialized"))?;
+
+        if self.config.vm_template.boot_to_be_template {
+            qmp.set_ignore_shared_memory_capability()
+                .context("failed to set ignore shared memory capability")?;
+        }
+
+        let uri = format!("exec:cat >{}", self.config.vm_template.device_state_path);
+
+        qmp.execute_migration(&uri)
+            .context("failed to execute migration")?;
+
+        self.wait_for_migration()
+            .await
+            .context("failed to wait for migration")?;
+
+        info!(sl!(), "migration finished successfully");
+
+        Ok(())
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {

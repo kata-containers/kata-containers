@@ -40,7 +40,7 @@ use kata_sys_util::spec::load_oci_spec;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
-use kata_types::config::TomlConfig;
+use kata_types::config::{hypervisor::Factory, TomlConfig};
 use kata_types::initdata::{calculate_initdata_digest, ProtectedPlatform};
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
@@ -97,6 +97,7 @@ pub struct VirtSandbox {
     monitor: Arc<HealthCheck>,
     sandbox_config: Option<SandboxConfig>,
     shm_size: u64,
+    factory: Option<Factory>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -104,6 +105,13 @@ impl std::fmt::Debug for VirtSandbox {
         f.debug_struct("VirtSandbox")
             .field("sid", &self.sid)
             .field("msg_sender", &self.msg_sender)
+            .field("inner", &"<SandboxInner>")
+            .field("resource_manager", &self.resource_manager)
+            .field("agent", &"<Agent>")
+            .field("hypervisor", &self.hypervisor)
+            .field("monitor", &"<HealthCheck>")
+            .field("sandbox_config", &self.sandbox_config)
+            .field("factory", &self.factory)
             .finish()
     }
 }
@@ -116,6 +124,7 @@ impl VirtSandbox {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
         sandbox_config: SandboxConfig,
+        factory: Factory,
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
@@ -129,7 +138,20 @@ impl VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             shm_size: sandbox_config.shm_size,
             sandbox_config: Some(sandbox_config),
+            factory: Some(factory),
         })
+    }
+
+    pub fn get_agent(&self) -> Arc<dyn Agent> {
+        self.agent.clone()
+    }
+
+    pub fn get_sid(&self) -> String {
+        self.sid.clone()
+    }
+
+    pub fn get_hypervisor(&self) -> Arc<dyn Hypervisor> {
+        self.hypervisor.clone()
     }
 
     #[instrument]
@@ -684,6 +706,58 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
+    /// Core function for starting a VM from a template
+    ///
+    /// This function is responsible for creating and starting a VM sandbox from a predefined template,
+    /// serving as the core implementation of the template mechanism.
+    async fn start_template(&self) -> Result<()> {
+        info!(sl!(), "sandbox::start_template()"; "sandbox:" => format!("{:?}", self));
+        let id = &self.sid;
+
+        let sandbox_config = self.sandbox_config.as_ref().unwrap();
+
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
+        let inner = self.inner.write().await;
+        if inner.state != SandboxState::Init {
+            return Ok(());
+        }
+        let selinux_label = load_oci_spec().ok().and_then(|spec| {
+            spec.process()
+                .as_ref()
+                .and_then(|process| process.selinux_label().clone())
+        });
+
+        self.hypervisor
+            .prepare_vm(
+                id,
+                sandbox_config.network_env.netns.clone(),
+                &sandbox_config.annotations,
+                selinux_label,
+            )
+            .await
+            .context("prepare vm")?;
+
+        // generate device and setup before start vm
+        // should after hypervisor.prepare_vm
+        let resources = self
+            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
+            .await
+            .context("prepare resources before start vm")?;
+
+        self.resource_manager
+            .prepare_before_start_vm(resources)
+            .await
+            .context("set up device before start vm")?;
+
+        self.hypervisor
+            .start_vm(10_000)
+            .await
+            .context("start template vm")?;
+        info!(sl!(), "vm started from template");
+        Ok(())
+    }
+
     async fn status(&self) -> Result<SandboxStatus> {
         info!(sl!(), "get sandbox status");
         let inner = self.inner.read().await;
@@ -937,6 +1011,7 @@ impl Persist for VirtSandbox {
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
             sandbox_config: None,
             shm_size: DEFAULT_SHM_SIZE,
+            factory: None,
         })
     }
 }

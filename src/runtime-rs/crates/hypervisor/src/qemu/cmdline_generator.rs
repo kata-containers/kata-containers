@@ -1476,6 +1476,23 @@ impl ToQemuParams for Rtc {
     }
 }
 
+// Template represents QEMU template boot configuration.
+#[derive(Debug)]
+struct Template {}
+
+impl Template {
+    fn new() -> Template {
+        Template {}
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Template {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec!["-incoming".to_owned(), "defer".to_owned()])
+    }
+}
+
 #[derive(Debug)]
 struct ObjectRngRandom {
     // id is the device ID
@@ -2221,6 +2238,10 @@ impl<'a> QemuCmdLine<'a> {
 
         qemu_cmd_line.add_rtc();
 
+        if config.vm_template.boot_from_template {
+            qemu_cmd_line.add_template();
+        }
+
         if bus_type(config) != VirtioBusType::Ccw {
             qemu_cmd_line.add_rng();
         }
@@ -2258,6 +2279,11 @@ impl<'a> QemuCmdLine<'a> {
     fn add_rtc(&mut self) {
         let rtc = Rtc::new();
         self.devices.push(Box::new(rtc));
+    }
+
+    fn add_template(&mut self) {
+        let template = Template::new();
+        self.devices.push(Box::new(template));
     }
 
     fn add_rng(&mut self) {

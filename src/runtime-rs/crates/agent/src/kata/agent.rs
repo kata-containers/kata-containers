@@ -49,6 +49,10 @@ impl AgentManager for KataAgent {
     async fn agent_config(&self) -> AgentConfig {
         self.agent_config().await
     }
+
+    async fn disconnect(&self) -> Result<()> {
+        self.disconnect().await.context("disconnect agent")
+    }
 }
 
 // implement for health service
