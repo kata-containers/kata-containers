@@ -497,7 +497,16 @@ function helm_helper() {
 	ensure_yq
 	ensure_helm
 
+	# Update dependencies before configuring values
+	pushd ${helm_chart_dir}
+	helm dependencies update
+	popd
+
+	# Create temporary values file for customization
+	# yq will initialize the file structure as we add values
 	values_yaml=$(mktemp -t values_yaml.XXXXXX)
+	# Enable node-feature-discovery deployment
+	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
 	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
 		die "HELM_IMAGE_REFERENCE environment variable cannot be empty."

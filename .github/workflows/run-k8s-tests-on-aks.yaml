@@ -136,7 +136,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
 
       - name: Run tests

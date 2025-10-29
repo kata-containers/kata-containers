@@ -69,7 +69,7 @@ jobs:
         run: bash "${HOME}/scripts/k8s_cluster_check.sh"
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-kubeadm
 
       - name: Run tests

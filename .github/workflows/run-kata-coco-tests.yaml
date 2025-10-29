@@ -80,7 +80,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Uninstall previous `kbs-client`
@@ -212,7 +212,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
         env:
           EXPERIMENTAL_FORCE_GUEST_PULL: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && env.KATA_HYPERVISOR || '' }}
@@ -327,7 +327,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Deploy CSI driver
