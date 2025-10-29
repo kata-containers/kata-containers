@@ -588,7 +588,6 @@ function main() {
 		create-cluster) create_cluster "" ;;
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
-		setup-crio) setup_crio ;;
 		deploy-coco-kbs) deploy_coco_kbs ;;
 		deploy-k8s) deploy_k8s ${CONTAINER_ENGINE:-} ${CONTAINER_ENGINE_VERSION:-};;
 		install-bats) install_bats ;;
