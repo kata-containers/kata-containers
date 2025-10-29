@@ -22,3 +22,9 @@ version: "3.22.0"
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
 appVersion: "3.22.0"
+
+dependencies:
+  - name: node-feature-discovery
+    version: "~0.18.0"
+    repository: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+    condition: node-feature-discovery.enabled
