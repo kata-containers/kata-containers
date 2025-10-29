@@ -36,8 +36,8 @@
         "Process": {
             "NoNewPrivileges": true,
             "User": {
-                "UID": 65535,
-                "GID": 65535,
+                "UID": 0,
+                "GID": 0,
                 "AdditionalGids": [],
                 "Username": ""
             },
@@ -300,7 +300,7 @@
         "enable_configmap_secret_storages": false
     },
     "cluster_config": {
-        "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
+        "pause_container_image": "mcr.microsoft.com/oss/v2/kubernetes/pause:3.6",
         "guest_pull": true
     },
     "request_defaults": {
