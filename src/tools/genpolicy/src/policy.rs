@@ -704,13 +704,25 @@ impl AgentPolicy {
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
         let mut process = containerd::get_process(is_privileged, &self.config.settings.common);
+        debug!(
+            "get_container_process: after containerd::get_process: process = {:?}",
+            &process
+        );
 
         yaml_container.apply_capabilities(&mut process.Capabilities, &self.config.settings.common);
+        debug!(
+            "get_container_process: after apply_capabilities: process = {:?}",
+            &process
+        );
 
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
         yaml_container
             .registry
             .get_process(&mut process, yaml_has_command, yaml_has_args);
+        debug!(
+            "get_container_process: after registry.get_processs: process = {:?}",
+            &process
+        );
 
         if let Some(tty) = yaml_container.tty {
             process.Terminal = tty;
@@ -737,13 +749,35 @@ impl AgentPolicy {
             resource.get_annotations(),
             service_account_name,
         );
+        debug!(
+            "get_container_process: after get_env_variables: User = {:?}",
+            &process.User
+        );
 
         substitute_env_variables(&mut process.Env);
+        debug!(
+            "get_container_process: after substitute_env_variables: User = {:?}",
+            &process.User
+        );
+
         substitute_args_env_variables(&mut process.Args, &process.Env);
+        debug!(
+            "get_container_process: after substitute_args_env_variables: User = {:?}",
+            &process.User
+        );
 
         c_settings.get_process_fields(&mut process);
+        debug!(
+            "get_container_process: after c_settings.get_process_fields: User = {:?}",
+            &process.User
+        );
+
         let mut must_check_passwd = false;
         resource.get_process_fields(&mut process, &mut must_check_passwd);
+        debug!(
+            "get_container_process: after resource.get_process_fields: must_check_passwd = {must_check_passwd}, User = {:?}",
+            &process.User
+        );
 
         // The actual GID of the process run by the CRI
         // Depends on the contents of /etc/passwd in the container
@@ -754,6 +788,10 @@ impl AgentPolicy {
                 .unwrap_or(0);
         }
         yaml_container.get_process_fields(&mut process);
+        debug!(
+            "get_container_process: after yaml_container.get_process_fields: User = {:?}",
+            &process.User
+        );
 
         // The last step containerd always does is add the User.GID to AdditionalGids
         // The sandbox path does not respect the securityContext fsGroup/supplementalGroups
