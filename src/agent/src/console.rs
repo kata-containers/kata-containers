@@ -145,7 +145,7 @@ fn run_in_child(slave_fd: libc::c_int, shell: String) -> Result<()> {
     }
 
     let cmd = CString::new(shell).unwrap();
-    let args: Vec<CString> = Vec::new();
+    let args: Vec<CString> = vec![cmd.clone()];
 
     // run shell
     let _ = unistd::execvp(cmd.as_c_str(), &args).map_err(|e| match e {
