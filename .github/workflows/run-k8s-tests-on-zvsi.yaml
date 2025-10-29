@@ -46,11 +46,9 @@ jobs:
         include:
           - snapshotter: devmapper
             pull-type: default
-            using-nfd: true
             deploy-cmd: configure-snapshotter
           - snapshotter: nydus
             pull-type: guest-pull
-            using-nfd: false
             deploy-cmd: deploy-snapshotter
         exclude:
           - snapshotter: overlayfs
@@ -76,7 +74,6 @@ jobs:
       KUBERNETES: ${{ matrix.k8s }}
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
-      USING_NFD: ${{ matrix.using-nfd }}
       TARGET_ARCH: "s390x"
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}

@@ -57,7 +57,6 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "vanilla"
-      USING_NFD: "false"
       KBS: "true"
       K8S_TEST_HOST_TYPE: "baremetal"
       KBS_INGRESS: "nodeport"
@@ -163,7 +162,6 @@ jobs:
       # host type chose it will result on the creation of a cluster with
       # insufficient resources.
       K8S_TEST_HOST_TYPE: "all"
-      USING_NFD: "false"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -284,7 +282,6 @@ jobs:
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
       K8S_TEST_HOST_TYPE: "all"
-      USING_NFD: "false"
       # We are skipping the auto generated policy tests for now,
       # but those should be enabled as soon as we work on that.
       AUTO_GENERATE_POLICY: "no"
