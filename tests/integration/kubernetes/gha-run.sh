@@ -586,7 +586,10 @@ function main() {
 
 	# Auto-generate policy on some Host types, if the caller didn't specify an AUTO_GENERATE_POLICY value.
 	if [[ -z "${AUTO_GENERATE_POLICY}" ]]; then
-		if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+		if [[ "${KATA_HOST_OS}" = "cbl-mariner" || \
+			  "${KATA_HYPERVISOR}" = "qemu-snp" || \
+			  "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
+
 			AUTO_GENERATE_POLICY="yes"
 		elif [[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" && \
 		        "${TARGET_ARCH}" = "x86_64" && \
