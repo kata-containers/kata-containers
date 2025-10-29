@@ -47,3 +47,23 @@ env:
   _experimentalForceGuestPull_aarch64: ""
   _experimentalForceGuestPull_s390x: ""
   _experimentalForceGuestPull_ppc64le: ""
+
+# Node Feature Discovery (NFD) configuration
+# node-feature-discovery is used to detect hardware features, including virtualization support
+#
+# When enabled, kata-deploy will manage NFD as a subchart and enforce virtualization checks:
+#   - x86_64: Requires Intel VT-x (VMX) or AMD-V (SVM) CPU features
+#   - aarch64, s390x, ppc64le, riscv64: Always allowed (specific virt detection not yet implemented)
+#
+# NFD will use its default configuration which includes detecting CPU features like VMX and SVM
+#
+# IMPORTANT: If you already have node-feature-discovery installed independently in your
+#            cluster, keep this disabled.
+#
+#            When disabled, NO virtualization checks will be enforced (we **DO NOT**
+#            control any external node-feature-discovery configuration).
+#
+#            If you want virtualization checks with an external node-feature-discovery
+#            deployment, use nodeSelector manually.
+node-feature-discovery:
+  enabled: false
