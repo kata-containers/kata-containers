@@ -166,7 +166,9 @@ impl Container {
         );
 
         let mut storages = vec![];
+        // let mut is_coco_pause = false;
         if let Some(storage) = rootfs.get_storage().await {
+            // is_coco_pause = is_coco_pause_container(&storage.driver, &storage.source);
             storages.push(storage);
         }
         inner.rootfs.push(rootfs);
@@ -249,6 +251,15 @@ impl Container {
                 .passfd_io_init(hvsock_uds_path, *passfd_port)
                 .await?;
         }
+
+        // // When using guest pull within CoCo, the agent will create the sandbox
+        // // based on a pause bundle that is part of the guest's rootfs. In this
+        // // case, the `CreateContainerRequest` for the sandbox pause container
+        // // is merely a signal to the agent to do so; it provides no other
+        // // useful information beyond triggering this action.
+        // if is_coco_pause {
+        //     normalize_pause_container_spec(&mut spec).context("normalize pause spec failed")?;
+        // }
 
         info!(
             sl!(),
@@ -685,6 +696,85 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
 
     false
 }
+
+// /// Normalizes the OCI Spec for a pause container.
+// /// This sets up a minimal process with specific capabilities, user, and rootfs settings.
+// /// This function (or the context in which this description is relevant)
+// /// likely pertains to how the OCI specification for the pause container
+// /// is handled in such a "guest image pull" scenario, where the actual
+// /// configuration is derived from a pre-existing bundle within the guest
+// /// rather than being fully described in the incoming `OCI Spec`.
+// fn normalize_pause_container_spec(spec: &mut oci::Spec) -> Result<()> {
+//     // Define the list of capabilities required for the pause container
+//     let capabilities: Vec<String> = vec![
+//         "CHOWN".to_string(),
+//         "DAC_OVERRIDE".to_string(),
+//         "FSETID".to_string(),
+//         "FOWNER".to_string(),
+//         "MKNOD".to_string(),
+//         "NET_RAW".to_string(),
+//         "SETGID".to_string(),
+//         "SETUID".to_string(),
+//         "SETFCAP".to_string(),
+//         "SETPCAP".to_string(),
+//         "NET_BIND_SERVICE".to_string(),
+//         "CAP_SYS_CHROOT".to_string(),
+//         "KILL".to_string(),
+//         "AUDIT_WRITE".to_string(),
+//     ];
+//     let capabilities: HashSet<oci::Capability> = capabilities
+//         .into_iter()
+//         .map(|s| {
+//             s.parse::<oci::Capability>().map_err(|e| {
+//                 anyhow::anyhow!("Parse capability string failed with '{}': {:?}", s, e)
+//             })
+//         })
+//         .collect::<Result<HashSet<oci::Capability>>>()?;
+
+//     let user = oci::UserBuilder::default()
+//         .uid(65535_u32)
+//         .gid(65535_u32)
+//         .additional_gids(vec![65535_u32])
+//         .build()?;
+
+//     // Create the LinuxCapabilities
+//     let linux_capabilities = oci::LinuxCapabilitiesBuilder::default()
+//         .bounding(capabilities.clone())
+//         .effective(capabilities.clone())
+//         .permitted(capabilities)
+//         .build()?;
+
+//     // Create the Process
+//     let process = oci::ProcessBuilder::default()
+//         .user(user)
+//         .args(vec!["/pause".to_string()])
+//         .env(vec![
+//             "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+//         ])
+//         .cwd("/".to_string())
+//         .capabilities(linux_capabilities)
+//         .no_new_privileges(true)
+//         .oom_score_adj(-998)
+//         .build()?;
+
+//     // Set the Process
+//     spec.set_process(Some(process));
+
+//     // Set Rootfs to readonly
+//     if let Some(root) = spec.root_mut() {
+//         root.set_readonly(Some(true));
+//     } else {
+//         let mut default_root = oci::Root::default();
+//         default_root.set_readonly(Some(true));
+//         spec.set_root(Some(default_root));
+//     }
+
+//     Ok(())
+// }
+
+// fn is_coco_pause_container(driver: &str, source: &str) -> bool {
+//     driver == "image_guest_pull" && source == "pause"
+// }
 
 /// Cleans or filters specific device cgroup rules within the `devices` field of the `LinuxResources`.
 /// Specifically, it iterates through all `LinuxDeviceCgroup` rules in `resources`

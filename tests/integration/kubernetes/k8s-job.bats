@@ -16,6 +16,11 @@ setup() {
 	yaml_file="${pod_config_dir}/job.yaml"
 	set_node "${yaml_file}" "${node}"
 
+	# Initialize pod_name here to ensure it's always declared,
+	# even if it's an empty string initially.
+	# It will be populated later in the @test.
+	pod_name=""
+
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -25,7 +30,6 @@ setup() {
 	local cmd
 	local logs
 	local pi_number
-	local pod_name
 
 	# Create job
 	kubectl apply -f "${yaml_file}"

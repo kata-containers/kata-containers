@@ -180,7 +180,7 @@ setup() {
     assert_pod_fail "$pod_config"
 
     # runtime-rs has its dedicated error message, we need handle it separately.
-    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev-runtime-rs" ]; then
+    if [ "${KATA_HYPERVISOR}" == "qemu-runtime-rs-coco-dev" ]; then
         pod_name="large-image-pod"
         kubectl describe "pod/$pod_name" | grep "agent create container"
         kubectl describe "pod/$pod_name" | grep "timeout"

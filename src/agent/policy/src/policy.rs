@@ -195,6 +195,7 @@ impl AgentPolicy {
 
     /// Replace the Policy in regorus.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
+        info!(sl!(), "DEBUG: set_policy: {}", policy);
         self.engine = Self::new_engine();
         self.engine
             .add_policy("agent_policy".to_string(), policy.to_string())?;
