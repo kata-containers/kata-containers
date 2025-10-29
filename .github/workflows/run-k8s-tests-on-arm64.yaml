@@ -58,7 +58,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Install `bats`
@@ -82,5 +82,5 @@ jobs:
 
       - name: Delete kata-deploy
         if: always()
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
