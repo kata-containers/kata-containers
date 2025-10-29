@@ -93,6 +93,16 @@ is_coco_platform() {
 	esac
 }
 
+is_aks_cluster() {
+	case "${KATA_HYPERVISOR}" in
+		"qemu-tdx"|"qemu-snp")
+			return 1
+			;;
+		*)
+			return 0
+	esac
+}
+
 adapt_common_policy_settings_for_non_coco() {
 	local settings_dir=$1
 
@@ -133,11 +143,29 @@ adapt_common_policy_settings_for_cbl_mariner() {
 	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
+# adapt common policy settings for non-TEE Hosts on AKS
+adapt_common_policy_settings_for_aks() {
+	info "Adapting common policy settings for AKS non-TEE Hosts"
+
+	jq '.pause_container.Process.User.UID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	jq '.pause_container.Process.User.GID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	jq '.cluster_config.pause_container_image = "mcr.microsoft.com/oss/v2/kubernetes/pause:3.6"' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	jq '.cluster_config.pause_container_id_policy = "v2"' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
 
 	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
+	is_aks_cluster && adapt_common_policy_settings_for_aks "${settings_dir}"
 
 	case "${KATA_HOST_OS}" in
 		"cbl-mariner")

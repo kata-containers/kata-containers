@@ -194,9 +194,17 @@ impl yaml::K8sResource for StatefulSet {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        is_pause_container: bool,
+        pause_container_additional_gid: bool,
+        must_check_passwd: &mut bool,
+    ) {
         yaml::get_process_fields(
             process,
+            is_pause_container,
+            pause_container_additional_gid,
             &self.spec.template.spec.securityContext,
             must_check_passwd,
         );
