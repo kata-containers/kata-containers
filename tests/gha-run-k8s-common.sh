@@ -343,34 +343,6 @@ function deploy_microk8s() {
 	sudo rm -rf /usr/local/bin/kubectl
 }
 
-function _get_k0s_kubernetes_version_for_crio() {
-	# k0s version will look like:
-	# v1.27.5+k0s.0
-	#
-	# The CRI-O repo for such version of Kubernetes expects something like:
-	# 1.27
-	k0s_version=$(get_from_kata_deps ".externals.k0s.version")
-
-	# Remove everything after the second '.'
-	crio_version=${k0s_version%\.*+*}
-	# Remove the 'v'
-	crio_version=${crio_version#v}
-
-	echo "${crio_version}"
-}
-
-function setup_crio() {
-	# Get the CRI-O version to be installed depending on the version of the
-	# "k8s distro" that we are using
-	case "${KUBERNETES}" in
-		k0s) crio_version=$(_get_k0s_kubernetes_version_for_crio) ;;
-		*) >&2 echo "${KUBERNETES} flavour is not supported with CRI-O"; exit 2 ;;
-
-	esac
-
-	install_crio "${crio_version}"
-}
-
 function install_system_dependencies() {
 	dependencies="${1}"
 
