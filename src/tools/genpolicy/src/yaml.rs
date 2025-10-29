@@ -390,6 +390,11 @@ pub fn get_process_fields(
     security_context: &Option<pod::PodSecurityContext>,
     must_check_passwd: &mut bool,
 ) {
+    debug!(
+        "get_process_fields: security_context = {:?}",
+        security_context
+    );
+
     if let Some(context) = security_context {
         if let Some(uid) = context.runAsUser {
             process.User.UID = uid.try_into().unwrap();
@@ -417,6 +422,10 @@ pub fn get_process_fields(
         }
 
         if let Some(fs_group) = context.fsGroup {
+            debug!(
+                "get_process_fields: inserting fs_group = {} into AdditionalGids",
+                &fs_group
+            );
             process
                 .User
                 .AdditionalGids
@@ -424,6 +433,10 @@ pub fn get_process_fields(
         }
 
         if let Some(supplemental_groups) = &context.supplementalGroups {
+            debug!(
+                "get_process_fields: inserting supplementalGroups = {:?} into AdditionalGids",
+                &supplemental_groups
+            );
             supplemental_groups.iter().for_each(|g| {
                 process.User.AdditionalGids.insert(*g);
             });
