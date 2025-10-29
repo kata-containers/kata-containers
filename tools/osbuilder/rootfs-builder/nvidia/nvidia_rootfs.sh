@@ -200,14 +200,8 @@ chisseled_compute() {
 	cp -a "${stage_one}/${libdir}"/libc.so.6*         	"${libdir}"/.
 	cp -a "${stage_one}/${libdir}"/libm.so.6*         	"${libdir}"/.
 	cp -a "${stage_one}/${libdir}"/librt.so.1*        	"${libdir}"/.
-	# nvidia-persitenced dependencies, needs to be vetted for v590
-	cp -a "${stage_one}/${libdir}"/libtirpc.so.3*    	"${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libgssapi_krb5.so.2*	"${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libkrb5.so.3*		"${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libkrb5support.so.0*	"${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libk5crypto.so.3*	"${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*	    "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libkeyutils.so.1*	"${libdir}"/.
+
+	[[ "${type}" == "confidential" ]] && cp -a "${stage_one}/${libdir}"/libnvidia-pkcs11* 	"${libdir}"/.
 
 	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
