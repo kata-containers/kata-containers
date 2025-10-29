@@ -780,8 +780,10 @@ impl KataSpec {
         if process.User.GID == 0 {
             process.User.GID = self.Process.User.GID;
         }
+        for gid in &self.Process.User.AdditionalGids {
+            process.User.AdditionalGids.insert(*gid);
+        }
 
-        process.User.AdditionalGids = self.Process.User.AdditionalGids.clone();
         process.User.Username = String::from(&self.Process.User.Username);
         add_missing_strings(&self.Process.Args, &mut process.Args);
 
