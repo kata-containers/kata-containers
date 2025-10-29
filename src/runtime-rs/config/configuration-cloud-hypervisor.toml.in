@@ -225,6 +225,11 @@ block_device_driver = "virtio-blk-pci"
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Enable running clh VMM as a non-root user.
+# By default clh VMM run as root. When this is set to true, clh VMM process runs as
+# a non-root random user. See documentation for the limitations of this mode.
+#rootless = true
+
 # Disable the 'seccomp' feature from Cloud Hypervisor, firecracker or dragonball, default false
 # disable_seccomp = true
 
