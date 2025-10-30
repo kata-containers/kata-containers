@@ -51,7 +51,6 @@ jobs:
           - nydus
           - ovmf
           - qemu
-          - stratovirt
           - virtiofsd
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
