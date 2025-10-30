@@ -986,19 +986,25 @@ impl Container {
                 debug!("get_process_fields: uid = {uid}");
 
                 process.User.UID = uid.try_into().unwrap();
+
                 // Changing the UID can break the GID mapping
                 // if a /etc/passwd file is present.
                 // The proper GID is determined, in order of preference:
                 // 1. the securityContext runAsGroup field (applied last in code)
                 // 2. lacking an explicit runAsGroup, /etc/passwd (get_gid_from_passwd_uid)
-                // 3. fall back to pod-level GID if there is one (unwrap_or)
                 //
                 // This behavior comes from the containerd runtime implementation:
                 // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
-                process.User.GID = self
+                match self
                     .registry
                     .get_gid_from_passwd_uid(process.User.UID)
-                    .unwrap_or(process.User.GID);
+                {
+                    Ok(gid) => process.User.GID = gid,
+                    Err(e) => debug!(
+                        "get_process_fields: GID not found in container image for UID = {}, error: {e}",
+                        process.User.UID
+                        ),
+                }
             }
 
             if let Some(gid) = context.runAsGroup {
@@ -1012,16 +1018,20 @@ impl Container {
         }
 
         // Handle AdditionalGids here as this is the last time the UID can be updated.
-        for gid in self
-            .registry
-            .get_additional_groups_from_uid(process.User.UID)
-            .unwrap_or_default()
-        {
-            debug!(
-                "get_process_fields: adding GID = {gid} for UID = {}",
-                process.User.UID
-            );
-            process.User.AdditionalGids.insert(gid);
+        match self.registry.get_additional_groups_from_uid(process.User.UID) {
+            Ok(gids) => {
+                for gid in gids {
+                    debug!(
+                        "get_process_fields: adding GID = {gid} for UID = {}",
+                        process.User.UID
+                    );
+                    process.User.AdditionalGids.insert(gid);
+                }
+            }
+            Err(e) => debug!(
+                    "get_process_fields: additional GIDs not found in container image for UID = {}, error: {e}",
+                    process.User.UID
+                ),
         }
     }
 }

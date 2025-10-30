@@ -119,10 +119,6 @@ adapt_common_policy_settings_for_non_coco() {
 	jq '.sandbox.storages += [{"driver":"virtio-fs","driver_options":[],"fs_group":null,"fstype":"virtiofs","mount_point":"/run/kata-containers/shared/containers/","options":[],"source":"kataShared"}]' \
 		"${settings_dir}/genpolicy-settings.json" > temp.json
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	# Disable guest pull.
-	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for CBL-Mariner Hosts
