@@ -508,6 +508,11 @@ function helm_helper() {
 	# Enable node-feature-discovery deployment
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
+	# Do not enable on cbl-mariner yet, as the deployment is failing on those
+	if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]]; then
+		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
+	fi
+
 	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
 		die "HELM_IMAGE_REFERENCE environment variable cannot be empty."
 	fi
