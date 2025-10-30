@@ -429,13 +429,11 @@ jobs:
           { containerd_version: lts,    vmm: clh              },
           { containerd_version: lts,    vmm: dragonball       },
           { containerd_version: lts,    vmm: qemu             },
-          { containerd_version: lts,    vmm: stratovirt       },
           { containerd_version: lts,    vmm: cloud-hypervisor },
           { containerd_version: lts,    vmm: qemu-runtime-rs  },
           { containerd_version: active, vmm: clh              },
           { containerd_version: active, vmm: dragonball       },
           { containerd_version: active, vmm: qemu             },
-          { containerd_version: active, vmm: stratovirt       },
           { containerd_version: active, vmm: cloud-hypervisor },
           { containerd_version: active, vmm: qemu-runtime-rs  },
          ]
