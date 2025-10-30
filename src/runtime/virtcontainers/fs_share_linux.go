@@ -689,8 +689,22 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		rootfsStorage.MountPoint = filepath.Join(kataGuestSharedDir(), c.id)
 		rootfsStorage.Fstype = c.state.Fstype
 
+		// Start with the original rootfs mount options
+		rootfsStorage.Options = c.rootFs.Options
+
+		// Add filesystem-specific options
 		if c.state.Fstype == "xfs" {
-			rootfsStorage.Options = []string{"nouuid"}
+			// Add nouuid to existing options if not already present
+			hasNouuid := false
+			for _, opt := range rootfsStorage.Options {
+				if opt == "nouuid" {
+					hasNouuid = true
+					break
+				}
+			}
+			if !hasNouuid {
+				rootfsStorage.Options = append(rootfsStorage.Options, "nouuid")
+			}
 		}
 
 		// Ensure container mount destination exists
