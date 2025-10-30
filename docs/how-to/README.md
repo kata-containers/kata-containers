@@ -31,6 +31,7 @@
 - [Setting Sysctls with Kata](how-to-use-sysctls-with-kata.md)
 - [What Is VMCache and How To Enable It](what-is-vm-cache-and-how-do-I-use-it.md)
 - [What Is VM Templating and How To Enable It](what-is-vm-templating-and-how-do-I-use-it.md)
+- [How to Use Template in runtime-rs](how-to-use-template-in-runtime-rs.md)
 - [Privileged Kata Containers](privileged.md)
 - [How to load kernel modules in Kata Containers](how-to-load-kernel-modules-with-kata.md)
 - [How to use Kata Containers with `virtio-mem`](how-to-use-virtio-mem-with-kata.md)
