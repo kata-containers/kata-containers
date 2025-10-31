@@ -39,6 +39,12 @@ pub const CDH_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/cdh.toml");
 /// Magic number of initdata device
 pub const INITDATA_MAGIC_NUMBER: &[u8] = b"initdata";
 
+/// initdata device with disk type 'vd*'
+const INITDATA_PREFIX_DISK_VDX: &str = "vd";
+
+/// initdata device with disk type 'sd*'
+const INITDATA_PREFIX_DISK_SDX: &str = "sd";
+
 async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
     let dev_dir = Path::new("/dev");
     let mut read_dir = tokio::fs::read_dir(dev_dir).await?;
@@ -46,9 +52,15 @@ async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
         let filename = entry.file_name();
         let filename = filename.to_string_lossy();
         debug!(logger, "Initdata check device `{filename}`");
-        if !filename.starts_with("vd") {
+
+        // Currently there're two disk types supported:
+        // virtio-blk (vd*) and virtio-scsi (sd*)
+        if !filename.starts_with(INITDATA_PREFIX_DISK_VDX)
+            && !filename.starts_with(INITDATA_PREFIX_DISK_SDX)
+        {
             continue;
         }
+
         let path = entry.path();
 
         debug!(logger, "Initdata find potential device: `{path:?}`");
