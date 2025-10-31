@@ -631,7 +631,7 @@ fn amend_spec(
     }
 
     // special process K8s ephemeral volumes.
-    update_ephemeral_storage_type(spec);
+    update_ephemeral_storage_type(spec, false);
 
     if let Some(linux) = &mut spec.linux_mut() {
         if disable_guest_seccomp {

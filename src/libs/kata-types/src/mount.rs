@@ -24,6 +24,9 @@ pub const KATA_SHAREDFS_GUEST_PREMOUNT_TAG: &str = "kataShared";
 pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
 
 /// KATA_HOST_DIR_TYPE use for host empty dir
+pub const KATA_K8S_HOST_DIR_VOLUME_TYPE: &str = "local";
+
+/// KATA_HOST_DIR_TYPE use for host empty dir
 pub const KATA_HOST_DIR_VOLUME_TYPE: &str = "kata:hostdir";
 
 /// KATA_MOUNT_INFO_FILE_NAME is used for the file that holds direct-volume mount info
