@@ -112,9 +112,15 @@ impl yaml::K8sResource for Job {
         false
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        is_pause_container: bool,
+        must_check_passwd: &mut bool,
+    ) {
         yaml::get_process_fields(
             process,
+            is_pause_container,
             &self.spec.template.spec.securityContext,
             must_check_passwd,
         );

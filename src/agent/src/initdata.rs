@@ -46,7 +46,8 @@ async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
         let filename = entry.file_name();
         let filename = filename.to_string_lossy();
         debug!(logger, "Initdata check device `{filename}`");
-        if !filename.starts_with("vd") {
+        if !filename.starts_with("vd") && !filename.starts_with("sd") {
+            info!(logger, "Initdata device skipped with `{filename}`");
             continue;
         }
         let path = entry.path();

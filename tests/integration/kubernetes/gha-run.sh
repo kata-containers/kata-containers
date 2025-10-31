@@ -33,7 +33,6 @@ export ITA_KEY="${ITA_KEY:-}"
 export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export PULL_TYPE="${PULL_TYPE:-default}"
-export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 
@@ -201,12 +200,17 @@ function deploy_kata() {
 		case "${SNAPSHOTTER}" in
 			nydus|erofs)
 				ARCH="$(uname -m)"
-				# We only want to tests this for the qemu-coco-dev runtime class
-				# as it's running on a GitHub runner (and not on a BM machine),
+				# We only want to tests this for the qemu-coco-dev and
+				# qemu-coco-dev-runtime-rs runtime classes
+				# as they are running on a GitHub runner (and not on a BM machine),
 				# and there the snapshotter is deployed on every run (rather than
 				# deployed when the machine is configured, as on the BM machines).
-				if [[ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]] && [[ ${ARCH} == "x86_64" ]]; then
-					EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}"
+				if [[ ${ARCH} == "x86_64" ]]; then
+					case "${KATA_HYPERVISOR}" in
+						"qemu-coco-dev"|"qemu-runtime-rs-coco-dev")
+							EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}"
+							;;
+					esac
 				fi
 				;;
 			*) ;;
@@ -581,6 +585,11 @@ function cleanup_nydus_snapshotter() {
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
+
+	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
+	# Auto-generate policy on cbl-mariner, if the caller didn't specify an AUTO_GENERATE_POLICY value.
+	[[ -z "${AUTO_GENERATE_POLICY}" ]] && [[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && AUTO_GENERATE_POLICY="yes"
+	export AUTO_GENERATE_POLICY
 
 	action="${1:-}"
 

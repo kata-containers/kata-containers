@@ -85,7 +85,7 @@ auto_generate_policy_enabled() {
 
 is_coco_platform() {
 	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
+		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev"|"qemu-runtime-rs-coco-dev")
 			return 0
 			;;
 		*)
@@ -111,7 +111,7 @@ adapt_common_policy_settings_for_non_coco() {
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Using watchable binds for configMap volumes - instead of CopyFileRequest.
-	jq '.volumes.configMap.driver = "watchable-bind"' \
+	jq '.volumes.configMap.mount_point = "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-" | .volumes.configMap.driver = "watchable-bind"' \
 		"${settings_dir}/genpolicy-settings.json" > temp.json
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 
@@ -298,7 +298,7 @@ hard_coded_policy_tests_enabled() {
 	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
 	# users can enable testing of the same policies (plus the auto-generated policies) by
 	# specifying AUTO_GENERATE_POLICY=yes.
-	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-tdx")
+	local -r enabled_hypervisors=("qemu-coco-dev" "qemu-snp" "qemu-tdx" "qemu-runtime-rs-coco-dev")
 	for enabled_hypervisor in "${enabled_hypervisors[@]}"
 	do
 		if [[ "${enabled_hypervisor}" == "${KATA_HYPERVISOR}" ]]; then

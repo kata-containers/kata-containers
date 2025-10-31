@@ -129,7 +129,7 @@ add_runtime_handler_annotations() {
 	fi
 
 	case "${KATA_HYPERVISOR}" in
-		qemu-coco-dev | qemu-snp | qemu-tdx)
+		qemu-coco-dev | qemu-snp | qemu-tdx | qemu-runtime-rs-coco-dev)
 			info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
 			local handler_value="kata-${KATA_HYPERVISOR}"
 			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml

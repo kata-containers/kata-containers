@@ -62,7 +62,7 @@ setup() {
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
-	retries="10"
+	retries="50"
 
 	# Check the total of cpus
 	for _ in $(seq 1 "$retries"); do

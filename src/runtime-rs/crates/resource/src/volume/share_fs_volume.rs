@@ -332,7 +332,7 @@ impl VolumeManager {
             );
 
             // Return guest path
-            return Ok(state.guest_path.clone());
+            // return Ok(state.guest_path.clone());
         }
 
         // Create a new volume state
