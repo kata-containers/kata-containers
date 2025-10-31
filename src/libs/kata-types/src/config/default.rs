@@ -41,6 +41,8 @@ pub const DEFAULT_BLOCK_NVDIMM_MEM_OFFSET: u64 = 0;
 pub const DEFAULT_BLOCK_DEVICE_AIO_THREADS: &str = "threads";
 pub const DEFAULT_BLOCK_DEVICE_AIO_NATIVE: &str = "native";
 pub const DEFAULT_BLOCK_DEVICE_AIO: &str = "io_uring";
+pub const DEFAULT_BLOCK_DEVICE_NUM_QUEUES: u32 = 1;
+pub const DEFAULT_BLOCK_DEVICE_QUEUE_SIZE: u32 = 128;
 
 pub const DEFAULT_SHARED_FS_TYPE: &str = "virtio-fs";
 pub const DEFAULT_VIRTIO_FS_CACHE_MODE: &str = "never";
