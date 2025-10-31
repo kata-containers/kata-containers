@@ -184,10 +184,10 @@ function adjust_shim_for_nfd() {
 		file="/opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml"
 		case "${shim}" in
 			*tdx*)
-				yq -yi --arg k "tdx.intel.com/keys" '.overhead.podFixed[$k] = 1' "${file}"
+				yq -yi --arg k "tdx.intel.com/keys" '.overhead.podFixed[$k] = "1"' "${file}"
 				;;
 			*snp*)
-				yq -yi --arg k "sev-snp.amd.com/esids" '.overhead.podFixed[$k] = 1' "${file}"
+				yq -yi --arg k "sev-snp.amd.com/esids" '.overhead.podFixed[$k] = "1"' "${file}"
 				;;
 			*)
 				;;
