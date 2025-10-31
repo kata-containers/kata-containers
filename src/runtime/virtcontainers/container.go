@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
@@ -62,10 +61,6 @@ var cdromMajors = map[int64]string{
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
 // #define FLOPPY_MAJOR		2
 const floppyMajor = int64(2)
-
-// vfioAnnotationPrefix is the CDI annotation prefix for VFIO devices that Kata generates
-// for the inner runtime (guest). Example: cdi.k8s.io/vfio50 -> nvidia.com/gpu=0
-var vfioAnnotationPrefix = fmt.Sprintf("%svfio", cdi.AnnotationPrefix)
 
 // Process gathers data related to a container process.
 type Process struct {
@@ -1022,7 +1017,7 @@ func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 }
 
 // Sort the devices starting with device #1 being the VFIO control group
-// device and the next being the actual device(s) e.g. /dev/vfio/<group>
+// device and the next the actuall device(s) e.g. /dev/vfio/<group>
 func sortContainerVFIODevices(devices []config.DeviceInfo) []config.DeviceInfo {
 	var vfioDevices []config.DeviceInfo
 
@@ -1080,65 +1075,35 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 			siblings[i].Index = i
 		}
 
-		// Remove all outer runtime CDI annotations (cdi.k8s.io/*) from the container spec
-		// before creating guest-specific (inner runtime) CDI annotations. The host-side
-		// annotations (e.g., cdi.k8s.io/gpu: nvidia.com/pgpu=0) served their purpose for
-		// device allocation and cold-plugging, but reference device kinds that don't exist
-		// in the guest where they would be unresolvable.
-		c.removeOuterCDIAnnotations()
+		// Now that we have the index lets connect the /dev/vfio/<num>
+		// to the correct index
+		if devices, ok := devices.([]ContainerDevice); ok {
+			for _, dev := range devices {
+				c.siblingAnnotation(dev.ContainerPath, siblings)
+			}
+		}
 
-		// Create guest-compatible CDI annotations by mapping each /dev/vfio/<num> device
-		// to its indexed sibling (e.g., cdi.k8s.io/vfio50: nvidia.com/gpu=0).
-		c.addInnerCDIAnnotations(devices, siblings)
+		if devices, ok := devices.([]config.DeviceInfo); ok {
+			for _, dev := range devices {
+				c.siblingAnnotation(dev.ContainerPath, siblings)
+			}
+
+		}
+
 	}
 }
-
-func (c *Container) addInnerCDIAnnotations(devices interface{}, siblings []DeviceRelation) {
-	if devices, ok := devices.([]ContainerDevice); ok {
-		for _, dev := range devices {
-			c.siblingAnnotation(dev.ContainerPath, siblings)
-		}
-	}
-
-	if devices, ok := devices.([]config.DeviceInfo); ok {
-		for _, dev := range devices {
-			c.siblingAnnotation(dev.ContainerPath, siblings)
-		}
-	}
-}
-
 func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) {
 	for _, sibling := range siblings {
 		if sibling.Path == devPath {
 			vfioNum := filepath.Base(devPath)
-			annoKey := fmt.Sprintf("%s%s", vfioAnnotationPrefix, vfioNum)
+			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
 			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
 			if c.config.CustomSpec.Annotations == nil {
 				c.config.CustomSpec.Annotations = make(map[string]string)
 			}
 			c.config.CustomSpec.Annotations[annoKey] = annoValue
-			c.Logger().Infof("adding inner runtime CDI annotation: %s: %s", annoKey, annoValue)
+			c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
 		}
-	}
-}
-
-func (c *Container) removeOuterCDIAnnotations() {
-	if c.config.CustomSpec == nil || c.config.CustomSpec.Annotations == nil {
-		return
-	}
-
-	for key, value := range c.config.CustomSpec.Annotations {
-		if !strings.HasPrefix(key, cdi.AnnotationPrefix) {
-			continue
-		}
-
-		// preserve generated inner runtime VFIO annotations
-		if strings.HasPrefix(key, vfioAnnotationPrefix) && strings.HasPrefix(value, "nvidia.com/gpu=") {
-			continue
-		}
-
-		c.Logger().Infof("deleting outer runtime CDI annotation: %s=%s", key, value)
-		delete(c.config.CustomSpec.Annotations, key)
 	}
 }
 
