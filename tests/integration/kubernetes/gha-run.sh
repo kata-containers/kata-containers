@@ -432,7 +432,7 @@ function cleanup_kata_deploy() {
 
 	# Do not return after deleting only the parent object cascade=foreground
 	# means also wait for child/dependent object deletion
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade=foreground --timeout 10m --namespace kube-system --debug
 }
 
 function cleanup() {
