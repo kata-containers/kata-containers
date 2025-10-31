@@ -300,8 +300,7 @@
         "enable_configmap_secret_storages": false
     },
     "cluster_config": {
-        "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
-        "guest_pull": true
+        "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6"
     },
     "request_defaults": {
         "CreateContainerRequest": {

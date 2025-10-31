@@ -166,18 +166,6 @@ impl Container {
         let mut passwd = String::new();
         let mut group = String::new();
 
-        // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
-        // See issue https://github.com/kata-containers/kata-containers/issues/11162
-        if config.settings.cluster_config.guest_pull {
-            info!("Guest pull is enabled, skipping passwd/group file parsing");
-            return Ok(Container {
-                image: image_string,
-                config_layer,
-                passwd,
-                group,
-            });
-        }
-
         let image_layers = get_image_layers(
             &config.layers_cache,
             &mut client,
@@ -195,12 +183,14 @@ impl Container {
                 passwd = String::new();
             } else if !layer.passwd.is_empty() {
                 passwd = layer.passwd.clone();
+                debug!("Found in image layer passwd = \n{passwd}");
             }
 
             if layer.group == WHITEOUT_MARKER {
                 group = String::new();
             } else if !layer.group.is_empty() {
                 group = layer.group.clone();
+                debug!("Found in image layer group = \n{group}");
             }
         }
 
@@ -221,6 +211,7 @@ impl Container {
         match parse_passwd_file(&self.passwd) {
             Ok(records) => {
                 if let Some(record) = records.iter().find(|&r| r.uid == uid) {
+                    debug!("Found GID = {} for UID = {uid} in image layer", record.gid);
                     Ok(record.gid)
                 } else {
                     Err(anyhow!("Failed to find uid {} in /etc/passwd", uid))
@@ -244,6 +235,10 @@ impl Container {
         match parse_passwd_file(&self.passwd) {
             Ok(records) => {
                 if let Some(record) = records.iter().find(|&r| r.user == user) {
+                    debug!(
+                        "Found GID = {} for user = {user} in image layer",
+                        record.gid
+                    );
                     Ok((record.uid, record.gid))
                 } else {
                     Err(anyhow!("Failed to find user {} in /etc/passwd", user))
@@ -279,6 +274,10 @@ impl Container {
                         if u == &user && &record.name != u {
                             // The second condition works around containerd bug
                             // https://github.com/containerd/containerd/issues/11937.
+                            debug!(
+                                "Found AdditionalGID = {} for user = {user} in image layer",
+                                record.gid
+                            );
                             groups.push(record.gid);
                         }
                     });
@@ -303,7 +302,10 @@ impl Container {
                     user
                 );
                 match self.get_uid_gid_from_passwd_user(user.to_string().clone()) {
-                    Ok((uid, _)) => uid,
+                    Ok((uid, _)) => {
+                        debug!("Parsed user = {user} to uid = {uid}");
+                        uid
+                    }
                     Err(err) => {
                         warn!(
                             "could not resolve named user {}, defaulting to uid 0: {}",
@@ -323,8 +325,11 @@ impl Container {
         yaml_has_command: bool,
         yaml_has_args: bool,
     ) {
-        debug!("Getting process field from docker config layer...");
         let docker_config = &self.config_layer.config;
+        debug!(
+            "Getting process field for docker config with User = {:?}",
+            &docker_config.User
+        );
 
         /*
          * The user field may:
@@ -361,7 +366,14 @@ impl Container {
 
                     debug!("Using UID:GID mapping from /etc/passwd");
                 }
-                process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
+
+                match self.get_gid_from_passwd_uid(process.User.UID) {
+                    Ok(gid) => process.User.GID = gid,
+                    Err(e) => debug!(
+                        "GID not found in container image for UID = {}, error: {e}",
+                        process.User.GID
+                    ),
+                }
             }
         }
 
