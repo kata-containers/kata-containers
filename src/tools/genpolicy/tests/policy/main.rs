@@ -22,7 +22,7 @@ mod tests {
     // Translate each test case in testcases.json
     // to one request type.
     #[derive(Clone, Debug, Deserialize, Serialize)]
-    #[serde(tag = "type")]
+    #[serde(tag = "kind", content = "request")]
     enum TestRequest {
         CopyFile(CopyFileRequest),
         CreateContainer(CreateContainerRequest),
@@ -49,10 +49,22 @@ mod tests {
         }
     }
 
+    fn serialize_request_only(value: &TestRequest) -> serde_json::Result<serde_json::Value> {
+        if let serde_json::Value::Object(map) = serde_json::to_value(value)? {
+            for (k, v) in map {
+                if k == "request" {
+                    return Ok(v);
+                }
+            }
+        }
+        Ok(serde_json::Value::Null)
+    }
+
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestCase {
         description: String,
         allowed: bool,
+        #[serde(flatten)]
         request: TestRequest,
     }
 
@@ -158,7 +170,7 @@ mod tests {
         for test_case in test_cases {
             println!("\n== case: {} ==\n", test_case.description);
 
-            let v = serde_json::to_value(&test_case.request).unwrap();
+            let v = serialize_request_only(&test_case.request).unwrap();
 
             let results = pol
                 .allow_request(
@@ -170,6 +182,7 @@ mod tests {
             let logs = fs::read_to_string(workdir.join("policy.log")).unwrap();
             let results = results.unwrap();
 
+            // TODO(burgerdev): better description of failure (left != right)
             assert_eq!(
                 test_case.allowed, results.0,
                 "logs: {}\npolicy: {}",
