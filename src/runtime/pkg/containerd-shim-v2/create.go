@@ -43,6 +43,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
+	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
 
 type startManagementServerFunc func(s *service, ctx context.Context, ociSpec *specs.Spec)
@@ -184,6 +185,13 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			}
 		}
 
+		// config.WithCDI() has used the CDI annotations to inject
+		// host-side devices. As these annotations reference device kinds
+		// that don't exist in the guest (e.g., nvidia.com/pgpu), we
+		// remove them before creating the sandbox and the containers
+		// within it.
+		removeCDIAnnotations(ociSpec.Annotations)
+
 		// Pass service's context instead of local ctx to CreateSandbox(), since local
 		// ctx will be canceled after this rpc service call, but the sandbox will live
 		// across multiple rpc service calls.
@@ -222,6 +230,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 				}
 			}
 		}()
+
+		// CDI annotations have been processed during PodSandbox creation
+		// and cold-plug. CDI annotations referencing device kinds that
+		// exist in the guest (e.g., nvidia.com/gpu) will be generated
+		// during device attachment.
+		removeCDIAnnotations(ociSpec.Annotations)
 
 		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, disableOutput, runtimeConfig.DisableGuestEmptyDir)
 		if err != nil {
@@ -432,4 +446,17 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxId stri
 		return nil
 	}
 	return fmt.Errorf("failed to get the gid of /dev/kvm")
+}
+
+func removeCDIAnnotations(annotations map[string]string) {
+	if annotations == nil {
+		return
+	}
+
+	for key := range annotations {
+		if strings.HasPrefix(key, cdi.AnnotationPrefix) {
+			shimLog.Debugf("removing CDI annotation: %s=%s", key, annotations[key])
+			delete(annotations, key)
+		}
+	}
 }
