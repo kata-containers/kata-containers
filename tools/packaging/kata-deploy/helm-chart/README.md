@@ -126,6 +126,9 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `image.tag` | Tag of the image reference | `""` |
 | `k8sDistribution` | Set the k8s distribution to use: `k8s`, `k0s`, `k3s`, `rke2`, `microk8s` | `k8s` |
 | `nodeSelector` | Node labels for pod assignment. Allows restricting deployment to specific nodes | `{}` |
+| `runtimeClasses.enabled` | Enable Helm-managed `runtimeClass` creation (recommended) | `true` |
+| `runtimeClasses.createDefault` | Create a default `runtimeClass` alias for the default shim | `false` |
+| `runtimeClasses.defaultName` | Name for the default `runtimeClass` | `kata` |
 | `env.debug` | Enable debugging in the `configuration.toml` | `false` |
 | `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca` |
 | `env.shims_x86_64` | List of shims to deploy for x86_64 (if set, overrides `shims`) | `""` |
@@ -137,9 +140,9 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.defaultShim_aarch64` | The default shim to use if none specified for aarch64 (if set, overrides `defaultShim`) | `""` |
 | `env.defaultShim_s390x` | The default shim to use if none specified for s390x (if set, overrides `defaultShim`) | `""` |
 | `env.defaultShim_ppc64le` | The default shim to use if none specified for ppc64le (if set, overrides `defaultShim`) | `""` |
-| `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
-| `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` (if `createDefaultRuntimeClass` is set **OR** `defaultRuntimeClassName` is set, a default runtime class will be created, and its default  name is `kata`) | `false` |
-| `env.defaultRuntimeClassName` | The default k8s `runtimeClass` name (if `createDefaultRuntimeClass` is set **OR** `defaultRuntimeClassName` is set, a `default runtime class will be created, and its default name is `kata`) | "" |
+| `env.createRuntimeClasses` | **DEPRECATED** - Use `runtimeClasses.enabled` instead. Script-based `runtimeClass` creation | `false` |
+| `env.createDefaultRuntimeClass` | **DEPRECATED** - Use `runtimeClasses.createDefault` instead | `false` |
+| `env.defaultRuntimeClassName` | **DEPRECATED** - Use `runtimeClasses.defaultName` instead | `""` |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
 | `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim | `""` |
 | `env.snapshotterHandlerMapping_x86_64` | Provide the snapshotter handler for each shim for x86_64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
@@ -162,6 +165,29 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env._experimentalForceGuestPull_aarch64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for aarch64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
 | `env._experimentalForceGuestPull_s390x` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for s390x (if set, overrides `_experimentalForceGuestPull`) | `""` |
 | `env._experimentalForceGuestPull_ppc64le` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for ppc64le (if set, overrides `_experimentalForceGuestPull`) | `""` |
+
+## `RuntimeClass` Management
+
+**NEW**: Starting with Kata Containers v3.23.0, `runtimeClasses` are managed by
+         Helm by default, providing better lifecycle management and integration.
+
+### Features:
+- **Automatic Creation**: `runtimeClasses` are automatically created for all configured shims
+- **Lifecycle Management**: Helm manages creation, updates, and deletion of `runtimeClasses`
+
+### Configuration:
+```yaml
+runtimeClasses:
+  enabled: true                  # Enable Helm-managed `runtimeClasses` (default)
+  createDefault: false           # Create a default "kata" `runtimeClass`
+  defaultName: "kata"            # Name for the default `runtimeClass`
+```
+
+When `runtimeClasses.enabled: true` (default), the Helm chart creates
+`runtimeClass` resources for all shims specified in `env.shims`.
+
+The kata-deploy script will no longer create `runtimeClasses`
+(`env.createRuntimeClasses` defaults to `"false"`).
 
 ## Example: only `qemu` shim and debug enabled
 
@@ -211,9 +237,11 @@ $ helm install kata-deploy-cicd       \
   -n kata-deploy-cicd                 \
   --set env.multiInstallSuffix=cicd   \
   --set env.debug=true                \
-  --set env.createRuntimeClasses=true \
   "${CHART}" --version  "${VERSION}"
 ```
+
+Note: `runtimeClasses` are automatically created by Helm (via
+      `runtimeClasses.enabled=true`, which is the default).
 
 Now verify the installation by examining the `runtimeClasses`:
 

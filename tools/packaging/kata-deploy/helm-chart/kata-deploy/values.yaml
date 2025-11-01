@@ -11,6 +11,20 @@ k8sDistribution: "k8s"
 #   kata-containers: "enabled"
 #   node-type: "worker"
 nodeSelector: {}
+
+# RuntimeClass configuration
+# When enabled, RuntimeClasses will be created by the Helm chart instead of by the kata-deploy script
+runtimeClasses:
+  # Enable RuntimeClass creation via Helm
+  enabled: true
+  # Create a default RuntimeClass (alias for the default shim)
+  # NOTE: Default RuntimeClass creation is NOT supported with multiInstallSuffix.
+  #       When multiInstallSuffix is set, this option will be ignored to avoid naming conflicts.
+  #       In multi-install scenarios, use the fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
+  createDefault: false
+  # Name for the default RuntimeClass (defaults to "kata" if not specified)
+  defaultName: "kata"
+
 env:
   debug: "false"
   shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"
@@ -23,7 +37,10 @@ env:
   defaultShim_aarch64: ""
   defaultShim_s390x: ""
   defaultShim_ppc64le: ""
-  createRuntimeClasses: "true"
+  # createRuntimeClasses: DEPRECATED - Use runtimeClasses.enabled instead
+  # When runtimeClasses.enabled is true (default), this is automatically set to "false"
+  # to let Helm manage RuntimeClasses instead of the kata-deploy script
+  createRuntimeClasses: "false"
   createDefaultRuntimeClass: "false"
   allowedHypervisorAnnotations: ""
   snapshotterHandlerMapping: ""
@@ -40,6 +57,9 @@ env:
   pullTypeMapping_ppc64le: ""
   installationPrefix: ""
   hostOS: ""
+  # Suffix for multi-install deployments to avoid conflicts between multiple Kata installations
+  # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
+  #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
   multiInstallSuffix: ""
   _experimentalSetupSnapshotter: ""
   _experimentalForceGuestPull: ""
