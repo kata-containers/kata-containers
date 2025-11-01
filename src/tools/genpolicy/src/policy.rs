@@ -733,10 +733,15 @@ impl AgentPolicy {
             &process
         );
 
+        let guest_pull = self.config.settings.cluster_config.guest_pull;
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
-        yaml_container
-            .registry
-            .get_process(&mut process, yaml_has_command, yaml_has_args);
+
+        yaml_container.registry.get_process(
+            &mut process,
+            yaml_has_command,
+            yaml_has_args,
+            guest_pull,
+        );
         debug!(
             "get_container_process: after registry.get_processs: process = {:?}",
             &process
@@ -813,7 +818,6 @@ impl AgentPolicy {
         let all_additional_gids = v1_policy || !is_pause_container;
         let reset_additional_gids = is_pause_container;
 
-        let guest_pull = self.config.settings.cluster_config.guest_pull;
         let mut must_check_passwd = false;
 
         resource.get_process_fields(
