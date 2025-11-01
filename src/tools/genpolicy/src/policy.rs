@@ -743,7 +743,7 @@ impl AgentPolicy {
             guest_pull,
         );
         debug!(
-            "get_container_process: after registry.get_processs: process = {:?}",
+            "get_container_process: after registry.get_process: process = {:?}",
             &process
         );
 
@@ -834,24 +834,32 @@ impl AgentPolicy {
         // The actual GID of the process run by the CRI
         // Depends on the contents of /etc/passwd in the container
         if must_check_passwd {
-            match yaml_container
-                .registry
-                .get_gid_from_passwd_uid(process.User.UID)
-            {
-                Ok(gid) => set_process_user_gid(&mut process, reset_additional_gids, gid),
-                Err(e) => {
-                    debug!(
-                        "get_container_process: GID not found in container image for UID = {}, error: {e}",
-                        process.User.UID
-                    );
+            let new_gid = if guest_pull {
+                0
+            } else {
+                match yaml_container
+                    .registry
+                    .get_gid_from_passwd_uid(process.User.UID)
+                {
+                    Ok(gid) => gid,
+                    Err(e) => {
+                        debug!(
+                            "get_container_process: GID not found in container image for UID = {}, error: {e}",
+                            process.User.UID
+                        );
 
-                    // must_check_passwd is true because the user specified runAsUser. No GID
-                    // corresponding to the UID has been found in the container image, but the
-                    // current process.User.GID must be added to the AdditionalGids.
-                    let gid = if guest_pull { 0 } else { process.User.GID };
-                    set_process_user_gid(&mut process, reset_additional_gids, gid);
+                        // must_check_passwd is true because the user specified runAsUser. No GID
+                        // corresponding to the UID has been found in the container image, but the
+                        // current process.User.GID must be added to the AdditionalGids.
+                        if guest_pull {
+                            0
+                        } else {
+                            process.User.GID
+                        }
+                    }
                 }
-            }
+            };
+            set_process_user_gid(&mut process, reset_additional_gids, new_gid);
         } else if all_additional_gids {
             debug!(
                 "get_container_process: inserting process.User.GID = {} into AdditionalGids",
