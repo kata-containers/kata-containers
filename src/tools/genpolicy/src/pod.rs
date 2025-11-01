@@ -1037,16 +1037,18 @@ impl Container {
         }
 
         // Handle AdditionalGids here as this is the last time the UID can be updated.
-        for gid in self
-            .registry
-            .get_additional_groups_from_uid(process.User.UID)
-            .unwrap_or_default()
-        {
-            debug!(
-                "get_process_fields: adding GID = {gid} for UID = {}",
-                process.User.UID
-            );
-            process.User.AdditionalGids.insert(gid);
+        if !guest_pull {
+            for gid in self
+                .registry
+                .get_additional_groups_from_uid(process.User.UID)
+                .unwrap_or_default()
+            {
+                debug!(
+                    "get_process_fields: adding GID = {gid} for UID = {}",
+                    process.User.UID
+                );
+                process.User.AdditionalGids.insert(gid);
+            }
         }
     }
 }
