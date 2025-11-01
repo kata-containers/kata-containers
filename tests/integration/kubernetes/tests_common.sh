@@ -93,6 +93,16 @@ is_coco_platform() {
 	esac
 }
 
+is_aks_cluster() {
+	case "${KATA_HYPERVISOR}" in
+		"qemu-tdx"|"qemu-snp")
+			return 1
+			;;
+		*)
+			return 0
+	esac
+}
+
 adapt_common_policy_settings_for_non_coco() {
 	local settings_dir=$1
 
@@ -111,7 +121,7 @@ adapt_common_policy_settings_for_non_coco() {
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Using watchable binds for configMap volumes - instead of CopyFileRequest.
-	jq '.volumes.configMap.driver = "watchable-bind"' \
+	jq '.volumes.configMap.mount_point = "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-" | .volumes.configMap.driver = "watchable-bind"' \
 		"${settings_dir}/genpolicy-settings.json" > temp.json
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 
@@ -133,11 +143,29 @@ adapt_common_policy_settings_for_cbl_mariner() {
 	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
+# adapt common policy settings for non-TEE Hosts on AKS
+adapt_common_policy_settings_for_aks() {
+	info "Adapting common policy settings for AKS non-TEE Hosts"
+
+	jq '.pause_container.Process.User.UID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	jq '.pause_container.Process.User.GID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	jq '.cluster_config.pause_container_image = "mcr.microsoft.com/oss/v2/kubernetes/pause:3.6"' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	jq '.cluster_config.pause_container_id_policy = "v2"' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
 
 	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
+	is_aks_cluster && adapt_common_policy_settings_for_aks "${settings_dir}"
 
 	case "${KATA_HOST_OS}" in
 		"cbl-mariner")
@@ -206,7 +234,7 @@ auto_generate_policy_no_added_flags() {
 	declare -r additional_flags="${4:-""}"
 
 	auto_generate_policy_enabled || return 0
-	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
+	local genpolicy_command="RUST_LOG=debug /opt/kata/bin/genpolicy -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 

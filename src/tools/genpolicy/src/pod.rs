@@ -918,8 +918,20 @@ impl yaml::K8sResource for Pod {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
-        yaml::get_process_fields(process, &self.spec.securityContext, must_check_passwd);
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        is_pause_container: bool,
+        pause_container_additional_gid: bool,
+        must_check_passwd: &mut bool,
+    ) {
+        yaml::get_process_fields(
+            process,
+            is_pause_container,
+            pause_container_additional_gid,
+            &self.spec.securityContext,
+            must_check_passwd,
+        );
     }
 
     fn get_sysctls(&self) -> Vec<Sysctl> {
@@ -973,9 +985,23 @@ impl Container {
         compress_default_capabilities(capabilities, defaults);
     }
 
-    pub fn get_process_fields(&self, process: &mut policy::KataProcess) {
+    pub fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        all_additional_gids: bool,
+        guest_pull: bool,
+    ) {
+        debug!(
+            "get_process_fields: container image = {:?}",
+            self.registry.image
+        );
+
         if let Some(context) = &self.securityContext {
+            debug!("get_process_fields: securityContext = {:?}", context);
+
             if let Some(uid) = context.runAsUser {
+                debug!("get_process_fields: uid = {uid}");
+
                 process.User.UID = uid.try_into().unwrap();
                 // Changing the UID can break the GID mapping
                 // if a /etc/passwd file is present.
@@ -986,14 +1012,23 @@ impl Container {
                 //
                 // This behavior comes from the containerd runtime implementation:
                 // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
-                process.User.GID = self
-                    .registry
-                    .get_gid_from_passwd_uid(process.User.UID)
-                    .unwrap_or(process.User.GID);
+                match self.registry.get_gid_from_passwd_uid(process.User.UID) {
+                    Ok(gid) => policy::set_process_user_gid(process, all_additional_gids, gid),
+                    Err(e) => {
+                        debug!(
+                            "get_process_fields: GID not found in container image for UID = {}, error: {e}",
+                            process.User.UID
+                        );
+                        if guest_pull {
+                            policy::set_process_user_gid(process, all_additional_gids, 0);
+                        }
+                    }
+                }
             }
 
             if let Some(gid) = context.runAsGroup {
-                process.User.GID = gid.try_into().unwrap();
+                debug!("get_process_fields: runAsGroup = {:?}", gid);
+                policy::set_process_user_gid(process, all_additional_gids, gid.try_into().unwrap());
             }
 
             if let Some(allow) = context.allowPrivilegeEscalation {
@@ -1002,12 +1037,18 @@ impl Container {
         }
 
         // Handle AdditionalGids here as this is the last time the UID can be updated.
-        for gid in self
-            .registry
-            .get_additional_groups_from_uid(process.User.UID)
-            .unwrap_or_default()
-        {
-            process.User.AdditionalGids.insert(gid);
+        if !guest_pull {
+            for gid in self
+                .registry
+                .get_additional_groups_from_uid(process.User.UID)
+                .unwrap_or_default()
+            {
+                debug!(
+                    "get_process_fields: adding GID = {gid} for UID = {}",
+                    process.User.UID
+                );
+                process.User.AdditionalGids.insert(gid);
+            }
         }
     }
 }

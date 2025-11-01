@@ -166,18 +166,6 @@ impl Container {
         let mut passwd = String::new();
         let mut group = String::new();
 
-        // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
-        // See issue https://github.com/kata-containers/kata-containers/issues/11162
-        if config.settings.cluster_config.guest_pull {
-            info!("Guest pull is enabled, skipping passwd/group file parsing");
-            return Ok(Container {
-                image: image_string,
-                config_layer,
-                passwd,
-                group,
-            });
-        }
-
         let image_layers = get_image_layers(
             &config.layers_cache,
             &mut client,
@@ -195,12 +183,14 @@ impl Container {
                 passwd = String::new();
             } else if !layer.passwd.is_empty() {
                 passwd = layer.passwd.clone();
+                debug!("Found in image layer passwd = \n{passwd}");
             }
 
             if layer.group == WHITEOUT_MARKER {
                 group = String::new();
             } else if !layer.group.is_empty() {
                 group = layer.group.clone();
+                debug!("Found in image layer group = \n{group}");
             }
         }
 
@@ -221,6 +211,7 @@ impl Container {
         match parse_passwd_file(&self.passwd) {
             Ok(records) => {
                 if let Some(record) = records.iter().find(|&r| r.uid == uid) {
+                    debug!("Found GID = {} for UID = {uid} in image layer", record.gid);
                     Ok(record.gid)
                 } else {
                     Err(anyhow!("Failed to find uid {} in /etc/passwd", uid))
@@ -244,6 +235,10 @@ impl Container {
         match parse_passwd_file(&self.passwd) {
             Ok(records) => {
                 if let Some(record) = records.iter().find(|&r| r.user == user) {
+                    debug!(
+                        "Found GID = {} for user = {user} in image layer",
+                        record.gid
+                    );
                     Ok((record.uid, record.gid))
                 } else {
                     Err(anyhow!("Failed to find user {} in /etc/passwd", user))
@@ -279,6 +274,10 @@ impl Container {
                         if u == &user && &record.name != u {
                             // The second condition works around containerd bug
                             // https://github.com/containerd/containerd/issues/11937.
+                            debug!(
+                                "Found AdditionalGID = {} for user = {user} in image layer",
+                                record.gid
+                            );
                             groups.push(record.gid);
                         }
                     });
@@ -303,7 +302,10 @@ impl Container {
                     user
                 );
                 match self.get_uid_gid_from_passwd_user(user.to_string().clone()) {
-                    Ok((uid, _)) => uid,
+                    Ok((uid, _)) => {
+                        debug!("Parsed user = {user} to uid = {uid}");
+                        uid
+                    }
                     Err(err) => {
                         warn!(
                             "could not resolve named user {}, defaulting to uid 0: {}",
@@ -322,9 +324,13 @@ impl Container {
         process: &mut policy::KataProcess,
         yaml_has_command: bool,
         yaml_has_args: bool,
+        guest_pull: bool,
     ) {
-        debug!("Getting process field from docker config layer...");
         let docker_config = &self.config_layer.config;
+        debug!(
+            "Getting process field for docker config with User = {:?}",
+            &docker_config.User
+        );
 
         /*
          * The user field may:
@@ -344,24 +350,38 @@ impl Container {
                     let parts_count = user.len();
                     if parts_count != 2 {
                         warn!(
-                            "Failed to split user, expected two parts, got {}, using uid = gid = 0",
+                            "get_process: Failed to split user, expected two parts, got {}, using uid = gid = 0",
                             parts_count
                         );
                     } else {
-                        debug!("Parsing uid from user[0] = {}", &user[0]);
+                        debug!("get_process: Parsing uid from user[0] = {}", &user[0]);
                         process.User.UID = self.parse_user_string(user[0]);
 
                         debug!(
-                            "Overriding OCI container GID with UID:GID mapping from /etc/passwd"
+                            "get_process: Overriding OCI container GID with UID:GID mapping from /etc/passwd"
                         );
                     }
                 } else {
-                    debug!("Parsing uid from image_user = {}", image_user);
+                    debug!("get_process: Parsing uid from image_user = {}", image_user);
                     process.User.UID = self.parse_user_string(image_user);
 
-                    debug!("Using UID:GID mapping from /etc/passwd");
+                    debug!("get_process: Using UID:GID mapping from /etc/passwd");
                 }
-                process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
+
+                if guest_pull {
+                    process.User.GID = 0;
+                } else {
+                    match self.get_gid_from_passwd_uid(process.User.UID) {
+                        Ok(gid) => process.User.GID = gid,
+                        Err(e) => {
+                            debug!(
+                                "get_process: GID not found in container image for UID = {}, error: {e}",
+                                process.User.UID
+                            );
+                            process.User.GID = 0;
+                        }
+                    }
+                }
             }
         }
 
@@ -381,12 +401,15 @@ impl Container {
         }
 
         let policy_args = &mut process.Args;
-        debug!("Already existing policy args: {:?}", policy_args);
+        debug!(
+            "get_process: Already existing policy args: {:?}",
+            policy_args
+        );
 
         if let Some(entry_points) = &docker_config.Entrypoint {
-            debug!("Image Entrypoint: {:?}", entry_points);
+            debug!("get_process: Image Entrypoint: {:?}", entry_points);
             if !yaml_has_command {
-                debug!("Inserting Entrypoint into policy args");
+                debug!("get_process: Inserting Entrypoint into policy args");
 
                 let mut reversed_entry_points = entry_points.clone();
                 reversed_entry_points.reverse();
@@ -395,29 +418,32 @@ impl Container {
                     policy_args.insert(0, entry_point.clone());
                 }
             } else {
-                debug!("Ignoring image Entrypoint because YAML specified the container command");
+                debug!("get_process: Ignoring image Entrypoint because YAML specified the container command");
             }
         } else {
-            debug!("No image Entrypoint");
+            debug!("get_process: No image Entrypoint");
         }
 
-        debug!("Updated policy args: {:?}", policy_args);
+        debug!("get_process: Updated policy args: {:?}", policy_args);
 
         if yaml_has_command {
-            debug!("Ignoring image Cmd because YAML specified the container command");
+            debug!("get_process: Ignoring image Cmd because YAML specified the container command");
         } else if yaml_has_args {
-            debug!("Ignoring image Cmd because YAML specified the container args");
+            debug!("get_process: Ignoring image Cmd because YAML specified the container args");
         } else if let Some(commands) = &docker_config.Cmd {
-            debug!("Adding to policy args the image Cmd: {:?}", commands);
+            debug!(
+                "get_process: Adding to policy args the image Cmd: {:?}",
+                commands
+            );
 
             for cmd in commands {
                 policy_args.push(cmd.clone());
             }
         } else {
-            debug!("Image Cmd field is not present");
+            debug!("get_process: Image Cmd field is not present");
         }
 
-        debug!("Updated policy args: {:?}", policy_args);
+        debug!("get_process: Updated policy args: {:?}", policy_args);
 
         if let Some(working_dir) = &docker_config.WorkingDir {
             if !working_dir.is_empty() {
@@ -425,7 +451,7 @@ impl Container {
             }
         }
 
-        debug!("get_process succeeded.");
+        debug!("get_process: succeeded.");
     }
 }
 

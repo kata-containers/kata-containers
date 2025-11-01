@@ -42,7 +42,7 @@ pub struct AgentPolicy {
     /// Rego rules read from a file (rules.rego).
     pub rules: String,
 
-    /// Policy settings.
+    /// Policy settings based on genpolicy's command line.
     pub config: utils::Config,
 }
 
@@ -430,15 +430,32 @@ pub struct CommonData {
     pub privileged_caps: Vec<String>,
 }
 
-/// Configuration from "kubectl config".
+/// Configuration specific to user's cluster.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
     /// Pause container image reference.
     pub pause_container_image: String,
+
     /// Whether or not the cluster uses the guest pull mechanism
     /// In guest pull, host can't look into layers to determine GID.
     /// See issue https://github.com/kata-containers/kata-containers/issues/11162
     pub guest_pull: bool,
+
+    /// Supported values:
+    ///
+    /// "v1" - Pause container UID/GID/AdditionalGids handled as in AKS pre-October 2025:
+    ///         - Example container image reference: mcr.microsoft.com/oss/kubernetes/pause:3.6
+    ///         - Defaults: UID=65535, GID=65535, AdditionalGids=[65535].
+    ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *replaces*
+    ///           the default value from AdditionalGids.
+    ///         - Groups specified using fsGroup or supplementalGroups *get added* to AdditionalGids.
+    /// "v2" - Pause container UID/GID/AdditionalGids handled as in AKS post-October 2025:
+    ///         - Example container image reference: mcr.microsoft.com/oss/v2/kubernetes/pause:3.6
+    ///         - Defaults: UID=0, GID=0, AdditionalGids=[].
+    ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *gets added
+    ///           as the only value* in AdditionalGids.
+    ///         - Groups specified using fsGroup or supplementalGroups *don't get added* to AdditionalGids.
+    pub pause_container_id_policy: String,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -562,6 +579,7 @@ impl AgentPolicy {
         let mut policy_containers = Vec::new();
 
         for (i, yaml_container) in yaml_containers.iter().enumerate() {
+            debug!("============== Container {i}");
             policy_containers.push(self.get_container_policy(resource, yaml_container, i == 0));
         }
 
@@ -704,13 +722,30 @@ impl AgentPolicy {
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
         let mut process = containerd::get_process(is_privileged, &self.config.settings.common);
+        debug!(
+            "get_container_process: after containerd::get_process: process = {:?}",
+            &process
+        );
 
         yaml_container.apply_capabilities(&mut process.Capabilities, &self.config.settings.common);
+        debug!(
+            "get_container_process: after apply_capabilities: process = {:?}",
+            &process
+        );
 
+        let guest_pull = self.config.settings.cluster_config.guest_pull;
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
-        yaml_container
-            .registry
-            .get_process(&mut process, yaml_has_command, yaml_has_args);
+
+        yaml_container.registry.get_process(
+            &mut process,
+            yaml_has_command,
+            yaml_has_args,
+            guest_pull,
+        );
+        debug!(
+            "get_container_process: after registry.get_process: process = {:?}",
+            &process
+        );
 
         if let Some(tty) = yaml_container.tty {
             process.Terminal = tty;
@@ -737,30 +772,107 @@ impl AgentPolicy {
             resource.get_annotations(),
             service_account_name,
         );
+        debug!(
+            "get_container_process: after get_env_variables: User = {:?}",
+            &process.User
+        );
 
         substitute_env_variables(&mut process.Env);
+        debug!(
+            "get_container_process: after substitute_env_variables: User = {:?}",
+            &process.User
+        );
+
         substitute_args_env_variables(&mut process.Args, &process.Env);
+        debug!(
+            "get_container_process: after substitute_args_env_variables: User = {:?}",
+            &process.User
+        );
 
         c_settings.get_process_fields(&mut process);
+        debug!(
+            "get_container_process: after c_settings.get_process_fields: User = {:?}",
+            &process.User
+        );
+
+        let v1_policy = self
+            .config
+            .settings
+            .cluster_config
+            .pause_container_id_policy
+            == "v1";
+        if !v1_policy {
+            let v2_policy = self
+                .config
+                .settings
+                .cluster_config
+                .pause_container_id_policy
+                == "v2";
+            if !v2_policy {
+                panic!(
+                    "Unsupported pause_container_id_policy = {} - must be v1 or v2 in the settings file",
+                    self.config.settings.cluster_config.pause_container_id_policy
+                );
+            }
+        }
+        let all_additional_gids = v1_policy || !is_pause_container;
+        let reset_additional_gids = is_pause_container;
+
         let mut must_check_passwd = false;
-        resource.get_process_fields(&mut process, &mut must_check_passwd);
+
+        resource.get_process_fields(
+            &mut process,
+            all_additional_gids,
+            reset_additional_gids,
+            &mut must_check_passwd,
+        );
+        debug!(
+            "get_container_process: after resource.get_process_fields: must_check_passwd = {must_check_passwd}, User = {:?}",
+            &process.User
+        );
 
         // The actual GID of the process run by the CRI
         // Depends on the contents of /etc/passwd in the container
         if must_check_passwd {
-            process.User.GID = yaml_container
-                .registry
-                .get_gid_from_passwd_uid(process.User.UID)
-                .unwrap_or(0);
-        }
-        yaml_container.get_process_fields(&mut process);
+            let new_gid = if guest_pull {
+                0
+            } else {
+                match yaml_container
+                    .registry
+                    .get_gid_from_passwd_uid(process.User.UID)
+                {
+                    Ok(gid) => gid,
+                    Err(e) => {
+                        debug!(
+                            "get_container_process: GID not found in container image for UID = {}, error: {e}",
+                            process.User.UID
+                        );
 
-        // The last step containerd always does is add the User.GID to AdditionalGids
-        // The sandbox path does not respect the securityContext fsGroup/supplementalGroups
-        if is_pause_container {
-            process.User.AdditionalGids.clear();
+                        // must_check_passwd is true because the user specified runAsUser. No GID
+                        // corresponding to the UID has been found in the container image, but the
+                        // current process.User.GID must be added to the AdditionalGids.
+                        if guest_pull {
+                            0
+                        } else {
+                            process.User.GID
+                        }
+                    }
+                }
+            };
+            set_process_user_gid(&mut process, reset_additional_gids, new_gid);
+        } else if all_additional_gids {
+            debug!(
+                "get_container_process: inserting process.User.GID = {} into AdditionalGids",
+                process.User.GID
+            );
+            process.User.AdditionalGids.insert(process.User.GID);
         }
-        process.User.AdditionalGids.insert(process.User.GID);
+
+        yaml_container.get_process_fields(&mut process, all_additional_gids, guest_pull);
+        debug!(
+            "get_container_process: after yaml_container.get_process_fields: User = {:?}",
+            &process.User
+        );
 
         process
     }
@@ -780,8 +892,10 @@ impl KataSpec {
         if process.User.GID == 0 {
             process.User.GID = self.Process.User.GID;
         }
+        for gid in &self.Process.User.AdditionalGids {
+            process.User.AdditionalGids.insert(*gid);
+        }
 
-        process.User.AdditionalGids = self.Process.User.AdditionalGids.clone();
         process.User.Username = String::from(&self.Process.User.Username);
         add_missing_strings(&self.Process.Args, &mut process.Args);
 
@@ -1029,4 +1143,21 @@ pub fn get_kata_namespaces(
     });
 
     namespaces
+}
+
+pub fn set_process_user_gid(
+    process: &mut policy::KataProcess,
+    reset_additional_gids: bool,
+    gid: u32,
+) {
+    debug!("set_process_user_gid: setting process.User.GID = {gid}");
+    process.User.GID = gid;
+
+    if reset_additional_gids {
+        debug!("set_process_user_gid: clearing AdditionalGids");
+        process.User.AdditionalGids.clear();
+    }
+
+    debug!("set_process_user_gid: inserting gid = {gid} into AdditionalGids");
+    process.User.AdditionalGids.insert(gid);
 }

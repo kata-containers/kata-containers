@@ -101,6 +101,8 @@ pub trait K8sResource {
     fn get_process_fields(
         &self,
         _process: &mut policy::KataProcess,
+        _all_additional_gids: bool,
+        _reset_additional_gids: bool,
         _must_check_passwd: &mut bool,
     ) {
         // No need to implement support for securityContext or similar fields
@@ -387,9 +389,16 @@ fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
 
 pub fn get_process_fields(
     process: &mut policy::KataProcess,
+    all_additional_gids: bool,
+    reset_additional_gids: bool,
     security_context: &Option<pod::PodSecurityContext>,
     must_check_passwd: &mut bool,
 ) {
+    debug!(
+        "get_process_fields: security_context = {:?}",
+        security_context
+    );
+
     if let Some(context) = security_context {
         if let Some(uid) = context.runAsUser {
             process.User.UID = uid.try_into().unwrap();
@@ -412,21 +421,31 @@ pub fn get_process_fields(
         }
 
         if let Some(gid) = context.runAsGroup {
-            process.User.GID = gid.try_into().unwrap();
+            policy::set_process_user_gid(process, reset_additional_gids, gid.try_into().unwrap());
             *must_check_passwd = false;
         }
 
-        if let Some(fs_group) = context.fsGroup {
-            process
-                .User
-                .AdditionalGids
-                .insert(fs_group.try_into().unwrap());
-        }
+        if all_additional_gids {
+            if let Some(fs_group) = context.fsGroup {
+                debug!(
+                    "get_process_fields: inserting fs_group = {} into AdditionalGids",
+                    &fs_group
+                );
+                process
+                    .User
+                    .AdditionalGids
+                    .insert(fs_group.try_into().unwrap());
+            }
 
-        if let Some(supplemental_groups) = &context.supplementalGroups {
-            supplemental_groups.iter().for_each(|g| {
-                process.User.AdditionalGids.insert(*g);
-            });
+            if let Some(supplemental_groups) = &context.supplementalGroups {
+                debug!(
+                    "get_process_fields: inserting supplementalGroups = {:?} into AdditionalGids",
+                    &supplemental_groups
+                );
+                supplemental_groups.iter().for_each(|g| {
+                    process.User.AdditionalGids.insert(*g);
+                });
+            }
         }
 
         if let Some(allow) = context.allowPrivilegeEscalation {
