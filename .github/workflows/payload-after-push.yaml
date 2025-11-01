@@ -195,6 +195,7 @@ jobs:
           yq eval '.image.reference = "quay.io/kata-containers/kata-deploy-ci" | .image.tag = "kata-containers-latest"' -i tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml
 
           echo "Generating the chart package"
+          helm dependencies update tools/packaging/kata-deploy/helm-chart/kata-deploy
           helm package tools/packaging/kata-deploy/helm-chart/kata-deploy
 
           echo "Pushing the chart to the OCI registries"

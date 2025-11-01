@@ -216,6 +216,7 @@ function _upload_helm_chart_tarball()
 
 	RELEASE_VERSION="$(_release_version)"
 
+	helm dependencies update ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
 	helm package ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
 	gh release upload "${RELEASE_VERSION}" "kata-deploy-${RELEASE_VERSION}.tgz"
 }
