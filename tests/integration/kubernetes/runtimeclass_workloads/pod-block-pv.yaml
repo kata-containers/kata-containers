@@ -13,9 +13,9 @@ spec:
         - devicePath: DEVICE_PATH
           name: my-volume
       imagePullPolicy: IfNotPresent
-      securityContext:
-        capabilities:
-          add: ["SYS_ADMIN"]
+      # securityContext:
+      #   capabilities:
+      #     add: ["SYS_ADMIN"]
   volumes:
     - name: my-volume
       persistentVolumeClaim:
