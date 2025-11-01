@@ -86,7 +86,6 @@ else
 		"k8s-port-forward.bats" \
 		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
-		"k8s-qos-pods.bats" \
 		"k8s-replication.bats" \
 		"k8s-seccomp.bats" \
 		"k8s-sysctls.bats" \
@@ -99,6 +98,7 @@ else
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \
+		"k8s-qos-pods.bats" \
 		"k8s-sandbox-vcpus-allocation.bats" \
 		"k8s-scale-nginx.bats" \
 	)

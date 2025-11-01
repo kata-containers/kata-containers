@@ -72,6 +72,7 @@ setup() {
 }
 
 teardown() {
+	kubectl describe pod "$pod_name"
 	kubectl delete pod "$pod_name"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
