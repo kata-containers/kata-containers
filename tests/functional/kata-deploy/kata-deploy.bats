@@ -15,9 +15,10 @@ setup() {
 	pushd "${repo_root_dir}"
 
 	# We expect 2 runtime classes because:
-	# * `kata` is the default runtimeclass created, basically an alias for `kata-${KATA_HYPERVISOR}`.
+	# * `kata` is the default runtimeclass created by Helm, basically an alias for `kata-${KATA_HYPERVISOR}`.
 	# * `kata-${KATA_HYPERVISOR}` is the other one
-	#    * As part of the tests we're only deploying the specific runtimeclass that will be used, instead of all of them.
+	#    * As part of the tests we're only deploying the specific runtimeclass that will be used (via HELM_SHIMS), instead of all of them.
+	#    * RuntimeClasses are now created by the Helm chart (runtimeClasses.enabled=true by default)
 	expected_runtime_classes=2
 
 	# We expect both runtime classes to have the same handler: kata-${KATA_HYPERVISOR}
@@ -40,7 +41,7 @@ setup() {
 	# Set the tested hypervisor as the default `kata` shim
 	export HELM_DEFAULT_SHIM="${KATA_HYPERVISOR}"
 
-	# Let the `kata-deploy` create the default `kata` runtime class
+	# Let the Helm chart create the default `kata` runtime class
 	export HELM_CREATE_DEFAULT_RUNTIME_CLASS="true"
 
 	HOST_OS=""
