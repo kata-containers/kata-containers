@@ -1,5 +1,5 @@
 ## Introduction
-To improve security, Kata Container supports running the VMM process (QEMU and cloud-hypervisor) as a non-`root` user. 
+To improve security, Kata Container supports running the VMM process (QEMU and cloud-hypervisor) as a non-`root` user, in both runtime-go and runtime-rs. 
 This document describes how to enable the rootless VMM mode and its limitations.
 
 ## Pre-requisites
