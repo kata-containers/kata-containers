@@ -38,13 +38,14 @@ setup() {
 
     # Wait for the job to be created
     cmd="kubectl describe job ${job_name} | grep SuccessfulCreate"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    abort_cmd="kubectl describe pod ${job_name} | grep \"CreateContainerRequest is blocked by policy\""
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 
     # Wait for the job to complete
     cmd="kubectl get pods -o jsonpath='{.items[*].status.phase}' | grep Succeeded"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
 # Common function for all test cases that expect CreateContainer to be blocked by policy.
