@@ -39,8 +39,9 @@ setup() {
 
 wait_for_successful_rollout() {
     cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    abort_cmd="kubectl describe pod ${deployment_name} | grep \"CreateContainerRequest is blocked by policy\""
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
 @test "Successful sc deployment with auto-generated policy and container image volumes" {
