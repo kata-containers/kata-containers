@@ -75,19 +75,26 @@ replace_prometheus_image() {
 		"${correct_pod_yaml}"
 }
 
-# Common function for several test cases from this bats script.
 wait_for_pod_ready() {
+	cmd="kubectl wait --for=condition=Ready --timeout=0s pod ${pod_name}"
+	abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+	info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+	waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
+}
+
+create_and_wait_for_pod_ready() {
 	kubectl create -f "${correct_configmap_yaml}"
 	kubectl create -f "${correct_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+	wait_for_pod_ready
 }
 
 @test "Successful pod with auto-generated policy" {
-	wait_for_pod_ready
+	create_and_wait_for_pod_ready
 }
 
 @test "Able to read env variables sourced from configmap using envFrom" {
-	wait_for_pod_ready
+	create_and_wait_for_pod_ready
+
 	expected_env_var=$(kubectl exec "${pod_name}" -- "${exec_command[@]}")
 	[ "$expected_env_var" = "value-3" ] || fail "expected_env_var is not equal to value-3"
 }
@@ -100,7 +107,7 @@ wait_for_pod_ready() {
 
 	kubectl create -f "${testcase_pre_generate_configmap_yaml}"
 	kubectl create -f "${testcase_pre_generate_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+	wait_for_pod_ready
 }
 
 @test "Successful pod with auto-generated policy and custom layers cache path" {
@@ -114,7 +121,7 @@ wait_for_pod_ready() {
 
 	kubectl create -f "${testcase_pre_generate_configmap_yaml}"
 	kubectl create -f "${testcase_pre_generate_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+	wait_for_pod_ready
 }
 
 # Common function for several test cases from this bats script.
@@ -191,11 +198,10 @@ test_pod_policy_error() {
 	kubectl create -f "${correct_configmap_yaml}"
 	kubectl create -f "${incorrect_pod_yaml}"
 
-	command="kubectl describe pod ${pod_name} | grep FailedPostStartHook"
-	info "Waiting ${wait_time} seconds for: ${command}"
-
-	# Don't print the "Message:" line because it contains a truncated policy log.
-	waitForProcess "${wait_time}" "$sleep_time" "${command}" | grep -v "Message:"
+	cmd="kubectl describe pod ${pod_name} | grep FailedPostStartHook"
+	abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+	info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+	waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
 @test "RuntimeClassName filter: no policy" {
@@ -215,7 +221,7 @@ test_pod_policy_error() {
 }
 
 @test "ExecProcessRequest tests" {
-	wait_for_pod_ready
+	create_and_wait_for_pod_ready
 
 	# Execute commands allowed by the policy.
 	pod_exec_allowed_command "${pod_name}" "echo" "livenessProbe" "test"
@@ -241,7 +247,7 @@ test_pod_policy_error() {
 
 	kubectl create -f "${correct_configmap_yaml}"
 	kubectl create -f "${incorrect_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+	wait_for_pod_ready
 }
 
 @test "Policy failure: unexpected UID = 0" {
