@@ -1,7 +1,7 @@
 module example.com/m
 
 // Keep in sync with version in versions.yaml
-go 1.24.6
+go 1.24.9
 
 require (
 	github.com/BurntSushi/toml v1.3.2
