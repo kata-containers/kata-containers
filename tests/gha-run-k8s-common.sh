@@ -509,10 +509,17 @@ function helm_helper() {
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
 	# Do not enable on cbl-mariner yet, as the deployment is failing on those
-	# Do not enable on s390x yet, as the uninstall is failing on those
-	if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]] || [[ "$(uname -m)" == "s390x" ]]; then
+	if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]]; then
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
 	fi
+
+	# Do not enable on s390x,ppc64le yet, as the uninstall is failing on those
+	arch=$(uname -m)
+	case "${arch}" in
+		s390x|ppc64le)
+			yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
+			;;
+	esac
 
 	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
 		die "HELM_IMAGE_REFERENCE environment variable cannot be empty."
