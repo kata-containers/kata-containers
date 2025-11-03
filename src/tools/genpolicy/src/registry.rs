@@ -390,7 +390,28 @@ impl Container {
 
                     debug!("Container::get_process: Using UID:GID mapping from /etc/passwd");
                 }
-                process.User.GID = self.get_gid_from_passwd_uid(process.User.UID).unwrap_or(0);
+
+                match self.get_gid_from_passwd_uid(process.User.UID) {
+                    Ok(gid) => {
+                        process.User.GID = gid;
+                        debug!(
+                            "Container::get_process: set GID = {gid} from container image for UID = {}",
+                            process.User.UID
+                        );
+
+                        process.User.AdditionalGids.insert(gid);
+                        debug!(
+                            "get_container_process: inserted GID = {gid} into AdditionalGids: User = {:?}",
+                            &process.User
+                        );
+                    }
+                    Err(e) => {
+                        debug!(
+                            "Container::get_process: no GID for UID = {} in container image, error {e}",
+                            process.User.UID
+                        );
+                    }
+                }
             }
         }
 

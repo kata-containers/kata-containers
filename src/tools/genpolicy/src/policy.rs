@@ -435,10 +435,25 @@ pub struct CommonData {
 pub struct ClusterConfig {
     /// Pause container image reference.
     pub pause_container_image: String,
+
     /// Whether or not the cluster uses the guest pull mechanism
     /// In guest pull, host can't look into layers to determine GID.
     /// See issue https://github.com/kata-containers/kata-containers/issues/11162
     pub guest_pull: bool,
+
+    /// Supported values:
+    ///
+    /// "v1" - Pause container UID/GID/AdditionalGids handled as in AKS pre-October 2025:
+    ///         - Example container image reference: mcr.microsoft.com/oss/kubernetes/pause:3.6
+    ///         - Defaults: UID=65535, GID=65535, AdditionalGids=[65535].
+    ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *replaces*
+    ///           the default value from AdditionalGids.
+    /// "v2" - Pause container UID/GID/AdditionalGids handled as in AKS post-October 2025:
+    ///         - Example container image reference: mcr.microsoft.com/oss/v2/kubernetes/pause:3.6
+    ///         - Defaults: UID=0, GID=0, AdditionalGids=[].
+    ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *gets added
+    ///           as the only value* in AdditionalGids.
+    pub pause_container_id_policy: String,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -720,6 +735,9 @@ impl AgentPolicy {
         );
 
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
+
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Container image settings.
         yaml_container
             .registry
             .get_process(&mut process, yaml_has_command, yaml_has_args);
@@ -772,7 +790,28 @@ impl AgentPolicy {
 
         ///////////////////////////////////////////////////////////////////////////////////////
         // genpolicy-settings.json information.
-        c_settings.get_process_fields(&mut process);
+        let v1_policy = self
+            .config
+            .settings
+            .cluster_config
+            .pause_container_id_policy
+            == "v1";
+        if !v1_policy {
+            let v2_policy = self
+                .config
+                .settings
+                .cluster_config
+                .pause_container_id_policy
+                == "v2";
+            if !v2_policy {
+                panic!(
+                    "Unsupported pause_container_id_policy = {} - must be v1 or v2 in the settings file",
+                    self.config.settings.cluster_config.pause_container_id_policy
+                );
+            }
+        }
+        let update_additional_gids = !is_pause_container || v1_policy;
+        c_settings.get_process_fields(&mut process, update_additional_gids);
         debug!(
             "get_container_process: after c_settings.get_process_fields: User = {:?}",
             &process.User
@@ -781,7 +820,7 @@ impl AgentPolicy {
         ///////////////////////////////////////////////////////////////////////////////////////
         // Resource-level settings from user's YAML - e.g., pod-level or deployment-level.
         let mut must_check_passwd = false;
-        resource.get_process_fields(&mut process, &mut must_check_passwd);
+        resource.get_process_fields(&mut process, &mut must_check_passwd, is_pause_container);
         debug!(
             "get_container_process: after resource.get_process_fields: must_check_passwd = {must_check_passwd}, User = {:?}",
             &process.User
@@ -790,10 +829,31 @@ impl AgentPolicy {
         if must_check_passwd {
             ///////////////////////////////////////////////////////////////////////////////////
             // Settings based on container image.
-            process.User.GID = yaml_container
-                .registry
-                .get_gid_from_passwd_uid(process.User.UID)
-                .unwrap_or(0);
+            let uid = process.User.UID;
+            let gid = match yaml_container.registry.get_gid_from_passwd_uid(uid) {
+                Ok(g) => g,
+                Err(e) => {
+                    debug!("get_container_process: no GID for UID = {uid} in container image, error {e}");
+                    0
+                }
+            };
+            process.User.GID = gid;
+            debug!(
+                "get_container_process: after registry.get_gid_from_passwd_uid: User = {:?}",
+                &process.User
+            );
+
+            process.User.AdditionalGids.clear();
+            debug!(
+                "get_container_process: cleared AdditionalGids due to runAsUser = {}, User = {:?}",
+                process.User.UID, &process.User
+            );
+
+            process.User.AdditionalGids.insert(gid);
+            debug!(
+                "get_container_process: inserted GID = {gid} into AdditionalGids: User = {:?}",
+                &process.User
+            );
         }
 
         ///////////////////////////////////////////////////////////////////////////////////////
@@ -804,13 +864,10 @@ impl AgentPolicy {
             &process.User
         );
 
-        // The last step containerd always does is add the User.GID to AdditionalGids
-        // The sandbox path does not respect the securityContext fsGroup/supplementalGroups
-        if is_pause_container {
-            process.User.AdditionalGids.clear();
-        }
-        process.User.AdditionalGids.insert(process.User.GID);
-
+        debug!(
+            "get_container_process: returning: User = {:?}",
+            &process.User
+        );
         process
     }
 }
@@ -822,15 +879,30 @@ impl KataSpec {
         }
     }
 
-    fn get_process_fields(&self, process: &mut KataProcess) {
+    fn get_process_fields(&self, process: &mut KataProcess, update_additional_gids: bool) {
         if process.User.UID == 0 {
             process.User.UID = self.Process.User.UID;
+            debug!(
+                "get_process_fields: set UID = {}: User = {:?}",
+                process.User.UID, &process.User
+            );
         }
         if process.User.GID == 0 {
             process.User.GID = self.Process.User.GID;
+            debug!(
+                "get_process_fields: set GID = {}: User = {:?}",
+                process.User.GID, &process.User
+            );
+
+            if update_additional_gids {
+                process.User.AdditionalGids.insert(process.User.GID);
+                debug!(
+                    "get_process_fields: inserted process.User.GID = {} into AdditionalGids: User = {:?}",
+                    process.User.GID, &process.User
+                );
+            }
         }
 
-        process.User.AdditionalGids = self.Process.User.AdditionalGids.clone();
         process.User.Username = String::from(&self.Process.User.Username);
         add_missing_strings(&self.Process.Args, &mut process.Args);
 

@@ -150,11 +150,17 @@ impl yaml::K8sResource for Deployment {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        must_check_passwd: &mut bool,
+        all_additional_gids: bool,
+    ) {
         yaml::get_process_fields(
             process,
-            &self.spec.template.spec.securityContext,
             must_check_passwd,
+            all_additional_gids,
+            &self.spec.template.spec.securityContext,
         );
     }
 

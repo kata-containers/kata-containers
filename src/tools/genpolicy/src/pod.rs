@@ -918,8 +918,18 @@ impl yaml::K8sResource for Pod {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
-        yaml::get_process_fields(process, &self.spec.securityContext, must_check_passwd);
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        must_check_passwd: &mut bool,
+        is_pause_container: bool,
+    ) {
+        yaml::get_process_fields(
+            process,
+            must_check_passwd,
+            is_pause_container,
+            &self.spec.securityContext,
+        );
     }
 
     fn get_sysctls(&self) -> Vec<Sysctl> {
@@ -983,9 +993,10 @@ impl Container {
             debug!("get_process_fields: securityContext = {:?}", context);
 
             if let Some(uid) = context.runAsUser {
-                debug!("get_process_fields: uid = {uid}");
+                debug!("get_process_fields: runAsUser uid = {uid}");
 
-                process.User.UID = uid.try_into().unwrap();
+                let new_uid = uid.try_into().unwrap();
+                process.User.UID = new_uid;
                 // Changing the UID can break the GID mapping
                 // if a /etc/passwd file is present.
                 // The proper GID is determined, in order of preference:
@@ -995,15 +1006,37 @@ impl Container {
                 //
                 // This behavior comes from the containerd runtime implementation:
                 // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
-                process.User.GID = self
-                    .registry
-                    .get_gid_from_passwd_uid(process.User.UID)
-                    .unwrap_or(process.User.GID);
+                let new_gid = match self.registry.get_gid_from_passwd_uid(new_uid) {
+                    Ok(gid) => gid,
+                    Err(e) => {
+                        debug!("get_process_fields: no GID for UID = {new_uid} in container image, error {e}");
+                        process.User.GID
+                    }
+                };
+                process.User.GID = new_gid;
+                debug!(
+                    "get_process_fields: set GID = {new_gid}, User = {:?}",
+                    &process.User
+                );
+
+                process.User.AdditionalGids.insert(new_gid);
+                debug!(
+                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
+                    &process.User
+                );
             }
 
             if let Some(gid) = context.runAsGroup {
                 debug!("get_process_fields: runAsGroup = {:?}", gid);
-                process.User.GID = gid.try_into().unwrap();
+
+                let new_gid = gid.try_into().unwrap();
+                process.User.GID = new_gid;
+
+                process.User.AdditionalGids.insert(new_gid);
+                debug!(
+                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
+                    &process.User
+                );
             }
 
             if let Some(allow) = context.allowPrivilegeEscalation {
@@ -1018,7 +1051,7 @@ impl Container {
             .unwrap_or_default()
         {
             debug!(
-                "get_process_fields: adding GID = {gid} for UID = {}",
+                "get_process_fields: adding additional group = {gid} for UID = {}",
                 process.User.UID
             );
             process.User.AdditionalGids.insert(gid);
