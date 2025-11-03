@@ -23,8 +23,9 @@ pub const KATA_SHAREDFS_GUEST_PREMOUNT_TAG: &str = "kataShared";
 /// KATA_EPHEMERAL_VOLUME_TYPE creates a tmpfs backed volume for sharing files between containers.
 pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
 
-/// KATA_HOST_DIR_TYPE use for host empty dir
-pub const KATA_HOST_DIR_VOLUME_TYPE: &str = "kata:hostdir";
+/// KATA_K8S_LOCAL_STORAGE_TYPE is used for k8s empty dir (a disk-backed volume),
+/// to create a local directory inside the VM for sharing files between containers.
+pub const KATA_K8S_LOCAL_STORAGE_TYPE: &str = "local";
 
 /// KATA_MOUNT_INFO_FILE_NAME is used for the file that holds direct-volume mount info
 pub const KATA_MOUNT_INFO_FILE_NAME: &str = "mountInfo.json";
@@ -519,11 +520,6 @@ pub fn is_kata_guest_mount_volume(ty: &str) -> bool {
 /// Checks whether a mount type is a marker for a Kata ephemeral volume.
 pub fn is_kata_ephemeral_volume(ty: &str) -> bool {
     ty == KATA_EPHEMERAL_VOLUME_TYPE
-}
-
-/// Checks whether a mount type is a marker for a Kata hostdir volume.
-pub fn is_kata_host_dir_volume(ty: &str) -> bool {
-    ty == KATA_HOST_DIR_VOLUME_TYPE
 }
 
 /// Splits a sandbox bindmount string into its real path and mode.
