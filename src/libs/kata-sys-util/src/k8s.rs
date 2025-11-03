@@ -42,15 +42,15 @@ pub fn is_ephemeral_volume(mount: &Mount) -> bool {
 /// K8s `EmptyDir` volumes are directories on the host. If the fs type is tmpfs, it's a ephemeral
 /// volume instead of a `EmptyDir` volume.
 pub fn is_host_empty_dir(path: &str) -> bool {
-    if is_empty_dir(path) {
-        if let Ok(info) = get_linux_mount_info(path) {
-            if info.fs_type != "tmpfs" {
-                return true;
-            }
-        }
+    if !is_empty_dir(path) {
+        return false;
     }
 
-    false
+    match get_linux_mount_info(path) {
+        Ok(info) => info.fs_type != "tmpfs",
+        Err(crate::mount::Error::NoMountEntry(_)) => true,
+        Err(_) => false,
+    }
 }
 
 // update_ephemeral_storage_type sets the mount type to 'ephemeral'
