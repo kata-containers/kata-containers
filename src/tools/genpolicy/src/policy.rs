@@ -702,6 +702,7 @@ impl AgentPolicy {
         c_settings: &KataSpec,
         is_privileged: bool,
     ) -> KataProcess {
+        ///////////////////////////////////////////////////////////////////////////////////////
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
         let mut process = containerd::get_process(is_privileged, &self.config.settings.common);
@@ -710,6 +711,8 @@ impl AgentPolicy {
             &process
         );
 
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Container-level settings from user's YAML.
         yaml_container.apply_capabilities(&mut process.Capabilities, &self.config.settings.common);
         debug!(
             "get_container_process: after apply_capabilities: process = {:?}",
@@ -767,12 +770,16 @@ impl AgentPolicy {
             &process.User
         );
 
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // genpolicy-settings.json information.
         c_settings.get_process_fields(&mut process);
         debug!(
             "get_container_process: after c_settings.get_process_fields: User = {:?}",
             &process.User
         );
 
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Resource-level settings from user's YAML - e.g., pod-level or deployment-level.
         let mut must_check_passwd = false;
         resource.get_process_fields(&mut process, &mut must_check_passwd);
         debug!(
@@ -780,14 +787,17 @@ impl AgentPolicy {
             &process.User
         );
 
-        // The actual GID of the process run by the CRI
-        // Depends on the contents of /etc/passwd in the container
         if must_check_passwd {
+            ///////////////////////////////////////////////////////////////////////////////////
+            // Settings based on container image.
             process.User.GID = yaml_container
                 .registry
                 .get_gid_from_passwd_uid(process.User.UID)
                 .unwrap_or(0);
         }
+
+        ///////////////////////////////////////////////////////////////////////////////////////
+        // Container-level settings from user's YAML.
         yaml_container.get_process_fields(&mut process);
         debug!(
             "get_container_process: after yaml_container.get_process_fields: User = {:?}",
