@@ -1,4 +1,4 @@
-name: CI | Run containerd multi-snapshotter stability test
+name: CI | Run containerd guest pull stability tests
 on:
   schedule:
     - cron: "0 */1 * * *" #run every hour
@@ -7,20 +7,22 @@ permissions: {}
 
 # This job relies on k8s pre-installed using kubeadm
 jobs:
-  run-containerd-multi-snapshotter-stability-tests:
-    name: run-containerd-multi-snapshotter-stability-tests
+  run-containerd-guest-pull-stability-tests:
+    name: run-containerd-guest-pull-stability-tests-${{ matrix.environment.test-type }}-${{ matrix.environment.containerd }}
     strategy:
       fail-fast: false
       matrix:
-        containerd:
-          - v1.7
-          - v2.0
-          - v2.1
-          - v2.2
+        environment: [
+          { test-type: multi-snapshotter, containerd: v2.2 },
+          { test-type: multi-experimental-force-guest-pull, containerd: v1.7 },
+          { test-type: multi-experimental-force-guest-pull, containerd: v2.0 },
+          { test-type: multi-experimental-force-guest-pull, containerd: v2.1 },
+          { test-type: multi-experimental-force-guest-pull, containerd: v2.2 },
+        ]
     env:
       # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here.
       IMAGES_LIST: quay.io/mongodb/mongodb-community-server@sha256:8b73733842da21b6bbb6df4d7b2449229bb3135d2ec8c6880314d88205772a11 ghcr.io/edgelesssys/redis@sha256:ecb0a964c259a166a1eb62f0eb19621d42bd1cce0bc9bb0c71c828911d4ba93d
-    runs-on: containerd-${{ matrix.containerd }}
+    runs-on: containerd-${{ matrix.environment.test-type }}-${{ matrix.environment.containerd }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -37,8 +39,9 @@ jobs:
         env:
           KATA_HYPERVISOR: qemu-coco-dev
           KUBERNETES: vanilla
-          SNAPSHOTTER: nydus
-          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: true
+          SNAPSHOTTER: ${{ matrix.environment.test-type == 'multi-snapshotter' && 'nydus' || '' }}
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ matrix.environment.test-type == 'multi-snapshotter' }}
+          EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.environment.test-type == 'experimental-force-guest-pull' && 'qemu-coco-dev' || '' }}
 
       # This is needed as we may hit the createContainerTimeout
       - name: Adjust Kata Containers' create_container_timeout
