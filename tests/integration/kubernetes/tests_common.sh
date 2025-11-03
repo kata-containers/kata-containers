@@ -462,12 +462,6 @@ teardown_common() {
 
 	kubectl describe pods
 	k8s_delete_all_pods_if_any_exists || true
-
-	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
-		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
-	fi
 }
 
 # Execute a command in a pod and grep kubectl's output.
