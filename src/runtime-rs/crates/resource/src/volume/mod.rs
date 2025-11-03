@@ -8,6 +8,7 @@ mod block_volume;
 mod default_volume;
 mod ephemeral_volume;
 pub mod hugepage;
+mod local_volume;
 mod share_fs_volume;
 mod shm_volume;
 pub mod utils;
@@ -80,6 +81,11 @@ impl VolumeResource {
                 Arc::new(
                     shm_volume::ShmVolume::new(m)
                         .with_context(|| format!("new shm volume {:?}", m))?,
+                )
+            } else if local_volume::is_local_volume(m) {
+                Arc::new(
+                    local_volume::LocalStorage::new(m, sid, cid)
+                        .with_context(|| format!("new local volume {:?}", m))?,
                 )
             } else if ephemeral_volume::is_ephemeral_volume(m) {
                 Arc::new(
