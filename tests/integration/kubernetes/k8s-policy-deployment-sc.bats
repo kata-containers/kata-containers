@@ -37,44 +37,35 @@ setup() {
     cp "${pod_sc_deployment_supplementalgroups_yaml}" "${incorrect_deployment_yaml_supplementalgroups}"
 }
 
+wait_for_successful_rollout() {
+    cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
+    abort_cmd="kubectl describe pod ${deployment_name} | grep \"CreateContainerRequest is blocked by policy\""
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
+}
+
 @test "Successful sc deployment with auto-generated policy and container image volumes" {
     # Initiate deployment
     kubectl apply -f "${pod_sc_deployment_yaml}"
-
-    # Wait for the deployment to be created
-    cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    wait_for_successful_rollout
 }
 
 @test "Successful sc with fsGroup/supplementalGroup deployment with auto-generated policy and container image volumes" {
     # Initiate deployment
     kubectl apply -f "${pod_sc_deployment_supplementalgroups_yaml}"
-
-    # Wait for the deployment to be created
-    cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    wait_for_successful_rollout
 }
 
 @test "Successful sc deployment with security context choosing another valid user" {
     # Initiate deployment
     kubectl apply -f "${pod_sc_nobodyupdate_deployment_yaml}"
-
-    # Wait for the deployment to be created
-    cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    wait_for_successful_rollout
 }
 
 @test "Successful layered sc deployment with auto-generated policy and container image volumes" {
     # Initiate deployment
     kubectl apply -f "${pod_sc_layered_deployment_yaml}"
-
-    # Wait for the deployment to be created
-    cmd="kubectl rollout status --timeout=1s deployment/${deployment_name} | grep 'successfully rolled out'"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    wait_for_successful_rollout
 }
 
 test_deployment_policy_error() {

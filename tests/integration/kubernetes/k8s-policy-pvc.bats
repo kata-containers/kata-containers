@@ -34,7 +34,11 @@ setup() {
 @test "Successful pod with auto-generated policy" {
 	kubectl create -f "${correct_pod_yaml}"
 	kubectl create -f "${pvc_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+
+	cmd="kubectl wait --for=condition=Ready --timeout=0s pod ${pod_name}"
+	abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+	info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+	waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
 # Common function for several test cases from this bats script.

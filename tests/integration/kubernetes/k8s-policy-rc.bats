@@ -91,8 +91,9 @@ test_rc_policy() {
             wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
         else
             cmd="kubectl wait --for=condition=Ready --timeout=0s pod ${pod_name}"
-            bats_unbuffered_info "Waiting for: ${cmd}"
-            waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+            abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+            info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+            waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
         fi
     done
 

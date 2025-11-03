@@ -119,6 +119,24 @@ function waitForProcess() {
 	return 1
 }
 
+function waitForCmdWithAbortCmd() {
+	wait_time="$1"
+	sleep_time="$2"
+	cmd="$3"
+	abort_cmd="$4"
+	while [ "$wait_time" -gt 0 ]; do
+		if eval "$cmd"; then
+			return 0
+		elif eval "$abort_cmd"; then
+			return 1
+		else
+			sleep "$sleep_time"
+			wait_time=$((wait_time-sleep_time))
+		fi
+	done
+	return 1
+}
+
 # Check if the $1 argument is the name of a 'known'
 # Kata runtime. Of course, the end user can choose any name they
 # want in reality, but this function knows the names of the default
