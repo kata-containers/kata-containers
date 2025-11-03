@@ -142,7 +142,6 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.defaultShim_ppc64le` | The default shim to use if none specified for ppc64le (if set, overrides `defaultShim`) | `""` |
 | `env.createRuntimeClasses` | **DEPRECATED** - Use `runtimeClasses.enabled` instead. Script-based `runtimeClass` creation | `false` |
 | `env.createDefaultRuntimeClass` | **DEPRECATED** - Use `runtimeClasses.createDefault` instead | `false` |
-| `env.defaultRuntimeClassName` | **DEPRECATED** - Use `runtimeClasses.defaultName` instead | `""` |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
 | `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim | `""` |
 | `env.snapshotterHandlerMapping_x86_64` | Provide the snapshotter handler for each shim for x86_64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
