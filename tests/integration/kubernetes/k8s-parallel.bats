@@ -38,7 +38,7 @@ setup() {
 	kubectl get jobs -l jobgroup=${job_name}
 
 	# Check the pods
-	kubectl wait --for=condition=Ready --timeout=$timeout pod -l jobgroup=${job_name}
+	kubectl wait --for=condition=Ready --timeout=120s pod -l jobgroup=${job_name}
 
 	# Check output of the jobs
 	for i in $(kubectl get pods -l jobgroup=${job_name} -o name); do
