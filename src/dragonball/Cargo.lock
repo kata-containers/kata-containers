@@ -371,8 +371,10 @@ name = "dbs-tdx"
 version = "0.1.0"
 dependencies = [
  "kvm-bindings",
+ "kvm-ioctls",
  "serde_json",
  "thiserror 1.0.48",
+ "vm-memory",
  "vmm-sys-util",
 ]
 
@@ -530,6 +532,7 @@ dependencies = [
  "dbs-interrupt",
  "dbs-legacy-devices",
  "dbs-pci",
+ "dbs-tdx",
  "dbs-upcall",
  "dbs-utils",
  "dbs-virtio-devices",
