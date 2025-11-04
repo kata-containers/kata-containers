@@ -164,6 +164,15 @@ function deploy_coco_kbs() {
 function deploy_kata() {
 	platform="${1:-}"
 
+	echo "FIDENCIO | DEBUG"
+	kubectl get ds -A
+	kubectl get jobs -A
+	helm -n kube-system uninstall kata-deploy || true
+	kubectl -n kube-system delete ds kata-deploy || true
+	kubectl -n kube-system delete job kata-deploy-cleanup || true
+	kubectl -n kube-system delete secrets sh.helm.release.v1.kata-deploy.v1 || true
+	echo "FIDENCIO | DEBUG"
+
 	[[ "${platform}" = "kcli" ]] && \
 	export KUBECONFIG="${HOME}/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
