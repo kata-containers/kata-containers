@@ -45,7 +45,7 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: kubeadm
-      K8S_TEST_HOST_TYPE: all
+      K8S_TEST_HOST_TYPE: baremetal
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
