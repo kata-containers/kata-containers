@@ -68,13 +68,6 @@ cleanup() {
     # Clean up ctr resources
     sudo ctr image rm $(sudo ctr image list -q) || true
 
-    # Clean up crictl resources
-    for pod_id in $(sudo crictl pods -q); do
-        sudo crictl stopp $pod_id
-        sudo crictl rmp $pod_id
-    done
-    sudo crictl rmi $(sudo crictl images -q) || true
-
     # Remove the test image
     ${container_engine} rmi -f ${test_image_name} > /dev/null 2>&1
 
@@ -99,7 +92,7 @@ validate_env() {
         echo "zcrypttest not found" >&2
         exit 1
     fi
-    necessary_commands=( "${container_engine}" "ctr" "crictl" "lszcrypt" )
+    necessary_commands=( "${container_engine}" "ctr" "lszcrypt" )
     for cmd in "${necessary_commands[@]}"; do
         if ! which ${cmd} > /dev/null 2>&1; then
             echo "${cmd} not found" >&2
