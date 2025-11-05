@@ -509,8 +509,7 @@ function helm_helper() {
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
 	# Do not enable on cbl-mariner yet, as the deployment is failing on those
-	# Do not enable on s390x yet, as the uninstall is failing on those
-	if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]] || [[ "$(uname -m)" == "s390x" ]]; then
+	if [[ "${HELM_HOST_OS}" == "cbl-mariner" ]]; then
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
 	fi
 
