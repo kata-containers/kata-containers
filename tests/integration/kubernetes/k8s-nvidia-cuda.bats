@@ -15,9 +15,10 @@ export RUNTIME_CLASS_NAME
 POD_NAME_CUDA="cuda-vectoradd-kata"
 export POD_NAME_CUDA
 
-setup() {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+POD_WAIT_TIMEOUT=${POD_WAIT_TIMEOUT:-300s}
+export POD_WAIT_TIMEOUT
 
+setup() {
     setup_common
     get_pod_config_dir
 
@@ -31,13 +32,11 @@ setup() {
 }
 
 @test "CUDA Vector Addition Test" {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     # Create the CUDA pod
     kubectl apply -f "${pod_yaml}"
 
     # Wait for pod to complete successfully
-    kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout=300s pod "${pod_name}"
+    kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout="${POD_WAIT_TIMEOUT}" pod "${pod_name}"
 
     # Get and verify the output contains expected CUDA success message
     output=$(kubectl logs "${pod_name}")
@@ -48,8 +47,6 @@ setup() {
 }
 
 teardown() {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     # Debugging information
     echo "=== CUDA vectoradd Pod Logs ==="
     kubectl logs "${pod_name}" || true
