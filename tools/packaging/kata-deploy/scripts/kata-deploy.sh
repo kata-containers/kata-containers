@@ -33,6 +33,40 @@ info() {
 	echo "INFO: $msg" >&2
 }
 
+# Check if a value exists within a specific field in the config file
+# * field_contains_value "${config}" "kernel_params" "agent.log=debug"
+field_contains_value() {
+	local config_file="$1"
+	local field="$2"
+	local value="$3"
+	# Use word boundaries (\b) to match complete parameters, not substrings
+	# This handles space-separated values like kernel_params = "param1 param2 param3"
+	grep -qE "^${field}[^=]*=.*[[:space:]\"](${value})([[:space:]\"]|$)" "${config_file}"
+}
+
+# Get existing values from a TOML array field and return them as a comma-separated string
+# * get_field_array_values "${config}" "enable_annotations"
+get_field_array_values() {
+	local config_file="$1"
+	local field="$2"
+	# Extract values from field = ["val1", "val2", ...] format
+	grep "^${field} = " "${config_file}" | sed "s/^${field} = \[\(.*\)\]/\1/" | sed 's/"//g' | sed 's/, /,/g'
+}
+
+# Check if a boolean config is already set to true
+config_is_true() {
+	local config_file="$1"
+	local key="$2"
+	grep -qE "^${key}\s*=\s*true" "${config_file}"
+}
+
+# Check if a string value already exists anywhere in the file (literal match)
+string_exists_in_file() {
+	local file_path="$1"
+	local string="$2"
+	grep -qF "${string}" "${file_path}"
+}
+
 DEBUG="${DEBUG:-"false"}"
 
 ARCH=$(uname -m)
@@ -55,6 +89,12 @@ SNAPSHOTTER_HANDLER_MAPPING_AARCH64="${SNAPSHOTTER_HANDLER_MAPPING_AARCH64:-${SN
 SNAPSHOTTER_HANDLER_MAPPING_S390X="${SNAPSHOTTER_HANDLER_MAPPING_S390X:-${SNAPSHOTTER_HANDLER_MAPPING}}"
 SNAPSHOTTER_HANDLER_MAPPING_PPC64LE="${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE:-${SNAPSHOTTER_HANDLER_MAPPING}}"
 
+ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64="${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64="${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_S390X="${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE="${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
+
 PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 PULL_TYPE_MAPPING_X86_64="${PULL_TYPE_MAPPING_X86_64:-${PULL_TYPE_MAPPING}}"
 PULL_TYPE_MAPPING_AARCH64="${PULL_TYPE_MAPPING_AARCH64:-${PULL_TYPE_MAPPING}}"
@@ -70,6 +110,7 @@ EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE:-
 SHIMS_FOR_ARCH=""
 DEFAULT_SHIM_FOR_ARCH=""
 SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH=""
+ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH=""
 PULL_TYPE_MAPPING_FOR_ARCH=""
 EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH=""
 case ${ARCH} in
@@ -77,6 +118,7 @@ case ${ARCH} in
 		SHIMS_FOR_ARCH="${SHIMS_X86_64}"
 		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_X86_64}"
 		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
 		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_X86_64}"
 		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64}"
 		;;
@@ -84,6 +126,7 @@ case ${ARCH} in
 		SHIMS_FOR_ARCH="${SHIMS_AARCH64}"
 		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_AARCH64}"
 		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
 		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_AARCH64}"
 		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64}"
 		;;
@@ -91,6 +134,7 @@ case ${ARCH} in
 		SHIMS_FOR_ARCH="${SHIMS_S390X}"
 		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_S390X}"
 		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_S390X}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
 		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_S390X}"
 		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_S390X}"
 		;;
@@ -98,6 +142,7 @@ case ${ARCH} in
 		SHIMS_FOR_ARCH="${SHIMS_PPC64LE}"
 		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_PPC64LE}"
 		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
 		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_PPC64LE}"
 		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE}"
 		;;
@@ -105,6 +150,7 @@ case ${ARCH} in
 		SHIMS_FOR_ARCH="${SHIMS}"
 		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM}"
 		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS}"
 		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING}"
 		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL}"
 		;;
@@ -116,21 +162,14 @@ default_shim="${DEFAULT_SHIM_FOR_ARCH}"
 IFS=',' read -a snapshotters <<< "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}"
 snapshotters_delimiter=':'
 
+IFS=' ' read -a hypervisor_annotations <<< "${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH}"
+
 IFS=',' read -a pull_types <<< "${PULL_TYPE_MAPPING_FOR_ARCH}"
 
 IFS="," read -a experimental_force_guest_pull <<< "${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
 
 CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
 CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
-
-ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
-
-IFS=' ' read -a non_formatted_allowed_hypervisor_annotations <<< "$ALLOWED_HYPERVISOR_ANNOTATIONS"
-allowed_hypervisor_annotations=""
-for allowed_hypervisor_annotation in "${non_formatted_allowed_hypervisor_annotations[@]}"; do
-	allowed_hypervisor_annotations+="\"$allowed_hypervisor_annotation\", "
-done
-allowed_hypervisor_annotations=$(echo $allowed_hypervisor_annotations | sed 's/,$//')
 
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
@@ -484,7 +523,9 @@ EOF
 		chmod +x ${qemu_binary_script_host_path}
 	fi
 
-	sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
+	if ! string_exists_in_file "${config_path}" "${qemu_binary_script}"; then
+		sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
+	fi
 }
 
 function install_artifacts() {
@@ -505,26 +546,119 @@ function install_artifacts() {
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
 		# Properly set https_proxy and no_proxy for Kata Containers
 		if [ -n "${AGENT_HTTPS_PROXY}" ]; then
-			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.https_proxy"; then
+				sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+			fi
 		fi
 
 		if [ -n "${AGENT_NO_PROXY}" ]; then
-			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.no_proxy"; then
+				sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+			fi
 		fi
 
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
-			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
-			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
-			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${kata_config_file}"
+			if ! config_is_true "${kata_config_file}" "enable_debug"; then
+				sed -i -e 's/^#\{0,1\}\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
+			fi
+			if ! config_is_true "${kata_config_file}" "debug_console_enabled"; then
+				sed -i -e 's/^#\{0,1\}\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
+			fi
+
+			local debug_params=""
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.log=debug"; then
+				debug_params+=" agent.log=debug"
+			fi
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "initcall_debug"; then
+				debug_params+=" initcall_debug"
+			fi
+			if [[ -n "${debug_params}" ]]; then
+				sed -i -e "s/^kernel_params = \"\(.*\)\"/kernel_params = \"\1${debug_params}\"/g" "${kata_config_file}"
+			fi
 		fi
 
-		if [ -n "${allowed_hypervisor_annotations}" ]; then
-			sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, $allowed_hypervisor_annotations]/" "${kata_config_file}"
+		# Apply allowed_hypervisor_annotations:
+		#   Here we need to support both cases of:
+		#   * A list of annotations, which will be blindly applied to all shims
+		#   * A per-shim list of annotations, which will only be applied to the specific shim
+		if [[ ${#hypervisor_annotations[@]} -gt 0 ]]; then
+			local shim_specific_annotations=""
+			local global_annotations=""
+
+			for m in "${hypervisor_annotations[@]}"; do
+				# Check if this mapping has a colon (shim-specific) or not
+				if [[ "${m}" == *:* ]]; then
+					# Shim-specific mapping like "qemu:foo,bar"
+					local key="${m%:*}"
+					local value="${m#*:}"
+
+					if [[ "${key}" != "${shim}" ]]; then
+						continue
+					fi
+	
+					if [[ -n "${shim_specific_annotations}" ]]; then
+						shim_specific_annotations+=","
+					fi
+					shim_specific_annotations+="${value}"
+				else
+					# All shims annotations like "foo bar"
+					if [[ -n "${global_annotations}" ]]; then
+						global_annotations+=","
+					fi
+					global_annotations+="$(echo "${m}" | sed 's/ /,/g')"
+				fi
+			done
+
+			# Combine shim-specific and non-shim-specific annotations
+			local all_annotations="${global_annotations}"
+			if [[ -n "${shim_specific_annotations}" ]]; then
+				if [[ -n "${all_annotations}" ]]; then
+					all_annotations+=","
+				fi
+				all_annotations+="${shim_specific_annotations}"
+			fi
+
+			if [[ -n "${all_annotations}" ]]; then
+				local existing_annotations=$(get_field_array_values "${kata_config_file}" "enable_annotations")
+
+				# Combine existing and new annotations
+				local combined_annotations="${existing_annotations}"
+				if [[ -n "${combined_annotations}" ]] && [[ -n "${all_annotations}" ]]; then
+					combined_annotations+=",${all_annotations}"
+				elif [[ -n "${all_annotations}" ]]; then
+					combined_annotations="${all_annotations}"
+				fi
+
+				# Deduplicate all annotations
+				IFS=',' read -a annotations <<< "${combined_annotations}"
+				local -A seen_annotations
+				local unique_annotations=()
+				
+				for annotation in "${annotations[@]}"; do
+					# Trim whitespace
+					annotation=$(echo "${annotation}" | sed 's/^[[:space:]]//;s/[[:space:]]$//')
+					if [[ -n "${annotation}" ]] && [[ -z "${seen_annotations[${annotation}]+_}" ]]; then
+						seen_annotations["${annotation}"]=1
+						unique_annotations+=("${annotation}")
+					fi
+				done
+				
+				if [[ ${#unique_annotations[@]} -gt 0 ]]; then
+					local formatted_annotations=()
+					for ann in "${unique_annotations[@]}"; do
+						formatted_annotations+=("\"${ann}\"")
+					done
+					local final_annotations=$(IFS=', '; echo "${formatted_annotations[*]}")
+					sed -i -e "s/^enable_annotations = \[.*\]/enable_annotations = [${final_annotations}]/" "${kata_config_file}"
+				fi
+			fi
 		fi
 
 		if printf '%s\n' "${experimental_force_guest_pull[@]}" | grep -Fxq "${shim}"; then
-			sed -i -e 's/^\(experimental_force_guest_pull\).*=.*$/\1 = true/g' "${kata_config_file}"
+			if ! config_is_true "${kata_config_file}" "experimental_force_guest_pull"; then
+				sed -i -e 's/^#\{0,1\}\(experimental_force_guest_pull\).*=.*$/\1 = true/g' "${kata_config_file}"
+			fi
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
@@ -584,11 +718,20 @@ function install_artifacts() {
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
-		sed -i -E "s|(static_sandbox_resource_mgmt)=false|\1=true|" "${config_path}"
+
+		if ! config_is_true "${config_path}" "static_sandbox_resource_mgmt"; then
+			sed -i -E "s|(static_sandbox_resource_mgmt)\s*=\s*false|\1=true|" "${config_path}"
+		fi
 
 		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
-		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
-		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+
+		if ! field_contains_value "${config_path}" "valid_hypervisor_paths" "${clh_path}"; then
+			sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
+		fi
+
+		if ! field_contains_value "${config_path}" "path" "${clh_path}"; then
+			sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+		fi
 	fi
 
 	local expand_runtime_classes_for_nfd=false
@@ -1122,6 +1265,10 @@ function main() {
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
 	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS}"
+	echo "  * x86_64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
+	echo "  * aarch64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
+	echo "  * s390x: ${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
+	echo "  * ppc64le: ${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
 	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
 	echo "  * x86_64: ${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
 	echo "  * aarch64: ${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
