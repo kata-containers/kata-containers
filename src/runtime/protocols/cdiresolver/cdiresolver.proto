@@ -1,0 +1,52 @@
+// To regenerate deviceplugin.pb.go run make generate-protocols
+syntax = "proto3";
+
+package cdiresolver;
+
+option go_package = "../cdiresolver";
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+//import "gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.goproto_stringer_all) = false;
+option (gogoproto.stringer_all) =  true;
+option (gogoproto.goproto_getters_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_unrecognized_all) = false;
+
+// CDIResolver is the service advertised by the sandbox-device-plugin
+// Likely client will be the sandbox-shim which will need to know
+// which physical devices it needs to cold plug
+service CDIResolver {
+    rpc AllocatePodDevices(PodRequest) returns (PhysicalDeviceResponse) {}
+    rpc AllocateContainerDevices(ContainerRequest) returns (PhysicalDeviceResponse) {}
+    rpc FreeContainerDevices(ContainerRequest) returns (PhysicalDeviceResponse) {}
+    rpc FreePodDevices(PodRequest) returns (PhysicalDeviceResponse) {}
+}
+
+message PodRequest {
+	// PodID is the UUID of the pod for which devices are being sought
+	string PodID = 1;
+	// Count is the number of devices needed
+	int32 Count = 2;
+	// DeviceType is the type of device
+	string DeviceType = 3;
+}
+
+message PhysicalDeviceResponse {
+	// VirtualDeviceIDs is the list of virtual ids of the devices requested
+	repeated string VirtualDeviceIDs = 1;
+	// PhysicalDeviceIDs is the list of physical ids of the devices requested
+	repeated string PhysicalDeviceIDs = 2;
+}
+
+message ContainerRequest {
+	// PodID is the uuid string of the pod
+	string PodID = 1;
+	// ContainerID is the uuid string of a container within the pod
+	string ContainerID = 2;
+	// VirtualDeviceIDs is a list of virtual_ids that should be associated with the pod
+	repeated string VirtualDeviceIDs = 3;
+}

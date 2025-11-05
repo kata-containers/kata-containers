@@ -888,6 +888,18 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 
 generate-config: $(CONFIGS)
 
+##TARGET generate-protocols: generate/update grpc protocols
+generate-protocols:
+	image=$$(docker build -q \
+	  --build-arg GO_VERSION=$$(yq '.languages.golang.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg PROTOC_VERSION=$$(yq '.externals.protoc.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg PROTOC_GEN_GO_VERSION=$$(yq '.externals."protoc-gen-go".version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg PROTOC_GEN_GO_GRPC_VERSION=$$(yq '.externals."protoc-gen-go-grpc".version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg TTRPC_VERSION=$$(yq '.externals.ttrpc.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  $(CURDIR)/../../tools/packaging/static-build/codegen) && \
+	docker run --rm --workdir /kata/src/runtime -v $(CURDIR)/../..:/kata --user $(shell id -u) $$image \
+	/kata/src/runtime/hack/update-generated-runtime-proto.sh
+
 test: hook go-test
 
 hook:

@@ -215,13 +215,14 @@ codecov-html: check_tarpaulin
 	show-summary \
 	vendor
 
-##TARGET generate-protocols: generate/update grpc agent protocols
+##TARGET generate-protocols: generate/update grpc protocols
 generate-protocols:
 	image=$$(docker build -q \
-	  --build-arg GO_VERSION=$$(yq '.languages.golang.version' $(CURDIR)/../../versions.yaml) \
+	  --build-arg GO_VERSION=$$(yq '.languages.golang.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
 	  --build-arg PROTOC_VERSION=$$(yq '.externals.protoc.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
-	  --build-arg PROTOC_GEN_GO_VERSION=$$(yq '.externals.protoc-gen-go.version' $(CURDIR)/../../versions.yaml) \
-	  --build-arg TTRPC_VERSION=$$(yq '.externals.ttrpc.version' $(CURDIR)/../../versions.yaml) \
+	  --build-arg PROTOC_GEN_GO_VERSION=$$(yq '.externals."protoc-gen-go".version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg PROTOC_GEN_GO_GRPC_VERSION=$$(yq '.externals."protoc-gen-go-grpc".version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
+	  --build-arg TTRPC_VERSION=$$(yq '.externals.ttrpc.version' $(CURDIR)/../../versions.yaml | grep -oE "[0-9.]+") \
 	  $(CURDIR)/../../tools/packaging/static-build/codegen) && \
 	docker run --rm --workdir /kata/src/agent -v $(CURDIR)/../..:/kata --user $(shell id -u) $$image \
 	../libs/protocols/hack/update-generated-proto.sh all

@@ -384,6 +384,11 @@ externals:
     url: "https://github.com/protocolbuffers/protobuf-go/releases"
     version: "v1.28.1"
 
+  protoc-gen-go-grpc:
+    description: "Protobuf Go compiler"
+    url: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+    version: "v1.3.0"
+
   ttrpc:
     description: "ttRPC libary and code generation utilities"
     url: "https://github.com/containerd/ttrpc/releases"
