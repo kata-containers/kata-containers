@@ -523,7 +523,9 @@ EOF
 		chmod +x ${qemu_binary_script_host_path}
 	fi
 
-	sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
+	if ! string_exists_in_file "${config_path}" "${qemu_binary_script}"; then
+		sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
+	fi
 }
 
 function install_artifacts() {
@@ -544,18 +546,36 @@ function install_artifacts() {
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
 		# Properly set https_proxy and no_proxy for Kata Containers
 		if [ -n "${AGENT_HTTPS_PROXY}" ]; then
-			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.https_proxy"; then
+				sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+			fi
 		fi
 
 		if [ -n "${AGENT_NO_PROXY}" ]; then
-			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.no_proxy"; then
+				sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+			fi
 		fi
 
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
-			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
-			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
-			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${kata_config_file}"
+			if ! config_is_true "${kata_config_file}" "enable_debug"; then
+				sed -i -e 's/^#\{0,1\}\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
+			fi
+			if ! config_is_true "${kata_config_file}" "debug_console_enabled"; then
+				sed -i -e 's/^#\{0,1\}\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
+			fi
+
+			local debug_params=""
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.log=debug"; then
+				debug_params+=" agent.log=debug"
+			fi
+			if ! field_contains_value "${kata_config_file}" "kernel_params" "initcall_debug"; then
+				debug_params+=" initcall_debug"
+			fi
+			if [[ -n "${debug_params}" ]]; then
+				sed -i -e "s/^kernel_params = \"\(.*\)\"/kernel_params = \"\1${debug_params}\"/g" "${kata_config_file}"
+			fi
 		fi
 
 		# Apply allowed_hypervisor_annotations:
@@ -600,7 +620,18 @@ function install_artifacts() {
 			fi
 
 			if [[ -n "${all_annotations}" ]]; then
-				IFS=',' read -a annotations <<< "${all_annotations}"
+				local existing_annotations=$(get_field_array_values "${kata_config_file}" "enable_annotations")
+
+				# Combine existing and new annotations
+				local combined_annotations="${existing_annotations}"
+				if [[ -n "${combined_annotations}" ]] && [[ -n "${all_annotations}" ]]; then
+					combined_annotations+=",${all_annotations}"
+				elif [[ -n "${all_annotations}" ]]; then
+					combined_annotations="${all_annotations}"
+				fi
+
+				# Deduplicate all annotations
+				IFS=',' read -a annotations <<< "${combined_annotations}"
 				local -A seen_annotations
 				local unique_annotations=()
 				
@@ -609,20 +640,25 @@ function install_artifacts() {
 					annotation=$(echo "${annotation}" | sed 's/^[[:space:]]//;s/[[:space:]]$//')
 					if [[ -n "${annotation}" ]] && [[ -z "${seen_annotations[${annotation}]+_}" ]]; then
 						seen_annotations["${annotation}"]=1
-						# Add quotes for TOML format
-						unique_annotations+=("\"${annotation}\"")
+						unique_annotations+=("${annotation}")
 					fi
 				done
 				
 				if [[ ${#unique_annotations[@]} -gt 0 ]]; then
-					local final_annotations=$(IFS=', '; echo "${unique_annotations[*]}")
-					sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, ${final_annotations}]/" "${kata_config_file}"
+					local formatted_annotations=()
+					for ann in "${unique_annotations[@]}"; do
+						formatted_annotations+=("\"${ann}\"")
+					done
+					local final_annotations=$(IFS=', '; echo "${formatted_annotations[*]}")
+					sed -i -e "s/^enable_annotations = \[.*\]/enable_annotations = [${final_annotations}]/" "${kata_config_file}"
 				fi
 			fi
 		fi
 
 		if printf '%s\n' "${experimental_force_guest_pull[@]}" | grep -Fxq "${shim}"; then
-			sed -i -e 's/^\(experimental_force_guest_pull\).*=.*$/\1 = true/g' "${kata_config_file}"
+			if ! config_is_true "${kata_config_file}" "experimental_force_guest_pull"; then
+				sed -i -e 's/^#\{0,1\}\(experimental_force_guest_pull\).*=.*$/\1 = true/g' "${kata_config_file}"
+			fi
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
@@ -682,11 +718,20 @@ function install_artifacts() {
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
-		sed -i -E "s|(static_sandbox_resource_mgmt)=false|\1=true|" "${config_path}"
+
+		if ! config_is_true "${config_path}" "static_sandbox_resource_mgmt"; then
+			sed -i -E "s|(static_sandbox_resource_mgmt)\s*=\s*false|\1=true|" "${config_path}"
+		fi
 
 		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
-		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
-		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+
+		if ! field_contains_value "${config_path}" "valid_hypervisor_paths" "${clh_path}"; then
+			sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
+		fi
+
+		if ! field_contains_value "${config_path}" "path" "${clh_path}"; then
+			sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+		fi
 	fi
 
 	local expand_runtime_classes_for_nfd=false
