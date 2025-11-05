@@ -9,6 +9,8 @@ metadata:
   name: ${POD_NAME_CUDA}
   labels:
     app: ${POD_NAME_CUDA}
+  annotations:
+    cdi.k8s.io/gpu: "nvidia.com/pgpu=0"
 spec:
   runtimeClassName: ${RUNTIME_CLASS_NAME}
   restartPolicy: Never

@@ -13,9 +13,16 @@ source "${kubernetes_dir}/../../common.bash"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime
 enable_nvrc_trace() {
-	if [[ ${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu} == "kata-qemu-nvidia-gpu" ]]; then
+	local config_file=""
+	if [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu" ]]; then
 		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
+	elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-snp" ]]; then
+		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-snp.toml"
+
+		# Let's temporarily hijack this function to set needed changes for the test
+		sudo sed -i -e 's/^shared_fs = "none"/shared_fs = "virtio-9p"/' "${config_file}"
 	fi
+
 	if ! grep -q "nvrc.log=trace" "${config_file}"; then
 		sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 nvrc.log=trace"/g' "${config_file}"
 	fi
@@ -38,6 +45,12 @@ if [ -n "${K8S_TEST_NV:-}" ]; then
 else
 	K8S_TEST_NV=("k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-nim.bats")
+fi
+
+# KATA_HYPERVISOR is set in the CI workflow yaml file, and can be set by the user executing CI locally
+if [ -n "${KATA_HYPERVISOR:-}" ]; then
+	export RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
+	info "Set RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME} from KATA_HYPERVISOR=${KATA_HYPERVISOR}"
 fi
 
 ensure_yq
