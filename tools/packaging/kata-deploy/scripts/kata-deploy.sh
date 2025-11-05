@@ -33,6 +33,40 @@ info() {
 	echo "INFO: $msg" >&2
 }
 
+# Check if a value exists within a specific field in the config file
+# * field_contains_value "${config}" "kernel_params" "agent.log=debug"
+field_contains_value() {
+	local config_file="$1"
+	local field="$2"
+	local value="$3"
+	# Use word boundaries (\b) to match complete parameters, not substrings
+	# This handles space-separated values like kernel_params = "param1 param2 param3"
+	grep -qE "^${field}[^=]*=.*[[:space:]\"](${value})([[:space:]\"]|$)" "${config_file}"
+}
+
+# Get existing values from a TOML array field and return them as a comma-separated string
+# * get_field_array_values "${config}" "enable_annotations"
+get_field_array_values() {
+	local config_file="$1"
+	local field="$2"
+	# Extract values from field = ["val1", "val2", ...] format
+	grep "^${field} = " "${config_file}" | sed "s/^${field} = \[\(.*\)\]/\1/" | sed 's/"//g' | sed 's/, /,/g'
+}
+
+# Check if a boolean config is already set to true
+config_is_true() {
+	local config_file="$1"
+	local key="$2"
+	grep -qE "^${key}\s*=\s*true" "${config_file}"
+}
+
+# Check if a string value already exists anywhere in the file (literal match)
+string_exists_in_file() {
+	local file_path="$1"
+	local string="$2"
+	grep -qF "${string}" "${file_path}"
+}
+
 DEBUG="${DEBUG:-"false"}"
 
 ARCH=$(uname -m)
