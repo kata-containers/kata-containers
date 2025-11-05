@@ -16,6 +16,8 @@ POD_NAME_CUDA="cuda-vectoradd-kata"
 export POD_NAME_CUDA
 
 setup() {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     setup_common
     get_pod_config_dir
 
@@ -29,6 +31,8 @@ setup() {
 }
 
 @test "CUDA Vector Addition Test" {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     # Create the CUDA pod
     kubectl apply -f "${pod_yaml}"
 
@@ -44,6 +48,8 @@ setup() {
 }
 
 teardown() {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     # Debugging information
     echo "=== CUDA vectoradd Pod Logs ==="
     kubectl logs "${pod_name}" || true

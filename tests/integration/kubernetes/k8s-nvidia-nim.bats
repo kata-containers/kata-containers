@@ -79,6 +79,8 @@ create_embedqa_pod() {
 }
 
 setup_file() {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     setup_common
 
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
@@ -102,6 +104,8 @@ setup_file() {
 }
 
 @test "List of models available for inference" {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variable is shared via file between BATS tests
@@ -122,6 +126,8 @@ setup_file() {
 }
 
 @test "Simple OpenAI completion request" {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -147,6 +153,8 @@ setup_file() {
 
 
 @test "LangChain NVIDIA AI Endpoints" {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -179,6 +187,7 @@ EOF
 }
 
 @test "Kata Documentation RAG" {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
     [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
 
     # shellcheck disable=SC1091  # File is created by previous test
@@ -340,6 +349,8 @@ EOF
 }
 
 teardown_file() {
+    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
+
     # Debugging information
     echo "=== Instruct Pod Logs ==="
     kubectl logs "${POD_NAME_INSTRUCT}" || true
