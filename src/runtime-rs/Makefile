@@ -264,7 +264,7 @@ ifneq (,$(CLHCMD))
     VMROOTFSDRIVER_CLH := virtio-pmem
 
     DEFSANDBOXCGROUPONLY_CLH := true
-    DEFSTATICRESOURCEMGMT_CLH := true
+    DEFSTATICRESOURCEMGMT_CLH := false
 endif
 
 ifneq (,$(QEMUCMD))
@@ -306,7 +306,7 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
 
     # overriding options
-    DEFSTATICRESOURCEMGMT_QEMU := true
+    DEFSTATICRESOURCEMGMT_QEMU := false
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false
