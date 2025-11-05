@@ -14,10 +14,10 @@ jobs:
       matrix:
         environment: [
           { test-type: multi-snapshotter, containerd: v2.2 },
-          { test-type: multi-experimental-force-guest-pull, containerd: v1.7 },
-          { test-type: multi-experimental-force-guest-pull, containerd: v2.0 },
-          { test-type: multi-experimental-force-guest-pull, containerd: v2.1 },
-          { test-type: multi-experimental-force-guest-pull, containerd: v2.2 },
+          { test-type: force-guest-pull, containerd: v1.7 },
+          { test-type: force-guest-pull, containerd: v2.0 },
+          { test-type: force-guest-pull, containerd: v2.1 },
+          { test-type: force-guest-pull, containerd: v2.2 },
         ]
     env:
       # I don't want those to be inside double quotes, so I'm deliberately ignoring the double quotes here.
@@ -41,7 +41,7 @@ jobs:
           KUBERNETES: vanilla
           SNAPSHOTTER: ${{ matrix.environment.test-type == 'multi-snapshotter' && 'nydus' || '' }}
           USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ matrix.environment.test-type == 'multi-snapshotter' }}
-          EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.environment.test-type == 'experimental-force-guest-pull' && 'qemu-coco-dev' || '' }}
+          EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.environment.test-type == 'force-guest-pull' && 'qemu-coco-dev' || '' }}
 
       # This is needed as we may hit the createContainerTimeout
       - name: Adjust Kata Containers' create_container_timeout
