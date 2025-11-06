@@ -219,5 +219,6 @@ pub fn get_process_seccomp_rules() -> Vec<(i64, Vec<seccompiler::SeccompRule>)> 
         (libc::SYS_chmod, vec![]),
         #[cfg(target_arch = "x86_64")]
         (libc::SYS_fchmodat2, vec![]),
+        (libc::SYS_pselect6, vec![]),
     ]
 }
