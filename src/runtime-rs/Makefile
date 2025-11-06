@@ -306,7 +306,7 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
 
     # overriding options
-    DEFSTATICRESOURCEMGMT_QEMU := false
+    DEFSTATICRESOURCEMGMT_QEMU := true
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false
