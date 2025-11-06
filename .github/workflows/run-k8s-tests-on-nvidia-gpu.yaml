@@ -59,6 +59,23 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Uninstall previous `kbs-client`
+        if: matrix.environment.name != 'nvidia-gpu'
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
+
+      - name: Deploy CoCo KBS
+        if: matrix.environment.name != 'nvidia-gpu'
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
+        env:
+          NVIDIA_VERIFIER_MODE: remote
+
+      - name: Install `kbs-client`
+        if: matrix.environment.name != 'nvidia-gpu'
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+
       - name: Deploy Kata
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
@@ -87,3 +104,8 @@ jobs:
         if: always()
         timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
+
+      - name: Delete CoCo KBS
+        if: always() && matrix.environment.name != 'nvidia-gpu'
+        run: |
+          bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
