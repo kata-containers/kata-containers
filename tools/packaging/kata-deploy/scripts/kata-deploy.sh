@@ -909,7 +909,12 @@ function configure_containerd_runtime() {
 	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${configuration_file}
 	tomlq -i -t $(printf '%s.runtime_path=%s' ${runtime_table} ${runtime_path}) ${configuration_file}
 	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${configuration_file}
-	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+	if [[ "${shim}" == *"nvidia-gpu-"* ]]; then
+		tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*","cdi.k8s.io/*"]' ${runtime_table}) ${configuration_file}
+	else
+		tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+	fi
+
 	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${configuration_file}
 
 	if [ "${DEBUG}" == "true" ]; then
