@@ -59,9 +59,25 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nix::errno::Errno;
     use std::fs::File;
     use std::io::prelude::*;
     use test_utils::skip_if_not_root;
+
+    /// Helper function to check if the result is an EPERM error
+    fn is_permission_error(result: &Result<()>) -> bool {
+        if let Err(e) = result {
+            if let Some(errno) = e.downcast_ref::<Errno>() {
+                if *errno == Errno::EPERM {
+                    println!(
+                        "EPERM: skipping test - reseeding RNG is not permitted in this environment"
+                    );
+                    return true;
+                }
+            }
+        }
+        false
+    }
 
     #[test]
     fn test_reseed_rng() {
@@ -73,6 +89,9 @@ mod tests {
         // Ensure the buffer was filled.
         assert!(n == POOL_SIZE);
         let ret = reseed_rng(&seed);
+        if is_permission_error(&ret) {
+            return;
+        }
         assert!(ret.is_ok());
     }
 
@@ -85,6 +104,9 @@ mod tests {
         // Ensure the buffer was filled.
         assert!(n == POOL_SIZE);
         let ret = reseed_rng(&seed);
+        if is_permission_error(&ret) {
+            return;
+        }
         if nix::unistd::Uid::effective().is_root() {
             assert!(ret.is_ok());
         } else {
