@@ -22,6 +22,15 @@ export LOCAL_NIM_CACHE="/opt/nim/.cache"
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
 export SKIP_MULTI_GPU_TESTS
 
+if [[ "${RUNTIME_CLASS_NAME}" == "kata-qemu-nvidia-gpu-snp" ]]; then
+    POD_READY_TIMEOUT_INSTRUCT=${POD_READY_TIMEOUT_INSTRUCT:-1000s}
+else
+    POD_READY_TIMEOUT_INSTRUCT=${POD_READY_TIMEOUT_INSTRUCT:-500s}
+fi
+POD_READY_TIMEOUT_EMBEDQA=${POD_READY_TIMEOUT_EMBEDQA:-500s}
+export POD_READY_TIMEOUT_INSTRUCT
+export POD_READY_TIMEOUT_EMBEDQA
+
 DOCKER_CONFIG_JSON=$(
     echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" |
         base64 -w0
@@ -49,7 +58,7 @@ create_inference_pod() {
     export POD_INSTRUCT_YAML="${pod_instruct_yaml}"
 
     kubectl apply -f "${POD_INSTRUCT_YAML}"
-    kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME_INSTRUCT}"
+    kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
 
     # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
     POD_IP_INSTRUCT=$(kubectl get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}')
@@ -68,7 +77,7 @@ create_embedqa_pod() {
     export POD_EMBEDQA_YAML="${pod_embedqa_yaml}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
-    kubectl wait --for=condition=Ready --timeout=500s pod "${POD_NAME_EMBEDQA}"
+    kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
 
     # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
     POD_IP_EMBEDQA=$(kubectl get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}')
@@ -79,8 +88,6 @@ create_embedqa_pod() {
 }
 
 setup_file() {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     setup_common
 
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
@@ -104,8 +111,6 @@ setup_file() {
 }
 
 @test "List of models available for inference" {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variable is shared via file between BATS tests
@@ -126,8 +131,6 @@ setup_file() {
 }
 
 @test "Simple OpenAI completion request" {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -153,8 +156,6 @@ setup_file() {
 
 
 @test "LangChain NVIDIA AI Endpoints" {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -187,7 +188,6 @@ EOF
 }
 
 @test "Kata Documentation RAG" {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
     [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
 
     # shellcheck disable=SC1091  # File is created by previous test
@@ -349,8 +349,6 @@ EOF
 }
 
 teardown_file() {
-    [ "${KATA_HYPERVISOR}" = "qemu-nvidia-gpu-snp" ] && skip "The CC version of the test is under development"
-
     # Debugging information
     echo "=== Instruct Pod Logs ==="
     kubectl logs "${POD_NAME_INSTRUCT}" || true

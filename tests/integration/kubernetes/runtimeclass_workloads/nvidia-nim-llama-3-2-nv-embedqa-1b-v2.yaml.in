@@ -17,6 +17,8 @@ metadata:
   name: nvidia-nim-llama-3-2-nv-embedqa-1b-v2
   labels:
     app: nvidia-nim-llama-3-2-nv-embedqa-1b-v2
+  annotations:
+    cdi.k8s.io/gpu: "nvidia.com/pgpu=1"
 spec:
   restartPolicy: Always
   runtimeClassName: "${RUNTIME_CLASS_NAME}"
