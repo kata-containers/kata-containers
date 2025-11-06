@@ -544,16 +544,63 @@ function install_artifacts() {
 		mkdir -p "$config_path"
 
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
-		# Properly set https_proxy and no_proxy for Kata Containers
+		# Till deprecation period is over, we need to support:
+		# * "http://proxy:8080" (applies to all shims)
+		# * per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
 		if [ -n "${AGENT_HTTPS_PROXY}" ]; then
-			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.https_proxy"; then
-				sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+			local https_proxy_value=""
+			
+			# Parse AGENT_HTTPS_PROXY - check if it contains "=" for per-shim format
+			if [[ "${AGENT_HTTPS_PROXY}" == *=* ]]; then
+				# Per-shim format: parse semicolon-separated "shim=proxy" mappings
+				IFS=';' read -ra proxy_mappings <<< "${AGENT_HTTPS_PROXY}"
+				for mapping in "${proxy_mappings[@]}"; do
+					local key="${mapping%%=*}"
+					local value="${mapping#*=}"
+					if [[ "${key}" == "${shim}" ]]; then
+						https_proxy_value="${value}"
+						break
+					fi
+				done
+			else
+				# Simple format: apply to all shims
+				https_proxy_value="${AGENT_HTTPS_PROXY}"
+			fi
+			
+			if [ -n "${https_proxy_value}" ]; then
+				if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.https_proxy"; then
+					sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='"${https_proxy_value}"'"|g' "${kata_config_file}"
+				fi
 			fi
 		fi
 
+		# Till deprecation period is over, need to support:
+		# * "localhost,127.0.0.1" (applies to all shims)
+		# * per-shim format: "qemu-tdx=localhost,127.0.0.1;qemu-snp=192.168.0.0/16"
 		if [ -n "${AGENT_NO_PROXY}" ]; then
-			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.no_proxy"; then
-				sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+			local no_proxy_value=""
+			
+			# Parse AGENT_NO_PROXY - check if it contains "=" for per-shim format
+			if [[ "${AGENT_NO_PROXY}" == *=* ]]; then
+				# Per-shim format: parse semicolon-separated "shim=no_proxy" mappings
+				IFS=';' read -ra noproxy_mappings <<< "${AGENT_NO_PROXY}"
+				for mapping in "${noproxy_mappings[@]}"; do
+					local key="${mapping%%=*}"
+					local value="${mapping#*=}"
+					if [[ "${key}" == "${shim}" ]]; then
+						no_proxy_value="${value}"
+						break
+					fi
+				done
+			else
+				# Simple format: apply to all shims
+				no_proxy_value="${AGENT_NO_PROXY}"
+			fi
+			
+			if [ -n "${no_proxy_value}" ]; then
+				if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.no_proxy"; then
+					sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='"${no_proxy_value}"'"|g' "${kata_config_file}"
+				fi
 			fi
 		fi
 
