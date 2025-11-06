@@ -83,7 +83,7 @@ setup() {
 		sleep 1
 	done
 
-	info "total_cpus_container = $total_cpus"
+	info "total_cpus_container = $total_cpus_container"
 
 	[ "$total_cpus_container" -eq "$total_cpus" ]
 
