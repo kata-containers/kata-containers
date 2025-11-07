@@ -29,6 +29,11 @@ setup() {
     # Substitute environment variables in the YAML template
     envsubst < "${pod_yaml_in}" > "${pod_yaml}"
 
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+    add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+    add_cdi_envvars_to_policy_settings "${policy_settings_dir}"
+
+    auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 }
 
 @test "CUDA Vector Addition Test" {
@@ -52,5 +57,6 @@ teardown() {
     echo "=== CUDA vectoradd Pod Logs ==="
     kubectl logs "${pod_name}" || true
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir}"
     teardown_common "${node}" "${node_start_time:-}"
 }

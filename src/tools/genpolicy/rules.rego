@@ -259,6 +259,24 @@ allow_anno_key(i_key, p_oci) if {
 
     print("allow_anno_key 2: true")
 }
+# Allow CDI annotations for GPU device passthrough
+# Key: cdi.k8s.io/vfio<num> where <num> is one or more digits
+# Value: nvidia.com/gpu=<index> where <index>is one or more digits
+# This matches the annotation created by siblingAnnotation() in container.go
+allow_anno_key(i_key, p_oci) if {
+    print("allow_anno_key 3: i key =", i_key)
+
+    startswith(i_key, "cdi.k8s.io/vfio")
+
+    suffix := trim_prefix(i_key, "cdi.k8s.io/vfio")
+    regex.match("^[0-9]+$", suffix)
+
+    i_value := input.OCI.Annotations[i_key]
+    print("allow_anno_key 3: i value =", i_value)
+    regex.match("^nvidia\\.com/gpu=[0-9]+$", i_value)
+
+    print("allow_anno_key 3: true")
+}
 
 # Get the value of the S_NAME_KEY annotation and
 # correlate it with other annotations and process fields.
@@ -461,10 +479,45 @@ allow_devices(p_devices, i_devices) if {
     print("allow_devices: start")
     every i_device in i_devices {
         print("allow_devices: i_device =", i_device)
-        some p_device in p_devices
-        p_device.container_path == i_device.container_path
+        allow_device(p_devices, i_device)
     }
     print("allow_devices: true")
+}
+
+allow_device(p_devices, i_device) if {
+    print("allow_device 1: start")
+    some p_device in p_devices
+    p_device.container_path == i_device.container_path
+    print("allow_device 1: true")
+}
+
+# TODO: can this go into genpolicy and will this persist with the new device plugin approach?
+# Allow VFIO PCI guest kernel devices for GPU passthrough (dynamically added)
+# Pattern: /dev/vfio/<num> where <num> is one or more digits
+allow_device(p_devices, i_device) if {
+    print("allow_device 2: start")
+
+    # Check container path matches /dev/vfio/<num>
+    startswith(i_device.container_path, "/dev/vfio/")
+    suffix := trim_prefix(i_device.container_path, "/dev/vfio/")
+    regex.match("^[0-9]+$", suffix)
+
+    # Check device type
+    i_device.type_ == "vfio-pci-gk"
+
+    # Check that id matches the device number in the path
+    i_device.id == suffix
+
+    # Check that vm_path is empty (device is passed through to guest)
+    i_device.vm_path == ""
+
+    # Check options contain PCI address in format XXXX:XX:XX.X=XX/XX
+    count(i_device.options) > 0
+    every option in i_device.options {
+        regex.match("^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$", option)
+    }
+
+    print("allow_device 2: true")
 }
 
 
@@ -1110,7 +1163,7 @@ allow_storage_source(p_storage, i_storage, bundle_id) if {
     source2 := replace(source1, "$(sfprefix)", policy_data.common.sfprefix)
     source3 := replace(source2, "$(cpath)", policy_data.common.cpath)
     source4 := replace(source3, "$(bundle-id)", bundle_id)
-    
+
     print("allow_storage_source 2: source =", source4)
     regex.match(source4, i_storage.source)
 
