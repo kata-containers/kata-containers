@@ -42,15 +42,15 @@ pub fn is_ephemeral_volume(mount: &Mount) -> bool {
 /// K8s `EmptyDir` volumes are directories on the host. If the fs type is tmpfs, it's a ephemeral
 /// volume instead of a `EmptyDir` volume.
 pub fn is_host_empty_dir(path: &str) -> bool {
-    if is_empty_dir(path) {
-        if let Ok(info) = get_linux_mount_info(path) {
-            if info.fs_type != "tmpfs" {
-                return true;
-            }
-        }
+    if !is_empty_dir(path) {
+        return false;
     }
 
-    false
+    match get_linux_mount_info(path) {
+        Ok(info) => info.fs_type != "tmpfs",
+        Err(crate::mount::Error::NoMountEntry(_)) => true,
+        Err(_) => false,
+    }
 }
 
 // update_ephemeral_storage_type sets the mount type to 'ephemeral'
@@ -58,7 +58,7 @@ pub fn is_host_empty_dir(path: &str) -> bool {
 // For the given pod ephemeral volume is created only once
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
-pub fn update_ephemeral_storage_type(oci_spec: &mut Spec) {
+pub fn update_ephemeral_storage_type(oci_spec: &mut Spec, disable_guest_empty_dir: bool) {
     if let Some(mounts) = oci_spec.mounts_mut() {
         for m in mounts.iter_mut() {
             if let Some(typ) = &m.typ() {
@@ -69,13 +69,14 @@ pub fn update_ephemeral_storage_type(oci_spec: &mut Spec) {
 
             if let Some(source) = &m.source() {
                 let mnt_src = &source.display().to_string();
-                //here we only care about the "bind" mount volume.
+                // We only care about the "bind" mount volume here.
                 if is_ephemeral_volume(m) {
                     m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
-                } else if is_host_empty_dir(mnt_src) {
+                }
+                if is_host_empty_dir(mnt_src) && !disable_guest_empty_dir {
                     // FIXME support disable_guest_empty_dir
                     // https://github.com/kata-containers/kata-containers/blob/02a51e75a7e0c6fce5e8abe3b991eeac87e09645/src/runtime/pkg/katautils/create.go#L105
-                    m.set_typ(Some(String::from(mount::KATA_HOST_DIR_VOLUME_TYPE)));
+                    m.set_typ(Some(mount::KATA_K8S_LOCAL_STORAGE_TYPE.to_string()));
                 }
             }
         }

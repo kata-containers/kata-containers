@@ -73,7 +73,7 @@ impl EphemeralVolume {
         mount.set_destination(m.destination().clone());
         mount.set_typ(Some("bind".to_string()));
         mount.set_source(Some(PathBuf::from(&source)));
-        mount.set_options(Some(vec!["rbind".to_string()]));
+        mount.set_options(m.options().clone());
 
         Ok(Self {
             mount,
