@@ -58,6 +58,14 @@ if [ -n "${KATA_HYPERVISOR:-}" ]; then
 fi
 export RUNTIME_CLASS_NAME
 
+if [[ "${RUNTIME_CLASS_NAME}" == kata-qemu-nvidia-gpu-* ]]; then
+	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-yes}"
+else
+	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
+fi
+export AUTO_GENERATE_POLICY
+
+
 ensure_yq
 
 if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
