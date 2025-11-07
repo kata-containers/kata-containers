@@ -1,4 +1,4 @@
-name: CI | Run NVIDIA GPU kubernetes tests on arm64
+name: CI | Run NVIDIA GPU kubernetes tests on amd64
 on:
   workflow_call:
     inputs:

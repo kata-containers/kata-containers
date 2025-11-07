@@ -77,6 +77,7 @@ setup_kbs_credentials() {
 
 create_inference_pod() {
     envsubst <"${POD_INSTRUCT_YAML_IN}" >"${POD_INSTRUCT_YAML}"
+    add_allow_all_policy_to_yaml "${POD_INSTRUCT_YAML}"
 
     kubectl apply -f "${POD_INSTRUCT_YAML}"
     kubectl_retry 10 30 wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
@@ -92,6 +93,7 @@ create_inference_pod() {
 
 create_embedqa_pod() {
     envsubst <"${POD_EMBEDQA_YAML_IN}" >"${POD_EMBEDQA_YAML}"
+    add_allow_all_policy_to_yaml "${POD_EMBEDQA_YAML}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
     kubectl_retry 10 30 wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
