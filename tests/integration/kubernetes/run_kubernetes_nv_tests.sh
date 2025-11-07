@@ -46,11 +46,17 @@ else
 		"k8s-nvidia-nim.bats")
 fi
 
-# KATA_HYPERVISOR is set in the CI workflow yaml file, and can be set by the user executing CI locally
+RUNTIME_CLASS_NAME="kata-qemu-nvidia-gpu"
 if [ -n "${KATA_HYPERVISOR:-}" ]; then
-	export RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
+	SUPPORTED_VMMS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	if [[ ! " ${SUPPORTED_VMMS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
+		die "Unsupported KATA_HYPERVISOR=${KATA_HYPERVISOR}. Must be one of: ${SUPPORTED_VMMS[*]}"
+	fi
+	RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
 	info "Set RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME} from KATA_HYPERVISOR=${KATA_HYPERVISOR}"
 fi
+export RUNTIME_CLASS_NAME
 
 ensure_yq
 
