@@ -36,6 +36,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils/retry"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
@@ -597,7 +598,31 @@ func (k *kataAgent) updateInterface(ctx context.Context, ifc *pbTypes.Interface)
 	ifcReq := &grpc.UpdateInterfaceRequest{
 		Interface: ifc,
 	}
-	resultingInterface, err := k.sendReq(ctx, ifcReq)
+	// Since the network device hotplug is an asynchronous operation,
+	// it's possible that the hotplug operation had returned, but the network device
+	// hasn't ready in guest, thus it's better to retry on this operation to
+	// wait until the device ready in guest.
+
+	var resultingInterface interface{}
+
+	err := retry.Do(func() error {
+		if resInterface, nerr := k.sendReq(ctx, ifcReq); nerr != nil {
+			errMsg := nerr.Error()
+			if !strings.Contains(errMsg, "Link not found") {
+				return retry.Unrecoverable(nerr)
+			}
+
+			return nerr
+		} else {
+			resultingInterface = resInterface
+			return nil
+		}
+	},
+
+		retry.Attempts(20),
+		retry.LastErrorOnly(true),
+		retry.Delay(20*time.Millisecond))
+
 	if err != nil {
 		k.Logger().WithFields(logrus.Fields{
 			"interface-requested": fmt.Sprintf("%+v", ifc),
