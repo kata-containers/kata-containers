@@ -128,6 +128,12 @@ pub struct Runtime {
     #[serde(default)]
     pub disable_guest_seccomp: bool,
 
+    /// If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem.
+    /// Instead, emptyDir mounts will be created on the host and shared via virtio-fs.
+    /// This is potentially slower, but allows sharing of files from host to guest.
+    #[serde(default)]
+    pub disable_guest_empty_dir: bool,
+
     /// Determines how VFIO devices should be be presented to the container.
     ///
     /// Options:
