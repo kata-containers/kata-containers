@@ -350,15 +350,15 @@ EOF
 
 teardown_file() {
     # Debugging information
-    echo "=== Instruct Pod Logs ==="
-    kubectl logs "${POD_NAME_INSTRUCT}" || true
+    echo "=== Instruct Pod Logs ===" >&3
+    kubectl logs "${POD_NAME_INSTRUCT}"  >&3 || true
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
-        echo "=== EmbedQA Pod Logs ==="
-        kubectl logs "${POD_EMBEDQA_YAML}" || true
+        echo "=== EmbedQA Pod Logs ===" >&3
+        kubectl logs "${POD_NAME_EMBEDQA}" >&3 || true
     fi
 
-    teardown_common "${node}" "${node_start_time:-}"
+    teardown_common "${node}" "${node_start_time:-}" >&3
 
     # we have both secrets and pod elements in the manifests; teardown_common only deletes pods
     kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
