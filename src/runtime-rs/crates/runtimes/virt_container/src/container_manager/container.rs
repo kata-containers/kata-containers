@@ -133,6 +133,7 @@ impl Container {
         amend_spec(
             &mut spec,
             toml_config.runtime.disable_guest_seccomp,
+            toml_config.runtime.disable_guest_empty_dir,
             disable_guest_selinux,
         )
         .context("amend spec")?;
@@ -622,6 +623,7 @@ fn amend_spec(
     spec: &mut oci::Spec,
     disable_guest_seccomp: bool,
     disable_guest_selinux: bool,
+    disable_guest_empty_dir: bool,
 ) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
     if let Some(hooks) = spec.hooks().as_ref() {
@@ -631,7 +633,7 @@ fn amend_spec(
     }
 
     // special process K8s ephemeral volumes.
-    update_ephemeral_storage_type(spec, false);
+    update_ephemeral_storage_type(spec, disable_guest_empty_dir);
 
     if let Some(linux) = &mut spec.linux_mut() {
         if disable_guest_seccomp {
@@ -728,11 +730,11 @@ mod tests {
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = false
-        amend_spec(&mut spec, false, false).unwrap();
+        amend_spec(&mut spec, false, false, false).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = true
-        amend_spec(&mut spec, true, false).unwrap();
+        amend_spec(&mut spec, true, false, false).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
     }
 
@@ -755,12 +757,12 @@ mod tests {
             .unwrap();
 
         // disable_guest_selinux = false, selinux labels are left alone
-        amend_spec(&mut spec, false, false).unwrap();
+        amend_spec(&mut spec, false, false, false).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label() == &Some("xxx".to_owned()));
         assert!(spec.linux().as_ref().unwrap().mount_label() == &Some("yyy".to_owned()));
 
         // disable_guest_selinux = true, selinux labels are reset
-        amend_spec(&mut spec, false, true).unwrap();
+        amend_spec(&mut spec, false, true, false).unwrap();
         assert!(spec.process().as_ref().unwrap().selinux_label().is_none());
         assert!(spec.linux().as_ref().unwrap().mount_label().is_none());
     }

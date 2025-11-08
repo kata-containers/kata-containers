@@ -296,6 +296,10 @@ pub const KATA_ANNO_CFG_RUNTIME_AGENT: &str = "io.katacontainers.config.runtime.
 /// A sandbox annotation that determines if seccomp should be applied inside guest.
 pub const KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP: &str =
     "io.katacontainers.config.runtime.disable_guest_seccomp";
+/// A sandbox annotation that determines if it should create Kubernetes emptyDir mounts on the guest filesystem.
+pub const KATA_ANNO_CFG_DISABLE_GUEST_EMPTY_DIR: &str =
+    "io.katacontainers.config.runtime.disable_guest_empty_dir";
+
 /// A sandbox annotation that determines if pprof enabled.
 pub const KATA_ANNO_CFG_ENABLE_PPROF: &str = "io.katacontainers.config.runtime.enable_pprof";
 /// A sandbox annotation that determines if experimental features enabled.
@@ -1018,6 +1022,14 @@ impl Annotation {
                     KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.disable_guest_seccomp = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(bool_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_DISABLE_GUEST_EMPTY_DIR => match self.get_value::<bool>(key) {
+                        Ok(r) => {
+                            config.runtime.disable_guest_empty_dir = r.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(bool_err);
