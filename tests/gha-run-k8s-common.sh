@@ -513,6 +513,11 @@ function helm_helper() {
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
 	fi
 
+	# Do not enable on nvidia-gpu-* tests, as it'll be deployed by the GPU operator
+	if [[ "${KATA_HYPERVISOR}" == *"nvidia-gpu"* ]]; then
+		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
+	fi
+
 	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
 		die "HELM_IMAGE_REFERENCE environment variable cannot be empty."
 	fi
