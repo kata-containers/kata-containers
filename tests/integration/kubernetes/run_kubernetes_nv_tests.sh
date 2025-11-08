@@ -18,9 +18,6 @@ enable_nvrc_trace() {
 		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
 	elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-snp" ]]; then
 		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-snp.toml"
-
-		# Let's temporarily hijack this function to set needed changes for the test
-		sudo sed -i -e 's/^shared_fs = "none"/shared_fs = "virtio-9p"/' "${config_file}"
 	fi
 
 	if ! grep -q "nvrc.log=trace" "${config_file}"; then
