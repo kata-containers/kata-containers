@@ -6,30 +6,35 @@
 #
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
-# shellcheck disable=SC2154  # BATS variables are not assigned in this file
-load "${BATS_TEST_DIRNAME}/../../common.bash"
-# shellcheck disable=SC1091
-load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu}
 export RUNTIME_CLASS_NAME
-
-export POD_NAME_INSTRUCT="nvidia-nim-llama-3-1-8b-instruct"
-export POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 
 export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
 export SKIP_MULTI_GPU_TESTS
 
-if [[ "${RUNTIME_CLASS_NAME}" == "kata-qemu-nvidia-gpu-snp" ]]; then
-    POD_READY_TIMEOUT_INSTRUCT=${POD_READY_TIMEOUT_INSTRUCT:-1000s}
-else
-    POD_READY_TIMEOUT_INSTRUCT=${POD_READY_TIMEOUT_INSTRUCT:-500s}
+TEE=false
+[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
+[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+export TEE
+
+POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
+POD_NAME_INSTRUCT="nvidia-nim-llama-3-1-8b-instruct"
+POD_READY_TIMEOUT_EMBEDQA_PREDEFINED=500s
+POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=500s
+if [[ "${TEE}" = "true" ]]; then
+    POD_NAME_EMBEDQA="${POD_NAME_EMBEDQA}-tee"
+    POD_NAME_INSTRUCT="${POD_NAME_INSTRUCT}-tee"
+    POD_READY_TIMEOUT_EMBEDQA_PREDEFINED=1000s
+    POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=1000s
 fi
-POD_READY_TIMEOUT_EMBEDQA=${POD_READY_TIMEOUT_EMBEDQA:-500s}
-export POD_READY_TIMEOUT_INSTRUCT
-export POD_READY_TIMEOUT_EMBEDQA
+export POD_NAME_EMBEDQA
+export POD_NAME_INSTRUCT
+export POD_READY_TIMEOUT_EMBEDQA=${POD_READY_TIMEOUT_EMBEDQA:-${POD_READY_TIMEOUT_EMBEDQA_PREDEFINED}}
+export POD_READY_TIMEOUT_INSTRUCT=${POD_READY_TIMEOUT_INSTRUCT:-${POD_READY_TIMEOUT_INSTRUCT_PREDEFINED}}
 
 DOCKER_CONFIG_JSON=$(
     echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" |
@@ -49,13 +54,19 @@ setup_langchain_flow() {
     [[ "$(pip show beautifulsoup4 2>/dev/null | awk '/^Version:/{print $2}')" = "4.13.4" ]] || pip install beautifulsoup4==4.13.4
 }
 
+setup_kbs_credentials() {
+    # Get KBS address and export it for pod template substitution
+    export CC_KBS_ADDR="$(kbs_k8s_svc_http_addr)"
+
+    # Set allow all resources policy (hardening will be done later)
+    kbs_set_allow_all_resources
+
+    # DOCKER_CONFIG_JSON is already base64 encoded
+    kbs_set_resource_base64 "default" "credentials" "nvcr" "${DOCKER_CONFIG_JSON}"
+}
+
 create_inference_pod() {
-    pod_instruct_yaml_in="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml.in"
-    pod_instruct_yaml="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml"
-
-    envsubst <"${pod_instruct_yaml_in}" >"${pod_instruct_yaml}"
-
-    export POD_INSTRUCT_YAML="${pod_instruct_yaml}"
+    envsubst <"${POD_INSTRUCT_YAML_IN}" >"${POD_INSTRUCT_YAML}"
 
     kubectl apply -f "${POD_INSTRUCT_YAML}"
     kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
@@ -69,12 +80,7 @@ create_inference_pod() {
 }
 
 create_embedqa_pod() {
-    pod_embedqa_yaml_in="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml.in"
-    pod_embedqa_yaml="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml"
-
-    envsubst <"${pod_embedqa_yaml_in}" >"${pod_embedqa_yaml}"
-
-    export POD_EMBEDQA_YAML="${pod_embedqa_yaml}"
+    envsubst <"${POD_EMBEDQA_YAML_IN}" >"${POD_EMBEDQA_YAML}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
     kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
@@ -88,7 +94,20 @@ create_embedqa_pod() {
 }
 
 setup_file() {
+    [ "${TEE}" = "true" ] && return 0
+
     setup_common
+
+    get_pod_config_dir
+
+    export POD_INSTRUCT_YAML_IN="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml.in"
+    export POD_INSTRUCT_YAML="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml"
+    export POD_EMBEDQA_YAML_IN="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml.in"
+    export POD_EMBEDQA_YAML="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml"
+
+    if [ "${TEE}" = "true" ]; then
+        setup_kbs_credentials
+    fi
 
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
@@ -101,8 +120,6 @@ setup_file() {
 
     setup_langchain_flow
 
-    get_pod_config_dir
-
     create_inference_pod
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
@@ -111,6 +128,8 @@ setup_file() {
 }
 
 @test "List of models available for inference" {
+    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variable is shared via file between BATS tests
@@ -131,6 +150,8 @@ setup_file() {
 }
 
 @test "Simple OpenAI completion request" {
+    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -156,6 +177,8 @@ setup_file() {
 
 
 @test "LangChain NVIDIA AI Endpoints" {
+    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
+
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -188,6 +211,7 @@ EOF
 }
 
 @test "Kata Documentation RAG" {
+    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
     [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
 
     # shellcheck disable=SC1091  # File is created by previous test
@@ -349,6 +373,8 @@ EOF
 }
 
 teardown_file() {
+    [ "${TEE}" = "true" ] && return 0
+
     # Debugging information
     echo "=== Instruct Pod Logs ===" >&3
     kubectl logs "${POD_NAME_INSTRUCT}"  >&3 || true
@@ -358,12 +384,17 @@ teardown_file() {
         kubectl logs "${POD_NAME_EMBEDQA}" >&3 || true
     fi
 
+    if [ "${TEE}" = "true" ]; then
+        echo "=== KBS Pod Logs ===" >&3
+        kubectl logs -n coco-tenant -l app=kbs --tail=-1 >&3 || true
+    fi
+
     teardown_common "${node}" "${node_start_time:-}" >&3
 
     # we have both secrets and pod elements in the manifests; teardown_common only deletes pods
-    kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
+    [ -f "${POD_INSTRUCT_YAML}" ] && kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
-        kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
+        [ -f "${POD_EMBEDQA_YAML}" ] && kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
     fi
 }
