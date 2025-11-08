@@ -70,6 +70,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
         env:
           NVIDIA_VERIFIER_MODE: remote
+          KBS_INGRESS: nodeport
 
       - name: Install `kbs-client`
         if: matrix.environment.name != 'nvidia-gpu'
