@@ -18,6 +18,8 @@ enable_nvrc_trace() {
 		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
 	elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-snp" ]]; then
 		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-snp.toml"
+	elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-tdx" ]]; then
+		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-tdx.toml"
 	fi
 
 	if ! grep -q "nvrc.log=trace" "${config_file}"; then
