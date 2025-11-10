@@ -370,6 +370,9 @@ function kbs_k8s_deploy() {
 		echo "::group::DEBUG - describe kbs pod"
 		kubectl -n "${KBS_NS}" describe pod -l app=kbs || true
 		echo "::endgroup::"
+		echo "::group::DEBUG - kbs logs"
+		kubectl -n "${KBS_NS}" logs -l app=kbs || true
+		echo "::endgroup::"
 		return 1
 	fi
 	echo "::endgroup::"
