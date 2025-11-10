@@ -35,7 +35,19 @@ pub struct Deployment {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeploymentSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
+    minReadySeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    paused: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progressDeadlineSeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    revisionHistoryLimit: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     selector: Option<yaml::LabelSelector>,
@@ -44,7 +56,6 @@ pub struct DeploymentSpec {
     strategy: Option<DeploymentStrategy>,
 
     template: pod_template::PodTemplateSpec,
-    // TODO: additional fields.
 }
 
 /// Reference / Kubernetes API / Workload Resources / Deployment.
