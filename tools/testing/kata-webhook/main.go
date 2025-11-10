@@ -57,15 +57,6 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 		return &kwhmutating.MutatorResult{}, nil
 	}
 
-	for i := range pod.Spec.Containers {
-		if pod.Spec.Containers[i].SecurityContext != nil && pod.Spec.Containers[i].SecurityContext.Privileged != nil {
-			if *pod.Spec.Containers[i].SecurityContext.Privileged {
-				fmt.Println("privileged container: ", pod.GetNamespace(), pod.GetName())
-				return &kwhmutating.MutatorResult{}, nil
-			}
-		}
-	}
-
 	if pod.Spec.RuntimeClassName != nil {
 		fmt.Println("explicit runtime: ", pod.GetNamespace(), pod.GetName(), pod.Spec.RuntimeClassName)
 		return &kwhmutating.MutatorResult{}, nil
