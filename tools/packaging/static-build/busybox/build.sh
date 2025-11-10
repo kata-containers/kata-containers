@@ -16,6 +16,7 @@ source "${script_dir}/../../scripts/lib.sh"
 
 
 readonly busybox_builder="${script_dir}/build-static-busybox.sh"
+readonly busybox_builddir="${repo_root_dir}/build/busybox/builddir"
 
 busybox_version="$(get_from_kata_deps ".externals.busybox.version")"
 readonly BUSYBOX_VERSION=${busybox_version}
@@ -33,6 +34,7 @@ docker pull "${container_image}" || \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 
+mkdir -p "${busybox_builddir}"
 docker run --rm -i -v "${repo_root_dir:?}:${repo_root_dir}" \
 	--env DESTDIR="${DESTDIR:?}" \
 	--env BUSYBOX_VERSION="${BUSYBOX_VERSION:?}" \
@@ -41,6 +43,6 @@ docker run --rm -i -v "${repo_root_dir:?}:${repo_root_dir}" \
 	--env BUSYBOX_CONF_DIR="${script_dir:?}" \
 	--env HOME="/tmp" \
 	--user "$(id -u):$(id -g)" \
-	-w "${repo_root_dir}/build/busybox/builddir" \
+	-w "${busybox_builddir}" \
 	"${container_image}" \
 	sh -c "${busybox_builder}"
