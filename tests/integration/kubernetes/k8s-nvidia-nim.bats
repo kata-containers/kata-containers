@@ -42,6 +42,12 @@ DOCKER_CONFIG_JSON=$(
 )
 export DOCKER_CONFIG_JSON
 
+KBS_AUTH_CONFIG_JSON=$(
+    echo -n "{\"auths\":{\"nvcr.io\":{\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" |
+        base64 -w0
+)
+export KBS_AUTH_CONFIG_JSON
+
 setup_langchain_flow() {
     # shellcheck disable=SC1091  # Sourcing virtual environment activation script
     source "${HOME}"/.cicd/venv/bin/activate
@@ -61,8 +67,12 @@ setup_kbs_credentials() {
     # Set allow all resources policy (hardening will be done later)
     kbs_set_allow_all_resources
 
-    # DOCKER_CONFIG_JSON is already base64 encoded
-    kbs_set_resource_base64 "default" "credentials" "nvcr" "${DOCKER_CONFIG_JSON}"
+    # Set up Kubernetes secret for the containerd metadata pull
+    kubectl delete secret ngc-secret-instruct --ignore-not-found
+    kubectl create secret docker-registry ngc-secret-instruct --docker-server="nvcr.io" --docker-username="\$oauthtoken" --docker-password="${NGC_API_KEY}"
+
+    # KBS_AUTH_CONFIG_JSON is already base64 encoded
+    kbs_set_resource_base64 "default" "credentials" "nvcr" "${KBS_AUTH_CONFIG_JSON}"
 }
 
 create_inference_pod() {
