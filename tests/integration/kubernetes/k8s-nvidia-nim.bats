@@ -94,8 +94,6 @@ create_embedqa_pod() {
 }
 
 setup_file() {
-    [ "${TEE}" = "true" ] && return 0
-
     setup_common
 
     get_pod_config_dir
@@ -128,8 +126,6 @@ setup_file() {
 }
 
 @test "List of models available for inference" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variable is shared via file between BATS tests
@@ -150,8 +146,6 @@ setup_file() {
 }
 
 @test "Simple OpenAI completion request" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -177,8 +171,6 @@ setup_file() {
 
 
 @test "LangChain NVIDIA AI Endpoints" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -211,7 +203,6 @@ EOF
 }
 
 @test "Kata Documentation RAG" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
     [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
 
     # shellcheck disable=SC1091  # File is created by previous test
@@ -373,8 +364,6 @@ EOF
 }
 
 teardown_file() {
-    [ "${TEE}" = "true" ] && return 0
-
     # Debugging information
     echo "=== Instruct Pod Logs ===" >&3
     kubectl logs "${POD_NAME_INSTRUCT}"  >&3 || true
