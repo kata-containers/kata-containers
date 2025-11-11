@@ -80,7 +80,7 @@ impl LocalStorage {
         let mounts: Vec<oci::Mount> = if sid != cid {
             let mut mount = oci::Mount::default();
             mount.set_destination(m.destination().clone());
-            mount.set_typ(Some("bind".to_string()));
+            mount.set_typ(Some(KATA_K8S_LOCAL_STORAGE_TYPE.to_string()));
             mount.set_source(Some(PathBuf::from(&source)));
             mount.set_options(m.options().clone());
             vec![mount]

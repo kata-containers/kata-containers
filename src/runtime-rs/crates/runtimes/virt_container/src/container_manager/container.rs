@@ -133,8 +133,8 @@ impl Container {
         amend_spec(
             &mut spec,
             toml_config.runtime.disable_guest_seccomp,
-            toml_config.runtime.disable_guest_empty_dir,
             disable_guest_selinux,
+            toml_config.runtime.disable_guest_empty_dir,
         )
         .context("amend spec")?;
 
