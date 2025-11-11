@@ -147,7 +147,7 @@ test_rc_policy() {
 @test "Policy failure: unexpected capability" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
     yq -i \
-      '.spec.template.spec.containers[0].securityContext.capabilities.add += ["CAP_SYS_CHROOT"]' \
+      '.spec.template.spec.containers[0].securityContext.capabilities.add += ["SYS_NICE"]' \
       "${incorrect_yaml}"
 
     test_rc_policy true
