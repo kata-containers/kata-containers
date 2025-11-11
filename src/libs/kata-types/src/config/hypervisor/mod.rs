@@ -189,6 +189,13 @@ pub struct BlockDeviceInfo {
     /// increases the initial max rate
     #[serde(default)]
     pub disk_rate_limiter_ops_one_time_burst: Option<u64>,
+
+    /// virtio queue size. Size: byte
+    #[serde(default)]
+    pub queue_size: u32,
+    /// block device multi-queue
+    #[serde(default)]
+    pub num_queues: usize,
 }
 
 impl BlockDeviceInfo {
@@ -219,6 +226,15 @@ impl BlockDeviceInfo {
                 ));
             }
         }
+
+        if self.num_queues == 0 {
+            self.num_queues = default::DEFAULT_BLOCK_DEVICE_NUM_QUEUES as usize;
+        }
+
+        if self.queue_size == 0 {
+            self.queue_size = default::DEFAULT_BLOCK_DEVICE_QUEUE_SIZE;
+        }
+
         if self.memory_offset == 0 {
             self.memory_offset = default::DEFAULT_BLOCK_NVDIMM_MEM_OFFSET;
         }
