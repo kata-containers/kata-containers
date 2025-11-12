@@ -5,4 +5,55 @@ license = "Apache-2.0"
 rust-version = "1.85.1"
 
 [workspace]
-members = []
+members = [
+    # Dragonball
+    "src/dragonball",
+    "src/dragonball/dbs_acpi",
+    "src/dragonball/dbs_address_space",
+    "src/dragonball/dbs_allocator",
+    "src/dragonball/dbs_arch",
+    "src/dragonball/dbs_boot",
+    "src/dragonball/dbs_device",
+    "src/dragonball/dbs_interrupt",
+    "src/dragonball/dbs_legacy_devices",
+    "src/dragonball/dbs_pci",
+    "src/dragonball/dbs_tdx",
+    "src/dragonball/dbs_upcall",
+    "src/dragonball/dbs_utils",
+    "src/dragonball/dbs_virtio_devices",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Rust-VMM crates
+event-manager = "0.2.1"
+kvm-bindings = "0.6.0"
+kvm-ioctls = "=0.12.1"
+linux-loader = "0.8.0"
+seccompiler = "0.5.0"
+vfio-bindings = "0.3.0"
+vfio-ioctls = "0.1.0"
+virtio-bindings = "0.1.0"
+virtio-queue = "0.7.0"
+vm-fdt = "0.2.0"
+vm-memory = "0.10.0"
+vm-superio = "0.5.0"
+vmm-sys-util = "0.11.0"
+
+# Local dependencies from Dragonball Sandbox crates
+dbs-acpi = { path = "src/dragonball/dbs_acpi" }
+dbs-address-space = { path = "src/dragonball/dbs_address_space" }
+dbs-allocator = { path = "src/dragonball/dbs_allocator" }
+dbs-arch = { path = "src/dragonball/dbs_arch" }
+dbs-boot = { path = "src/dragonball/dbs_boot" }
+dbs-device = { path = "src/dragonball/dbs_device" }
+dbs-interrupt = { path = "src/dragonball/dbs_interrupt" }
+dbs-legacy-devices = { path = "src/dragonball/dbs_legacy_devices" }
+dbs-pci = { path = "src/dragonball/dbs_pci" }
+dbs-tdx = { path = "src/dragonball/dbs_tdx" }
+dbs-upcall = { path = "src/dragonball/dbs_upcall" }
+dbs-utils = { path = "src/dragonball/dbs_utils" }
+dbs-virtio-devices = { path = "src/dragonball/dbs_virtio_devices" }
+
+# Local dependencies from `src/lib`
+test-utils = { path = "src/libs/test-utils" }
