@@ -23,7 +23,6 @@ import (
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/typeurl/v2"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -113,19 +112,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		if s.sandbox != nil {
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
-		// Here we deal with CDI devices that are cold-plugged (k8s) and
-		// for the single_container (nerdctl, podman, ...) use-case.
-		// We can provide additional directories where to search for
-		// CDI specs if needed. immutable OS's only have specific
-		// directories where applications can write too. For instance /opt/cdi
-		//
-		// _, err = withCDI(ociSpec.Annotations, []string{"/opt/cdi"}, ociSpec)
-		_, err = config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
-		if err != nil {
-			return nil, fmt.Errorf("adding CDI devices failed: %w", err)
-		}
 
 		s.config = runtimeConfig
+		err = coldPlugDevices(ctx, s, ociSpec)
+		if err != nil {
+			return nil, fmt.Errorf("device cold plug failed: %w", err)
+		}
 
 		// create tracer
 		// This is the earliest location we can create the tracer because we must wait
