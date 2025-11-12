@@ -192,7 +192,7 @@ get_kernel() {
 	fi
 
 	if [ -f "${kernel_tarball}" ]; then
-	       	if [ -n "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+		if [ -z "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
 			info "invalid kernel tarball ${kernel_tarball} removing "
 			rm -f "${kernel_tarball}"
 		fi
