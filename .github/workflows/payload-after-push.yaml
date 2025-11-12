@@ -97,7 +97,7 @@ jobs:
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-arm64
       target-branch: ${{ github.ref_name }}
-      runner: ubuntu-22.04-arm
+      runner: ubuntu-24.04-arm
       arch: arm64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}

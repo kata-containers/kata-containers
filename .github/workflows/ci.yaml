@@ -102,7 +102,7 @@ jobs:
       tag: ${{ inputs.tag }}-arm64
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-22.04-arm
+      runner: ubuntu-24.04-arm
       arch: arm64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
