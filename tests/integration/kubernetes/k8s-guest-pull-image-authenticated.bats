@@ -14,7 +14,9 @@ setup() {
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    if [ "${SNAPSHOTTER:-}" != "nydus" ] &&  [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ]; then
+        skip "No snapshotter or experimental_force_guest_pull was found but this test requires one"
+    fi
 
     setup_common || die "setup_common failed"
     AUTHENTICATED_IMAGE="${AUTHENTICATED_IMAGE:-quay.io/kata-containers/confidential-containers-auth:test}"
@@ -170,7 +172,9 @@ teardown() {
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ]; then
+        skip "No snapshotter or experimental_force_guest_pull was found but this test requires one"
+    fi
 
     confidential_teardown_common "${node}" "${node_start_time:-}"
     kubectl delete secret cococred --ignore-not-found
