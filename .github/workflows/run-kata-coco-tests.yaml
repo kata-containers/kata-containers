@@ -137,6 +137,7 @@ jobs:
           - guest-pull
         include:
           - pull-type: experimental-force-guest-pull
+            vmm: qemu-coco-dev
             snapshotter: ""
     runs-on: ubuntu-22.04
     permissions:
