@@ -216,6 +216,7 @@ function deploy_kata() {
 	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-"* ]]; then
 		EXPERIMENTAL_FORCE_GUEST_PULL="${KATA_HYPERVISOR}"
 	fi
+	export EXPERIMENTAL_FORCE_GUEST_PULL
 
 	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
 	export HELM_IMAGE_REFERENCE="${DOCKER_REGISTRY}/${DOCKER_REPO}"
