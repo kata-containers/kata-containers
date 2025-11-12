@@ -684,6 +684,25 @@ func WithCDI(annotations map[string]string, cdiSpecDirs []string, spec *specs.Sp
 		return spec, nil
 	}
 
+	if err = injectDevices(cdiSpecDirs, spec, devsFromAnnotations); err != nil {
+		return nil, err
+	}
+
+	// One crucial thing to keep in mind is that CDI device injection
+	// might add OCI Spec environment variables, hooks, and mounts as
+	// well. Therefore it is important that none of the corresponding
+	// OCI Spec fields are reset up in the call stack once we return.
+	return spec, nil
+}
+
+// InjectCDIDevices injects the specified devices into the oci spec.
+// Devices must be a slice of strings of the form
+// vendor.com/class=unique_name
+func InjectCDIDevices(spec *specs.Spec, devices []string) error {
+	return injectDevices(nil, spec, devices)
+}
+
+func injectDevices(cdiSpecDirs []string, spec *specs.Spec, devices []string) error {
 	var registry cdi.Registry
 	if len(cdiSpecDirs) > 0 {
 		// We can override the directories where to search for CDI specs
@@ -693,22 +712,13 @@ func WithCDI(annotations map[string]string, cdiSpecDirs []string, spec *specs.Sp
 		registry = cdi.GetRegistry()
 	}
 
-	if err = registry.Refresh(); err != nil {
-		// We don't consider registry refresh failure a fatal error.
-		// For instance, a dynamically generated invalid CDI Spec file for
-		// any particular vendor shouldn't prevent injection of devices of
-		// different vendors. CDI itself knows better and it will fail the
-		// injection if necessary.
-		return nil, fmt.Errorf("CDI registry refresh failed: %w", err)
+	if err := registry.Refresh(); err != nil {
+		return fmt.Errorf("CDI registry refresh failed: %w", err)
 	}
 
-	if _, err := registry.InjectDevices(spec, devsFromAnnotations...); err != nil {
-		return nil, fmt.Errorf("CDI device injection failed: %w", err)
+	if _, err := registry.InjectDevices(spec, devices...); err != nil {
+		return fmt.Errorf("CDI device injection failed: %w", err)
 	}
 
-	// One crucial thing to keep in mind is that CDI device injection
-	// might add OCI Spec environment variables, hooks, and mounts as
-	// well. Therefore it is important that none of the corresponding
-	// OCI Spec fields are reset up in the call stack once we return.
-	return spec, nil
+	return nil
 }

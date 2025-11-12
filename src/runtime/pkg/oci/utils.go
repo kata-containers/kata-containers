@@ -174,6 +174,25 @@ type RuntimeConfig struct {
 
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
+
+	// PodResourceAPISock specifies the unix socket for the Kubelet's
+	// PodResource API endpoint. If empty, kubernetes based cold plug
+	// will not be attempted. In order for this feature to work, the
+	// KubeletPodResourcesGet featureGate must be enabled in Kubelet,
+	// if using Kubelet older than 1.34.
+	//
+	// The pod resource API's socket is relative to the Kubelet's root-dir,
+	// which is defined by the cluster admin, and its location is:
+	// ${KubeletRootDir}/pod-resources/kubelet.sock
+	//
+	// HypervisorConfig.ColdPlugVFIO acts as a feature gate:
+	// 	ColdPlugVFIO = NoPort => no cold plug
+	//	ColdPlugVFIO != NoPort AND PodResourceAPISock = "" => need
+	//		explicit CDI annotation for cold plug (applies mainly
+	//		to non-k8s cases)
+	//	ColdPlugVFIO != NoPort AND PodResourceAPISock != "" => kubelet
+	//		based cold plug.
+	PodResourceAPISock string
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
