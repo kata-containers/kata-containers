@@ -1,0 +1,8 @@
+[workspace.package]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2018"
+license = "Apache-2.0"
+rust-version = "1.85.1"
+
+[workspace]
+members = []
