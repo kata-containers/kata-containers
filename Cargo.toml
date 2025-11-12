@@ -24,6 +24,14 @@ members = [
 ]
 resolver = "2"
 
+# TODO: Add all excluded crates to root workspace
+exclude = [
+    "src/agent",
+    "src/tools",
+    "src/libs",
+    "src/runtime-rs",
+]
+
 [workspace.dependencies]
 # Rust-VMM crates
 event-manager = "0.2.1"
