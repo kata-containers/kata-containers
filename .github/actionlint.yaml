@@ -31,4 +31,4 @@ self-hosted-runner:
     - s390x
     - s390x-large
     - tdx
-    - ubuntu-22.04-arm
+    - ubuntu-24.04-arm
