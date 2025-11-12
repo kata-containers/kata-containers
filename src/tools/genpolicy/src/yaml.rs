@@ -271,7 +271,8 @@ pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
 
 pub async fn k8s_resource_init(spec: &mut pod::PodSpec, config: &Config) {
     for container in &mut spec.containers {
-        container.init(config).await;
+        let is_pause_container = false;
+        container.init(config, is_pause_container).await;
     }
 
     pod::add_pause_container(&mut spec.containers, config).await;
@@ -279,7 +280,8 @@ pub async fn k8s_resource_init(spec: &mut pod::PodSpec, config: &Config) {
     if let Some(init_containers) = &spec.initContainers {
         for container in init_containers {
             let mut new_container = container.clone();
-            new_container.init(config).await;
+            let is_pause_container = false;
+            new_container.init(config, is_pause_container).await;
             spec.containers.insert(1, new_container);
         }
     }
