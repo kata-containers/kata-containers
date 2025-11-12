@@ -605,15 +605,15 @@ impl QemuInner {
             }
         };
 
-        let coldplugged_mem = megs_to_bytes(self.config.memory_info.default_memory);
+        let coldplugged_mem_mb = self.config.memory_info.default_memory;
+        let coldplugged_mem = megs_to_bytes(coldplugged_mem_mb);
         let new_total_mem = megs_to_bytes(new_total_mem_mb);
 
         if new_total_mem < coldplugged_mem {
-            return Err(anyhow!(
-                "asked to resize to {} M but that is less than cold-plugged memory size ({})",
-                new_total_mem_mb,
-                bytes_to_megs(coldplugged_mem)
-            ));
+            warn!(sl!(), "asked to resize to {} M but that is less than cold-plugged memory size ({}), nothing to do",new_total_mem_mb,
+                bytes_to_megs(coldplugged_mem));
+
+            return Ok((coldplugged_mem_mb, MemoryConfig::default()));
         }
 
         let guest_mem_block_size = qmp.guest_memory_block_size();
