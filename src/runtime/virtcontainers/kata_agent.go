@@ -2703,29 +2703,41 @@ func IsNydusRootFSType(s string) bool {
 	return strings.HasPrefix(path.Base(s), "nydus-overlayfs")
 }
 
-// IsErofsRootFS checks if any of the options contain io.containerd.snapshotter.v1.erofs path
+// IsErofsRootFS checks if the rootfs is backed by the EROFS snapshotter
 func IsErofsRootFS(root RootFs) bool {
 	// TODO: support containerd mount manager: https://github.com/containerd/containerd/issues/11303
 	if root.Type != "overlay" {
 		return false
 	}
-	for _, opt := range root.Options {
-		if strings.Contains(opt, "io.containerd.snapshotter.v1.erofs") {
+
+	lowerdirs, upperdir := parseErofsRootFsOptions(root.Options)
+	for _, s := range append(lowerdirs, upperdir) {
+		if strings.Contains(s, "io.containerd.snapshotter.v1.erofs") {
+			return true
+		}
+		var st unix.Statfs_t
+		if err := unix.Statfs(s, &st); err != nil {
+			continue
+		}
+		if uint32(st.Type) == uint32(0xE0F5E1E2) {
 			return true
 		}
 	}
 	return false
 }
 
-func parseErofsRootFsOptions(options []string) []string {
-	lowerdirs := []string{}
+func parseErofsRootFsOptions(options []string) ([]string, string) {
+	var upperdir string
 
+	lowerdirs := []string{}
 	for _, opt := range options {
 		if strings.HasPrefix(opt, "lowerdir=") {
 			lowerdirValue := strings.TrimPrefix(opt, "lowerdir=")
 
 			lowerdirs = append(lowerdirs, strings.Split(lowerdirValue, ":")...)
+		} else if strings.HasPrefix(opt, "upperdir=") {
+			upperdir = strings.TrimPrefix(opt, "upperdir=")
 		}
 	}
-	return lowerdirs
+	return lowerdirs, upperdir
 }
