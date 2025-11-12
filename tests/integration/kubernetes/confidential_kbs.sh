@@ -329,9 +329,6 @@ function kbs_k8s_deploy() {
 			# `api_key`property by a valid ITA/ITTS API key, in the
 			# ITA/ITTS specific configuration
 			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
-			# Trustee moved to ITA v2 appraisal API which changed the tee-pubkey/attester_type paths under tdx.
-			sed -i -e '/trusted_jwk_sets/a extra_teekey_paths = ["/tdx/attester_runtime_data/tee-pubkey"]' kbs-config.toml
-			sed -i -e 's:attester_type:tdx"]["attester_type:' policy.rego
 		popd
 
 		if [[ -n "${HTTPS_PROXY}" ]]; then
@@ -372,6 +369,9 @@ function kbs_k8s_deploy() {
 		echo "::endgroup::"
 		echo "::group::DEBUG - describe kbs pod"
 		kubectl -n "${KBS_NS}" describe pod -l app=kbs || true
+		echo "::endgroup::"
+		echo "::group::DEBUG - kbs logs"
+		kubectl -n "${KBS_NS}" logs -l app=kbs || true
 		echo "::endgroup::"
 		return 1
 	fi
