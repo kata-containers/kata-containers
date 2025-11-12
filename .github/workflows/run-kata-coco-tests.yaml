@@ -158,6 +158,7 @@ jobs:
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
+      EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.pull-type == 'experimental-force-guest-pull' && matrix.vmm || '' }}
       # Caution: current ingress controller used to expose the KBS service
       # requires much vCPUs, lefting only a few for the tests. Depending on the
       # host type chose it will result on the creation of a cluster with
@@ -216,7 +217,6 @@ jobs:
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
         env:
-          EXPERIMENTAL_FORCE_GUEST_PULL: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && env.KATA_HYPERVISOR || '' }}
           USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ env.SNAPSHOTTER == 'nydus' }}
           AUTO_GENERATE_POLICY: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && 'no' || 'yes' }}
 
@@ -282,6 +282,7 @@ jobs:
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: "true"
+      EXPERIMENTAL_FORCE_GUEST_PULL: ""
       K8S_TEST_HOST_TYPE: "all"
       # We are skipping the auto generated policy tests for now,
       # but those should be enabled as soon as we work on that.
