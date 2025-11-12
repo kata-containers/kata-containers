@@ -1,0 +1,3 @@
+[
+  { "op": "replace", "path": "/sandbox/allowed_guest_hooks/0", "value": "/expected/hook/path" }
+]

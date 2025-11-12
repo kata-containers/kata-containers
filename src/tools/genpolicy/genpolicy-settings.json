@@ -224,7 +224,8 @@
                 "mount_point": "/run/kata-containers/sandbox/shm",
                 "fs_group": null
             }
-        ]
+        ],
+        "allowed_guest_hooks": [""]
     },
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
