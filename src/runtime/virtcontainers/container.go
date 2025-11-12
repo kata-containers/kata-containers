@@ -27,6 +27,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
+	"github.com/moby/sys/mountinfo"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -764,7 +765,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 	}
 
 	// Add container's devices to sandbox's device-manager
-	if err := c.createDevices(contConfig); err != nil {
+	if err := c.createDevices(ctx, contConfig); err != nil {
 		return nil, err
 	}
 
@@ -828,34 +829,34 @@ func (c *Container) createMounts(ctx context.Context) error {
 	return c.createBlockDevices(ctx)
 }
 
-func findMountSource(mnt string) (string, error) {
-	output, err := os.ReadFile("/proc/mounts")
-	if err != nil {
-		return "", err
-	}
-
-	// /proc/mounts has 6 fields per line, one mount per line, e.g.
-	// /dev/loop0 /var/lib/containerd/io.containerd.snapshotter.v1.erofs/snapshots/1/fs erofs ro,relatime,user_xattr,acl,cache_strategy=readaround 0 0
-	for _, line := range strings.Split(string(output), "\n") {
-		parts := strings.Split(line, " ")
-		if len(parts) == 6 {
-			switch parts[2] {
-			case "erofs":
-				if parts[1] == mnt {
-					return parts[0], nil
-				}
-			}
+func findErofsMountSource(mounts []*mountinfo.Info, mnt string) (string, error) {
+	for _, m := range mounts {
+		if m.FSType == "erofs" && m.Mountpoint == mnt {
+			return m.Source, nil
 		}
 	}
 	return "", fmt.Errorf("erofs mount not found for %s", mnt)
 }
 
-func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
+func parseOverlayUpperFs(mounts []*mountinfo.Info, path string) (*mountinfo.Info, error) {
+	for _, m := range mounts {
+		if strings.HasPrefix(m.Mountpoint, filepath.Dir(path)) {
+			return m, nil
+		}
+	}
+	return nil, fmt.Errorf("upper mount not found for %s", path)
+}
+
+func (c *Container) createErofsDevices(ctx context.Context) ([]config.DeviceInfo, error) {
 	var deviceInfos []config.DeviceInfo
 	if IsErofsRootFS(c.rootFs) {
-		lowerdirs := parseErofsRootFsOptions(c.rootFs.Options)
+		mounts, err := mountinfo.GetMounts(nil)
+		if err != nil {
+			return nil, err
+		}
+		lowerdirs, upperdir := parseErofsRootFsOptions(c.rootFs.Options)
 		for _, path := range lowerdirs {
-			s, err := findMountSource(path)
+			s, err := findErofsMountSource(mounts, path)
 			if err != nil {
 				return nil, err
 			}
@@ -875,11 +876,40 @@ func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
 			}
 			deviceInfos = append(deviceInfos, *di)
 		}
+
+		if upperdir != "" {
+			// check if upperdir is really backed by a filesystem
+			if m, err := parseOverlayUpperFs(mounts, upperdir); err == nil {
+				s := m.Source
+				if strings.HasPrefix(s, "/dev/loop") {
+					b, err := os.ReadFile(fmt.Sprintf("/sys/block/loop%s/loop/backing_file", strings.TrimPrefix(s, "/dev/loop")))
+					if err != nil {
+						return nil, err
+					}
+					s = strings.TrimSuffix(string(b), "\n")
+				}
+				if filepath.Base(s) != "rwlayer.img" {
+					return nil, fmt.Errorf("unsupported upper blockfile %s for %s", s, upperdir)
+				}
+				// XXX: we cannot umount here because it's in another mntns,
+				//      therefore remountRo for safety; should adapt containerd
+				//      custom mount type instead.
+				if err := remount(ctx, syscall.MS_RDONLY, m.Mountpoint); err != nil {
+					return nil, fmt.Errorf("failed to unmount rwlayer %s", m.Mountpoint)
+				}
+
+				di, err := c.createDeviceInfo(s, s, false, true)
+				if err != nil {
+					return nil, err
+				}
+				deviceInfos = append(deviceInfos, *di)
+			}
+		}
 	}
 	return deviceInfos, nil
 }
 
-func (c *Container) createDevices(contConfig *ContainerConfig) error {
+func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
@@ -889,7 +919,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	}
 	deviceInfos := append(virtualVolumesDeviceInfos, contConfig.DeviceInfos...)
 
-	erofsDeviceInfos, err := c.createErofsDevices()
+	erofsDeviceInfos, err := c.createErofsDevices(ctx)
 	if err != nil {
 		return err
 	}
