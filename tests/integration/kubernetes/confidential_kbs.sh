@@ -402,6 +402,11 @@ function kbs_k8s_deploy() {
 	_post_deploy "${ingress}"
 	echo "::endgroup::"
 
+
+	# TODO remove me: Attestation test works locally but not on CI runner - need more log output
+	kubectl set env deployment/kbs -n "${KBS_NS}" RUST_LOG=debug
+	sleep 10
+
 	# By default, the KBS service is reachable within the cluster only,
 	# thus the following healthy checker should run from a pod. So start a
 	# debug pod where it will try to get a response from the service. The
