@@ -32,6 +32,7 @@ impl Container {
         config: &Config,
         image: &str,
         containerd_socket_path: &str,
+        is_pause_container: bool,
     ) -> Result<Self> {
         info!("============================================");
         info!("Using containerd socket: {:?}", containerd_socket_path);
@@ -70,34 +71,29 @@ impl Container {
 
         // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
         // See issue https://github.com/kata-containers/kata-containers/issues/11162
-        if config.settings.cluster_config.guest_pull {
+        let v1_policy = config.settings.cluster_config.pause_container_id_policy == "v1";
+        if config.settings.cluster_config.guest_pull && (v1_policy || !is_pause_container) {
             info!("Guest pull is enabled, skipping passwd/group file parsing");
-            return Ok(Container {
-                image: image_str,
-                config_layer,
-                passwd,
-                group,
-            });
-        }
+        } else {
+            let image_layers =
+                get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client)
+                    .await
+                    .unwrap();
 
-        let image_layers =
-            get_image_layers(&config.layers_cache, &manifest, &config_layer, &ctrd_client)
-                .await
-                .unwrap();
+            // Find the last layer with an /etc/* file, respecting whiteouts.
+            info!("Parsing users and groups in image layers");
+            for layer in &image_layers {
+                if layer.passwd == WHITEOUT_MARKER {
+                    passwd = String::new();
+                } else if !layer.passwd.is_empty() {
+                    passwd = layer.passwd.clone();
+                }
 
-        // Find the last layer with an /etc/* file, respecting whiteouts.
-        info!("Parsing users and groups in image layers");
-        for layer in &image_layers {
-            if layer.passwd == WHITEOUT_MARKER {
-                passwd = String::new();
-            } else if !layer.passwd.is_empty() {
-                passwd = layer.passwd.clone();
-            }
-
-            if layer.group == WHITEOUT_MARKER {
-                group = String::new();
-            } else if !layer.group.is_empty() {
-                group = layer.group.clone();
+                if layer.group == WHITEOUT_MARKER {
+                    group = String::new();
+                } else if !layer.group.is_empty() {
+                    group = layer.group.clone();
+                }
             }
         }
 
