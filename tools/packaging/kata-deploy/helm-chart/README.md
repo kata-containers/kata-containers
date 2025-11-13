@@ -256,6 +256,61 @@ defaultShim:
 
 The chart maintains full backward compatibility with the legacy `env.*` format. If legacy values are set, they take precedence over the new structured format. This allows for gradual migration.
 
+### Example Values Files
+
+To make it easier to try out Kata Containers, we provide several example values files:
+
+#### `try-kata.values.yaml` - All Shims Enabled
+
+This file enables all available Kata Containers shims, making it easy to try out all runtime options:
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f try-kata.values.yaml
+```
+
+This includes:
+- Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
+- TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
+- NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
+
+#### `try-kata-tee.values.yaml` - Trusted Execution Environment Shims
+
+This file enables only the TEE (Trusted Execution Environment) shims for confidential computing:
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f try-kata-tee.values.yaml
+```
+
+Includes:
+- `qemu-snp` - AMD SEV-SNP (amd64)
+- `qemu-tdx` - Intel TDX (amd64)
+- `qemu-se` - IBM Secure Execution (s390x)
+- `qemu-se-runtime-rs` - IBM Secure Execution Rust runtime (s390x)
+- `qemu-cca` - Arm Confidential Compute Architecture (arm64)
+- `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
+- `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, s390x)
+
+#### `try-kata-nvidia-gpu.values.yaml` - NVIDIA GPU Shims
+
+This file enables only the NVIDIA GPU-enabled shims:
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f try-kata-nvidia-gpu.values.yaml
+```
+
+Includes:
+- `qemu-nvidia-gpu` - Standard NVIDIA GPU support (amd64, arm64)
+- `qemu-nvidia-gpu-snp` - NVIDIA GPU with AMD SEV-SNP (amd64)
+- `qemu-nvidia-gpu-tdx` - NVIDIA GPU with Intel TDX (amd64)
+
+**Note**: These example files are located in the chart directory. When installing from the OCI registry, you'll need to download them separately or clone the repository to access them.
+
 ## `RuntimeClass` Management
 
 **NEW**: Starting with Kata Containers v3.23.0, `runtimeClasses` are managed by
