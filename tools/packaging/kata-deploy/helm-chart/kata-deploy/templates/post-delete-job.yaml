@@ -39,7 +39,7 @@ rules:
   verbs: ["delete", "get", "list", "watch"]
 - apiGroups: ["apps"]
   resources: ["daemonsets"]
-  verbs: ["list"]
+  verbs: ["get", "list", "watch"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
