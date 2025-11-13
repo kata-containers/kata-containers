@@ -1,10 +1,13 @@
 imagePullPolicy: Always
+
 imagePullSecrets: []
+
 image:
   reference: quay.io/kata-containers/kata-deploy
   tag: ""
-# k8s-dist can be k8s, k3s, rke2, k0s, microk8s
-k8sDistribution: "k8s"
+
+k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
+
 # Node selector to control which nodes the kata-deploy daemonset runs on
 # Example:
 # nodeSelector:
@@ -12,37 +15,256 @@ k8sDistribution: "k8s"
 #   node-type: "worker"
 nodeSelector: {}
 
-# RuntimeClass configuration
-# When enabled, RuntimeClasses will be created by the Helm chart instead of by the kata-deploy script
+debug: false
+
+snapshotter:
+  setup: []  # ["nydus", "erofs"] or []
+
+# See MAINTENANCE.md for field descriptions and maintenance guide
+# NOTE: All shims are disabled by default. Enable the ones you need explicitly.
+shims:
+  clh: # cloud-hypervisor, golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  cloud-hypervisor: # rust runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  dragonball: # rust runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  
+  fc: # firecracker, golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "devmapper" # requires pre-configuration on the user side
+  firecracker: # firecracker, golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "devmapper" # requires pre-configuration on the user side
+ 
+  qemu: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  qemu-runtime-rs: # rust runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+ 
+  qemu-nvidia-gpu: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  qemu-nvidia-gpu-snp: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+      forceGuestPull: true
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-nvidia-gpu-tdx: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+      forceGuestPull: true
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-snp: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-tdx: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-se: # golang runtime
+    enabled: false
+    supportedArches:
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-se-runtime-rs: # rust runtime
+    enabled: false
+    supportedArches:
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-cca: # golang runtime
+    enabled: false
+    supportedArches:
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-coco-dev: # golang runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+  qemu-coco-dev-runtime-rs: # rust runtime
+    enabled: false
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+# Default shim per architecture
+# Since shims are disabled by default, you must explicitly configure defaultShim
+# for the architectures you're using.
+# Example:
+#   defaultShim:
+#     amd64: shim
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+  s390x: qemu
+  ppc64le: qemu
+
 runtimeClasses:
-  # Enable RuntimeClass creation via Helm
   enabled: true
-  # Create a default RuntimeClass (alias for the default shim)
-  # NOTE: Default RuntimeClass creation is NOT supported with multiInstallSuffix.
-  #       When multiInstallSuffix is set, this option will be ignored to avoid naming conflicts.
-  #       In multi-install scenarios, use the fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
   createDefault: false
-  # Name for the default RuntimeClass (defaults to "kata" if not specified)
   defaultName: "kata"
 
 env:
-  debug: "false"
-  shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"
+  installationPrefix: ""
+  hostOS: ""
+  # Suffix for multi-install deployments to avoid conflicts between multiple Kata installations
+  # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
+  #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
+  multiInstallSuffix: ""
+  
+  # DEPRECATED: Use 'runtimeClasses.enabled' and 'runtimeClasses.createDefault' instead
+  # Will be removed in 2 releases
+  createRuntimeClasses: "false"
+  createDefaultRuntimeClass: "false"
+  
+  # DEPRECATED: Use structured 'shims' and 'defaultShim' sections above
+  # Will be removed in 2 releases
+  debug: ""
+  shims: ""
   shims_x86_64: ""
   shims_aarch64: ""
   shims_s390x: ""
   shims_ppc64le: ""
-  defaultShim: "qemu"
+  defaultShim: ""
   defaultShim_x86_64: ""
   defaultShim_aarch64: ""
   defaultShim_s390x: ""
   defaultShim_ppc64le: ""
-  # createRuntimeClasses: DEPRECATED - Use runtimeClasses.enabled instead
-  # When runtimeClasses.enabled is true (default), this is automatically set to "false"
-  # to let Helm manage RuntimeClasses instead of the kata-deploy script
-  createRuntimeClasses: "false"
-  createDefaultRuntimeClass: "false"
   allowedHypervisorAnnotations: ""
+  _experimentalSetupSnapshotter: ""
   snapshotterHandlerMapping: ""
   snapshotterHandlerMapping_x86_64: ""
   snapshotterHandlerMapping_aarch64: ""
@@ -55,13 +277,6 @@ env:
   pullTypeMapping_aarch64: ""
   pullTypeMapping_s390x: ""
   pullTypeMapping_ppc64le: ""
-  installationPrefix: ""
-  hostOS: ""
-  # Suffix for multi-install deployments to avoid conflicts between multiple Kata installations
-  # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
-  #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
-  multiInstallSuffix: ""
-  _experimentalSetupSnapshotter: ""
   _experimentalForceGuestPull: ""
   _experimentalForceGuestPull_x86_64: ""
   _experimentalForceGuestPull_aarch64: ""

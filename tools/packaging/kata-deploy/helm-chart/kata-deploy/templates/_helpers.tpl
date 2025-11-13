@@ -56,3 +56,199 @@ Returns the namespace where node-feature-discovery is found, or empty string if 
 {{- $foundNamespace -}}
 {{- end -}}
 
+{{/*
+Get enabled shims for a specific architecture from structured config
+*/}}
+{{- define "kata-deploy.getEnabledShimsForArch" -}}
+{{- $arch := .arch -}}
+{{- $enabledShims := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if $shimConfig.enabled -}}
+{{- $archSupported := false -}}
+{{- range $shimConfig.supportedArches -}}
+{{- if eq . $arch -}}
+{{- $archSupported = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $archSupported -}}
+{{- $enabledShims = append $enabledShims $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join " " $enabledShims -}}
+{{- end -}}
+
+{{/*
+Get default shim for a specific architecture from structured config
+*/}}
+{{- define "kata-deploy.getDefaultShimForArch" -}}
+{{- $arch := .arch -}}
+{{- index .root.Values.defaultShim $arch -}}
+{{- end -}}
+
+{{/*
+Get snapshotter handler mapping for a specific architecture from structured config
+Format: shim1:snapshotter1,shim2:snapshotter2
+*/}}
+{{- define "kata-deploy.getSnapshotterHandlerMappingForArch" -}}
+{{- $arch := .arch -}}
+{{- $mappings := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if $shimConfig.enabled -}}
+{{- $archSupported := false -}}
+{{- range $shimConfig.supportedArches -}}
+{{- if eq . $arch -}}
+{{- $archSupported = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $archSupported -}}
+{{- if $shimConfig.containerd -}}
+{{- $snapshotter := $shimConfig.containerd.snapshotter -}}
+{{- if $snapshotter -}}
+{{- $mappings = append $mappings (printf "%s:%s" $shimName $snapshotter) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $mappings -}}
+{{- end -}}
+
+{{/*
+Get pull type mapping for a specific architecture from structured config
+Format: shim1:pullType1,shim2:pullType2
+*/}}
+{{- define "kata-deploy.getPullTypeMappingForArch" -}}
+{{- $arch := .arch -}}
+{{- $mappings := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if $shimConfig.enabled -}}
+{{- $archSupported := false -}}
+{{- range $shimConfig.supportedArches -}}
+{{- if eq . $arch -}}
+{{- $archSupported = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $archSupported -}}
+{{- $forceGuestPull := false -}}
+{{- if and $shimConfig.containerd $shimConfig.containerd.forceGuestPull -}}
+{{- $forceGuestPull = $shimConfig.containerd.forceGuestPull -}}
+{{- end -}}
+{{- if and $shimConfig.crio $shimConfig.crio.guestPull -}}
+{{- $forceGuestPull = $shimConfig.crio.guestPull -}}
+{{- end -}}
+{{- if $forceGuestPull -}}
+{{- $mappings = append $mappings (printf "%s:guest-pull" $shimName) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $mappings -}}
+{{- end -}}
+
+{{/*
+Get allowed hypervisor annotations for a specific architecture from structured config
+*/}}
+{{- define "kata-deploy.getAllowedHypervisorAnnotationsForArch" -}}
+{{- $arch := .arch -}}
+{{- $annotations := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if $shimConfig.enabled -}}
+{{- $archSupported := false -}}
+{{- range $shimConfig.supportedArches -}}
+{{- if eq . $arch -}}
+{{- $archSupported = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $archSupported -}}
+{{- range $annotation := $shimConfig.allowedHypervisorAnnotations -}}
+{{- $found := false -}}
+{{- range $existingAnnotation := $annotations -}}
+{{- if eq $existingAnnotation $annotation -}}
+{{- $found = true -}}
+{{- end -}}
+{{- end -}}
+{{- if not $found -}}
+{{- $annotations = append $annotations $annotation -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $annotations -}}
+{{- end -}}
+
+{{/*
+Get agent HTTPS proxy from structured config
+Returns the first non-empty httpsProxy found in enabled shims
+*/}}
+{{- define "kata-deploy.getAgentHttpsProxy" -}}
+{{- $proxy := "" -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if and $shimConfig.enabled $shimConfig.agent $shimConfig.agent.httpsProxy -}}
+{{- $proxy = $shimConfig.agent.httpsProxy -}}
+{{- break -}}
+{{- end -}}
+{{- end -}}
+{{- $proxy -}}
+{{- end -}}
+
+{{/*
+Get agent NO_PROXY from structured config
+Returns the first non-empty noProxy found in enabled shims
+*/}}
+{{- define "kata-deploy.getAgentNoProxy" -}}
+{{- $proxy := "" -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if and $shimConfig.enabled $shimConfig.agent $shimConfig.agent.noProxy -}}
+{{- $proxy = $shimConfig.agent.noProxy -}}
+{{- break -}}
+{{- end -}}
+{{- end -}}
+{{- $proxy -}}
+{{- end -}}
+
+{{/*
+Get snapshotter setup list from structured config
+*/}}
+{{- define "kata-deploy.getSnapshotterSetup" -}}
+{{- join "," .Values.snapshotter.setup -}}
+{{- end -}}
+
+{{/*
+Get debug value from structured config
+*/}}
+{{- define "kata-deploy.getDebug" -}}
+{{- if .Values.debug -}}
+{{- "true" -}}
+{{- else -}}
+{{- "false" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get EXPERIMENTAL_FORCE_GUEST_PULL for a specific architecture from structured config
+*/}}
+{{- define "kata-deploy.getForceGuestPullForArch" -}}
+{{- $arch := .arch -}}
+{{- /* Return comma-separated list of shim names that have forceGuestPull enabled */ -}}
+{{- /* Note: EXPERIMENTAL_FORCE_GUEST_PULL only checks containerd.forceGuestPull, not crio.guestPull */ -}}
+{{- $shimNames := list -}}
+{{- range $shimName, $shimConfig := .root.Values.shims -}}
+{{- if $shimConfig.enabled -}}
+{{- $archSupported := false -}}
+{{- range $shimConfig.supportedArches -}}
+{{- if eq . $arch -}}
+{{- $archSupported = true -}}
+{{- end -}}
+{{- end -}}
+{{- if $archSupported -}}
+{{- if and $shimConfig.containerd $shimConfig.containerd.forceGuestPull -}}
+{{- $shimNames = append $shimNames $shimName -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- join "," $shimNames -}}
+{{- end -}}
+
