@@ -95,7 +95,7 @@ is_coco_platform() {
 
 is_aks_cluster() {
 	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp")
+		"qemu-tdx"|"qemu-snp"|qemu-nvidia-gpu*)
 			return 1
 			;;
 		*)
