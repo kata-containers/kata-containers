@@ -97,7 +97,7 @@ metadata:
 handler: kata-qemu-nvidia-gpu-snp
 overhead:
     podFixed:
-        memory: "16384Mi"
+        memory: "98304Mi"
         cpu: "1"
 scheduling:
   nodeSelector:
@@ -110,7 +110,7 @@ metadata:
 handler: kata-qemu-nvidia-gpu-tdx
 overhead:
     podFixed:
-        memory: "16384Mi"
+        memory: "98304Mi"
         cpu: "1"
 scheduling:
   nodeSelector:
@@ -123,7 +123,7 @@ metadata:
 handler: kata-qemu-nvidia-gpu
 overhead:
     podFixed:
-        memory: "4096Mi"
+        memory: "98304Mi"
         cpu: "1"
 scheduling:
   nodeSelector:
