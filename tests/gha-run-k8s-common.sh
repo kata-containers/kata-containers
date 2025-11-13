@@ -503,8 +503,37 @@ function helm_helper() {
 	popd
 
 	# Create temporary values file for customization
-	# yq will initialize the file structure as we add values
+	# Start with an appropriate example values file based on the hypervisor type
 	values_yaml=$(mktemp -t values_yaml.XXXXXX)
+
+	# Determine which example values file to use as base
+	local base_values_file="${helm_chart_dir}/values.yaml"
+	if [[ -n "${KATA_HYPERVISOR}" ]]; then
+		case "${KATA_HYPERVISOR}" in
+			*nvidia-gpu*)
+				# Use NVIDIA GPU example file
+				if [[ -f "${helm_chart_dir}/try-kata-nvidia-gpu.values.yaml" ]]; then
+					base_values_file="${helm_chart_dir}/try-kata-nvidia-gpu.values.yaml"
+				fi
+				;;
+			qemu-snp|qemu-tdx|qemu-se|qemu-se-runtime-rs|qemu-cca|qemu-coco-dev|qemu-coco-dev-runtime-rs)
+				# Use TEE example file
+				if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
+					base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"
+				fi
+				;;
+			*)
+				# Use all shims example file for standard hypervisors
+				if [[ -f "${helm_chart_dir}/try-kata.values.yaml" ]]; then
+					base_values_file="${helm_chart_dir}/try-kata.values.yaml"
+				fi
+				;;
+		esac
+	fi
+
+	# Copy the base values file to the temporary file
+	cp "${base_values_file}" "${values_yaml}"
+
 	# Enable node-feature-discovery deployment
 	yq -i ".node-feature-discovery.enabled = true" "${values_yaml}"
 
@@ -531,6 +560,12 @@ function helm_helper() {
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
 	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
+		# Disable all shims first (in case we started from an example file with shims enabled)
+		# Then we'll enable only the ones specified in HELM_SHIMS
+		for shim_key in $(yq '.shims | keys | .[]' "${values_yaml}" 2>/dev/null); do
+			yq -i ".shims.${shim_key}.enabled = false" "${values_yaml}"
+		done
+
 		# Use new structured format
 		if [[ -n "${HELM_DEBUG}" ]]; then
 			if [[ "${HELM_DEBUG}" == "true" ]]; then
@@ -544,6 +579,9 @@ function helm_helper() {
 		if [[ -n "${HELM_SHIMS}" ]]; then
 			# HELM_SHIMS is a space-separated list of shim names
 			# Enable each shim and set supported architectures
+			# TEE shims that need defaults unset (will be set based on env vars)
+			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-tdx qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
 				# Most shims support amd64 and arm64, some have specific arch requirements
@@ -574,6 +612,16 @@ function helm_helper() {
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\", \"ppc64le\"]" "${values_yaml}"
 						;;
 				esac
+
+				# Explicitly unset defaults for TEE shims - these will be set based on env vars:
+				# - snapshotter: nydus if HELM_SNAPSHOTTER_HANDLER_MAPPING is set
+				# - forceGuestPull: true if HELM_EXPERIMENTAL_FORCE_GUEST_PULL is set
+				# - guestPull: true if HELM_PULL_TYPE_MAPPING contains guest-pull
+				if echo "${tee_shims}" | grep -qw "${shim}"; then
+					yq -i ".shims.${shim}.containerd.snapshotter = \"\"" "${values_yaml}"
+					yq -i ".shims.${shim}.containerd.forceGuestPull = false" "${values_yaml}"
+					yq -i ".shims.${shim}.crio.guestPull = false" "${values_yaml}"
+				fi
 			done
 		fi
 
@@ -587,10 +635,30 @@ function helm_helper() {
 		fi
 
 		# Configure snapshotter setup using new structured format
+		# Note: snapshotter.setup (global) is separate from containerd.snapshotter (per-shim)
+		# Always unset first to clear any defaults from base file
+		yq -i ".snapshotter.setup = []" "${values_yaml}"
+
+		# For TDX and SNP shims, snapshotter.setup must ALWAYS be disabled in CI
+		# Check if any TDX/SNP shims are enabled
+		disable_snapshotter_setup=false
+		for shim in ${HELM_SHIMS}; do
+			case "${shim}" in
+				qemu-tdx|qemu-snp|qemu-nvidia-gpu-tdx|qemu-nvidia-gpu-snp)
+					disable_snapshotter_setup=true
+					break
+					;;
+			esac
+		done
+
+		# Safety check: Fail if EXPERIMENTAL_SETUP_SNAPSHOTTER is set when using SNP/TDX shims
+		if [[ "${disable_snapshotter_setup}" == "true" ]] && [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+			die "ERROR: HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER cannot be set when using SNP/TDX shims (qemu-snp, qemu-tdx, qemu-nvidia-gpu-snp, qemu-nvidia-gpu-tdx). snapshotter.setup must always be disabled for these shims."
+		fi
+
 		if [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
 			# Convert space-separated or comma-separated list to YAML array
 			IFS=', ' read -ra snapshotter_list <<< "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}"
-			yq -i ".snapshotter.setup = []" "${values_yaml}"
 			for snapshotter in "${snapshotter_list[@]}"; do
 				yq -i ".snapshotter.setup += [\"${snapshotter}\"]" "${values_yaml}"
 			done

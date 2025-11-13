@@ -1,0 +1,62 @@
+# Example values file to enable NVIDIA GPU shims
+# This includes all NVIDIA GPU-enabled shims: qemu-nvidia-gpu, qemu-nvidia-gpu-snp, qemu-nvidia-gpu-tdx
+#
+# Usage:
+#   helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+#     --version VERSION \
+#     -f try-kata-nvidia-gpu.values.yaml
+
+debug: false
+
+snapshotter:
+  setup: []
+
+# Enable NVIDIA GPU shims
+shims:
+  qemu-nvidia-gpu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  qemu-nvidia-gpu-snp:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+      forceGuestPull: true
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-nvidia-gpu-tdx:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+      forceGuestPull: true
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+# Default shim per architecture (prefer NVIDIA GPU shims)
+defaultShim:
+  amd64: qemu-nvidia-gpu  # Can be changed to qemu-nvidia-gpu-snp or qemu-nvidia-gpu-tdx if preferred
+  arm64: qemu-nvidia-gpu
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+  defaultName: "kata"
+
