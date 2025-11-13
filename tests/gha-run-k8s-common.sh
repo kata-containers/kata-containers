@@ -198,13 +198,13 @@ function get_nodes_and_pods_info() {
 function deploy_k0s() {
 	if [[ "${CONTAINER_RUNTIME}" == "crio" ]]; then
 		url=$(get_from_kata_deps ".externals.k0s.url")
-	
+
 		k0s_version_param=""
 		version=$(get_from_kata_deps ".externals.k0s.version")
 		if [[ -n "${version}" ]]; then
 			k0s_version_param="K0S_VERSION=${version}"
 		fi
-	
+
 		curl -sSLf "${url}" | sudo "${k0s_version_param}" sh
 	else
 		curl -sSLf -sSLf https://get.k0s.sh | sudo sh
@@ -394,7 +394,7 @@ EOF
 	sudo chown $(id -u):$(id -g) $HOME/.kube/config
 
 	# Deploy flannel
-	kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml	
+	kubectl apply -f https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
 
 	# Untaint the node
 	kubectl taint nodes --all node-role.kubernetes.io/control-plane-
@@ -531,19 +531,219 @@ function helm_helper() {
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
 	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
-		[[ -n "${HELM_DEBUG}" ]] && yq -i ".env.debug = \"${HELM_DEBUG}\"" "${values_yaml}"
-		[[ -n "${HELM_SHIMS}" ]] && yq -i ".env.shims = \"${HELM_SHIMS}\"" "${values_yaml}"
-		[[ -n "${HELM_DEFAULT_SHIM}" ]] && yq -i ".env.defaultShim = \"${HELM_DEFAULT_SHIM}\"" "${values_yaml}"
+		# Use new structured format
+		if [[ -n "${HELM_DEBUG}" ]]; then
+			if [[ "${HELM_DEBUG}" == "true" ]]; then
+				yq -i ".debug = true" "${values_yaml}"
+			else
+				yq -i ".debug = false" "${values_yaml}"
+			fi
+		fi
+
+		# Configure shims using new structured format
+		if [[ -n "${HELM_SHIMS}" ]]; then
+			# HELM_SHIMS is a space-separated list of shim names
+			# Enable each shim and set supported architectures
+			for shim in ${HELM_SHIMS}; do
+				# Determine supported architectures based on shim name
+				# Most shims support amd64 and arm64, some have specific arch requirements
+				case "${shim}" in
+					qemu-se|qemu-se-runtime-rs)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"s390x\"]" "${values_yaml}"
+						;;
+					qemu-cca)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
+						;;
+					qemu-snp|qemu-tdx|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
+						;;
+					qemu-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
+						;;
+					qemu-nvidia-gpu)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\"]" "${values_yaml}"
+						;;
+					*)
+						# Default: support amd64, arm64, s390x, ppc64le
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\", \"ppc64le\"]" "${values_yaml}"
+						;;
+				esac
+			done
+		fi
+
+		# Set default shim per architecture
+		if [[ -n "${HELM_DEFAULT_SHIM}" ]]; then
+			# Set for all architectures (can be overridden per-arch if needed)
+			yq -i ".defaultShim.amd64 = \"${HELM_DEFAULT_SHIM}\"" "${values_yaml}"
+			yq -i ".defaultShim.arm64 = \"${HELM_DEFAULT_SHIM}\"" "${values_yaml}"
+			yq -i ".defaultShim.s390x = \"${HELM_DEFAULT_SHIM}\"" "${values_yaml}"
+			yq -i ".defaultShim.ppc64le = \"${HELM_DEFAULT_SHIM}\"" "${values_yaml}"
+		fi
+
+		# Configure snapshotter setup using new structured format
+		if [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+			# Convert space-separated or comma-separated list to YAML array
+			IFS=', ' read -ra snapshotter_list <<< "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+			yq -i ".snapshotter.setup = []" "${values_yaml}"
+			for snapshotter in "${snapshotter_list[@]}"; do
+				yq -i ".snapshotter.setup += [\"${snapshotter}\"]" "${values_yaml}"
+			done
+		fi
+
+		if [[ -z "${HELM_SHIMS}" ]]; then
+			die "A list of shims is expected but none was provided"
+		fi
+
+		# Convert simple format to per-shim format for all enabled shims
+		# HELM_ALLOWED_HYPERVISOR_ANNOTATIONS: if not in per-shim format (no colon), convert to per-shim format
+		# Output format: "qemu:foo,bar clh:foo" (space-separated entries, each with shim:annotations where annotations are comma-separated)
+		# Example: "foo bar" with shim "qemu-tdx" -> "qemu-tdx:foo,bar"
+		if [[ "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" != *:* ]]; then
+			# Simple format: convert to per-shim format for all enabled shims
+			# "default_vcpus" -> "qemu-tdx:default_vcpus" (single shim)
+			# "image kernel default_vcpus" -> "qemu-tdx:image,kernel,default_vcpus" (single shim)
+			# "default_vcpus" -> "qemu-tdx:default_vcpus qemu-snp:default_vcpus" (multiple shims)
+			local converted_annotations=""
+			for shim in ${HELM_SHIMS}; do
+				if [[ -n "${converted_annotations}" ]]; then
+					converted_annotations+=" "
+				fi
+				# Convert space-separated to comma-separated: "foo bar" -> "foo,bar"
+				local annotations_comma=$(echo "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" | sed 's/ /,/g')
+				converted_annotations+="${shim}:${annotations_comma}"
+			done
+			HELM_ALLOWED_HYPERVISOR_ANNOTATIONS="${converted_annotations}"
+		fi
+
+		# HELM_AGENT_HTTPS_PROXY: if not in per-shim format (no equals), convert to per-shim format
+		if [[ "${HELM_AGENT_HTTPS_PROXY}" != *=* ]]; then
+			# Simple format: convert to per-shim format for all enabled shims
+			# "http://proxy:8080" -> "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy:8080"
+			local converted_proxy=""
+			for shim in ${HELM_SHIMS}; do
+				if [[ -n "${converted_proxy}" ]]; then
+					converted_proxy+=";"
+				fi
+				converted_proxy+="${shim}=${HELM_AGENT_HTTPS_PROXY}"
+			done
+			HELM_AGENT_HTTPS_PROXY="${converted_proxy}"
+		fi
+
+		# HELM_AGENT_NO_PROXY: if not in per-shim format (no equals), convert to per-shim format
+		if [[ "${HELM_AGENT_NO_PROXY}" != *=* ]]; then
+			# Simple format: convert to per-shim format for all enabled shims
+			# "localhost,127.0.0.1" -> "qemu-tdx=localhost,127.0.0.1;qemu-snp=localhost,127.0.0.1"
+			local converted_noproxy=""
+			for shim in ${HELM_SHIMS}; do
+				if [[ -n "${converted_noproxy}" ]]; then
+					converted_noproxy+=";"
+				fi
+				converted_noproxy+="${shim}=${HELM_AGENT_NO_PROXY}"
+			done
+			HELM_AGENT_NO_PROXY="${converted_noproxy}"
+		fi
+
+		# Set allowed hypervisor annotations (now in per-shim format)
+		# Format: "qemu-tdx:default_vcpus qemu-snp:default_vcpus" (space-separated, colon-separated shim:annotations)
+		if [[ -n "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" ]]; then
+			# Parse space-separated annotations and set values for matching shims
+			IFS=' ' read -ra annotations <<< "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}"
+			for m in "${annotations[@]}"; do
+				# Check if this mapping has a colon (shim-specific)
+				if [[ "${m}" == *:* ]]; then
+					# Shim-specific mapping like "qemu:foo,bar"
+					local shim="${m%:*}"
+					local value="${m#*:}"
+
+					# Convert comma-separated list to YAML array
+					IFS=',' read -ra final_annotations <<< "${value}"
+					yq -i ".shims.${shim}.allowedHypervisorAnnotations = []" "${values_yaml}"
+					for annotation in "${final_annotations[@]}"; do
+						# Trim whitespace
+						annotation=$(echo "${annotation}" | sed 's/^[[:space:]]//;s/[[:space:]]$//')
+						if [[ -n "${annotation}" ]]; then
+							yq -i ".shims.${shim}.allowedHypervisorAnnotations += [\"${annotation}\"]" "${values_yaml}"
+						fi
+					done
+				fi
+			done
+		fi
+
+		# Set agent proxy settings (now in per-shim format)
+		# Format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy:8080" (semicolon-separated "shim=proxy" mappings)
+		if [[ -n "${HELM_AGENT_HTTPS_PROXY}" ]]; then
+			# Parse semicolon-separated "shim=proxy" mappings and set values for matching shims
+			IFS=';' read -ra proxy_mappings <<< "${HELM_AGENT_HTTPS_PROXY}"
+			for mapping in "${proxy_mappings[@]}"; do
+				local shim="${mapping%%=*}"
+				local value="${mapping#*=}"
+				yq -i ".shims.${shim}.agent.httpsProxy = \"${value}\"" "${values_yaml}"
+			done
+		fi
+
+		if [[ -n "${HELM_AGENT_NO_PROXY}" ]]; then
+			# Parse semicolon-separated "shim=no_proxy" mappings and set values for matching shims
+			IFS=';' read -ra noproxy_mappings <<< "${HELM_AGENT_NO_PROXY}"
+			for mapping in "${noproxy_mappings[@]}"; do
+				local shim="${mapping%%=*}"
+				local value="${mapping#*=}"
+				yq -i ".shims.${shim}.agent.noProxy = \"${value}\"" "${values_yaml}"
+			done
+		fi
+
+		# Set snapshotter handler mapping (format: "shim:snapshotter")
+		if [[ -n "${HELM_SNAPSHOTTER_HANDLER_MAPPING}" ]]; then
+			# Parse format "shim:snapshotter" or "shim1:snapshotter1,shim2:snapshotter2"
+			IFS=',' read -ra mappings <<< "${HELM_SNAPSHOTTER_HANDLER_MAPPING}"
+			for mapping in "${mappings[@]}"; do
+				shim="${mapping%%:*}"
+				snapshotter="${mapping##*:}"
+				yq -i ".shims.${shim}.containerd.snapshotter = \"${snapshotter}\"" "${values_yaml}"
+				# When using a snapshotter (like nydus), ensure forceGuestPull is false
+				# to prevent EXPERIMENTAL_FORCE_GUEST_PULL from being incorrectly set
+				yq -i ".shims.${shim}.containerd.forceGuestPull = false" "${values_yaml}"
+			done
+		fi
+
+		# Set pull type mapping (format: "shim:pullType")
+		if [[ -n "${HELM_PULL_TYPE_MAPPING}" ]]; then
+			# Parse format "shim:pullType" or "shim1:pullType1,shim2:pullType2"
+			IFS=',' read -ra mappings <<< "${HELM_PULL_TYPE_MAPPING}"
+			for mapping in "${mappings[@]}"; do
+				shim="${mapping%%:*}"
+				pull_type="${mapping##*:}"
+				if [[ "${pull_type}" == "guest-pull" ]]; then
+					# PULL_TYPE_MAPPING with guest-pull only sets crio.guestPull.
+					yq -i ".shims.${shim}.crio.guestPull = true" "${values_yaml}"
+				else
+					echo "WARN: Unsupported pull type '${pull_type}' for shim '${shim}' in HELM_PULL_TYPE_MAPPING."
+				fi
+			done
+		fi
+
+		# Set experimental force guest pull (if set to shim name, enable it)
+		if [[ "${HELM_EXPERIMENTAL_FORCE_GUEST_PULL}" ]]; then
+			# Parse format "shim1,shim2,..."
+			IFS=',' read -ra shims <<< "${HELM_EXPERIMENTAL_FORCE_GUEST_PULL}"
+			for shim in "${shims[@]}"; do
+				yq -i ".shims.${shim}.containerd.forceGuestPull = true" "${values_yaml}"
+				# When using EXPERIMENTAL_FORCE_GUEST_PULL, ensure a snapshotter (like nydus) is not set,
+				# to prevent the snapshotter from being incorrectly set
+				yq -i ".shims.${shim}.containerd.snapshotter = \"\"" "${values_yaml}"
+			done
+		fi
+
 		[[ -n "${HELM_CREATE_RUNTIME_CLASSES}" ]] && yq -i ".runtimeClasses.enabled = ${HELM_CREATE_RUNTIME_CLASSES}" "${values_yaml}"
 		[[ -n "${HELM_CREATE_DEFAULT_RUNTIME_CLASS}" ]] && yq -i ".runtimeClasses.createDefault = ${HELM_CREATE_DEFAULT_RUNTIME_CLASS}" "${values_yaml}"
-		[[ -n "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" ]] && yq -i ".env.allowedHypervisorAnnotations = \"${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}\"" "${values_yaml}"
-		[[ -n "${HELM_SNAPSHOTTER_HANDLER_MAPPING}" ]] && yq -i ".env.snapshotterHandlerMapping = \"${HELM_SNAPSHOTTER_HANDLER_MAPPING}\"" "${values_yaml}"
-		[[ -n "${HELM_AGENT_HTTPS_PROXY}" ]] && yq -i ".env.agentHttpsProxy = \"${HELM_AGENT_HTTPS_PROXY}\"" "${values_yaml}"
-		[[ -n "${HELM_AGENT_NO_PROXY}" ]] && yq -i ".env.agentNoProxy = \"${HELM_AGENT_NO_PROXY}\"" "${values_yaml}"
-		[[ -n "${HELM_PULL_TYPE_MAPPING}" ]] && yq -i ".env.pullTypeMapping = \"${HELM_PULL_TYPE_MAPPING}\"" "${values_yaml}"
+
+		# Legacy env.* settings that don't have structured equivalents yet
 		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
-		[[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]] && yq -i ".env._experimentalSetupSnapshotter=\"${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}\"" "${values_yaml}"
-		[[ -n "${HELM_EXPERIMENTAL_FORCE_GUEST_PULL}" ]] && yq -i ".env._experimentalForceGuestPull=\"${HELM_EXPERIMENTAL_FORCE_GUEST_PULL}\"" "${values_yaml}"
 	fi
 
 	echo "::group::Final kata-deploy manifests used in the test"
