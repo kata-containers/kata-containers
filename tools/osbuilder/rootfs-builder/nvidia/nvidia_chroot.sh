@@ -281,19 +281,19 @@ setup_apt_repositories() {
 
 	if [[ "${arch_target}" == "x86_64" ]]; then
 		cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
 		CHROOT_EOF
 	fi
 
 	if [[ "${arch_target}" == "aarch64" ]]; then
 		cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
 		CHROOT_EOF
 	fi
 
