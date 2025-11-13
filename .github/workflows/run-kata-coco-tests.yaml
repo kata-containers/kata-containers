@@ -131,6 +131,7 @@ jobs:
       matrix:
         vmm:
           - qemu-coco-dev
+          - qemu-coco-dev-runtime-rs
         snapshotter:
           - nydus
         pull-type:
@@ -250,6 +251,7 @@ jobs:
 
       - name: Delete AKS cluster
         if: always()
+        timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
 
   # Generate jobs for testing CoCo on non-TEE environments with erofs-snapshotter

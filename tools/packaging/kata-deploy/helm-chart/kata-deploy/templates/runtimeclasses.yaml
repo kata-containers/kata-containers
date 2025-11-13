@@ -16,6 +16,7 @@
   "firecracker" (dict "memory" "130Mi" "cpu" "250m")
   "qemu" (dict "memory" "160Mi" "cpu" "250m")
   "qemu-coco-dev" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-coco-dev-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
   "qemu-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
   "qemu-se-runtime-rs" (dict "memory" "1024Mi" "cpu" "1.0")
   "qemu-se" (dict "memory" "1024Mi" "cpu" "1.0")
@@ -77,4 +78,3 @@ scheduling:
 {{- end }}
 {{- end }}
 {{- end }}
-
