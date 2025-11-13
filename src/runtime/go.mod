@@ -63,6 +63,7 @@ require (
 	google.golang.org/protobuf v1.36.6
 	k8s.io/apimachinery v0.33.0
 	k8s.io/cri-api v0.33.0
+	k8s.io/kubelet v0.33.0
 	tags.cncf.io/container-device-interface v1.0.1
 )
 
