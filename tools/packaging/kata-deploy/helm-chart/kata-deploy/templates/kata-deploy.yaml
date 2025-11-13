@@ -261,24 +261,24 @@ spec:
           value: {{ $snapshotterSetup | quote }}
         {{- end }}
         {{- $forceGuestPullAmd64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "amd64") | trim -}}
-        {{- if eq $forceGuestPullAmd64 "true" }}
+        {{- if $forceGuestPullAmd64 }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_X86_64
-          value: "true"
+          value: {{ $forceGuestPullAmd64 | quote }}
         {{- end }}
         {{- $forceGuestPullArm64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "arm64") | trim -}}
-        {{- if eq $forceGuestPullArm64 "true" }}
+        {{- if $forceGuestPullArm64 }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64
-          value: "true"
+          value: {{ $forceGuestPullAmd64 | quote }}
         {{- end }}
         {{- $forceGuestPullS390x := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "s390x") | trim -}}
-        {{- if eq $forceGuestPullS390x "true" }}
+        {{- if $forceGuestPullS390x }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_S390X
-          value: "true"
+          value: {{ $forceGuestPullAmd64 | quote }}
         {{- end }}
         {{- $forceGuestPullPpc64le := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "ppc64le") | trim -}}
-        {{- if eq $forceGuestPullPpc64le "true" }}
+        {{- if $forceGuestPullPpc64le }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE
-          value: "true"
+          value: {{ $forceGuestPullAmd64 | quote }}
         {{- end }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
