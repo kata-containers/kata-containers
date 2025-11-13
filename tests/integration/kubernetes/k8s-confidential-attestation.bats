@@ -48,6 +48,8 @@ setup() {
 @test "Get CDH resource" {
 	if ! is_confidential_hardware; then
 		kbs_set_allow_all_resources
+	else
+		kbs_set_default_policy
 	fi
 
 	kubectl apply -f "${K8S_TEST_YAML}"
