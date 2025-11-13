@@ -165,6 +165,97 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env._experimentalForceGuestPull_s390x` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for s390x (if set, overrides `_experimentalForceGuestPull`) | `""` |
 | `env._experimentalForceGuestPull_ppc64le` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for ppc64le (if set, overrides `_experimentalForceGuestPull`) | `""` |
 
+## Structured Configuration
+
+**NEW**: Starting with Kata Containers v3.23.0, a new structured configuration format is available for configuring shims. This provides better type safety, clearer organization, and per-shim configuration options.
+
+### Migration from Legacy Format
+
+The legacy `env.*` configuration format is **deprecated** and will be removed in 2 releases. Users are encouraged to migrate to the new structured format.
+
+**Deprecated fields** (will be removed in 2 releases):
+- `env.shims`, `env.shims_x86_64`, `env.shims_aarch64`, `env.shims_s390x`, `env.shims_ppc64le`
+- `env.defaultShim`, `env.defaultShim_x86_64`, `env.defaultShim_aarch64`, `env.defaultShim_s390x`, `env.defaultShim_ppc64le`
+- `env.allowedHypervisorAnnotations`
+- `env.snapshotterHandlerMapping`, `env.snapshotterHandlerMapping_x86_64`, etc.
+- `env.pullTypeMapping`, `env.pullTypeMapping_x86_64`, etc.
+- `env.agentHttpsProxy`, `env.agentNoProxy`
+- `env._experimentalSetupSnapshotter`
+- `env._experimentalForceGuestPull`, `env._experimentalForceGuestPull_x86_64`, etc.
+- `env.debug`
+
+### New Structured Format
+
+The new format uses a `shims` section where each shim can be configured individually:
+
+```yaml
+# Enable debug mode globally
+debug: false
+
+# Configure snapshotter setup
+snapshotter:
+  setup: []  # ["nydus", "erofs"] or []
+
+# Configure shims
+shims:
+  qemu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  qemu-snp:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+# Default shim per architecture
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+  s390x: qemu
+  ppc64le: qemu
+```
+
+### Key Benefits
+
+1. **Per-shim configuration**: Each shim can have its own settings for snapshotter, guest pull, agent proxy, etc.
+2. **Architecture-aware**: Shims declare which architectures they support
+3. **Type safety**: Structured format reduces configuration errors
+4. **Better defaults**: Shims are disabled by default, requiring explicit enablement
+
+### Example: Enable `qemu` shim with new format
+
+```yaml
+shims:
+  qemu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+```
+
+### Backward Compatibility
+
+The chart maintains full backward compatibility with the legacy `env.*` format. If legacy values are set, they take precedence over the new structured format. This allows for gradual migration.
+
 ## `RuntimeClass` Management
 
 **NEW**: Starting with Kata Containers v3.23.0, `runtimeClasses` are managed by
@@ -183,7 +274,8 @@ runtimeClasses:
 ```
 
 When `runtimeClasses.enabled: true` (default), the Helm chart creates
-`runtimeClass` resources for all shims specified in `env.shims`.
+`runtimeClass` resources for all enabled shims (either from the new structured
+`shims` configuration or from the legacy `env.shims` format).
 
 The kata-deploy script will no longer create `runtimeClasses`
 (`env.createRuntimeClasses` defaults to `"false"`).
