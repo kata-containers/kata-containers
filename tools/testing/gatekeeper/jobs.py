@@ -35,7 +35,7 @@ RUNNING = 127
 
 _GH_HEADERS = {"Accept": "application/vnd.github.v3+json"}
 if os.environ.get("GITHUB_TOKEN"):
-    _GH_HEADERS["Authorization"] = f"token {os.environ['GITHUB_TOKEN']}"
+    _GH_HEADERS["Authorization"] = f"Bearer {os.environ['GITHUB_TOKEN']}"
 _GH_API_URL = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}"
 _GH_RUNS_URL = f"{_GH_API_URL}/actions/runs"
 if os.environ.get("DEBUG", "false") == "true":
