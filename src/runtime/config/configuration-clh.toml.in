@@ -494,3 +494,14 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# cold_plug_devices enables cold plug of devices into the sandbox
+# In order for this to work, either the KubeletPodResourcesGet
+# featureGate must be enabled in Kubelet or a CDI annotation must be
+# explicitly added (the latter applies mainly to non-k8s cases).
+cold_plug_devices = @DEFCOLDPLUGDEVICES@
+
+# pod_resource_api_sock specifies the unix socket for the Kubelet's
+# PodResource API endpoint. If empty, kubernetes based cold plug
+# will not be attempted
+pod_resource_api_sock = @DEFPODRESOURCEAPISOCK@
