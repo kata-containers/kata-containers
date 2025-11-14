@@ -64,7 +64,9 @@ setup() {
 	sleep 5
 
 	kubectl logs aa-test-cc
-	kubectl logs aa-test-cc | grep -q "aatest"
+	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	run bash -c "$cmd"
+	[ "$status" -eq 0 ]
 }
 
 @test "Cannot get CDH resource when deny-all policy is set" {
@@ -80,8 +82,8 @@ setup() {
 	sleep 5
 
 	kubectl logs aa-test-cc
-	cmd="kubectl logs aa-test-cc | grep -q aatest"
-	run $cmd
+	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	run bash -c "$cmd"
 	[ "$status" -eq 1 ]
 }
 
