@@ -351,14 +351,14 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.3"
+    version: "v2.3.9"
 
   # Keep the version here aligned with the NYDUS_SNAPSHOTTER_VERSION
   # on tools/packaging/kata-deploy/Dockerfile
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.15.2"
+    version: "v0.15.7"
 
   opa:
     description: "Open Policy Agent"
