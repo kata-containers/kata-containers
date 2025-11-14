@@ -10,7 +10,8 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
-SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+SUPPORTED_GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "${SUPPORTED_GPU_TEE_HYPERVISORS[@]}")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 
 function setup_unencrypted_confidential_pod() {
@@ -67,7 +68,21 @@ function check_hypervisor_for_confidential_tests_tee_only() {
 	local kata_hypervisor="${1}"
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
+	# shellcheck disable=SC2076 # intentionally use literal string matching
 	if [[ " ${SUPPORTED_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
+		return 0
+	fi
+
+	return 1
+}
+
+# This function verifies whether the input hypervisor supports confidential GPU tests
+function check_hypervisor_for_confidential_gpu_tests() {
+	local kata_hypervisor="${1}"
+	# This check must be done with "<SPACE>${kata_hypervisor}<SPACE>" to avoid
+	# having substrings being matched incorrectly.
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	if [[ " ${SUPPORTED_GPU_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
 		return 0
 	fi
 
@@ -86,6 +101,15 @@ function is_confidential_runtime_class() {
 # Common check for confidential hardware tests.
 function is_confidential_hardware() {
 	if check_hypervisor_for_confidential_tests_tee_only "${KATA_HYPERVISOR}"; then
+		return 0
+	fi
+
+	return 1
+}
+
+# Common check for confidential GPU hardware tests.
+function is_confidential_gpu_hardware() {
+	if check_hypervisor_for_confidential_gpu_tests "${KATA_HYPERVISOR}"; then
 		return 0
 	fi
 
