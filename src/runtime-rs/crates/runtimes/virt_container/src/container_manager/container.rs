@@ -692,18 +692,18 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
 /// Specifically, it iterates through all `LinuxDeviceCgroup` rules in `resources`
 /// and removes those considered to be "default, all-access (rwm), and non-specific device" rules.
 fn clean_linux_resources_devices(resources: &mut LinuxResources) {
-    if let Some(devices) = resources.devices_mut().take() {
-        let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
-            .into_iter()
-            .filter(|device| {
-                !(!device.allow()
-                    && device.typ().is_none()
-                    && device.major().is_none()
-                    && device.minor().is_none()
-                    && device.access().as_deref() == Some("rwm"))
-            })
-            .collect();
-
+    if let Some(_devices) = resources.devices_mut().take() {
+        // let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
+        //     .into_iter()
+        //     .filter(|device| {
+        //         !(!device.allow()
+        //             && device.typ().is_none()
+        //             && device.major().is_none()
+        //             && device.minor().is_none()
+        //             && device.access().as_deref() == Some("rwm"))
+        //     })
+        //     .collect();
+        let cleaned_devices: Vec<LinuxDeviceCgroup> = Vec::new();
         resources.set_devices(if cleaned_devices.is_empty() {
             None
         } else {
