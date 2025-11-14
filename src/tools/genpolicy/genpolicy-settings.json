@@ -227,7 +227,7 @@
         ]
     },
     "common": {
-        "cpath": "/run/kata-containers/shared/containers",
+        "cpath": "/run/kata-containers/shared/containers(?:/passthrough)?",
         "root_path": "/run/kata-containers/$(bundle-id)/rootfs",
         "sfprefix": "^$(cpath)/(watchable/)?$(bundle-id)-[a-z0-9]{16}-",
         "ip_p": "[0-9]{1,5}",
