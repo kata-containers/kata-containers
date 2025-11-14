@@ -864,7 +864,7 @@ EOF
 
 	local key
 	local value
-	if [ -n "${PULL_TYPE_MAPPING}" ]; then
+	if [[ -n "${PULL_TYPE_MAPPING_FOR_ARCH}" ]]; then
 		for m in "${pull_types[@]}"; do
 			key="${m%"$snapshotters_delimiter"*}"
 			value="${m#*"$snapshotters_delimiter"}"
@@ -875,9 +875,9 @@ EOF
 
 			if [ "${value}" == "guest-pull" ]; then
 				echo -e "\truntime_pull_image = true" | \
-					tee -a "$crio_drop_in_conf_file"
+					tee -a "${crio_drop_in_conf_file}"
 			else
-				die "Unsupported pull type '$value' for ${shim}"
+				die "Unsupported pull type '${value}' for ${shim}"
 			fi
 			break
 		done
@@ -968,7 +968,7 @@ function configure_containerd_runtime() {
 		tomlq -i -t '.debug.level = "debug"' ${configuration_file}
 	fi
 
-	if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+	if [[ -n "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" ]]; then
 		for m in "${snapshotters[@]}"; do
 			key="${m%$snapshotters_delimiter*}"
 
@@ -1100,8 +1100,8 @@ function containerd_snapshotter_version_check() {
 	local containerd_version_to_avoid="1.6"
 	local containerd_version=${container_runtime_version#$containerd_prefix}
 
-	if grep -q ^$containerd_version_to_avoid <<< $containerd_version; then
-		if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+	if grep -q ^${containerd_version_to_avoid} <<< ${containerd_version}; then
+		if [[ -n "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" ]]; then
 			die "kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"
 		fi
 	fi
@@ -1125,8 +1125,8 @@ function containerd_erofs_snapshotter_version_check() {
 }
 
 function snapshotter_handler_mapping_validation_check() {
-	echo "Validating the snapshotter-handler mapping: \"${SNAPSHOTTER_HANDLER_MAPPING}\""
-	if [ -z "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+	echo "Validating the snapshotter-handler mapping: \"${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}\""
+	if [[ -z "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" ]]; then
 		echo "No snapshotter has been requested, using the default value from containerd"
 		return
 	fi
@@ -1135,20 +1135,20 @@ function snapshotter_handler_mapping_validation_check() {
 		shim="${m%$snapshotters_delimiter*}"
 		snapshotter="${m#*$snapshotters_delimiter}"
 
-		if [ -z "$shim" ]; then
+		if [ -z "${shim}" ]; then
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one shim is empty"
 		fi
 
-		if [ -z "$snapshotter" ]; then
+		if [ -z "${snapshotter}" ]; then
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one snapshotter is empty"
 		fi
 
-		if ! grep -q " $shim " <<< " $SHIMS "; then
-			die "\"$shim\" is not part of \"$SHIMS\""
+		if ! grep -q " ${shim} " <<< " ${SHIMS_FOR_ARCH} "; then
+			die "\"${shim}\" is not part of \"${SHIMS_FOR_ARCH}\""
 		fi
 
-		matches=$(grep -o "$shim$snapshotters_delimiter" <<< "${SNAPSHOTTER_HANDLER_MAPPING}" | wc -l)
-		if [ $matches -ne 1 ]; then
+		matches=$(grep -o "${shim}${snapshotters_delimiter}" <<< "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" | wc -l)
+		if [[ ${matches} -ne 1 ]]; then
 			die "One, and only one, entry per shim is required"
 		fi
 	done
@@ -1304,31 +1304,31 @@ function main() {
 	echo "Environment variables passed to this script"
 	echo "* NODE_NAME: ${NODE_NAME}"
 	echo "* DEBUG: ${DEBUG}"
-	echo "* SHIMS: ${SHIMS}"
+	echo "* SHIMS: ${SHIMS_FOR_ARCH}"
 	echo "  * x86_64: ${SHIMS_X86_64}"
 	echo "  * aarch64: ${SHIMS_AARCH64}"
 	echo "  * s390x: ${SHIMS_S390X}"
 	echo "  * ppc64le: ${SHIMS_PPC64LE}"
-	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
+	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM_FOR_ARCH}"
 	echo "  * x86_64: ${DEFAULT_SHIM_X86_64}"
 	echo "  * aarch64: ${DEFAULT_SHIM_AARCH64}"
 	echo "  * s390x: ${DEFAULT_SHIM_S390X}"
 	echo "  * ppc64le: ${DEFAULT_SHIM_PPC64LE}"
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
-	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH}"
 	echo "  * x86_64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
 	echo "  * aarch64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
 	echo "  * s390x: ${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
 	echo "  * ppc64le: ${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
-	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}"
 	echo "  * x86_64: ${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
 	echo "  * aarch64: ${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
 	echo "  * s390x: ${SNAPSHOTTER_HANDLER_MAPPING_S390X}"
 	echo "  * ppc64le: ${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE}"
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
-	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
+	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING_FOR_ARCH}"
 	echo "  * x86_64: ${PULL_TYPE_MAPPING_X86_64}"
 	echo "  * aarch64: ${PULL_TYPE_MAPPING_AARCH64}"
 	echo "  * s390x: ${PULL_TYPE_MAPPING_S390X}"
@@ -1337,7 +1337,7 @@ function main() {
 	echo "* MULTI_INSTALL_SUFFIX: ${MULTI_INSTALL_SUFFIX}"
 	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
 	echo "* EXPERIMENTAL_SETUP_SNAPSHOTTER: ${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
-	echo "* EXPERIMENTAL_FORCE_GUEST_PULL: ${EXPERIMENTAL_FORCE_GUEST_PULL}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL: ${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
 	echo "  * x86_64: ${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64}"
 	echo "  * aarch64: ${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64}"
 	echo "  * s390x: ${EXPERIMENTAL_FORCE_GUEST_PULL_S390X}"
