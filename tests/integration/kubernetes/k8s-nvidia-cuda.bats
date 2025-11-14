@@ -28,7 +28,7 @@ setup() {
 
     # Substitute environment variables in the YAML template
     envsubst < "${pod_yaml_in}" > "${pod_yaml}"
-
+    add_allow_all_policy_to_yaml "${pod_yaml}"
 }
 
 @test "CUDA Vector Addition Test" {
