@@ -53,6 +53,27 @@ kbs_set_deny_all_resources() {
 		"${COCO_KBS_DIR}/sample_policies/deny_all.rego"
 }
 
+# Set KBS resource policy requiring GPU0's EAR status to be non-contraindicated.
+#
+kbs_set_gpu0_resource_policy() {
+	local policy_file
+	policy_file=$(mktemp -t kbs-gpu-policy-XXXXX.rego)
+
+	cat > "${policy_file}" <<-'EOF'
+		package policy
+		import rego.v1
+		default allow = false
+		allow if {
+		    input["submods"]["gpu0"]["ear.status"] != "contraindicated"
+		}
+	EOF
+
+	kbs_set_resources_policy "${policy_file}"
+	local rc=$?
+	rm -f "${policy_file}"
+	return "${rc}"
+}
+
 # Set resources policy.
 #
 # Parameters:
