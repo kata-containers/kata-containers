@@ -15,12 +15,12 @@ setup() {
         [[ "${KATA_HYPERVISOR}" == qemu-se* ]] && skip "test not working for IBM Z LPAR (see ${issue_url})"
 	get_pod_config_dir
 
+        pod_name="inotify-configmap-testing"
 	pod_yaml="${pod_config_dir}"/inotify-configmap-pod.yaml
 	auto_generate_policy "${pod_config_dir}" "${pod_yaml}"
 }
 
 @test "configmap update works, and preserves symlinks" {
-        pod_name="inotify-configmap-testing"
 
         # Create configmap for my deployment
         kubectl apply -f "${pod_config_dir}"/inotify-configmap.yaml
