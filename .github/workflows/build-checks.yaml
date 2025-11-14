@@ -12,7 +12,7 @@ name: Build checks
 jobs:
   check:
     name: check
-    runs-on: ${{ matrix.component.name == 'runtime' && inputs.instance == 'ubuntu-24.04-s390x' && 's390x' || matrix.component.name == 'runtime' && inputs.instance == 'ubuntu-24.04-ppc64le' && 'ppc64le' || inputs.instance }}
+    runs-on: ${{ matrix.runner || inputs.instance }}
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +68,38 @@ jobs:
             needs:
               - rust
               - protobuf-compiler
+        instance:
+          - ${{ inputs.instance }} 
+        include:
+          - component:
+              name: runtime
+              path: src/runtime
+              needs:
+                - golang
+                - XDG_RUNTIME_DIR
+            instance: ubuntu-24.04-s390x
+            runner: s390x
+          - component:
+              name: runtime
+              path: src/runtime
+              needs:
+                - golang
+                - XDG_RUNTIME_DIR
+            instance: ubuntu-24.04-ppc64le
+            runner: ppc64le
+          - component:
+              name: agent
+              path: src/agent
+              needs:
+                - rust
+                - libdevmapper
+                - libseccomp
+                - protobuf-compiler
+                - clang
+            instance: ubuntu-24.04-ppc64le
+            runner: ppc64le
+
+             
 
     steps:
       - name: Adjust a permission for repo
