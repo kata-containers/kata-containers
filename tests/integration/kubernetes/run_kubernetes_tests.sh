@@ -87,6 +87,7 @@ else
 		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
 		"k8s-replication.bats" \
+		"k8s-ro-volume.bats" \
 		"k8s-seccomp.bats" \
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
