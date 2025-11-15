@@ -235,7 +235,7 @@ defaultShim:
 1. **Per-shim configuration**: Each shim can have its own settings for snapshotter, guest pull, agent proxy, etc.
 2. **Architecture-aware**: Shims declare which architectures they support
 3. **Type safety**: Structured format reduces configuration errors
-4. **Better defaults**: Shims are disabled by default, requiring explicit enablement
+4. **Easy to use**: All shims are enabled by default in `values.yaml`, so you can use the chart directly without modification
 
 ### Example: Enable `qemu` shim with new format
 
@@ -256,24 +256,37 @@ defaultShim:
 
 The chart maintains full backward compatibility with the legacy `env.*` format. If legacy values are set, they take precedence over the new structured format. This allows for gradual migration.
 
-### Example Values Files
+### Default Configuration
 
-To make it easier to try out Kata Containers, we provide several example values files:
-
-#### `try-kata.values.yaml` - All Shims Enabled
-
-This file enables all available Kata Containers shims, making it easy to try out all runtime options:
+The default `values.yaml` file has **all shims enabled by default**, making it easy to use the chart directly without modification:
 
 ```sh
 helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
-  --version VERSION \
-  -f try-kata.values.yaml
+  --version VERSION
 ```
 
-This includes:
+This includes all available Kata Containers shims:
 - Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
 - TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
 - NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
+
+To enable only specific shims, you can override the configuration:
+
+```yaml
+# Custom values file - enable only qemu shim
+shims:
+  qemu:
+    enabled: true
+  clh:
+    enabled: false
+  cloud-hypervisor:
+    enabled: false
+  # ... disable other shims as needed
+```
+
+### Example Values Files
+
+For convenience, we also provide example values files that demonstrate specific use cases:
 
 #### `try-kata-tee.values.yaml` - Trusted Execution Environment Shims
 
@@ -337,10 +350,73 @@ The kata-deploy script will no longer create `runtimeClasses`
 
 ## Example: only `qemu` shim and debug enabled
 
+Since all shims are enabled by default, you need to disable the ones you don't want:
+
+```sh
+# Using --set flags (disable all except qemu)
+$ helm install kata-deploy \
+  --set shims.clh.enabled=false \
+  --set shims.cloud-hypervisor.enabled=false \
+  --set shims.dragonball.enabled=false \
+  --set shims.fc.enabled=false \
+  --set shims.qemu-runtime-rs.enabled=false \
+  --set shims.qemu-nvidia-gpu.enabled=false \
+  --set shims.qemu-nvidia-gpu-snp.enabled=false \
+  --set shims.qemu-nvidia-gpu-tdx.enabled=false \
+  --set shims.qemu-snp.enabled=false \
+  --set shims.qemu-tdx.enabled=false \
+  --set shims.qemu-se.enabled=false \
+  --set shims.qemu-se-runtime-rs.enabled=false \
+  --set shims.qemu-cca.enabled=false \
+  --set shims.qemu-coco-dev.enabled=false \
+  --set shims.qemu-coco-dev-runtime-rs.enabled=false \
+  --set debug=true \
+  "${CHART}" --version  "${VERSION}"
+```
+
+Or use a custom values file:
+
+```yaml
+# custom-values.yaml
+debug: true
+shims:
+  qemu:
+    enabled: true
+  clh:
+    enabled: false
+  cloud-hypervisor:
+    enabled: false
+  dragonball:
+    enabled: false
+  fc:
+    enabled: false
+  qemu-runtime-rs:
+    enabled: false
+  qemu-nvidia-gpu:
+    enabled: false
+  qemu-nvidia-gpu-snp:
+    enabled: false
+  qemu-nvidia-gpu-tdx:
+    enabled: false
+  qemu-snp:
+    enabled: false
+  qemu-tdx:
+    enabled: false
+  qemu-se:
+    enabled: false
+  qemu-se-runtime-rs:
+    enabled: false
+  qemu-cca:
+    enabled: false
+  qemu-coco-dev:
+    enabled: false
+  qemu-coco-dev-runtime-rs:
+    enabled: false
+```
+
 ```sh
 $ helm install kata-deploy \
-  --set env.shims="qemu" \
-  --set env.debug=true \
+  -f custom-values.yaml \
   "${CHART}" --version  "${VERSION}"
 ```
 
