@@ -40,29 +40,29 @@ spec:
       httpGet:
         path: /v1/health/live
         port: http-openai
-      initialDelaySeconds: 15
+      initialDelaySeconds: 120
       periodSeconds: 10
-      timeoutSeconds: 1
+      timeoutSeconds: 10
       successThreshold: 1
-      failureThreshold: 3
+      failureThreshold: 10
     readinessProbe:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 15
+      initialDelaySeconds: 120
       periodSeconds: 10
-      timeoutSeconds: 1
+      timeoutSeconds: 10
       successThreshold: 1
-      failureThreshold: 3
+      failureThreshold: 10
     startupProbe:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 40
+      initialDelaySeconds: 180
       periodSeconds: 10
-      timeoutSeconds: 1
+      timeoutSeconds: 10
       successThreshold: 1
-      failureThreshold: 180
+      failureThreshold: 300
     # Environment variable for NGC_API_KEY. In production, use a Secret.
     env:
       - name: NGC_API_KEY

@@ -51,31 +51,31 @@ spec:
       httpGet:
         path: /v1/health/live
         port: 8000
-      initialDelaySeconds: 15
+      initialDelaySeconds: 120
       periodSeconds: 10
-      timeoutSeconds: 1
+      timeoutSeconds: 10
       successThreshold: 1
-      failureThreshold: 3
+      failureThreshold: 10
 
     readinessProbe:
       httpGet:
         path: /v1/health/ready
         port: 8000
-      initialDelaySeconds: 15
+      initialDelaySeconds: 120
       periodSeconds: 10
-      timeoutSeconds: 1
+      timeoutSeconds: 10
       successThreshold: 1
-      failureThreshold: 3
+      failureThreshold: 10
 
     startupProbe:
       httpGet:
         path: /v1/health/ready
         port: 8000
-      initialDelaySeconds: 40
+      initialDelaySeconds: 180
       periodSeconds: 10
-      timeoutSeconds: 1
+      timeoutSeconds: 10
       successThreshold: 1
-      failureThreshold: 180
+      failureThreshold: 300
 
     resources:
       limits:
