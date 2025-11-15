@@ -42,6 +42,12 @@ DOCKER_CONFIG_JSON=$(
 )
 export DOCKER_CONFIG_JSON
 
+KBS_AUTH_CONFIG_JSON=$(
+    echo -n "{\"auths\":{\"nvcr.io\":{\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" |
+        base64 -w0
+)
+export KBS_AUTH_CONFIG_JSON
+
 setup_langchain_flow() {
     # shellcheck disable=SC1091  # Sourcing virtual environment activation script
     source "${HOME}"/.cicd/venv/bin/activate
@@ -61,17 +67,22 @@ setup_kbs_credentials() {
     # Set allow all resources policy (hardening will be done later)
     kbs_set_allow_all_resources
 
-    # DOCKER_CONFIG_JSON is already base64 encoded
-    kbs_set_resource_base64 "default" "credentials" "nvcr" "${DOCKER_CONFIG_JSON}"
+    # Set up Kubernetes secret for the containerd metadata pull
+    kubectl delete secret ngc-secret-instruct --ignore-not-found
+    kubectl create secret docker-registry ngc-secret-instruct --docker-server="nvcr.io" --docker-username="\$oauthtoken" --docker-password="${NGC_API_KEY}"
+
+    # KBS_AUTH_CONFIG_JSON is already base64 encoded
+    kbs_set_resource_base64 "default" "credentials" "nvcr" "${KBS_AUTH_CONFIG_JSON}"
 }
 
 create_inference_pod() {
     envsubst <"${POD_INSTRUCT_YAML_IN}" >"${POD_INSTRUCT_YAML}"
 
     kubectl apply -f "${POD_INSTRUCT_YAML}"
-    kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
+    kubectl_retry_cc_nv wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
 
     # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
+    kubectl_retry_cc_nv get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}'
     POD_IP_INSTRUCT=$(kubectl get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}')
     [[ -n "${POD_IP_INSTRUCT}" ]]
 
@@ -83,10 +94,12 @@ create_embedqa_pod() {
     envsubst <"${POD_EMBEDQA_YAML_IN}" >"${POD_EMBEDQA_YAML}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
-    kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
+    kubectl_retry_cc_nv wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
 
     # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
+    kubectl_retry_cc_nv get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}'
     POD_IP_EMBEDQA=$(kubectl get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}')
+
     [[ -n "${POD_IP_EMBEDQA}" ]]
 
     echo "POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >>"${BATS_SUITE_TMPDIR}/env"
@@ -94,8 +107,6 @@ create_embedqa_pod() {
 }
 
 setup_file() {
-    [ "${TEE}" = "true" ] && return 0
-
     setup_common
 
     get_pod_config_dir
@@ -128,8 +139,6 @@ setup_file() {
 }
 
 @test "List of models available for inference" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variable is shared via file between BATS tests
@@ -150,8 +159,6 @@ setup_file() {
 }
 
 @test "Simple OpenAI completion request" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -177,8 +184,6 @@ setup_file() {
 
 
 @test "LangChain NVIDIA AI Endpoints" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
-
     # shellcheck disable=SC1091  # File is created by previous test
     source "${BATS_SUITE_TMPDIR}/env"
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
@@ -211,7 +216,6 @@ EOF
 }
 
 @test "Kata Documentation RAG" {
-    [ "${TEE}" = "true" ] && skip "Skipping the test till we use a Trustee version that includes https://github.com/confidential-containers/trustee/pull/1035"
     [ "${SKIP_MULTI_GPU_TESTS}" = "true" ] && skip "indicated to skip tests requiring multiple GPUs"
 
     # shellcheck disable=SC1091  # File is created by previous test
@@ -373,8 +377,6 @@ EOF
 }
 
 teardown_file() {
-    [ "${TEE}" = "true" ] && return 0
-
     # Debugging information
     echo "=== Instruct Pod Logs ===" >&3
     kubectl logs "${POD_NAME_INSTRUCT}"  >&3 || true
