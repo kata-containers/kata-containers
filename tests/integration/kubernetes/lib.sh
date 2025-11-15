@@ -380,3 +380,27 @@ get_node_kata_sandbox_id() {
 	done
 	echo $kata_sandbox_id
 }
+
+# Wrapper for kubectl with retry logic optimized for NVIDIA confidential computing workloads
+# Uses 10 retries with 30-second intervals (vs kubectl_retry's 5 retries with 15s interval)
+# to handle slower confidential computing environments
+kubectl_retry_cc_nv() {
+	local attempt=1
+	local max_attempts=10
+	local interval=30
+
+	while [ ${attempt} -le ${max_attempts} ]; do
+		echo "# kubectl_retry_cc_nv attempt ${attempt}/${max_attempts}" >&3
+		if kubectl "$@"; then
+			return 0
+		fi
+		if [ ${attempt} -lt ${max_attempts} ]; then
+			echo "# Waiting ${interval} seconds before retry..." >&3
+			sleep ${interval}
+		fi
+		attempt=$((attempt + 1))
+	done
+
+	echo "# kubectl_retry_cc_nv: 'kubectl $*' failed after ${max_attempts} tries" >&3
+	return 1
+}
