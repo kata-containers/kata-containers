@@ -12,7 +12,28 @@ snapshotter:
   setup: ["nydus"]  # TEE shims typically use nydus snapshotter
 
 # Enable TEE (Trusted Execution Environment) shims
+# First disable all shims (since values.yaml enables all by default)
 shims:
+  clh:
+    enabled: false
+  cloud-hypervisor:
+    enabled: false
+  dragonball:
+    enabled: false
+  fc:
+    enabled: false
+  qemu:
+    enabled: false
+  qemu-runtime-rs:
+    enabled: false
+  qemu-nvidia-gpu:
+    enabled: false
+  qemu-nvidia-gpu-snp:
+    enabled: false
+  qemu-nvidia-gpu-tdx:
+    enabled: false
+
+  # Now enable TEE shims (qemu-snp, qemu-tdx, qemu-se, qemu-se-runtime-rs, qemu-cca, qemu-coco-dev, qemu-coco-dev-runtime-rs)
   qemu-snp:
     enabled: true
     supportedArches:

@@ -20,11 +20,10 @@ debug: false
 snapshotter:
   setup: []  # ["nydus", "erofs"] or []
 
-# See MAINTENANCE.md for field descriptions and maintenance guide
-# NOTE: All shims are disabled by default. Enable the ones you need explicitly.
+# Enable all available shims
 shims:
-  clh: # cloud-hypervisor, golang runtime
-    enabled: false
+  clh:
+    enabled: true
     supportedArches:
       - amd64
       - arm64
@@ -32,8 +31,8 @@ shims:
     containerd:
       snapshotter: ""
 
-  cloud-hypervisor: # rust runtime
-    enabled: false
+  cloud-hypervisor:
+    enabled: true
     supportedArches:
       - amd64
       - arm64
@@ -41,17 +40,17 @@ shims:
     containerd:
       snapshotter: ""
 
-  dragonball: # rust runtime
-    enabled: false
+  dragonball:
+    enabled: true
     supportedArches:
       - amd64
       - arm64
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
-  
-  fc: # firecracker, golang runtime
-    enabled: false
+
+  fc:
+    enabled: true
     supportedArches:
       - amd64
       - arm64
@@ -59,8 +58,8 @@ shims:
     containerd:
       snapshotter: "devmapper" # requires pre-configuration on the user side
 
-  qemu: # golang runtime
-    enabled: false
+  qemu:
+    enabled: true
     supportedArches:
       - amd64
       - arm64
@@ -70,17 +69,17 @@ shims:
     containerd:
       snapshotter: ""
 
-  qemu-runtime-rs: # rust runtime
-    enabled: false
+  qemu-runtime-rs:
+    enabled: true
     supportedArches:
       - amd64
       - s390x
     allowedHypervisorAnnotations: []
     containerd:
       snapshotter: ""
- 
-  qemu-nvidia-gpu: # golang runtime
-    enabled: false
+
+  qemu-nvidia-gpu:
+    enabled: true
     supportedArches:
       - amd64
       - arm64
@@ -88,8 +87,8 @@ shims:
     containerd:
       snapshotter: ""
 
-  qemu-nvidia-gpu-snp: # golang runtime
-    enabled: false
+  qemu-nvidia-gpu-snp:
+    enabled: true
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -102,8 +101,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-nvidia-gpu-tdx: # golang runtime
-    enabled: false
+  qemu-nvidia-gpu-tdx:
+    enabled: true
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -116,8 +115,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-snp: # golang runtime
-    enabled: false
+  qemu-snp:
+    enabled: true
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -130,8 +129,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-tdx: # golang runtime
-    enabled: false
+  qemu-tdx:
+    enabled: true
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -144,8 +143,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-se: # golang runtime
-    enabled: false
+  qemu-se:
+    enabled: true
     supportedArches:
       - s390x
     allowedHypervisorAnnotations: []
@@ -158,8 +157,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-se-runtime-rs: # rust runtime
-    enabled: false
+  qemu-se-runtime-rs:
+    enabled: true
     supportedArches:
       - s390x
     allowedHypervisorAnnotations: []
@@ -172,8 +171,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-cca: # golang runtime
-    enabled: false
+  qemu-cca:
+    enabled: true
     supportedArches:
       - arm64
     allowedHypervisorAnnotations: []
@@ -186,8 +185,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-coco-dev: # golang runtime
-    enabled: false
+  qemu-coco-dev:
+    enabled: true
     supportedArches:
       - amd64
       - s390x
@@ -201,8 +200,8 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
-  qemu-coco-dev-runtime-rs: # rust runtime
-    enabled: false
+  qemu-coco-dev-runtime-rs:
+    enabled: true
     supportedArches:
       - amd64
       - s390x
@@ -217,11 +216,6 @@ shims:
       noProxy: ""
 
 # Default shim per architecture
-# Since shims are disabled by default, you must explicitly configure defaultShim
-# for the architectures you're using.
-# Example:
-#   defaultShim:
-#     amd64: shim
 defaultShim:
   amd64: qemu
   arm64: qemu
