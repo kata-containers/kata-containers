@@ -81,4 +81,4 @@ spec:
       limits:
         nvidia.com/pgpu: 1
         cpu: "16"
-        memory: "64Gi"
+        memory: "96Gi"
