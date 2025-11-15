@@ -196,6 +196,8 @@ type runtime struct {
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
+	ColdPlugDevices           bool     `toml:"cold_plug_devices"`
+	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
 }
 
 type agent struct {
@@ -1602,6 +1604,8 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	config.ForceGuestPull = tomlConf.Runtime.ForceGuestPull
+	config.ColdPlugDevices = tomlConf.Runtime.ColdPlugDevices
+	config.PodResourceAPISock = tomlConf.Runtime.PodResourceAPISock
 
 	return resolved, config, nil
 }

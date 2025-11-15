@@ -174,6 +174,17 @@ type RuntimeConfig struct {
 
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
+
+	// ColdPlugDevices enables cold plug of devices into the sandbox
+	// In order for this to work, either the KubeletPodResourcesGet
+	// featureGate must be enabled in Kubelet or a CDI annotation must be
+	// explicitly added (the latter applies mainly to non-k8s cases).
+	ColdPlugDevices bool
+
+	// PodResourceAPISock specifies the unix socket for the Kubelet's
+	// PodResource API endpoint. If empty, kubernetes based cold plug
+	// will not be attempted
+	PodResourceAPISock string
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
