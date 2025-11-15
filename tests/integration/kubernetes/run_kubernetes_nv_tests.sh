@@ -43,7 +43,8 @@ if [ -n "${K8S_TEST_NV:-}" ]; then
 	K8S_TEST_NV=($K8S_TEST_NV)
 else
 	K8S_TEST_NV=("k8s-nvidia-cuda.bats" \
-		"k8s-nvidia-nim.bats")
+		"k8s-nvidia-nim.bats" \
+		"k8s-confidential-attestation.bats")
 fi
 
 # KATA_HYPERVISOR is set in the CI workflow yaml file, and can be set by the user executing CI locally
@@ -51,6 +52,14 @@ if [ -n "${KATA_HYPERVISOR:-}" ]; then
 	export RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
 	info "Set RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME} from KATA_HYPERVISOR=${KATA_HYPERVISOR}"
 fi
+
+# to remove when this variable is set in .github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
+if [ -z "${KBS:-}" ]; then
+	if [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-snp" ]] || [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-tdx" ]]; then
+		KBS="true"
+	fi
+fi
+export KBS
 
 ensure_yq
 
