@@ -89,11 +89,23 @@ function handle_error() {
 trap 'handle_error $LINENO' ERR
 
 # A wrapper function for kubectl with retry logic
-# runs the command up to 5 times with a 15-second interval
+# runs the command up to 5 times with a 15-second interval by default
 # to ensure successful execution
+# Usage:
+#   kubectl_retry [max_tries] [interval] kubectl_args...
+#   kubectl_retry kubectl_args...  (uses defaults: 5 retries, 15s interval)
+#   kubectl_retry 10 30 kubectl_args...  (uses 10 retries, 30s interval)
 function kubectl_retry() {
 	local max_tries=5
 	local interval=15
+
+	# Check if first two arguments are numbers (for max_tries and interval)
+	if [[ "${1}" =~ ^[0-9]+$ ]] && [[ "${2}" =~ ^[0-9]+$ ]]; then
+		max_tries="${1}"
+		interval="${2}"
+		shift 2
+	fi
+
 	local i=0
 	while true; do
 		kubectl "$@" && return 0 || true

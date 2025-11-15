@@ -79,9 +79,10 @@ create_inference_pod() {
     envsubst <"${POD_INSTRUCT_YAML_IN}" >"${POD_INSTRUCT_YAML}"
 
     kubectl apply -f "${POD_INSTRUCT_YAML}"
-    kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
+    kubectl_retry 10 30 wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
 
     # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
+    kubectl_retry 10 30 get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}'
     POD_IP_INSTRUCT=$(kubectl get pod "${POD_NAME_INSTRUCT}" -o jsonpath='{.status.podIP}')
     [[ -n "${POD_IP_INSTRUCT}" ]]
 
@@ -93,10 +94,12 @@ create_embedqa_pod() {
     envsubst <"${POD_EMBEDQA_YAML_IN}" >"${POD_EMBEDQA_YAML}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
-    kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
+    kubectl_retry 10 30 wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
 
     # shellcheck disable=SC2030  # Variable is shared via file between BATS tests
+    kubectl_retry 10 30 get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}'
     POD_IP_EMBEDQA=$(kubectl get pod "${POD_NAME_EMBEDQA}" -o jsonpath='{.status.podIP}')
+
     [[ -n "${POD_IP_EMBEDQA}" ]]
 
     echo "POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >>"${BATS_SUITE_TMPDIR}/env"

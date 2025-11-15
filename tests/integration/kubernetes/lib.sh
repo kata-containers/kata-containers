@@ -380,3 +380,4 @@ get_node_kata_sandbox_id() {
 	done
 	echo $kata_sandbox_id
 }
+
