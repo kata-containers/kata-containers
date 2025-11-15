@@ -12,7 +12,36 @@ snapshotter:
   setup: []
 
 # Enable NVIDIA GPU shims
+# First disable all shims (since values.yaml enables all by default)
 shims:
+  clh:
+    enabled: false
+  cloud-hypervisor:
+    enabled: false
+  dragonball:
+    enabled: false
+  fc:
+    enabled: false
+  qemu:
+    enabled: false
+  qemu-runtime-rs:
+    enabled: false
+  qemu-snp:
+    enabled: false
+  qemu-tdx:
+    enabled: false
+  qemu-se:
+    enabled: false
+  qemu-se-runtime-rs:
+    enabled: false
+  qemu-cca:
+    enabled: false
+  qemu-coco-dev:
+    enabled: false
+  qemu-coco-dev-runtime-rs:
+    enabled: false
+
+  # Now enable NVIDIA GPU shims
   qemu-nvidia-gpu:
     enabled: true
     supportedArches:

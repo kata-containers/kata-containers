@@ -503,10 +503,11 @@ function helm_helper() {
 	popd
 
 	# Create temporary values file for customization
-	# Start with an appropriate example values file based on the hypervisor type
+	# Start with values.yaml which has all shims enabled by default
+	# Use example files only for specific hypervisor types that need different configurations
 	values_yaml=$(mktemp -t values_yaml.XXXXXX)
 
-	# Determine which example values file to use as base
+	# Determine which values file to use as base
 	local base_values_file="${helm_chart_dir}/values.yaml"
 	if [[ -n "${KATA_HYPERVISOR}" ]]; then
 		case "${KATA_HYPERVISOR}" in
@@ -520,12 +521,6 @@ function helm_helper() {
 				# Use TEE example file
 				if [[ -f "${helm_chart_dir}/try-kata-tee.values.yaml" ]]; then
 					base_values_file="${helm_chart_dir}/try-kata-tee.values.yaml"
-				fi
-				;;
-			*)
-				# Use all shims example file for standard hypervisors
-				if [[ -f "${helm_chart_dir}/try-kata.values.yaml" ]]; then
-					base_values_file="${helm_chart_dir}/try-kata.values.yaml"
 				fi
 				;;
 		esac
