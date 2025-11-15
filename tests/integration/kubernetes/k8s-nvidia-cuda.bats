@@ -6,11 +6,16 @@
 #
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
-load "${BATS_TEST_DIRNAME}/../../common.bash"
-load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu}
 export RUNTIME_CLASS_NAME
+
+# TODO: Replace with is_confidential_gpu_hardware() once available
+TEE=false
+[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
+[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+export TEE
 
 POD_NAME_CUDA="cuda-vectoradd-kata"
 export POD_NAME_CUDA
@@ -29,6 +34,20 @@ setup() {
     # Substitute environment variables in the YAML template
     envsubst < "${pod_yaml_in}" > "${pod_yaml}"
 
+    # For TEE environments, set up KBS and add kernel params annotation
+    if [ "${TEE}" = "true" ]; then
+        export CC_KBS_ADDR="$(kbs_k8s_svc_http_addr)"
+
+        # TODO: Replace with kbs_set_gpu_attestation_policy() once available
+        kbs_set_allow_all_resources
+
+        # kernel parameters for attestation
+        kernel_params_annotation="io.katacontainers.config.hypervisor.kernel_params"
+        kernel_params_value="agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
+        set_metadata_annotation "${pod_yaml}" \
+            "${kernel_params_annotation}" \
+            "${kernel_params_value}"
+    fi
 }
 
 @test "CUDA Vector Addition Test" {
