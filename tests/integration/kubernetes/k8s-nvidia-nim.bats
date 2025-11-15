@@ -16,6 +16,7 @@ export LOCAL_NIM_CACHE="/opt/nim/.cache"
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
 export SKIP_MULTI_GPU_TESTS
 
+# TODO: Replace with is_confidential_gpu_hardware() once available
 TEE=false
 [[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
 [[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
@@ -59,6 +60,7 @@ setup_kbs_credentials() {
     export CC_KBS_ADDR="$(kbs_k8s_svc_http_addr)"
 
     # Set allow all resources policy (hardening will be done later)
+    # TODO: Replace with kbs_set_gpu_attestation_policy() once available
     kbs_set_allow_all_resources
 
     # DOCKER_CONFIG_JSON is already base64 encoded
