@@ -4,7 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-#!/bin/bash
 set -euo pipefail
 [[ -n "${DEBUG}" ]] && set -x
 
@@ -164,6 +163,10 @@ build_nvidia_drivers() {
 		# went wroing make sure the signing_key.pem is removed
 		[[ -e "${signing_key}" ]] && rm -f "${signing_key}"
 	done
+
+	# Save the modules for later so that a linux-image purge does not remove them
+	tar cvfa /lib/modules.save_from_purge.tar.zst /lib/modules
+
 	popd >> /dev/null
 }
 
@@ -281,19 +284,19 @@ setup_apt_repositories() {
 
 	if [[ "${arch_target}" == "x86_64" ]]; then
 		cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
-			deb [arch=amd64] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os} main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os}-updates main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os}-security main restricted universe multiverse
+			deb [arch=amd64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://us.archive.ubuntu.com/ubuntu ${base_os}-backports main restricted universe multiverse
 		CHROOT_EOF
 	fi
 
 	if [[ "${arch_target}" == "aarch64" ]]; then
 		cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
-			deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os} main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os}-updates main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os}-security main restricted universe multiverse
+			deb [arch=arm64 signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://ports.ubuntu.com/ubuntu-ports ${base_os}-backports main restricted universe multiverse
 		CHROOT_EOF
 	fi
 
@@ -373,6 +376,65 @@ install_nvidia_dcgm() {
 		datacenter-gpu-manager-exporter
 }
 
+cleanup_rootfs() {
+	echo "chroot: Cleanup NVIDIA GPU rootfs"
+
+	apt-mark hold libstdc++6 libzstd1 libgnutls30t64 pciutils
+
+	if [[ -n "${driver_version}" ]]; then
+		apt-mark hold libnvidia-cfg1-"${driver_version}"-server \
+			nvidia-utils-"${driver_version}"-server         \
+			nvidia-kernel-common-"${driver_version}"-server \
+			nvidia-imex-"${driver_version}"                 \
+			nvidia-compute-utils-"${driver_version}"-server \
+			libnvidia-compute-"${driver_version}"-server    \
+			libnvidia-gl-"${driver_version}"-server         \
+			libnvidia-extra-"${driver_version}"-server      \
+			libnvidia-decode-"${driver_version}"-server     \
+			libnvidia-fbc1-"${driver_version}"-server       \
+			libnvidia-encode-"${driver_version}"-server     \
+			libnvidia-nscq-"${driver_version}"              \
+			linuxptp libnftnl11
+	fi
+
+	kernel_headers=$(dpkg --get-selections | cut -f1 | grep linux-headers)
+	linux_images=$(dpkg --get-selections | cut -f1 | grep linux-image)
+	for i in ${kernel_headers} ${linux_images}; do
+		apt purge -yqq "${i}"
+	done
+
+	apt purge -yqq jq make gcc xz-utils linux-libc-dev
+
+	if [[ -n "${driver_version}" ]]; then
+		apt purge -yqq nvidia-headless-no-dkms-"${driver_version}"-server"${driver_type}" \
+			nvidia-kernel-source-"${driver_version}"-server"${driver_type}"
+	fi
+
+	apt autoremove -yqq
+
+	apt clean
+	apt autoclean
+
+	for modules_version in /lib/modules/*; do
+		ln -sf "${modules_version}" /lib/modules/"$(uname -r)"
+		touch  "${modules_version}"/modules.order
+		touch  "${modules_version}"/modules.builtin
+		depmod -a
+	done
+
+	rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt /var/cache/debconf
+	rm -f /etc/apt/sources.list
+	rm -f /usr/bin/nvidia-ngx-updater /usr/bin/nvidia-container-runtime
+	rm -f /var/log/{nvidia-installer.log,dpkg.log,alternatives.log}
+
+	# Clear and regenerate the ld cache
+	rm -f /etc/ld.so.cache
+	ldconfig
+
+	tar xvf /lib/modules.save_from_purge.tar.zst -C /
+	rm -f /lib/modules.save_from_purge.tar.zst
+}
+
 # Start of script
 echo "chroot: Setup NVIDIA GPU rootfs stage one"
 
@@ -387,3 +449,4 @@ install_nvidia_fabricmanager
 install_nvidia_ctk
 export_driver_version
 install_nvidia_dcgm
+cleanup_rootfs
