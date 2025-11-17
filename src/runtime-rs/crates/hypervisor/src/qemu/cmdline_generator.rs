@@ -335,7 +335,7 @@ struct Smp {
 impl Smp {
     fn new(config: &HypervisorConfig) -> Smp {
         Smp {
-            num_vcpus: config.cpu_info.default_vcpus as u32,
+            num_vcpus: config.cpu_info.default_vcpus.ceil() as u32,
             max_num_vcpus: config.cpu_info.default_maxvcpus,
         }
     }
