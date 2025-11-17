@@ -1,78 +1,27 @@
-// Copyright © 2019 Intel Corporation
+// Copyright (c) 2019-2022 Alibaba Cloud
+// Copyright (c) 2019-2022 Ant Group
 //
-// Copyright (c) 2023 Alibaba Cloud.
-//
-// SPDX-License-Identifier: Apache-2.0 OR BSD-3-Clause
+// SPDX-License-Identifier: Apache-2.0
 //
 
+#![allow(missing_docs)]
+#![allow(non_camel_case_types)]
+
+use super::*;
+
+use kvm_bindings::{
+    __u32, __u64, kvm_cpuid2, kvm_cpuid_entry2, CpuId, KVMIO, KVM_MAX_CPUID_ENTRIES,
+};
 use std::os::unix::io::RawFd;
-
-use kvm_bindings::{CpuId, __IncompleteArrayField, KVMIO};
 use thiserror::Error;
-use vmm_sys_util::fam::{FamStruct, FamStructWrapper};
-use vmm_sys_util::ioctl::ioctl_with_val;
-use vmm_sys_util::{generate_fam_struct_impl, ioctl_ioc_nr, ioctl_iowr_nr};
-
-/// Tdx capability list.
-pub type TdxCaps = FamStructWrapper<TdxCapabilities>;
-
-/// Cpuid configs entry counts.
-const TDX1_MAX_NR_CPUID_CONFIGS: usize = 6;
-
-generate_fam_struct_impl!(
-    TdxCapabilities,
-    TdxCpuidConfig,
-    cpuid_configs,
-    u32,
-    nr_cpuid_configs,
-    TDX1_MAX_NR_CPUID_CONFIGS
-);
-
-#[repr(C)]
-#[derive(Debug, Default, Copy, Clone, PartialEq)]
-/// Tdx cpuid config.
-pub struct TdxCpuidConfig {
-    /// cpuid leaf
-    pub leaf: u32,
-    /// cpuid sub leaf
-    pub sub_leaf: u32,
-    /// eax
-    pub eax: u32,
-    /// ebx
-    pub ebx: u32,
-    /// ecx
-    pub ecx: u32,
-    /// edx
-    pub edx: u32,
-}
-
-#[repr(C)]
-#[derive(Default)]
-/// Tdx capabilities.
-pub struct TdxCapabilities {
-    /// cpuid bits need to be fixed to 0.
-    pub attrs_fixed0: u64,
-    /// cpuid bits need to be fixed to 1.
-    pub attrs_fixed1: u64,
-    /// xfam bits need to be fixed to 0.
-    pub xfam_fixed0: u64,
-    /// xfam bits need to be fixed to 1.
-    pub xfam_fixed1: u64,
-    /// cpuid configs entry number.
-    pub nr_cpuid_configs: u32,
-    /// padding.
-    pub padding: u32,
-    /// cpuid config list
-    pub cpuid_configs: __IncompleteArrayField<TdxCpuidConfig>,
-}
+use vmm_sys_util::ioctl::ioctl_with_ref;
+use vmm_sys_util::{ioctl_ioc_nr, ioctl_iowr_nr};
 
 ioctl_iowr_nr!(KVM_MEMORY_ENCRYPT_OP, KVMIO, 0xba, std::os::raw::c_ulong);
+
 /// TDX module related errors.
 #[derive(Error, Debug)]
 pub enum TdxIoctlError {
-    /// Failed to create TdxCaps
-    #[error("Failed to create TdxCaps")]
-    TdxCapabilitiesCreate,
     /// Failed to get TDX Capbilities
     #[error("Failed to get TDX Capbilities: {0}")]
     TdxCapabilities(#[source] std::io::Error),
@@ -88,6 +37,9 @@ pub enum TdxIoctlError {
     /// Failed to init TDX vcpu.
     #[error("Failed to init TDX vcpu: {0}")]
     TdxInitVcpu(#[source] std::io::Error),
+    /// Failed to get TDX CPUID.
+    #[error("Failed to get TDX CpuId: {0}")]
+    TdxGetCpuid(#[source] std::io::Error),
 }
 
 /// TDX related ioctl command
@@ -102,119 +54,269 @@ enum TdxCommand {
     /// Init memory region for TD
     InitMemRegion = 3,
     /// Finalize TD
-    Finalize = 4,
+    FinalizeVm = 4,
+    /// Get CPUID for TD
+    GetCpuid = 5,
 }
+
+#[repr(C)]
+#[derive(Debug, Default)]
+struct kvm_tdx_cmd {
+    id: __u32,
+    flags: __u32,
+    data: __u64,
+    hw_error: __u64,
+}
+
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of kvm_tdx_cmd"][::std::mem::size_of::<kvm_tdx_cmd>() - 24usize];
+    ["Alignment of kvm_tdx_cmd"][::std::mem::align_of::<kvm_tdx_cmd>() - 8usize];
+    ["Offset of field: kvm_tdx_cmd::id"][::std::mem::offset_of!(kvm_tdx_cmd, id) - 0usize];
+    ["Offset of field: kvm_tdx_cmd::flags"][::std::mem::offset_of!(kvm_tdx_cmd, flags) - 4usize];
+    ["Offset of field: kvm_tdx_cmd::data"][::std::mem::offset_of!(kvm_tdx_cmd, data) - 8usize];
+    ["Offset of field: kvm_tdx_cmd::hw_error"]
+        [::std::mem::offset_of!(kvm_tdx_cmd, hw_error) - 16usize];
+};
+
+#[repr(C)]
+#[derive(Debug)]
+struct kvm_tdx_capabilities {
+    supported_attrs: __u64,
+    supported_xfam: __u64,
+    reserved: [__u64; 254usize],
+    cpuid: kvm_cpuid2,
+}
+
+impl Default for kvm_tdx_capabilities {
+    fn default() -> Self {
+        Self {
+            supported_attrs: 0__u64,
+            supported_xfam: 0__u64,
+            reserved: [0__u64; 254usize],
+            cpuid: Default::default(),
+        }
+    }
+}
+
+const _: () = {
+    ["Size of kvm_tdx_capabilities"][::std::mem::size_of::<kvm_tdx_capabilities>() - 2056usize];
+    ["Alignment of kvm_tdx_capabilities"][::std::mem::align_of::<kvm_tdx_capabilities>() - 8usize];
+    ["Offset of field: kvm_tdx_capabilities::supported_attrs"]
+        [::std::mem::offset_of!(kvm_tdx_capabilities, supported_attrs) - 0usize];
+    ["Offset of field: kvm_tdx_capabilities::supported_xfam"]
+        [::std::mem::offset_of!(kvm_tdx_capabilities, supported_xfam) - 8usize];
+    ["Offset of field: kvm_tdx_capabilities::reserved"]
+        [::std::mem::offset_of!(kvm_tdx_capabilities, reserved) - 16usize];
+    ["Offset of field: kvm_tdx_capabilities::cpuid"]
+        [::std::mem::offset_of!(kvm_tdx_capabilities, cpuid) - 2048usize];
+};
+
+#[repr(C)]
+#[derive(Debug, Default)]
+struct kvm_tdx_init_vm {
+    attributes: __u64,
+    xfam: __u64,
+    mrconfigid: [__u64; 6usize],
+    mrowner: [__u64; 6usize],
+    mrownerconfig: [__u64; 6usize],
+    reserved: [__u64; 12usize],
+    cpuid: kvm_cpuid2,
+}
+
+const _: () = {
+    ["Size of kvm_tdx_init_vm"][::std::mem::size_of::<kvm_tdx_init_vm>() - 264usize];
+    ["Alignment of kvm_tdx_init_vm"][::std::mem::align_of::<kvm_tdx_init_vm>() - 8usize];
+    ["Offset of field: kvm_tdx_init_vm::attributes"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, attributes) - 0usize];
+    ["Offset of field: kvm_tdx_init_vm::xfam"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, xfam) - 8usize];
+    ["Offset of field: kvm_tdx_init_vm::mrconfigid"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, mrconfigid) - 16usize];
+    ["Offset of field: kvm_tdx_init_vm::mrowner"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, mrowner) - 64usize];
+    ["Offset of field: kvm_tdx_init_vm::mrownerconfig"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, mrownerconfig) - 112usize];
+    ["Offset of field: kvm_tdx_init_vm::reserved"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, reserved) - 160usize];
+    ["Offset of field: kvm_tdx_init_vm::cpuid"]
+        [::std::mem::offset_of!(kvm_tdx_init_vm, cpuid) - 256usize];
+};
+
+#[repr(C)]
+#[derive(Debug, Default)]
+struct kvm_tdx_init_mem_region {
+    source_addr: __u64,
+    gpa: __u64,
+    nr_pages: __u64,
+}
+
+const _: () = {
+    ["Size of kvm_tdx_init_mem_region"][::std::mem::size_of::<kvm_tdx_init_mem_region>() - 24usize];
+    ["Alignment of kvm_tdx_init_mem_region"]
+        [::std::mem::align_of::<kvm_tdx_init_mem_region>() - 8usize];
+    ["Offset of field: kvm_tdx_init_mem_region::source_addr"]
+        [::std::mem::offset_of!(kvm_tdx_init_mem_region, source_addr) - 0usize];
+    ["Offset of field: kvm_tdx_init_mem_region::gpa"]
+        [::std::mem::offset_of!(kvm_tdx_init_mem_region, gpa) - 8usize];
+    ["Offset of field: kvm_tdx_init_mem_region::nr_pages"]
+        [::std::mem::offset_of!(kvm_tdx_init_mem_region, nr_pages) - 16usize];
+};
 
 /// TDX related ioctl command
 fn tdx_command(
     fd: &RawFd,
     command: TdxCommand,
-    metadata: u32,
+    flags: u32,
     data: u64,
+    hw_error: u64,
 ) -> std::result::Result<(), std::io::Error> {
-    #[repr(C)]
-    struct TdxIoctlCmd {
-        command: TdxCommand,
-        metadata: u32,
-        data: u64,
-    }
-    let cmd = TdxIoctlCmd {
-        command,
-        metadata,
+    let cmd = kvm_tdx_cmd {
+        id: command as __u32,
+        flags,
         data,
+        hw_error,
     };
-    let ret = unsafe {
-        ioctl_with_val(
-            fd,
-            KVM_MEMORY_ENCRYPT_OP(),
-            &cmd as *const TdxIoctlCmd as std::os::raw::c_ulong,
-        )
-    };
+    let ret = unsafe { ioctl_with_ref(fd, KVM_MEMORY_ENCRYPT_OP(), &cmd) };
+
     if ret < 0 {
         return Err(std::io::Error::last_os_error());
     }
     Ok(())
 }
 
-/// Init TDX
-pub fn tdx_init(
-    vm_fd: &RawFd,
-    cpu_id: &CpuId,
-    max_vcpus: u32,
-) -> std::result::Result<(), TdxIoctlError> {
-    #[repr(C)]
-    struct TdxInitVm {
-        max_vcpus: u32,
-        tsc_khz: u32,
-        attributes: u64,
-        cpuid: u64,
-        mrconfigid: [u64; 6],
-        mrowner: [u64; 6],
-        mrownerconfig: [u64; 6],
-        reserved: [u64; 43],
-    }
-    let data = TdxInitVm {
-        max_vcpus,
-        tsc_khz: 0,
-        attributes: 0, // TDX1_TD_ATTRIBUTE_DEBUG,
-        cpuid: cpu_id.as_fam_struct_ptr() as u64,
-        mrconfigid: [0; 6],
-        mrowner: [0; 6],
-        mrownerconfig: [0; 6],
-        reserved: [0; 43],
-    };
-    tdx_command(vm_fd, TdxCommand::InitVm, 0, &data as *const _ as u64)
-        .map_err(TdxIoctlError::TdxInit)
+fn vec_with_fam_field<T: Default, F>(count: usize) -> Vec<T> {
+    let size_required = count * std::mem::size_of::<F>() + std::mem::size_of::<T>();
+    let rounded = size_required.div_ceil(std::mem::size_of::<T>());
+    let mut v = Vec::with_capacity(rounded);
+    v.resize_with(rounded, T::default);
+    v
 }
 
-/// Finalize the TDX setup for this VM
-pub fn tdx_finalize(vm_fd: &RawFd) -> std::result::Result<(), TdxIoctlError> {
-    tdx_command(vm_fd, TdxCommand::Finalize, 0, 0).map_err(TdxIoctlError::TdxFinalize)
+#[derive(Clone)]
+pub struct TdxCapabilities {
+    pub supported_attrs: u64,
+    pub supported_xfam: u64,
+    pub cpu_id: CpuId,
 }
 
-/// Initialize TDX memory Region
-pub fn tdx_init_memory_region(
-    vm_fd: &RawFd,
-    host_address: u64,
-    guest_address: u64,
-    size: u64,
-    measure: bool,
-) -> std::result::Result<(), TdxIoctlError> {
-    #[repr(C)]
-    struct TdxInitMemRegion {
-        host_address: u64,
-        guest_address: u64,
-        pages: u64,
+/// Get TDX capabilities
+pub fn tdx_get_caps(vm_fd: &RawFd) -> std::result::Result<TdxCapabilities, TdxIoctlError> {
+    let defaults = CpuId::new(KVM_MAX_CPUID_ENTRIES).map_err(|e| {
+        TdxIoctlError::TdxCapabilities(std::io::Error::new(std::io::ErrorKind::OutOfMemory, e))
+    })?;
+    let mut caps =
+        vec_with_fam_field::<kvm_tdx_capabilities, kvm_cpuid_entry2>(KVM_MAX_CPUID_ENTRIES);
+    caps[0].cpuid.nent = KVM_MAX_CPUID_ENTRIES as __u32;
+    caps[0].cpuid.padding = 0;
+    unsafe {
+        let cpuid_entries = caps[0].cpuid.entries.as_mut_slice(KVM_MAX_CPUID_ENTRIES);
+        cpuid_entries.copy_from_slice(defaults.as_slice());
     }
-    let data = TdxInitMemRegion {
-        host_address,
-        guest_address,
-        pages: size / 4096,
-    };
     tdx_command(
         vm_fd,
-        TdxCommand::InitMemRegion,
-        if measure { 1 } else { 0 },
-        &data as *const _ as u64,
-    )
-    .map_err(TdxIoctlError::TdxInitMemRegion)
-}
-
-/// Initialize TDX vcpu
-pub fn tdx_init_vcpu(vcpu_fd: &RawFd, hob_address: u64) -> std::result::Result<(), TdxIoctlError> {
-    tdx_command(vcpu_fd, TdxCommand::InitVcpu, 0, hob_address).map_err(TdxIoctlError::TdxInitVcpu)
-}
-
-/// Get tdx capabilities.
-pub fn tdx_get_caps(kvm_fd: &RawFd) -> std::result::Result<TdxCaps, TdxIoctlError> {
-    let mut tdx_caps = TdxCaps::new(TDX1_MAX_NR_CPUID_CONFIGS)
-        .map_err(|_| TdxIoctlError::TdxCapabilitiesCreate)?;
-    tdx_command(
-        kvm_fd,
         TdxCommand::Capabilities,
         0,
-        tdx_caps.as_mut_fam_struct_ptr() as *const _ as u64,
+        &caps[0] as *const _ as u64,
+        0,
     )
     .map_err(TdxIoctlError::TdxCapabilities)?;
-    Ok(tdx_caps)
+    let mut cpu_id = unsafe {
+        CpuId::from_entries(caps[0].cpuid.entries.as_slice(caps[0].cpuid.nent as usize)).map_err(
+            |e| {
+                TdxIoctlError::TdxCapabilities(std::io::Error::new(
+                    std::io::ErrorKind::OutOfMemory,
+                    e,
+                ))
+            },
+        )?
+    };
+    cpu_id.as_mut_fam_struct().nent = caps[0].cpuid.nent;
+    cpu_id.as_mut_fam_struct().padding = 0;
+    Ok(TdxCapabilities {
+        supported_attrs: caps[0].supported_attrs,
+        supported_xfam: caps[0].supported_xfam,
+        cpu_id,
+    })
+}
+
+pub fn tdx_init(
+    vm_fd: &RawFd,
+    caps: &TdxCapabilities,
+    cpu_id: &CpuId,
+) -> Result<(), TdxIoctlError> {
+    let cpu_id = cpu_id.as_slice();
+    let mut init_vm =
+        vec_with_fam_field::<kvm_tdx_init_vm, kvm_cpuid_entry2>(KVM_MAX_CPUID_ENTRIES);
+    init_vm[0].attributes = caps.supported_attrs;
+    init_vm[0].xfam = caps.supported_xfam;
+    init_vm[0].cpuid.nent = KVM_MAX_CPUID_ENTRIES as __u32;
+    init_vm[0].cpuid.padding = 0;
+    unsafe {
+        let cpuid_entries = init_vm[0].cpuid.entries.as_mut_slice(cpu_id.len());
+        cpuid_entries.copy_from_slice(cpu_id);
+    }
+    tdx_command(
+        vm_fd,
+        TdxCommand::InitVm,
+        0,
+        &init_vm[0] as *const _ as u64,
+        0,
+    )
+    .map_err(TdxIoctlError::TdxInit)?;
+
+    Ok(())
+}
+
+pub fn tdx_init_vcpu(vcpu_fd: &RawFd, hob_address: u64) -> Result<(), TdxIoctlError> {
+    tdx_command(vcpu_fd, TdxCommand::InitVcpu, 0, hob_address, 0)
+        .map_err(TdxIoctlError::TdxInitVcpu)?;
+
+    Ok(())
+}
+
+pub fn tdx_init_mem_region(
+    vcpu_fd: &RawFd,
+    source_addr: u64,
+    gpa: u64,
+    nr_pages: u64,
+    flags: u32,
+) -> Result<(), TdxIoctlError> {
+    let init_mem_region = kvm_tdx_init_mem_region {
+        source_addr,
+        gpa,
+        nr_pages,
+    };
+    tdx_command(
+        vcpu_fd,
+        TdxCommand::InitMemRegion,
+        flags & KVM_TDX_MEASURE_MEMORY_REGION,
+        &init_mem_region as *const _ as u64,
+        0,
+    )
+    .map_err(TdxIoctlError::TdxInitMemRegion)?;
+
+    Ok(())
+}
+
+pub fn tdx_finalize(vm_fd: &RawFd) -> Result<(), TdxIoctlError> {
+    tdx_command(vm_fd, TdxCommand::FinalizeVm, 0, 0, 0).map_err(TdxIoctlError::TdxFinalize)?;
+
+    Ok(())
+}
+
+pub fn tdx_get_cpuid(vcpu_fd: &RawFd) -> Result<CpuId, TdxIoctlError> {
+    let cpu_id = CpuId::new(KVM_MAX_CPUID_ENTRIES).map_err(|e| {
+        TdxIoctlError::TdxGetCpuid(std::io::Error::new(std::io::ErrorKind::OutOfMemory, e))
+    })?;
+    tdx_command(
+        vcpu_fd,
+        TdxCommand::GetCpuid,
+        0,
+        cpu_id.as_fam_struct_ptr() as u64,
+        0,
+    )
+    .map_err(TdxIoctlError::TdxGetCpuid)?;
+
+    Ok(cpu_id)
 }
