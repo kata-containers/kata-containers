@@ -32,7 +32,7 @@ permissions: {}
 jobs:
   build-asset:
     name: build-asset
-    runs-on: s390x
+    runs-on: ubuntu-24.04-s390x
     permissions:
       contents: read
       packages: write
@@ -257,7 +257,7 @@ jobs:
 
   build-asset-shim-v2:
     name: build-asset-shim-v2
-    runs-on: s390x
+    runs-on: ubuntu-24.04-s390x
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
       contents: read
@@ -319,7 +319,7 @@ jobs:
 
   create-kata-tarball:
     name: create-kata-tarball
-    runs-on: s390x
+    runs-on: ubuntu-24.04-s390x
     needs:
       - build-asset
       - build-asset-rootfs
