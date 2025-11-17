@@ -14,9 +14,8 @@ path = "src/bin/main.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-backtrace = { version = ">=0.3.35", features = [
+backtrace = { version = ">=0.3.76", features = [
     "libunwind",
-    "libbacktrace",
     "std",
 ], default-features = false }
 containerd-shim-protos = { workspace = true }
