@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -7,20 +7,29 @@
 #   - (none - only uses shell builtins and busybox commands)
 #
 
-function configure_crio_runtime() {
+configure_crio_runtime() {
 	local shim="${1}"
 	local adjusted_shim_to_multi_install="${shim}"
+	local runtime
+	local configuration
+	local config_path
+	local kata_path
+	local kata_conf
+	local kata_config_path
+	local key
+	local value
+
 	if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
 		adjusted_shim_to_multi_install="${shim}-${MULTI_INSTALL_SUFFIX}"
 	fi
-	local runtime="kata-${adjusted_shim_to_multi_install}"
-	local configuration="configuration-${shim}"
+	runtime="kata-${adjusted_shim_to_multi_install}"
+	configuration="configuration-${shim}"
 
-	local config_path=$(get_kata_containers_config_path "${shim}")
+	config_path=$(get_kata_containers_config_path "${shim}")
 
-	local kata_path=$(get_kata_containers_runtime_path "${shim}")
-	local kata_conf="crio.runtime.runtimes.${runtime}"
-	local kata_config_path="${config_path}/${configuration}.toml"
+	kata_path=$(get_kata_containers_runtime_path "${shim}")
+	kata_conf="crio.runtime.runtimes.${runtime}"
+	kata_config_path="${config_path}/${configuration}.toml"
 
 	cat <<EOF | tee -a "$crio_drop_in_conf_file"
 
@@ -32,18 +41,16 @@ function configure_crio_runtime() {
 	privileged_without_host_devices = true
 EOF
 
-	local key
-	local value
-	if [[ -n "${PULL_TYPE_MAPPING_FOR_ARCH}" ]]; then
-		for m in "${pull_types[@]}"; do
+	if [ -n "${PULL_TYPE_MAPPING_FOR_ARCH}" ]; then
+		for m in ${pull_types}; do
 			key="${m%"$snapshotters_delimiter"*}"
 			value="${m#*"$snapshotters_delimiter"}"
 
-			if [[ "${value}" = "default" || "${key}" != "${shim}" ]]; then
+			if [ "${value}" = "default" ] || [ "${key}" != "${shim}" ]; then
 				continue
 			fi
 
-			if [ "${value}" == "guest-pull" ]; then
+			if [ "${value}" = "guest-pull" ]; then
 				echo -e "\truntime_pull_image = true" | \
 					tee -a "${crio_drop_in_conf_file}"
 			else
@@ -54,7 +61,7 @@ EOF
 	fi
 }
 
-function configure_crio() {
+configure_crio() {
 	# Configure crio to use Kata:
 	echo "Add Kata Containers as a supported runtime for CRIO:"
 
@@ -76,11 +83,11 @@ function configure_crio() {
 EOF
 
 	# configure runtimes for crio
-	for shim in "${shims[@]}"; do
+	for shim in ${shims}; do
 		configure_crio_runtime $shim
 	done
 
-	if [ "${DEBUG}" == "true" ]; then
+	if [ "${DEBUG}" = "true" ]; then
 		cat <<EOF | tee $crio_drop_in_conf_file_debug
 [crio.runtime]
 log_level = "debug"
@@ -88,9 +95,9 @@ EOF
 	fi
 }
 
-function cleanup_crio() {
+cleanup_crio() {
 	rm -f $crio_drop_in_conf_file
-	if [[ "${DEBUG}" == "true" ]]; then
+	if [ "${DEBUG}" = "true" ]; then
 		rm -f $crio_drop_in_conf_file_debug
 	fi
 }
