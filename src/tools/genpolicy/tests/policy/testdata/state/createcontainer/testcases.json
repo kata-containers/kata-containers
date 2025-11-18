@@ -1,9 +1,9 @@
 [
   {
-    "description": "test create container and save container_id in state",
     "allowed": true,
+    "description": "test create container and save container_id in state",
+    "kind": "CreateContainerRequest",
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/4bae4a8e74302a8edfe17424aff0b632cae893687f4d9ad2f2115666899f9a12",
@@ -271,10 +271,10 @@
     }
   },
   {
-    "description": "test remove container and remove container_id from state",
     "allowed": true,
+    "description": "test remove container and remove container_id from state",
+    "kind": "RemoveContainerRequest",
     "request": {
-      "type": "RemoveContainer",
       "container_id": "4bae4a8e74302a8edfe17424aff0b632cae893687f4d9ad2f2115666899f9a12",
       "timeout": 0
     }

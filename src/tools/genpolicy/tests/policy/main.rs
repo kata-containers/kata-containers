@@ -22,37 +22,50 @@ mod tests {
     // Translate each test case in testcases.json
     // to one request type.
     #[derive(Clone, Debug, Deserialize, Serialize)]
-    #[serde(tag = "type")]
+    #[serde(tag = "kind", content = "request")]
+    #[allow(clippy::enum_variant_names)] // The tags need to match the entrypoint logged by the agent.
     enum TestRequest {
-        CopyFile(CopyFileRequest),
-        CreateContainer(CreateContainerRequest),
-        CreateSandbox(CreateSandboxRequest),
-        ExecProcess(ExecProcessRequest),
-        RemoveContainer(RemoveContainerRequest),
-        UpdateInterface(UpdateInterfaceRequest),
-        UpdateRoutes(UpdateRoutesRequest),
-        AddARPNeighbors(AddARPNeighborsRequest),
+        CopyFileRequest(CopyFileRequest),
+        CreateContainerRequest(CreateContainerRequest),
+        CreateSandboxRequest(CreateSandboxRequest),
+        ExecProcessRequest(ExecProcessRequest),
+        RemoveContainerRequest(RemoveContainerRequest),
+        UpdateInterfaceRequest(UpdateInterfaceRequest),
+        UpdateRoutesRequest(UpdateRoutesRequest),
+        AddARPNeighborsRequest(AddARPNeighborsRequest),
     }
 
     impl Display for TestRequest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                TestRequest::CopyFile(_) => write!(f, "CopyFileRequest"),
-                TestRequest::CreateContainer(_) => write!(f, "CreateContainerRequest"),
-                TestRequest::CreateSandbox(_) => write!(f, "CreateSandboxRequest"),
-                TestRequest::ExecProcess(_) => write!(f, "ExecProcessRequest"),
-                TestRequest::RemoveContainer(_) => write!(f, "RemoveContainerRequest"),
-                TestRequest::UpdateInterface(_) => write!(f, "UpdateInterfaceRequest"),
-                TestRequest::UpdateRoutes(_) => write!(f, "UpdateRoutesRequest"),
-                TestRequest::AddARPNeighbors(_) => write!(f, "AddARPNeighborsRequest"),
+                TestRequest::CopyFileRequest(_) => write!(f, "CopyFileRequest"),
+                TestRequest::CreateContainerRequest(_) => write!(f, "CreateContainerRequest"),
+                TestRequest::CreateSandboxRequest(_) => write!(f, "CreateSandboxRequest"),
+                TestRequest::ExecProcessRequest(_) => write!(f, "ExecProcessRequest"),
+                TestRequest::RemoveContainerRequest(_) => write!(f, "RemoveContainerRequest"),
+                TestRequest::UpdateInterfaceRequest(_) => write!(f, "UpdateInterfaceRequest"),
+                TestRequest::UpdateRoutesRequest(_) => write!(f, "UpdateRoutesRequest"),
+                TestRequest::AddARPNeighborsRequest(_) => write!(f, "AddARPNeighborsRequest"),
             }
         }
+    }
+
+    fn serialize_request_only(value: &TestRequest) -> serde_json::Result<serde_json::Value> {
+        if let serde_json::Value::Object(map) = serde_json::to_value(value)? {
+            for (k, v) in map {
+                if k == "request" {
+                    return Ok(v);
+                }
+            }
+        }
+        Ok(serde_json::Value::Null)
     }
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestCase {
         description: String,
         allowed: bool,
+        #[serde(flatten)]
         request: TestRequest,
     }
 
@@ -158,7 +171,7 @@ mod tests {
         for test_case in test_cases {
             println!("\n== case: {} ==\n", test_case.description);
 
-            let v = serde_json::to_value(&test_case.request).unwrap();
+            let v = serialize_request_only(&test_case.request).unwrap();
 
             let results = pol
                 .allow_request(
@@ -170,6 +183,7 @@ mod tests {
             let logs = fs::read_to_string(workdir.join("policy.log")).unwrap();
             let results = results.unwrap();
 
+            // TODO(burgerdev): better description of failure (left != right)
             assert_eq!(
                 test_case.allowed, results.0,
                 "logs: {}\npolicy: {}",

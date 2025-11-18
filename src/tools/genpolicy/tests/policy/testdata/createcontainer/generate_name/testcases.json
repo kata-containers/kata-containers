@@ -1,28 +1,35 @@
 [
   {
-    "description": "generated name with valid prefix (dummysfx)",
     "allowed": true,
+    "description": "generated name with valid prefix (dummysfx)",
+    "kind": "CreateContainerRequest",
     "request": {
-      "type": "CreateContainer",
       "OCI": {
-        "Version": "1.1.0",
         "Annotations": {
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+          "io.kubernetes.cri.container-type": "sandbox",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummysfx_00000000-0000-0000-0000-000000000000",
           "io.kubernetes.cri.sandbox-name": "dummysfx",
           "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.container-type": "sandbox",
-          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
-          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummysfx_00000000-0000-0000-0000-000000000000",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
+          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000"
         },
         "Linux": {
           "GIDMappings": [],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
           "MountLabel": "",
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": "",
           "Namespaces": [
             {
               "Path": "",
@@ -41,41 +48,22 @@
               "Type": "network"
             }
           ],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
           "ReadonlyPaths": [
             "/proc/bus",
             "/proc/fs",
             "/proc/irq",
             "/proc/sys",
             "/proc/sysrq-trigger"
-          ]
+          ],
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": ""
         },
         "Process": {
-          "SelinuxLabel": "",
-          "User": {
-            "Username": "",
-            "UID": 65535,
-            "GID": 65535,
-            "AdditionalGids": [
-              65535
-            ]
-          },
           "Args": [
             "/pause"
           ],
-          "Cwd": "/",
-          "NoNewPrivileges": true,
           "Capabilities": {
             "Ambient": [],
             "Bounding": [
@@ -126,39 +114,58 @@
               "CAP_KILL",
               "CAP_AUDIT_WRITE"
             ]
+          },
+          "Cwd": "/",
+          "NoNewPrivileges": true,
+          "SelinuxLabel": "",
+          "User": {
+            "AdditionalGids": [
+              65535
+            ],
+            "GID": 65535,
+            "UID": 65535,
+            "Username": ""
           }
         },
         "Root": {
-          "Readonly": true,
-          "Path": "/run/kata-containers/bundle-id/rootfs"
-        }
+          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Readonly": true
+        },
+        "Version": "1.1.0"
       }
     }
   },
   {
-    "description": "generated name with invalid prefix (xyzdummy)",
     "allowed": false,
+    "description": "generated name with invalid prefix (xyzdummy)",
+    "kind": "CreateContainerRequest",
     "request": {
-      "type": "CreateContainer",
       "OCI": {
-        "Version": "1.1.0",
         "Annotations": {
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+          "io.kubernetes.cri.container-type": "sandbox",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_xyzdummy_00000000-0000-0000-0000-000000000000",
           "io.kubernetes.cri.sandbox-name": "xyzdummy",
           "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.container-type": "sandbox",
-          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
-          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_xyzdummy_00000000-0000-0000-0000-000000000000",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
-          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
+          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000"
         },
         "Linux": {
           "GIDMappings": [],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
           "MountLabel": "",
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": "",
           "Namespaces": [
             {
               "Path": "",
@@ -177,41 +184,22 @@
               "Type": "network"
             }
           ],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
           "ReadonlyPaths": [
             "/proc/bus",
             "/proc/fs",
             "/proc/irq",
             "/proc/sys",
             "/proc/sysrq-trigger"
-          ]
+          ],
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": ""
         },
         "Process": {
-          "SelinuxLabel": "",
-          "User": {
-            "Username": "",
-            "UID": 65535,
-            "GID": 65535,
-            "AdditionalGids": [
-              65535
-            ]
-          },
           "Args": [
             "/pause"
           ],
-          "Cwd": "/",
-          "NoNewPrivileges": true,
           "Capabilities": {
             "Ambient": [],
             "Bounding": [
@@ -262,12 +250,24 @@
               "CAP_KILL",
               "CAP_AUDIT_WRITE"
             ]
+          },
+          "Cwd": "/",
+          "NoNewPrivileges": true,
+          "SelinuxLabel": "",
+          "User": {
+            "AdditionalGids": [
+              65535
+            ],
+            "GID": 65535,
+            "UID": 65535,
+            "Username": ""
           }
         },
         "Root": {
-          "Readonly": true,
-          "Path": "/run/kata-containers/bundle-id/rootfs"
-        }
+          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Readonly": true
+        },
+        "Version": "1.1.0"
       }
     }
   }

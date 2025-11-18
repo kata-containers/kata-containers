@@ -1,27 +1,34 @@
 [
   {
-    "description": "CreateContainer with config map volume",
     "allowed": true,
+    "description": "CreateContainer with config map volume",
+    "kind": "CreateContainerRequest",
     "request": {
-      "type": "CreateContainer",
       "OCI": {
-        "Version": "1.1.0",
         "Annotations": {
-          "io.kubernetes.cri.sandbox-name": "dummy",
-          "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.container-type": "container",
-          "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "dummy",
+          "io.kubernetes.cri.container-type": "container",
           "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000",
-          "io.kubernetes.cri.container-name": "dummy"
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default"
         },
         "Linux": {
           "GIDMappings": [],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
           "MountLabel": "",
-          "Resources": {
-            "Devices": []
-          },
-          "RootfsPropagation": "",
           "Namespaces": [
             {
               "Path": "",
@@ -40,40 +47,22 @@
               "Type": "network"
             }
           ],
-          "MaskedPaths": [
-            "/proc/acpi",
-            "/proc/asound",
-            "/proc/kcore",
-            "/proc/keys",
-            "/proc/latency_stats",
-            "/proc/timer_list",
-            "/proc/timer_stats",
-            "/proc/sched_debug",
-            "/sys/firmware",
-            "/proc/scsi"
-          ],
           "ReadonlyPaths": [
             "/proc/bus",
             "/proc/fs",
             "/proc/irq",
             "/proc/sys",
             "/proc/sysrq-trigger"
-          ]
+          ],
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": ""
         },
         "Process": {
-          "SelinuxLabel": "",
-          "User": {
-            "Username": "",
-            "UID": 65535,
-            "AdditionalGids": [
-              0
-            ]
-          },
           "Args": [
             "/pause"
           ],
-          "Cwd": "/",
-          "NoNewPrivileges": false,
           "Capabilities": {
             "Ambient": [],
             "Bounding": [
@@ -124,12 +113,23 @@
               "CAP_KILL",
               "CAP_AUDIT_WRITE"
             ]
+          },
+          "Cwd": "/",
+          "NoNewPrivileges": false,
+          "SelinuxLabel": "",
+          "User": {
+            "AdditionalGids": [
+              0
+            ],
+            "UID": 65535,
+            "Username": ""
           }
         },
         "Root": {
-          "Readonly": false,
-          "Path": "/run/kata-containers/bundle-id/rootfs"
-        }
+          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Readonly": false
+        },
+        "Version": "1.1.0"
       },
       "storages": []
     }
