@@ -126,10 +126,14 @@ func TestDeviceToCgroupDeviceRule(t *testing.T) {
 	assert.NoError(err)
 	f.Close()
 
-	// fail: regular file to device
+	// success: regular file to device
 	dev, err := DeviceToCgroupDeviceRule(f.Name())
-	assert.Error(err)
-	assert.Nil(dev)
+	assert.NoError(err)
+	assert.NotNil(dev)
+	assert.Equal(rune(dev.Type), 'b')
+	assert.Equal(dev.Major, int64(VirtualDeviceMajor))
+	assert.Equal(dev.Minor, int64(VirtualDeviceMinor))
+	assert.True(dev.Allow)
 
 	// fail: no such file
 	os.Remove(f.Name())
