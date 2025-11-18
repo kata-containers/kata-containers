@@ -178,7 +178,7 @@ class Checker:
         jobs = []
         page = 1
         while True:
-            url = f"{_GH_RUNS_URL}/{run_id}/jobs?per_page=100&page={page}"
+            url = f"{_GH_RUNS_URL}/{run_id}/jobs?per_page=30&page={page}"
             output = self.fetch_json_from_url(
                 url, f"get_jobs_for_workflow_run__{run_id}")
             jobs.extend(output["jobs"])
