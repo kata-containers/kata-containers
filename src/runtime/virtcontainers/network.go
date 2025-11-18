@@ -315,12 +315,15 @@ func generateVCNetworkStructures(ctx context.Context, endpoints []Endpoint) ([]*
 			routes = append(routes, &r)
 		}
 
-		for _, neigh := range endpoint.Properties().Neighbors {
-			var n pbTypes.ARPNeighbor
+		gatewaySet := gatewaySetFromRoutes(endpoint.Properties().Routes)
 
-			if !validGuestNeighbor(neigh) {
+		for _, neigh := range endpoint.Properties().Neighbors {
+
+			if !validGuestNeighbor(neigh, gatewaySet) {
 				continue
 			}
+
+			var n pbTypes.ARPNeighbor
 
 			n.Device = endpoint.Name()
 			n.State = int32(neigh.State)

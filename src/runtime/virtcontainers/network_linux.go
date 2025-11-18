@@ -1614,7 +1614,39 @@ func validGuestRoute(route netlink.Route) bool {
 	return route.Protocol != unix.RTPROT_KERNEL
 }
 
-func validGuestNeighbor(neigh netlink.Neigh) bool {
-	// We add only static ARP entries
-	return neigh.State == netlink.NUD_PERMANENT
+// neighbor is valid if it is static or a default-gateway
+func validGuestNeighbor(neigh netlink.Neigh, gatewaySet map[string]struct{}) bool {
+	// need a MAC for the guest
+	if neigh.HardwareAddr == nil {
+		return false
+	}
+	// Keep all static entries
+	if neigh.State == netlink.NUD_PERMANENT {
+		return true
+	}
+	// Gateway-only exception: allow the default-gateway IP:
+	// On some setups, the pod subnet gateway does not appear in the host ARP cache as a static entry.
+	// On these setups an ARP request storm happens when many Kata PODs are started at the same time and they all look for the gateway MAC address.
+	// This forces the gateway to churn a lot of ARP requests and render the ARP request full, hence dropping some ARP requests.
+	// Manually pre-populating the ARP entry in the UVM guest ARP cache for that gateway solves that problem.
+	_, isGw := gatewaySet[neigh.IP.String()]
+	return isGw
+}
+
+// helper: default routes => set of gateway IP strings
+func gatewaySetFromRoutes(routes []netlink.Route) map[string]struct{} {
+	gatewaySet := make(map[string]struct{})
+	for _, route := range routes {
+		if route.Gw == nil {
+			continue
+		}
+		if route.Dst == nil {
+			gatewaySet[route.Gw.String()] = struct{}{}
+			continue
+		}
+		if ones, _ := route.Dst.Mask.Size(); ones == 0 { // 0.0.0.0/0 or ::/0
+			gatewaySet[route.Gw.String()] = struct{}{}
+		}
+	}
+	return gatewaySet
 }
