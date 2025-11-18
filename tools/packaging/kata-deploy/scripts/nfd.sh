@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -7,11 +7,11 @@
 #   - kubectl
 #
 
-function setup_nfd_rules() {
+setup_nfd_rules() {
 	local expand_runtime_classes_for_nfd=false
-	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io &>/dev/null; then
+	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io >/dev/null 2>&1; then
 		arch="$(uname -m)"
-		if [[ ${arch} == "x86_64" ]]; then
+		if [ "${arch}" = "x86_64" ]; then
 			node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
 
 			kubectl apply -f "${node_feature_rule_file}"
@@ -23,10 +23,10 @@ function setup_nfd_rules() {
 	echo "${expand_runtime_classes_for_nfd}"
 }
 
-function remove_nfd_rules() {
-	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io &>/dev/null; then
+remove_nfd_rules() {
+	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io >/dev/null 2>&1; then
 		arch="$(uname -m)"
-		if [[ ${arch} == "x86_64" ]]; then
+		if [ "${arch}" = "x86_64" ]; then
 			node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
 
 			kubectl delete  --ignore-not-found -f "${node_feature_rule_file}"
