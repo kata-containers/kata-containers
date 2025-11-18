@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -59,15 +59,15 @@ string_exists_in_file() {
 	grep -qF "${string}" "${file_path}"
 }
 
-function host_systemctl() {
+host_systemctl() {
 	nsenter --target 1 --mount systemctl "${@}"
 }
 
-function host_exec() {
-	nsenter --target 1 --mount bash -c "$*"
+host_exec() {
+	nsenter --target 1 --mount sh -c "$*"
 }
 
-function get_kata_containers_config_path() {
+get_kata_containers_config_path() {
 	local shim="$1"
 
 	# Directory holding pristine configuration files for the current default golang runtime.
@@ -103,7 +103,7 @@ function get_kata_containers_config_path() {
 	echo "$config_path"
 }
 
-function get_kata_containers_runtime_path() {
+get_kata_containers_runtime_path() {
 	local shim="$1"
 
 	local runtime_path
@@ -176,7 +176,7 @@ function get_tdx_ovmf_path_from_distro() {
 	esac
 }
 
-function adjust_qemu_cmdline() {
+adjust_qemu_cmdline() {
 	shim="${1}"
 	config_path="${2}"
 	qemu_share="${shim}"
@@ -185,17 +185,25 @@ function adjust_qemu_cmdline() {
 	# ${dest_dir}/opt/kata/share/kata-qemu/qemu
 	# ${dest_dir}/opt/kata/share/kata-qemu-snp-experimnental/qemu
 	# ${dest_dir}/opt/kata/share/kata-qemu-cca-experimental/qemu
-	[[ "${shim}" =~ ^(qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-cca)$ ]] && qemu_share=${shim}-experimental
+	case "${shim}" in
+		qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-cca)
+			qemu_share=${shim}-experimental
+			;;
+	esac
 
 	# Both qemu and qemu-coco-dev use exactly the same QEMU, so we can adjust
 	# the shim on the qemu-coco-dev case to qemu
-	[[ "${shim}" =~ ^(qemu|qemu-coco-dev)$ ]] && qemu_share="qemu"
+	case "${shim}" in
+		qemu|qemu-coco-dev)
+			qemu_share="qemu"
+			;;
+	esac
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
 	qemu_binary_script="${qemu_binary}-installation-prefix"
 	qemu_binary_script_host_path="/host/${qemu_binary_script}"
 
-	if [[ ! -f ${qemu_binary_script_host_path} ]]; then
+	if [ ! -f ${qemu_binary_script_host_path} ]; then
 		# From the QEMU man page:
 		# ```
 		# -L  path
@@ -208,7 +216,7 @@ function adjust_qemu_cmdline() {
 		# tied to the location of the PREFIX used during build time
 		# (/opt/kata, in our case).
 		cat <<EOF >${qemu_binary_script_host_path}
-#!/usr/bin/env bash
+#!/bin/sh
 
 exec ${qemu_binary} "\$@" -L ${dest_dir}/share/kata-${qemu_share}/qemu/
 EOF
