@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -8,22 +8,22 @@
 #   - nsenter (via host_systemctl function from utils.sh)
 #
 
-function wait_till_node_is_ready() {
+wait_till_node_is_ready() {
 	local ready="False"
 
-	while ! [[ "${ready}" == "True" ]]; do
+	while [ "${ready}" != "True" ]; do
 		sleep 2s
 		ready=$(kubectl get node $NODE_NAME -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
 	done
 }
 
-function restart_runtime() {
+restart_runtime() {
 	local runtime="${1}"
 
-	if [ "${runtime}" == "k0s-worker" ] || [ "${runtime}" == "k0s-controller" ]; then
+	if [ "${runtime}" = "k0s-worker" ] || [ "${runtime}" = "k0s-controller" ]; then
 		# do nothing, k0s will automatically load the config on the fly
 		:
-	elif [ "${runtime}" == "microk8s" ]; then
+	elif [ "${runtime}" = "microk8s" ]; then
 		host_systemctl restart snap.microk8s.daemon-containerd.service
 	else
 		host_systemctl daemon-reload
@@ -33,13 +33,13 @@ function restart_runtime() {
 	wait_till_node_is_ready
 }
 
-function restart_cri_runtime() {
+restart_cri_runtime() {
 	local runtime="${1}"
 
-	if [ "${runtime}" == "k0s-worker" ] || [ "${runtime}" == "k0s-controller" ]; then
+	if [ "${runtime}" = "k0s-worker" ] || [ "${runtime}" = "k0s-controller" ]; then
 		# do nothing, k0s will automatically unload the config on the fly
 		:
-	elif [ "$1" == "microk8s" ]; then
+	elif [ "$1" = "microk8s" ]; then
 		host_systemctl restart snap.microk8s.daemon-containerd.service
 	else
 		host_systemctl daemon-reload
@@ -47,7 +47,7 @@ function restart_cri_runtime() {
 	fi
 }
 
-function cleanup_cri_runtime() {
+cleanup_cri_runtime() {
 	case $1 in
 	crio)
 		cleanup_crio
@@ -57,24 +57,24 @@ function cleanup_cri_runtime() {
 		;;
 	esac
 
-	[ "${HELM_POST_DELETE_HOOK}" == "false" ] && return
+	[ "${HELM_POST_DELETE_HOOK}" = "false" ] && return
 
 	# Only run this code in the HELM_POST_DELETE_HOOK
 	restart_cri_runtime "$1"
 }
 
-function reset_runtime() {
+reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 	restart_cri_runtime "$1"
 
-	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
+	if [ "$1" = "crio" ] || [ "$1" = "containerd" ]; then
 		host_systemctl restart kubelet
 	fi
 
 	wait_till_node_is_ready
 }
 
-function configure_cri_runtime() {
+configure_cri_runtime() {
 	local runtime="${1}"
 
 	case "${runtime}" in
