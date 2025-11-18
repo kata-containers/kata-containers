@@ -1,0 +1,64 @@
+name: CI | kata-deploy ash compatibility
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-scripts-changed:
+    name: Check if scripts changed
+    runs-on: ubuntu-24.04
+    outputs:
+      scripts_changed: ${{ steps.filter.outputs.scripts }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check for script changes
+        id: filter
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if git diff --name-only "origin/${BASE_REF}"..HEAD | grep -q "^tools/packaging/kata-deploy/scripts/"; then
+            echo "scripts=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "scripts=no" >> "$GITHUB_OUTPUT"
+          fi
+
+  ash-compatibility-test:
+    name: ash compatibility test
+    needs: check-scripts-changed
+    if: needs.check-scripts-changed.outputs.scripts_changed == 'yes'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run ash compatibility tests in busybox container
+        env:
+          WORKSPACE: ${{ github.workspace }}
+        run: |
+          # Use busybox container directly - no need for bats or bash
+          # The test script itself is ash-compatible
+          docker run --rm \
+            -v "${WORKSPACE}:/workspace" \
+            -w /workspace \
+            busybox:latest \
+            sh tests/functional/kata-deploy/test-ash-compatibility.sh
+
