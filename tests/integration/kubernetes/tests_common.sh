@@ -305,7 +305,6 @@ add_requests_to_policy_settings() {
 #
 # Pattern: PCI_RESOURCE_<VENDOR>_<DEVICE>=<PCI_ADDRESS>
 # PCI address format: 4 hex digits : 2 hex digits : 2 hex digits . 1 digit
-# Example: PCI_RESOURCE_NVIDIA_COM_GA102GL_A10=0000:65:00.0
 add_cdi_envvars_to_policy_settings() {
 	declare -r settings_dir="$1"
 
@@ -313,7 +312,10 @@ add_cdi_envvars_to_policy_settings() {
 
 	info "${settings_dir}/genpolicy-settings.json: allowing CDI PCI_RESOURCE environment variables"
 
-	local -r pci_resource_regex='^PCI_RESOURCE_[A-Z0-9_]+=[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]$'
+	# Example: PCI_RESOURCE_NVIDIA_COM_GA102GL_A10=0000:65:00.0
+    #local -r pci_resource_regex='^PCI_RESOURCE_[A-Z0-9_]+=[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]$'
+	# Example: PCI_RESOURCE_NVIDIA_COM_pgpu=0000:65:00.0
+	local -r pci_resource_regex='^PCI_RESOURCE_NVIDIA_COM_pgpu=[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]$'
 
 	jq ".request_defaults.CreateContainerRequest.allow_env_regex += [\"${pci_resource_regex}\"]" \
 		"${settings_dir}"/genpolicy-settings.json > \
