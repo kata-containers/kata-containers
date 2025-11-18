@@ -14,7 +14,6 @@ export RUNTIME_CLASS_NAME
 export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
-export SKIP_MULTI_GPU_TESTS
 
 TEE=false
 [[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
@@ -30,11 +29,13 @@ if [[ "${TEE}" = "true" ]]; then
     POD_NAME_INSTRUCT="${POD_NAME_INSTRUCT}-tee"
     POD_READY_TIMEOUT_EMBEDQA_PREDEFINED=1000s
     POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=1000s
+    SKIP_MULTI_GPU_TESTS="true"
 fi
 export POD_NAME_EMBEDQA
 export POD_NAME_INSTRUCT
 export POD_READY_TIMEOUT_EMBEDQA=${POD_READY_TIMEOUT_EMBEDQA:-${POD_READY_TIMEOUT_EMBEDQA_PREDEFINED}}
 export POD_READY_TIMEOUT_INSTRUCT=${POD_READY_TIMEOUT_INSTRUCT:-${POD_READY_TIMEOUT_INSTRUCT_PREDEFINED}}
+export SKIP_MULTI_GPU_TESTS
 
 DOCKER_CONFIG_JSON=$(
     echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" |
