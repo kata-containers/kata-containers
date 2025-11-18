@@ -22,7 +22,7 @@ use kata_types::{
     container::{update_ocispec_annotations, POD_CONTAINER, POD_SANDBOX},
     k8s::{self, container_type},
 };
-use oci_spec::runtime::{self as oci, LinuxDeviceCgroup};
+use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{
@@ -217,11 +217,10 @@ impl Container {
         if let Some(linux) = &mut spec.linux_mut() {
             linux.set_resources(resources);
 
-            // In certain scenarios, particularly under CoCo/Agent Policy enforcement, the default initial value of `Linux.Resources.Devices`
-            // is considered non-compliant, leading to container creation failures. To address this issue and ensure consistency with the behavior
-            // in `runtime-go`, the default value of `Linux.Resources.Devices` from the OCI Spec should be removed.
+            // In certain scenarios, particularly under CoCo/Agent Policy enforcement,
+            // the value of `Linux.Resources.Devices` should be empty.
             if let Some(resource) = linux.resources_mut() {
-                clean_linux_resources_devices(resource);
+                resource.set_devices(None);
             }
         }
 
@@ -686,30 +685,6 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     }
 
     false
-}
-
-/// Cleans or filters specific device cgroup rules within the `devices` field of the `LinuxResources`.
-/// Specifically, it iterates through all `LinuxDeviceCgroup` rules in `resources`
-/// and removes those considered to be "default, all-access (rwm), and non-specific device" rules.
-fn clean_linux_resources_devices(resources: &mut LinuxResources) {
-    if let Some(devices) = resources.devices_mut().take() {
-        let cleaned_devices: Vec<LinuxDeviceCgroup> = devices
-            .into_iter()
-            .filter(|device| {
-                !(!device.allow()
-                    && device.typ().is_none()
-                    && device.major().is_none()
-                    && device.minor().is_none()
-                    && device.access().as_deref() == Some("rwm"))
-            })
-            .collect();
-
-        resources.set_devices(if cleaned_devices.is_empty() {
-            None
-        } else {
-            Some(cleaned_devices)
-        });
-    }
 }
 
 #[cfg(test)]
