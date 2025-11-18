@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
@@ -96,17 +96,25 @@ case ${ARCH} in
 		;;
 esac
 
-IFS=' ' read -a shims <<< "${SHIMS_FOR_ARCH}"
+# In ash, we can't use read -a for arrays, so we use the variables directly
+# as space/comma-separated strings and iterate over them unquoted.
+# For comma-separated values, we convert them to space-separated for easier iteration.
+shims="${SHIMS_FOR_ARCH}"
 default_shim="${DEFAULT_SHIM_FOR_ARCH}"
 
-IFS=',' read -a snapshotters <<< "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}"
+# Convert comma-separated to space-separated for easier iteration
+snapshotters=$(echo "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" | tr ',' ' ')
 snapshotters_delimiter=':'
 
-IFS=' ' read -a hypervisor_annotations <<< "${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH}"
+hypervisor_annotations="${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH}"
 
-IFS=',' read -a pull_types <<< "${PULL_TYPE_MAPPING_FOR_ARCH}"
+# Convert comma-separated to space-separated for easier iteration
+pull_types=$(echo "${PULL_TYPE_MAPPING_FOR_ARCH}" | tr ',' ' ')
 
-IFS="," read -a experimental_force_guest_pull <<< "${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
+experimental_force_guest_pull="${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
+
+# Convert comma-separated to space-separated for easier iteration
+experimental_setup_snapshotter=$(echo "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" | tr ',' ' ')
 
 CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
 CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
@@ -115,7 +123,7 @@ AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 
 EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
-IFS=',' read -a experimental_setup_snapshotter <<< "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+experimental_setup_snapshotter="${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 
 crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
 crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
@@ -129,9 +137,12 @@ INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
 dest_dir="${default_dest_dir}"
 if [ -n "${INSTALLATION_PREFIX}" ]; then
-	if [[ "${INSTALLATION_PREFIX:0:1}" != "/" ]]; then
-		die 'INSTALLATION_PREFIX must begin with a "/"(ex. /hoge/fuga)'
-	fi
+	case "${INSTALLATION_PREFIX}" in
+		/*) ;;
+		*)
+			die 'INSTALLATION_PREFIX must begin with a "/"(ex. /hoge/fuga)'
+			;;
+	esac
 	# There's no `/` in between ${INSTALLATION_PREFIX} and ${default_dest_dir}
 	# as, otherwise, we'd have it doubled there, as: `/foo/bar//opt/kata`
 	dest_dir="${INSTALLATION_PREFIX}${default_dest_dir}"
