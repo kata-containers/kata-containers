@@ -54,6 +54,10 @@ default AllowRequestsFailingPolicy := false
 # Constants
 S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
 S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
+# TODO /dev/vfio/devices/vfio ... with new device plugin
+VFIO_DEVICE_PATH = "/dev/vfio"
+VFIO_DEVICE_PREFIX = "/dev/vfio/"
+CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
 
 CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # Check if the input request should be rejected even before checking the
@@ -102,7 +106,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
 
     p_devices := p_container.devices
-    allow_devices(p_devices, i_devices)
+    allow_devices(p_devices, i_devices, i_oci)
 
     ret := allow_linux(ops_builder2, p_oci, i_oci)
     ret.allowed
@@ -259,23 +263,19 @@ allow_anno_key(i_key, p_oci) if {
 
     print("allow_anno_key 2: true")
 }
-# Allow CDI annotations for GPU device passthrough
-# Key: cdi.k8s.io/vfio<num> where <num> is one or more digits
-# Value: nvidia.com/gpu=<index> where <index>is one or more digits
-# This matches the annotation created by siblingAnnotation() in container.go
 allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 3: i key =", i_key)
+    print("allow_anno_key 3 (regex): i key =", i_key)
 
-    startswith(i_key, "cdi.k8s.io/vfio")
+    some p_key_regex, p_value_regex in p_oci.Annotations
+    startswith(p_key_regex, "^")
+    startswith(p_value_regex, "^")
 
-    suffix := trim_prefix(i_key, "cdi.k8s.io/vfio")
-    regex.match("^[0-9]+$", suffix)
+    regex.match(p_key_regex, i_key)
 
     i_value := input.OCI.Annotations[i_key]
-    print("allow_anno_key 3: i value =", i_value)
-    regex.match("^nvidia\\.com/gpu=[0-9]+$", i_value)
+    regex.match(p_value_regex, i_value)
 
-    print("allow_anno_key 3: true")
+    print("allow_anno_key 3 (regex): true")
 }
 
 # Get the value of the S_NAME_KEY annotation and
@@ -475,51 +475,107 @@ allow_log_directory(p_oci, i_oci) if {
     print("allow_log_directory: true")
 }
 
-allow_devices(p_devices, i_devices) if {
+allow_devices(p_devices, i_devices, i_oci) if {
     print("allow_devices: start")
-    every i_device in i_devices {
-        print("allow_devices: i_device =", i_device)
-        allow_device(p_devices, i_device)
-    }
+
+    p_volume_devices := [d | d := p_devices[_]; d.container_path != VFIO_DEVICE_PATH]
+    i_volume_devices := [d | d := i_devices[_]; not startswith(d.container_path, VFIO_DEVICE_PREFIX)]
+    allow_volume_devices(p_volume_devices, i_volume_devices)
+
+    p_vfio_devices := [d | d := p_devices[_]; d.container_path == VFIO_DEVICE_PATH]
+    i_vfio_devices := [d | d := i_devices[_]; startswith(d.container_path, VFIO_DEVICE_PREFIX)]
+    allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci)
+
     print("allow_devices: true")
 }
 
-allow_device(p_devices, i_device) if {
-    print("allow_device 1: start")
-    some p_device in p_devices
-    p_device.container_path == i_device.container_path
-    print("allow_device 1: true")
+allow_volume_devices(p_volume_devices, i_volume_devices) if {
+    print("allow_volume_devices: start")
+
+    every i_device in i_volume_devices {
+        some p_device in p_volume_devices
+        p_device.container_path == i_device.container_path
+    }
+
+    print("allow_volume_devices: true")
 }
 
-# TODO: can this go into genpolicy and will this persist with the new device plugin approach?
-# Allow VFIO PCI guest kernel devices for GPU passthrough (dynamically added)
-# Pattern: /dev/vfio/<num> where <num> is one or more digits
-allow_device(p_devices, i_device) if {
-    print("allow_device 2: start")
+allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci) if {
+    print("allow_vfio_devices: start")
 
-    # Check container path matches /dev/vfio/<num>
-    startswith(i_device.container_path, "/dev/vfio/")
-    suffix := trim_prefix(i_device.container_path, "/dev/vfio/")
+    every i_device in i_vfio_devices {
+        allow_vfio_device(p_vfio_devices, i_device)
+    }
+
+    allow_vfio_device_count(p_vfio_devices, i_vfio_devices)
+    allow_vfio_cdi_correlation(i_vfio_devices, i_oci)
+
+    print("allow_vfio_devices: true")
+}
+
+allow_vfio_device(p_vfio_devices, i_device) if {
+    print("allow_vfio_device: start")
+
+    some p_device in p_vfio_devices
+
+    startswith(i_device.container_path, VFIO_DEVICE_PREFIX)
+    suffix := trim_prefix(i_device.container_path, VFIO_DEVICE_PREFIX)
     regex.match("^[0-9]+$", suffix)
 
-    # Check device type
-    i_device.type_ == "vfio-pci-gk"
-
-    # Check that id matches the device number in the path
     i_device.id == suffix
 
-    # Check that vm_path is empty (device is passed through to guest)
-    i_device.vm_path == ""
+    i_device.type_ == p_device.type_
 
-    # Check options contain PCI address in format XXXX:XX:XX.X=XX/XX
+    i_device.vm_path == p_device.vm_path
+
     count(i_device.options) > 0
     every option in i_device.options {
         regex.match("^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$", option)
     }
-
-    print("allow_device 2: true")
+    print("allow_vfio_device: true")
 }
 
+allow_vfio_device_count(p_vfio_devices, i_vfio_devices) if {
+    print("allow_vfio_device_count: start")
+
+    p_count := count(p_vfio_devices)
+    i_count := count(i_vfio_devices)
+
+    i_count == p_count
+
+    vfio_numbers := [suffix |
+        d := i_vfio_devices[_];
+        suffix := trim_prefix(d.container_path, VFIO_DEVICE_PREFIX);
+        regex.match("^[0-9]+$", suffix)
+    ]
+    count(vfio_numbers) == count({n | n := vfio_numbers[_]})
+
+    print("allow_vfio_device_count: true")
+}
+
+
+allow_vfio_cdi_correlation(i_vfio_devices, i_oci) if {
+    print("allow_vfio_cdi_correlation: start")
+
+    vfio_numbers := [suffix |
+        d := i_vfio_devices[_];
+        suffix := trim_prefix(d.container_path, VFIO_DEVICE_PREFIX);
+        regex.match("^[0-9]+$", suffix)
+    ]
+
+    cdi_suffixes := [suffix |
+        some key, _ in i_oci.Annotations;
+        startswith(key, CDI_VFIO_ANNOTATION_PREFIX);
+        suffix := trim_prefix(key, CDI_VFIO_ANNOTATION_PREFIX);
+        regex.match("^[0-9]+$", suffix)
+    ]
+
+    count(vfio_numbers) == count(cdi_suffixes)
+
+    {n | n := vfio_numbers[_]} == {s | s := cdi_suffixes[_]}
+
+    print("allow_vfio_cdi_correlation: true")
+}
 
 allow_linux(state_ops, p_oci, i_oci) := {"ops": ops, "allowed": true} if {
     p_namespaces := p_oci.Linux.Namespaces

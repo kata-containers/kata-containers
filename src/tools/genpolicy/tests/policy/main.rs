@@ -329,4 +329,9 @@ mod tests {
     async fn test_create_container_volumes_container_image() {
         runtests("createcontainer/volumes/container_image").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_gpu_vfio_cdi() {
+        runtests("createcontainer/gpu_vfio_cdi").await;
+    }
 }
