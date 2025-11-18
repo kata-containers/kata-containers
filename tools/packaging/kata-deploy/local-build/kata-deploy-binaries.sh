@@ -604,8 +604,8 @@ install_initrd_nvidia_gpu() {
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
+	export MEASURED_ROOTFS=yes
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu-confidential"
 }
@@ -753,6 +753,7 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
+	export MEASURED_ROOTFS=yes
 	install_kernel_helper \
 		"assets.kernel.confidential" \
 		"kernel-nvidia-gpu-confidential" \
@@ -986,7 +987,7 @@ install_shimv2() {
 	export RUNTIME_CHOICE
 
 	if [ "${MEASURED_ROOTFS}" = "yes" ]; then
-		local image_conf_tarball="${workdir}/kata-static-rootfs-image-confidential.tar.zst"
+		local image_conf_tarball=$(find "${workdir}" -name "kata-static-rootfs-image-*confidential.tar.zst")
 		if [ ! -f "${image_conf_tarball}" ]; then
 			die "Building the shim-v2 with MEASURED_ROOTFS support requires a rootfs confidential image tarball"
 		fi
