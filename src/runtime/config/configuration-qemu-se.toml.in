@@ -243,10 +243,14 @@ block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
 #block_device_cache_noflush = true
 
 # Enable iothreads (data-plane) to be used. This causes IO to be
-# handled in a separate IO thread. This is currently only implemented
-# for SCSI.
+# handled in a separate IO thread. This is currently implemented
+# for virtio-scsi and virtio-blk.
 #
 enable_iothreads = @DEFENABLEIOTHREADS@
+
+# Independent IOThreads enables IO to be processed in a separate thread, it is
+# for QEMU hotplug device attach to iothread, like virtio-blk.
+indep_iothreads = @DEFINDEPIOTHREADS@
 
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
