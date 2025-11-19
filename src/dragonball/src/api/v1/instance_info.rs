@@ -58,11 +58,14 @@ pub struct InstanceInfo {
     pub tids: Vec<(u8, u32)>,
     /// Last instance downtime
     pub last_instance_downtime: u64,
+    #[cfg(feature = "tdx")]
+    /// Whether TDX is enabled for the microVM
+    pub tdx_enabled: bool,
 }
 
 impl InstanceInfo {
     /// create instance info object with given id, version, and platform type
-    pub fn new(id: String, vmm_version: String) -> Self {
+    pub fn new(id: String, vmm_version: String, #[cfg(feature = "tdx")] tdx_enabled: bool) -> Self {
         InstanceInfo {
             id,
             state: InstanceState::Uninitialized,
@@ -72,6 +75,8 @@ impl InstanceInfo {
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
             last_instance_downtime: 0,
+            #[cfg(feature = "tdx")]
+            tdx_enabled,
         }
     }
 }
@@ -87,6 +92,8 @@ impl Default for InstanceInfo {
             async_state: AsyncState::Uninitialized,
             tids: Vec::new(),
             last_instance_downtime: 0,
+            #[cfg(feature = "tdx")]
+            tdx_enabled: false,
         }
     }
 }

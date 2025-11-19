@@ -16,6 +16,8 @@ use std::sync::{Arc, Barrier, Mutex, RwLock};
 use std::time::Duration;
 
 use dbs_arch::VpmuFeatureLevel;
+#[cfg(feature = "tdx")]
+use dbs_tdx::{tdx_get_max_vcpus, tdx_init_vcpu, TdxError};
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{DevMgrService, UpcallClient};
 use dbs_utils::epoll_manager::{EpollManager, EventOps, EventSet, Events, MutEventSubscriber};
@@ -118,6 +120,15 @@ pub enum VcpuManagerError {
     /// Kvm Ioctl Error
     #[error("failure in issuing KVM ioctl command: {0}")]
     Kvm(#[source] kvm_ioctls::Error),
+
+    #[cfg(feature = "tdx")]
+    /// Tdx init vcpu error
+    #[error("TDX init vcpu error:{0}")]
+    TdxVcpuInit(#[source] TdxError),
+
+    /// Missing vcpu FDs
+    #[error("Missing vcpu FDs")]
+    MissingVcpuFds,
 }
 
 #[cfg(feature = "hotplug")]
@@ -252,7 +263,16 @@ impl VcpuManager {
     ) -> Result<Arc<Mutex<Self>>> {
         let support_immediate_exit = kvm_context.kvm().check_extension(Cap::ImmediateExit);
         let max_vcpu_count = vm_config_info.max_vcpu_count;
-        let kvm_max_vcpu_count = kvm_context.get_max_vcpus();
+        let mut kvm_max_vcpu_count = kvm_context.get_max_vcpus();
+        #[cfg(feature = "tdx")]
+        let tdx_enabled = shared_info.read()
+            .expect("Failed to get TDX status because shared info couldn't be written due to poisoned lock")
+            .tdx_enabled;
+        // For TDX, the max vCPU allowed for VM might be different from the initial query in KVM context
+        #[cfg(feature = "tdx")]
+        if tdx_enabled {
+            kvm_max_vcpu_count = kvm_max_vcpu_count.min(tdx_get_max_vcpus(&vm_fd.as_raw_fd()));
+        }
 
         // check the max vcpu count in kvm. max_vcpu_count is u8 and kvm_context.get_max_vcpus()
         // returns usize, so convert max_vcpu_count to usize instead of converting kvm max vcpu to
@@ -385,7 +405,13 @@ impl VcpuManager {
         } else {
             self.vcpu_config.boot_vcpu_count
         };
-        self.create_vcpus(boot_vcpu_count, Some(request_ts), Some(entry_addr))?;
+        self.create_vcpus(
+            boot_vcpu_count,
+            Some(request_ts),
+            Some(entry_addr),
+            #[cfg(feature = "tdx")]
+            false,
+        )?;
 
         Ok(())
     }
@@ -406,6 +432,7 @@ impl VcpuManager {
         vcpu_count: u8,
         request_ts: Option<TimestampUs>,
         entry_addr: Option<GuestAddress>,
+        #[cfg(feature = "tdx")] tdx_enabled: bool,
     ) -> Result<Vec<u8>> {
         info!("create vcpus");
         if vcpu_count > self.vcpu_config.max_vcpu_count {
@@ -415,7 +442,13 @@ impl VcpuManager {
         let request_ts = request_ts.unwrap_or_default();
         let mut created_cpus = Vec::new();
         for cpu_id in self.calculate_available_vcpus(vcpu_count) {
-            self.create_vcpu(cpu_id, request_ts.clone(), entry_addr)?;
+            self.create_vcpu(
+                cpu_id,
+                request_ts.clone(),
+                entry_addr,
+                #[cfg(feature = "tdx")]
+                tdx_enabled,
+            )?;
             created_cpus.push(cpu_id);
         }
 
@@ -481,6 +514,18 @@ impl VcpuManager {
             .collect()
     }
 
+    #[cfg(feature = "tdx")]
+    /// init vcpus for TDX
+    pub fn init_tdx_vcpus(&self, hob_address: u64) -> Result<()> {
+        for vcpu_info in &self.vcpu_infos {
+            if let Some(vcpu_fd) = &vcpu_info.vcpu_fd {
+                tdx_init_vcpu(&vcpu_fd.as_raw_fd(), hob_address)
+                    .map_err(VcpuManagerError::TdxVcpuInit)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Get available vcpus to create with target vcpu_count
     /// Argument:
     /// * vcpu_count: target vcpu_count online in VcpuManager.
@@ -520,6 +565,7 @@ impl VcpuManager {
         &mut self,
         entry_addr: Option<GuestAddress>,
         vcpu: &mut Vcpu,
+        #[cfg(feature = "tdx")] tdx_enabled: bool,
     ) -> std::result::Result<(), VcpuError> {
         vcpu.configure(
             &self.vcpu_config,
@@ -527,6 +573,8 @@ impl VcpuManager {
             &self.vm_as,
             entry_addr,
             None,
+            #[cfg(feature = "tdx")]
+            tdx_enabled,
         )
     }
 
@@ -535,6 +583,7 @@ impl VcpuManager {
         cpu_index: u8,
         request_ts: TimestampUs,
         entry_addr: Option<GuestAddress>,
+        #[cfg(feature = "tdx")] tdx_enabled: bool,
     ) -> Result<()> {
         info!("creating vcpu {}", cpu_index);
         if self.vcpu_infos.get(cpu_index as usize).is_none() {
@@ -562,8 +611,13 @@ impl VcpuManager {
             .unwrap()
             .vcpu
             .insert(cpu_index as u32, vcpu.metrics());
-        self.configure_single_vcpu(entry_addr, &mut vcpu)
-            .map_err(VcpuManagerError::Vcpu)?;
+        self.configure_single_vcpu(
+            entry_addr,
+            &mut vcpu,
+            #[cfg(feature = "tdx")]
+            tdx_enabled,
+        )
+        .map_err(VcpuManagerError::Vcpu)?;
         self.vcpu_infos[cpu_index as usize].vcpu = Some(vcpu);
 
         Ok(())
@@ -893,7 +947,13 @@ mod hotplug {
             }
 
             let created_vcpus = self
-                .create_vcpus(vcpu_count, None, None)
+                .create_vcpus(
+                    vcpu_count,
+                    None,
+                    None,
+                    #[cfg(feature = "tdx")]
+                    false,
+                )
                 .map_err(VcpuResizeError::Vcpu)?;
             let cpu_ids = self
                 .activate_vcpus(vcpu_count, true)
@@ -1246,11 +1306,25 @@ mod tests {
         let mut vcpu_manager = vm.vcpu_manager().unwrap();
 
         // test create vcpu more than max
-        let res = vcpu_manager.create_vcpus(20, None, None);
+        let res = vcpu_manager.create_vcpus(
+            20,
+            None,
+            None,
+            #[cfg(feature = "tdx")]
+            false,
+        );
         assert!(matches!(res, Err(VcpuManagerError::ExpectedVcpuExceedMax)));
 
         // test create vcpus
-        assert!(vcpu_manager.create_vcpus(2, None, None).is_ok());
+        assert!(vcpu_manager
+            .create_vcpus(
+                2,
+                None,
+                None,
+                #[cfg(feature = "tdx")]
+                false
+            )
+            .is_ok());
         assert_eq!(vcpu_manager.present_vcpus_count(), 0);
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
         assert_eq!(vcpu_manager.vcpus().len(), 2);

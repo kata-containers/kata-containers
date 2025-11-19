@@ -27,6 +27,9 @@ pub struct BootSourceConfig {
     /// Path of the initrd, if there is one.
     /// ps. rootfs is set in BlockDeviceConfigInfo
     pub initrd_path: Option<String>,
+    #[cfg(feature = "tdx")]
+    /// Path of the tdshim image.
+    pub tdshim_image_path: Option<String>,
     /// The boot arguments to pass to the kernel.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boot_args: Option<String>,
@@ -52,4 +55,21 @@ pub enum BootSourceConfigError {
     /// The boot source cannot be update post boot.
     #[error("the update operation is not allowed after boot")]
     UpdateNotAllowedPostBoot,
+
+    #[cfg(feature = "tdx")]
+    /// The tdshim file cannot be opened.
+    #[error(
+        "the tdshim file cannot be opened due to invalid tdshim path or invalid permissions: {0}"
+    )]
+    InvalidTdshimPath(#[source] std::io::Error),
+
+    #[cfg(feature = "tdx")]
+    /// The tdshim file is unexpected.
+    #[error("the tdshim file is only expected for TDX instances")]
+    UnexpectedTdshimPath,
+
+    #[cfg(feature = "tdx")]
+    /// The tdshim file is expected.
+    #[error("the tdshim file is expected for TDX instances")]
+    MissingTdshimPath,
 }

@@ -48,6 +48,9 @@ pub const MAX_IRQS: InterruptIndex = 1024;
 /// Default maximum number of Message Signaled Interrupts per device.
 pub const DEFAULT_MAX_MSI_IRQS_PER_DEVICE: InterruptIndex = 256;
 
+/// Default number of userspace IOAPIC routes for split irqchip
+pub const NR_ROUTES_USERSPACE_IOAPIC: u64 = 24;
+
 /// Structure to manage interrupt sources for a virtual machine based on the Linux KVM framework.
 ///
 /// The KVM framework provides methods to inject interrupts into the target virtual machines, which
@@ -187,6 +190,11 @@ impl KvmIrqRouting {
         #[allow(unused_mut)]
         let mut routes = self.routes.lock().unwrap();
 
+        //
+        // TODO: Disable legacy irq for TDX
+        //
+        // TDX requires split-irqchip, which does not support legacy irq
+        //
         #[cfg(feature = "kvm-legacy-irq")]
         LegacyIrq::initialize_legacy(&mut routes)?;
 

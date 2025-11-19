@@ -396,6 +396,7 @@ version = "0.2.1"
 dependencies = [
  "anyhow",
  "event-manager",
+ "kvm-bindings",
  "libc",
  "log",
  "serde",

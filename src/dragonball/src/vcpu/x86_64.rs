@@ -84,6 +84,7 @@ impl Vcpu {
     /// * `vm_memory` - The guest memory used by this microvm.
     /// * `kernel_start_addr` - Offset from `guest_mem` at which the kernel starts.
     /// * `pgtable_addr` - pgtable address for ap vcpu
+    /// * `tdx_enabled` - Whether TDX is enabled for the VM
     pub fn configure(
         &mut self,
         vcpu_config: &VcpuConfig,
@@ -91,8 +92,16 @@ impl Vcpu {
         vm_as: &GuestAddressSpaceImpl,
         kernel_start_addr: Option<GuestAddress>,
         _pgtable_addr: Option<GuestAddress>,
+        #[cfg(feature = "tdx")] tdx_enabled: bool,
     ) -> Result<()> {
         self.set_cpuid(vcpu_config)?;
+
+        #[cfg(feature = "tdx")]
+        // Skip updating regs because TDX does not allow for these operations.
+        // Initial setup of regs will be handled by TDVF
+        if tdx_enabled {
+            return Ok(());
+        }
 
         dbs_arch::regs::setup_msrs(&self.fd).map_err(VcpuError::MSRSConfiguration)?;
         if let Some(start_addr) = kernel_start_addr {

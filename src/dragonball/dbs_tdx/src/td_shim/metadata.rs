@@ -4,33 +4,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-/// TDVF related functionality.
+/// TDVF metadata related functionality.
+
+use super::TdvfError;
+
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
-use thiserror::Error;
-
-/// TDVF related errors.
-#[derive(Error, Debug)]
-pub enum TdvfError {
-    /// Failed to read TDVF descriptor.
-    #[error("Failed read TDVF descriptor: {0}")]
-    ReadDescriptor(#[source] std::io::Error),
-    /// Failed to read TDVF descriptor offset.
-    #[error("Failed read TDVF descriptor offset: {0}")]
-    ReadDescriptorOffset(#[source] std::io::Error),
-    /// Invalid descriptor signature.
-    #[error("Invalid descriptor signature")]
-    InvalidDescriptorSignature,
-    /// Invalid descriptor size.
-    #[error("Invalid descriptor size")]
-    InvalidDescriptorSize,
-    /// Invalid descriptor version.
-    #[error("Invalid descriptor version")]
-    InvalidDescriptorVersion,
-}
 
 /// TDVF_DESCRIPTOR
-#[repr(packed)]
+#[repr(C, packed)]
 pub struct TdvfDescriptor {
     signature: [u8; 4],
     length: u32,
@@ -38,7 +20,7 @@ pub struct TdvfDescriptor {
     num_sections: u32, // NumberOfSectionEntry
 }
 
-#[repr(packed)]
+#[repr(C, packed)]
 #[derive(Clone, Copy, Default, Debug)]
 /// DVF_SECTION
 pub struct TdvfSection {
@@ -64,7 +46,7 @@ pub enum TdvfSectionType {
     Bfv,
     /// CFV section type
     Cfv,
-    /// TD Hob offser
+    /// TD Hob offset
     TdHob,
     /// Temp Memory
     TempMem,

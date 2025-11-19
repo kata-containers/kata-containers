@@ -8,16 +8,38 @@
 
 use std::collections::HashMap;
 use std::convert::TryInto;
+#[cfg(feature = "tdx")]
+use std::io::{Seek, SeekFrom};
 use std::ops::Deref;
+#[cfg(feature = "tdx")]
+use std::os::fd::AsRawFd;
 
 use dbs_address_space::AddressSpace;
+#[cfg(feature = "tdx")]
+use dbs_address_space::AddressSpaceRegionType;
+#[cfg(feature = "tdx")]
+use dbs_boot::layout::{BIOS_MEM_START, MMIO_LOW_START};
 use dbs_boot::{add_e820_entry, bootparam, layout, mptable, BootParamsWrapper, InitrdConfig};
+use dbs_interrupt::kvm::NR_ROUTES_USERSPACE_IOAPIC;
+#[cfg(feature = "tdx")]
+use dbs_tdx::td_shim::{
+    parse_tdvf_sections, PayloadImageType, PayloadInfo, TdHob, TdvfError, TdvfSection,
+    TdvfSectionType,
+};
+#[cfg(feature = "tdx")]
+use dbs_tdx::{tdx_finalize, tdx_init, tdx_init_mem_region, TdxError};
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
-use kvm_bindings::{kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_PIT_SPEAKER_DUMMY};
+use kvm_bindings::{
+    kvm_enable_cap, kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_CAP_SPLIT_IRQCHIP,
+    KVM_CAP_X2APIC_API, KVM_PIT_SPEAKER_DUMMY, KVM_X2APIC_API_DISABLE_BROADCAST_QUIRK,
+    KVM_X2APIC_API_USE_32BIT_IDS,
+};
 use linux_loader::cmdline::Cmdline;
 use linux_loader::configurator::{linux::LinuxBootConfigurator, BootConfigurator, BootParams};
 use slog::info;
+#[cfg(feature = "tdx")]
+use vm_memory::Bytes;
 use vm_memory::{Address, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
@@ -173,6 +195,12 @@ impl Vm {
     ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: start initializing microvm ...");
 
+        #[cfg(feature = "tdx")]
+        if self.is_tdx_enabled() {
+            self.enable_split_irqchip()?;
+            self.enable_x2apic()?;
+        }
+
         self.init_tss()?;
         // For x86_64 we need to create the interrupt controller before calling `KVM_CREATE_VCPUS`
         // while on aarch64 we need to do it the other way around.
@@ -191,8 +219,13 @@ impl Vm {
             info!(self.logger, "VM: enable CPU disable_idle_exits capability");
         }
 
+        #[cfg(feature = "tdx")]
+        if self.is_tdx_enabled() {
+            return self.init_tdx_microvm(vm_as);
+        }
+
         let vm_memory = vm_as.memory();
-        let kernel_loader_result = self.load_kernel(vm_memory.deref())?;
+        let kernel_loader_result = self.load_kernel(vm_memory.deref(), None)?;
         self.vcpu_manager()
             .map_err(StartMicroVmError::Vcpu)?
             .create_boot_vcpus(request_ts, kernel_loader_result.kernel_load)
@@ -212,6 +245,12 @@ impl Vm {
         cmdline: &Cmdline,
         initrd: Option<InitrdConfig>,
     ) -> std::result::Result<(), StartMicroVmError> {
+        #[cfg(feature = "tdx")]
+        // For TDX VM, boot parameters are set up by TDVF, so skip this step
+        if self.is_tdx_enabled() {
+            return Ok(());
+        }
+
         let cmdline_addr = GuestAddress(dbs_boot::layout::CMDLINE_START);
         linux_loader::loader::load_cmdline(vm_memory, cmdline_addr, cmdline)
             .map_err(StartMicroVmError::LoadCommandline)?;
@@ -264,6 +303,13 @@ impl Vm {
     pub(crate) fn setup_interrupt_controller(
         &mut self,
     ) -> std::result::Result<(), StartMicroVmError> {
+        #[cfg(feature = "tdx")]
+        // TDX uses split irqchip, and irqchip is created while enabling KVM_CAP_SPLIT_IRQCHIP
+        // Therefore no need to call KVM_CREATE_IRQCHIP
+        if self.is_tdx_enabled() {
+            return Ok(());
+        }
+
         self.vm_fd
             .create_irq_chip()
             .map_err(|e| StartMicroVmError::ConfigureVm(VmError::VmSetup(e)))
@@ -271,6 +317,12 @@ impl Vm {
 
     /// Creates an in-kernel device model for the PIT.
     pub(crate) fn create_pit(&self) -> std::result::Result<(), StartMicroVmError> {
+        #[cfg(feature = "tdx")]
+        // TDX requires split irqchip, therefore does not support in-kernel PIT. Skil this step.
+        if self.is_tdx_enabled() {
+            return Ok(());
+        }
+
         info!(self.logger, "VM: create pit");
         // We need to enable the emulation of a dummy speaker port stub so that writing to port 0x61
         // (i.e. KVM_SPEAKER_BASE_ADDRESS) does not trigger an exit to user space.
@@ -300,5 +352,311 @@ impl Vm {
         self.reset_eventfd = Some(reset_evt);
 
         Ok(())
+    }
+
+    #[cfg(feature = "tdx")]
+    fn init_tdx_microvm(
+        &mut self,
+        vm_as: GuestAddressSpaceImpl,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        self.init_tdx()?;
+
+        let boot_vcpu_count = self.vm_config().vcpu_count;
+        self.vcpu_manager()
+            .map_err(StartMicroVmError::Vcpu)?
+            .create_vcpus(
+                boot_vcpu_count,
+                None,
+                None,
+                #[cfg(feature = "tdx")]
+                true,
+            )
+            .map_err(StartMicroVmError::Vcpu)?;
+
+        let vm_memory = vm_as.memory();
+        let sections = self.parse_tdvf_sections()?;
+        let (hob_offset, payload_offset, payload_size, cmdline_offset) =
+            self.load_tdshim(vm_memory.deref(), &sections)?;
+
+        let payload_info =
+            self.load_tdx_payload(payload_offset, payload_size, vm_memory.deref())?;
+
+        self.load_tdx_cmdline(cmdline_offset, vm_memory.deref())?;
+
+        self.vcpu_manager()
+            .map_err(StartMicroVmError::Vcpu)?
+            .init_tdx_vcpus(hob_offset)
+            .map_err(StartMicroVmError::Vcpu)?;
+
+        let address_space = self
+            .vm_address_space()
+            .cloned()
+            .ok_or(StartMicroVmError::GuestMemoryNotInitialized)?;
+        self.generate_hob_list(hob_offset, vm_memory.deref(), address_space, payload_info)?;
+
+        for section in sections {
+            let host_address = vm_memory
+                .deref()
+                .get_host_address(GuestAddress(section.address))
+                .unwrap();
+            self.init_tdx_memory(
+                host_address as u64,
+                section.address,
+                section.size,
+                section.attributes,
+            )?;
+        }
+
+        self.finalize_tdx()?;
+
+        Ok(())
+    }
+
+    pub(crate) fn enable_split_irqchip(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        let mut enable_split_irqchip = kvm_enable_cap {
+            cap: KVM_CAP_SPLIT_IRQCHIP,
+            ..Default::default()
+        };
+        enable_split_irqchip.args[0] = NR_ROUTES_USERSPACE_IOAPIC;
+        self.vm_fd()
+            .enable_cap(&enable_split_irqchip)
+            .map_err(StartMicroVmError::EnableSplitIrqchip)
+    }
+
+    pub(crate) fn enable_x2apic(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        let mut enable_x2apic = kvm_enable_cap {
+            cap: KVM_CAP_X2APIC_API,
+            ..Default::default()
+        };
+        enable_x2apic.args[0] =
+            (KVM_X2APIC_API_USE_32BIT_IDS | KVM_X2APIC_API_DISABLE_BROADCAST_QUIRK) as u64;
+        self.vm_fd()
+            .enable_cap(&enable_x2apic)
+            .map_err(StartMicroVmError::EnableX2apic)
+    }
+
+    #[cfg(feature = "tdx")]
+    fn init_tdx(&self) -> std::result::Result<(), StartMicroVmError> {
+        // Safe to unwrap because this function will only be called when initializing TDX VM
+        // with tdx_enabled set to true, and tdx_caps must have been set when initializing
+        // VM struct
+        let tdx_caps = self.tdx_caps.as_ref().unwrap();
+        let cpu_id = self.vcpu_manager().unwrap().supported_cpuid.clone();
+        tdx_init(
+            &self.vm_fd.as_raw_fd(),
+            tdx_caps.supported_attrs,
+            tdx_caps.supported_xfam,
+            cpu_id,
+            &tdx_caps.cpu_id,
+        )
+        .map_err(StartMicroVmError::TdxError)?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "tdx")]
+    fn parse_tdvf_sections(&mut self) -> std::result::Result<Vec<TdvfSection>, StartMicroVmError> {
+        let kernel_config = self
+            .kernel_config
+            .as_mut()
+            .ok_or(StartMicroVmError::MissingKernelConfig)?;
+
+        let tdshim_file = kernel_config.tdshim_file_mut().unwrap();
+
+        parse_tdvf_sections(tdshim_file)
+            .map_err(TdxError::TdvfError)
+            .map_err(StartMicroVmError::TdxError)
+    }
+
+    #[cfg(feature = "tdx")]
+    fn load_tdshim(
+        &mut self,
+        vm_memory: &GuestMemoryImpl,
+        sections: &[TdvfSection],
+    ) -> std::result::Result<(u64, u64, u64, u64), StartMicroVmError> {
+        let mut hob_offset: Option<u64> = None;
+        let mut payload_offset: Option<u64> = None;
+        let mut payload_size: Option<u64> = None;
+        let mut cmdline_offset: Option<u64> = None;
+
+        let kernel_config = self
+            .kernel_config
+            .as_mut()
+            .ok_or(StartMicroVmError::MissingKernelConfig)?;
+
+        let tdshim_file = kernel_config.tdshim_file_mut().unwrap();
+
+        for section in sections {
+            match section.r#type {
+                TdvfSectionType::Bfv | TdvfSectionType::Cfv => {
+                    tdshim_file
+                        .seek(SeekFrom::Start(section.data_offset as u64))
+                        .map_err(TdvfError::TdShimSeek)
+                        .map_err(TdxError::TdvfError)
+                        .map_err(StartMicroVmError::TdxError)?;
+                    vm_memory
+                        .read_from(
+                            GuestAddress(section.address),
+                            tdshim_file,
+                            section.data_size as usize,
+                        )
+                        .map_err(TdvfError::LoadTdShimSection)
+                        .map_err(TdxError::TdvfError)
+                        .map_err(StartMicroVmError::TdxError)?;
+                }
+                TdvfSectionType::TdHob => {
+                    hob_offset = Some(section.address);
+                }
+                TdvfSectionType::Payload => {
+                    payload_offset = Some(section.address);
+                    payload_size = Some(section.size);
+                }
+                TdvfSectionType::PayloadParam => {
+                    cmdline_offset = Some(section.address);
+                }
+                _ => {}
+            }
+        }
+
+        if hob_offset.is_none() {
+            return Err(StartMicroVmError::TdxError(TdxError::TdvfError(
+                TdvfError::MissingTdShimSection("TdHob"),
+            )));
+        }
+
+        if payload_offset.is_none() || payload_size.is_none() {
+            return Err(StartMicroVmError::TdxError(TdxError::TdvfError(
+                TdvfError::MissingTdShimSection("Payload"),
+            )));
+        }
+
+        if cmdline_offset.is_none() {
+            return Err(StartMicroVmError::TdxError(TdxError::TdvfError(
+                TdvfError::MissingTdShimSection("PayloadParam"),
+            )));
+        }
+
+        Ok((
+            // Safe to unwrap since we already checked all there fields are not none
+            hob_offset.unwrap(),
+            payload_offset.unwrap(),
+            payload_size.unwrap(),
+            cmdline_offset.unwrap(),
+        ))
+    }
+
+    #[cfg(feature = "tdx")]
+    fn load_tdx_payload(
+        &mut self,
+        payload_offset: u64,
+        payload_size: u64,
+        vm_memory: &GuestMemoryImpl,
+    ) -> std::result::Result<PayloadInfo, StartMicroVmError> {
+        let kernel_loader_result =
+            self.load_kernel(vm_memory, Some(GuestAddress(payload_offset)))?;
+
+        if kernel_loader_result.kernel_end > (payload_offset + payload_size) {
+            Err(StartMicroVmError::TdxError(TdxError::TdvfError(
+                TdvfError::LoadTdShimPayload,
+            )))
+        } else {
+            let payload_info = PayloadInfo::new(
+                PayloadImageType::RawVmLinux,
+                kernel_loader_result.kernel_load.0,
+            );
+            Ok(payload_info)
+        }
+    }
+
+    #[cfg(feature = "tdx")]
+    fn load_tdx_cmdline(
+        &mut self,
+        cmdline_offset: u64,
+        vm_memory: &GuestMemoryImpl,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let cmdline = self
+            .kernel_config
+            .as_ref()
+            .ok_or(StartMicroVmError::MissingKernelConfig)?
+            .kernel_cmdline();
+        linux_loader::loader::load_cmdline(vm_memory, GuestAddress(cmdline_offset), cmdline)
+            .map_err(StartMicroVmError::LoadCommandline)?;
+        Ok(())
+    }
+
+    #[cfg(feature = "tdx")]
+    fn generate_hob_list(
+        &self,
+        hob_offset: u64,
+        vm_memory: &GuestMemoryImpl,
+        address_space: AddressSpace,
+        payload_info: PayloadInfo,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let mut hob = TdHob::start(hob_offset);
+
+        let mut memory_regions: Vec<(bool, u64, u64)> = Vec::new();
+        address_space
+            .walk_regions(|region| {
+                match region.region_type() {
+                    AddressSpaceRegionType::DefaultMemory => {
+                        memory_regions.push((true, region.start_addr().0, region.len()));
+                    }
+                    AddressSpaceRegionType::FirmwareMemory => {
+                        memory_regions.push((false, region.start_addr().0, region.len()));
+                    }
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        for (is_ram, start, size) in memory_regions {
+            hob.add_memory_resource(vm_memory, start, size, is_ram)
+                .map_err(TdxError::TdvfError)
+                .map_err(StartMicroVmError::TdxError)?;
+        }
+
+        hob.add_mmio_resource(vm_memory, MMIO_LOW_START, BIOS_MEM_START - MMIO_LOW_START)
+            .map_err(TdxError::TdvfError)
+            .map_err(StartMicroVmError::TdxError)?;
+        hob.add_payload(vm_memory, payload_info)
+            .map_err(TdxError::TdvfError)
+            .map_err(StartMicroVmError::TdxError)?;
+
+        hob.finish(vm_memory)
+            .map_err(TdxError::TdvfError)
+            .map_err(StartMicroVmError::TdxError)
+    }
+
+    #[cfg(feature = "tdx")]
+    fn init_tdx_memory(
+        &mut self,
+        host_address: u64,
+        guest_address: u64,
+        size: u64,
+        flags: u32,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        let vcpus_manager = self.vcpu_manager().map_err(StartMicroVmError::Vcpu)?;
+        let vcpus = vcpus_manager.vcpus();
+
+        if vcpus.is_empty() {
+            return Err(StartMicroVmError::Vcpu(
+                crate::vcpu::VcpuManagerError::MissingVcpuFds,
+            ));
+        }
+
+        tdx_init_mem_region(
+            &vcpus[0].vcpu_fd().as_raw_fd(),
+            host_address,
+            guest_address,
+            size / dbs_boot::PAGE_SIZE as u64,
+            flags,
+        )
+        .map_err(StartMicroVmError::TdxError)
+    }
+
+    #[cfg(feature = "tdx")]
+    fn finalize_tdx(&self) -> std::result::Result<(), StartMicroVmError> {
+        tdx_finalize(&self.vm_fd().as_raw_fd()).map_err(StartMicroVmError::TdxError)
     }
 }

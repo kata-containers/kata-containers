@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod epoll_manager;
+pub mod guest_memfd;
 pub mod metric;
 pub mod net;
 pub mod rate_limiter;

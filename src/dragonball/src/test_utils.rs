@@ -21,6 +21,8 @@ pub mod tests {
         vm.set_kernel_config(KernelConfigInfo::new(
             kernel_file.into_file(),
             None,
+            #[cfg(feature = "tdx")]
+            None,
             cmd_line,
         ));
 

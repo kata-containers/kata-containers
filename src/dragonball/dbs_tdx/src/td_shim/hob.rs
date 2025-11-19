@@ -5,7 +5,10 @@
 //
 
 /// Hob related functionality.
-use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemoryError, GuestMemoryMmap};
+
+use super::TdvfError;
+
+use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemoryMmap};
 
 /// HOB Type
 #[repr(u16)]
@@ -51,6 +54,7 @@ struct HobHandoffInfoTable {
     efi_free_memory_bottom: u64,
     efi_end_of_hob_list: u64,
 }
+
 impl HobHandoffInfoTable {
     pub fn new(efi_end_of_hob_list: u64) -> Self {
         HobHandoffInfoTable {
@@ -76,6 +80,7 @@ impl HobHandoffInfoTable {
 struct HobEnd {
     header: HobHeader,
 }
+
 impl HobEnd {
     fn new() -> Self {
         HobEnd {
@@ -97,6 +102,7 @@ struct EfiGuid {
     data3: u16,
     data4: [u8; 8],
 }
+
 impl EfiGuid {
     /// RESOURCE_HOB_GUID
     fn resource() -> Self {
@@ -156,12 +162,25 @@ pub enum PayloadImageType {
     BzImage,
     RawVmLinux,
 }
+
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PayloadInfo {
     pub image_type: PayloadImageType,
+    pub reserved: u32,
     pub entry_point: u64,
 }
+
+impl PayloadInfo {
+    pub fn new(image_type: PayloadImageType, entry_point: u64) -> Self {
+        Self {
+            image_type,
+            reserved: 0,
+            entry_point,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug)]
 struct TdPayloadDescription {
@@ -169,6 +188,7 @@ struct TdPayloadDescription {
     efi_guid_type: EfiGuid,
     payload_info: PayloadInfo,
 }
+
 impl TdPayloadDescription {
     fn new(payload: PayloadInfo) -> Self {
         TdPayloadDescription {
@@ -200,12 +220,12 @@ fn align_hob(v: u64) -> u64 {
 }
 
 impl TdHob {
-    /// update offset to align with 8 bytes
+    /// Update offset to align with 8 bytes
     fn update_offset<T>(&mut self) {
         self.current_offset = align_hob(self.current_offset + std::mem::size_of::<T>() as u64)
     }
 
-    /// start wirting hot list
+    /// Start writing hob list
     pub fn start(offset: u64) -> TdHob {
         // Leave a gap to place the HandoffTable at the start as it can only be filled in later
         let mut hob = TdHob {
@@ -216,17 +236,19 @@ impl TdHob {
         hob
     }
 
-    /// finish writing hot list
-    pub fn finish(&mut self, mem: &GuestMemoryMmap) -> Result<(), GuestMemoryError> {
+    /// Finish writing hob list
+    pub fn finish(&mut self, mem: &GuestMemoryMmap) -> Result<(), TdvfError> {
         // Write end
         let end = HobEnd::new();
-        mem.write_obj(end, GuestAddress(self.current_offset))?;
+        mem.write_obj(end, GuestAddress(self.current_offset))
+            .map_err(TdvfError::WriteHobList)?;
         self.update_offset::<HobEnd>();
 
         // Write handoff, delayed as it needs end of HOB list
         let efi_end_of_hob_list = self.current_offset;
         let handoff = HobHandoffInfoTable::new(efi_end_of_hob_list);
         mem.write_obj(handoff, GuestAddress(self.start_offset))
+            .map_err(TdvfError::WriteHobList)
     }
 
     /// Add resource to TD HOB
@@ -237,7 +259,7 @@ impl TdHob {
         resource_length: u64,
         resource_type: u32,
         resource_attribute: u32,
-    ) -> Result<(), GuestMemoryError> {
+    ) -> Result<(), TdvfError> {
         let resource_descriptor = HobResourceDescriptor::new(
             resource_type,
             resource_attribute,
@@ -245,7 +267,8 @@ impl TdHob {
             resource_length,
         );
 
-        mem.write_obj(resource_descriptor, GuestAddress(self.current_offset))?;
+        mem.write_obj(resource_descriptor, GuestAddress(self.current_offset))
+            .map_err(TdvfError::WriteHobList)?;
         self.update_offset::<HobResourceDescriptor>();
         Ok(())
     }
@@ -257,7 +280,7 @@ impl TdHob {
         physical_start: u64,
         resource_length: u64,
         ram: bool,
-    ) -> Result<(), GuestMemoryError> {
+    ) -> Result<(), TdvfError> {
         self.add_resource(
             mem,
             physical_start,
@@ -267,10 +290,6 @@ impl TdHob {
             } else {
                 0x0 // EFI_RESOURCE_SYSTEM_MEMORY
             },
-            // TODO:
-            // QEMU currently fills it in like this:
-            // EFI_RESOURCE_ATTRIBUTE_PRESENT | EFI_RESOURCE_ATTRIBUTE_INITIALIZED|EFI_RESOURCE_ATTRIBUTE_ENCRYPTED  | EFI_RESOURCE_ATTRIBUTE_TESTED
-            // which differs from the spec (due to TDVF implementation issue?)
             0x07,
         )
     }
@@ -281,7 +300,7 @@ impl TdHob {
         mem: &GuestMemoryMmap,
         physical_start: u64,
         resource_length: u64,
-    ) -> Result<(), GuestMemoryError> {
+    ) -> Result<(), TdvfError> {
         self.add_resource(
             mem,
             physical_start,
@@ -296,9 +315,10 @@ impl TdHob {
         &mut self,
         mem: &GuestMemoryMmap,
         payload_info: PayloadInfo,
-    ) -> Result<(), GuestMemoryError> {
+    ) -> Result<(), TdvfError> {
         let payload = TdPayloadDescription::new(payload_info);
-        mem.write_obj(payload, GuestAddress(self.current_offset))?;
+        mem.write_obj(payload, GuestAddress(self.current_offset))
+            .map_err(TdvfError::WriteHobList)?;
         self.update_offset::<TdPayloadDescription>();
         Ok(())
     }

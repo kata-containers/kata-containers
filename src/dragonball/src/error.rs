@@ -11,6 +11,8 @@
 
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::pmu::PmuError;
+#[cfg(feature = "tdx")]
+use dbs_tdx::TdxError;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtioError;
 
@@ -81,6 +83,11 @@ pub enum Error {
     /// Fail to create device manager system
     #[error("failed to create device manager system: {0}")]
     DeviceMgrError(#[source] device_manager::DeviceMgrError),
+
+    #[cfg(feature = "tdx")]
+    /// TDX related error
+    #[error("TDX related error: {0}")]
+    TdxError(#[source] TdxError),
 }
 
 /// Errors associated with starting the instance.
@@ -223,6 +230,23 @@ pub enum StartMicroVmError {
     /// Cannot build seccomp filters.
     #[error("failure while configuring seccomp filters: {0}")]
     SeccompFilters(#[source] seccompiler::Error),
+
+    #[cfg(feature = "tdx")]
+    /// TDX ioctl related error
+    #[error("TDX ioctl related error: {0}")]
+    TdxError(#[source] TdxError),
+
+    /// Cannot enable split irqchip
+    #[error("Failed to enable split irqchip: {0}")]
+    EnableSplitIrqchip(#[source] vmm_sys_util::errno::Error),
+
+    /// Cannot enable X2APIC
+    #[error("Failed to enable X2APIC: {0}")]
+    EnableX2apic(#[source] vmm_sys_util::errno::Error),
+
+    /// Guest memory not initialized
+    #[error("Guest memory has not been initialized")]
+    GuestMemoryNotInitialized,
 }
 
 /// Errors associated with starting the instance.

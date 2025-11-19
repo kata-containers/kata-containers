@@ -9,6 +9,9 @@ pub struct KernelConfigInfo {
     kernel_file: File,
     /// The descriptor to the initrd file, if there is one
     initrd_file: Option<File>,
+    #[cfg(feature = "tdx")]
+    /// The descriptor to the tdshim file.
+    tdshim_file: Option<File>,
     /// The commandline for guest kernel.
     cmdline: linux_loader::cmdline::Cmdline,
 }
@@ -18,11 +21,13 @@ impl KernelConfigInfo {
     pub fn new(
         kernel_file: File,
         initrd_file: Option<File>,
+        #[cfg(feature = "tdx")] tdshim_file: Option<File>,
         cmdline: linux_loader::cmdline::Cmdline,
     ) -> Self {
         KernelConfigInfo {
             kernel_file,
             initrd_file,
+            tdshim_file,
             cmdline,
         }
     }
@@ -51,6 +56,12 @@ impl KernelConfigInfo {
     pub fn kernel_cmdline_mut(&mut self) -> &mut linux_loader::cmdline::Cmdline {
         &mut self.cmdline
     }
+
+    #[cfg(feature = "tdx")]
+    /// Get a mutable reference to the tdshim file.
+    pub fn tdshim_file_mut(&mut self) -> Option<&mut File> {
+        self.tdshim_file.as_mut()
+    }
 }
 
 #[cfg(test)]
@@ -64,7 +75,13 @@ mod tests {
         let initrd = TempFile::new().unwrap();
         let mut cmdline = linux_loader::cmdline::Cmdline::new(1024).unwrap();
         cmdline.insert_str("ro").unwrap();
-        let mut info = KernelConfigInfo::new(kernel.into_file(), Some(initrd.into_file()), cmdline);
+        let mut info = KernelConfigInfo::new(
+            kernel.into_file(),
+            Some(initrd.into_file()),
+            #[cfg(feature = "tdx")]
+            None,
+            cmdline,
+        );
 
         assert_eq!(info.cmdline.as_cstring().unwrap().as_bytes(), b"ro");
         assert!(info.initrd_file_mut().is_some());

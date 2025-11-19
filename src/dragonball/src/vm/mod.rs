@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::ops::Deref;
-use std::os::unix::io::RawFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -14,6 +14,11 @@ use dbs_arch::gic::GICDevice;
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::pmu::PmuError;
 use dbs_boot::InitrdConfig;
+#[cfg(feature = "tdx")]
+use dbs_tdx::{
+    tdx_get_caps, tdx_precheck_post_create_vm, tdx_precheck_pre_create_vm, TdxCapabilities,
+    KVM_X86_TDX_VM,
+};
 use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
 use kvm_ioctls::VmFd;
@@ -211,6 +216,9 @@ pub struct Vm {
 
     #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
+
+    #[cfg(feature = "tdx")]
+    tdx_caps: Option<TdxCapabilities>,
 }
 
 impl Vm {
@@ -223,7 +231,24 @@ impl Vm {
         let id = api_shared_info.read().unwrap().id.clone();
         let logger = slog_scope::logger().new(slog::o!("id" => id));
         let kvm = KvmContext::new(kvm_fd)?;
+        #[cfg(feature = "tdx")]
+        let tdx_enabled = api_shared_info
+            .read()
+            .expect("Failed to get TDX status due to poisoned lock")
+            .tdx_enabled;
+        #[cfg(not(feature = "tdx"))]
         let vm_fd = Arc::new(kvm.create_vm()?);
+        #[cfg(feature = "tdx")]
+        let vm_fd = {
+            if tdx_enabled {
+                tdx_precheck_pre_create_vm(&kvm.kvm().as_raw_fd()).map_err(Error::TdxError)?;
+                let vm = kvm.create_vm_with_type(KVM_X86_TDX_VM)?;
+                tdx_precheck_post_create_vm(&vm.as_raw_fd()).map_err(Error::TdxError)?;
+                Arc::new(vm)
+            } else {
+                Arc::new(kvm.create_vm()?)
+            }
+        };
         let resource_manager = Arc::new(ResourceManager::new(Some(kvm.max_memslots())));
         let device_manager = DeviceManager::new(
             vm_fd.clone(),
@@ -233,6 +258,15 @@ impl Vm {
             api_shared_info.clone(),
         )
         .map_err(Error::DeviceMgrError)?;
+
+        #[cfg(feature = "tdx")]
+        let tdx_caps = {
+            if tdx_enabled {
+                Some(tdx_get_caps(&vm_fd.as_raw_fd()).map_err(Error::TdxError)?)
+            } else {
+                None
+            }
+        };
 
         Ok(Vm {
             epoll_manager,
@@ -258,6 +292,9 @@ impl Vm {
             irqchip_handle: None,
             #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_client: None,
+
+            #[cfg(feature = "tdx")]
+            tdx_caps,
         })
     }
 
@@ -407,6 +444,14 @@ impl Vm {
         Err(StartMicroVmError::AddressManagerError(
             AddressManagerError::GuestMemoryNotInitialized,
         ))
+    }
+
+    #[cfg(feature = "tdx")]
+    /// Check whether TDX is enabled
+    pub fn is_tdx_enabled(&self) -> bool {
+        let shared_info = self.shared_info.read()
+            .expect("Failed to determine if TDX is enabled because shared info couldn't be read due to poisoned lock");
+        shared_info.tdx_enabled
     }
 }
 
@@ -592,8 +637,13 @@ impl Vm {
             numa_regions,
         );
 
-        let mut address_space_param = AddressSpaceMgrBuilder::new(&mem_type, &mem_file_path)
-            .map_err(StartMicroVmError::AddressManagerError)?;
+        let mut address_space_param = AddressSpaceMgrBuilder::new(
+            &mem_type,
+            &mem_file_path,
+            #[cfg(feature = "tdx")]
+            self.is_tdx_enabled(),
+        )
+        .map_err(StartMicroVmError::AddressManagerError)?;
         address_space_param.set_kvm_vm_fd(self.vm_fd.clone());
         self.address_space
             .create_address_space(&self.resource_manager, &numa_regions, address_space_param)
@@ -678,6 +728,7 @@ impl Vm {
     fn load_kernel(
         &mut self,
         vm_memory: &GuestMemoryImpl,
+        kernel_offset: Option<GuestAddress>,
     ) -> std::result::Result<KernelLoaderResult, StartMicroVmError> {
         // This is the easy way out of consuming the value of the kernel_cmdline.
         let kernel_config = self
@@ -689,7 +740,7 @@ impl Vm {
         #[cfg(target_arch = "x86_64")]
         return linux_loader::loader::elf::Elf::load(
             vm_memory,
-            None,
+            kernel_offset,
             kernel_config.kernel_file_mut(),
             Some(high_mem_addr),
         )
@@ -1068,6 +1119,8 @@ pub mod tests {
 
         vm.set_kernel_config(KernelConfigInfo::new(
             kernel_file.into_file(),
+            None,
+            #[cfg(feature = "tdx")]
             None,
             cmd_line,
         ));

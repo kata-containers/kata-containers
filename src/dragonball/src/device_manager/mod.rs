@@ -1507,6 +1507,12 @@ impl DeviceManager {
 
         Ok(())
     }
+
+    #[cfg(feature = "tdx")]
+    /// check whether TDX is enabled
+    pub fn is_tdx_enabled(&self) -> bool {
+        self.shared_info.read().expect("Poisoned lock").tdx_enabled
+    }
 }
 
 #[cfg(feature = "hotplug")]
@@ -1568,6 +1574,8 @@ mod tests {
             let shared_info = Arc::new(RwLock::new(InstanceInfo::new(
                 String::from("dragonball"),
                 String::from("1"),
+                #[cfg(feature = "tdx")]
+                false,
             )));
 
             let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
@@ -1672,6 +1680,8 @@ mod tests {
         let kernel_file = kernel_temp_file.into_file();
         let mut cmdline = crate::vm::KernelConfigInfo::new(
             kernel_file,
+            None,
+            #[cfg(feature = "tdx")]
             None,
             linux_loader::cmdline::Cmdline::new(0x1000).unwrap(),
         );
