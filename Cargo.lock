@@ -255,7 +255,7 @@ dependencies = [
 name = "dbs-acpi"
 version = "0.1.0"
 dependencies = [
- "vm-memory",
+ "vm-memory 0.16.2",
 ]
 
 [[package]]
@@ -267,7 +267,7 @@ dependencies = [
  "libc",
  "nix 0.23.2",
  "thiserror 1.0.48",
- "vm-memory",
+ "vm-memory 0.16.2",
  "vmm-sys-util",
 ]
 
@@ -287,7 +287,7 @@ dependencies = [
  "libc",
  "memoffset 0.6.5",
  "thiserror 1.0.48",
- "vm-memory",
+ "vm-memory 0.16.2",
  "vmm-sys-util",
 ]
 
@@ -304,7 +304,7 @@ dependencies = [
  "libc",
  "thiserror 1.0.48",
  "vm-fdt",
- "vm-memory",
+ "vm-memory 0.16.2",
 ]
 
 [[package]]
@@ -362,7 +362,7 @@ dependencies = [
  "vfio-bindings",
  "vfio-ioctls",
  "virtio-queue",
- "vm-memory",
+ "vm-memory 0.16.2",
  "vmm-sys-util",
 ]
 
@@ -435,7 +435,7 @@ dependencies = [
  "vhost",
  "virtio-bindings",
  "virtio-queue",
- "vm-memory",
+ "vm-memory 0.16.2",
  "vmm-sys-util",
 ]
 
@@ -558,7 +558,7 @@ dependencies = [
  "vfio-bindings",
  "vfio-ioctls",
  "virtio-queue",
- "vm-memory",
+ "vm-memory 0.16.2",
  "vmm-sys-util",
 ]
 
@@ -693,7 +693,7 @@ dependencies = [
  "mio 0.8.11",
  "nix 0.24.3",
  "virtio-queue",
- "vm-memory",
+ "vm-memory 0.10.0",
  "vmm-sys-util",
 ]
 
@@ -1161,7 +1161,7 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9259ddbfbb52cc918f6bbc60390004ddd0228cf1d85f402009ff2b3d95de83f"
 dependencies = [
- "vm-memory",
+ "vm-memory 0.10.0",
 ]
 
 [[package]]
@@ -1394,7 +1394,7 @@ dependencies = [
  "nydus-utils",
  "serde",
  "serde_json",
- "vm-memory",
+ "vm-memory 0.10.0",
 ]
 
 [[package]]
@@ -1423,7 +1423,7 @@ dependencies = [
  "tar",
  "tokio",
  "url",
- "vm-memory",
+ "vm-memory 0.10.0",
 ]
 
 [[package]]
@@ -2362,7 +2362,7 @@ dependencies = [
  "log",
  "thiserror 2.0.12",
  "vfio-bindings",
- "vm-memory",
+ "vm-memory 0.16.2",
  "vmm-sys-util",
 ]
 
@@ -2374,7 +2374,7 @@ checksum = "a6769e8dbf5276b4376439fbf36bb880d203bf614bf7ef444198edc24b5a9f35"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
- "vm-memory",
+ "vm-memory 0.10.0",
  "vmm-sys-util",
 ]
 
@@ -2392,7 +2392,7 @@ checksum = "3ba81e2bcc21c0d2fc5e6683e79367e26ad219197423a498df801d79d5ba77bd"
 dependencies = [
  "log",
  "virtio-bindings",
- "vm-memory",
+ "vm-memory 0.10.0",
  "vmm-sys-util",
 ]
 
@@ -2408,8 +2408,19 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "688a70366615b45575a424d9c665561c1b5ab2224d494f706b6a6812911a827c"
 dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
+name = "vm-memory"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd5e56d48353c5f54ef50bd158a0452fc82f5383da840f7b8efc31695dd3b9d"
+dependencies = [
  "arc-swap",
  "libc",
+ "thiserror 1.0.48",
  "winapi",
 ]
 
