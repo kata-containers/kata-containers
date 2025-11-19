@@ -595,7 +595,7 @@ function main() {
 	if [[ -z "${AUTO_GENERATE_POLICY}" ]]; then
 		if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
 			AUTO_GENERATE_POLICY="yes"
-		elif [[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" && \
+		elif [[ "${KATA_HYPERVISOR}" = qemu-coco-dev* && \
 		        "${TARGET_ARCH}" = "x86_64" && \
 		        "${PULL_TYPE}" != "experimental-force-guest-pull" ]]; then
 			AUTO_GENERATE_POLICY="yes"
