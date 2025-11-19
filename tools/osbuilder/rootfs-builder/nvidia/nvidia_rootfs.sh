@@ -207,7 +207,7 @@ chisseled_compute() {
 	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
 	cp -a "${stage_one}/${libdir}"/libnvidia-cfg.so.* lib/"${machine_arch}"-linux-gnu/.
 
-	# basich GPU admin tools
+	# basic GPU admin tools
 	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.
 	cp -a "${stage_one}"/usr/bin/nvidia-smi           bin/.
 	cp -a "${stage_one}"/usr/bin/nvidia-ctk           bin/.
@@ -219,6 +219,17 @@ chisseled_gpudirect() {
 	echo "nvidia: chisseling GPUDirect"
 	echo "nvidia: not implemented yet"
 	exit 1
+}
+
+setup_nvrc_init_symlinks() {
+	local rootfs_type=${1:-""}
+
+	local bin="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	local target=${machine_arch}-unknown-linux-musl
+
+	# make sure NVRC is the init process for the initrd and image case
+	ln -sf /bin/"${bin}-${target}" init
+	ln -sf /bin/"${bin}-${target}" sbin/init
 }
 
 chisseled_init() {
@@ -244,9 +255,7 @@ chisseled_init() {
 	cp -a "${stage_one}/bin/${bin}-${target}".cert bin/.
 	cp -a "${stage_one}/bin/${bin}-${target}".sig  bin/.
 
-	# make sure NVRC is the init process for the initrd and image case
-	ln -sf  /bin/"${bin}-${target}" init
-	ln -sf  /bin/"${bin}-${target}" sbin/init
+	setup_nvrc_init_symlinks "${rootfs_type}"
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
@@ -270,11 +279,24 @@ compress_rootfs() {
 	# For some unobvious reason libc has executable bit set
 	# clean this up otherwise the find -executable will not work correctly
 	find . -type f -name "*.so.*" | while IFS= read -r file; do
+		if ! file "${file}" | grep -q ELF; then
+			echo "nvidia: skip stripping file: ${file} ($(file -b "${file}"))"
+			continue
+		fi
 		chmod -x "${file}"
 		strip "${file}"
 	done
 
 	find . -type f -executable | while IFS= read -r file; do
+		# Skip files with setuid/setgid bits (UPX refuses to pack them)
+		if [ -u "${file}" ] || [ -g "${file}" ]; then
+			echo "nvidia: skip compressing executable (special permissions): ${file} ($(file -b "${file}"))"
+			continue
+		fi
+		if ! file "${file}" | grep -q ELF; then
+			echo "nvidia: skip compressing executable (not ELF): ${file} ($(file -b "${file}"))"
+			continue
+		fi
 		strip "${file}"
 		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
 	done
@@ -287,7 +309,6 @@ compress_rootfs() {
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
 
 	chmod +x "${libdir}"/ld-linux-*
-
 }
 
 coco_guest_components() {
@@ -315,56 +336,57 @@ coco_guest_components() {
 	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
 }
 
-toggle_debug() {
-	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<debug\>'; then
-		export DEBUG="true"
-	fi
-}
-
 setup_nvidia_gpu_rootfs_stage_two() {
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
-
 	readonly type=${1:-""}
 
-	echo "nvidia: chisseling the following stack components: ${stack}"
+	# If devkit flag is set, skip chisseling, use stage_one
+	if echo "${stack}" | grep -q '\<devkit\>'; then
+		echo "nvidia: devkit mode enabled - skip chisseling"
 
+		tar -C "${stage_two}" -xf "${stage_one}".tar.zst
 
-	[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
-	[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
+		pushd "${stage_two}" >> /dev/null
 
-	tar -C "${stage_one}" -xf "${stage_one}".tar.zst
+		# Only step needed from stage_two (see chisseled_init)
+		setup_nvrc_init_symlinks "${type}"
+	else
+		echo "nvidia: chisseling the following stack components: ${stack}"
 
+		[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
+		[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
 
-	pushd "${stage_two}" >> /dev/null
+		tar -C "${stage_one}" -xf "${stage_one}".tar.zst
 
-	toggle_debug
-	chisseled_init "${type}"
-	chisseled_iptables
+		pushd "${stage_two}" >> /dev/null
 
-	IFS=',' read -r -a stack_components <<< "${NVIDIA_GPU_STACK}"
+		chisseled_init "${type}"
+		chisseled_iptables
 
-	for component in "${stack_components[@]}"; do
-		if [[ "${component}" = "compute" ]]; then
-			echo "nvidia: processing \"compute\" component"
-			chisseled_compute
-		elif [[ "${component}" = "dcgm" ]]; then
-			echo "nvidia: processing DCGM component"
-			chisseled_dcgm
-		elif [[ "${component}" = "nvswitch" ]]; then
-			echo "nvidia: processing NVSwitch component"
-			chisseled_nvswitch
-		elif [[ "${component}" = "gpudirect" ]]; then
-			echo "nvidia: processing GPUDirect component"
-			chisseled_gpudirect
-		fi
-	done
+		IFS=',' read -r -a stack_components <<< "${NVIDIA_GPU_STACK}"
 
-	coco_guest_components
+		for component in "${stack_components[@]}"; do
+			if [[ "${component}" = "compute" ]]; then
+				echo "nvidia: processing \"compute\" component"
+				chisseled_compute
+			elif [[ "${component}" = "dcgm" ]]; then
+				echo "nvidia: processing DCGM component"
+				chisseled_dcgm
+			elif [[ "${component}" = "nvswitch" ]]; then
+				echo "nvidia: processing NVSwitch component"
+				chisseled_nvswitch
+			elif [[ "${component}" = "gpudirect" ]]; then
+				echo "nvidia: processing GPUDirect component"
+				chisseled_gpudirect
+			fi
+		done
+
+		coco_guest_components
+	fi
 
 	compress_rootfs
-
 	chroot . ldconfig
 
-	popd  >> /dev/null
+	popd >> /dev/null
 }

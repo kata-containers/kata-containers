@@ -570,13 +570,16 @@ install_initrd_confidential() {
 #              -> use the latest and greatest driver,
 #                 lts release or e.g. version=550.127.1
 # driver       -> enable open or closed drivers
-# debug        -> enable debugging support
 # compute      -> enable the compute GPU stack, includes utility
 # graphics     -> enable the graphics GPU stack, includes compute
 # dcgm         -> enable the DCGM stack + DGCM exporter
 # nvswitch     -> enable DGX like systems
 # gpudirect    -> enable use-cases like GPUDirect RDMA, GPUDirect GDS
 # dragonball   -> enable dragonball support
+# devkit       -> builds a developer kit image, resulting in a larger
+#                 rootfs size. May require incrementing the
+#                 default_memory allocation and with this, potentially
+#                 podOverhead. Experimental. Not for use in production
 #
 # The full stack can be enabled by setting all the options like:
 #
