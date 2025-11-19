@@ -276,7 +276,7 @@ fn get_config_map_mount_and_storage(
         storages.push(agent::Storage {
             driver: settings_config_map.driver.clone(),
             driver_options: Vec::new(),
-            source: format!("{}{}$", &settings_config_map.mount_source, &yaml_mount.name),
+            source: format!("{}{}$", &settings_config_map.mount_source, &mount_path_str),
             fstype: settings_config_map.fstype.clone(),
             options: settings_config_map.options.clone(),
             mount_point: format!("{}{mount_path_str}$", &settings_config_map.mount_point),
