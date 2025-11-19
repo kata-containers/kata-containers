@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 export KBS="${KBS:-false}"
 export SNAPSHOTTER="${SNAPSHOTTER:-}"
-export EXPERIMENTAL_FORCE_GUEST_PULL="{EXPERIMENTAL_FORCE_GUEST_PULL:-}"
+export EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
 
 setup() {
     if ! is_confidential_runtime_class; then
