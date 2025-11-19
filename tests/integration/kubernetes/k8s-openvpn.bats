@@ -35,14 +35,17 @@ setup() {
     client_secret_template_yaml="${pod_config_dir}/openvpn/openvpn-client-secret.yaml.in"
     client_secret_instance_yaml="${pod_config_dir}/openvpn/openvpn-client-secret-instance.yaml"
 
-    # TODO: workaround for issue 11777: https://github.com/kata-containers/kata-containers/issues/11777
-    # remove allow-all configuration and uncomment below when resolved (or loop over files under openvpn folder)
-    add_allow_all_policy_to_yaml "$server_pod_yaml"
-    add_allow_all_policy_to_yaml "$client_pod_yaml"
-    #policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
-    #add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
-    #auto_generate_policy "${policy_settings_dir}" "$server_pod_yaml"
-    #auto_generate_policy "${policy_settings_dir}" "$client_pod_yaml"
+    # See issue https://github.com/kata-containers/kata-containers/issues/11162 and
+    # other references to this issue in the genpolicy source folder.
+    if [[ "${SNAPSHOTTER:-}" == "nydus" ]]; then
+        add_allow_all_policy_to_yaml "$server_pod_yaml"
+        add_allow_all_policy_to_yaml "$client_pod_yaml"
+    else
+        policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+        add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+        auto_generate_policy "${policy_settings_dir}" "$server_pod_yaml" "$server_configmap_yaml" "--config-file $server_secret_template_yaml"
+        auto_generate_policy "${policy_settings_dir}" "$client_pod_yaml" "$client_configmap_yaml" "--config-file $client_secret_template_yaml"
+    fi
 }
 
 @test "Pods establishing a VPN connection using openvpn" {
@@ -90,8 +93,9 @@ teardown() {
     echo "=== OpenVPN Client Pod Logs ==="
     kubectl logs "$client_pod_name" || true
 
-    # TODO, see above, workaround for issue 11777. Uncomment when resolved.
-    #delete_tmp_policy_settings_dir "${policy_settings_dir}"
+    if [[ "${SNAPSHOTTER:-}" != "nydus" ]]; then
+        delete_tmp_policy_settings_dir "${policy_settings_dir}"
+    fi
     teardown_common "${node}" "${node_start_time:-}"
 
     # teardown cleans up pods, but not other resources
