@@ -393,7 +393,7 @@ function kbs_k8s_deploy() {
 
 	local pod=kbs-checker-$$
 	kubectl run "${pod}" --image=quay.io/prometheus/busybox --restart=Never -- \
-		sh -c "wget -O- --timeout=5 \"${kbs_ip}:${kbs_port}\" || true"
+		sh -c "wget -O- --timeout=60 \"${kbs_ip}:${kbs_port}\" || true"
 	if ! waitForProcess "60" "10" "kubectl logs \"${pod}\" 2>/dev/null | grep -q \"404 Not Found\""; then
 		echo "ERROR: KBS service is not responding to requests"
 		echo "::group::DEBUG - kbs logs"
