@@ -14,9 +14,9 @@ data:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nvidia-nim-llama-3-2-nv-embedqa-1b-v2
+  name: ${POD_NAME_EMBEDQA}
   labels:
-    app: nvidia-nim-llama-3-2-nv-embedqa-1b-v2
+    app: ${POD_NAME_EMBEDQA}
   annotations:
     cdi.k8s.io/gpu: "nvidia.com/pgpu=1"
 spec:
@@ -30,7 +30,7 @@ spec:
     runAsGroup: 0
     runAsUser: 0
   containers:
-  - name: nvidia-nim-llama-3-2-nv-embedqa-1b-v2
+  - name: ${POD_NAME_EMBEDQA}
     image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.5.0
     imagePullPolicy: IfNotPresent
     env:
