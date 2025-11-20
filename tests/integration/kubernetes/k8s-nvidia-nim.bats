@@ -78,6 +78,8 @@ setup_kbs_credentials() {
 create_inference_pod() {
     envsubst <"${POD_INSTRUCT_YAML_IN}" >"${POD_INSTRUCT_YAML}"
 
+    auto_generate_policy "${policy_settings_dir}" "${pod_instruct_yaml}"
+
     kubectl apply -f "${POD_INSTRUCT_YAML}"
     kubectl_retry 10 30 wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
 
@@ -92,6 +94,8 @@ create_inference_pod() {
 
 create_embedqa_pod() {
     envsubst <"${POD_EMBEDQA_YAML_IN}" >"${POD_EMBEDQA_YAML}"
+
+    auto_generate_policy "${policy_settings_dir}" "${pod_embedqa_yaml}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
     kubectl_retry 10 30 wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
@@ -130,6 +134,10 @@ setup_file() {
     python3 -m venv "${HOME}"/.cicd/venv
 
     setup_langchain_flow
+
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+    add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+    add_cdi_envvars_to_policy_settings "${policy_settings_dir}"
 
     create_inference_pod
 
@@ -391,6 +399,7 @@ teardown_file() {
         kubectl logs -n coco-tenant -l app=kbs --tail=-1 >&3 || true
     fi
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir}"
     teardown_common "${node}" "${node_start_time:-}" >&3
 
     # we have both secrets and pod elements in the manifests; teardown_common only deletes pods
