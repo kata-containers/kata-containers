@@ -191,6 +191,7 @@ func TestPrepareEphemeralMounts(t *testing.T) {
 					Options: []string{
 						"rw",
 						"relatime",
+						"size=512M",
 					},
 					Source: "/tmp",
 				},
@@ -203,17 +204,6 @@ func TestPrepareEphemeralMounts(t *testing.T) {
 					},
 					Source: "/tmp",
 				},
-				{
-					// should be ignored because it is sizeLimited
-					Type: KataLocalDevType,
-					Options: []string{
-						"rw",
-						"relatime",
-						"size=1M",
-					},
-					Source: "/tmp",
-				},
-			},
 		},
 	}
 
@@ -225,7 +215,7 @@ func TestPrepareEphemeralMounts(t *testing.T) {
 		assert.Equal(t, s.Source, "tmpfs")
 		assert.Equal(t, s.Fstype, "tmpfs")
 		assert.Equal(t, s.MountPoint, filepath.Join(ephemeralPath(), "tmp"))
-		assert.Equal(t, len(s.Options), 2) // remount, size=1024M
+		assert.Equal(t, len(s.Options), 2) // remount, size=512M
 
 		validSet := map[string]struct{}{
 			"remount":    {},
