@@ -195,7 +195,8 @@ get_kernel_modules_dir() {
 
 cleanup_and_fail_shim_v2_specifics() {
 	for variant in confidential nvidia-gpu-confidential; do
-		rm -f "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash_${variant}.txt"
+		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash_${variant}.txt"
+		[ -f "${root_hash_file}" ] && rm -f "${root_hash_file}"
 	done
 
 	return $(cleanup_and_fail "${1:-}" "${2:-}")
@@ -255,10 +256,13 @@ install_cached_shim_v2_tarball_compare_root_hashes() {
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
 	for variant in confidential nvidia-gpu-confidential; do
-		[ -f shim-v2-root_hash_${variant}.txt ] || return 1
+		# skip if one or the other does not exist
+		[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ] && continue
 
 		diff "${tarball_dir}/root_hash_${variant}.txt" shim-v2-root_hash_${variant}.txt || return 1
 	done
+	# If no root_hash_ files are found we need to fail
+	ls -lh "${tarball_dir}/root_hash_*.txt" || die "No root_hash_variant.txt files found for diff"
 
 	return 0
 }
