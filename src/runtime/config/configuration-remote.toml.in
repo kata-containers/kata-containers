@@ -31,7 +31,7 @@ remote_hypervisor_timeout = 600
 #   - NVDIMM devices
 #
 # Default false
-# confidential_guest = true
+confidential_guest = false
 
 
 # List of valid annotation names for the hypervisor
@@ -102,13 +102,13 @@ default_bridges = @DEFBRIDGES@
 # If unspecified then it will be set @DEFMEMSLOTS@.
 # This is will determine the times that memory will be hotadded to sandbox/VM.
 # Note: the remote hypervisor uses the peer pod config to determine the memory of the VM
-#memory_slots = @DEFMEMSLOTS@
+memory_slots = @DEFMEMSLOTS@
 
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available. And Debug also enable the hmp socket.
 #
 # Default false
-#enable_debug = true
+enable_debug = false
 
 # Path to OCI hook binaries in the *guest rootfs*.
 # This does not affect host-side hooks which must instead be added to
@@ -125,7 +125,7 @@ default_bridges = @DEFBRIDGES@
 # https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
-#guest_hook_path = "/usr/share/oci/hooks"
+guest_hook_path = ""
 
 # disable applying SELinux on the VMM process (default false)
 disable_selinux=@DEFDISABLESELINUX@
@@ -141,7 +141,7 @@ disable_guest_selinux = true
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
-#enable_debug = true
+enable_debug = false
 
 # Enable agent tracing.
 #
@@ -155,24 +155,24 @@ disable_guest_selinux = true
 #   increasing the container shutdown time slightly.
 #
 # (default: disabled)
-#enable_tracing = true
+enable_tracing = false
 
 # Enable debug console.
 
 # If enabled, user can connect guest OS running inside hypervisor
 # through "kata-runtime exec <sandbox-id>" command
 
-#debug_console_enabled = true
+debug_console_enabled = false
 
 # Agent connection dialing timeout value in seconds
 # (default: 30)
-#dial_timeout = 30
+dial_timeout = 30
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)
-#enable_debug = true
+enable_debug = false
 #
 # Internetworking model
 # Determines how the VM should be connected to the
@@ -208,22 +208,22 @@ disable_guest_seccomp=true
 # (format: "user:role:type")
 # Note: You cannot specify MCS policy with the label because the sensitivity levels and
 # categories are determined automatically by high-level container runtimes such as containerd.
-#guest_selinux_label="@DEFGUESTSELINUXLABEL@"
+guest_selinux_label="@DEFGUESTSELINUXLABEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)
-#enable_tracing = true
+enable_tracing = false
 
 # Set the full url to the Jaeger HTTP Thrift collector.
 # The default if not set will be "http://localhost:14268/api/traces"
-#jaeger_endpoint = ""
+jaeger_endpoint = ""
 
 # Sets the username to be used if basic auth is required for Jaeger.
-#jaeger_user = ""
+jaeger_user = ""
 
 # Sets the password to be used if basic auth is required for Jaeger.
-#jaeger_password = ""
+jaeger_password = ""
 
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
@@ -287,7 +287,7 @@ experimental=@DEFAULTEXPFEATURES@
 
 # If enabled, user can run pprof tools with shim v2 process through kata-monitor.
 # (default: false)
-# enable_pprof = true
+enable_pprof = false
 
 # Indicates the CreateContainer request timeout needed for the workload(s)
 # It using guest_pull this includes the time to pull the image inside the guest

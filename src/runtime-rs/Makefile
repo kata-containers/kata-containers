@@ -347,8 +347,13 @@ endif
     DEFBLOCKDEVICEAIO_QEMU := io_uring
     DEFNETWORKMODEL_QEMU := tcfilter
     DEFDISABLEGUESTSELINUX := true
-    DEFSECCOMPSANDBOXPARAM := on,obsolete=deny,spawn=deny,resourcecontrol=deny
-    DEFGUESTSELINUXLABEL := system_u:system_r:container_t
+    # Default is empty string "" to match Rust default None (when commented out in config).
+    # Most users will want to set this to "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
+    # for better security. Note: "elevateprivileges=deny" doesn't work with daemonize option.
+    DEFSECCOMPSANDBOXPARAM := ""
+    # Default is empty string "" to match Rust default None (when commented out in config).
+    # Most users will want to set this to "system_u:system_r:container_t" for SELinux support.
+    DEFGUESTSELINUXLABEL := ""
 endif
 
 ifneq (,$(FCCMD))
