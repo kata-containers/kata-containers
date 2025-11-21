@@ -177,6 +177,7 @@ build_with_container() {
 		   --env USER="$(id -u)" \
 		   --env GROUP="$(id -g)" \
 		   --env IMAGE_SIZE_ALIGNMENT_MB="${IMAGE_SIZE_ALIGNMENT_MB}" \
+		   --env VARIANT="${VARIANT}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
@@ -208,6 +209,10 @@ check_rootfs() {
 	# check agent or systemd
 	case "${AGENT_INIT}" in
 		"no")
+			# Check if we have alternative init systems installed
+			# For now check if we have NVRC
+			ls -l "${rootfs}/sbin/init" | grep -q "NVRC" && OK "init is NVRC" && return 0
+
 			for systemd_path in $candidate_systemd_paths; do
 				systemd="${rootfs}${systemd_path}"
 				if [ -x "${systemd}" ] || [ -L "${systemd}" ]; then
@@ -480,7 +485,8 @@ create_rootfs_image() {
 	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -b "${device}p2" ]; then
 		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
 		local image_dir=$(dirname "${image}")
-		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash.txt 2>&1
+		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash_${VARIANT}.txt 2>&1
+		OK "Root hash file created for variant: ${VARIANT}"
 	fi
 
 	losetup -d "${device}"
@@ -631,6 +637,7 @@ main() {
 		# the first 2M are for the first MBR + NVDIMM metadata and were already
 		# consider in calculate_img_size
 		rootfs_img_size=$((img_size - dax_header_sz))
+
 		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}" "${agent_bin}"
 	fi
