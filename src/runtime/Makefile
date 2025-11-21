@@ -462,6 +462,7 @@ ifneq (,$(QEMUCMD))
     KERNELSEPATH = $(KERNELDIR)/$(KERNELSENAME)
 
     # NVIDIA GPU specific options (all should be suffixed by _NV)
+
     KERNELNAME_NV = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE))
     KERNELPATH_NV = $(KERNELDIR)/$(KERNELNAME_NV)
 
