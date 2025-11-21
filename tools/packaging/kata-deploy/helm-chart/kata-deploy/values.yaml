@@ -8,12 +8,17 @@ image:
 
 k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 
-# Node selector to control which nodes the kata-deploy daemonset runs on
-# Example:
+# Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
+# Examples:
 # nodeSelector:
 #   kata-containers: "enabled"
 #   node-type: "worker"
+# tolerations:
+#   - key: "reservedFor"
+#     operator: "Exists"
+#     effect: "NoSchedule"
 nodeSelector: {}
+tolerations: []
 
 debug: false
 
