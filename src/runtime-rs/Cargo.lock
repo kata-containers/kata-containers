@@ -345,7 +345,7 @@ dependencies = [
  "addr2line",
  "cfg-if 1.0.0",
  "libc",
- "miniz_oxide 0.7.1",
+ "miniz_oxide",
  "object",
  "rustc-demangle",
  "windows-link 0.2.1",
@@ -576,9 +576,9 @@ dependencies = [
 
 [[package]]
 name = "cgroups-rs"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879433e90a9bf3c38e4e854ad36bd14507751dbd3a0df15429283ff5c10ff0e4"
+checksum = "efc46cf39fc5922b840030e0e5b378ce5caa9a824a675a95c6dec2c2c9ce9468"
 dependencies = [
  "bit-vec",
  "libc",
@@ -1442,7 +1442,7 @@ checksum = "bfe33edd8e85a12a67454e37f8c75e730830d83e313556ab9ebf9ee7fbeb3bfb"
 dependencies = [
  "crc32fast",
  "libz-sys",
- "miniz_oxide 0.8.9",
+ "miniz_oxide",
 ]
 
 [[package]]
@@ -3875,7 +3875,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.9.0",
  "byte-unit",
- "cgroups-rs 0.4.0",
+ "cgroups-rs 0.5.0",
  "flate2",
  "futures 0.3.28",
  "hex",
