@@ -42,7 +42,8 @@ ENABLE_NVRC_TRACE="${ENABLE_NVRC_TRACE:-true}"
 if [ -n "${K8S_TEST_NV:-}" ]; then
 	K8S_TEST_NV=($K8S_TEST_NV)
 else
-	K8S_TEST_NV=("k8s-nvidia-cuda.bats" \
+	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
+		"k8s-nvidia-cuda.bats" \
 		"k8s-nvidia-nim.bats")
 fi
 
@@ -65,6 +66,11 @@ else
 fi
 export AUTO_GENERATE_POLICY
 
+
+# TODO: remove this unconditional assignment as soon as this variable is set in .github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
+if [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-snp" ]] || [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-tdx" ]]; then
+	export KBS="true"
+fi
 
 ensure_yq
 
