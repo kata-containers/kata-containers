@@ -261,12 +261,12 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "6d1dcfbadad2c67c0972d242156b4d5701a3e4ff"
+    version: "94c3958250837420aea266623fe24ac990c7e5bf"
     # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "6d1dcfbadad2c67c0972d242156b4d5701a3e4ff"
+    image_tag: "94c3958250837420aea266623fe24ac990c7e5bf"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "6d1dcfbadad2c67c0972d242156b4d5701a3e4ff-x86_64"
+    ita_image_tag: "94c3958250837420aea266623fe24ac990c7e5bf-x86_64"
     toolchain: "1.85.1"
 
   containerd:
