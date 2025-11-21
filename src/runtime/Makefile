@@ -474,7 +474,6 @@ ifneq (,$(QEMUCMD))
     KERNELPARAMS_NV += "cgroup_no_v1=all"
 
     KERNELTDXPARAMS_NV = $(KERNELPARAMS_NV)
-    KERNELTDXPARAMS_NV += "clearcpuid=mtrr"
     KERNELTDXPARAMS_NV += "authorize_allow_devs=pci:ALL"
 
     KERNELSNPPARAMS_NV = $(KERNELPARAMS_NV)
