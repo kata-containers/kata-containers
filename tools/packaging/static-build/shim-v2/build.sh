@@ -108,15 +108,14 @@ case "${RUNTIME_CHOICE}" in
 esac
 
 for vmm in ${VMM_CONFIGS}; do
-	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
-	if [ -f ${config_file} ]; then
-		if [ ${ARCH} == "ppc64le" ]; then
- 			sed -i -e '/^image =/d' ${config_file}
- 			sed -i 's/^# \(initrd =.*\)/\1/g' ${config_file}
- 		else
- 			sed -i -e '/^initrd =/d' ${config_file}
- 		fi
-	fi
+	for config_file in "${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}"*.toml; do
+		if [ -f "${config_file}" ]; then
+			if [ ${ARCH} == "ppc64le" ]; then
+				# On ppc64le, replace image line with initrd line
+				sed -i -e 's|^image = .*|initrd = "'${PREFIX}'/share/kata-containers/kata-containers-initrd.img"|' "${config_file}"
+			fi
+		fi
+	done
 done
 
 pushd "${DESTDIR}/${PREFIX}/share/defaults/kata-containers"

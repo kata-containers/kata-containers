@@ -85,6 +85,11 @@ impl ConfigPlugin for CloudHypervisorConfig {
             if ch.memory_info.memory_slots == 0 {
                 ch.memory_info.memory_slots = default::DEFAULT_CH_MEMORY_SLOTS;
             }
+
+            // Apply factory defaults
+            if ch.factory.template_path.is_empty() {
+                ch.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
+            }
         }
 
         Ok(())

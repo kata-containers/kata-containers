@@ -52,7 +52,8 @@ pub struct Config {
     // the next compact_force_times times, a compaction will be forced
     // regardless of the system's memory situation.
     // If compact_force_times is set to 0, will do force compaction each time.
-    // If compact_force_times is set to std::u64::MAX, will never do force compaction.
+    // If compact_force_times is set to std::u64::MAX, u64::MAX - 1, or i64::MAX, will never do force compaction.
+    // Note: Using i64::MAX (9223372036854775807) instead of u64::MAX to avoid TOML parser issues.
     pub compact_force_times: u64,
 }
 
@@ -67,7 +68,7 @@ impl Default for Config {
             compact_sec_max: 5 * 60,
             compact_order: PAGE_REPORTING_MIN_ORDER,
             compact_threshold: 2 << PAGE_REPORTING_MIN_ORDER,
-            compact_force_times: u64::MAX,
+            compact_force_times: i64::MAX as u64,
         }
     }
 }
@@ -133,7 +134,7 @@ impl CompactCore {
     }
 
     fn need_force_compact(&self) -> bool {
-        if self.config.compact_force_times == u64::MAX {
+        if self.config.compact_force_times >= i64::MAX as u64 {
             return false;
         }
 

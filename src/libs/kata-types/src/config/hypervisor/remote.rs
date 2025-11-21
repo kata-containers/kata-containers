@@ -65,6 +65,11 @@ impl ConfigPlugin for RemoteConfig {
             if remote.memory_info.memory_slots == 0 {
                 remote.memory_info.memory_slots = default::DEFAULT_REMOTE_MEMORY_SLOTS
             }
+
+            // Apply factory defaults
+            if remote.factory.template_path.is_empty() {
+                remote.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
+            }
         }
 
         Ok(())

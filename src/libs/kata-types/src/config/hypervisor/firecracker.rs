@@ -69,6 +69,11 @@ impl ConfigPlugin for FirecrackerConfig {
                 firecracker.memory_info.default_memory =
                     default::DEFAULT_FIRECRACKER_MEMORY_SIZE_MB;
             }
+
+            // Apply factory defaults
+            if firecracker.factory.template_path.is_empty() {
+                firecracker.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
+            }
         }
 
         Ok(())
