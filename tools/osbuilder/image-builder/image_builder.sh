@@ -210,7 +210,7 @@ check_rootfs() {
 	case "${AGENT_INIT}" in
 		"no")
 			# Check if we have alternative init systems installed
-			# For now check if we have NRVRC
+			# For now check if we have NVRC
 			ls -l "${rootfs}/sbin/init" | grep -q "NVRC" && OK "init is NVRC" && return 0
 
 			for systemd_path in $candidate_systemd_paths; do
