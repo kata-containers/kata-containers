@@ -63,11 +63,11 @@ spec:
     resources:
       requests:
         cpu: "16"
-        memory: "96Gi"
+        memory: "32Gi"
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "96Gi"
+        memory: "32Gi"
 ---
 apiVersion: v1
 kind: Secret
