@@ -39,6 +39,7 @@ K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 # Enable NVRC trace logging by default for NVIDIA GPU tests
 ENABLE_NVRC_TRACE="${ENABLE_NVRC_TRACE:-true}"
 
+K8S_TEST_NV="k8s-nvidia-nim.bats"
 if [ -n "${K8S_TEST_NV:-}" ]; then
 	K8S_TEST_NV=($K8S_TEST_NV)
 else
