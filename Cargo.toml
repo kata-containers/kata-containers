@@ -51,7 +51,7 @@ virtio-queue = "0.7.0"
 vm-fdt = "0.2.0"
 vm-memory = "0.10.0"
 vm-superio = "0.5.0"
-vmm-sys-util = "0.11.0"
+vmm-sys-util = "0.15.0"
 
 # Local dependencies from Dragonball Sandbox crates
 dbs-acpi = { path = "src/dragonball/dbs_acpi" }

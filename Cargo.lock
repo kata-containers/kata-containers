@@ -268,7 +268,7 @@ dependencies = [
  "nix 0.23.2",
  "thiserror 1.0.48",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -288,7 +288,7 @@ dependencies = [
  "memoffset 0.6.5",
  "thiserror 1.0.48",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -323,7 +323,7 @@ dependencies = [
  "kvm-bindings",
  "kvm-ioctls",
  "libc",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -336,7 +336,7 @@ dependencies = [
  "log",
  "serde",
  "vm-superio",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -363,7 +363,7 @@ dependencies = [
  "vfio-ioctls",
  "virtio-queue",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -373,7 +373,7 @@ dependencies = [
  "kvm-bindings",
  "serde_json",
  "thiserror 1.0.48",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -400,7 +400,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.48",
  "timerfd",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -436,7 +436,7 @@ dependencies = [
  "virtio-bindings",
  "virtio-queue",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -559,7 +559,7 @@ dependencies = [
  "vfio-ioctls",
  "virtio-queue",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -615,7 +615,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "377fa591135fbe23396a18e2655a6d5481bf7c5823cdfa3cc81b01a229cbe640"
 dependencies = [
  "libc",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -694,7 +694,7 @@ dependencies = [
  "nix 0.24.3",
  "virtio-queue",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.11.2",
 ]
 
 [[package]]
@@ -1116,7 +1116,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efe70e65a5b092161d17f5005b66e5eefe7a94a70c332e755036fc4af78c4e79"
 dependencies = [
- "vmm-sys-util",
+ "vmm-sys-util 0.11.2",
 ]
 
 [[package]]
@@ -1127,7 +1127,7 @@ checksum = "3d592c9b0da14bacab1fe89c78e7ed873b20cf7f502d0fc26f628d733215b1e5"
 dependencies = [
  "kvm-bindings",
  "libc",
- "vmm-sys-util",
+ "vmm-sys-util 0.11.2",
 ]
 
 [[package]]
@@ -2363,7 +2363,7 @@ dependencies = [
  "thiserror 2.0.12",
  "vfio-bindings",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -2375,7 +2375,7 @@ dependencies = [
  "bitflags 1.3.2",
  "libc",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.11.2",
 ]
 
 [[package]]
@@ -2393,7 +2393,7 @@ dependencies = [
  "log",
  "virtio-bindings",
  "vm-memory",
- "vmm-sys-util",
+ "vmm-sys-util 0.11.2",
 ]
 
 [[package]]
@@ -2421,9 +2421,19 @@ checksum = "a4b5231d334edbc03b22704caa1a022e4c07491d6df736593f26094df8b04a51"
 
 [[package]]
 name = "vmm-sys-util"
-version = "0.11.1"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd64fe09d8e880e600c324e7d664760a17f56e9672b7495a86381b49e4f72f46"
+checksum = "48b7b084231214f7427041e4220d77dfe726897a6d41fddee450696e66ff2a29"
+dependencies = [
+ "bitflags 1.3.2",
+ "libc",
+]
+
+[[package]]
+name = "vmm-sys-util"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "506c62fdf617a5176827c2f9afbcf1be155b03a9b4bf9617a60dbc07e3a1642f"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
