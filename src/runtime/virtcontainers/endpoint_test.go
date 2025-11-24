@@ -46,6 +46,10 @@ func TestVfioEndpointTypeSet(t *testing.T) {
 	testEndpointTypeSet(t, "vfio", VfioEndpointType)
 }
 
+func TestNetkitEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "netkit", NetkitEndpointType)
+}
+
 func TestEndpointTypeSetFailure(t *testing.T) {
 	var endpointType EndpointType
 
@@ -80,6 +84,11 @@ func TestMacvlanEndpointTypeString(t *testing.T) {
 func TestMacvtapEndpointTypeString(t *testing.T) {
 	endpointType := MacvtapEndpointType
 	testEndpointTypeString(t, &endpointType, string(MacvtapEndpointType))
+}
+
+func TestNetkitEndpointTypeString(t *testing.T) {
+	endpointType := NetkitEndpointType
+	testEndpointTypeString(t, &endpointType, string(NetkitEndpointType))
 }
 
 func TestIncorrectEndpointTypeString(t *testing.T) {
