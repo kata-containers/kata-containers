@@ -89,6 +89,11 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh run-nv-tests
         env:
           NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
       - name: Collect artifacts ${{ matrix.environment.vmm }}
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts

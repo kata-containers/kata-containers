@@ -85,3 +85,7 @@ jobs:
 
       - name: Run tests
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
