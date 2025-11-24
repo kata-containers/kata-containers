@@ -615,7 +615,20 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
 		if value != "" {
 			params := vc.DeserializeParams(strings.Fields(value))
+
+			// Annotation parameters should replace existing parameters with the same key
+			// rather than append, to allow overriding default values
 			for _, param := range params {
+				// Remove any existing parameter with the same key
+				var newParams []vc.Param
+				for _, existingParam := range config.HypervisorConfig.KernelParams {
+					if existingParam.Key != param.Key {
+						newParams = append(newParams, existingParam)
+					}
+				}
+				config.HypervisorConfig.KernelParams = newParams
+
+				// Now add the annotation parameter
 				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
 					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
 				}

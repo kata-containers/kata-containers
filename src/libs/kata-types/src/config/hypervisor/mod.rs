@@ -374,6 +374,71 @@ impl BootInfo {
         self.kernel_params = p.join(KERNEL_PARAM_DELIMITER);
     }
 
+    /// Replace kernel parameters with the same key.
+    ///
+    /// For each parameter in the new_params string, if a parameter with the same key
+    /// already exists in kernel_params, it will be removed before adding the new one.
+    /// This allows selective parameter override from annotations without replacing
+    /// the entire kernel command line.
+    pub fn replace_kernel_params(&mut self, new_params: &str) {
+        if new_params.is_empty() {
+            return;
+        }
+
+        // Parse existing kernel parameters into a map
+        let mut existing_params: Vec<(String, String)> = Vec::new();
+        for param in self.kernel_params.split(KERNEL_PARAM_DELIMITER) {
+            let param = param.trim();
+            if param.is_empty() {
+                continue;
+            }
+            // Split by '=' to get key and value
+            if let Some(eq_pos) = param.find('=') {
+                let key = param[..eq_pos].to_string();
+                let value = param[eq_pos + 1..].to_string();
+                existing_params.push((key, value));
+            } else {
+                // Parameter without value (like "quiet")
+                existing_params.push((param.to_string(), String::new()));
+            }
+        }
+
+        // Parse new parameters and collect keys to replace
+        let mut new_param_keys: Vec<String> = Vec::new();
+        let mut new_param_list: Vec<String> = Vec::new();
+        for param in new_params.split(KERNEL_PARAM_DELIMITER) {
+            let param = param.trim();
+            if param.is_empty() {
+                continue;
+            }
+            if let Some(eq_pos) = param.find('=') {
+                let key = param[..eq_pos].to_string();
+                new_param_keys.push(key);
+            } else {
+                new_param_keys.push(param.to_string());
+            }
+            new_param_list.push(param.to_string());
+        }
+
+        // Remove existing parameters that will be replaced
+        existing_params.retain(|(key, _)| !new_param_keys.contains(key));
+
+        // Reconstruct kernel_params: existing params + new params
+        let mut all_params: Vec<String> = existing_params
+            .iter()
+            .map(|(key, value)| {
+                if value.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{}={}", key, value)
+                }
+            })
+            .collect();
+        all_params.extend(new_param_list);
+
+        self.kernel_params = all_params.join(KERNEL_PARAM_DELIMITER);
+    }
+
     /// Validate guest kernel image annotation.
     pub fn validate_boot_path(&self, path: &str) -> Result<()> {
         validate_path!(path, "path {} is invalid{}")?;
