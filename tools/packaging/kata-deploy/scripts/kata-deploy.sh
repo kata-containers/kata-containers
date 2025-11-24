@@ -233,6 +233,41 @@ function adjust_shim_for_nfd() {
 	fi
 }
 
+function patch_runtimeclasses_for_nfd() {
+	info "Patching existing runtime classes for NFD"
+
+	for shim in "${shims[@]}"; do
+		local runtime_class_name="kata-${shim}"
+		if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+			runtime_class_name="kata-${shim}-${MULTI_INSTALL_SUFFIX}"
+		fi
+
+		# Check if runtime class exists
+		if ! kubectl get runtimeclass "${runtime_class_name}" &>/dev/null; then
+			continue
+		fi
+
+		case "${shim}" in
+			*tdx*)
+				info "Patching runtime class ${runtime_class_name} for TDX NFD support"
+				# Use merge patch strategy to add/update tdx.intel.com/keys in overhead.podFixed
+				# This preserves existing overhead.podFixed values and creates structure if needed
+				kubectl patch runtimeclass "${runtime_class_name}" --type=merge \
+					-p='{"overhead":{"podFixed":{"tdx.intel.com/keys":1}}}'
+				;;
+			*snp*)
+				info "Patching runtime class ${runtime_class_name} for SNP NFD support"
+				# Use merge patch strategy to add/update sev-snp.amd.com/esids in overhead.podFixed
+				# This preserves existing overhead.podFixed values and creates structure if needed
+				kubectl patch runtimeclass "${runtime_class_name}" --type=merge \
+					-p='{"overhead":{"podFixed":{"sev-snp.amd.com/esids":1}}}'
+				;;
+			*)
+				;;
+		esac
+	done
+}
+
 function create_runtimeclasses() {
 	echo "Creating the runtime classes"
 
@@ -796,6 +831,10 @@ function install_artifacts() {
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
 		create_runtimeclasses "${expand_runtime_classes_for_nfd}"
+	elif [[ "${expand_runtime_classes_for_nfd}" == "true" ]]; then
+		# Even if we're not creating runtime classes, we need to patch existing ones
+		# for TDX/SNP when NFD is detected
+		patch_runtimeclasses_for_nfd 
 	fi
 }
 
