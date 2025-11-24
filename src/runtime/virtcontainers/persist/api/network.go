@@ -68,6 +68,10 @@ type VethEndpoint struct {
 	NetPair NetworkInterfacePair
 }
 
+type NetkitEndpoint struct {
+	NetPair NetworkInterfacePair
+}
+
 type IPVlanEndpoint struct {
 	NetPair NetworkInterfacePair
 }
@@ -88,6 +92,7 @@ type NetworkEndpoint struct {
 	// One and only one of these below are not nil according to Type.
 	Physical  *PhysicalEndpoint  `json:",omitempty"`
 	Veth      *VethEndpoint      `json:",omitempty"`
+	Netkit    *NetkitEndpoint    `json:",omitempty"`
 	VhostUser *VhostUserEndpoint `json:",omitempty"`
 	Macvlan   *MacvlanEndpoint   `json:",omitempty"`
 	Macvtap   *MacvtapEndpoint   `json:",omitempty"`
