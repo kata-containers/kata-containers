@@ -55,7 +55,7 @@ setup() {
     # Get and verify the output contains expected CUDA success message
     kubectl logs "${POD_NAME_CUDA}"
     output=$(kubectl logs "${POD_NAME_CUDA}")
-    echo "# CUDA Vector Add Output: ${output}" >&3
+    echo "# CUDA Vector Add Output: ${output}"
 
     # The CUDA vectoradd sample outputs "Test PASSED" on success
     [[ "${output}" =~ "Test PASSED" ]]
@@ -67,5 +67,10 @@ teardown() {
     kubectl logs "${POD_NAME_CUDA}" || true
 
     delete_tmp_policy_settings_dir "${policy_settings_dir}"
-    teardown_common "${node}" "${node_start_time:-}"
+    kubectl describe pods
+
+    # Clean up resources
+    [ -f "${pod_yaml}" ] && kubectl delete -f "${pod_yaml}" --ignore-not-found=true
+
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_DIRNAME:-}"
 }
