@@ -396,15 +396,14 @@ teardown_file() {
     fi
 
     if [ "${TEE}" = "true" ]; then
-        echo "=== KBS Pod Logs ===" >&3
-        kubectl logs -n coco-tenant -l app=kbs --tail=-1 >&3 || true
+        confidential_teardown_common "${node}" "${node_start_time:-}" >&3
+    else
+        teardown_common "${node}" "${node_start_time:-}" >&3
     fi
 
     teardown_cdi_override_for_nvidia_gpu_snp
 
-    teardown_common "${node}" "${node_start_time:-}" >&3
-
-    # we have both secrets and pod elements in the manifests; teardown_common only deletes pods
+    # we have both secrets and pod elements in the manifests; teardown only deletes pods
     [ -f "${POD_INSTRUCT_YAML}" ] && kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
