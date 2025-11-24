@@ -593,3 +593,14 @@ set_nginx_image() {
 
 	NGINX_IMAGE="${nginx_image}" envsubst < "${input_yaml}" > "${output_yaml}"
 }
+
+print_node_journal_since_test_start() {
+	local node="${1}"
+	local node_start_time="${2:-}"
+	local BATS_TEST_COMPLETED="${3:-}"
+
+	if [[ -n "${node_start_time:-}" && -z "${BATS_TEST_COMPLETED:-}" ]]; then
+		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
+		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
+	fi
+}

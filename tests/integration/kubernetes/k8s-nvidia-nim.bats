@@ -110,6 +110,7 @@ create_embedqa_pod() {
     echo "# POD_IP_EMBEDQA=${POD_IP_EMBEDQA}" >&3
 }
 
+# With setup_file and teardown_file being used, we use >&3 in some places to direct output to the terminal
 setup_file() {
     setup_common
 
@@ -393,18 +394,20 @@ teardown_file() {
         kubectl logs "${POD_NAME_EMBEDQA}" >&3 || true
     fi
 
-    if [ "${TEE}" = "true" ]; then
+    if [[ "${TEE}" = "true" ]]; then
         echo "=== KBS Pod Logs ===" >&3
-        kubectl logs -n coco-tenant -l app=kbs --tail=-1 >&3 || true
+        kbs_k8s_print_logs "${node_start_time}" >&3
     fi
 
     delete_tmp_policy_settings_dir "${policy_settings_dir}"
-    teardown_common "${node}" "${node_start_time:-}" >&3
+    kubectl describe pods >&3
 
-    # we have both secrets and pod elements in the manifests; teardown_common only deletes pods
+    # Clean up resources (manifests contain both secrets and pods)
     [ -f "${POD_INSTRUCT_YAML}" ] && kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
         [ -f "${POD_EMBEDQA_YAML}" ] && kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
     fi
+
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_DIRNAME:-}"
 }
