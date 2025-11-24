@@ -58,6 +58,7 @@ S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
 VFIO_DEVICE_PATH = "/dev/vfio"
 VFIO_DEVICE_PREFIX = "/dev/vfio/"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
+VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
 
 CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # Check if the input request should be rejected even before checking the
@@ -114,7 +115,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # save to policy state
     # key: input.container_id
     # val: index of p_container in the policy_data.containers array
-    print("CreateContainerRequest: addding container_id=", input.container_id, " to state")
+    print("CreateContainerRequest: adding container_id=", input.container_id, " to state")
     add_p_container_to_state := state_allows(input.container_id, idx)
 
     ops := concat_op_if_not_null(ret.ops, add_p_container_to_state)
@@ -264,18 +265,15 @@ allow_anno_key(i_key, p_oci) if {
     print("allow_anno_key 2: true")
 }
 allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 3 (regex): i key =", i_key)
+    print("allow_anno_key 3: i key =", i_key)
 
-    some p_key_regex, p_value_regex in p_oci.Annotations
-    startswith(p_key_regex, "^")
-    startswith(p_value_regex, "^")
-
+    some p_key_regex, p_value_regex in policy_data.containers[_].runtime_anno_patterns
     regex.match(p_key_regex, i_key)
 
     i_value := input.OCI.Annotations[i_key]
     regex.match(p_value_regex, i_value)
 
-    print("allow_anno_key 3 (regex): true")
+    print("allow_anno_key 3: true")
 }
 
 # Get the value of the S_NAME_KEY annotation and
@@ -492,9 +490,9 @@ allow_devices(p_devices, i_devices, i_oci) if {
 allow_volume_devices(p_volume_devices, i_volume_devices) if {
     print("allow_volume_devices: start")
 
-    every i_device in i_volume_devices {
+    every i_volume_device in i_volume_devices {
         some p_device in p_volume_devices
-        p_device.container_path == i_device.container_path
+        p_device.container_path == i_volume_device.container_path
     }
 
     print("allow_volume_devices: true")
@@ -503,45 +501,41 @@ allow_volume_devices(p_volume_devices, i_volume_devices) if {
 allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci) if {
     print("allow_vfio_devices: start")
 
-    every i_device in i_vfio_devices {
-        allow_vfio_device(p_vfio_devices, i_device)
+    every i_vfio_device in i_vfio_devices {
+        allow_vfio_device(p_vfio_devices, i_vfio_device)
     }
 
-    allow_vfio_device_count(p_vfio_devices, i_vfio_devices)
-    allow_vfio_cdi_correlation(i_vfio_devices, i_oci)
+    allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci)
 
     print("allow_vfio_devices: true")
 }
 
-allow_vfio_device(p_vfio_devices, i_device) if {
+allow_vfio_device(p_vfio_devices, i_vfio_device) if {
     print("allow_vfio_device: start")
 
     some p_device in p_vfio_devices
 
-    startswith(i_device.container_path, VFIO_DEVICE_PREFIX)
-    suffix := trim_prefix(i_device.container_path, VFIO_DEVICE_PREFIX)
+    startswith(i_vfio_device.container_path, VFIO_DEVICE_PREFIX)
+    suffix := trim_prefix(i_vfio_device.container_path, VFIO_DEVICE_PREFIX)
     regex.match("^[0-9]+$", suffix)
 
-    i_device.id == suffix
+    i_vfio_device.id == suffix
 
-    i_device.type_ == p_device.type_
+    i_vfio_device.type_ == p_device.type_
 
-    i_device.vm_path == p_device.vm_path
+    i_vfio_device.vm_path == p_device.vm_path
 
-    count(i_device.options) > 0
-    every option in i_device.options {
-        regex.match("^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$", option)
+    count(i_vfio_device.options) > 0
+    every option in i_vfio_device.options {
+        regex.match(VFIO_PCI_ADDRESS_REGEX, option)
     }
     print("allow_vfio_device: true")
 }
 
-allow_vfio_device_count(p_vfio_devices, i_vfio_devices) if {
-    print("allow_vfio_device_count: start")
+allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
+    print("allow_vfio_device_cdi_correlation: start")
 
-    p_count := count(p_vfio_devices)
-    i_count := count(i_vfio_devices)
-
-    i_count == p_count
+    count(i_vfio_devices) == count(p_vfio_devices)
 
     vfio_numbers := [suffix |
         d := i_vfio_devices[_];
@@ -549,19 +543,6 @@ allow_vfio_device_count(p_vfio_devices, i_vfio_devices) if {
         regex.match("^[0-9]+$", suffix)
     ]
     count(vfio_numbers) == count({n | n := vfio_numbers[_]})
-
-    print("allow_vfio_device_count: true")
-}
-
-
-allow_vfio_cdi_correlation(i_vfio_devices, i_oci) if {
-    print("allow_vfio_cdi_correlation: start")
-
-    vfio_numbers := [suffix |
-        d := i_vfio_devices[_];
-        suffix := trim_prefix(d.container_path, VFIO_DEVICE_PREFIX);
-        regex.match("^[0-9]+$", suffix)
-    ]
 
     cdi_suffixes := [suffix |
         some key, _ in i_oci.Annotations;
@@ -571,10 +552,9 @@ allow_vfio_cdi_correlation(i_vfio_devices, i_oci) if {
     ]
 
     count(vfio_numbers) == count(cdi_suffixes)
-
     {n | n := vfio_numbers[_]} == {s | s := cdi_suffixes[_]}
 
-    print("allow_vfio_cdi_correlation: true")
+    print("allow_vfio_device_cdi_correlation: true")
 }
 
 allow_linux(state_ops, p_oci, i_oci) := {"ops": ops, "allowed": true} if {

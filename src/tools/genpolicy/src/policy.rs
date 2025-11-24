@@ -275,10 +275,13 @@ pub struct ContainerPolicy {
     /// Data compared with req.sandbox_pidns for CreateContainerRequest calls.
     sandbox_pidns: bool,
 
-    /// Allow list of ommand lines that are allowed to be executed using
+    /// Allow list of command lines that are allowed to be executed using
     /// ExecProcessRequest. By default, all ExecProcessRequest calls are blocked
     /// by the policy.
     exec_commands: Vec<Vec<String>>,
+
+    /// Runtime-assigned annotation key-value pairs for validation of input annotations.
+    runtime_anno_patterns: BTreeMap<String, String>,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
@@ -454,6 +457,28 @@ pub struct ClusterConfig {
     ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *gets added
     ///           as the only value* in AdditionalGids.
     pub pause_container_id_policy: String,
+}
+
+/// VFIO device annotation patterns for runtime-assigned CDI annotations.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VfioDeviceAnnotations {
+    /// Device path for VFIO devices.
+    pub device_path: String,
+
+    /// Regex pattern for VFIO CDI annotation keys.
+    pub key_regex: String,
+
+    /// Regex pattern for NVIDIA GPU CDI annotation values.
+    pub nvidia_gpu_value_regex: String,
+
+    /// Device type for NVIDIA GPU VFIO devices (gk variant).
+    pub nvidia_gpu_gk_device_type: String,
+}
+
+/// Device annotation patterns for various device types.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeviceAnnotations {
+    pub vfio: VfioDeviceAnnotations,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -683,17 +708,24 @@ impl AgentPolicy {
             }
         }
 
-        // Generate device entries for expected VFIO devices
-        let expected_vfio_devices = yaml_container.get_nvidia_pgpu_count();
-        if let Some(nvidia_pgpu_count) = expected_vfio_devices {
-            for _ in 0..nvidia_pgpu_count {
-                let mut device = agent::Device::new();
-                // The actual device number /dev/vfio/<num> is assigned at runtime by the device plugin
-                // TODO: This will change to /dev/vfio/devices/vfio<num> when the new device plugin is used.
-                device.set_container_path("/dev/vfio".to_string());
-                device.set_type("vfio-pci-gk".to_string());
-                device.set_vm_path("".to_string());
-                devices.push(device);
+        // Generate expected device entries and annotation key-value pairs for VFIO devices
+        let mut runtime_anno_patterns = BTreeMap::new();
+        if let Some(nvidia_pgpu_count) = yaml_container.get_nvidia_pgpu_count() {
+            if nvidia_pgpu_count > 0 {
+                for _ in 0..nvidia_pgpu_count {
+                    let mut device = agent::Device::new();
+                    // TODO: change device_path to /dev/vfio/devices/vfio<num> when the new device plugin is used.
+                    // The actual device number /dev/vfio/<num> is assigned at runtime by the device plugin
+                    device.set_container_path(self.config.settings.device_annotations.vfio.device_path.clone());
+                    device.set_type(self.config.settings.device_annotations.vfio.nvidia_gpu_gk_device_type.clone());
+                    device.set_vm_path("".to_string());
+                    devices.push(device);
+                }
+
+                runtime_anno_patterns.insert(
+                    self.config.settings.device_annotations.vfio.key_regex.clone(),
+                    self.config.settings.device_annotations.vfio.nvidia_gpu_value_regex.clone(),
+                );
             }
         }
 
@@ -720,6 +752,7 @@ impl AgentPolicy {
             devices,
             sandbox_pidns,
             exec_commands,
+            runtime_anno_patterns,
         }
     }
 
@@ -1107,18 +1140,6 @@ fn get_container_annotations(
         annotations
             .entry("io.kubernetes.cri.image-name".to_string())
             .or_insert(image_name);
-
-        // Add CDI annotation regex pattern for GPU containers
-        // The actual device numbers are assigned at runtime by the shim
-        // Pattern matches: cdi.k8s.io/vfio<num> = nvidia.com/gpu=<num>
-        if let Some(nvidia_pgpu_count) = yaml_container.get_nvidia_pgpu_count() {
-            if nvidia_pgpu_count > 0 {
-                annotations.insert(
-                    "^cdi\\.k8s\\.io/vfio[0-9]+$".to_string(),
-                    "^nvidia\\.com/gpu=[0-9]+$".to_string(),
-                );
-            }
-        }
     }
 
     annotations.insert(
