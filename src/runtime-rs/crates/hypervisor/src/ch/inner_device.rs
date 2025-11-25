@@ -25,7 +25,7 @@ use ch_config::ch_api::{
     cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add_with_fds,
     cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
 };
-use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
+use ch_config::convert::DEFAULT_NUM_PCI_SEGMENTS;
 use ch_config::DiskConfig;
 use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
 use kata_sys_util::netns::NetnsGuard;
@@ -542,8 +542,8 @@ impl TryFrom<BlockConfig> for DiskConfig {
         let disk_config: DiskConfig = DiskConfig {
             path: Some(blkcfg.path_on_host.as_str().into()),
             readonly: blkcfg.is_readonly,
-            num_queues: DEFAULT_DISK_QUEUES,
-            queue_size: DEFAULT_DISK_QUEUE_SIZE,
+            num_queues: blkcfg.num_queues,
+            queue_size: blkcfg.queue_size as u16,
             ..Default::default()
         };
 

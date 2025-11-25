@@ -211,6 +211,12 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # Default false
 #block_device_cache_direct = true
 
+# Virtio queue size. Size: byte. default 128
+#queue_size: u32,
+
+# Block device multi-queue, default 1
+#num_queues: usize,
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.

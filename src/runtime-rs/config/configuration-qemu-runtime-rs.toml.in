@@ -280,6 +280,12 @@ block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
 #
 enable_iothreads = @DEFENABLEIOTHREADS@
 
+# Virtio queue size. Size: byte. default 128
+#queue_size: u32,
+
+# Block device multi-queue, default 1
+#num_queues: usize,
+
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
 # as all of the memory will be allocated and locked

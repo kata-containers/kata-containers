@@ -62,6 +62,8 @@ impl RawblockVolume {
             path_on_host: mount_info.device.clone(),
             driver_option: blkdev_info.block_device_driver,
             blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+            num_queues: blkdev_info.num_queues,
+            queue_size: blkdev_info.queue_size,
             ..Default::default()
         };
 
