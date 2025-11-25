@@ -290,7 +290,7 @@ impl VirtSandbox {
     ) -> Result<()> {
         let mut st = state.clone();
         // for dragonball, we use vmm_master_tid
-        let vmm_pid = self
+        let vmm_pid: u32 = self
             .hypervisor
             .get_vmm_master_tid()
             .await
@@ -804,7 +804,7 @@ impl Sandbox for VirtSandbox {
 
     async fn wait(&self) -> Result<SandboxExitInfo> {
         info!(sl!(), "wait sandbox");
-        let exit_code = self.hypervisor.wait_vm().await.context("wait vm")?;
+        let exit_code: i32 = self.hypervisor.wait_vm().await.context("wait vm")?;
         Ok(SandboxExitInfo {
             exit_status: exit_code as u32,
             exited_at: Some(std::time::SystemTime::now()),
