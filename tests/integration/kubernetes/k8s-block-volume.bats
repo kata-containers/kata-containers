@@ -10,6 +10,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
 	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
 	get_pod_config_dir
@@ -91,6 +92,7 @@ setup() {
 }
 
 teardown() {
+	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
 	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
 	 # Debugging information
