@@ -54,9 +54,6 @@ default AllowRequestsFailingPolicy := false
 # Constants
 S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
 S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
-# TODO /dev/vfio/devices/vfio ... with new device plugin
-VFIO_DEVICE_PATH = "/dev/vfio"
-VFIO_DEVICE_PREFIX = "/dev/vfio/"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
 VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
 
@@ -476,12 +473,14 @@ allow_log_directory(p_oci, i_oci) if {
 allow_devices(p_devices, i_devices, i_oci) if {
     print("allow_devices: start")
 
-    p_volume_devices := [d | d := p_devices[_]; d.container_path != VFIO_DEVICE_PATH]
-    i_volume_devices := [d | d := i_devices[_]; not startswith(d.container_path, VFIO_DEVICE_PREFIX)]
+    vfio_device_path := policy_data.device_annotations.vfio.device_path
+
+    p_volume_devices := [d | d := p_devices[_]; d.container_path != vfio_device_path]
+    i_volume_devices := [d | d := i_devices[_]; not startswith(d.container_path, vfio_device_path)]
     allow_volume_devices(p_volume_devices, i_volume_devices)
 
-    p_vfio_devices := [d | d := p_devices[_]; d.container_path == VFIO_DEVICE_PATH]
-    i_vfio_devices := [d | d := i_devices[_]; startswith(d.container_path, VFIO_DEVICE_PREFIX)]
+    p_vfio_devices := [d | d := p_devices[_]; d.container_path == vfio_device_path]
+    i_vfio_devices := [d | d := i_devices[_]; startswith(d.container_path, vfio_device_path)]
     allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci)
 
     print("allow_devices: true")
@@ -515,8 +514,9 @@ allow_vfio_device(p_vfio_devices, i_vfio_device) if {
 
     some p_device in p_vfio_devices
 
-    startswith(i_vfio_device.container_path, VFIO_DEVICE_PREFIX)
-    suffix := trim_prefix(i_vfio_device.container_path, VFIO_DEVICE_PREFIX)
+    vfio_device_path := policy_data.device_annotations.vfio.device_path
+    startswith(i_vfio_device.container_path, vfio_device_path)
+    suffix := trim_prefix(i_vfio_device.container_path, vfio_device_path)
     regex.match("^[0-9]+$", suffix)
 
     i_vfio_device.id == suffix
@@ -537,9 +537,10 @@ allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
 
     count(i_vfio_devices) == count(p_vfio_devices)
 
+    vfio_device_path := policy_data.device_annotations.vfio.device_path
     vfio_numbers := [suffix |
         d := i_vfio_devices[_];
-        suffix := trim_prefix(d.container_path, VFIO_DEVICE_PREFIX);
+        suffix := trim_prefix(d.container_path, vfio_device_path);
         regex.match("^[0-9]+$", suffix)
     ]
     count(vfio_numbers) == count({n | n := vfio_numbers[_]})

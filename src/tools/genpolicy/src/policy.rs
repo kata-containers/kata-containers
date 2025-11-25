@@ -61,6 +61,9 @@ pub struct PolicyData {
     /// Settings read from genpolicy-settings.json, related directly to each
     /// kata agent endpoint, that get added to the output policy.
     pub request_defaults: RequestDefaults,
+
+    /// Device annotation settings read from genpolicy-settings.json.
+    pub device_annotations: DeviceAnnotations,
 }
 
 /// OCI Container spec. This struct is very similar to the Spec struct from
@@ -462,7 +465,7 @@ pub struct ClusterConfig {
 /// VFIO device annotation patterns for runtime-assigned CDI annotations.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VfioDeviceAnnotations {
-    /// Device path for VFIO devices.
+    /// Device path prefix for VFIO devices (without device number suffix).
     pub device_path: String,
 
     /// Regex pattern for VFIO CDI annotation keys.
@@ -611,6 +614,7 @@ impl AgentPolicy {
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
             sandbox: self.config.settings.sandbox.clone(),
+            device_annotations: self.config.settings.device_annotations.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -697,6 +701,15 @@ impl AgentPolicy {
         let mut devices: Vec<agent::Device> = vec![];
         if let Some(volumeDevices) = &yaml_container.volumeDevices {
             for volumeDevice in volumeDevices {
+                if volumeDevice.devicePath.starts_with(&self.config.settings.device_annotations.vfio.device_path) {
+                    panic!(
+                        "Volume device path '{}' conflicts with VFIO device path prefix '{}'. \
+                         VFIO devices should be requested via resource limits (e.g., nvidia.com/gpu), not as volume devices.",
+                        volumeDevice.devicePath,
+                        self.config.settings.device_annotations.vfio.device_path
+                    );
+                }
+
                 let mut device = agent::Device::new();
                 device.set_container_path(volumeDevice.devicePath.clone());
                 devices.push(device);
