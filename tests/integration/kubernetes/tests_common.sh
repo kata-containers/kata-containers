@@ -22,7 +22,7 @@ export sleep_time=3
 
 # Timeout for use with `kubectl wait`, unless it needs to wait longer.
 # Note: try to keep timeout and wait_time equal.
-export timeout=90s
+export timeout=300s
 
 # issues that can't test yet.
 export fc_limitations="https://github.com/kata-containers/documentation/issues/351"
