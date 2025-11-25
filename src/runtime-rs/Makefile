@@ -328,7 +328,7 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_COCO = $(KERNELDIR)/$(KERNEL_NAME_COCO)
 
     # overriding options
-    DEFSTATICRESOURCEMGMT_QEMU := true
+    DEFSTATICRESOURCEMGMT_QEMU := false
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false
