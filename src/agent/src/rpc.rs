@@ -448,6 +448,7 @@ impl AgentService {
     async fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
         let cid = req.container_id;
         let eid = req.exec_id;
+        let all = req.all;
 
         info!(
             sl(),
@@ -485,8 +486,7 @@ impl AgentService {
             }
         };
 
-        if eid.is_empty() {
-            // eid is empty, signal all the remaining processes in the container cgroup
+        if all {
             info!(
                 sl(),
                 "signal all the remaining processes";
