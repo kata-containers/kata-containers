@@ -293,7 +293,7 @@
             "CAP_BPF",
             "CAP_CHECKPOINT_RESTORE"
         ],
-        "image_layer_verification" : "none"
+        "image_layer_verification": "none"
     },
     "kata_config": {
         "oci_version": "1.1.0",
@@ -308,14 +308,14 @@
         "CreateContainerRequest": {
             "allow_env_regex": [
                 "^HOSTNAME=$(dns_label)$",
-                "^$(svc_name_downward_env)_PORT_$(ip_p)_TCP=tcp://$(ipv4_a):$(ip_p)$",
-                "^$(svc_name_downward_env)_PORT_$(ip_p)_TCP_PROTO=tcp$",
-                "^$(svc_name_downward_env)_PORT_$(ip_p)_TCP_PORT=$(ip_p)$",
-                "^$(svc_name_downward_env)_PORT_$(ip_p)_TCP_ADDR=$(ipv4_a)$",
+                "^$(svc_name_downward_env)_PORT_$(ip_p)_(TCP|UDP)=(tcp|udp)://$(ipv4_a):$(ip_p)$",
+                "^$(svc_name_downward_env)_PORT_$(ip_p)_(TCP|UDP)_PROTO=(tcp|udp)$",
+                "^$(svc_name_downward_env)_PORT_$(ip_p)_(TCP|UDP)_PORT=$(ip_p)$",
+                "^$(svc_name_downward_env)_PORT_$(ip_p)_(TCP|UDP)_ADDR=$(ipv4_a)$",
                 "^$(svc_name_downward_env)_SERVICE_HOST=$(ipv4_a)$",
                 "^$(svc_name_downward_env)_SERVICE_PORT=$(ip_p)$",
                 "^$(svc_name_downward_env)_SERVICE_PORT_$(dns_label)=$(ip_p)$",
-                "^$(svc_name_downward_env)_PORT=tcp://$(ipv4_a):$(ip_p)$",
+                "^$(svc_name_downward_env)_PORT=(tcp|udp)://$(ipv4_a):$(ip_p)$",
                 "^JOB_COMPLETION_INDEX=[0-9]+$",
                 "^AZURE_CLIENT_ID=[A-Fa-f0-9-]*$",
                 "^AZURE_TENANT_ID=[A-Fa-f0-9-]*$",
