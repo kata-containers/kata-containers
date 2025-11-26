@@ -701,7 +701,10 @@ impl AgentPolicy {
         let mut devices: Vec<agent::Device> = vec![];
         if let Some(volumeDevices) = &yaml_container.volumeDevices {
             for volumeDevice in volumeDevices {
-                if volumeDevice.devicePath.starts_with(&self.config.settings.device_annotations.vfio.device_path) {
+                if volumeDevice
+                    .devicePath
+                    .starts_with(&self.config.settings.device_annotations.vfio.device_path)
+                {
                     panic!(
                         "Volume device path '{}' conflicts with VFIO device path prefix '{}'. \
                          VFIO devices should be requested via resource limits (e.g., nvidia.com/gpu), not as volume devices.",
@@ -729,15 +732,39 @@ impl AgentPolicy {
                     let mut device = agent::Device::new();
                     // TODO: change device_path to /dev/vfio/devices/vfio<num> when the new device plugin is used.
                     // The actual device number /dev/vfio/<num> is assigned at runtime by the device plugin
-                    device.set_container_path(self.config.settings.device_annotations.vfio.device_path.clone());
-                    device.set_type(self.config.settings.device_annotations.vfio.nvidia_gpu_gk_device_type.clone());
+                    device.set_container_path(
+                        self.config
+                            .settings
+                            .device_annotations
+                            .vfio
+                            .device_path
+                            .clone(),
+                    );
+                    device.set_type(
+                        self.config
+                            .settings
+                            .device_annotations
+                            .vfio
+                            .nvidia_gpu_gk_device_type
+                            .clone(),
+                    );
                     device.set_vm_path("".to_string());
                     devices.push(device);
                 }
 
                 runtime_anno_patterns.insert(
-                    self.config.settings.device_annotations.vfio.key_regex.clone(),
-                    self.config.settings.device_annotations.vfio.nvidia_gpu_value_regex.clone(),
+                    self.config
+                        .settings
+                        .device_annotations
+                        .vfio
+                        .key_regex
+                        .clone(),
+                    self.config
+                        .settings
+                        .device_annotations
+                        .vfio
+                        .nvidia_gpu_value_regex
+                        .clone(),
                 );
             }
         }
