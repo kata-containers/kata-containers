@@ -34,7 +34,7 @@ on:
         description: The build type for kata-deploy. Use 'rust' for Rust-based build, empty or omit for script-based (default).
         required: false
         type: string
-        default: ""
+        default: "rust" 
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: true
