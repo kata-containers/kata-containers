@@ -1,0 +1,53 @@
+[package]
+name = "kata-deploy"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+license = "Apache-2.0"
+
+[[bin]]
+name = "kata-deploy"
+path = "src/main.rs"
+
+[dependencies]
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging
+log = "0.4"
+env_logger = "0.10"
+
+# Command line parsing
+clap = { version = "4.5", features = ["derive"] }
+
+# TOML parsing and manipulation
+toml = "0.5.8"
+toml_edit = "0.22"
+
+# YAML parsing and manipulation
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+
+# Kubernetes API client
+kube = { version = "2.0", features = ["runtime", "derive"] }
+k8s-openapi = { version = "0.26", default-features = false, features = ["v1_33"] }
+
+# System operations (using nsenter command instead of syscalls)
+libc = "0.2"
+
+# JSON serialization
+serde_json = "1.0"
+
+# File operations
+walkdir = "2"
+
+# String manipulation
+regex = "1.10"
+
+# Async runtime (required by kube-rs and for async main)
+tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "time"] }
+
+[dev-dependencies]
+tempfile = "3.8"
