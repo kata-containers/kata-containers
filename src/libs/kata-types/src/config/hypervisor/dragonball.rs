@@ -79,11 +79,6 @@ impl ConfigPlugin for DragonballConfig {
             if db.memory_info.memory_slots == 0 {
                 db.memory_info.memory_slots = default::DEFAULT_DRAGONBALL_MEMORY_SLOTS;
             }
-
-            // Apply factory defaults
-            if db.factory.template_path.is_empty() {
-                db.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
-            }
         }
         Ok(())
     }

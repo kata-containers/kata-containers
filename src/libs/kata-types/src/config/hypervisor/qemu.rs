@@ -92,7 +92,6 @@ impl ConfigPlugin for QemuConfig {
                 qemu.memory_info.memory_slots = default::DEFAULT_QEMU_MEMORY_SLOTS;
             }
 
-            // Apply factory defaults
             if qemu.factory.template_path.is_empty() {
                 qemu.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
             }
