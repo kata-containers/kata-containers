@@ -529,11 +529,13 @@ function adjust_qemu_cmdline() {
 	# ${dest_dir}/opt/kata/share/kata-qemu/qemu
 	# ${dest_dir}/opt/kata/share/kata-qemu-snp-experimnental/qemu
 	# ${dest_dir}/opt/kata/share/kata-qemu-cca-experimental/qemu
-	[[ "${shim}" =~ ^(qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-cca)$ ]] && qemu_share=${shim}-experimental
+	[[ "${shim}" == "qemu-nvidia-gpu-snp" ]] && qemu_share=qemu-snp-experimental
+	[[ "${shim}" == "qemu-nvidia-gpu-tdx" ]] && qemu_share=qemu-tdx-experimental
+	[[ "${shim}" == "qemu-cca" ]] && qemu_share=qemu-cca-experimental
 
 	# Both qemu and qemu-coco-dev use exactly the same QEMU, so we can adjust
 	# the shim on the qemu-coco-dev case to qemu
-	[[ "${shim}" =~ ^(qemu|qemu-coco-dev)$ ]] && qemu_share="qemu"
+	[[ "${shim}" =~ ^(qemu|qemu-coco-dev|qemu-nvidia-gpu)$ ]] && qemu_share="qemu"
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
 	qemu_binary_script="${qemu_binary}-installation-prefix"
