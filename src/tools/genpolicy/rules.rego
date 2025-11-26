@@ -98,7 +98,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     print("CreateContainerRequest: p Readonly =", p_oci.Root.Readonly, "i Readonly =", i_oci.Root.Readonly)
     p_oci.Root.Readonly == i_oci.Root.Readonly
 
-    allow_anno(p_oci, i_oci)
+    allow_anno(p_container, i_oci)
 
     p_storages := p_container.storages
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
@@ -225,52 +225,50 @@ concat_op_if_not_null(ops, op) = result if {
 }
 
 # Reject unexpected annotations.
-allow_anno(p_oci, i_oci) if {
+allow_anno(p_container, i_oci) if {
     print("allow_anno 1: start")
 
     not i_oci.Annotations
 
     print("allow_anno 1: true")
 }
-allow_anno(p_oci, i_oci) if {
+allow_anno(p_container, i_oci) if {
+    p_oci := p_container.OCI
+
     print("allow_anno 2: p Annotations =", p_oci.Annotations)
     print("allow_anno 2: i Annotations =", i_oci.Annotations)
 
-    i_keys := object.keys(i_oci.Annotations)
-    print("allow_anno 2: i keys =", i_keys)
-
-    every i_key in i_keys {
-        allow_anno_key(i_key, p_oci)
+    every i_key, i_value in i_oci.Annotations {
+        allow_anno_key_value(i_key, i_value, p_container)
     }
 
     print("allow_anno 2: true")
 }
 
-allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 1: i key =", i_key)
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 1: i key =", i_key)
 
     startswith(i_key, "io.kubernetes.cri.")
 
-    print("allow_anno_key 1: true")
+    print("allow_anno_key_value 1: true")
 }
-allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 2: i key =", i_key)
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 2: i key =", i_key)
 
-    some p_key, _ in p_oci.Annotations
+    some p_key, _ in p_container.OCI.Annotations
     p_key == i_key
 
-    print("allow_anno_key 2: true")
+    print("allow_anno_key_value 2: true")
 }
-allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 3: i key =", i_key)
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 3: i key =", i_key, "i_value =", i_value)
 
-    some p_key_regex, p_value_regex in policy_data.containers[_].runtime_anno_patterns
+    some p_key_regex, p_value_regex in p_container.runtime_anno_patterns
+
     regex.match(p_key_regex, i_key)
-
-    i_value := input.OCI.Annotations[i_key]
     regex.match(p_value_regex, i_value)
 
-    print("allow_anno_key 3: true")
+    print("allow_anno_key_value 3: true")
 }
 
 # Get the value of the S_NAME_KEY annotation and
