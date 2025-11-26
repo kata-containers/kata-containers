@@ -101,7 +101,7 @@ assets:
 
     qemu-cca-experimental:
       description: "QEMU with experimental CCA support"
-      url: "https://git.codelinaro.org/linaro/dcap/qemu.git"
+      url: "https://gitlab.com/Linaro/dcap/qemu.git"
       tag: "97345ddc501d3eb45bbbf15d97608fba0c2c0c7b"
 
     qemu-snp-experimental:
@@ -387,7 +387,7 @@ externals:
     cca:
       description: "UEFI for arm64 CCA virtual machines."
       version: "cca/2025-02-06"
-      url: "https://git.codelinaro.org/linaro/dcap/edk2"
+      url: "https://gitlab.com/Linaro/dcap/edk2"
       package: "ArmVirtPkg/ArmVirtQemu.dsc"
       package_output_dir: "ArmVirtQemu-AARCH64"
 
