@@ -488,7 +488,7 @@ impl Qmp {
         );
         netdev_frontend_args.insert("addr".to_owned(), format!("{:02}", slot).into());
         netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
-        netdev_frontend_args.insert("mq".to_owned(), "on".into());
+        netdev_frontend_args.insert("mq".to_owned(), true.into());
         // As the golang runtime documents the vectors computation, it's
         // 2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq
         netdev_frontend_args.insert(
