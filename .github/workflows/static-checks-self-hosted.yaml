@@ -29,7 +29,7 @@ jobs:
       matrix:
         instance:
           - "ubuntu-24.04-arm"
-          - "s390x"
+          - "ubuntu-24.04-s390x"
           - "ubuntu-24.04-ppc64le"
     uses: ./.github/workflows/build-checks.yaml
     with:
