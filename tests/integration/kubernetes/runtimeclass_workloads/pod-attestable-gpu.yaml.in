@@ -8,7 +8,7 @@ kind: Pod
 metadata:
   name: aa-test-cc
   annotations:
-    cdi.k8s.io/gpu: "nvidia.com/pgpu=0"
+    cdi.k8s.io/gpu: "nvidia.com/pgpu=1"
 spec:
   runtimeClassName: ${RUNTIME_CLASS_NAME}
   containers:
