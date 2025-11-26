@@ -535,7 +535,7 @@ function adjust_qemu_cmdline() {
 
 	# Both qemu and qemu-coco-dev use exactly the same QEMU, so we can adjust
 	# the shim on the qemu-coco-dev case to qemu
-	[[ "${shim}" =~ ^(qemu|qemu-coco-dev|qemu-nvidia-gpu)$ ]] && qemu_share="qemu"
+	[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-nvidia-gpu)$ ]] && qemu_share="qemu"
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
 	qemu_binary_script="${qemu_binary}-installation-prefix"
@@ -854,7 +854,7 @@ function install_artifacts() {
 				sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
 				# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-				[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-se|qemu-coco-dev|qemu-cca)$ ]] && \
+				[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-cca)$ ]] && \
 					adjust_qemu_cmdline "${shim}" "${kata_config_file}"
 			fi
 		fi
