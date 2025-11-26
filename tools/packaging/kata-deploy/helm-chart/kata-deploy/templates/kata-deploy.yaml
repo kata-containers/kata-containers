@@ -133,7 +133,11 @@ spec:
       - name: kube-kata
         image: {{ .Values.image.reference }}:{{ default .Chart.AppVersion .Values.image.tag }}
         imagePullPolicy: {{ .Values.imagePullPolicy }}
-        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install"]
+{{- if eq (include "kata-deploy.isRustBuild" .) "true" }}
+        command: ["/usr/bin/kata-deploy", "install"]
+{{- else }}
+        command: ["/opt/kata-artifacts/scripts/kata-deploy.sh", "install"]
+{{- end }}
         env:
         - name: NODE_NAME
           valueFrom:
