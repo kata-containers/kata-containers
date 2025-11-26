@@ -39,8 +39,8 @@ K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 # Enable NVRC trace logging by default for NVIDIA GPU tests
 ENABLE_NVRC_TRACE="${ENABLE_NVRC_TRACE:-true}"
 
-if [ -n "${K8S_TEST_NV:-}" ]; then
-	K8S_TEST_NV=($K8S_TEST_NV)
+if [[ -n "${K8S_TEST_NV:-}" ]]; then
+	mapfile -d " " -t K8S_TEST_NV <<< "${K8S_TEST_NV}"
 else
 	K8S_TEST_NV=("k8s-confidential-attestation.bats" \
 		"k8s-nvidia-cuda.bats" \
@@ -48,7 +48,7 @@ else
 fi
 
 RUNTIME_CLASS_NAME="kata-qemu-nvidia-gpu"
-if [ -n "${KATA_HYPERVISOR:-}" ]; then
+if [[ -n "${KATA_HYPERVISOR:-}" ]]; then
 	SUPPORTED_VMMS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
 	# shellcheck disable=SC2076 # intentionally use literal string matching
 	if [[ ! " ${SUPPORTED_VMMS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
