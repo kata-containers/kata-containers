@@ -263,20 +263,6 @@ tx_rate_limiter_max_rate = 0
 # disable applying SELinux on the VMM process (default false)
 disable_selinux = @DEFDISABLESELINUX@
 
-[factory]
-# VM templating support. Once enabled, new VMs are created from template
-# using vm cloning. They will share the same initial kernel, initramfs and
-# agent memory by mapping it readonly. It helps speeding up new container
-# creation and saves a lot of memory if there are many kata containers running
-# on the same host.
-#
-# When disabled, new VMs are created from scratch.
-#
-# Note: Requires "initrd=" to be set ("image=" is not supported).
-#
-# Default false
-enable_template = false
-
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
