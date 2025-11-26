@@ -142,6 +142,10 @@ jobs:
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
       - name: Refresh OIDC token in case access token expired
         if: always()
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0

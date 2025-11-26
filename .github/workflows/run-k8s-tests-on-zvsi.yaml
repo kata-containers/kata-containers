@@ -131,6 +131,10 @@ jobs:
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi
