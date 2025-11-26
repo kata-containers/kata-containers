@@ -47,7 +47,7 @@ pub const DEFAULT_BLOCK_DEVICE_QUEUE_SIZE: u32 = 128;
 pub const DEFAULT_SHARED_FS_TYPE: &str = "virtio-fs";
 pub const DEFAULT_VIRTIO_FS_CACHE_MODE: &str = "never";
 pub const DEFAULT_VIRTIO_FS_DAX_SIZE_MB: u32 = 1024;
-pub const DEFAULT_SHARED_9PFS_SIZE_MB: u32 = 128 * 1024;
+pub const DEFAULT_SHARED_9PFS_SIZE_MB: u32 = 8 * 1024;
 pub const MIN_SHARED_9PFS_SIZE_MB: u32 = 4 * 1024;
 pub const MAX_SHARED_9PFS_SIZE_MB: u32 = 8 * 1024 * 1024;
 
@@ -112,3 +112,6 @@ pub const MAX_REMOTE_VCPUS: u32 = 32;
 pub const MIN_REMOTE_MEMORY_SIZE_MB: u32 = 64;
 pub const DEFAULT_REMOTE_MEMORY_SIZE_MB: u32 = 128;
 pub const DEFAULT_REMOTE_MEMORY_SLOTS: u32 = 128;
+
+// Default configuration for factory/templating
+pub const DEFAULT_TEMPLATE_PATH: &str = "/run/vc/vm/template";

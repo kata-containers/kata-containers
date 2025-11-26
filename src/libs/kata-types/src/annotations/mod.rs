@@ -620,7 +620,7 @@ impl Annotation {
                         hv.boot_info.kernel = value.to_string();
                     }
                     KATA_ANNO_CFG_HYPERVISOR_KERNEL_PARAMS => {
-                        hv.boot_info.kernel_params = value.to_string();
+                        hv.boot_info.replace_kernel_params(value);
                     }
                     KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH => {
                         hv.boot_info.validate_boot_path(value)?;

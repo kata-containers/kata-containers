@@ -233,13 +233,19 @@ DEFDISABLESELINUX := false
 
 # Default guest SELinux configuration
 DEFDISABLEGUESTSELINUX := true
-DEFGUESTSELINUXLABEL := system_u:system_r:container_t
+# Default is empty string "" to match the default golang (when commented out in config).
+# Most users will want to set this to "system_u:system_r:container_t" for SELinux support.
+DEFGUESTSELINUXLABEL := 
 
 #Default SeccomSandbox param
 #The same default policy is used by libvirt
-#More explanation on https://lists.gnu.org/archive/html/qemu-devel/2017-02/msg03348.html
+# More explanation on https://lists.gnu.org/archive/html/qemu-devel/2017-02/msg03348.html
+#
+# Default is empty string "" to match the default (when commented out in config).
+# Most users will want to set this to "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
+# for better security. Note: "elevateprivileges=deny" doesn't work with daemonize option.
 # Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
-DEFSECCOMPSANDBOXPARAM := on,obsolete=deny,spawn=deny,resourcecontrol=deny
+DEFSECCOMPSANDBOXPARAM :=
 
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom

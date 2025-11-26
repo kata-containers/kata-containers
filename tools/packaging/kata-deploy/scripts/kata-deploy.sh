@@ -33,38 +33,36 @@ info() {
 	echo "INFO: $msg" >&2
 }
 
-# Check if a value exists within a specific field in the config file
-# * field_contains_value "${config}" "kernel_params" "agent.log=debug"
-field_contains_value() {
-	local config_file="$1"
-	local field="$2"
-	local value="$3"
-	# Use word boundaries (\b) to match complete parameters, not substrings
-	# This handles space-separated values like kernel_params = "param1 param2 param3"
-	grep -qE "^${field}[^=]*=.*[[:space:]\"](${value})([[:space:]\"]|$)" "${config_file}"
-}
-
 # Get existing values from a TOML array field and return them as a comma-separated string
-# * get_field_array_values "${config}" "enable_annotations"
+# * get_field_array_values "${config}" "enable_annotations" "${shim}"
 get_field_array_values() {
 	local config_file="$1"
 	local field="$2"
-	# Extract values from field = ["val1", "val2", ...] format
-	grep "^${field} = " "${config_file}" | sed "s/^${field} = \[\(.*\)\]/\1/" | sed 's/"//g' | sed 's/, /,/g'
-}
-
-# Check if a boolean config is already set to true
-config_is_true() {
-	local config_file="$1"
-	local key="$2"
-	grep -qE "^${key}\s*=\s*true" "${config_file}"
-}
-
-# Check if a string value already exists anywhere in the file (literal match)
-string_exists_in_file() {
-	local file_path="$1"
-	local string="$2"
-	grep -qF "${string}" "${file_path}"
+	local shim="${3:-}"
+	
+	# Determine hypervisor name if shim is provided
+	local hypervisor_name=""
+	if [[ -n "${shim}" ]]; then
+		hypervisor_name=$(get_hypervisor_name "${shim}")
+	fi
+	
+	# Get array values using tomlq - output each element on a new line, then convert to comma-separated
+	local array_values=""
+	if [[ -n "${hypervisor_name}" ]]; then
+		array_values=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.'"${field}"' // [] | .[]' "${config_file}" 2>/dev/null || echo "")
+	fi
+	
+	# Fallback: try without hypervisor prefix (for top-level fields)
+	if [[ -z "${array_values}" ]] || [[ "${array_values}" == "null" ]]; then
+		array_values=$(tomlq -r '."'"${field}"'" // [] | .[]' "${config_file}" 2>/dev/null || echo "")
+	fi
+	
+	# Convert newline-separated values to comma-separated string
+	if [[ -n "${array_values}" ]]; then
+		echo "${array_values}" | tr '\n' ',' | sed 's/,$//'
+	else
+		echo ""
+	fi
 }
 
 DEBUG="${DEBUG:-"false"}"
@@ -474,8 +472,11 @@ function tdx_supported() {
 	version="${2}"
 	config="${3}"
 
-	sed -i -e "s|PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT|$(get_tdx_qemu_path_from_distro ${distro})|g" ${config}
-	sed -i -e "s|PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT|$(get_tdx_ovmf_path_from_distro ${distro})|g" ${config}
+	local qemu_path=$(get_tdx_qemu_path_from_distro ${distro})
+	local ovmf_path=$(get_tdx_ovmf_path_from_distro ${distro})
+
+	tomlq -i -t '.hypervisor.qemu.path = "'"${qemu_path}"'"' "${config}" 2>/dev/null || true
+	tomlq -i -t '.hypervisor.qemu.firmware = "'"${ovmf_path}"'"' "${config}" 2>/dev/null || true
 
 	info "In order to use the tdx related runtime classes, ensure TDX is properly configured for ${distro} ${version} by following the instructions provided at: $(get_tdx_distro_instructions ${distro})"
 }
@@ -558,9 +559,38 @@ EOF
 		chmod +x ${qemu_binary_script_host_path}
 	fi
 
-	if ! string_exists_in_file "${config_path}" "${qemu_binary_script}"; then
-		sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
-	fi
+	tomlq -i -t '.hypervisor.qemu.path = "'"${qemu_binary_script}"'"' "${config_path}" 2>/dev/null || true
+}
+
+function get_hypervisor_name() {
+	local shim="${1}"
+	case "${shim}" in
+		qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs | qemu | qemu-tdx | qemu-snp | qemu-se | qemu-coco-dev | qemu-cca | qemu-nvidia-gpu | qemu-nvidia-gpu-tdx | qemu-nvidia-gpu-snp)
+			echo "qemu"
+			;;
+		clh)
+			echo "clh"
+			;;
+		cloud-hypervisor)
+			echo "cloud-hypervisor"
+			;;
+		dragonball)
+			echo "dragonball"
+			;;
+		fc | firecracker)
+			echo "firecracker"
+			;;
+		stratovirt)
+			echo "stratovirt"
+			;;
+		remote)
+			echo "remote"
+			;;
+		*)
+			# Default to the shim name itself if no specific mapping
+			echo "${shim}"
+			;;
+	esac
 }
 
 function install_artifacts() {
@@ -579,6 +609,7 @@ function install_artifacts() {
 		mkdir -p "$config_path"
 
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
+
 		# Till deprecation period is over, we need to support:
 		# * "http://proxy:8080" (applies to all shims)
 		# * per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
@@ -603,8 +634,14 @@ function install_artifacts() {
 			fi
 
 			if [[ -n "${https_proxy_value}" ]]; then
-				if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.https_proxy"; then
-					sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='"${https_proxy_value}"'"|g' "${kata_config_file}"
+				local hypervisor_name=$(get_hypervisor_name "${shim}")
+				local current_params=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.kernel_params // ""' "${kata_config_file}" 2>/dev/null || echo "")
+				# Only add if not already present
+				if [[ "${current_params}" != *"agent.https_proxy"* ]]; then
+					local new_params="${current_params}"
+					[[ -n "${new_params}" ]] && new_params+=" "
+					new_params+="agent.https_proxy=${https_proxy_value}"
+					tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.kernel_params = "'"${new_params}"'"' "${kata_config_file}" 2>/dev/null || true
 				fi
 			fi
 		fi
@@ -633,30 +670,55 @@ function install_artifacts() {
 			fi
 
 			if [[ -n "${no_proxy_value}" ]]; then
-				if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.no_proxy"; then
-					sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='"${no_proxy_value}"'"|g' "${kata_config_file}"
+				local hypervisor_name=$(get_hypervisor_name "${shim}")
+				local current_params=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.kernel_params // ""' "${kata_config_file}" 2>/dev/null || echo "")
+				# Only add if not already present
+				if [[ "${current_params}" != *"agent.no_proxy"* ]]; then
+					local new_params="${current_params}"
+					[[ -n "${new_params}" ]] && new_params+=" "
+					new_params+="agent.no_proxy=${no_proxy_value}"
+					tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.kernel_params = "'"${new_params}"'"' "${kata_config_file}" 2>/dev/null || true
 				fi
 			fi
 		fi
 
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
-			if ! config_is_true "${kata_config_file}" "enable_debug"; then
-				sed -i -e 's/^#\{0,1\}\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
-			fi
-			if ! config_is_true "${kata_config_file}" "debug_console_enabled"; then
-				sed -i -e 's/^#\{0,1\}\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
+			local hypervisor_name=$(get_hypervisor_name "${shim}")
+
+			# Only set these boolean flags if not already set to true
+			local current_enable_debug=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.enable_debug // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_enable_debug}" != "true" ]]; then
+				tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.enable_debug = true' "${kata_config_file}" 2>/dev/null || true
 			fi
 
+			local current_runtime_debug=$(tomlq -r '.runtime.enable_debug // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_runtime_debug}" != "true" ]]; then
+				tomlq -i -t '.runtime.enable_debug = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			local current_debug_console=$(tomlq -r '.agent.kata.debug_console_enabled // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_debug_console}" != "true" ]]; then
+				tomlq -i -t '.agent.kata.debug_console_enabled = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			local current_agent_debug=$(tomlq -r '.agent.kata.enable_debug // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_agent_debug}" != "true" ]]; then
+				tomlq -i -t '.agent.kata.enable_debug = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			# Add debug kernel params if not already present
+			local current_params=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.kernel_params // ""' "${kata_config_file}" 2>/dev/null || echo "")
 			local debug_params=""
-			if ! field_contains_value "${kata_config_file}" "kernel_params" "agent.log=debug"; then
+			if [[ "${current_params}" != *"agent.log=debug"* ]]; then
 				debug_params+=" agent.log=debug"
 			fi
-			if ! field_contains_value "${kata_config_file}" "kernel_params" "initcall_debug"; then
+			if [[ "${current_params}" != *"initcall_debug"* ]]; then
 				debug_params+=" initcall_debug"
 			fi
 			if [[ -n "${debug_params}" ]]; then
-				sed -i -e "s/^kernel_params = \"\(.*\)\"/kernel_params = \"\1${debug_params}\"/g" "${kata_config_file}"
+				local new_params="${current_params}${debug_params}"
+				tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.kernel_params = "'"${new_params}"'"' "${kata_config_file}" 2>/dev/null || true
 			fi
 		fi
 
@@ -702,7 +764,8 @@ function install_artifacts() {
 			fi
 
 			if [[ -n "${all_annotations}" ]]; then
-				local existing_annotations=$(get_field_array_values "${kata_config_file}" "enable_annotations")
+				local hypervisor_name=$(get_hypervisor_name "${shim}")
+				local existing_annotations=$(get_field_array_values "${kata_config_file}" "enable_annotations" "${shim}")
 
 				# Combine existing and new annotations
 				local combined_annotations="${existing_annotations}"
@@ -731,16 +794,14 @@ function install_artifacts() {
 					for ann in "${unique_annotations[@]}"; do
 						formatted_annotations+=("\"${ann}\"")
 					done
-					local final_annotations=$(IFS=', '; echo "${formatted_annotations[*]}")
-					sed -i -e "s/^enable_annotations = \[.*\]/enable_annotations = [${final_annotations}]/" "${kata_config_file}"
+					local final_annotations=$(IFS=','; echo "${formatted_annotations[*]}")
+					tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.enable_annotations = ['"${final_annotations}"']' "${kata_config_file}" 2>/dev/null || true
 				fi
 			fi
 		fi
 
 		if printf '%s\n' "${experimental_force_guest_pull[@]}" | grep -Fxq "${shim}"; then
-			if ! config_is_true "${kata_config_file}" "experimental_force_guest_pull"; then
-				sed -i -e 's/^#\{0,1\}\(experimental_force_guest_pull\).*=.*$/\1 = true/g' "${kata_config_file}"
-			fi
+			tomlq -i -t '.runtime.experimental_force_guest_pull = true' "${kata_config_file}" 2>/dev/null || true
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
@@ -800,20 +861,38 @@ function install_artifacts() {
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
-
-		if ! config_is_true "${config_path}" "static_sandbox_resource_mgmt"; then
-			sed -i -E "s|(static_sandbox_resource_mgmt)\s*=\s*false|\1=true|" "${config_path}"
-		fi
-
 		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
+		local mariner_hypervisor_name="clh"
 
-		if ! field_contains_value "${config_path}" "valid_hypervisor_paths" "${clh_path}"; then
-			sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
+		tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.static_sandbox_resource_mgmt = true' "${config_path}" 2>/dev/null || true
+
+		# Append to valid_hypervisor_paths if not already present
+		local existing_paths=$(tomlq -r '.hypervisor.'"${mariner_hypervisor_name}"'.valid_hypervisor_paths // [] | .[]' "${config_path}" 2>/dev/null || echo "")
+		local path_exists=false
+		if [[ -n "${existing_paths}" ]]; then
+			while IFS= read -r path; do
+				path=$(echo "${path}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+				if [[ "${path}" == "${clh_path}" ]]; then
+					path_exists=true
+					break
+				fi
+			done <<< "${existing_paths}"
 		fi
 
-		if ! field_contains_value "${config_path}" "path" "${clh_path}"; then
-			sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+		if [[ "${path_exists}" == "false" ]]; then
+			local formatted_paths=()
+			if [[ -n "${existing_paths}" ]]; then
+				while IFS= read -r path; do
+					path=$(echo "${path}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+					formatted_paths+=("\"${path}\"")
+				done <<< "${existing_paths}"
+			fi
+			formatted_paths+=("\"${clh_path}\"")
+			local final_paths=$(IFS=','; echo "${formatted_paths[*]}")
+			tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.valid_hypervisor_paths = ['"${final_paths}"']' "${config_path}" 2>/dev/null || true
 		fi
+
+		tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.path = "'"${clh_path}"'"' "${config_path}" 2>/dev/null || true
 	fi
 
 	local expand_runtime_classes_for_nfd=false

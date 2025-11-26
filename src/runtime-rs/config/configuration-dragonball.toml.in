@@ -16,13 +16,12 @@ path = "@DBPATH@"
 ctlpath = "@DBCTLPATH@"
 kernel = "@KERNELPATH_DB@"
 image = "@IMAGEPATH@"
-# initrd = "@INITRDPATH@"
 
 # rootfs filesystem type:
 #   - ext4 (default)
 #   - xfs
 #   - erofs
-rootfs_type=@DEFROOTFSTYPE@
+rootfs_type = @DEFROOTFSTYPE@
 
  
 # Block storage driver to be used for the VM rootfs is backed
@@ -43,7 +42,7 @@ valid_hypervisor_paths = @DBVALIDHYPERVISORPATHS@
 # List of valid annotations values for ctlpath
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: 
-# valid_ctlpaths = 
+valid_ctlpaths = []
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -106,7 +105,7 @@ default_bridges = @DEFBRIDGES@
 # the VM.
 #
 # Default false
-#reclaim_guest_freed_memory = true
+reclaim_guest_freed_memory = false
 
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
@@ -129,7 +128,7 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # to enable debug output where available.
 #
 # Default false
-#enable_debug = true
+enable_debug = false
 
 # The log level will be applied to hypervisor.
 # Possible values are:
@@ -140,17 +139,18 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # - error
 # - critical
 # Default: info
-#log_level = "info"
+log_level = "info"
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
 # behaving as it would when running on bare metal.
 #
-#disable_nesting_checks = true
+# Default false
+disable_nesting_checks = false
 
 # If host doesn't support vhost_net, set to true. Thus we won't create vhost fds for nics.
 # Default false
-#disable_vhost_net = true
+disable_vhost_net = false
 
 # Path to OCI hook binaries in the *guest rootfs*.
 # This does not affect host-side hooks which must instead be added to
@@ -167,7 +167,8 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
-#guest_hook_path = "/usr/share/oci/hooks"
+# Recommended value when enabling: "/usr/share/oci/hooks"
+guest_hook_path = ""
 
 # Shared file system type:
 #   - inline-virtio-fs (default)
@@ -209,13 +210,13 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # Specifies cache-related options for block devices.
 # Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
 # Default false
-#block_device_cache_direct = true
+block_device_cache_direct = false
 
 # Virtio queue size. Size: byte. default 128
-#queue_size: u32,
+queue_size = 128
 
 # Block device multi-queue, default 1
-#num_queues: usize,
+num_queues = 1
 
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
@@ -223,33 +224,33 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # This is useful when you want to use vhost-user network
 # stacks within the container. This will automatically
 # result in memory pre allocation
-#enable_hugepages = true
+enable_hugepages = false
 
 # Disable the 'seccomp' feature from Cloud Hypervisor, firecracker or dragonball, default false
-# disable_seccomp = true
+disable_seccomp = false
 
 # Enable swap in the guest. Default false.
 # When enable_guest_swap is enabled, insert a raw file to the guest as the swap device.
-#enable_guest_swap = true
+enable_guest_swap = false
 
 # If enable_guest_swap is enabled, the swap device will be created in the guest
 # at this path. Default "/run/kata-containers/swap".
-#guest_swap_path = "/run/kata-containers/swap"
+guest_swap_path = "/run/kata-containers/swap"
 
 # The percentage of the total memory to be used as swap device.
 # Default 100.
-#guest_swap_size_percent = 100
+guest_swap_size_percent = 100
 
 # The threshold in seconds to create swap device in the guest.
 # Kata will wait guest_swap_create_threshold_secs seconds before creating swap device.
 # Default 60.
-#guest_swap_create_threshold_secs = 60
+guest_swap_create_threshold_secs = 60
 
 [agent.@PROJECT_TYPE@]
-container_pipe_size=@PIPESIZE@
+container_pipe_size = @PIPESIZE@
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
-#enable_debug = true
+enable_debug = false
 
 # The log level will be applied to agent.
 # Possible values are:
@@ -260,7 +261,7 @@ container_pipe_size=@PIPESIZE@
 # - error
 # - critical
 # (default: info)
-#log_level = "info"
+log_level = "info"
 
 # Enable agent tracing.
 #
@@ -274,18 +275,18 @@ container_pipe_size=@PIPESIZE@
 #   increasing the container shutdown time slightly.
 #
 # (default: disabled)
-#enable_tracing = true
+enable_tracing = false
 
 # Enable debug console.
 
 # If enabled, user can connect guest OS running inside hypervisor
 # through "kata-runtime exec <sandbox-id>" command
 
-#debug_console_enabled = true
+debug_console_enabled = false
 
 # Agent dial timeout in millisecond.
 # (default: 10)
-#dial_timeout_ms = 10
+dial_timeout_ms = 10
 
 # Agent reconnect timeout in millisecond.
 # Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
@@ -294,7 +295,7 @@ container_pipe_size=@PIPESIZE@
 # You'd better not change the value of dial_timeout_ms, unless you have an
 # idea of what you are doing.
 # (default: 3000)
-#reconnect_timeout_ms = 3000
+reconnect_timeout_ms = 3000
 
 # Create Container Request Timeout
 # This timeout value is used to set the maximum duration for the agent to process a CreateContainerRequest.
@@ -307,28 +308,28 @@ container_pipe_size=@PIPESIZE@
 # - runtime-request-timeout: The timeout value specified in the Kubelet configuration described as the link below:
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout)
 # Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
-# create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
 [agent.@PROJECT_TYPE@.mem_agent]
 # Control the mem-agent function enable or disable.
 # Default to false
-#mem_agent_enable = true
+mem_agent_enable = false
 
 # Control the mem-agent memcg function disable or enable
 # Default to false
-#memcg_disable = false
+memcg_disable = false
 
 # Control the mem-agent function swap enable or disable.
 # Default to false
-#memcg_swap = false
+memcg_swap = false
 
 # Control the mem-agent function swappiness max number.
 # Default to 50
-#memcg_swappiness_max = 50
+memcg_swappiness_max = 50
 
 # Control the mem-agent memcg function wait period seconds
 # Default to 600
-#memcg_period_secs = 600
+memcg_period_secs = 600
 
 # Control the mem-agent memcg wait period PSI percent limit.
 # If the percentage of memory and IO PSI stall time within
@@ -336,7 +337,7 @@ container_pipe_size=@PIPESIZE@
 # then the aging and eviction for this cgroup will not be
 # executed after this waiting period.
 # Default to 1
-#memcg_period_psi_percent_limit = 1
+memcg_period_psi_percent_limit = 1
 
 # Control the mem-agent memcg eviction PSI percent limit.
 # If the percentage of memory and IO PSI stall time for a cgroup
@@ -344,44 +345,44 @@ container_pipe_size=@PIPESIZE@
 # this cgroup will immediately stop and will not resume until
 # the next memcg waiting period.
 # Default to 1
-#memcg_eviction_psi_percent_limit = 1
+memcg_eviction_psi_percent_limit = 1
 
 # Control the mem-agent memcg eviction run aging count min.
 # A cgroup will only perform eviction when the number of aging cycles
 # in memcg is greater than or equal to memcg_eviction_run_aging_count_min.
 # Default to 3
-#memcg_eviction_run_aging_count_min = 3
+memcg_eviction_run_aging_count_min = 3
 
 # Control the mem-agent compact function disable or enable
 # Default to false
-#compact_disable = false
+compact_disable = false
 
 # Control the mem-agent compaction function wait period seconds
 # Default to 600
-#compact_period_secs = 600
+compact_period_secs = 600
 
 # Control the mem-agent compaction function wait period PSI percent limit.
 # If the percentage of memory and IO PSI stall time within
 # the compaction waiting period exceeds this value,
 # then the compaction will not be executed after this waiting period.
 # Default to 1
-#compact_period_psi_percent_limit = 1
+compact_period_psi_percent_limit = 1
 
 # Control the mem-agent compaction function compact PSI percent limit.
 # During compaction, the percentage of memory and IO PSI stall time
 # is checked every second. If this percentage exceeds
 # compact_psi_percent_limit, the compaction process will stop.
 # Default to 5
-#compact_psi_percent_limit = 5
+compact_psi_percent_limit = 5
 
 # Control the maximum number of seconds for each compaction of mem-agent compact function.
 # Default to 180
-#compact_sec_max = 180
+compact_sec_max = 180
 
 # Control the mem-agent compaction function compact order.
 # compact_order is use with compact_threshold.
 # Default to 9
-#compact_order = 9
+compact_order = 9
 
 # Control the mem-agent compaction function compact threshold.
 # compact_threshold is the pages number.
@@ -394,22 +395,22 @@ container_pipe_size=@PIPESIZE@
 # since the previous compaction.
 # then the system should initiate another round of memory compaction.
 # Default to 1024
-#compact_threshold = 1024
+compact_threshold = 1024
 
 # Control the mem-agent compaction function force compact times.
 # After one compaction, if there has not been a compaction within
 # the next compact_force_times times, a compaction will be forced
 # regardless of the system's memory situation.
 # If compact_force_times is set to 0, will do force compaction each time.
-# If compact_force_times is set to 18446744073709551615, will never do force compaction.
-# Default to 18446744073709551615
-#compact_force_times = 18446744073709551615
+# If compact_force_times is set to 9223372036854775807, will never do force compaction.
+# Default to 9223372036854775807
+compact_force_times = 9223372036854775807
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)
-#enable_debug = true
+enable_debug = false
 
 # The log level will be applied to runtimes.
 # Possible values are:
@@ -420,14 +421,14 @@ container_pipe_size=@PIPESIZE@
 # - error
 # - critical
 # (default: info)
-#log_level = "info"
+log_level = "info"
 
 # If enabled, enabled, it means that 1) if the runtime exits abnormally,
 # the cleanup process will be skipped, and 2) the runtime will not exit
 # even if the health check fails.
 # This option is typically used to retain abnormal information for debugging.
 # (default: false)
-#keep_abnormal = true
+keep_abnormal = false
 
 # Internetworking model
 # Determines how the VM should be connected to the
@@ -452,33 +453,33 @@ container_pipe_size=@PIPESIZE@
 #     Uses tc filter rules to redirect traffic from the network interface
 #     provided by plugin to a tap interface connected to the VM.
 #
-internetworking_model="@DEFNETWORKMODEL_DB@"
+internetworking_model = "@DEFNETWORKMODEL_DB@"
 
-name="@RUNTIMENAME@"
-hypervisor_name="@HYPERVISOR_DB@"
-agent_name="@PROJECT_TYPE@"
+name = "@RUNTIMENAME@"
+hypervisor_name = "@HYPERVISOR_DB@"
+agent_name = "@PROJECT_TYPE@"
 
 # disable guest seccomp
 # Determines whether container seccomp profiles are passed to the virtual
 # machine and applied by the kata agent. If set to true, seccomp is not applied
 # within the guest
 # (default: true)
-disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)
-#enable_tracing = true
+enable_tracing = false
 
 # Set the full url to the Jaeger HTTP Thrift collector.
 # The default if not set will be "http://localhost:14268/api/traces"
-#jaeger_endpoint = ""
+jaeger_endpoint = ""
 
 # Sets the username to be used if basic auth is required for Jaeger.
-#jaeger_user = ""
+jaeger_user = ""
 
 # Sets the password to be used if basic auth is required for Jaeger.
-#jaeger_password = ""
+jaeger_password = ""
 
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
@@ -486,7 +487,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # (default: false)
-#disable_new_netns = true
+disable_new_netns = false
 
 # if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
 # The container cgroups in the host are not created, just one single cgroup per sandbox.
@@ -494,18 +495,18 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_DB@
+sandbox_cgroup_only = @DEFSANDBOXCGROUPONLY_DB@
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.
 # Supported experimental features:
 # (default: [])
-experimental=@DEFAULTEXPFEATURES@
+experimental = @DEFAULTEXPFEATURES@
 
 # If enabled, user can run pprof tools with shim v2 process through kata-monitor.
 # (default: false)
-# enable_pprof = true
+enable_pprof = false
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
@@ -514,7 +515,7 @@ experimental=@DEFAULTEXPFEATURES@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
+static_sandbox_resource_mgmt = @DEFSTATICRESOURCEMGMT_DB@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted(ro, rw) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
@@ -524,7 +525,7 @@ static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
 # - "/path/to", default readonly mode.
 # - "/path/to:ro", readonly mode.
 # - "/path/to:rw", readwrite mode.
-sandbox_bind_mounts=@DEFBINDMOUNTS@
+sandbox_bind_mounts = @DEFBINDMOUNTS@
 
 # Base directory of directly attachable network config.
 # Network devices for VM-based containers are allowed to be placed in the
@@ -540,4 +541,4 @@ dan_conf = "@DEFDANCONF@"
 use_passfd_io = true
 
 # If fd passthrough io is enabled, the runtime will attempt to use the specified port instead of the default port.
-# passfd_listener_port = 1027
+passfd_listener_port = 1027

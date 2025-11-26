@@ -14,14 +14,13 @@
 path = "@QEMUCCAEXPERIMENTALPATH@"
 kernel = "@KERNELCONFIDENTIALPATH@"
 image = "@IMAGECONFIDENTIALPATH@"
-# initrd = "@INITRDCONFIDENTIALPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
 #   - ext4 (default)
 #   - xfs
 #   - erofs
-rootfs_type=@DEFROOTFSTYPE@
+rootfs_type = @DEFROOTFSTYPE@
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
@@ -42,7 +41,7 @@ confidential_guest = true
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
-# rootless = true
+rootless = false
 
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
@@ -80,7 +79,7 @@ firmware_volume = "@FIRMWAREVOLUMEPATH@"
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
-machine_accelerators="@MACHINEACCELERATORS@"
+machine_accelerators = "@MACHINEACCELERATORS@"
 
 # Qemu seccomp sandbox feature
 # comma-separated list of seccomp sandbox features to control the syscall access.
@@ -88,12 +87,13 @@ machine_accelerators="@MACHINEACCELERATORS@"
 # Note: "elevateprivileges=deny" doesn't work with daemonize option, so it's removed from the seccomp sandbox
 # Another note: enabling this feature may reduce performance, you may enable
 # /proc/sys/net/core/bpf_jit_enable to reduce the impact. see https://man7.org/linux/man-pages/man8/bpfc.8.html
-#seccompsandbox="@DEFSECCOMPSANDBOXPARAM@"
+# Recommended value when enabling: "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
+seccompsandbox = "@DEFSECCOMPSANDBOXPARAM@"
 
 # CPU features
 # comma-separated list of cpu features to pass to the cpu
 # For example, `cpu_features = "pmu=off,vmx=off"
-cpu_features="@CPUFEATURES@"
+cpu_features = "@CPUFEATURES@"
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
@@ -138,7 +138,7 @@ default_memory = @DEFMEMSZ@
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
 # This is will determine the times that memory will be hotadded to sandbox/VM.
-#memory_slots = @DEFMEMSLOTS@
+memory_slots = @DEFMEMSLOTS@
 
 # Default maximum memory in MiB per SB / VM
 # unspecified or == 0           --> will be set to the actual amount of physical RAM
@@ -151,13 +151,13 @@ default_maxmemory = @DEFMAXMEMSZ@
 # If set block storage driver (block_device_driver) to "nvdimm",
 # should set memory_offset to the size of block device.
 # Default 0
-#memory_offset = 0
+memory_offset = 0
 
 # Specifies virtio-mem will be enabled or not.
 # Please note that this option should be used with the command
 # "echo 1 > /proc/sys/vm/overcommit_memory".
 # Default false
-#enable_virtio_mem = true
+enable_virtio_mem = false
 
 # Disable block device from being used for a container's rootfs.
 # In case of a storage driver like devicemapper where a container's
@@ -217,17 +217,17 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
-#block_device_cache_set = true
+block_device_cache_set = false
 
 # Specifies cache-related options for block devices.
 # Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
 # Default false
-#block_device_cache_direct = true
+block_device_cache_direct = false
 
 # Specifies cache-related options for block devices.
 # Denotes whether flush requests for the device are ignored.
 # Default false
-#block_device_cache_noflush = true
+block_device_cache_noflush = false
 
 # Enable iothreads (data-plane) to be used. This causes IO to be
 # handled in a separate IO thread. This is currently only implemented
@@ -242,7 +242,7 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # upfront or in the cases where you want memory latencies
 # to be very predictable
 # Default false
-#enable_mem_prealloc = true
+enable_mem_prealloc = false
 
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
@@ -250,7 +250,7 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # This is useful when you want to use vhost-user network
 # stacks within the container. This will automatically
 # result in memory pre allocation
-#enable_hugepages = true
+enable_hugepages = false
 
 # Enable vhost-user storage device, default false
 # Enabling this will result in some Linux reserved block type
@@ -267,11 +267,11 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Enabling this will result in the VM having a vIOMMU device
 # This will also add the following options to the kernel's
 # command line: intel_iommu=on,iommu=pt
-#enable_iommu = true
+enable_iommu = false
 
 # Enable IOMMU_PLATFORM, default false
 # Enabling this will result in the VM device having iommu_platform=on set
-#enable_iommu_platform = true
+enable_iommu_platform = false
 
 # List of valid annotations values for the vhost user store path
 # The default if not set is empty (all annotations rejected.)
@@ -282,7 +282,7 @@ valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.
 # This option will be ignored if VM templating is enabled.
-#file_mem_backend = "@DEFFILEMEMBACKEND@"
+file_mem_backend = "@DEFFILEMEMBACKEND@"
 
 # List of valid annotations values for the file_mem_backend annotation
 # The default if not set is empty (all annotations rejected.)
@@ -297,17 +297,17 @@ pflashes = []
 # to enable debug output where available.
 #
 # Default false
-#enable_debug = true
+enable_debug = false
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
 # behaving as it would when running on bare metal.
 #
-#disable_nesting_checks = true
+disable_nesting_checks = false
 
 # This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
-#msize_9p = @DEFMSIZE9P@
+msize_9p = @DEFMSIZE9P@
 
 # If false and nvdimm is supported, use nvdimm device to plug guest image.
 # Otherwise virtio-block device is used.
@@ -319,11 +319,11 @@ disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
 # Default 0
-#pcie_root_port = 2
+pcie_root_port = 0
 
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance.
-#disable_vhost_net = true
+disable_vhost_net = false
 
 #
 # Default entropy source.
@@ -335,7 +335,7 @@ disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 # The source of entropy /dev/urandom is non-blocking and provides a
 # generally acceptable source of entropy. It should work well for pretty much
 # all practical purposes.
-#entropy_source= "@DEFENTROPYSOURCE@"
+entropy_source= "@DEFENTROPYSOURCE@"
 
 # List of valid annotations values for entropy_source
 # The default if not set is empty (all annotations rejected.)
@@ -357,17 +357,17 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
 # Warnings will be logged if any error is encountered while scanning for hooks,
 # but it will not abort container execution.
-#guest_hook_path = "/usr/share/oci/hooks"
+guest_hook_path = ""
 #
 # Use rx Rate Limiter to control network I/O inbound bandwidth(size in bits/sec for SB/VM).
 # In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) to discipline traffic.
 # Default 0-sized value means unlimited rate.
-#rx_rate_limiter_max_rate = 0
+rx_rate_limiter_max_rate = 0
 # Use tx Rate Limiter to control network I/O outbound bandwidth(size in bits/sec for SB/VM).
 # In Qemu, we use classful qdiscs HTB(Hierarchy Token Bucket) and ifb(Intermediate Functional Block)
 # to discipline traffic.
 # Default 0-sized value means unlimited rate.
-#tx_rate_limiter_max_rate = 0
+tx_rate_limiter_max_rate = 0
 
 # Set where to save the guest memory dump file.
 # If set, when GUEST_PANICKED event occurred,
@@ -377,9 +377,10 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # The dumped file(also called vmcore) can be processed with crash or gdb.
 #
 # WARNING:
-#   Dump guest’s memory can take very long depending on the amount of guest memory
+#   Dump guest's memory can take very long depending on the amount of guest memory
 #   and use much disk space.
-#guest_memory_dump_path="/var/crash/kata"
+# Recommended value when enabling: "/var/crash/kata"
+guest_memory_dump_path = ""
 
 # If enable paging.
 # Basically, if you want to use "gdb" rather than "crash",
@@ -387,7 +388,7 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # then you should enable paging.
 #
 # See: https://www.qemu.org/docs/master/qemu-qmp-ref.html#Dump-guest-memory for details
-#guest_memory_dump_paging=false
+guest_memory_dump_paging = false
 
 # Enable swap in the guest. Default false.
 # When enable_guest_swap is enabled, insert a raw file to the guest as the swap device
@@ -398,26 +399,26 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # If swap_in_bytes is not set, the size should be memory_limit_in_bytes.
 # If swap_in_bytes and memory_limit_in_bytes is not set, the size should
 # be default_memory.
-#enable_guest_swap = true
+enable_guest_swap = false
 
 # use legacy serial for guest console if available and implemented for architecture. Default false
-#use_legacy_serial = true
+use_legacy_serial = false
 
 # disable applying SELinux on the VMM process (default false)
-disable_selinux=@DEFDISABLESELINUX@
+disable_selinux = @DEFDISABLESELINUX@
 
 # disable applying SELinux on the container process
 # If set to false, the type `container_t` is applied to the container process by default.
 # Note: To enable guest SELinux, the guest rootfs must be CentOS that is created and built
 # with `SELINUX=yes`.
 # (default: true)
-disable_guest_selinux=@DEFDISABLEGUESTSELINUX@
+disable_guest_selinux = @DEFDISABLEGUESTSELINUX@
 
 # In QEMU, the Realm Management Extension (RME) measurement algorithm is used for attestation, and it supports
 # sha256 and sha512 as options. The default is sha512. This algorithm is crucial for verifying the integrity of a
 # Realm, a secure execution environment within the larger system. QEMU supports sha256 and sha512 for CCA RME
 # measurements. sha512 is generally preferred on 64-bit architectures due to potential hardware acceleration.
-measurement_algo="@DEFCCAMEASUREMENTALGO@"
+measurement_algo = "@DEFCCAMEASUREMENTALGO@"
 
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
@@ -431,12 +432,12 @@ measurement_algo="@DEFCCAMEASUREMENTALGO@"
 # Note: Requires "initrd=" to be set ("image=" is not supported).
 #
 # Default false
-#enable_template = true
+enable_template = false
 
 # Specifies the path of template.
 #
 # Default "/run/vc/vm/template"
-#template_path = "/run/vc/vm/template"
+template_path = "/run/vc/vm/template"
 
 # The number of caches of VMCache:
 # unspecified or == 0   --> VMCache is disabled
@@ -455,17 +456,17 @@ measurement_algo="@DEFCCAMEASUREMENTALGO@"
 # a new sandbox.
 #
 # Default 0
-#vm_cache_number = 0
+vm_cache_number = 0
 
 # Specify the address of the Unix socket that is used by VMCache.
 #
 # Default /var/run/kata-containers/cache.sock
-#vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
+vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
 
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
-#enable_debug = true
+enable_debug = false
 
 # Enable agent tracing.
 #
@@ -479,7 +480,7 @@ measurement_algo="@DEFCCAMEASUREMENTALGO@"
 #   increasing the container shutdown time slightly.
 #
 # (default: disabled)
-#enable_tracing = true
+enable_tracing = false
 
 # Comma separated list of kernel modules and their parameters.
 # These modules will be loaded in the guest kernel using modprobe(8).
@@ -492,14 +493,14 @@ measurement_algo="@DEFCCAMEASUREMENTALGO@"
 #  * The module is not available in the guest or it doesn't met the guest kernel
 #    requirements, like architecture and version.
 #
-kernel_modules=[]
+kernel_modules = []
 
 # Enable debug console.
 
 # If enabled, user can connect guest OS running inside hypervisor
 # through "kata-runtime exec <sandbox-id>" command
 
-#debug_console_enabled = true
+debug_console_enabled = false
 
 # Agent connection dialing timeout value in seconds
 # (default: 90)
@@ -509,7 +510,7 @@ dial_timeout = 90
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)
-#enable_debug = true
+enable_debug = false
 #
 # Internetworking model
 # Determines how the VM should be connected to the
@@ -527,14 +528,14 @@ dial_timeout = 90
 #     Uses tc filter rules to redirect traffic from the network interface
 #     provided by plugin to a tap interface connected to the VM.
 #
-internetworking_model="@DEFNETWORKMODEL_QEMU@"
+internetworking_model = "@DEFNETWORKMODEL_QEMU@"
 
 # disable guest seccomp
 # Determines whether container seccomp profiles are passed to the virtual
 # machine and applied by the kata agent. If set to true, seccomp is not applied
 # within the guest
 # (default: true)
-disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+disable_guest_seccomp = @DEFDISABLEGUESTSECCOMP@
 
 # Apply a custom SELinux security policy to the container process inside the VM.
 # This is used when you want to apply a type other than the default `container_t`,
@@ -542,22 +543,23 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # (format: "user:role:type")
 # Note: You cannot specify MCS policy with the label because the sensitivity levels and
 # categories are determined automatically by high-level container runtimes such as containerd.
-#guest_selinux_label="@DEFGUESTSELINUXLABEL@"
+# Example value when enabling: "system_u:system_r:container_t"
+guest_selinux_label = "@DEFGUESTSELINUXLABEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)
-#enable_tracing = true
+enable_tracing = false
 
 # Set the full url to the Jaeger HTTP Thrift collector.
 # The default if not set will be "http://localhost:14268/api/traces"
-#jaeger_endpoint = ""
+jaeger_endpoint = ""
 
 # Sets the username to be used if basic auth is required for Jaeger.
-#jaeger_user = ""
+jaeger_user = ""
 
 # Sets the password to be used if basic auth is required for Jaeger.
-#jaeger_password = ""
+jaeger_password = ""
 
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
@@ -565,7 +567,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # (default: false)
-#disable_new_netns = true
+disable_new_netns = false
 
 # if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
 # The container cgroups in the host are not created, just one single cgroup per sandbox.
@@ -573,7 +575,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+sandbox_cgroup_only = @DEFSANDBOXCGROUPONLY@
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
@@ -582,13 +584,13 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
+static_sandbox_resource_mgmt = @DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
 # If defaults are utilized, these mounts should be available in the guest at `/run/kata-containers/shared/containers/sandbox-mounts`
 # These will not be exposed to the container workloads, and are only provided for potential guest services.
-sandbox_bind_mounts=@DEFBINDMOUNTS@
+sandbox_bind_mounts = @DEFBINDMOUNTS@
 
 # VFIO Mode
 # Determines how VFIO devices should be be presented to the container.
@@ -609,22 +611,22 @@ sandbox_bind_mounts=@DEFBINDMOUNTS@
 #    Using this mode requires specially built workloads that know how
 #    to locate the relevant device interfaces within the VM.
 #
-vfio_mode="@DEFVFIOMODE@"
+vfio_mode = "@DEFVFIOMODE@"
 
 # If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
 # be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
-disable_guest_empty_dir=@DEFDISABLEGUESTEMPTYDIR@
+disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.
 # Supported experimental features:
 # (default: [])
-experimental=@DEFAULTEXPFEATURES@
+experimental = @DEFAULTEXPFEATURES@
 
 # If enabled, user can run pprof tools with shim v2 process through kata-monitor.
 # (default: false)
-# enable_pprof = true
+enable_pprof = false
 
 # Indicates the CreateContainer request timeout needed for the workload(s)
 # It using guest_pull this includes the time to pull the image inside the guest
