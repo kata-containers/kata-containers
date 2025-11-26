@@ -1,0 +1,10 @@
+# Cargo configuration for kata-deploy binary
+#
+# Tests must run serially because they share environment variables
+# and global state that cannot be safely accessed in parallel.
+
+[alias]
+# Custom test command that runs tests serially
+# Use: cargo test-serial
+test-serial = "test --bin kata-deploy -- --test-threads=1"
+
