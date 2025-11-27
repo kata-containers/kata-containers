@@ -878,7 +878,7 @@ impl yaml::K8sResource for Pod {
             storages,
             container,
             settings,
-            &self.spec.volumes,
+            &self.spec,
         );
     }
 
