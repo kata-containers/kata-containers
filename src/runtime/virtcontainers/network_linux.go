@@ -892,6 +892,11 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	// bridge created by the network plugin on the host actually expects
 	// to see traffic from this MAC address and not another one.
 	tapHardAddr := attrs.HardwareAddr
+	if len(attrs.HardwareAddr) == 0 {
+		// L3 devices (e.g., netkit in L3 mode) have no MAC address and are not currently supported.
+		// They require IP routing instead of L2 bridging, which is not yet implemented.
+		return fmt.Errorf("Device %s has no MAC address (netkit L3 mode is not supported - use netkit L2 mode or veth devices)", attrs.Name)
+	}
 	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
 
 	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
@@ -989,6 +994,11 @@ func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disabl
 	// the one inside the VM in order to avoid any firewall issues. The
 	// bridge created by the network plugin on the host actually expects
 	// to see traffic from this MAC address and not another one.
+	if len(attrs.HardwareAddr) == 0 {
+		// L3 devices (e.g., netkit in L3 mode) have no MAC address and are not currently supported.
+		// They require IP routing instead of L2 bridging, which is not yet implemented.
+		return fmt.Errorf("Device %s has no MAC address (netkit L3 mode is not supported - use netkit L2 mode or veth devices)", attrs.Name)
+	}
 	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
 
 	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
