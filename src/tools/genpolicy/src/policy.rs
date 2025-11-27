@@ -730,8 +730,10 @@ impl AgentPolicy {
             if nvidia_pgpu_count > 0 {
                 for _ in 0..nvidia_pgpu_count {
                     let mut device = agent::Device::new();
-                    // TODO: change device_path to /dev/vfio/devices/vfio<num> when the new device plugin is used.
-                    // The actual device number /dev/vfio/<num> is assigned at runtime by the device plugin
+                    // The actual device number <device_path><device_number> is assigned at
+                    // runtime by the device plugin. Here at policy generation time, we set
+                    // the device path prefix <device_path> and validate against this prefix
+                    // when enforcing the policy.
                     device.set_container_path(
                         self.config
                             .settings

@@ -300,8 +300,8 @@ add_requests_to_policy_settings() {
 	done
 }
 
-# Temporary function: Add support for CDI environment variables
-# used for GPU device passthrough (with current device plugin).
+# Temporary function: Add support for PCI_RESOURCE environment variables
+# injected by nvidia-sandbox-device-plugin for GPU device passthrough.
 #
 # Pattern: PCI_RESOURCE_<VENDOR>_<DEVICE>=<PCI_ADDRESS>
 # PCI address format: 4 hex digits : 2 hex digits : 2 hex digits . 1 digit
