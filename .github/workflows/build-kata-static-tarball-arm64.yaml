@@ -150,6 +150,7 @@ jobs:
       matrix:
         asset:
           - rootfs-image
+          - rootfs-image-nvidia-gpu
           - rootfs-initrd
           - rootfs-initrd-nvidia-gpu
     steps:
