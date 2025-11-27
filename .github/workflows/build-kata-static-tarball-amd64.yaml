@@ -171,6 +171,8 @@ jobs:
           - rootfs-image
           - rootfs-image-confidential
           - rootfs-image-mariner
+          - rootfs-image-nvidia-gpu
+          - rootfs-image-nvidia-gpu-confidential
           - rootfs-initrd
           - rootfs-initrd-confidential
           - rootfs-initrd-nvidia-gpu
