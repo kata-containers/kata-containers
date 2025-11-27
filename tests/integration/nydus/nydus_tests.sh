@@ -79,6 +79,52 @@ function config_kata() {
 }
 
 function config_containerd() {
+    # store pure version number extracted from config
+    local version_num=""
+    # store the raw line containing "version = ..."
+    local version_line=""
+
+    # 1) Check if containerd command is available in PATH
+    if ! command -v containerd >/dev/null 2>&1; then
+        echo "[ERROR] containerd command not found"
+        return
+    fi
+
+    # 2) Dump containerd configuration and look for the "version = ..."
+    #    We use awk to match lines starting with "version = X", allowing leading spaces
+    #    The 'exit' ensures we stop at the first match
+    version_line=$(containerd config dump 2>/dev/null | \
+        awk '/^[[:space:]]*version[[:space:]]*=/ {print; exit}')
+
+    # 3) If no "version = X" line is found, return
+    if [ -z "$version_line" ]; then
+        echo "[ERROR] Cannot find version key in containerd config, defaulting to v1 config"
+        return
+    fi
+
+    # 4) Extract the numeric version from the matched line
+    #    - Remove leading/trailing spaces around the value
+    #    - Remove surrounding double quotes if any
+    version_num=$(echo "$version_line" | awk -F'=' '
+        {
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)  # trim spaces
+            gsub(/"/, "", $2)                            # remove double quotes
+            print $2
+        }')
+
+    # 5) Validate that the extracted value is strictly numeric
+    #    If not numeric, fall back to v1 configuration
+    if ! echo "$version_num" | grep -Eq '^[0-9]+$'; then
+        echo "[ERROR] Invalid version format: \"$version_num\". Defaulting to v1 config"
+        return
+    fi
+
+    # 6) Based on version number, run the appropriate configuration function
+	echo "[INFO] Running config for containerd version $version_num"
+	config_containerd_core
+}
+
+function config_containerd_core() {
 	readonly runc_path=$(command -v runc)
 	sudo mkdir -p /etc/containerd/
 	if [ -f "$containerd_config" ]; then
@@ -89,27 +135,26 @@ function config_containerd() {
 	fi
 
 	cat <<EOF | sudo tee $containerd_config
-[debug]
-  level = "debug"
 [proxy_plugins]
   [proxy_plugins.nydus]
     type = "snapshot"
     address = "/run/containerd-nydus/containerd-nydus-grpc.sock"
 [plugins]
-  [plugins.cri]
-    disable_hugetlb_controller = false
-    [plugins.cri.containerd]
-      snapshotter = "nydus"
-      disable_snapshot_annotations = false
-      [plugins.cri.containerd.runtimes]
-      [plugins.cri.containerd.runtimes.runc]
-         runtime_type = "io.containerd.runc.v2"
-         [plugins.cri.containerd.runtimes.runc.options]
-           BinaryName = "${runc_path}"
-           Root = ""
-      [plugins.cri.containerd.runtimes.kata-${KATA_HYPERVISOR}]
-         runtime_type = "io.containerd.kata-${KATA_HYPERVISOR}.v2"
-         privileged_without_host_devices = true
+  [plugins.'io.containerd.cri.v1.images']
+    snapshotter = 'nydus'
+	disable_snapshot_annotations = false
+    discard_unpacked_layers = false
+  [plugins.'io.containerd.cri.v1.runtime']
+    [plugins.'io.containerd.cri.v1.runtime'.containerd]
+      [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes]
+        [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata-${KATA_HYPERVISOR}]
+          runtime_type = "io.containerd.kata-${KATA_HYPERVISOR}.v2"
+          sandboxer = 'podsandbox'
+        [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
+          runtime_type = 'io.containerd.runc.v2'
+          sandboxer = 'podsandbox'
+          [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+            BinaryName = "${runc_path}"
 EOF
 }
 
