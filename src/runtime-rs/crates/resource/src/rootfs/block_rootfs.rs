@@ -69,7 +69,7 @@ impl BlockRootfs {
         let mut storage = Storage {
             fs_type: rootfs.fs_type.clone(),
             mount_point: container_path.clone(),
-            options: vec![],
+            options: rootfs.options.clone(),
             ..Default::default()
         };
 
@@ -77,7 +77,11 @@ impl BlockRootfs {
         // disk image is mounted across multiple VMs/containers.
         // This allows mounting XFS volumes that share the same UUID.
         if rootfs.fs_type == VM_ROOTFS_FILESYSTEM_XFS {
-            storage.options.push("nouuid".to_string());
+            // Add nouuid to existing options if not already present
+            let has_nouuid = storage.options.iter().any(|opt| opt == "nouuid");
+            if !has_nouuid {
+                storage.options.push("nouuid".to_string());
+            }
         }
 
         let mut device_id: String = "".to_owned();
