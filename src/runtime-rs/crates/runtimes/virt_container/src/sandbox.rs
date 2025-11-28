@@ -431,6 +431,22 @@ impl VirtSandbox {
         init_data: Option<String>,
     ) -> Result<Option<ProtectionDeviceConfig>> {
         let available_protection = available_guest_protection()?;
+        // We need to cover the following case:
+        // - Required to run Kata containers in TEE environment
+        // E.g., available_guest_protection() returns Se, but confidential_guest is not set.
+        // Unless the configuration is skipped, the VM will fail to start
+        // due to lack of a secure boot image for IBM SEL
+        if available_protection != GuestProtection::NoProtection
+            && !hypervisor_config.security_info.confidential_guest
+        {
+            info!(
+                sl!(),
+                "confidential_guest is not set while {:?} protection is detected, \
+                 skipping protection device config",
+                available_protection
+            );
+            return Ok(None);
+        }
         info!(
             sl!(),
             "sandbox: available protection: {:?}", available_protection
