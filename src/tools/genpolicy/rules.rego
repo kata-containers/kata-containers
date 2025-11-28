@@ -264,6 +264,7 @@ allow_anno_key_value(i_key, i_value, p_container) if {
     print("allow_anno_key_value 3: i key =", i_key, "i_value =", i_value)
 
     some p_key_regex, p_value_regex in p_container.runtime_anno_patterns
+    print("allow_anno_key_value 3: p_key_regex =", p_key_regex, "p_value_regex =", p_value_regex)
 
     regex.match(p_key_regex, i_key)
     regex.match(p_value_regex, i_value)
@@ -475,10 +476,12 @@ allow_devices(p_devices, i_devices, i_oci) if {
 
     p_volume_devices := [d | d := p_devices[_]; d.container_path != vfio_device_path]
     i_volume_devices := [d | d := i_devices[_]; not startswith(d.container_path, vfio_device_path)]
+    print("allow_devices: p_volume_devices =", p_volume_devices, "i_volume_devices =", i_volume_devices)
     allow_volume_devices(p_volume_devices, i_volume_devices)
 
     p_vfio_devices := [d | d := p_devices[_]; d.container_path == vfio_device_path]
     i_vfio_devices := [d | d := i_devices[_]; startswith(d.container_path, vfio_device_path)]
+    print("allow_devices: p_vfio_devices =", p_vfio_devices, "i_vfio_devices =", i_vfio_devices)
     allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci)
 
     print("allow_devices: true")
@@ -549,8 +552,8 @@ allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
         suffix := trim_prefix(key, CDI_VFIO_ANNOTATION_PREFIX);
         regex.match("^[0-9]+$", suffix)
     ]
+    count(cdi_suffixes) == count({s | s := cdi_suffixes[_]})
 
-    count(vfio_numbers) == count(cdi_suffixes)
     {n | n := vfio_numbers[_]} == {s | s := cdi_suffixes[_]}
 
     print("allow_vfio_device_cdi_correlation: true")
