@@ -791,6 +791,7 @@ impl ToQemuParams for ChardevSocket {
 
 #[derive(Debug)]
 struct DeviceVhostUserFs {
+    bus: String,
     bus_type: VirtioBusType,
     chardev: String,
     tag: String,
@@ -808,6 +809,7 @@ impl DeviceVhostUserFs {
         devno: Option<String>,
     ) -> DeviceVhostUserFs {
         DeviceVhostUserFs {
+            bus: "pcie.0".to_owned(),
             bus_type,
             chardev: chardev.to_owned(),
             tag: tag.to_owned(),
@@ -851,6 +853,11 @@ impl ToQemuParams for DeviceVhostUserFs {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
         params.push(format!("vhost-user-fs-{}", self.bus_type));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
+
         params.push(format!("chardev={}", self.chardev));
         params.push(format!("tag={}", self.tag));
         if self.queue_size != 0 {
@@ -1029,6 +1036,7 @@ impl ToQemuParams for DeviceScsiHd {
 
 #[derive(Debug)]
 struct DeviceVirtioBlk {
+    bus: String,
     bus_type: VirtioBusType,
     id: String,
     config_wce: bool,
@@ -1039,6 +1047,7 @@ struct DeviceVirtioBlk {
 impl DeviceVirtioBlk {
     fn new(id: &str, bus_type: VirtioBusType, devno: Option<String>) -> DeviceVirtioBlk {
         DeviceVirtioBlk {
+            bus: "pcie.0".to_owned(),
             bus_type,
             id: id.to_owned(),
             config_wce: false,
@@ -1065,6 +1074,11 @@ impl ToQemuParams for DeviceVirtioBlk {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
         params.push(format!("virtio-blk-{}", self.bus_type));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
+
         params.push(format!("drive=image-{}", self.id));
         if self.config_wce {
             params.push("config-wce=on".to_owned());
@@ -1085,6 +1099,7 @@ impl ToQemuParams for DeviceVirtioBlk {
 }
 
 struct VhostVsock {
+    bus: String,
     bus_type: VirtioBusType,
     vhostfd: tokio::fs::File,
     guest_cid: u32,
@@ -1101,6 +1116,7 @@ impl VhostVsock {
         devno: Option<String>,
     ) -> VhostVsock {
         VhostVsock {
+            bus: "pcie.0".to_owned(),
             bus_type,
             vhostfd,
             guest_cid,
@@ -1126,6 +1142,11 @@ impl ToQemuParams for VhostVsock {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
         params.push(format!("vhost-vsock-{}", self.bus_type));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
+
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
@@ -1272,6 +1293,7 @@ impl ToQemuParams for Netdev {
 
 #[derive(Debug)]
 pub struct DeviceVirtioNet {
+    bus: String,
     // driver is the qemu device driver
     device_driver: String,
 
@@ -1298,6 +1320,7 @@ impl DeviceVirtioNet {
         devno: Option<String>,
     ) -> DeviceVirtioNet {
         DeviceVirtioNet {
+            bus: "pcie.0".to_owned(),
             device_driver: format!("virtio-net-{}", bus_type),
             netdev_id: netdev_id.to_owned(),
             mac_address,
@@ -1353,6 +1376,10 @@ impl ToQemuParams for DeviceVirtioNet {
         //params.push(format!("driver={}", &self.device_driver.to_string()));
         params.push(self.device_driver.clone());
         params.push(format!("netdev={}", &self.netdev_id));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
 
         params.push(format!("mac={:?}", self.mac_address));
 
@@ -1379,6 +1406,7 @@ impl ToQemuParams for DeviceVirtioNet {
 #[derive(Debug)]
 struct DeviceVirtioSerial {
     id: String,
+    bus: String,
     bus_type: VirtioBusType,
     iommu_platform: bool,
     devno: Option<String>,
@@ -1388,6 +1416,7 @@ impl DeviceVirtioSerial {
     fn new(id: &str, bus_type: VirtioBusType, devno: Option<String>) -> DeviceVirtioSerial {
         DeviceVirtioSerial {
             id: id.to_owned(),
+            bus: "pcie.0".to_owned(),
             bus_type,
             iommu_platform: false,
             devno,
@@ -1406,6 +1435,11 @@ impl ToQemuParams for DeviceVirtioSerial {
         let mut params = Vec::new();
         params.push(format!("virtio-serial-{}", self.bus_type));
         params.push(format!("id={}", self.id));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
+
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
         }
@@ -1419,6 +1453,7 @@ impl ToQemuParams for DeviceVirtioSerial {
 #[derive(Debug)]
 struct DeviceVirtconsole {
     id: String,
+    bus: String,
     chardev: String,
 }
 
@@ -1426,6 +1461,7 @@ impl DeviceVirtconsole {
     fn new(id: &str, chardev: &str) -> DeviceVirtconsole {
         DeviceVirtconsole {
             id: id.to_owned(),
+            bus: "pcie.0".to_owned(),
             chardev: chardev.to_owned(),
         }
     }
@@ -1437,6 +1473,11 @@ impl ToQemuParams for DeviceVirtconsole {
         let mut params = Vec::new();
         params.push("virtconsole".to_owned());
         params.push(format!("id={}", self.id));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
+
         params.push(format!("chardev={}", self.chardev));
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1528,12 +1569,14 @@ impl ToQemuParams for ObjectRngRandom {
 struct DeviceRng {
     // transport is the virtio transport for this device.
     transport: String,
+    bus: String,
 }
 
 impl DeviceRng {
     fn new() -> DeviceRng {
         DeviceRng {
             transport: "virtio-rng-pci".to_owned(),
+            bus: "pcie.0".to_owned(),
         }
     }
 }
@@ -1541,17 +1584,22 @@ impl DeviceRng {
 #[async_trait]
 impl ToQemuParams for DeviceRng {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        let mut device_params = Vec::new();
+        let mut params = Vec::new();
 
-        device_params.push(self.transport.clone());
-        device_params.push(format!("rng={}", "rng0".to_owned()));
+        params.push(self.transport.clone());
+        params.push(format!("rng={}", "rng0".to_owned()));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
 
-        Ok(vec!["-device".to_owned(), device_params.join(",")])
+        Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
 
 #[derive(Debug)]
 struct DeviceIntelIommu {
+    bus: String,
     intremap: bool,
     device_iotlb: bool,
     caching_mode: bool,
@@ -1560,6 +1608,7 @@ struct DeviceIntelIommu {
 impl DeviceIntelIommu {
     fn new() -> DeviceIntelIommu {
         DeviceIntelIommu {
+            bus: "pcie.0".to_owned(),
             intremap: true,
             device_iotlb: true,
             caching_mode: true,
@@ -1572,6 +1621,11 @@ impl ToQemuParams for DeviceIntelIommu {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
         params.push("intel-iommu".to_owned());
+        // Only valid for Q35 aka x86
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(target_arch = "x86_64")]
+        params.push(format!("bus={}", self.bus));
+
         let to_onoff = |b| if b { "on" } else { "off" };
         params.push(format!("intremap={}", to_onoff(self.intremap)));
         params.push(format!("device-iotlb={}", to_onoff(self.device_iotlb)));
@@ -1769,6 +1823,7 @@ impl ToQemuParams for QmpSocket {
 
 #[derive(Debug)]
 struct DeviceVirtioScsi {
+    bus: String,
     bus_type: VirtioBusType,
     id: String,
     disable_modern: bool,
@@ -1780,6 +1835,7 @@ struct DeviceVirtioScsi {
 impl DeviceVirtioScsi {
     fn new(id: &str, disable_modern: bool, bus_type: VirtioBusType, devno: Option<String>) -> Self {
         DeviceVirtioScsi {
+            bus: "pcie.0".to_owned(),
             bus_type,
             id: id.to_owned(),
             disable_modern,
@@ -1805,6 +1861,11 @@ impl ToQemuParams for DeviceVirtioScsi {
         let mut params = Vec::new();
         params.push(format!("virtio-scsi-{}", self.bus_type));
         params.push(format!("id={}", self.id));
+        // Only valid for Q35 or VIRT machine types aka x86 or aarch64
+        // When NUMA is enabled we need to set the default bus to pcie.0
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        params.push(format!("bus={}", self.bus));
+
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
