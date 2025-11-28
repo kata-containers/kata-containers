@@ -181,6 +181,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: ppc64le
 
+      - name: Set KATA_TOOLS_STATIC_TARBALL env var
+        run: |
+          tarball=$(pwd)/kata-tools-static.tar.zst
+          echo "KATA_TOOLS_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
+
+      - name: Download amd64 tools artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64
+
+      - name: Upload amd64 static tarball tools to GitHub
+        run: |
+          ./tools/packaging/release/release.sh upload-kata-tools-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: amd64
+
   upload-versions-yaml:
     name: upload-versions-yaml
     needs: release
