@@ -300,6 +300,28 @@ add_requests_to_policy_settings() {
 	done
 }
 
+# Temporary function: Add support for PCI_RESOURCE environment variables
+# injected by nvidia-sandbox-device-plugin for GPU device passthrough.
+#
+# Pattern: PCI_RESOURCE_<VENDOR>_<DEVICE>=<PCI_ADDRESS>
+# PCI address format: 4 hex digits : 2 hex digits : 2 hex digits . 1 digit
+add_cdi_envvars_to_policy_settings() {
+	declare -r settings_dir="$1"
+
+	auto_generate_policy_enabled || return 0
+
+	info "${settings_dir}/genpolicy-settings.json: allowing CDI PCI_RESOURCE environment variables"
+
+	# Example: PCI_RESOURCE_NVIDIA_COM_pgpu=0000:65:00.0
+	local -r pci_resource_regex='^PCI_RESOURCE_NVIDIA_COM_pgpu=[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\\.[0-9]$'
+
+	jq ".request_defaults.CreateContainerRequest.allow_env_regex += [\"${pci_resource_regex}\"]" \
+		"${settings_dir}"/genpolicy-settings.json > \
+		"${settings_dir}"/new-genpolicy-settings.json
+	mv "${settings_dir}"/new-genpolicy-settings.json \
+		"${settings_dir}"/genpolicy-settings.json
+}
+
 # Change genpolicy settings to allow executing on the Guest VM the commands
 # used by "kubectl cp" from the Host to the Guest.
 add_copy_from_host_to_policy_settings() {
