@@ -125,7 +125,7 @@ const GROUP_FILE_WHITEOUT_TAR_PATH: &str = "etc/.wh.group";
 pub const WHITEOUT_MARKER: &str = "WHITEOUT";
 
 impl Container {
-    pub async fn new(config: &Config, image: &str, is_pause_container: bool) -> Result<Self> {
+    pub async fn new(config: &Config, image: &str, _is_pause_container: bool) -> Result<Self> {
         info!("============================================");
         info!("Pulling manifest and config for {image}");
         let image_string = image.to_string();
@@ -169,7 +169,7 @@ impl Container {
         // Nydus/guest_pull doesn't make available passwd/group files from layers properly.
         // See issue https://github.com/kata-containers/kata-containers/issues/11162
         let v1_policy = config.settings.cluster_config.pause_container_id_policy == "v1";
-        if config.settings.cluster_config.guest_pull && (v1_policy || !is_pause_container) {
+        if config.settings.cluster_config.guest_pull && v1_policy {
             info!("Guest pull is enabled, skipping passwd/group file parsing");
         } else {
             let image_layers = get_image_layers(
@@ -185,7 +185,10 @@ impl Container {
             // Find the last layer with an /etc/* file, respecting whiteouts.
             info!("Parsing users and groups in image layers");
             for layer in &image_layers {
+                debug!("Container:new: parsing layer diff_id = {}", &layer.diff_id);
+
                 if layer.passwd == WHITEOUT_MARKER {
+                    debug!("Container:new: found {WHITEOUT_MARKER} for passwd");
                     passwd = String::new();
                 } else if !layer.passwd.is_empty() {
                     passwd = layer.passwd.clone();
@@ -193,6 +196,7 @@ impl Container {
                 }
 
                 if layer.group == WHITEOUT_MARKER {
+                    debug!("Container:new: found {WHITEOUT_MARKER} for group");
                     group = String::new();
                 } else if !layer.group.is_empty() {
                     group = layer.group.clone();
