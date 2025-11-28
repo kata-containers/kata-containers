@@ -14,6 +14,7 @@ use std::fmt::Debug;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+#[cfg(target_arch = "s390x")]
 use std::str::FromStr;
 use std::sync::Arc;
 use ttrpc::{
@@ -1019,10 +1020,11 @@ impl agent_ttrpc::AgentService for AgentService {
         if !interface.devicePath.is_empty() {
             #[cfg(not(target_arch = "s390x"))]
             {
-                let pcipath = pci::Path::from_str(&interface.devicePath).map_ttrpc_err(|e| {
-                    format!("Unexpected pci-path for network interface: {e:?}")
-                })?;
-                wait_for_pci_net_interface(&self.sandbox, &pcipath)
+                let (root_complex, pcipath) = pcipath_from_dev_tree_path(&interface.devicePath)
+                    .map_ttrpc_err(|e| {
+                        format!("Invalid PCI path for network interface: {:?}", e)
+                    })?;
+                wait_for_pci_net_interface(&self.sandbox, root_complex, &pcipath)
                     .await
                     .map_ttrpc_err(|e| format!("interface not available: {e:?}"))?;
             }
@@ -2125,7 +2127,9 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
         slots.push(pci::SlotFn::new(*slot, 0)?);
     }
     let pcipath = pci::Path::new(slots)?;
-    let dev_name = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
+    // Default all virtio devices to root_complex 00 aka pcie.0
+    let root_complex = "00";
+    let dev_name = get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?;
 
     let c_str = CString::new(dev_name)?;
     let ret = unsafe { libc::swapon(c_str.as_ptr() as *const c_char, 0) };
