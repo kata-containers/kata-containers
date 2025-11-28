@@ -46,10 +46,10 @@ setup() {
     kubectl apply -f "${pod_yaml}"
 
     # Wait for pod to complete successfully (with retry)
-    kubectl_retry 10 30 wait --for=jsonpath='{.status.phase}'=Succeeded --timeout="${POD_WAIT_TIMEOUT}" pod "${POD_NAME_CUDA}"
+    kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout="${POD_WAIT_TIMEOUT}" pod "${POD_NAME_CUDA}"
 
     # Get and verify the output contains expected CUDA success message
-    kubectl_retry 10 30 logs "${POD_NAME_CUDA}"
+    kubectl logs "${POD_NAME_CUDA}"
     output=$(kubectl logs "${POD_NAME_CUDA}")
     echo "# CUDA Vector Add Output: ${output}" >&3
 
