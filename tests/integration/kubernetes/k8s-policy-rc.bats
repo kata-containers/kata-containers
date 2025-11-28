@@ -22,11 +22,8 @@ setup() {
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
         # Create the correct yaml file
-        nginx_version="${docker_images_nginx_version}"
-        nginx_image="nginx:$nginx_version"
-
-        sed -e "s/\${nginx_version}/${nginx_image}/" \
-            "${pod_config_dir}/k8s-policy-rc.yaml" > "${correct_yaml}"
+       nginx_image="$(get_nginx_image)"
+       NGINX_IMAGE="${nginx_image}" envsubst < "${pod_config_dir}/k8s-policy-rc.yaml" > "${correct_yaml}"
 
         # Add policy to the correct yaml file
         policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"

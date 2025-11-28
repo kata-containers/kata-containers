@@ -11,7 +11,6 @@
 # This contains variables and functions common to all e2e tests.
 
 # Variables used by the kubernetes tests
-export docker_images_nginx_version="1.15-alpine"
 export container_images_agnhost_name="registry.k8s.io/e2e-test-images/agnhost"
 export container_images_agnhost_version="2.21"
 
@@ -556,4 +555,12 @@ container_exec_with_retries() {
 	done
 
 	echo "${cmd_out}"
+}
+
+get_nginx_image() {
+	ensure_yq > /dev/null
+	nginx_version=$(get_from_kata_deps ".docker_images.nginx.version")
+	nginx_registry=$(get_from_kata_deps ".docker_images.nginx.registry")
+	nginx_image="${nginx_registry}:${nginx_version}"
+	echo "${nginx_image}"
 }
