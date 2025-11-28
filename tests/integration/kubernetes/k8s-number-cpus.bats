@@ -9,9 +9,9 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ] && skip "test not working https://github.com/kata-containers/kata-containers/issues/9039"
-	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[ "${KATA_HYPERVISOR}" = "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
+
 	pod_name="cpu-test"
 	container_name="c1"
 	get_pod_config_dir
@@ -52,9 +52,9 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ] && skip "test not working https://github.com/kata-containers/kata-containers/issues/9039"
-	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[ "${KATA_HYPERVISOR}" = "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 

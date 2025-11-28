@@ -150,8 +150,8 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 ##VAR DEFBRIDGES=<number> Default number of bridges
 DEFBRIDGES := 0
-DEFENABLEANNOTATIONS := [\"kernel_params\"]
-DEFENABLEANNOTATIONS_COCO := [\"kernel_params\",\"cc_init_data\"]
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 ##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled
@@ -328,7 +328,7 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_COCO = $(KERNELDIR)/$(KERNEL_NAME_COCO)
 
     # overriding options
-    DEFSTATICRESOURCEMGMT_QEMU := true
+    DEFSTATICRESOURCEMGMT_QEMU := false
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false

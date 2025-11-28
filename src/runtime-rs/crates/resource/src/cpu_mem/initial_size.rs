@@ -17,7 +17,7 @@ use oci_spec::runtime as oci;
 // sandbox/container's workload
 #[derive(Clone, Copy, Debug)]
 struct InitialSize {
-    vcpu: u32,
+    vcpu: f32,
     mem_mb: u32,
     orig_toml_default_mem: u32,
 }
@@ -28,7 +28,7 @@ const MIB: i64 = 1024 * 1024;
 impl TryFrom<&HashMap<String, String>> for InitialSize {
     type Error = anyhow::Error;
     fn try_from(an: &HashMap<String, String>) -> Result<Self> {
-        let mut vcpu: u32 = 0;
+        let mut vcpu: f32 = 0.0;
 
         let annotation = Annotation::new(an.clone());
         let (period, quota, memory) =
@@ -56,7 +56,7 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
 impl TryFrom<&oci::Spec> for InitialSize {
     type Error = anyhow::Error;
     fn try_from(spec: &oci::Spec) -> Result<Self> {
-        let mut vcpu: u32 = 0;
+        let mut vcpu: f32 = 0.0;
         let mut mem_mb: u32 = 0;
         match container_type(spec) {
             // podsandbox, from annotation
@@ -140,8 +140,8 @@ impl InitialSizeManager {
             .get_mut(hypervisor_name)
             .context("failed to get hypervisor config")?;
 
-        if self.resource.vcpu > 0 {
-            hv.cpu_info.default_vcpus = self.resource.vcpu as f32
+        if self.resource.vcpu > 0.0 {
+            info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
         }
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
         if self.resource.mem_mb > 0 {
@@ -160,11 +160,11 @@ impl InitialSizeManager {
     }
 }
 
-fn get_nr_vcpu(resource: &LinuxContainerCpuResources) -> u32 {
+fn get_nr_vcpu(resource: &LinuxContainerCpuResources) -> f32 {
     if let Some(v) = resource.get_vcpus() {
-        v as u32
+        v as f32
     } else {
-        0
+        0.0
     }
 }
 
@@ -223,7 +223,7 @@ mod tests {
                     memory: None,
                 },
                 result: InitialSize {
-                    vcpu: 0,
+                    vcpu: 0.0,
                     mem_mb: 0,
                     orig_toml_default_mem: 0,
                 },
@@ -237,7 +237,7 @@ mod tests {
                     memory: Some(512 * MIB),
                 },
                 result: InitialSize {
-                    vcpu: 3,
+                    vcpu: 3.0,
                     mem_mb: 512,
                     orig_toml_default_mem: 0,
                 },
@@ -250,7 +250,7 @@ mod tests {
                     memory: Some(513 * MIB),
                 },
                 result: InitialSize {
-                    vcpu: 0,
+                    vcpu: 0.0,
                     mem_mb: 514,
                     orig_toml_default_mem: 0,
                 },
@@ -295,9 +295,12 @@ mod tests {
 
             let initial_size = initial_size.unwrap();
             assert_eq!(
-                initial_size.vcpu, d.result.vcpu,
+                initial_size.vcpu.ceil(),
+                d.result.vcpu,
                 "test[{}]: {:?} vcpu should be {}",
-                i, d.desc, d.result.vcpu,
+                i,
+                d.desc,
+                d.result.vcpu,
             );
             assert_eq!(
                 initial_size.mem_mb, d.result.mem_mb,
@@ -349,9 +352,12 @@ mod tests {
 
             let initial_size = initial_size.unwrap();
             assert_eq!(
-                initial_size.vcpu, d.result.vcpu,
+                initial_size.vcpu.ceil(),
+                d.result.vcpu,
                 "test[{}]: {:?} vcpu should be {}",
-                i, d.desc, d.result.vcpu,
+                i,
+                d.desc,
+                d.result.vcpu,
             );
             assert_eq!(
                 initial_size.mem_mb, d.result.mem_mb,
