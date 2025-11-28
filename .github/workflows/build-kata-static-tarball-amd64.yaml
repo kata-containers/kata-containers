@@ -41,16 +41,11 @@ jobs:
       matrix:
         asset:
           - agent
-          - agent-ctl
           - busybox
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - coco-guest-components
-          - csi-kata-directvolume
           - firecracker
-          - genpolicy
-          - kata-ctl
-          - kata-manager
           - kernel
           - kernel-confidential
           - kernel-dragonball-experimental
@@ -63,7 +58,6 @@ jobs:
           - qemu
           - qemu-snp-experimental
           - qemu-tdx-experimental
-          - trace-forwarder
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
@@ -362,5 +356,106 @@ jobs:
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-static.tar.zst
+          retention-days: 15
+          if-no-files-found: error
+
+  build-tools-asset:
+    name: build-tools-asset
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        asset:
+          - agent-ctl
+          - csi-kata-directvolume
+          - genpolicy
+          - kata-ctl
+          - kata-manager
+          - trace-forwarder
+        stage:
+          - ${{ inputs.stage }}
+    steps:
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: quay.io
+          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Build ${{ matrix.asset }}
+        id: build
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          mkdir -p kata-tools-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-tools-build/.
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          ARTEFACT_REGISTRY: ghcr.io
+          ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+          ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-tools-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          path: kata-tools-build/kata-static-${{ matrix.asset }}.tar.zst
+          retention-days: 15
+          if-no-files-found: error
+
+  create-kata-tools-tarball:
+    name: create-kata-tools-tarball
+    runs-on: ubuntu-22.04
+    needs: [build-tools-asset]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+      - name: get-artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: kata-tools-artifacts-amd64-*${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+          merge-multiple: true
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-tools-artifacts versions.yaml kata-tools-static.tar.zst
+        env:
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+      - name: store-artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-static.tar.zst
           retention-days: 15
           if-no-files-found: error
