@@ -147,8 +147,17 @@ jobs:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
       - name: Install kata
         run: bash tests/integration/nydus/gha-run.sh install-kata kata-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/nydus/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Run nydus tests
         timeout-minutes: 10
@@ -367,8 +376,16 @@ jobs:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
-      - name: Install kata
-        run: bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata & kata-tools
+        run: | 
+          bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
+          bash tests/functional/kata-agent-apis/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Run kata agent api tests with agent-ctl
         run: bash tests/functional/kata-agent-apis/gha-run.sh run

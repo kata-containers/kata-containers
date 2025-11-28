@@ -616,7 +616,7 @@ function main() {
 		deploy-coco-kbs) deploy_coco_kbs ;;
 		deploy-k8s) deploy_k8s ${CONTAINER_ENGINE:-} ${CONTAINER_ENGINE_VERSION:-};;
 		install-bats) install_bats ;;
-		install-kata-tools) install_kata_tools ;;
+		install-kata-tools) install_kata_tools "${2:-}" ;;
 		install-kbs-client) install_kbs_client ;;
 		get-cluster-credentials) get_cluster_credentials "" ;;
 		deploy-csi-driver) return 0 ;;
