@@ -457,31 +457,42 @@ log_level = "debug"
 EOF
 }
 
-function install_kata_core() {
-	declare -r katadir="$1"
+function install_tarball() {
+	declare -r installed_dir="${1}"
+	declare -r tarball_dir="${2}"
+	declare -r tarball="${3}"
+	declare -r remove_tarball_dir="${4}"
 	declare -r destdir="/"
-	declare -r kata_tarball="kata-static.tar.zst"
 
-	# Removing previous kata installation
-	sudo rm -rf "${katadir}"
+	if [[ "${remove_tarball_dir}" == "true" ]]; then
+		# Removing previous tarball installation
+		sudo rm -rf "${installed_dir}"
+	fi
 
-	pushd "${kata_tarball_dir}"
-	sudo tar --zstd -xvf "${kata_tarball}" -C "${destdir}"
+	pushd "${tarball_dir}"
+	sudo tar --zstd -xvf "${tarball}" -C "${destdir}"
 	popd
 }
 
 function install_kata_tools() {
 	declare -r katadir="/opt/kata"
+	declare -r tarballdir="${1:-kata-tools-artifacts}"
+	declare -r local_bin_dir="/usr/local/bin/"
 
-	# TODO: implement a better way to install the tools - see issue #8864.
-	install_kata_core "${katadir}"
+	install_tarball "${katadir}" "${tarballdir}" "kata-tools-static.tar.zst" false
+
+	# create symbolic links to kata-tools components
+	for b in "${katadir}"/bin/* ; do
+		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
+	done
 }
 
 function install_kata() {
 	declare -r katadir="/opt/kata"
+	declare -r tarballdir="kata-artifacts"
 	declare -r local_bin_dir="/usr/local/bin/"
 
-	install_kata_core "${katadir}"
+	install_tarball "${katadir}" "${tarballdir}" "kata-static.tar.zst" true
 
 	# create symbolic links to kata components
 	for b in "${katadir}"/bin/* ; do

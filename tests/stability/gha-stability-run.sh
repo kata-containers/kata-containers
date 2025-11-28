@@ -30,7 +30,7 @@ function main() {
 	case "${action}" in
 		create-cluster) create_cluster ;;
 		install-bats) install_bats ;;
-		install-kata-tools) install_kata_tools ;;
+		install-kata-tools) install_kata_tools "${2:-}" ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-snapshotter) deploy_snapshotter ;;
 		deploy-kata-aks) deploy_kata "aks" ;;

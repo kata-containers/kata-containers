@@ -79,6 +79,15 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
+
       - name: Deploy Kata
         timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
@@ -178,14 +187,14 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: get-kata-tarball
+      - name: get-kata-tools-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
 
-      - name: Install kata
-        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Log into the Azure account
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
@@ -300,6 +309,15 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Remove unnecessary directories to free up space
         run: |
