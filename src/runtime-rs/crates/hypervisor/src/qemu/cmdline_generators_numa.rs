@@ -37,7 +37,7 @@ use async_trait::async_trait;
 ///                              ------------              ------------
 ///
 
-/// PCIeExpanderBusDevice is the only entity that is numa node affine.
+/// PCIeExpanderBusDevice is the only entity that is numa node affine. /////////
 /// -device pxb-pcie,id=pxb0,bus=pcie.1,bus_nr=20,numa_node=0
 #[derive(Debug, Default)]
 pub struct PCIeExpanderBusDevice {
@@ -69,6 +69,36 @@ impl ToQemuParams for PCIeExpanderBusDevice {
         Ok(vec!["-device".to_owned(), device_params.join(",")])
     }
 }
+/// ACPIGenericInitiator lets you associate a PCI device with one or more NUMA
+/// nodes, so QEMU can emit ACPI SRAT Generic Initiator Affinity structures for
+/// that device
+#[derive(Debug, Default)]
+pub struct ACPIGenericInitiator {
+	id: String,
+	pci_dev: String,
+	node: u32,
+}
+
+impl ACPIGenericInitiator {
+	fn new(id: &str, pci_dev: &str, node: u32) -> Self {
+		ACPIGenericInitiator {
+			id: id.to_owned(),
+			pci_dev: pci_dev.to_owned(),
+			node,
+		}
+	}
+}
+
+#[async_trait]
+impl ToQemuParams for ACPIGenericInitiator {
+	async fn qemu_params(&self) -> Result<Vec<String>> {
+		let mut device_params = Vec::new();
+		device_params.push(format!("{},id={}", "acpi-generic-initiator", self.id));
+		device_params.push(format!("pci-dev={}", self.pci_dev));
+		device_params.push(format!("node={}", self.node));
+		Ok(vec!["-object".to_owned(), device_params.join(",")])
+	}
+}
 
 impl<'a> QemuCmdLine<'a> {
     #[allow(dead_code)]
@@ -87,6 +117,13 @@ impl<'a> QemuCmdLine<'a> {
 
         let pxb_device = PCIeExpanderBusDevice::new(id, bus, bus_nr, numa_node);
         self.devices.push(Box::new(pxb_device));
+
+        Ok(())
+    }
+    #[allow(dead_code)]
+    pub fn add_acpi_generic_initiator(&mut self, id: &str, pci_dev: &str, node: u32) -> Result<()> {
+        let acpi_generic_initiator = ACPIGenericInitiator::new(id, pci_dev, node);
+        self.devices.push(Box::new(acpi_generic_initiator));
 
         Ok(())
     }
