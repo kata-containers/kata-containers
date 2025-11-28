@@ -37,7 +37,12 @@ jobs:
           make -j$(nproc) containerd-shim-v2
       - name: Bundle artifacts
         run: |
-          cp tools/packaging/kernel/kata-linux-*/vmlinux /tmp/vmlinux
+          if [[ "${{ matrix.arch }}" == "amd64" ]]
+          then
+            cp tools/packaging/kernel/kata-linux-*/arch/x86/boot/bzImage /tmp/vmlinux
+          else
+            cp tools/packaging/kernel/kata-linux-*/arch/arm64/boot/Image.gz /tmp/vmlinux
+          fi
           cp tools/osbuilder/kata-containers-image-ubuntu.img /tmp/kata-containers-image-ubuntu.img
           cp sbom.cdx.gz /tmp/sbom.cdx.gz
           cp src/runtime/containerd-shim-kata-v2 /tmp/containerd-shim-kata-v2
