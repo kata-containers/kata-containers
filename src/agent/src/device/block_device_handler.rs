@@ -6,8 +6,6 @@
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
-#[cfg(target_arch = "s390x")]
-use std::str::FromStr;
 use crate::device::{
     pcipath_to_sysfs, DeviceContext, DeviceHandler, DeviceInfo, SpecUpdate, BLOCK,
 };
@@ -20,6 +18,8 @@ use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+#[cfg(target_arch = "s390x")]
+use std::str::FromStr;
 
 #[cfg(target_arch = "s390x")]
 use kata_types::device::DRIVER_BLK_CCW_TYPE;

@@ -23,8 +23,6 @@ use tracing::instrument;
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
 #[cfg(target_arch = "s390x")]
-use std::str::FromStr;
-#[cfg(target_arch = "s390x")]
 use crate::device::block_device_handler::get_virtio_blk_ccw_device_name;
 use crate::device::block_device_handler::{
     get_virtio_blk_mmio_device_name, get_virtio_blk_pci_device_name,
@@ -32,6 +30,8 @@ use crate::device::block_device_handler::{
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
+#[cfg(target_arch = "s390x")]
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct VirtioBlkMmioHandler {}

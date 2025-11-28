@@ -38,14 +38,14 @@ pub fn pcipath_from_dev_tree_path(dev_tree_path: &str) -> Result<(&str, pci::Pat
 }
 
 #[cfg(target_arch = "aarch64")]
-pub fn create_pci_root_bus_path() -> String {
-    let ret = String::from("/devices/platform/4010000000.pcie/pci0000:00");
+pub fn create_pci_root_bus_path(root_complex: &str) -> String {
+    let ret = format!("/devices/platform/4010000000.pcie/pci0000:{root_complex}");
 
-    let acpi_root_bus_path = String::from("/devices/pci0000:00");
+    let acpi_root_bus_path = format!("/devices/pci0000:{root_complex}");
     let mut acpi_sysfs_dir = String::from(SYSFS_DIR);
     let mut sysfs_dir = String::from(SYSFS_DIR);
     let mut start_root_bus_path = String::from("/devices/platform/");
-    let end_root_bus_path = String::from("/pci0000:00");
+    let end_root_bus_path = format!("/pci0000:{root_complex}");
 
     // check if there is pci bus path for acpi
     acpi_sysfs_dir.push_str(&acpi_root_bus_path);
