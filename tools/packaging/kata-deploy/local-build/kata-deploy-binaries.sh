@@ -1187,6 +1187,13 @@ install_tools_helper() {
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
 	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
 
+	binary_count=$(echo "${binary}" | grep -c '^' || echo "0")
+	if [[ "${binary_count}" -eq 0 ]]; then
+		die "No binary found for ${tool} (expected: ${tool_binary})."
+	elif [[ "${binary_count}" -gt 1 ]]; then
+		die "Multiple binaries found for ${tool} (expected single ${tool_binary}). Found:"$'\n'"${binary}"
+	fi
+
 	if [[ "${tool}" == "genpolicy" ]]; then
 		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers"
 		mkdir -p "${defaults_path}"
