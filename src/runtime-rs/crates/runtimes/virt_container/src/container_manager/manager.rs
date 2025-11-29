@@ -252,20 +252,41 @@ impl ContainerManager for VirtContainerManager {
             }
         };
 
-        // kill(2) method can return ESRCH in certain cases, which is not handled by containerd cri server.
-        // CRIO server also doesn't handle ESRCH. So kata runtime will swallow it here.
+        // According to CRI specs, kubelet will call StopPodSandbox()
+        // at least once before calling RemovePodSandbox, and this call
+        // is idempotent, and must not return an error if all relevant
+        // resources have already been reclaimed. And in that call it will
+        // send a SIGKILL signal first to try to stop the container, thus
+        // once the container has terminated, here should ignore this signal
+        // and return directly.
+        //
+        // kill(2) method can return ESRCH in certain cases, which is not handled
+        // by containerd cri server. CRIO server also doesn't handle ESRCH.
+        // Additionally, when the VM/agent is dead (e.g., QEMU killed), the ttrpc
+        // connection will fail with "local stream closed" or similar errors.
+        // For SIGKILL/SIGTERM, we should treat these as success since the
+        // container is effectively terminated.
         c.kill_process(&req.process, req.signal, req.all)
             .await
             .or_else(|err| {
                 let err_str = format!("{:?}", err);
-                if err_str.contains("failed to find container")
+                let is_termination_signal = req.signal == 9 || req.signal == 15; // SIGKILL or SIGTERM
+                let is_process_gone = err_str.contains("failed to find container")
                     || err_str.contains("ESRCH")
-                    || err_str.contains("No such process") {
+                    || err_str.contains("No such process");
+                let is_connection_dead = err_str.contains("local stream closed")
+                    || err_str.contains("ttrpc: closed")
+                    || err_str.contains("stream closed")
+                    || err_str.contains("connection refused");
+
+                if is_process_gone || (is_termination_signal && is_connection_dead) {
                     warn!(
                         sl!(),
-                        "Signal encounters ESRCH, process already finished";
+                        "Signal encounters expected error, process/VM already terminated";
                         "container" => container_id,
-                        "process" => ?&req.process
+                        "process" => ?&req.process,
+                        "signal" => req.signal,
+                        "error" => &err_str
                     );
                     Ok(())
                 } else {
