@@ -4,6 +4,7 @@
 //
 
 mod cmdline_generator;
+mod cmdline_generators_numa;
 mod inner;
 mod qmp;
 
