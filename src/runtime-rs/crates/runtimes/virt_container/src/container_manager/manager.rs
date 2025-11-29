@@ -262,6 +262,8 @@ impl ContainerManager for VirtContainerManager {
         //
         // When the VM/agent is dead (e.g., QEMU killed externally), the ttrpc
         // connection will fail with "local stream closed" or similar errors.
+        // Additionally, if the container's init process is already gone, the
+        // agent returns "cannot find init process" error.
         // For SIGKILL/SIGTERM, we should treat these as success since the
         // container is effectively terminated. This matches the Go runtime
         // behavior and CRI spec requirement for idempotent stop operations.
@@ -270,15 +272,20 @@ impl ContainerManager for VirtContainerManager {
             .or_else(|err| {
                 let err_str = format!("{:?}", err);
                 let is_termination_signal = req.signal == 9 || req.signal == 15; // SIGKILL or SIGTERM
+
+                // Connection errors when VM/QEMU is dead
                 let is_connection_dead = err_str.contains("local stream closed")
                     || err_str.contains("ttrpc: closed")
                     || err_str.contains("stream closed")
                     || err_str.contains("connection refused");
 
-                if is_termination_signal && is_connection_dead {
+                // Process/container already gone errors from the agent
+                let is_process_gone = err_str.contains("cannot find init process");
+
+                if is_termination_signal && (is_connection_dead || is_process_gone) {
                     warn!(
                         sl!(),
-                        "Signal encounters expected error, VM already terminated";
+                        "Signal encounters expected error, VM/process already terminated";
                         "container" => container_id,
                         "process" => ?&req.process,
                         "signal" => req.signal,
