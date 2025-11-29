@@ -365,11 +365,31 @@ impl ContainerManager for VirtContainerManager {
     async fn state_process(&self, process: &ContainerProcess) -> Result<ProcessStateInfo> {
         let containers = self.containers.read().await;
         let container_id = &process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
-        let state = c.state_process(process).await.context("state process")?;
-        Ok(state)
+
+        // When using Sandbox API, the sandbox container (container_id == sandbox_id)
+        // is not stored in the containers map. Return a synthetic state for it.
+        if let Some(c) = containers.get(container_id) {
+            let state = c.state_process(process).await.context("state process")?;
+            Ok(state)
+        } else if container_id == &self.sid {
+            // Sandbox container state - return synthetic state
+            use common::types::ProcessStatus;
+            Ok(ProcessStateInfo {
+                container_id: self.sid.clone(),
+                exec_id: String::new(),
+                pid: PID { pid: self.pid },
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: ProcessStatus::Running,
+                exit_status: 0,
+                exited_at: None,
+            })
+        } else {
+            Err(Error::ContainerNotFound(container_id.clone()).into())
+        }
     }
 
     #[instrument]
