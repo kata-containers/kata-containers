@@ -260,29 +260,25 @@ impl ContainerManager for VirtContainerManager {
         // once the container has terminated, here should ignore this signal
         // and return directly.
         //
-        // kill(2) method can return ESRCH in certain cases, which is not handled
-        // by containerd cri server. CRIO server also doesn't handle ESRCH.
-        // Additionally, when the VM/agent is dead (e.g., QEMU killed), the ttrpc
+        // When the VM/agent is dead (e.g., QEMU killed externally), the ttrpc
         // connection will fail with "local stream closed" or similar errors.
         // For SIGKILL/SIGTERM, we should treat these as success since the
-        // container is effectively terminated.
+        // container is effectively terminated. This matches the Go runtime
+        // behavior and CRI spec requirement for idempotent stop operations.
         c.kill_process(&req.process, req.signal, req.all)
             .await
             .or_else(|err| {
                 let err_str = format!("{:?}", err);
                 let is_termination_signal = req.signal == 9 || req.signal == 15; // SIGKILL or SIGTERM
-                let is_process_gone = err_str.contains("failed to find container")
-                    || err_str.contains("ESRCH")
-                    || err_str.contains("No such process");
                 let is_connection_dead = err_str.contains("local stream closed")
                     || err_str.contains("ttrpc: closed")
                     || err_str.contains("stream closed")
                     || err_str.contains("connection refused");
 
-                if is_process_gone || (is_termination_signal && is_connection_dead) {
+                if is_termination_signal && is_connection_dead {
                     warn!(
                         sl!(),
-                        "Signal encounters expected error, process/VM already terminated";
+                        "Signal encounters expected error, VM already terminated";
                         "container" => container_id,
                         "process" => ?&req.process,
                         "signal" => req.signal,
@@ -290,12 +286,6 @@ impl ContainerManager for VirtContainerManager {
                     );
                     Ok(())
                 } else {
-                    warn!(
-                        sl!(),
-                        "Failed to signal process";
-                        "process" => ?&req.process,
-                        "error" => ?err
-                    );
                     Err(err)
                 }
             })
