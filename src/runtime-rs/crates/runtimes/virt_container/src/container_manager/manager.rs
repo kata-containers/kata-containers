@@ -212,28 +212,72 @@ impl ContainerManager for VirtContainerManager {
             oci_process,
         )
         .await
-        .context("exec")?;
-        Ok(())
+        .or_else(|err| {
+            let err_str = format!("{:?}", err);
+            if err_str.contains("failed to find container") {
+                warn!(
+                    sl!(),
+                    "Container not found during exec, already terminated"
+                );
+                Err(Error::ContainerNotFound(container_id.clone()).into())
+            } else {
+                Err(err).context("exec")
+            }
+        })
     }
 
     #[instrument]
     async fn kill_process(&self, req: &KillRequest) -> Result<()> {
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
+
+        // According to CRI specs, kubelet will call StopPodSandbox()
+        // at least once before calling RemovePodSandbox and this call
+        // is idempotent. It must not return an error if all relevant
+        // resources have already been reclaimed
+        let c = match containers.get(container_id) {
+            Some(c) => c,
+            None => {
+                // Container already removed - this is OK for SIGKILL/SIGTERM
+                if req.signal == 9 || req.signal == 15 {
+                    warn!(
+                        sl!(),
+                        "Container already removed, treating as success";
+                        "container" => container_id,
+                        "signal" => req.signal
+                    );
+                    return Ok(());
+                }
+                return Err(Error::ContainerNotFound(container_id.clone()).into());
+            }
+        };
+
+        // kill(2) method can return ESRCH in certain cases, which is not handled by containerd cri server.
+        // CRIO server also doesn't handle ESRCH. So kata runtime will swallow it here.
         c.kill_process(&req.process, req.signal, req.all)
             .await
-            .map_err(|err| {
-                warn!(
-                    sl!(),
-                    "failed to signal process {:?} {:?}", &req.process, err
-                );
-                err
+            .or_else(|err| {
+                let err_str = format!("{:?}", err);
+                if err_str.contains("failed to find container")
+                    || err_str.contains("ESRCH")
+                    || err_str.contains("No such process") {
+                    warn!(
+                        sl!(),
+                        "Signal encounters ESRCH, process already finished";
+                        "container" => container_id,
+                        "process" => ?&req.process
+                    );
+                    Ok(())
+                } else {
+                    warn!(
+                        sl!(),
+                        "Failed to signal process";
+                        "process" => ?&req.process,
+                        "error" => ?err
+                    );
+                    Err(err)
+                }
             })
-            .ok();
-        Ok(())
     }
 
     #[instrument]
