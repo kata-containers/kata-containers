@@ -212,28 +212,90 @@ impl ContainerManager for VirtContainerManager {
             oci_process,
         )
         .await
-        .context("exec")?;
-        Ok(())
+        .or_else(|err| {
+            let err_str = format!("{:?}", err);
+            if err_str.contains("failed to find container") {
+                warn!(
+                    sl!(),
+                    "Container not found during exec, already terminated"
+                );
+                Err(Error::ContainerNotFound(container_id.clone()).into())
+            } else {
+                Err(err).context("exec")
+            }
+        })
     }
 
     #[instrument]
     async fn kill_process(&self, req: &KillRequest) -> Result<()> {
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
+
+        // According to CRI specs, kubelet will call StopPodSandbox()
+        // at least once before calling RemovePodSandbox and this call
+        // is idempotent. It must not return an error if all relevant
+        // resources have already been reclaimed
+        let c = match containers.get(container_id) {
+            Some(c) => c,
+            None => {
+                // Container already removed - this is OK for SIGKILL/SIGTERM
+                if req.signal == 9 || req.signal == 15 {
+                    warn!(
+                        sl!(),
+                        "Container already removed, treating as success";
+                        "container" => container_id,
+                        "signal" => req.signal
+                    );
+                    return Ok(());
+                }
+                return Err(Error::ContainerNotFound(container_id.clone()).into());
+            }
+        };
+
+        // According to CRI specs, kubelet will call StopPodSandbox()
+        // at least once before calling RemovePodSandbox, and this call
+        // is idempotent, and must not return an error if all relevant
+        // resources have already been reclaimed. And in that call it will
+        // send a SIGKILL signal first to try to stop the container, thus
+        // once the container has terminated, here should ignore this signal
+        // and return directly.
+        //
+        // When the VM/agent is dead (e.g., QEMU killed externally), the ttrpc
+        // connection will fail with "local stream closed" or similar errors.
+        // Additionally, if the container's init process is already gone, the
+        // agent returns "cannot find init process" error.
+        // For SIGKILL/SIGTERM, we should treat these as success since the
+        // container is effectively terminated. This matches the Go runtime
+        // behavior and CRI spec requirement for idempotent stop operations.
         c.kill_process(&req.process, req.signal, req.all)
             .await
-            .map_err(|err| {
-                warn!(
-                    sl!(),
-                    "failed to signal process {:?} {:?}", &req.process, err
-                );
-                err
+            .or_else(|err| {
+                let err_str = format!("{:?}", err);
+                let is_termination_signal = req.signal == 9 || req.signal == 15; // SIGKILL or SIGTERM
+
+                // Connection errors when VM/QEMU is dead
+                let is_connection_dead = err_str.contains("local stream closed")
+                    || err_str.contains("ttrpc: closed")
+                    || err_str.contains("stream closed")
+                    || err_str.contains("connection refused");
+
+                // Process/container already gone errors from the agent
+                let is_process_gone = err_str.contains("cannot find init process");
+
+                if is_termination_signal && (is_connection_dead || is_process_gone) {
+                    warn!(
+                        sl!(),
+                        "Signal encounters expected error, VM/process already terminated";
+                        "container" => container_id,
+                        "process" => ?&req.process,
+                        "signal" => req.signal,
+                        "error" => &err_str
+                    );
+                    Ok(())
+                } else {
+                    Err(err)
+                }
             })
-            .ok();
-        Ok(())
     }
 
     #[instrument]
@@ -303,11 +365,31 @@ impl ContainerManager for VirtContainerManager {
     async fn state_process(&self, process: &ContainerProcess) -> Result<ProcessStateInfo> {
         let containers = self.containers.read().await;
         let container_id = &process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
-        let state = c.state_process(process).await.context("state process")?;
-        Ok(state)
+
+        // When using Sandbox API, the sandbox container (container_id == sandbox_id)
+        // is not stored in the containers map. Return a synthetic state for it.
+        if let Some(c) = containers.get(container_id) {
+            let state = c.state_process(process).await.context("state process")?;
+            Ok(state)
+        } else if container_id == &self.sid {
+            // Sandbox container state - return synthetic state
+            use common::types::ProcessStatus;
+            Ok(ProcessStateInfo {
+                container_id: self.sid.clone(),
+                exec_id: String::new(),
+                pid: PID { pid: self.pid },
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: ProcessStatus::Running,
+                exit_status: 0,
+                exited_at: None,
+            })
+        } else {
+            Err(Error::ContainerNotFound(container_id.clone()).into())
+        }
     }
 
     #[instrument]

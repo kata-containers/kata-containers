@@ -430,6 +430,32 @@ impl Container {
         all: bool,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
+
+        // Match Go runtime behavior: check if process is already stopped before signaling.
+        // For SIGKILL/SIGTERM, if the process is already stopped, return success immediately.
+        // This is critical for proper cleanup when VM dies - the wait thread sets status to
+        // Stopped even on error, so subsequent Kill() calls will see it as already stopped.
+        // See: src/runtime/pkg/containerd-shim-v2/service.go lines 839-846
+        let is_termination_signal = signal == 9 || signal == 15; // SIGKILL or SIGTERM
+        let process_status = if container_process.exec_id.is_empty() {
+            inner.init_process.get_status().await
+        } else if let Some(exec) = inner.exec_processes.get(&container_process.exec_id) {
+            exec.process.get_status().await
+        } else {
+            ProcessStatus::Unknown
+        };
+
+        if is_termination_signal && process_status == ProcessStatus::Stopped {
+            info!(
+                self.logger,
+                "process has already stopped, skipping signal";
+                "container" => &self.container_id.container_id,
+                "process" => ?container_process,
+                "signal" => signal
+            );
+            return Ok(());
+        }
+
         inner.signal_process(container_process, signal, all).await
     }
 
