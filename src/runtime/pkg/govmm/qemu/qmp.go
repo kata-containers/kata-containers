@@ -1160,7 +1160,8 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 // devID is the id of the device to add. Must be valid QMP identifier.
 // bdf is the PCI bus-device-function of the pci device.
 // bus is optional. When hot plugging a PCIe device, the bus can be the ID of the pcie-root-port.
-func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string) error {
+// iommufdID is the ID of the iommufd object to be created for this device. If empty, no iommufd object will be created.
+func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string, iommufdID string) error {
 	var driver string
 	var transport VirtioTransport
 
@@ -1178,6 +1179,16 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 	}
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if iommufdID != "" {
+		objectAddArgs := map[string]interface{}{
+			"qom-type": "iommufd",
+			"id":       iommufdID,
+		}
+		if err := q.executeCommand(ctx, "object-add", objectAddArgs, nil); err != nil {
+			return err
+		}
+		args["iommufd"] = iommufdID
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
