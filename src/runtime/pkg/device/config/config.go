@@ -15,6 +15,7 @@ import (
 
 	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/go-ini/ini"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
@@ -429,6 +430,16 @@ type VFIODev struct {
 	// HostPath is the path to the device on the host we need it as a reference
 	// to match a /dev/vfio/<num> device to a device in GK mode
 	HostPath string
+}
+
+// IOMMUFDID returns the IOMMUFD ID if the VFIO device is backed by IOMMUFD
+// otherwise returns an empty string.
+func (t VFIODev) IOMMUFDID() string {
+	if !strings.HasPrefix(t.DevfsDev, drivers.IommufdDevPath) {
+		return ""
+	}
+	basename := filepath.Base(t.DevfsDev)
+	return strings.TrimPrefix(basename, "vfio")
 }
 
 // RNGDev represents a random number generator device
