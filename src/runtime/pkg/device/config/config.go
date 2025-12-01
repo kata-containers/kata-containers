@@ -15,7 +15,7 @@ import (
 
 	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/go-ini/ini"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
@@ -435,7 +435,7 @@ type VFIODev struct {
 // IOMMUFDID returns the IOMMUFD ID if the VFIO device is backed by IOMMUFD
 // otherwise returns an empty string.
 func (t VFIODev) IOMMUFDID() string {
-	if !strings.HasPrefix(t.DevfsDev, drivers.IommufdDevPath) {
+	if !strings.HasPrefix(t.DevfsDev, device.IommufdDevPath) {
 		return ""
 	}
 	basename := filepath.Base(t.DevfsDev)
