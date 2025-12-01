@@ -50,6 +50,10 @@ func (l qmpTestLogger) Errorf(format string, v ...interface{}) {
 	l.Infof(format, v...)
 }
 
+func (l qmpTestLogger) Debugf(format string, v ...interface{}) {
+	l.Infof(format, v...)
+}
+
 // nolint: govet
 type qmpTestCommand struct {
 	name string
