@@ -6,35 +6,46 @@ rust-version = "1.85.1"
 
 [workspace]
 members = [
-    # Dragonball
-    "src/dragonball",
-    "src/dragonball/dbs_acpi",
-    "src/dragonball/dbs_address_space",
-    "src/dragonball/dbs_allocator",
-    "src/dragonball/dbs_arch",
-    "src/dragonball/dbs_boot",
-    "src/dragonball/dbs_device",
-    "src/dragonball/dbs_interrupt",
-    "src/dragonball/dbs_legacy_devices",
-    "src/dragonball/dbs_pci",
-    "src/dragonball/dbs_tdx",
-    "src/dragonball/dbs_upcall",
-    "src/dragonball/dbs_utils",
-    "src/dragonball/dbs_virtio_devices",
+  # Dragonball
+  "src/dragonball",
+  "src/dragonball/dbs_acpi",
+  "src/dragonball/dbs_address_space",
+  "src/dragonball/dbs_allocator",
+  "src/dragonball/dbs_arch",
+  "src/dragonball/dbs_boot",
+  "src/dragonball/dbs_device",
+  "src/dragonball/dbs_interrupt",
+  "src/dragonball/dbs_legacy_devices",
+  "src/dragonball/dbs_pci",
+  "src/dragonball/dbs_tdx",
+  "src/dragonball/dbs_upcall",
+  "src/dragonball/dbs_utils",
+  "src/dragonball/dbs_virtio_devices",
+
+  # runtime-rs
+  "src/runtime-rs",
+  "src/runtime-rs/crates/agent",
+  "src/runtime-rs/crates/hypervisor",
+  "src/runtime-rs/crates/persist",
+  "src/runtime-rs/crates/resource",
+  "src/runtime-rs/crates/runtimes",
+  "src/runtime-rs/crates/service",
+  "src/runtime-rs/crates/shim",
+  "src/runtime-rs/crates/shim-ctl",
+  "src/runtime-rs/tests/utils",
 ]
 resolver = "2"
 
 # TODO: Add all excluded crates to root workspace
 exclude = [
-    "src/agent",
-    "src/tools",
-    "src/libs",
-    "src/runtime-rs",
+  "src/agent",
+  "src/tools",
+  "src/libs",
 
-    # We are cloning and building rust packages under
-    # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead
-    # those packages to think they are part of the kata root workspace
-    "tools/packaging/kata-deploy/local-build/build",
+  # We are cloning and building rust packages under
+  # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead
+  # those packages to think they are part of the kata root workspace
+  "tools/packaging/kata-deploy/local-build/build",
 ]
 
 [workspace.dependencies]
@@ -54,6 +65,7 @@ vm-superio = "0.5.0"
 vmm-sys-util = "0.11.0"
 
 # Local dependencies from Dragonball Sandbox crates
+dragonball = { path = "src/dragonball" }
 dbs-acpi = { path = "src/dragonball/dbs_acpi" }
 dbs-address-space = { path = "src/dragonball/dbs_address_space" }
 dbs-allocator = { path = "src/dragonball/dbs_allocator" }
@@ -68,5 +80,57 @@ dbs-upcall = { path = "src/dragonball/dbs_upcall" }
 dbs-utils = { path = "src/dragonball/dbs_utils" }
 dbs-virtio-devices = { path = "src/dragonball/dbs_virtio_devices" }
 
+# Local dependencies from runtime-rs
+agent = { path = "src/runtime-rs/crates/agent" }
+hypervisor = { path = "src/runtime-rs/crates/hypervisor" }
+persist = { path = "src/runtime-rs/crates/persist" }
+resource = { path = "src/runtime-rs/crates/resource" }
+runtimes = { path = "src/runtime-rs/crates/runtimes" }
+service = { path = "src/runtime-rs/crates/service" }
+tests_utils = { path = "src/runtime-rs/tests/utils" }
+ch-config = { path = "src/runtime-rs/crates/hypervisor/ch-config" }
+common = { path = "src/runtime-rs/crates/runtimes/common" }
+linux_container = { path = "src/runtime-rs/crates/runtimes/linux_container" }
+virt_container = { path = "src/runtime-rs/crates/runtimes/virt_container" }
+wasm_container = { path = "src/runtime-rs/crates/runtimes/wasm_container" }
+
 # Local dependencies from `src/lib`
+kata-sys-util = { path = "src/libs/kata-sys-util" }
+kata-types = { path = "src/libs/kata-types", features = ["safe-path"] }
+logging = { path = "src/libs/logging" }
+protocols = { path = "src/libs/protocols", features = ["async"] }
+runtime-spec = { path = "src/libs/runtime-spec" }
+safe-path = { path = "src/libs/safe-path" }
+shim-interface = { path = "src/libs/shim-interface" }
 test-utils = { path = "src/libs/test-utils" }
+
+# Outside dependencies
+actix-rt = "2.7.0"
+anyhow = "1.0"
+async-trait = "0.1.48"
+containerd-shim = { version = "0.10.0", features = ["async"] }
+containerd-shim-protos = { version = "0.10.0", features = ["async"] }
+go-flag = "0.1.0"
+hyper = "0.14.20"
+hyperlocal = "0.8.0"
+lazy_static = "1.4"
+libc = "0.2"
+log = "0.4.14"
+netns-rs = "0.1.0"
+# Note: nix needs to stay sync'd with libs versions
+nix = "0.26.4"
+oci-spec = { version = "0.8.1", features = ["runtime"] }
+protobuf = "3.7.2"
+rand = "0.8.4"
+serde = { version = "1.0.145", features = ["derive"] }
+serde_json = "1.0.91"
+slog = "2.5.2"
+slog-scope = "4.4.0"
+strum = { version = "0.24.0", features = ["derive"] }
+tempfile = "3.19.1"
+thiserror = "1.0"
+tokio = "1.46.1"
+tracing = "0.1.41"
+tracing-opentelemetry = "0.18.0"
+ttrpc = "0.8.4"
+url = "2.5.4"
