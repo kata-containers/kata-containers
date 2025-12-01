@@ -1,3 +1,25 @@
+[package]
+name = "runtime-rs"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+description = "Containerd shim runtime for Kata Containers"
+keywords = ["kata-containers", "runtime", "shim"]
+repository = "https://github.com/kata-containers/kata-containers.git"
+license = "Apache-2.0"
+edition = "2018"
+
+[[bin]]
+name = "containerd-shim-kata-v2"
+path = "crates/shim/src/bin/main.rs"
+
+[[bin]]
+name = "shim-ctl"
+path = "crates/shim-ctl/src/main.rs"
+
+[features]
+dragonball = ["runtimes/dragonball"]
+cloud-hypervisor = ["runtimes/cloud-hypervisor"]
+
 [workspace]
 members = [
     "crates/agent",
@@ -75,3 +97,13 @@ tracing = "0.1.41"
 tracing-opentelemetry = "0.18.0"
 ttrpc = "0.8.4"
 url = "2.5.4"
+
+[dependencies]
+anyhow = { workspace = true }
+go-flag = { workspace = true }
+nix = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+shim = { path = "crates/shim" }
+common = { workspace = true }
+logging = { workspace = true }
+runtimes = { workspace = true }

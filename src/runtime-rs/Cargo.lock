@@ -3947,6 +3947,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime-rs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "common",
+ "go-flag",
+ "logging",
+ "nix 0.26.4",
+ "runtimes",
+ "shim",
+ "tokio",
+]
+
+[[package]]
 name = "runtime-spec"
 version = "0.1.0"
 dependencies = [
