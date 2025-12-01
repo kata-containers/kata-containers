@@ -475,9 +475,9 @@ plugins:
     version: "b7f6d3e0679796e907ecca88cfab0e32e326850d"
 
 docker_images:
-  description: "Docker hub images used for testing"
+  description: "Docker images used for testing"
 
   nginx:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
-    url: "https://hub.docker.com/_/nginx/"
+    registry: "quay.io/kata-containers/nginx"
     version: "1.15-alpine"

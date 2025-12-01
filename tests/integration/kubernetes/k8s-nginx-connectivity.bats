@@ -11,8 +11,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
 
-	nginx_version="${docker_images_nginx_version}"
-	nginx_image="nginx:$nginx_version"
 	busybox_image="quay.io/prometheus/busybox:latest"
 	deployment="nginx-deployment"
 
@@ -20,10 +18,8 @@ setup() {
 
 	# Create test .yaml
 	yaml_file="${pod_config_dir}/test-${deployment}.yaml"
+	set_nginx_image "${pod_config_dir}/${deployment}.yaml" "${yaml_file}"
 
-	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/${deployment}.yaml" > "${yaml_file}"
-	
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }
 
