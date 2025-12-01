@@ -33,7 +33,6 @@ setup() {
     pod_yaml="${pod_config_dir}/${POD_NAME_CUDA}.yaml"
 
     envsubst < "${pod_yaml_in}" > "${pod_yaml}"
-    add_allow_all_policy_to_yaml "${pod_yaml}"
 
     if [ "${TEE}" = "true" ]; then
         kernel_params_annotation="io.katacontainers.config.hypervisor.kernel_params"
@@ -44,6 +43,12 @@ setup() {
     fi
 
     setup_cdi_override_for_nvidia_gpu_snp
+
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+    add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+    add_cdi_envvars_to_policy_settings "${policy_settings_dir}"
+
+    auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 }
 
 @test "CUDA Vector Addition Test" {
@@ -69,5 +74,6 @@ teardown() {
 
     teardown_cdi_override_for_nvidia_gpu_snp
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir}"
     teardown_common "${node}" "${node_start_time:-}"
 }
