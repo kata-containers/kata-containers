@@ -61,6 +61,9 @@ pub struct PolicyData {
     /// Settings read from genpolicy-settings.json, related directly to each
     /// kata agent endpoint, that get added to the output policy.
     pub request_defaults: RequestDefaults,
+
+    /// Device annotation settings read from genpolicy-settings.json.
+    pub device_annotations: DeviceAnnotations,
 }
 
 /// OCI Container spec. This struct is very similar to the Spec struct from
@@ -275,10 +278,13 @@ pub struct ContainerPolicy {
     /// Data compared with req.sandbox_pidns for CreateContainerRequest calls.
     sandbox_pidns: bool,
 
-    /// Allow list of ommand lines that are allowed to be executed using
+    /// Allow list of command lines that are allowed to be executed using
     /// ExecProcessRequest. By default, all ExecProcessRequest calls are blocked
     /// by the policy.
     exec_commands: Vec<Vec<String>>,
+
+    /// Runtime-assigned annotation key-value pairs for validation of input annotations.
+    runtime_anno_patterns: BTreeMap<String, String>,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
@@ -456,6 +462,28 @@ pub struct ClusterConfig {
     pub pause_container_id_policy: String,
 }
 
+/// VFIO device annotation patterns for runtime-assigned CDI annotations.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VfioDeviceAnnotations {
+    /// Device path prefix for VFIO devices (without device number suffix).
+    pub device_path: String,
+
+    /// Regex pattern for VFIO CDI annotation keys.
+    pub key_regex: String,
+
+    /// Regex pattern for NVIDIA GPU CDI annotation values.
+    pub nvidia_gpu_value_regex: String,
+
+    /// Device type for NVIDIA GPU VFIO devices (gk variant).
+    pub nvidia_gpu_gk_device_type: String,
+}
+
+/// Device annotation patterns for various device types.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DeviceAnnotations {
+    pub vfio: VfioDeviceAnnotations,
+}
+
 /// Struct used to read data from the settings file and copy that data into the policy.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SandboxData {
@@ -586,6 +614,7 @@ impl AgentPolicy {
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
             sandbox: self.config.settings.sandbox.clone(),
+            device_annotations: self.config.settings.device_annotations.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -672,6 +701,18 @@ impl AgentPolicy {
         let mut devices: Vec<agent::Device> = vec![];
         if let Some(volumeDevices) = &yaml_container.volumeDevices {
             for volumeDevice in volumeDevices {
+                if volumeDevice
+                    .devicePath
+                    .starts_with(&self.config.settings.device_annotations.vfio.device_path)
+                {
+                    panic!(
+                        "Requested volume device file path '{}' conflicts with the file path reserved for VFIO device passthrough '{}'. \
+                         Note: for VFIO device passthrough, use resource limits (e.g., nvidia.com/gpu).",
+                        volumeDevice.devicePath,
+                        self.config.settings.device_annotations.vfio.device_path
+                    );
+                }
+
                 let mut device = agent::Device::new();
                 device.set_container_path(volumeDevice.devicePath.clone());
                 devices.push(device);
@@ -682,6 +723,55 @@ impl AgentPolicy {
                 })
             }
         }
+
+        // Generate expected device entries and annotation key-value pairs for VFIO devices
+        let mut runtime_anno_patterns = BTreeMap::new();
+        if let Some(nvidia_pgpu_count) = yaml_container.get_nvidia_pgpu_count() {
+            if nvidia_pgpu_count > 0 {
+                for _ in 0..nvidia_pgpu_count {
+                    let mut device = agent::Device::new();
+                    // The actual device number <device_path><device_number> is assigned at
+                    // runtime by the device plugin. Here at policy generation time, we set
+                    // the device path prefix <device_path>. When enforcing the policy, we
+                    // we validate against this prefix and compare the observed device
+                    // number with the number from the provided CDI annotations.
+                    device.set_container_path(
+                        self.config
+                            .settings
+                            .device_annotations
+                            .vfio
+                            .device_path
+                            .clone(),
+                    );
+                    device.set_type(
+                        self.config
+                            .settings
+                            .device_annotations
+                            .vfio
+                            .nvidia_gpu_gk_device_type
+                            .clone(),
+                    );
+                    device.set_vm_path("".to_string());
+                    devices.push(device);
+                }
+
+                runtime_anno_patterns.insert(
+                    self.config
+                        .settings
+                        .device_annotations
+                        .vfio
+                        .key_regex
+                        .clone(),
+                    self.config
+                        .settings
+                        .device_annotations
+                        .vfio
+                        .nvidia_gpu_value_regex
+                        .clone(),
+                );
+            }
+        }
+
         for default_device in &c_settings.Linux.Devices {
             linux.Devices.push(default_device.clone())
         }
@@ -705,6 +795,7 @@ impl AgentPolicy {
             devices,
             sandbox_pidns,
             exec_commands,
+            runtime_anno_patterns,
         }
     }
 

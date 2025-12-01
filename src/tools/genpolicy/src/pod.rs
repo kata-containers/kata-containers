@@ -1059,6 +1059,16 @@ impl Container {
             process.User.AdditionalGids.insert(gid);
         }
     }
+
+    // Get the number of NVIDIA passthrough GPUs requested in resource limits.
+    // Returns the count from "nvidia.com/pgpu" if present.
+    pub fn get_nvidia_pgpu_count(&self) -> Option<usize> {
+        self.resources
+            .as_ref()
+            .and_then(|r| r.limits.as_ref())
+            .and_then(|l| l.get("nvidia.com/pgpu"))
+            .and_then(|v| v.parse::<usize>().ok())
+    }
 }
 
 fn compress_default_capabilities(
