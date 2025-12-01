@@ -21,7 +21,7 @@ spec:
       runtimeClassName: kata
       containers:
       - name: nginxtest
-        image: quay.io/fidencio/${nginx_version}
+        image: ${NGINX_IMAGE}
         ports:
         - containerPort: 80
         volumeMounts:

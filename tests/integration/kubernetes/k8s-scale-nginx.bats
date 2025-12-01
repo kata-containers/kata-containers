@@ -9,16 +9,13 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	nginx_version="${docker_images_nginx_version}"
-	nginx_image="nginx:$nginx_version"
 	replicas="3"
 	deployment="nginx-deployment"
 	get_pod_config_dir
 
 	# Create the yaml file
 	test_yaml="${pod_config_dir}/test-${deployment}.yaml"
-	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/${deployment}.yaml" > "${test_yaml}"
+	set_nginx_image "${pod_config_dir}/${deployment}.yaml" "${test_yaml}"
 
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
