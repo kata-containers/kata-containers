@@ -653,6 +653,7 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 
 func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
 	filter *qmpEventFilter) error {
+	q.cfg.Logger.Infof("Executing QMP command: %s: %v", name, args)
 
 	_, err := q.executeCommandWithResponse(ctx, name, args, nil, filter)
 	return err
@@ -1181,14 +1182,15 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 		args["bus"] = bus
 	}
 	if iommufdID != "" {
+		iommufdIDFull := "iommufd" + iommufdID
 		objectAddArgs := map[string]interface{}{
 			"qom-type": "iommufd",
-			"id":       iommufdID,
+			"id":       iommufdIDFull,
 		}
 		if err := q.executeCommand(ctx, "object-add", objectAddArgs, nil); err != nil {
 			return err
 		}
-		args["iommufd"] = iommufdID
+		args["iommufd"] = iommufdIDFull
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
