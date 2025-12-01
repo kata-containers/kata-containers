@@ -18,3 +18,4 @@ src/tools/log-parser/kata-log-parser
 tools/packaging/static-build/agent/install_libseccomp.sh
 .envrc
 .direnv
+**/.DS_Store
