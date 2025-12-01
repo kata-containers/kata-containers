@@ -472,49 +472,22 @@ struct Machine {
     r#type: String,
     accel: String,
     options: String,
-    nvdimm: bool,
     kernel_irqchip: Option<String>,
     confidential_guest_support: String,
 
-    is_nvdimm_supported: bool,
     memory_backend: Option<String>,
 }
 
 impl Machine {
     fn new(config: &HypervisorConfig) -> Machine {
-        #[cfg(any(
-            target_arch = "aarch64",
-            all(target_arch = "powerpc64", target_endian = "little"),
-            target_arch = "x86",
-            target_arch = "x86_64",
-        ))]
-        let is_nvdimm_supported = true;
-        #[cfg(not(any(
-            target_arch = "aarch64",
-            all(target_arch = "powerpc64", target_endian = "little"),
-            target_arch = "x86",
-            target_arch = "x86_64",
-        )))]
-        let is_nvdimm_supported = false;
-
         Machine {
             r#type: config.machine_info.machine_type.clone(),
             accel: "kvm".to_owned(),
             options: config.machine_info.machine_accelerators.clone(),
-            nvdimm: false,
             kernel_irqchip: None,
             confidential_guest_support: "".to_owned(),
-            is_nvdimm_supported,
             memory_backend: None,
         }
-    }
-
-    fn set_nvdimm(&mut self, is_on: bool) -> &mut Self {
-        if is_on && !self.is_nvdimm_supported {
-            warn!(sl!(), "called to enable nvdimm but nvdimm is not supported");
-        }
-        self.nvdimm = is_on && self.is_nvdimm_supported;
-        self
     }
 
     fn set_memory_backend(&mut self, mem_backend: &str) -> &mut Self {
@@ -541,9 +514,6 @@ impl ToQemuParams for Machine {
         params.push(format!("accel={}", self.accel));
         if !self.options.is_empty() {
             params.push(self.options.clone());
-        }
-        if self.nvdimm {
-            params.push("nvdimm=on".to_owned());
         }
         if let Some(kernel_irqchip) = &self.kernel_irqchip {
             params.push(format!("kernel_irqchip={}", kernel_irqchip));
@@ -646,11 +616,6 @@ impl MemoryBackendFile {
 
     fn set_share(&mut self, share: bool) -> &mut Self {
         self.share = share;
-        self
-    }
-
-    fn set_readonly(&mut self, readonly: bool) -> &mut Self {
-        self.readonly = readonly;
         self
     }
 
@@ -864,34 +829,6 @@ impl ToQemuParams for DeviceVhostUserFs {
         }
         if let Some(devno) = &self.devno {
             params.push(format!("devno={}", devno));
-        }
-        Ok(vec!["-device".to_owned(), params.join(",")])
-    }
-}
-
-#[derive(Debug)]
-struct DeviceNvdimm {
-    memdev: String,
-    unarmed: bool,
-}
-
-impl DeviceNvdimm {
-    fn new(memdev: &str, unarmed: bool) -> DeviceNvdimm {
-        DeviceNvdimm {
-            memdev: memdev.to_owned(),
-            unarmed,
-        }
-    }
-}
-
-#[async_trait]
-impl ToQemuParams for DeviceNvdimm {
-    async fn qemu_params(&self) -> Result<Vec<String>> {
-        let mut params = Vec::new();
-        params.push("nvdimm".to_owned());
-        params.push(format!("memdev={}", self.memdev));
-        if self.unarmed {
-            params.push("unarmed=on".to_owned());
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -2190,10 +2127,9 @@ pub struct QemuCmdLine<'a> {
     // in the `devices` container.  However, there are several special cases
     // that might need to be set up in several steps after having been
     // initially constructed (from HypervisorConfig, mostly).  For instance,
-    // adding an NVDIMM needs to modify Machine and query Memory, adding a
-    // virtiofs share modifies both Memory and Machine, adding a serial console
-    // modifies Kernel etc.  For convenience accessing them, we store these
-    // singletons in named QemuCmdLine member.  The rest should go to the
+    // adding a virtiofs share modifies both Memory and Machine, adding a serial
+    // console modifies Kernel etc.  For convenience accessing them, we store
+    // these singletons in named QemuCmdLine member.  The rest should go to the
     // anonymous `devices` container.
     kernel: Kernel,
     memory: Memory,
@@ -2376,7 +2312,6 @@ impl<'a> QemuCmdLine<'a> {
 
         match bus_type {
             VirtioBusType::Pci => {
-                self.machine.set_nvdimm(true);
                 self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
             }
             VirtioBusType::Ccw => {
@@ -2402,36 +2337,6 @@ impl<'a> QemuCmdLine<'a> {
         }
 
         self.devices.push(Box::new(vhost_vsock_pci));
-        Ok(())
-    }
-
-    pub fn add_nvdimm(&mut self, path: &str, is_readonly: bool) -> Result<()> {
-        self.machine.set_nvdimm(true);
-        if self.memory.max_size == 0 || self.memory.num_slots == 0 {
-            info!(
-                sl!(),
-                "both memory max size and num slots must be set for nvdimm"
-            );
-            return Err(anyhow!(
-                "both memory max size and num slots must be set for nvdimm"
-            ));
-        }
-
-        let filesize = match std::fs::metadata(path) {
-            Ok(metadata) => metadata.len(),
-            Err(err) => {
-                info!(sl!(), "couldn't get size of {}: {}", path, err);
-                return Err(err.into());
-            }
-        };
-
-        let mut mem_file = MemoryBackendFile::new("TODO", path, filesize);
-        mem_file.set_readonly(is_readonly);
-        self.devices.push(Box::new(mem_file));
-
-        let nvdimm = DeviceNvdimm::new("TODO", is_readonly);
-        self.devices.push(Box::new(nvdimm));
-
         Ok(())
     }
 
@@ -2519,8 +2424,7 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(se_object));
 
         self.machine
-            .set_confidential_guest_support("pv0")
-            .set_nvdimm(false);
+            .set_confidential_guest_support("pv0");
 
         self.kernel.params.remove_all_by_key("reboot".to_string());
         self.kernel
@@ -2550,8 +2454,7 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
-            .set_confidential_guest_support("sev")
-            .set_nvdimm(false);
+            .set_confidential_guest_support("sev");
     }
 
     pub fn add_sev_snp_protection_device(
@@ -2568,8 +2471,7 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
-            .set_confidential_guest_support("snp")
-            .set_nvdimm(false);
+            .set_confidential_guest_support("snp");
 
         self.cpu.set_type("EPYC-v4");
     }
@@ -2587,8 +2489,7 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
-            .set_confidential_guest_support("tdx")
-            .set_nvdimm(false);
+            .set_confidential_guest_support("tdx");
     }
 
     /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.

@@ -131,10 +131,6 @@ impl QemuInner {
                         continue;
                     }
                     match block_dev.config.driver_option.as_str() {
-                        "nvdimm" => cmdline.add_nvdimm(
-                            &block_dev.config.path_on_host,
-                            block_dev.config.is_readonly,
-                        )?,
                         "ccw" | "blk" | "scsi" => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
