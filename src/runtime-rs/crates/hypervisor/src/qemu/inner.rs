@@ -163,12 +163,6 @@ impl QemuInner {
                                 &sev_snp_cfg.firmware,
                                 &sev_snp_cfg.host_data,
                             )
-                        } else {
-                            cmdline.add_sev_protection_device(
-                                sev_snp_cfg.cbitpos,
-                                sev_snp_cfg.phys_addr_reduction,
-                                &sev_snp_cfg.firmware,
-                            )
                         }
                     }
                     ProtectionDeviceConfig::Se => cmdline.add_se_protection_device(),

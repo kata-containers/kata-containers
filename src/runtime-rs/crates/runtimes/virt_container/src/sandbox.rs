@@ -437,19 +437,6 @@ impl VirtSandbox {
         );
 
         match available_protection {
-            GuestProtection::Sev(details) => {
-                if hypervisor_config.boot_info.firmware.is_empty() {
-                    return Err(anyhow!("SEV protection requires a path to firmaware"));
-                }
-
-                Ok(Some(ProtectionDeviceConfig::SevSnp(SevSnpConfig {
-                    is_snp: false,
-                    cbitpos: details.cbitpos,
-                    phys_addr_reduction: details.phys_addr_reduction,
-                    firmware: hypervisor_config.boot_info.firmware.clone(),
-                    host_data: None,
-                })))
-            }
             GuestProtection::Snp(details) => {
                 if hypervisor_config.boot_info.firmware.is_empty() {
                     return Err(anyhow!("SEV-SNP protection requires a path to firmaware"));
