@@ -30,7 +30,6 @@ setup() {
     pod_yaml="${pod_config_dir}/${POD_NAME_CUDA}.yaml"
 
     envsubst < "${pod_yaml_in}" > "${pod_yaml}"
-    add_allow_all_policy_to_yaml "${pod_yaml}"
 
     if [ "${TEE}" = "true" ]; then
         kernel_params_annotation="io.katacontainers.config.hypervisor.kernel_params"
@@ -39,6 +38,11 @@ setup() {
             "${kernel_params_annotation}" \
             "${kernel_params_value}"
     fi
+
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+    add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+
+    auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 }
 
 @test "CUDA Vector Addition Test" {
@@ -62,5 +66,6 @@ teardown() {
     echo "=== CUDA vectoradd Pod Logs ==="
     kubectl logs "${POD_NAME_CUDA}" || true
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir}"
     teardown_common "${node}" "${node_start_time:-}"
 }
