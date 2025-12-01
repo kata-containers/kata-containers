@@ -37,6 +37,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	pkgDevice "github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
@@ -849,7 +850,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		// In the case of IOMMUFD the device.HostPath will look like
 		// /dev/vfio/devices/vfio0
 		// (1) Check if we have the new IOMMUFD or old container based VFIO
-		if strings.HasPrefix(dev.HostPath, drivers.IommufdDevPath) {
+		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
 			q.Logger().Infof("### IOMMUFD Path: %s", dev.HostPath)
 			vfioDevices, err = drivers.GetDeviceFromVFIODev(dev)
 			if err != nil {
