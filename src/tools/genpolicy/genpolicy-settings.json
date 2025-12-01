@@ -197,6 +197,14 @@
             ]
         }
     },
+    "device_annotations": {
+        "vfio": {
+            "device_path": "/dev/vfio/devices/vfio",
+            "key_regex": "^cdi\\.k8s\\.io/vfio[0-9]+$",
+            "nvidia_gpu_value_regex": "^nvidia\\.com/gpu=[0-9]+$",
+            "nvidia_gpu_gk_device_type": "vfio-pci-gk"
+        }
+    },
     "mount_destinations": [
         "/sys/fs/cgroup",
         "/etc/hosts",

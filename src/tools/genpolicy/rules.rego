@@ -54,6 +54,8 @@ default AllowRequestsFailingPolicy := false
 # Constants
 S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
 S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
+CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
+VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
 
 CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # Check if the input request should be rejected even before checking the
@@ -96,13 +98,13 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     print("CreateContainerRequest: p Readonly =", p_oci.Root.Readonly, "i Readonly =", i_oci.Root.Readonly)
     p_oci.Root.Readonly == i_oci.Root.Readonly
 
-    allow_anno(p_oci, i_oci)
+    allow_anno(p_container, i_oci)
 
     p_storages := p_container.storages
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
 
     p_devices := p_container.devices
-    allow_devices(p_devices, i_devices)
+    allow_devices(p_devices, i_devices, i_oci)
 
     ret := allow_linux(ops_builder2, p_oci, i_oci)
     ret.allowed
@@ -110,7 +112,7 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # save to policy state
     # key: input.container_id
     # val: index of p_container in the policy_data.containers array
-    print("CreateContainerRequest: addding container_id=", input.container_id, " to state")
+    print("CreateContainerRequest: adding container_id=", input.container_id, " to state")
     add_p_container_to_state := state_allows(input.container_id, idx)
 
     ops := concat_op_if_not_null(ret.ops, add_p_container_to_state)
@@ -223,41 +225,51 @@ concat_op_if_not_null(ops, op) = result if {
 }
 
 # Reject unexpected annotations.
-allow_anno(p_oci, i_oci) if {
+allow_anno(p_container, i_oci) if {
     print("allow_anno 1: start")
 
     not i_oci.Annotations
 
     print("allow_anno 1: true")
 }
-allow_anno(p_oci, i_oci) if {
+allow_anno(p_container, i_oci) if {
+    p_oci := p_container.OCI
+
     print("allow_anno 2: p Annotations =", p_oci.Annotations)
     print("allow_anno 2: i Annotations =", i_oci.Annotations)
 
-    i_keys := object.keys(i_oci.Annotations)
-    print("allow_anno 2: i keys =", i_keys)
-
-    every i_key in i_keys {
-        allow_anno_key(i_key, p_oci)
+    every i_key, i_value in i_oci.Annotations {
+        allow_anno_key_value(i_key, i_value, p_container)
     }
 
     print("allow_anno 2: true")
 }
 
-allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 1: i key =", i_key)
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 1: i key =", i_key)
 
     startswith(i_key, "io.kubernetes.cri.")
 
-    print("allow_anno_key 1: true")
+    print("allow_anno_key_value 1: true")
 }
-allow_anno_key(i_key, p_oci) if {
-    print("allow_anno_key 2: i key =", i_key)
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 2: i key =", i_key)
 
-    some p_key, _ in p_oci.Annotations
+    some p_key, _ in p_container.OCI.Annotations
     p_key == i_key
 
-    print("allow_anno_key 2: true")
+    print("allow_anno_key_value 2: true")
+}
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 3: i key =", i_key, "i_value =", i_value)
+
+    some p_key_regex, p_value_regex in p_container.runtime_anno_patterns
+    print("allow_anno_key_value 3: p_key_regex =", p_key_regex, "p_value_regex =", p_value_regex)
+
+    regex.match(p_key_regex, i_key)
+    regex.match(p_value_regex, i_value)
+
+    print("allow_anno_key_value 3: true")
 }
 
 # Get the value of the S_NAME_KEY annotation and
@@ -457,16 +469,123 @@ allow_log_directory(p_oci, i_oci) if {
     print("allow_log_directory: true")
 }
 
-allow_devices(p_devices, i_devices) if {
+allow_devices(p_devices, i_devices, i_oci) if {
     print("allow_devices: start")
-    every i_device in i_devices {
-        print("allow_devices: i_device =", i_device)
-        some p_device in p_devices
-        p_device.container_path == i_device.container_path
-    }
+
+    vfio_device_path := policy_data.device_annotations.vfio.device_path
+
+    p_volume_devices := [d | d := p_devices[_]; d.container_path != vfio_device_path]
+    i_volume_devices := [d | d := i_devices[_]; not startswith(d.container_path, vfio_device_path)]
+    print("allow_devices: p_volume_devices =", p_volume_devices, "i_volume_devices =", i_volume_devices)
+    allow_volume_devices(p_volume_devices, i_volume_devices)
+
+    p_vfio_devices := [d | d := p_devices[_]; d.container_path == vfio_device_path]
+    i_vfio_devices := [d | d := i_devices[_]; startswith(d.container_path, vfio_device_path)]
+    print("allow_devices: p_vfio_devices =", p_vfio_devices, "i_vfio_devices =", i_vfio_devices)
+    allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci)
+
     print("allow_devices: true")
 }
 
+allow_volume_devices(p_volume_devices, i_volume_devices) if {
+    print("allow_volume_devices: start")
+
+    every i_volume_device in i_volume_devices {
+        some p_device in p_volume_devices
+        p_device.container_path == i_volume_device.container_path
+    }
+
+    print("allow_volume_devices: true")
+}
+
+allow_vfio_devices(p_vfio_devices, i_vfio_devices, i_oci) if {
+    print("allow_vfio_devices: start")
+
+    every i_vfio_device in i_vfio_devices {
+        allow_vfio_device(p_vfio_devices, i_vfio_device)
+    }
+
+    allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci)
+
+    print("allow_vfio_devices: true")
+}
+
+allow_vfio_device(p_vfio_devices, i_vfio_device) if {
+    print("allow_vfio_device: start")
+
+    some p_device in p_vfio_devices
+
+    vfio_device_path := policy_data.device_annotations.vfio.device_path
+    startswith(i_vfio_device.container_path, vfio_device_path)
+    suffix := trim_prefix(i_vfio_device.container_path, vfio_device_path)
+    regex.match("^[0-9]+$", suffix)
+
+    i_vfio_device.id == concat("", ["vfio", suffix])
+
+    i_vfio_device.type_ == p_device.type_
+
+    i_vfio_device.vm_path == p_device.vm_path
+
+    count(i_vfio_device.options) > 0
+    every option in i_vfio_device.options {
+        regex.match(VFIO_PCI_ADDRESS_REGEX, option)
+    }
+    print("allow_vfio_device: true")
+}
+
+get_cdi_vfio_anno_suffixes(annotations) := [suffix |
+    some key, _ in annotations
+    startswith(key, CDI_VFIO_ANNOTATION_PREFIX)
+    suffix := trim_prefix(key, CDI_VFIO_ANNOTATION_PREFIX)
+    regex.match("^[0-9]+$", suffix)
+]
+
+allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
+    print("allow_vfio_device_cdi_correlation 1: start")
+
+    count(i_vfio_devices) == 0
+    count(p_vfio_devices) == 0
+
+    print("allow_vfio_device_cdi_correlation 1: true")
+}
+
+# VFIO device hot-plug: input VFIO devices are present.
+# Input VFIO devices must match policy VFIO devices and unique set of CDI annotations.
+allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
+    print("allow_vfio_device_cdi_correlation 2: start")
+
+    count(i_vfio_devices) == count(p_vfio_devices)
+
+    vfio_device_path := policy_data.device_annotations.vfio.device_path
+    vfio_numbers := [suffix |
+        d := i_vfio_devices[_];
+        suffix := trim_prefix(d.container_path, vfio_device_path);
+        regex.match("^[0-9]+$", suffix)
+    ]
+    # Convert array to set to reject possible duplicate entries in the array
+    count(vfio_numbers) == count({n | n := vfio_numbers[_]})
+
+    cdi_suffixes := get_cdi_vfio_anno_suffixes(i_oci.Annotations)
+    count(cdi_suffixes) == count({s | s := cdi_suffixes[_]})
+    {n | n := vfio_numbers[_]} == {s | s := cdi_suffixes[_]}
+
+    print("allow_vfio_device_cdi_correlation 2: true")
+}
+
+# VFIO device cold-plug: no input VFIO devices expected.
+# Number of VFIO policy devices must match unique set of CDI annotations.
+allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
+    print("allow_vfio_device_cdi_correlation 3: start")
+
+    count(i_vfio_devices) == 0
+    count(p_vfio_devices) > 0
+
+    cdi_suffixes := get_cdi_vfio_anno_suffixes(i_oci.Annotations)
+    count(cdi_suffixes) == count({s | s := cdi_suffixes[_]})
+    count(cdi_suffixes) == count(p_vfio_devices)
+
+    print("allow_vfio_device_cdi_correlation 3: true")
+}
 
 allow_linux(state_ops, p_oci, i_oci) := {"ops": ops, "allowed": true} if {
     p_namespaces := p_oci.Linux.Namespaces
@@ -1110,7 +1229,7 @@ allow_storage_source(p_storage, i_storage, bundle_id) if {
     source2 := replace(source1, "$(sfprefix)", policy_data.common.sfprefix)
     source3 := replace(source2, "$(cpath)", policy_data.common.cpath)
     source4 := replace(source3, "$(bundle-id)", bundle_id)
-    
+
     print("allow_storage_source 2: source =", source4)
     regex.match(source4, i_storage.source)
 
