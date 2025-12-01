@@ -488,7 +488,7 @@ impl Machine {
             target_arch = "x86",
             target_arch = "x86_64",
         ))]
-        let is_nvdimm_supported = config.machine_info.machine_type != "microvm";
+        let is_nvdimm_supported = true;
         #[cfg(not(any(
             target_arch = "aarch64",
             all(target_arch = "powerpc64", target_endian = "little"),
