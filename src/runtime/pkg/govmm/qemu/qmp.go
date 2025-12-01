@@ -43,6 +43,10 @@ type QMPLog interface {
 	// Errorf writes error output to the log.  A newline will be
 	// added to the output if one is not provided.
 	Errorf(string, ...interface{})
+
+	// Debugf writes debug output to the log.  A newline will be
+	// added to the output if one is not provided.
+	Debugf(string, ...interface{})
 }
 
 type qmpNullLogger struct{}
@@ -58,6 +62,9 @@ func (l qmpNullLogger) Warningf(format string, v ...interface{}) {
 }
 
 func (l qmpNullLogger) Errorf(format string, v ...interface{}) {
+}
+
+func (l qmpNullLogger) Debugf(format string, v ...interface{}) {
 }
 
 // QMPConfig is a configuration structure that can be used to specify a
@@ -653,7 +660,7 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 
 func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
 	filter *qmpEventFilter) error {
-	q.cfg.Logger.Infof("Executing QMP command: %s: %v", name, args)
+	q.cfg.Logger.Debugf("Executing QMP command: %s: %v", name, args)
 
 	_, err := q.executeCommandWithResponse(ctx, name, args, nil, filter)
 	return err

@@ -177,6 +177,10 @@ func (l qmpLogger) Errorf(format string, v ...interface{}) {
 	l.logger.Errorf(format, v...)
 }
 
+func (l qmpLogger) Debugf(format string, v ...interface{}) {
+	l.logger.Debugf(format, v...)
+}
+
 // Logger returns a logrus logger appropriate for logging qemu messages
 func (q *qemu) Logger() *logrus.Entry {
 	return hvLogger.WithField("subsystem", "qemu")
