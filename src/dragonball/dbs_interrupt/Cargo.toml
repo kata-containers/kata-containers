@@ -18,6 +18,10 @@ kvm-ioctls = { workspace = true, optional = true }
 libc = "0.2"
 vmm-sys-util = {workspace = true}
 
+[dev-dependencies]
+test-utils = { workspace = true }
+nix = { workspace = true }
+
 [features]
 default = ["legacy-irq", "msi-irq"]
 

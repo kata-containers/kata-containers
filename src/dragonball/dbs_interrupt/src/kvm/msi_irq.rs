@@ -202,10 +202,12 @@ impl InterruptSourceGroup for MsiIrq {
 mod test {
     use super::*;
     use crate::manager::tests::create_vm_fd;
+    use test_utils::skip_if_not_root;
 
     #[test]
     #[allow(unreachable_patterns)]
     fn test_msi_interrupt_group() {
+        skip_if_not_root!();
         let vmfd = Arc::new(create_vm_fd());
         vmfd.create_irq_chip().unwrap();
 

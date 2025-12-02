@@ -24,3 +24,5 @@ vm-fdt = {workspace= true}
 vm-memory = { workspace = true, features = ["backend-mmap"] }
 device_tree = ">=1.1.0"
 dbs-device = { workspace = true }
+test-utils = { workspace = true }
+nix = { workspace = true }

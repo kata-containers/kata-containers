@@ -41,6 +41,8 @@ dbs-utils = {workspace = true}
 [dev-dependencies]
 dbs-arch = { workspace = true }
 kvm-ioctls = {workspace = true}
+test-utils = { workspace = true }
+nix = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
