@@ -47,7 +47,7 @@ impl U32Set {
     }
 
     /// Get an iterator over the CPU set.
-    pub fn iter(&self) -> Iter<u32> {
+    pub fn iter(&self) -> Iter<'_, u32> {
         self.0.iter()
     }
 }
