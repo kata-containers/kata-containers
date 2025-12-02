@@ -64,7 +64,7 @@ kbs_set_gpu0_resource_policy() {
 		import rego.v1
 		default allow = false
 		allow if {
-		    input["submods"]["gpu0"]["ear.status"] != "contraindicated"
+		    input["submods"]["gpu0"]["ear.status"] == "affirming"
 		}
 	EOF
 
