@@ -298,6 +298,7 @@ mod tests {
     use super::*;
     use crate::device_manager::tests::create_address_space;
     use crate::test_utils::tests::create_vm_for_test;
+    use test_utils::skip_if_not_root;
 
     impl Default for BalloonDeviceConfigInfo {
         fn default() -> Self {
@@ -330,6 +331,7 @@ mod tests {
 
     #[test]
     fn test_balloon_insert_or_update_device() {
+        skip_if_not_root!();
         //Init vm for test.
         let mut vm = create_vm_for_test();
 
@@ -354,6 +356,7 @@ mod tests {
 
     #[test]
     fn test_balloon_attach_device() {
+        skip_if_not_root!();
         //Init vm and insert balloon config for test.
         let mut vm = create_vm_for_test();
         let device_op_ctx = DeviceOpContext::new(
@@ -393,6 +396,7 @@ mod tests {
 
     #[test]
     fn test_balloon_update_device() {
+        skip_if_not_root!();
         //Init vm for test.
         let mut vm = create_vm_for_test();
         let device_op_ctx = DeviceOpContext::new(

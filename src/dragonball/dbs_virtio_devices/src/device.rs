@@ -579,6 +579,7 @@ pub(crate) mod tests {
     };
     use dbs_utils::epoll_manager::{EventOps, Events, MutEventSubscriber};
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_not_root;
     use virtio_queue::QueueSync;
     use vm_memory::{GuestMemoryAtomic, GuestMemoryMmap, GuestMemoryRegion, MmapRegion};
 
@@ -629,6 +630,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_virtio_queue_config() {
+        skip_if_not_root!();
         let (_vmfd, irq_manager) = crate::tests::create_vm_and_irq_manager();
         let group = irq_manager
             .create_group(InterruptSourceType::LegacyIrq, 0, 1)
@@ -660,6 +662,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_clone_virtio_queue_config() {
+        skip_if_not_root!();
         let (_vmfd, irq_manager) = crate::tests::create_vm_and_irq_manager();
         let group = irq_manager
             .create_group(InterruptSourceType::LegacyIrq, 0, 1)
@@ -698,6 +701,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_virtio_device_config() {
+        skip_if_not_root!();
         let mut device_config = create_virtio_device_config();
 
         device_config.notify_device_changes().unwrap();
@@ -783,6 +787,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_virtio_device() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
 
         let avail_features = 0x1234 << 32 | 0x4567;
