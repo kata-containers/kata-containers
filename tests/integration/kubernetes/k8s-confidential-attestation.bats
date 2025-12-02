@@ -118,5 +118,8 @@ teardown() {
 
 	teardown_cdi_override_for_nvidia_gpu_snp
 
+	# TODO remove me
+	kubectl logs -n coco-tenant -l app=kbs --tail=-1 || true
+
 	confidential_teardown_common "${node}" "${node_start_time:-}"
 }

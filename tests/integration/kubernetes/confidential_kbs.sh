@@ -64,7 +64,7 @@ kbs_set_gpu0_resource_policy() {
 		import rego.v1
 		default allow = false
 		allow if {
-		    input["submods"]["gpu0"]["ear.status"] != "contraindicated"
+		    input["submods"]["gpu0"]["ear.status"] == "affirming"
 		}
 	EOF
 
@@ -401,6 +401,10 @@ function kbs_k8s_deploy() {
 	echo "::group::Post deploy actions"
 	_post_deploy "${ingress}"
 	echo "::endgroup::"
+
+	# TODO remove me: Attestation test works locally but not on CI runner - need more log output
+	kubectl set env deployment/kbs -n "${KBS_NS}" RUST_LOG=debug
+	sleep 10
 
 	# By default, the KBS service is reachable within the cluster only,
 	# thus the following healthy checker should run from a pod. So start a
