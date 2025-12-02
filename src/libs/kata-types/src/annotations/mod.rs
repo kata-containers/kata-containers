@@ -283,6 +283,13 @@ pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPUS: &str =
 pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_GPU_MODEL: &str =
     "io.katacontainers.config.hypervisor.default_gpu_model";
 
+/// Block device specific annotation for num_queues
+pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES: &str =
+    "io.katacontainers.config.hypervisor.block_device_num_queues";
+/// Block device specific annotation for queue_size
+pub const KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_QUEUE_SIZE: &str =
+    "io.katacontainers.config.hypervisor.block_device_queue_size";
+
 // Runtime related annotations
 /// Prefix for Runtime configurations.
 pub const KATA_ANNO_CFG_RUNTIME_PREFIX: &str = "io.katacontainers.config.runtime.";
@@ -503,6 +510,7 @@ impl Annotation {
         let u32_err = io::Error::new(io::ErrorKind::InvalidData, "parse u32 error".to_string());
         let u64_err = io::Error::new(io::ErrorKind::InvalidData, "parse u64 error".to_string());
         let i32_err = io::Error::new(io::ErrorKind::InvalidData, "parse i32 error".to_string());
+        let usize_err = io::Error::new(io::ErrorKind::InvalidData, "parse usize error".to_string());
         let hv = config.hypervisor.get_mut(hypervisor_name).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -960,7 +968,26 @@ impl Annotation {
                             return Err(u32_err);
                         }
                     },
-
+                    KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_NUM_QUEUES => {
+                        match self.get_value::<usize>(key) {
+                            Ok(v) => {
+                                hv.blockdev_info.num_queues = v.unwrap_or_default();
+                            }
+                            Err(_e) => {
+                                return Err(usize_err);
+                            }
+                        }
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_QUEUE_SIZE => {
+                        match self.get_value::<u32>(key) {
+                            Ok(v) => {
+                                hv.blockdev_info.queue_size = v.unwrap_or_default();
+                            }
+                            Err(_e) => {
+                                return Err(u32_err);
+                            }
+                        }
+                    }
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
