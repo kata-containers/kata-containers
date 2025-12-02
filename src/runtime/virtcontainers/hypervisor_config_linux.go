@@ -44,6 +44,10 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		conf.MemorySize = defaultMemSzMiB
 	}
 
+	if conf.DefaultMaxMemorySize != 0 && uint64(conf.MemorySize) > conf.DefaultMaxMemorySize {
+		conf.MemorySize = uint32(conf.DefaultMaxMemorySize)
+	}
+
 	if conf.DefaultBridges == 0 {
 		conf.DefaultBridges = defaultBridges
 	}
@@ -56,6 +60,10 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 
 	if conf.DefaultMaxVCPUs == 0 || conf.DefaultMaxVCPUs > defaultMaxVCPUs {
 		conf.DefaultMaxVCPUs = defaultMaxVCPUs
+	}
+
+	if numNUMA := conf.NumNUMA(); numNUMA > 1 {
+		conf.DefaultMaxVCPUs -= conf.DefaultMaxVCPUs % numNUMA
 	}
 
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {

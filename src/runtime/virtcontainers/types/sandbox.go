@@ -342,3 +342,9 @@ type Resources struct {
 	Memory      uint
 	MemorySlots uint8
 }
+
+// NUMANode defines VM NUMA node mapping to host NUMA nodes and CPUs.
+type NUMANode struct {
+	HostNodes string
+	HostCPUs  string
+}

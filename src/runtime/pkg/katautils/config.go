@@ -25,6 +25,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
@@ -154,6 +155,8 @@ type hypervisor struct {
 	VirtioMem                      bool                      `toml:"enable_virtio_mem"`
 	IOMMU                          bool                      `toml:"enable_iommu"`
 	IOMMUPlatform                  bool                      `toml:"enable_iommu_platform"`
+	NUMA                           bool                      `toml:"enable_numa"`
+	NUMAMapping                    []string                  `toml:"numa_mapping"`
 	Debug                          bool                      `toml:"enable_debug"`
 	DisableNestingChecks           bool                      `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool                      `toml:"enable_iothreads"`
@@ -719,6 +722,18 @@ func (h hypervisor) getIOMMUPlatform() bool {
 	return h.IOMMUPlatform
 }
 
+func (h hypervisor) defaultNUMANodes() []types.NUMANode {
+	if !h.NUMA {
+		return nil
+	}
+	numaNodes, err := utils.GetNUMANodes(h.NUMAMapping)
+	if err != nil {
+		kataUtilsLogger.WithError(err).Warn("Cannot construct NUMA nodes.")
+		return nil
+	}
+	return numaNodes
+}
+
 func (h hypervisor) getRemoteHypervisorSocket() string {
 	if h.RemoteHypervisorSocket == "" {
 		return defaultRemoteHypervisorSocket
@@ -974,6 +989,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HugePages:                h.HugePages,
 		IOMMU:                    h.IOMMU,
 		IOMMUPlatform:            h.getIOMMUPlatform(),
+		NUMA:                     h.NUMA,
+		NUMANodes:                h.defaultNUMANodes(),
 		FileBackedMemRootDir:     h.FileBackedMemRootDir,
 		FileBackedMemRootList:    h.FileBackedMemRootList,
 		Debug:                    h.Debug,
@@ -1866,6 +1883,20 @@ func checkConfig(config oci.RuntimeConfig) error {
 	hypervisorType := config.HypervisorType
 	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType, hypervisorType); err != nil {
 		return err
+	}
+
+	if err := checkNumaConfig(config); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkNumaConfig ensures that we have static resource management set since
+// NUMA does not support hot-plug of memory or CPU, VFIO devices can be
+// hot-plugged.
+func checkNumaConfig(config oci.RuntimeConfig) error {
+	if !config.StaticSandboxResourceMgmt && config.HypervisorConfig.NUMA {
+		return errors.New("NUMA is enabled but static sandbox resource management is false, NUMA cannot hot-plug CPUs or memory, VFIO hot-plugging works, set static_sandbox_resource_mgmt=true")
 	}
 
 	return nil
