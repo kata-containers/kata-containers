@@ -21,7 +21,7 @@ spec:
     runAsUser: 0
   containers:
   - name: ${POD_NAME_EMBEDQA}
-    image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.5.0
+    image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.10.1
     imagePullPolicy: IfNotPresent
     env:
       - name: NIM_CACHE_PATH
@@ -73,7 +73,7 @@ spec:
 
     resources:
       limits:
-        nvidia.com/pgpu: 1
+        nvidia.com/pgpu: "1"
         cpu: "16"
         memory: "32Gi"
 

@@ -20,7 +20,7 @@ spec:
     fsGroup: 0
   containers:
   - name: ${POD_NAME_INSTRUCT}
-    image: nvcr.io/nim/meta/llama3-8b-instruct:1.0.0
+    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
     # Ports exposed by the container:
     ports:
       - containerPort: 8000
@@ -47,26 +47,23 @@ spec:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 40
+      initialDelaySeconds: 150
       periodSeconds: 10
       timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 180
+      failureThreshold: 45
     env:
       - name: NGC_API_KEY
         valueFrom:
           secretKeyRef:
             name: ngc-api-key-instruct
             key: api-key
-    # GPU resource request/limit (for NVIDIA GPU)
+    # GPU resource limit (for NVIDIA GPU)
     resources:
-      requests:
-        cpu: "16"
-        memory: "32Gi"
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "32Gi"
+        memory: "40Gi"
     # Mount the local .cache directory into the container
     volumeMounts:
       - name: nim-cache

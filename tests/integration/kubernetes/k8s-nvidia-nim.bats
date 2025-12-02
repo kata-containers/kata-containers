@@ -23,7 +23,7 @@ export TEE
 POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
 POD_NAME_INSTRUCT="nvidia-nim-llama-3-1-8b-instruct"
 POD_READY_TIMEOUT_EMBEDQA_PREDEFINED=500s
-POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=500s
+POD_READY_TIMEOUT_INSTRUCT_PREDEFINED=600s
 if [[ "${TEE}" = "true" ]]; then
     POD_NAME_EMBEDQA="${POD_NAME_EMBEDQA}-tee"
     POD_NAME_INSTRUCT="${POD_NAME_INSTRUCT}-tee"
@@ -233,6 +233,8 @@ EOF
     [[ -n "${POD_IP_EMBEDQA}" ]]
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
     [[ -n "${POD_IP_INSTRUCT}" ]]
+    # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
+    [[ -n "${MODEL_NAME}" ]]
 
     # shellcheck disable=SC1091  # Sourcing virtual environment activation script
     source "${HOME}"/.cicd/venv/bin/activate
@@ -348,7 +350,7 @@ EOF
 
     # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell
     cat <<EOF >>"${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
-llm = ChatNVIDIA(base_url="http://${POD_IP_INSTRUCT}:8000/v1", model="meta/llama3-8b-instruct", temperature=0.1, max_tokens=1000, top_p=1.0)
+llm = ChatNVIDIA(base_url="http://${POD_IP_INSTRUCT}:8000/v1", model="${MODEL_NAME}", temperature=0.1, max_tokens=1000, top_p=1.0)
 
 memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
@@ -410,5 +412,5 @@ teardown_file() {
         [ -f "${POD_EMBEDQA_YAML}" ] && kubectl delete -f "${POD_EMBEDQA_YAML}" --ignore-not-found=true
     fi
 
-    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_DIRNAME:-}"
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_COMPLETED:-}" >&3
 }

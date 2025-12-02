@@ -22,7 +22,7 @@ spec:
     fsGroup: 0
   containers:
   - name: ${POD_NAME_INSTRUCT}
-    image: nvcr.io/nim/meta/llama3-8b-instruct:1.0.0
+    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
     # Ports exposed by the container:
     ports:
       - containerPort: 8000
@@ -31,41 +31,41 @@ spec:
       httpGet:
         path: /v1/health/live
         port: http-openai
-      initialDelaySeconds: 120
+      initialDelaySeconds: 15
       periodSeconds: 10
-      timeoutSeconds: 10
+      timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 10
+      failureThreshold: 3
     readinessProbe:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 120
+      initialDelaySeconds: 15
       periodSeconds: 10
-      timeoutSeconds: 10
+      timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 10
+      failureThreshold: 3
     startupProbe:
       httpGet:
         path: /v1/health/ready
         port: http-openai
-      initialDelaySeconds: 180
+      initialDelaySeconds: 360
       periodSeconds: 10
-      timeoutSeconds: 10
+      timeoutSeconds: 1
       successThreshold: 1
-      failureThreshold: 300
+      failureThreshold: 30
     env:
       - name: NGC_API_KEY
         valueFrom:
           secretKeyRef:
             name: ngc-api-key-instruct
             key: api-key
-    # GPU resource request/limit (for NVIDIA GPU)
+    # GPU resource limit (for NVIDIA GPU)
     resources:
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "64Gi"
+        memory: "128Gi"
 ---
 apiVersion: v1
 kind: Secret
