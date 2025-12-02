@@ -444,12 +444,12 @@ languages:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
     # Keep in sync with rust-toolchain.toml
-    version: "1.85.1"
+    version: "1.88"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.85.1"
+      newest-version: "1.88"
 
   golangci-lint:
     description: "golangci-lint"
