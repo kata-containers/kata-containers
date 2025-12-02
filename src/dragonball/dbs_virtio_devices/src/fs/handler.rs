@@ -503,6 +503,7 @@ pub mod tests {
     use dbs_utils::epoll_manager::EpollManager;
     use dbs_utils::epoll_manager::SubscriberOps;
     use dbs_utils::rate_limiter::TokenBucket;
+    use test_utils::skip_if_not_root;
     use vm_memory::{GuestAddress, GuestMemoryMmap};
     use vmm_sys_util::tempfile::TempFile;
 
@@ -636,6 +637,7 @@ pub mod tests {
 
     #[test]
     fn test_fs_get_patch_rate_limiters() {
+        skip_if_not_root!();
         let mut handler = create_fs_epoll_handler(String::from("1"));
         let tokenbucket = TokenBucket::new(1, 1, 4);
 
@@ -705,6 +707,7 @@ pub mod tests {
 
     #[test]
     fn test_fs_epoll_handler_handle_event() {
+        skip_if_not_root!();
         let handler = create_fs_epoll_handler("test_1".to_string());
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
@@ -740,6 +743,7 @@ pub mod tests {
 
     #[test]
     fn test_fs_epoll_handler_handle_unknown_event() {
+        skip_if_not_root!();
         let handler = create_fs_epoll_handler("test_1".to_string());
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
@@ -756,6 +760,7 @@ pub mod tests {
 
     #[test]
     fn test_fs_epoll_handler_process_queue() {
+        skip_if_not_root!();
         {
             let mut handler = create_fs_epoll_handler("test_1".to_string());
 

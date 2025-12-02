@@ -748,6 +748,7 @@ pub(crate) mod tests {
     use dbs_device::resources::DeviceResources;
     use dbs_utils::epoll_manager::SubscriberOps;
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_not_root;
     use vm_memory::GuestMemoryMmap;
     use vmm_sys_util::eventfd::EventFd;
 
@@ -803,6 +804,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_balloon_virtio_device_normal() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
         let config = BalloonConfig {
             f_deflate_on_oom: true,
@@ -857,6 +859,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_balloon_virtio_device_active() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
 
         // check queue sizes error
@@ -923,6 +926,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_balloon_set_size() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
         let config = BalloonConfig {
             f_deflate_on_oom: true,
@@ -936,6 +940,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_balloon_epoll_handler_handle_event() {
+        skip_if_not_root!();
         let handler = create_balloon_epoll_handler();
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
@@ -968,6 +973,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_balloon_epoll_handler_process_report_queue() {
+        skip_if_not_root!();
         let mut handler = create_balloon_epoll_handler();
         let m = &handler.config.vm_as.clone();
 
@@ -997,6 +1003,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_balloon_epoll_handler_process_queue() {
+        skip_if_not_root!();
         let mut handler = create_balloon_epoll_handler();
         let m = &handler.config.vm_as.clone();
         // invalid idx

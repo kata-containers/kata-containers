@@ -219,9 +219,11 @@ impl Default for VhostUserNetDeviceMgr {
 mod tests {
     use super::*;
     use crate::test_utils::tests::create_vm_for_test;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_create_vhost_user_net_device() {
+        skip_if_not_root!();
         let vm = create_vm_for_test();
         let mgr = DeviceManager::new_test_mgr();
         let sock_1 = String::from("id_1");
@@ -249,6 +251,7 @@ mod tests {
 
     #[test]
     fn test_insert_vhost_user_net_device() {
+        skip_if_not_root!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
         let sock_1 = String::from("id_1");
@@ -277,6 +280,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_insert_error_cases() {
+        skip_if_not_root!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
         let sock_1 = String::from("id_1");

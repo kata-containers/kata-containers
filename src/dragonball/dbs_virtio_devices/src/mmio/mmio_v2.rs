@@ -494,6 +494,7 @@ where
 pub(crate) mod tests {
     use std::any::Any;
     use std::sync::Mutex;
+    use test_utils::skip_if_not_root;
 
     use byteorder::{ByteOrder, LittleEndian};
     use dbs_device::resources::{MsiIrqType, Resource, ResourceConstraint};
@@ -708,6 +709,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_virtio_mmio_v2_device_new() {
+        skip_if_not_root!();
         // test create error.
         let resources = DeviceResources::new();
         let mem = Arc::new(GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x1000)]).unwrap());
@@ -769,6 +771,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bus_device_read() {
+        skip_if_not_root!();
         let mut d = get_mmio_device();
 
         let mut buf = vec![0xff, 0, 0xfe, 0];
@@ -894,6 +897,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bus_device_write() {
+        skip_if_not_root!();
         let mut d = get_mmio_device();
 
         let mut buf = vec![0; 5];
@@ -1023,6 +1027,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bus_device_activate() {
+        skip_if_not_root!();
         // invalid state transition should failed
         let mut d = get_mmio_device();
 
@@ -1140,6 +1145,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_bus_device_reset() {
+        skip_if_not_root!();
         let resources = get_device_resource(false, false);
         let mut d = get_mmio_device_inner(true, 0, resources);
         let mut buf = vec![0; 4];
@@ -1169,6 +1175,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mmiov2_device_resources() {
+        skip_if_not_root!();
         let d = get_mmio_device();
 
         let resources = d.get_assigned_resources();
@@ -1185,6 +1192,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mmio_v2_device_msi() {
+        skip_if_not_root!();
         let resources = get_device_resource(true, false);
         let mut d = get_mmio_device_inner(true, 0, resources);
 
@@ -1227,6 +1235,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mmio_shared_memory() {
+        skip_if_not_root!();
         let resources = get_device_resource(true, true);
         let d = get_mmio_device_inner(true, 0, resources);
 
