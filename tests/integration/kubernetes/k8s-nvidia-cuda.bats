@@ -71,5 +71,5 @@ teardown() {
     # Clean up resources
     [ -f "${pod_yaml}" ] && kubectl delete -f "${pod_yaml}" --ignore-not-found=true
 
-    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_DIRNAME:-}"
+    print_node_journal_since_test_start "${node}" "${node_start_time:-}" "${BATS_TEST_COMPLETED:-}"
 }
