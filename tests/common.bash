@@ -633,7 +633,8 @@ function download_github_project_tarball() {
 	version="${2}"
 	tarball_name="${3}"
 
-	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
+	wget ${GH_TOKEN:+--header="Authorization: Bearer ${GH_TOKEN}"} \
+		"https://github.com/${project}/releases/download/${version}/${tarball_name}"
 }
 
 # version: The version to be intalled
