@@ -205,12 +205,12 @@ pub fn create_gic(vm: &VmFd, vcpu_count: u64) -> Result<Box<dyn GICDevice>> {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
     use kvm_ioctls::Kvm;
 
     #[test]
     fn test_create_gic() {
+        test_utils::skip_if_not_root!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         assert!(create_gic(&vm, 1).is_ok());

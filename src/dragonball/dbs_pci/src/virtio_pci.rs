@@ -1164,6 +1164,7 @@ pub(crate) mod tests {
     use dbs_interrupt::kvm::KvmIrqManager;
     use dbs_utils::epoll_manager::EpollManager;
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_not_root;
     use virtio_queue::QueueSync;
     use vm_memory::{GuestMemoryMmap, GuestRegionMmap, GuestUsize, MmapRegion};
 
@@ -1496,6 +1497,7 @@ pub(crate) mod tests {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
     fn test_virtio_pci_device_activate() {
+        skip_if_not_root!();
         let mut d: VirtioPciDevice<_, _, _> = get_pci_device();
         assert_eq!(d.state().queues.len(), 2);
         assert!(!d.state().check_queues_valid());
@@ -1554,6 +1556,7 @@ pub(crate) mod tests {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     #[test]
     fn test_bus_device_reset() {
+        skip_if_not_root!();
         let mut d: VirtioPciDevice<_, _, _> = get_pci_device();
 
         assert_eq!(d.state().queues.len(), 2);
@@ -1578,6 +1581,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_virtio_pci_device_resources() {
+        skip_if_not_root!();
         let d: VirtioPciDevice<_, _, _> = get_pci_device();
 
         let resources = d.get_assigned_resources();
@@ -1595,6 +1599,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_virtio_pci_register_ioevent() {
+        skip_if_not_root!();
         let d: VirtioPciDevice<_, _, _> = get_pci_device();
         d.register_ioevent().unwrap();
         assert!(d.ioevent_registered.load(Ordering::SeqCst));
@@ -1616,6 +1621,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_read_bar() {
+        skip_if_not_root!();
         let d: VirtioPciDevice<_, _, _> = get_pci_device();
         let origin_data = vec![1u8];
         // driver status

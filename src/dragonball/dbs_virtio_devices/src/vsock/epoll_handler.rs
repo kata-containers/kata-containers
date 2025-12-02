@@ -310,6 +310,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use test_utils::skip_if_not_root;
     use vm_memory::{Bytes, GuestAddress, GuestMemoryMmap};
     use vmm_sys_util::epoll::EventSet;
 
@@ -320,6 +321,7 @@ mod tests {
 
     #[test]
     fn test_irq() {
+        skip_if_not_root!();
         let test_ctx = TestContext::new();
         let mut ctx = test_ctx.create_event_handler_context();
         ctx.arti_activate(&test_ctx.mem);
@@ -329,6 +331,7 @@ mod tests {
 
     #[test]
     fn test_txq_event() {
+        skip_if_not_root!();
         // Test case:
         // - the driver has something to send (there's data in the TX queue);
         //   and
@@ -411,6 +414,7 @@ mod tests {
 
     #[test]
     fn test_rxq_event() {
+        skip_if_not_root!();
         // Test case:
         // - there is pending RX data in the backend; and
         // - the driver makes RX buffers available; and
@@ -468,6 +472,7 @@ mod tests {
 
     #[test]
     fn test_backend_event() {
+        skip_if_not_root!();
         // Test case:
         // - a backend event is received; and
         // - the backend has pending RX data.
@@ -567,6 +572,7 @@ mod tests {
 
     #[test]
     fn test_vsock_bof() {
+        skip_if_not_root!();
         const GAP_SIZE: usize = 768 << 20;
         const FIRST_AFTER_GAP: usize = 1 << 32;
         const GAP_START_ADDR: usize = FIRST_AFTER_GAP - GAP_SIZE;
