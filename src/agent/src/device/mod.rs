@@ -417,7 +417,7 @@ pub fn update_env_pci(
         let (name, eqval) = envvar.split_at(eqpos);
         let val = &eqval[1..];
 
-        if !name.starts_with("PCIDEVICE_") || name.ends_with("_INFO") {
+        if !name.starts_with("PCIDEVICE_") || name.ends_with("_INFO") || val.is_empty() {
             continue;
         }
 
