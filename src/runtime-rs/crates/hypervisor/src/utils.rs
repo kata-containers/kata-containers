@@ -21,6 +21,7 @@ use kata_types::{
     build_path,
     config::{Hypervisor, KATA_PATH},
 };
+use lazy_static::lazy_static;
 use nix::{
     fcntl,
     sched::{setns, CloneFlags},
@@ -367,6 +368,51 @@ pub fn get_cmd_output(cmd: &str, args: &[&str]) -> Result<String> {
     }
     let result = cmd.output()?;
     Ok(String::from_utf8(result.stdout)?)
+}
+
+// The presence of this sysfs directory is the fundamental architectural proof.
+const CCW_BUS_PATH: &str = "/sys/bus/ccw/devices";
+
+// These drivers are specific to traditional mainframe I/O and prove
+// native CCW support, even in virtualized environments.
+const NATIVE_CCW_DRIVERS: [&str; 3] = [
+    "3270",      // IBM 3270 Terminal Driver
+    "dasd-eckd", // Mainframe DASD (Disk) Driver
+    "zfcp",      // Fibre Channel Protocol Driver (FICON)
+];
+
+lazy_static! {
+    static ref NATIVE_CCW_BUS_CACHE: bool = {
+        if !Path::new(CCW_BUS_PATH).exists() {
+            false
+        } else {
+            let drivers_path = PathBuf::from("/sys/bus/ccw/drivers");
+            let mut native_driver_found = false;
+
+            for driver_name in NATIVE_CCW_DRIVERS.iter() {
+                let driver_path = drivers_path.join(driver_name);
+
+                if driver_path.exists() {
+                    native_driver_found = true;
+                    break;
+                }
+            }
+
+            native_driver_found
+        }
+    };
+}
+
+/// Detects if the system uses native CCW (Channel Command Word) bus.
+/// This function checks for the presence of CCW bus infrastructure in sysfs
+/// and verifies that native mainframe drivers are available.
+///
+/// The result is cached after the first call to avoid repeated IO operations.
+///
+/// # Returns
+/// `true` if native CCW bus is detected, `false` otherwise.
+pub fn uses_native_ccw_bus() -> bool {
+    *NATIVE_CCW_BUS_CACHE
 }
 
 #[cfg(test)]

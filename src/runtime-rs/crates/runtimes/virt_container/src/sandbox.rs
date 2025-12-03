@@ -30,7 +30,10 @@ use hypervisor::HYPERVISOR_REMOTE;
 #[cfg(feature = "dragonball")]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
-use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
+use hypervisor::{
+    utils::{get_hvsock_path, uses_native_ccw_bus},
+    HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID,
+};
 use hypervisor::{BlockConfig, Hypervisor};
 use hypervisor::{BlockDeviceAio, PortDeviceConfig};
 use hypervisor::{ProtectionDeviceConfig, SevSnpConfig, TdxConfig};
@@ -362,9 +365,7 @@ impl VirtSandbox {
                 .runtime
                 .hypervisor_name
                 == "remote";
-            if (boot_info.vm_rootfs_driver.ends_with("ccw") && security_info.confidential_guest)
-                || is_remote_hypervisor
-            {
+            if (uses_native_ccw_bus() && security_info.confidential_guest) || is_remote_hypervisor {
                 return Ok(None);
             } else {
                 return Err(anyhow!("both of image and initrd isn't set"));
