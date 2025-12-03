@@ -562,9 +562,9 @@ set_nginx_image() {
 	output_yaml=$2
 
 	ensure_yq
-	nginx_version=$(get_from_kata_deps ".docker_images.nginx.version")
 	nginx_registry=$(get_from_kata_deps ".docker_images.nginx.registry")
-	nginx_image="${nginx_registry}:${nginx_version}"
+	nginx_digest=$(get_from_kata_deps ".docker_images.nginx.digest")
+	nginx_image="${nginx_registry}@${nginx_digest}"
 
 	NGINX_IMAGE="${nginx_image}" envsubst < "${input_yaml}" > "${output_yaml}"
 }
