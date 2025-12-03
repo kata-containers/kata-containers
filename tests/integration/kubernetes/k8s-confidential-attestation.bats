@@ -24,6 +24,13 @@ setup() {
 	setup_common
 	get_pod_config_dir
 
+	# install SNP measurement dependencies
+	if [[ "${KATA_HYPERVISOR}" == *snp* ]]; then
+		ensure_sev_snp_measure
+		ensure_snphost
+
+	fi
+
 #	setup_unencrypted_confidential_pod
 
 	if is_confidential_gpu_hardware; then
@@ -106,6 +113,101 @@ setup() {
 	run bash -c "$cmd"
 	[ "$status" -eq 1 ]
 }
+
+# Negative test for getting a resource when the affirming policy is set
+# (the AS policy must return an affirming trust vector), but no
+# reference values are set.
+#
+# This can run on all platforms.
+@test "Cannot get CDH resource when affirming policy is set without reference values" {
+
+	# Require CPU0 to have affirming trust level.
+	kbs_set_cpu0_resource_policy
+	kubectl apply -f "${K8S_TEST_YAML}"
+
+	# Retrieve pod name, wait for it to come up, retrieve pod ip
+	export pod_name=$(kubectl get pod -o wide | grep "aa-test-cc" | awk '{print $1;}')
+
+	# Check pod creation
+	kubectl wait --for=condition=Ready --timeout="$timeout" pod "${pod_name}"
+
+	sleep 5
+
+	kubectl logs aa-test-cc
+	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	run bash -c "$cmd"
+	[ "$status" -eq 1 ]
+}
+
+@test "Can get CDH resource when affirming policy is set with reference values" {
+
+	[[ "${KATA_HYPERVISOR}" == *snp* ]] || skip "Test only supported with SNP"
+
+	# set a policy that requires CPU0 to have affirming trust level
+	kbs_set_cpu0_resource_policy
+
+	# get measured artifacts from qemu command line of previous test
+	log_line=$(sudo journalctl -r -x -t kata | grep -m 1 'launching.*qemu.*with:' || true)
+	qemu_cmd=$(echo "$log_line" | sed 's/.*with: \[\(.*\)\]".*/\1/')
+	[[ -n "$qemu_cmd" ]] || { echo "Could not find QEMU command line"; return 1; }
+
+	kernel_path=$(echo "$qemu_cmd" | grep -oP -- '-kernel \K[^ ]+')
+	initrd_path=$(echo "$qemu_cmd" | grep -oP -- '-initrd \K[^ ]+')
+	firmware_path=$(echo "$qemu_cmd" | grep -oP -- '-bios \K[^ ]+')
+	vcpu_count=$(echo "$qemu_cmd" | grep -oP -- '-smp \K\d+')
+	append=$(echo "$qemu_cmd" | sed -n 's/.*-append \(.*\) -bios.*/\1/p')
+
+	launch_measurement=$(PATH="${PATH}:${HOME}/.local/bin" sev-snp-measure \
+		--mode=snp \
+		--vcpus="${vcpu_count}" \
+		--vcpu-type=EPYC-v4 \
+		--output-format=base64 \
+		--ovmf="${firmware_path}" \
+		--kernel="${kernel_path}" \
+		--initrd="${initrd_path}" \
+		--append="${append}" \
+	)
+
+	# set launch measurement as reference value 
+	kbs_config_command set-sample-reference-value snp_launch_measurement "${launch_measurement}"
+
+
+	# Get the reported firmware version(s) for this machine
+	firmware=$(sudo snphost show tcb | grep -A 5 "Reported TCB")
+
+	microcode_version=$(echo "$firmware" | grep -oP 'Microcode:\s*\K\d+')
+	snp_version=$(echo "$firmware" | grep -oP 'SNP:\s*\K\d+')
+	tee_version=$(echo "$firmware" | grep -oP 'TEE:\s*\K\d+')
+	bootloader_version=$(echo "$firmware" | grep -oP 'Boot Loader:\s*\K\d+')
+
+	kbs_config_command set-sample-reference-value --as-integer snp_bootloader "${bootloader_version}"
+	kbs_config_command set-sample-reference-value --as-integer snp_microcode "${microcode_version}"
+	kbs_config_command set-sample-reference-value --as-integer snp_snp_svn "${snp_version}"
+	kbs_config_command set-sample-reference-value --as-integer snp_tee_svn "${tee_version}"
+
+	kubectl apply -f "${K8S_TEST_YAML}"
+
+	# Retrieve pod name, wait for it to come up, retrieve pod ip
+	export pod_name=$(kubectl get pod -o wide | grep "aa-test-cc" | awk '{print $1;}')
+
+	# Check pod creation
+	kubectl wait --for=condition=Ready --timeout="$timeout" pod "${pod_name}"
+
+	sleep 5
+
+	kubectl logs aa-test-cc
+	cmd="kubectl logs aa-test-cc | grep -q ${test_key}"
+	run bash -c "$cmd"
+	result=$status
+
+	# Set the snp launch measurement to something invalid, such that future negative tests
+	# running in the same context will work.
+	kbs_config_command set-sample-reference-value snp_launch_measurement abcd
+
+	[ "$result" -eq 0 ]
+
+}
+
 
 teardown() {
 	is_confidential_runtime_class || skip "Test not supported for ${KATA_HYPERVISOR}."
