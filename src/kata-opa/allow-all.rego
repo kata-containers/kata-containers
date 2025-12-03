@@ -22,6 +22,7 @@ default MemHotplugByProbeRequest := true
 default OnlineCPUMemRequest := true
 default PauseContainerRequest := true
 default PullImageRequest := true
+default ReadContainerTerminationMessage := true
 default ReadStreamRequest := true
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
