@@ -11,6 +11,10 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../tests/common.bash"
 
+# Path to the ORAS cache helper for downloading tarballs (sourced when needed)
+# Use ORAS_CACHE_HELPER env var (set by build.sh in Docker) or fallback to repo path
+oras_cache_helper="${ORAS_CACHE_HELPER:-${script_dir}/../tools/packaging/scripts/download-with-oras-cache.sh}"
+
 # The following variables if set on the environment will change the behavior
 # of gperf and libseccomp configure scripts, that may lead this script to
 # fail. So let's ensure they are unset here.
@@ -44,6 +48,9 @@ fi
 gperf_tarball="gperf-${gperf_version}.tar.gz"
 gperf_tarball_url="${gperf_url}/${gperf_tarball}"
 
+# Use ORAS cache for gperf downloads (gperf upstream can be unreliable)
+USE_ORAS_CACHE="${USE_ORAS_CACHE:-yes}"
+
 # We need to build the libseccomp library from sources to create a static
 # library for the musl libc.
 # However, ppc64le, riscv64 and s390x have no musl targets in Rust. Hence, we do
@@ -68,7 +75,23 @@ trap finish EXIT
 build_and_install_gperf() {
 	echo "Build and install gperf version ${gperf_version}"
 	mkdir -p "${gperf_install_dir}"
-	curl -sLO "${gperf_tarball_url}"
+
+	# Use ORAS cache if available and enabled
+	if [[ "${USE_ORAS_CACHE}" == "yes" ]] && [[ -f "${oras_cache_helper}" ]]; then
+		echo "Using ORAS cache for gperf download"
+		source "${oras_cache_helper}"
+		local cached_tarball
+		cached_tarball=$(download_component gperf "$(pwd)")
+		if [[ -f "${cached_tarball}" ]]; then
+			gperf_tarball="${cached_tarball}"
+		else
+			echo "ORAS cache download failed, falling back to direct download"
+			curl -sLO "${gperf_tarball_url}"
+		fi
+	else
+		curl -sLO "${gperf_tarball_url}"
+	fi
+
 	tar -xf "${gperf_tarball}"
 	pushd "gperf-${gperf_version}"
 	# Unset $CC for configure, we will always use native for gperf
