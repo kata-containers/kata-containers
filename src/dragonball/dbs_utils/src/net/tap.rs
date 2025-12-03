@@ -278,6 +278,7 @@ impl AsRawFd for Tap {
     }
 }
 
+#[cfg(test)]
 mod tests {
     #![allow(dead_code)]
 
