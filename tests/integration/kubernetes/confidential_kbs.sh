@@ -74,6 +74,28 @@ kbs_set_gpu0_resource_policy() {
 	return "${rc}"
 }
 
+# Set KBS resource policy requiring CPU0's EAR status to be affirming.
+#
+kbs_set_cpu0_resource_policy() {
+	local policy_file
+	policy_file=$(mktemp -t kbs-gpu-policy-XXXXX.rego)
+
+	cat > "${policy_file}" <<-'EOF'
+		package policy
+		import rego.v1
+		default allow = false
+		allow if {
+		    input["submods"]["cpu0"]["ear.status"] == "affirming"
+		}
+	EOF
+
+	kbs_set_resources_policy "${policy_file}"
+	local rc=$?
+	rm -f "${policy_file}"
+	return "${rc}"
+}
+
+
 # Set resources policy.
 #
 # Parameters:
@@ -90,6 +112,19 @@ kbs_set_resources_policy() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "${KBS_PRIVATE_KEY}" set-resource-policy \
 		--policy-file "${file}"
+}
+
+# Execute an admin command via the KBS client using the correct
+# URI and admin authentication key.
+#
+# Parameters:
+#	$1 - config command to run
+#
+kbs_config_command() {
+	local command="${1:-}"
+
+        kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+                --auth-private-key "${KBS_PRIVATE_KEY}" "${command}"
 }
 
 # Set resource data in base64 encoded.
