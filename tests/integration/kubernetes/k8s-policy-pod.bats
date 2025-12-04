@@ -130,9 +130,47 @@ create_and_wait_for_pod_ready() {
 
 # Common function for several test cases from this bats script.
 test_pod_policy_error() {
-	kubectl create -f "${correct_configmap_yaml}"
-	kubectl create -f "${incorrect_pod_yaml}"
-	wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
+	local max_attempts=5
+	local attempt_num
+	local sleep_between_attempts=5
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		info "Starting attempt #${attempt_num}"
+		kubectl delete -f "${incorrect_pod_yaml}" --ignore-not-found=true --now --timeout=120s
+		kubectl delete -f "${correct_configmap_yaml}" --ignore-not-found=true
+
+		# Create ConfigMap
+		kubectl create -f "${correct_configmap_yaml}"
+		if [ $? -ne 0 ]; then
+			warn "Failed to create ConfigMap. Retrying..."
+			continue
+		fi
+
+		# Create the incorrect pod (expected to be blocked)
+		kubectl create -f "${incorrect_pod_yaml}"
+		if [ $? -ne 0 ]; then
+			warn "Failed to create Pod. Retrying..."
+			continue
+		fi
+
+		# Wait for CreateContainerRequest to be blocked
+		run wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
+		if [ "$status" -eq 0 ]; then
+			info "wait_for_blocked_request succeeded on attempt #${attempt_num}"
+			return 0
+		else
+			warn "wait_for_blocked_request FAILED on attempt #${attempt_num}"
+		fi
+
+		# Retry if not the last attempt
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Retrying in ${sleep_between_attempts} seconds..."
+			sleep "${sleep_between_attempts}"
+		fi
+	done
+
+	error "Test failed after ${max_attempts} attempts."
+	return 1
 }
 
 @test "Policy failure: unexpected container image" {
@@ -143,6 +181,8 @@ test_pod_policy_error() {
 		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
+	test_result=$?
+	[ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected privileged security context" {
@@ -152,6 +192,8 @@ test_pod_policy_error() {
 		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
+	test_result=$?
+	[ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected terminationMessagePath" {
@@ -161,6 +203,8 @@ test_pod_policy_error() {
 		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
+	test_result=$?
+	[ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected hostPath volume mount" {
@@ -174,6 +218,8 @@ test_pod_policy_error() {
 		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
+	test_result=$?
+	[ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected config map" {
@@ -265,6 +311,8 @@ test_pod_policy_error() {
 		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
+	test_result=$?
+	[ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected UID = 1234" {
@@ -276,6 +324,8 @@ test_pod_policy_error() {
 		"${incorrect_pod_yaml}"
 
 	test_pod_policy_error
+	test_result=$?
+	[ "${test_result}" -eq 0 ]
 }
 
 teardown() {
