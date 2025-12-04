@@ -539,10 +539,16 @@ container_exec_with_retries() {
 	for _ in {1..10}; do
 		if [[ -n "${container_name}" ]]; then
 			bats_unbuffered_info "Executing in pod ${pod_name}, container ${container_name}: $*"
-			cmd_out=$(kubectl exec "${pod_name}" -c "${container_name}" -- "$@") || (bats_unbuffered_info "kubectl exec failed" ; cmd_out="")
+			if ! cmd_out=$(kubectl exec "${pod_name}" -c "${container_name}" -- "$@"); then
+				bats_unbuffered_info "kubectl exec failed"
+				cmd_out=""
+			fi
 		else
 			bats_unbuffered_info "Executing in pod ${pod_name}: $*"
-			cmd_out=$(kubectl exec "${pod_name}" -- "$@") || (bats_unbuffered_info "kubectl exec failed" ; cmd_out="")
+			if ! cmd_out=$(kubectl exec "${pod_name}" -- "$@"); then
+				bats_unbuffered_info "kubectl exec failed"
+				cmd_out=""
+			fi
 		fi
 
 		if [[ -n "${cmd_out}" ]]; then
