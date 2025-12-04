@@ -98,7 +98,10 @@ EOF
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    # Default wait timeout is 120
+    local wait_time=120
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev-runtime-rs ]] && wait_time=300
+    k8s_create_pod "${kata_pod}" "$wait_time"
     echo "Kata pod test-e2e from image security policy is running"
 }
 
@@ -124,7 +127,10 @@ EOF
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    # Default wait timeout is 120
+    local wait_time=120
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev-runtime-rs ]] && wait_time=300
+    k8s_create_pod "${kata_pod}" "$wait_time"
     echo "Kata pod test-e2e from image security policy is running"
 }
 
@@ -150,7 +156,10 @@ EOF
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    # Default wait timeout is 120
+    local wait_time=120
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev-runtime-rs ]] && wait_time=300
+    k8s_create_pod "${kata_pod}" "$wait_time"
     echo "Kata pod test-e2e from image security policy is running"
 }
 
@@ -167,7 +176,10 @@ EOF
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    # Default wait timeout is 120
+    local wait_time=120
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev-runtime-rs ]] && wait_time=300
+    k8s_create_pod "${kata_pod}" "$wait_time"
     echo "Kata pod test-e2e from image security policy is running"
 }
 
@@ -201,7 +213,10 @@ EOF
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    # Default wait timeout is 120
+    local wait_time=120
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev-runtime-rs ]] && wait_time=300
+    k8s_create_pod "${kata_pod}" "$wait_time"
     echo "Kata pod test-e2e from image security policy is running"
 }
 
@@ -234,7 +249,10 @@ EOF
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    # Default wait timeout is 120
+    local wait_time=120
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev-runtime-rs ]] && wait_time=300
+    k8s_create_pod "${kata_pod}" "$wait_time"
     echo "Kata pod test-e2e from image security policy is running"
 }
 
