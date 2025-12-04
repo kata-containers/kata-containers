@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	deviceUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
@@ -1065,13 +1067,14 @@ type DeviceRelation struct {
 	Bus   string
 	Path  string
 	Index int
+	BDF   string
 }
 
 // Depending on the HW we might need to inject metadata into the container
 // In this case for the NV GPU we need to provide the correct mapping from
 // VFIO-<NUM> to GPU index inside of the VM when vfio_mode="guest-kernel",
 // otherwise we do not know which GPU is which.
-func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
+func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error {
 
 	modeIsGK := (c.sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 
@@ -1086,13 +1089,13 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
 			// For the NV GPU we need special handling let's use only those
 			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF})
 			}
 		}
 		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
 			// For the NV GPU we need special handling let's use only those
 			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF})
 			}
 		}
 		// We need to sort the VFIO devices by bus to get the correct
@@ -1109,38 +1112,112 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 		// to the correct index
 		if devices, ok := devices.([]ContainerDevice); ok {
 			for _, dev := range devices {
-				c.siblingAnnotation(dev.ContainerPath, siblings)
+				if dev.ContainerPath == "/dev/vfio/vfio" {
+					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
+					continue
+				}
+				err := c.siblingAnnotation(dev.ContainerPath, siblings)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		if devices, ok := devices.([]config.DeviceInfo); ok {
 			for _, dev := range devices {
-				c.siblingAnnotation(dev.ContainerPath, siblings)
+				if dev.ContainerPath == "/dev/vfio/vfio" {
+					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
+					continue
+				}
+				err := c.siblingAnnotation(dev.ContainerPath, siblings)
+				if err != nil {
+					return err
+				}
 			}
 
 		}
 
 	}
+	return nil
 }
-func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) {
+
+// createCDIAnnotation adds a container annotation mapping a VFIO device to a GPU index.
+//
+// devPath is the path to the VFIO device, which can be in the format
+// "/dev/vfio/<num>" or "/dev/vfio/devices/vfio<num>". The function extracts
+// the device number from the path and creates an annotation with the key
+// "cdi.k8s.io/vfio<num>" and the value "nvidia.com/gpu=<index>", where
+// <num> is the device number and <index> is the provided GPU index.
+// The annotation is stored in c.config.CustomSpec.Annotations.
+func (c *Container) createCDIAnnotation(devPath string, index int) {
+	// We have here either /dev/vfio/<num> or /dev/vfio/devices/vfio<num>
+	baseName := filepath.Base(devPath)
+	vfioNum := baseName
+	// For IOMMUFD format /dev/vfio/devices/vfio<num>, strip "vfio" prefix
+	if strings.HasPrefix(baseName, "vfio") {
+		vfioNum = strings.TrimPrefix(baseName, "vfio")
+	}
+	annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
+	annoValue := fmt.Sprintf("nvidia.com/gpu=%d", index)
+	if c.config.CustomSpec.Annotations == nil {
+		c.config.CustomSpec.Annotations = make(map[string]string)
+	}
+	c.config.CustomSpec.Annotations[annoKey] = annoValue
+	c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
+}
+
+func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) error {
 	for _, sibling := range siblings {
 		if sibling.Path == devPath {
-			// We have here either /dev/vfio/<num> or /dev/vfio/devices/vfio<num>
-			baseName := filepath.Base(devPath)
-			vfioNum := baseName
-			// For IOMMUFD format /dev/vfio/devices/vfio<num>, strip "vfio" prefix
-			if strings.HasPrefix(baseName, "vfio") {
-				vfioNum = strings.TrimPrefix(baseName, "vfio")
+			c.createCDIAnnotation(devPath, sibling.Index)
+			return nil
+		}
+		// If the sandbox has cold-plugged an IOMMUFD device and if the
+		// device-plugins sends us a /dev/vfio/<NUM> device we need to
+		// check if the IOMMUFD device and the VFIO device are the same
+		// We have the sibling.BDF we now need to extract the BDF of the
+		// devPath that is either /dev/vfio/<NUM> or
+		// /dev/vfio/devices/vfio<NUM>
+		if strings.HasPrefix(filepath.Base(devPath), "vfio") {
+			// IOMMUFD device format (/dev/vfio/devices/vfio<NUM>), extract BDF from sysfs
+			major, minor, err := deviceUtils.GetMajorMinorFromDevPath(devPath)
+			if err != nil {
+				return err
 			}
-			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
-			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
-			if c.config.CustomSpec.Annotations == nil {
-				c.config.CustomSpec.Annotations = make(map[string]string)
+			iommufdBDF, err := deviceUtils.GetBDFFromVFIODev(major, minor)
+			if err != nil {
+				return err
 			}
-			c.config.CustomSpec.Annotations[annoKey] = annoValue
-			c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
+			if sibling.BDF == iommufdBDF {
+				c.createCDIAnnotation(devPath, sibling.Index)
+				// exit handling IOMMUFD device
+				return nil
+			}
+		}
+		// Legacy VFIO group device (/dev/vfio/<GROUP_NUM>), extract BDF from sysfs
+		vfioGroup := filepath.Base(devPath)
+		iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
+
+		deviceFiles, err := os.ReadDir(iommuDevicesPath)
+		if err != nil {
+			return err
+		}
+		vfioBDFs := make([]string, 0)
+		for _, deviceFile := range deviceFiles {
+			// Get bdf of device eg 0000:00:1c.0
+			deviceBDF, _, _, err := deviceUtils.GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
+			if err != nil {
+				return err
+			}
+			vfioBDFs = append(vfioBDFs, deviceBDF)
+		}
+		if slices.Contains(vfioBDFs, sibling.BDF) {
+			c.createCDIAnnotation(devPath, sibling.Index)
+			// exit handling legacy VFIO device
+			return nil
 		}
 	}
+	return fmt.Errorf("failed to match device %s with any cold-plugged GPU device by path or BDF; no suitable sibling found", devPath)
 }
 
 // create creates and starts a container inside a Sandbox. It has to be
