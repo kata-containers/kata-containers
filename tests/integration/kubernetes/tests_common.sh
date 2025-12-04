@@ -350,10 +350,10 @@ encode_policy_in_init_data() {
   local POLICY
 
   # if input is a file, read its contents
-  if [[ -f "$input" ]]; then
-    POLICY="$(< "$input")"
+  if [[ -f "${input}" ]]; then
+    POLICY="$(< "${input}")"
   else
-    POLICY="$input"
+    POLICY="${input}"
   fi
 
   cat <<EOF | gzip -c | base64 -w0
@@ -362,7 +362,7 @@ algorithm = "sha256"
 
 [data]
 "policy.rego" = '''
-$POLICY
+${POLICY}
 '''
 EOF
 }
