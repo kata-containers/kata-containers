@@ -160,7 +160,7 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 	return false, nil
 }
 
-func getMajorMinorFromDevPath(devPath string) (uint32, uint32, error) {
+func GetMajorMinorFromDevPath(devPath string) (uint32, uint32, error) {
 	fi, err := os.Stat(devPath)
 	if err != nil {
 		return 0, 0, err
@@ -181,7 +181,7 @@ func extractIndex(devicePath string) (string, error) {
 	return strings.TrimPrefix(base, prefix), nil
 }
 
-func getBdfFromVFIODev(major uint32, minor uint32) (string, error) {
+func GetBDFFromVFIODev(major uint32, minor uint32) (string, error) {
 	devPath := fmt.Sprintf("/sys/dev/char/%d:%d", major, minor)
 	realPath, err := filepath.EvalSymlinks(devPath)
 	if err != nil {
@@ -203,13 +203,13 @@ func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
 	// device major:minor entries in /sys/chart/major:minor
 	// $ ls -l /dev/vfio/devices/vfio0
 	// crw------- 1 root root 237, 0 Jan 15 16:53 /dev/vfio/devices/vfio0
-	major, minor, err := getMajorMinorFromDevPath(device.HostPath)
+	major, minor, err := GetMajorMinorFromDevPath(device.HostPath)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get major:minor from %s: %v", device.HostPath, err)
 	}
 	// $ ls -l /sys/dev/char/237:0
 	// /sys/dev/char/237:0 -> ../../devices/pci0000:64/0000:64:00.0/0000:65:00.0/vfio-dev/vfio0
-	deviceBDF, err := getBdfFromVFIODev(major, minor)
+	deviceBDF, err := GetBDFFromVFIODev(major, minor)
 	if err != nil {
 		return nil, err
 	}
