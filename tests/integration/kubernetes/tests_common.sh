@@ -233,7 +233,7 @@ auto_generate_policy_no_added_flags() {
 	declare -r additional_flags="${4:-""}"
 
 	auto_generate_policy_enabled || return 0
-	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
+	local genpolicy_command="RUST_LOG=debug /opt/kata/bin/genpolicy -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
@@ -461,12 +461,6 @@ teardown_common() {
 
 	kubectl describe pods
 	k8s_delete_all_pods_if_any_exists || true
-
-	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
-		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
-	fi
 }
 
 # Execute a command in a pod and grep kubectl's output.
