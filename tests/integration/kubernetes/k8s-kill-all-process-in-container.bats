@@ -26,10 +26,11 @@ setup() {
 
 @test "Kill all processes in container" {
 	# Create the pod
-	kubectl create -f "${yaml_file}"
-
+	# kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check PID from first container
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \

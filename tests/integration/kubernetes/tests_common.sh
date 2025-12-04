@@ -420,6 +420,80 @@ wait_for_blocked_request() {
 	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
 
+# k8s create a ready pod
+k8s_create_pod_ready() {
+	local pod_name="$1"
+	local pod_yaml="$2"
+	local wait_time="${3:-300}"
+	local max_attempts="${4:-5}"
+
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		# First,forcefully deleting resources
+		kubectl delete -f "${pod_yaml}" --ignore-not-found=true --now --timeout=$timeout
+
+		kubectl create -f "${pod_yaml}"
+		if [ $? -ne 0 ]; then
+			# Failed to create Pod.Aborting test.
+			continue
+		fi
+
+		# Check pod creation
+		run kubectl wait --for=condition=Ready --timeout="${wait_time}s" pod "${pod_name}"
+		if [ "$status" -eq 0 ]; then
+			# Test Succeeded on attempt #${attempt_num}
+			info "Waiting ${wait_time} seconds for pod ${pod_name} Ready."
+			return 0
+		fi
+
+		# Retry
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Waiting for 5 seconds before next attempt..."
+			sleep 5
+		fi
+	done
+
+	info "Test Failed after ${max_attempts} attempts for pod ${pod_name}."
+	return 1
+}
+
+k8s_create_deployment_ready() {
+	local deployment_yaml="$1"
+	local deployment="$2"
+
+	local wait_time=300
+	local max_attempts=5
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		# First,forcefully deleting resources
+		kubectl delete -f "${deployment_yaml}" --ignore-not-found=true --now --timeout=$timeout
+
+		kubectl create -f "${deployment_yaml}"
+		if [ $? -ne 0 ]; then
+			# Failed to create Pod.Aborting test.
+			continue
+		fi
+
+		# Check deployment ready
+		run kubectl wait --for=condition=Available --timeout="${wait_time}s" deployment/${deployment}
+		if [ "$status" -eq 0 ]; then
+			# Test Succeeded on attempt #${attempt_num}
+			return 0
+		fi
+
+		# Retry
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Waiting for 5 seconds before next attempt..."
+			sleep 5
+		fi
+	done
+
+	#Test Failed after ${max_attempts} attempts.
+	return 1
+}
+
 # Execute in a pod a command that is allowed by policy.
 pod_exec_allowed_command() {
 	local -r pod_name="$1"

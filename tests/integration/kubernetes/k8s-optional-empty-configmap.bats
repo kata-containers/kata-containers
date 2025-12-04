@@ -34,10 +34,11 @@ setup() {
 	kubectl create configmap "$config_name"
 
 	# Create a pod that consumes the "empty-config" and "optional-missing-config" ConfigMaps as volumes
-	kubectl create -f "${pod_yaml}"
-
+	# kubectl create -f "${pod_yaml}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retry for ready pod
+	k8s_create_pod_ready "$pod_name" "${pod_yaml}"
 
 	# Check configmap folders exist
 	kubectl exec $pod_name -- "${exec_empty_command[@]}"

@@ -82,8 +82,9 @@ setup() {
 	auto_generate_policy "${policy_settings_dir}" "${tmp_pod_yaml}"
 
 	# Start the workload.
-	kubectl create -f "$tmp_pod_yaml"
-	kubectl wait --for condition=ready --timeout=$timeout "pod/${pod_name}"
+	# kubectl create -f "$tmp_pod_yaml"
+	# kubectl wait --for condition=ready --timeout=$timeout "pod/${pod_name}"
+	k8s_create_pod_ready "${pod_name}" "$tmp_pod_yaml"
 
 	# Verify persistent volume claim is bound
 	kubectl get "pvc/${volume_claim}" | grep "Bound"

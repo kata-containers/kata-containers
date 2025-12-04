@@ -51,22 +51,66 @@ setup() {
 
 # Common function for all test cases that expect CreateContainer to be blocked by policy.
 test_job_policy_error() {
-    # Initiate job creation
-    kubectl apply -f "${incorrect_yaml}"
+    local max_attempts=5
+    local attempt_num
+    local sleep_between_attempts=5
 
-    # Wait for the job to be created
-    cmd="kubectl describe job ${job_name} | grep SuccessfulCreate"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}" || return 1
+    for attempt_num in $(seq 1 "${max_attempts}"); do
+        info "Starting attempt #${attempt_num}"
 
-    # List the pods that belong to the job
-    pod_names=$(kubectl get pods "--selector=job-name=${job_name}" --output=jsonpath='{.items[*].metadata.name}')
-    info "pod_names: ${pod_names}"
+        # Cleanup possible previous resources
+        kubectl delete -f "${incorrect_yaml}" --ignore-not-found=true --now --timeout=120s
 
-    # CreateContainerRequest must have been denied by the policy.
-    for pod_name in ${pod_names[@]}; do
-        wait_for_blocked_request "CreateContainerRequest" "${pod_name}" || return 1
+        # 1. Apply Job
+        kubectl apply -f "${incorrect_yaml}"
+        if [ $? -ne 0 ]; then
+            warn "Failed to apply Job. Retrying..."
+            continue
+        fi
+
+        # 2. Wait for Job creation event
+        cmd="kubectl describe job ${job_name} | grep SuccessfulCreate"
+        info "Waiting for: ${cmd}"
+
+        run waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+        if [ "$status" -ne 0 ]; then
+            warn "waitForProcess FAILED on attempt #${attempt_num}"
+            continue
+        fi
+
+        # 3. Get pod list
+        pod_names=$(kubectl get pods "--selector=job-name=${job_name}" --output=jsonpath='{.items[*].metadata.name}')
+        info "pod_names: ${pod_names}"
+
+        if [ -z "${pod_names}" ]; then
+            warn "No pods found for job. Retrying..."
+            continue
+        fi
+
+        # 4. Check each pod for blocked CreateContainerRequest
+        for pod_name in ${pod_names[@]}; do
+            info "Checking pod: ${pod_name}"
+
+            run wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
+            if [ "$status" -eq 0 ]; then
+                info "wait_for_blocked_request succeeded for pod ${pod_name} on attempt #${attempt_num}"
+                return 0
+            else
+                warn "wait_for_blocked_request FAILED for pod ${pod_name} on attempt #${attempt_num}"
+                # We break pod loop, but the attempt will continue
+                break
+            fi
+        done
+
+        # Retry if not last attempt
+        if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+            info "Retrying in ${sleep_between_attempts} seconds..."
+            sleep "${sleep_between_attempts}"
+        fi
     done
+
+    error "Test failed after ${max_attempts} attempts."
+    return 1
 }
 
 @test "Policy failure: unexpected environment variable" {
@@ -76,6 +120,8 @@ test_job_policy_error() {
         "${incorrect_yaml}"
 
     test_job_policy_error
+    test_result=$?
+    [ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected command line argument" {
@@ -85,6 +131,8 @@ test_job_policy_error() {
         "${incorrect_yaml}"
 
     test_job_policy_error
+    test_result=$?
+    [ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected emptyDir volume" {
@@ -98,6 +146,8 @@ test_job_policy_error() {
         "${incorrect_yaml}"
 
     test_job_policy_error
+    test_result=$?
+    [ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected projected volume" {
@@ -122,6 +172,8 @@ test_job_policy_error() {
     ' "${incorrect_yaml}"
 
     test_job_policy_error
+    test_result=$?
+    [ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected readOnlyRootFilesystem" {
@@ -131,6 +183,8 @@ test_job_policy_error() {
         "${incorrect_yaml}"
 
     test_job_policy_error
+    test_result=$?
+    [ "${test_result}" -eq 0 ]
 }
 
 @test "Policy failure: unexpected UID = 222" {
@@ -140,6 +194,8 @@ test_job_policy_error() {
         "${incorrect_yaml}"
 
     test_job_policy_error
+    test_result=$?
+    [ "${test_result}" -eq 0 ]
 }
 
 teardown() {

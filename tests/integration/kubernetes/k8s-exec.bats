@@ -38,10 +38,11 @@ setup() {
 
 @test "Kubectl exec" {
 	# Create the pod
-	kubectl create -f "${test_yaml_file}"
-
+	# kubectl create -f "${test_yaml_file}"
 	# Get pod specification
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${test_yaml_file}"
 
 	# Run commands in Pod
 	## Cases for -it options
