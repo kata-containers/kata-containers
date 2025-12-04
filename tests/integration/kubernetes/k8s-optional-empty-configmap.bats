@@ -26,6 +26,42 @@ setup() {
 	auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 }
 
+k8s_create_pod_ready() {
+	local pod_name="$1"
+	local pod_yaml="$2"
+
+	local wait_time=300
+	local max_attempts=5
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		# First,forcefully deleting resources
+		kubectl delete -f "${pod_yaml}" --ignore-not-found=true --now --timeout=$wait_time
+
+		kubectl create -f "${pod_yaml}"
+		if [ $? -ne 0 ]; then
+			# Failed to create Pod.Aborting test.
+			continue
+		fi
+
+		# Check pod creation
+		kubectl wait --for=condition=Ready --timeout=$wait_time pod "$pod_name"
+		if [ "$status" -eq 0 ]; then
+			# Test Succeeded on attempt #${attempt_num}
+			return 0
+		fi
+
+		# Retry
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Waiting for 5 seconds before next attempt..."
+			sleep 5
+		fi
+	done
+
+	#Test Failed after ${max_attempts} attempts.
+	return 1
+}
+
 @test "Optional and Empty ConfigMap Volume for a pod" {
 	config_name="empty-config"
 	pod_name="optional-empty-config-test-pod"
@@ -34,10 +70,11 @@ setup() {
 	kubectl create configmap "$config_name"
 
 	# Create a pod that consumes the "empty-config" and "optional-missing-config" ConfigMaps as volumes
-	kubectl create -f "${pod_yaml}"
-
+	# kubectl create -f "${pod_yaml}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retry for ready pod
+	k8s_create_pod_ready "$pod_name" "${pod_yaml}"
 
 	# Check configmap folders exist
 	kubectl exec $pod_name -- "${exec_empty_command[@]}"

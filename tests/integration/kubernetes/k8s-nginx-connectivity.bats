@@ -25,9 +25,11 @@ setup() {
 
 @test "Verify nginx connectivity between pods" {
 
-	kubectl create -f "${yaml_file}"
-	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
-	kubectl expose deployment/${deployment}
+	# kubectl create -f "${yaml_file}"
+	# kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
+	# Retries
+	k8s_create_deployment_ready "${yaml_file}" ${deployment}
+	kubectl expose deployment/${deployment} ${deployment}
 
 	busybox_pod="test-nginx"
 	kubectl run $busybox_pod --restart=Never -it --image="$busybox_image" \

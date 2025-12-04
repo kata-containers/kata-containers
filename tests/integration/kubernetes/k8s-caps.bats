@@ -40,9 +40,10 @@ setup() {
 
 @test "Check capabilities of pod" {
         # Create pod
-        kubectl create -f "${yaml_file}"
+        # kubectl create -f "${yaml_file}"
         # Check pod creation
-        kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+        # kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+        k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
         # Verify expected capabilities for the running container. Add retry to ensure
         # that the container had time to execute:

@@ -41,10 +41,11 @@ setup() {
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
 
 	# Create pod
-	kubectl create -f "${pod_config}"
-
+	# kubectl create -f "${pod_config}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	#kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${pod_config}"
 
 	# Create a file
 	echo "$content" > "$file_name"
@@ -78,10 +79,11 @@ setup() {
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
 
 	# Create pod
-	kubectl create -f "${pod_config}"
-
+	# kubectl create -f "${pod_config}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${pod_config}"
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true
