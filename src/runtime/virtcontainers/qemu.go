@@ -2515,6 +2515,10 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 	return currentMemory, addMemDevice, nil
 }
 
+func (q *qemu) ResizeBlock(ctx context.Context, deviceID string, size uint64) error {
+	return q.qmpMonitorCh.qmp.ExecuteBlockdevResize(ctx, deviceID, size)
+}
+
 // genericAppendBridges appends to devices the given bridges
 // nolint: unused, deadcode
 func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, machineType string) []govmmQemu.Device {
