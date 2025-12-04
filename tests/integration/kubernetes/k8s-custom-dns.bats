@@ -30,10 +30,11 @@ setup() {
 
 @test "Check custom dns" {
 	# Create the pod
-	kubectl create -f "${yaml_file}"
-
+	# kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check dns config at /etc/resolv.conf
 	kubectl exec "$pod_name" -- "${exec_command[@]}" | grep -q "nameserver 1.2.3.4"

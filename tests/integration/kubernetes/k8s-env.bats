@@ -26,10 +26,11 @@ setup() {
 
 @test "Environment variables" {
 	# Create pod
-	kubectl create -f "${yaml_file}"
-
+	# kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Print environment variables
 	grep_pod_exec_output "${pod_name}" "MY_POD_NAME=${pod_name}" "${exec_command[@]}"

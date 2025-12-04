@@ -128,51 +128,6 @@ create_and_wait_for_pod_ready() {
 	wait_for_pod_ready
 }
 
-# Common function for several test cases from this bats script.
-test_pod_policy_error() {
-	local max_attempts=5
-	local attempt_num
-	local sleep_between_attempts=5
-
-	for attempt_num in $(seq 1 "${max_attempts}"); do
-		info "Starting attempt #${attempt_num}"
-		kubectl delete -f "${incorrect_pod_yaml}" --ignore-not-found=true --now --timeout=120s
-		kubectl delete -f "${correct_configmap_yaml}" --ignore-not-found=true
-
-		# Create ConfigMap
-		kubectl create -f "${correct_configmap_yaml}"
-		if [ $? -ne 0 ]; then
-			warn "Failed to create ConfigMap. Retrying..."
-			continue
-		fi
-
-		# Create the incorrect pod (expected to be blocked)
-		kubectl create -f "${incorrect_pod_yaml}"
-		if [ $? -ne 0 ]; then
-			warn "Failed to create Pod. Retrying..."
-			continue
-		fi
-
-		# Wait for CreateContainerRequest to be blocked
-		run wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
-		if [ "$status" -eq 0 ]; then
-			info "wait_for_blocked_request succeeded on attempt #${attempt_num}"
-			return 0
-		else
-			warn "wait_for_blocked_request FAILED on attempt #${attempt_num}"
-		fi
-
-		# Retry if not the last attempt
-		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
-			info "Retrying in ${sleep_between_attempts} seconds..."
-			sleep "${sleep_between_attempts}"
-		fi
-	done
-
-	error "Test failed after ${max_attempts} attempts."
-	return 1
-}
-
 @test "Policy failure: unexpected container image" {
 	# Change the container image after generating the policy. The different image has
 	# different attributes (e.g., different command line) so the policy will reject it.
@@ -180,7 +135,7 @@ test_pod_policy_error() {
 		'.spec.containers[0].image = "quay.io/footloose/ubuntu18.04:latest"' \
 		"${incorrect_pod_yaml}"
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${correct_configmap_yaml}"
 	test_result=$?
 	[ "${test_result}" -eq 0 ]
 }
@@ -191,7 +146,7 @@ test_pod_policy_error() {
 		'.spec.containers[0].securityContext.privileged = true' \
 		"${incorrect_pod_yaml}"
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${correct_configmap_yaml}"
 	test_result=$?
 	[ "${test_result}" -eq 0 ]
 }
@@ -202,7 +157,7 @@ test_pod_policy_error() {
 		'.spec.containers[0].terminationMessagePath = "/dev/termination-custom-log"' \
 		"${incorrect_pod_yaml}"
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${correct_configmap_yaml}"
 	test_result=$?
 	[ "${test_result}" -eq 0 ]
 }
@@ -217,7 +172,7 @@ test_pod_policy_error() {
 		'.spec.volumes += [{"hostPath": {"path": "/tmp/k8s-policy-pod-test", "type": "DirectoryOrCreate"}, "name": "mountpoint-dir"}]' \
 		"${incorrect_pod_yaml}"
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${correct_configmap_yaml}"
 	test_result=$?
 	[ "${test_result}" -eq 0 ]
 }
@@ -310,7 +265,7 @@ test_pod_policy_error() {
 		'.spec.containers[0].securityContext.runAsUser = 0' \
 		"${incorrect_pod_yaml}"
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${correct_configmap_yaml}"
 	test_result=$?
 	[ "${test_result}" -eq 0 ]
 }
@@ -323,7 +278,7 @@ test_pod_policy_error() {
 		'.spec.containers[0].securityContext.runAsUser = 1234' \
 		"${incorrect_pod_yaml}"
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${correct_configmap_yaml}"
 	test_result=$?
 	[ "${test_result}" -eq 0 ]
 }

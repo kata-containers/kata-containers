@@ -27,10 +27,11 @@ setup() {
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${yaml_file}"
-
+	# kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"
@@ -52,10 +53,11 @@ setup() {
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${yaml_file}"
-
+	# kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"
@@ -78,10 +80,11 @@ setup() {
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${yaml_file}"
-
+	# kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"

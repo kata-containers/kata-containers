@@ -24,8 +24,11 @@ setup() {
 }
 
 @test "Scale nginx deployment" {
-	kubectl create -f "${test_yaml}"
-	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
+	# kubectl create -f "${test_yaml}"
+	# kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
+	# Retries
+	k8s_create_deployment_ready "${test_yaml}" ${deployment}
+
 	kubectl expose deployment/${deployment}
 	kubectl scale deployment/${deployment} --replicas=${replicas}
 	cmd="kubectl get deployment/${deployment} -o yaml | grep 'availableReplicas: ${replicas}'"

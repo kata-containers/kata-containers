@@ -39,14 +39,6 @@ setup() {
     waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
 }
 
-test_deployment_policy_error() {
-    # Initiate deployment
-    kubectl apply -f "${incorrect_deployment_yaml}"
-
-    # Wait for the deployment pod to fail
-    wait_for_blocked_request "CreateContainerRequest" "${deployment_name}"
-}
-
 @test "Policy failure: unexpected UID = 0" {
     # Change the pod UID to 0 after the policy has been generated using a different
     # runAsUser value. The policy would use UID = 0 by default, if there weren't
@@ -55,7 +47,7 @@ test_deployment_policy_error() {
         '.spec.template.spec.securityContext.runAsUser = 0' \
         "${incorrect_deployment_yaml}"
 
-    test_deployment_policy_error
+    test_deployment_policy_error "${incorrect_deployment_yaml}"
 }
 
 teardown() {

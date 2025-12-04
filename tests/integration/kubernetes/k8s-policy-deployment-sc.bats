@@ -68,16 +68,6 @@ wait_for_successful_rollout() {
     wait_for_successful_rollout
 }
 
-test_deployment_policy_error() {
-    local yaml=$1
-
-    # Initiate deployment
-    kubectl apply -f "${yaml}"
-
-    # Wait for the deployment pod to fail
-    wait_for_blocked_request "CreateContainerRequest" "${deployment_name}"
-}
-
 @test "Policy failure: unexpected GID = 0 for layered securityContext deployment" {
     # Change the pod GID to 0 after the policy has been generated using a different
     # runAsGroup value. The policy would use GID = 0 by default, if there weren't

@@ -29,10 +29,11 @@ setup() {
 
 @test "Check PID namespaces" {
 	# Create the pod
-	kubectl create -f "${test_yaml_file}"
-
+	# kubectl create -f "${test_yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	# Retry for ready pod
+	k8s_create_pod_ready "${pod_name}" "${test_yaml_file}"
 
 	# Check PID from first container
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \

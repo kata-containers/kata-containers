@@ -24,11 +24,12 @@ setup() {
 		"${pod_yaml}"
 
 	# Create the pod
-	kubectl create -f "${pod_yaml}"
-
+	# kubectl create -f "${pod_yaml}"
 	# Wait for pod to start
-	echo "timeout=${timeout}"
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# echo "timeout=${timeout}"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retry for ready pod
+	k8s_create_pod_ready "${pod_name}" "${pod_yaml}"
 
 	# Try executing a command in the Pod - an action rejected by the agent policy.
 	exec_output=$(kubectl exec "$pod_name" -- date 2>&1) || true
@@ -51,11 +52,13 @@ setup() {
 		"${pod_yaml}"
 
 	# Create the pod
-	kubectl create -f "${pod_yaml}"
+	# kubectl create -f "${pod_yaml}"
 
 	# Wait for pod to start
 	echo "timeout=${timeout}"
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retry for ready pod
+	k8s_create_pod_ready "${pod_name}" "${pod_yaml}"
 }
 
 teardown() {

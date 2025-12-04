@@ -39,10 +39,11 @@ setup() {
 
 @test "Empty dir volumes" {
 	# Create the pod
-	kubectl create -f "${yaml_file}"
-
+	#kubectl create -f "${yaml_file}"
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	#kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	# Retries
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check volume mounts
 	kubectl exec $pod_name -- "${mount_command[@]}" | grep "/tmp/cache type tmpfs"

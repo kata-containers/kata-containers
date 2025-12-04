@@ -50,7 +50,9 @@ setup() {
 
 @test "Pods establishing a VPN connection using openvpn" {
     # Step 1: Deploy the initialization pod and wait for it to be ready
-    kubectl apply -f "$init_pod_yaml"  && kubectl wait --for=condition=Ready --timeout=$timeout pod/$init_pod_name
+    # kubectl apply -f "$init_pod_yaml"  && kubectl wait --for=condition=Ready --timeout=$timeout pod/$init_pod_name
+	# Retries
+	k8s_create_pod_ready "${init_pod_name}" "${init_pod_yaml}"
 
     # Step 2: Extract base64-encoded certificates from the initialization pod
     export BASE64_CA_CRT="$(kubectl exec $init_pod_name -- cat /etc/openvpn/ca.crt.b64 | tr -d '\n')"
@@ -73,12 +75,16 @@ setup() {
     kubectl apply -f "$server_service_yaml"
     kubectl apply -f "$server_configmap_yaml"
     kubectl apply -f "$server_secret_instance_yaml"
-    kubectl apply -f "$server_pod_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$server_pod_name
+    # kubectl apply -f "$server_pod_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$server_pod_name
+	# Retries
+	k8s_create_pod_ready "${server_pod_name}" "${server_pod_yaml}"
 
     # Step 5: Deploy the OpenVPN client and wait for it to be ready (uses readiness probe)
     kubectl apply -f "$client_configmap_yaml"
     kubectl apply -f "$client_secret_instance_yaml"
-    kubectl apply -f "$client_pod_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$client_pod_name
+    # kubectl apply -f "$client_pod_yaml" && kubectl wait --for=condition=Ready --timeout=$timeout pod/$client_pod_name
+    # Retries
+    k8s_create_pod_ready "${client_pod_name}" "${client_pod_yaml}"
 }
 
 teardown() {

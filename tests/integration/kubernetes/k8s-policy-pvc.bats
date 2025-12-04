@@ -41,20 +41,13 @@ setup() {
 	waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
-# Common function for several test cases from this bats script.
-test_pod_policy_error() {
-	kubectl create -f "${incorrect_pod_yaml}"
-	kubectl create -f "${pvc_yaml}"
-	wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
-}
-
 @test "Policy failure: unexpected device mount" {
 	# Changing the location of a mounted device after policy generation should fail the policy check.
 	yq -i \
 		'.spec.containers[0].volumeDevices.[0].devicePath = "/dev/unexpected"' \
 		"${incorrect_pod_yaml}" \
 
-	test_pod_policy_error
+	test_pod_policy_error "${pod_name}" "${incorrect_pod_yaml}" "${pvc_yaml}"
 }
 
 teardown() {

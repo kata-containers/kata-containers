@@ -29,8 +29,9 @@ setup() {
 }
 
 @test "/dev hostPath volume bind mounts the guest device and skips virtio-fs" {
-	kubectl apply -f "${yaml_file}"
-	kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	# kubectl apply -f "${yaml_file}"
+	# kubectl wait --for=condition=Ready --timeout="${timeout}" pod "${pod_name}"
+	k8s_create_pod_ready "${pod_name}" "${yaml_file}"
 
 	# Check the mount info.
 

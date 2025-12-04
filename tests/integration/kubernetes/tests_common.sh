@@ -420,6 +420,168 @@ wait_for_blocked_request() {
 	waitForProcess "${wait_time}" "${sleep_time}" "${command}" >/dev/null 2>/dev/null
 }
 
+# k8s create a ready pod
+k8s_create_pod_ready() {
+	local pod_name="$1"
+	local pod_yaml="$2"
+	local wait_time="${3:-300}"
+	local max_attempts="${4:-5}"
+
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		# First,forcefully deleting resources
+		kubectl delete -f "${pod_yaml}" --ignore-not-found=true --now --timeout=$timeout
+
+		kubectl create -f "${pod_yaml}"
+		if [ $? -ne 0 ]; then
+			info "Failed to create Pod ${pod_name}. Aborting create."
+			continue
+		fi
+
+		# Check pod creation
+		run kubectl wait --for=condition=Ready --timeout="${wait_time}s" pod "${pod_name}"
+		if [ "$status" -eq 0 ]; then
+			# It might be helpful to analyze the pod creation within kubernetes 
+			info "Test Succeeded on attempt #${attempt_num}"
+			info "Waiting ${wait_time} seconds for pod ${pod_name} Ready."
+			return 0
+		fi
+
+		# Retry
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Waiting for 5 seconds before next attempt..."
+			sleep 5
+		fi
+	done
+
+	info "Test Failed after ${max_attempts} attempts for pod ${pod_name}."
+	return 1
+}
+
+# Common function for several test cases from this bats script.
+test_pod_policy_error() {
+	local pod_name="$1"
+	local pod_yaml="$2"
+	local resource_yaml="$3"
+
+	local max_attempts=5
+	local sleep_between_attempts=5
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		info "Starting attempt #${attempt_num}"
+		kubectl delete -f "${pod_yaml}" --ignore-not-found=true --now --timeout=120s
+		kubectl delete -f "${resource_yaml}" --ignore-not-found=true
+
+		# Create resource
+		kubectl create -f "${resource_yaml}"
+		if [ $? -ne 0 ]; then
+			warn "Failed to create resource. Retrying..."
+			continue
+		fi
+
+		# Create the incorrect pod (expected to be blocked)
+		kubectl create -f "${pod_yaml}"
+		if [ $? -ne 0 ]; then
+			warn "Failed to create Pod. Retrying..."
+			continue
+		fi
+
+		# Wait for CreateContainerRequest to be blocked
+		run wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
+		if [ "$status" -eq 0 ]; then
+			info "wait_for_blocked_request succeeded on attempt #${attempt_num}"
+			return 0
+		else
+			warn "wait_for_blocked_request FAILED on attempt #${attempt_num}"
+		fi
+
+		# Retry if not the last attempt
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Retrying in ${sleep_between_attempts} seconds..."
+			sleep "${sleep_between_attempts}"
+		fi
+	done
+
+	error "Test failed after ${max_attempts} attempts."
+	return 1
+}
+
+k8s_create_deployment_ready() {
+	local deployment_yaml="$1"
+	local deployment="$2"
+
+	local wait_time=300
+	local max_attempts=5
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		# First,forcefully deleting resources
+		kubectl delete -f "${deployment_yaml}" --ignore-not-found=true --now --timeout=$timeout
+
+		kubectl create -f "${deployment_yaml}"
+		if [ $? -ne 0 ]; then
+			info "Test Succeeded on attempt #${attempt_num}"
+			info "Failed to create ${deployment}. Aborting create."
+			continue
+		fi
+
+		# Check deployment ready
+		run kubectl wait --for=condition=Available --timeout="${wait_time}s" deployment/${deployment}
+		if [ "$status" -eq 0 ]; then
+			info "Test Succeeded on attempt #${attempt_num} for deployment/${deployment}"
+			return 0
+		fi
+
+		# Retry
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Waiting for 5 seconds before next attempt..."
+			sleep 5
+		fi
+	done
+
+	#Test Failed after ${max_attempts} attempts.
+	return 1
+}
+
+test_deployment_policy_error() {
+    local deploy_yaml=$1
+	local max_attempts=5
+	local sleep_between_attempts=5
+	local attempt_num
+
+	for attempt_num in $(seq 1 "${max_attempts}"); do
+		info "Starting attempt #${attempt_num}"
+		kubectl delete -f "${deploy_yaml}" --ignore-not-found=true --now --timeout=120s
+
+        # Initiate deployment
+        kubectl apply -f "${deploy_yaml}"
+		if [ $? -ne 0 ]; then
+			warn "Failed to create deployment. Retrying..."
+			continue
+		fi
+
+        # Wait for the deployment pod to fail
+        run wait_for_blocked_request "CreateContainerRequest" "${deployment_name}"
+		if [ "$status" -eq 0 ]; then
+			info "wait_for_blocked_request succeeded on attempt #${attempt_num}"
+			return 0
+		else
+			warn "wait_for_blocked_request FAILED on attempt #${attempt_num}"
+		fi
+
+		# Retry if not the last attempt
+		if [ "${attempt_num}" -lt "${max_attempts}" ]; then
+			info "Retrying in ${sleep_between_attempts} seconds..."
+			sleep "${sleep_between_attempts}"
+		fi
+	done
+
+	error "Test failed after ${max_attempts} attempts."
+	return 1
+}
+
 # Execute in a pod a command that is allowed by policy.
 pod_exec_allowed_command() {
 	local -r pod_name="$1"
