@@ -110,7 +110,7 @@ mod tests {
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
     async fn test_scsi_block_matcher() {
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_path("00");
         let devname = "sda";
 
         let mut uev_a = crate::uevent::Uevent::default();
