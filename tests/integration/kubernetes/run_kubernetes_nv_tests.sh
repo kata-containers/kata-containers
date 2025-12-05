@@ -59,11 +59,6 @@ if [[ -n "${KATA_HYPERVISOR:-}" ]]; then
 fi
 export RUNTIME_CLASS_NAME
 
-# TODO: remove this unconditional assignment as soon as this variable is set in .github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
-if [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-snp" ]] || [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-tdx" ]]; then
-	export KBS="true"
-fi
-
 ensure_yq
 
 if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
