@@ -82,7 +82,7 @@ setup_kbs_credentials() {
 
 create_inference_pod() {
     envsubst <"${POD_INSTRUCT_YAML_IN}" >"${POD_INSTRUCT_YAML}"
-    add_allow_all_policy_to_yaml "${POD_INSTRUCT_YAML}"
+    auto_generate_policy "${policy_settings_dir}" "${POD_INSTRUCT_YAML}"
 
     kubectl apply -f "${POD_INSTRUCT_YAML}"
     kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_INSTRUCT}" pod "${POD_NAME_INSTRUCT}"
@@ -98,7 +98,7 @@ create_inference_pod() {
 
 create_embedqa_pod() {
     envsubst <"${POD_EMBEDQA_YAML_IN}" >"${POD_EMBEDQA_YAML}"
-    add_allow_all_policy_to_yaml "${POD_EMBEDQA_YAML}"
+    auto_generate_policy "${policy_settings_dir}" "${POD_EMBEDQA_YAML}"
 
     kubectl apply -f "${POD_EMBEDQA_YAML}"
     kubectl wait --for=condition=Ready --timeout="${POD_READY_TIMEOUT_EMBEDQA}" pod "${POD_NAME_EMBEDQA}"
@@ -139,6 +139,10 @@ setup_file() {
     setup_langchain_flow
 
     setup_cdi_override_for_nvidia_gpu_snp
+
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+    add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+    add_cdi_envvars_to_policy_settings "${policy_settings_dir}"
 
     create_inference_pod
 
@@ -402,6 +406,7 @@ teardown_file() {
 
     teardown_cdi_override_for_nvidia_gpu_snp
 
+    delete_tmp_policy_settings_dir "${policy_settings_dir}"
     teardown_common "${node}" "${node_start_time:-}" >&3
 
     # we have both secrets and pod elements in the manifests; teardown_common only deletes pods

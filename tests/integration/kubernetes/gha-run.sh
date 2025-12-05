@@ -599,6 +599,8 @@ function main() {
 		        "${TARGET_ARCH}" = "x86_64" && \
 		        "${PULL_TYPE}" != "experimental-force-guest-pull" ]]; then
 			AUTO_GENERATE_POLICY="yes"
+		elif [[ "${KATA_HYPERVISOR}" = qemu-nvidia-gpu-* ]]; then
+			AUTO_GENERATE_POLICY="yes"
 		fi
 	fi
 

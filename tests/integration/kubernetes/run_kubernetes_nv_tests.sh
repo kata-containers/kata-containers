@@ -59,14 +59,6 @@ if [ -n "${KATA_HYPERVISOR:-}" ]; then
 fi
 export RUNTIME_CLASS_NAME
 
-if [[ "${RUNTIME_CLASS_NAME}" == kata-qemu-nvidia-gpu-* ]]; then
-	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-yes}"
-else
-	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
-fi
-export AUTO_GENERATE_POLICY
-
-
 # TODO: remove this unconditional assignment as soon as this variable is set in .github/workflows/run-k8s-tests-on-nvidia-gpu.yaml
 if [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-snp" ]] || [[ "${KATA_HYPERVISOR:-}" == "qemu-nvidia-gpu-tdx" ]]; then
 	export KBS="true"
