@@ -14,10 +14,10 @@ export RUNTIME_CLASS_NAME
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-${RUNTIME_CLASS_NAME#kata-}}
 export KATA_HYPERVISOR
 
-# TODO: Replace with is_confidential_gpu_hardware() once available
 TEE=false
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+if is_confidential_gpu_hardware; then
+    TEE=true
+fi
 export TEE
 
 export POD_NAME_CUDA="nvidia-cuda-vectoradd"
@@ -56,7 +56,7 @@ setup() {
     # Get and verify the output contains expected CUDA success message
     kubectl logs "${POD_NAME_CUDA}"
     output=$(kubectl logs "${POD_NAME_CUDA}")
-    echo "# CUDA Vector Add Output: ${output}" >&3
+    echo "# CUDA Vector Add Output: ${output}"
 
     # The CUDA vectoradd sample outputs "Test PASSED" on success
     [[ "${output}" =~ "Test PASSED" ]]
@@ -69,5 +69,9 @@ teardown() {
 
     teardown_cdi_override_for_nvidia_gpu_snp
 
-    teardown_common "${node}" "${node_start_time:-}"
+    if [ "${TEE}" = "true" ]; then
+        confidential_teardown_common "${node}" "${node_start_time:-}"
+    else
+        teardown_common "${node}" "${node_start_time:-}"
+    fi
 }

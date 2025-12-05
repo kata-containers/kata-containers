@@ -18,10 +18,10 @@ export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
 
-# TODO: Replace with is_confidential_gpu_hardware() once available
 TEE=false
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+if is_confidential_gpu_hardware; then
+    TEE=true
+fi
 export TEE
 
 POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
@@ -68,9 +68,7 @@ setup_kbs_credentials() {
     # Get KBS address and export it for pod template substitution
     export CC_KBS_ADDR="$(kbs_k8s_svc_http_addr)"
 
-    # Set allow all resources policy (hardening will be done later)
-    # TODO: Replace with kbs_set_gpu_attestation_policy() once available
-    kbs_set_allow_all_resources
+    kbs_set_gpu0_resource_policy
 
     # Set up Kubernetes secret for the containerd metadata pull
     kubectl delete secret ngc-secret-instruct --ignore-not-found
@@ -396,15 +394,14 @@ teardown_file() {
     fi
 
     if [ "${TEE}" = "true" ]; then
-        echo "=== KBS Pod Logs ===" >&3
-        kubectl logs -n coco-tenant -l app=kbs --tail=-1 >&3 || true
+        confidential_teardown_common "${node}" "${node_start_time:-}" >&3
+    else
+        teardown_common "${node}" "${node_start_time:-}" >&3
     fi
 
     teardown_cdi_override_for_nvidia_gpu_snp
 
-    teardown_common "${node}" "${node_start_time:-}" >&3
-
-    # we have both secrets and pod elements in the manifests; teardown_common only deletes pods
+    # we have both secrets and pod elements in the manifests; teardown only deletes pods
     [ -f "${POD_INSTRUCT_YAML}" ] && kubectl delete -f "${POD_INSTRUCT_YAML}" --ignore-not-found=true
 
     if [ "${SKIP_MULTI_GPU_TESTS}" != "true" ]; then
