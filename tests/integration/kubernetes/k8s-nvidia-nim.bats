@@ -11,6 +11,9 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu}
 export RUNTIME_CLASS_NAME
 
+KATA_HYPERVISOR=${KATA_HYPERVISOR:-${RUNTIME_CLASS_NAME#kata-}}
+export KATA_HYPERVISOR
+
 export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
@@ -134,6 +137,8 @@ setup_file() {
     python3 -m venv "${HOME}"/.cicd/venv
 
     setup_langchain_flow
+
+    setup_cdi_override_for_nvidia_gpu_snp
 
     create_inference_pod
 
@@ -394,6 +399,8 @@ teardown_file() {
         echo "=== KBS Pod Logs ===" >&3
         kubectl logs -n coco-tenant -l app=kbs --tail=-1 >&3 || true
     fi
+
+    teardown_cdi_override_for_nvidia_gpu_snp
 
     teardown_common "${node}" "${node_start_time:-}" >&3
 

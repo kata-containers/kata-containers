@@ -55,6 +55,8 @@ setup() {
 	set_metadata_annotation "${K8S_TEST_YAML}" \
 		"${kernel_params_annotation}" \
 		"${kernel_params_value}"
+
+	setup_cdi_override_for_nvidia_gpu_snp
 }
 
 @test "Get CDH resource" {
@@ -113,6 +115,8 @@ teardown() {
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
 	fi
+
+	teardown_cdi_override_for_nvidia_gpu_snp
 
 	confidential_teardown_common "${node}" "${node_start_time:-}"
 }

@@ -11,6 +11,9 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu}
 export RUNTIME_CLASS_NAME
 
+KATA_HYPERVISOR=${KATA_HYPERVISOR:-${RUNTIME_CLASS_NAME#kata-}}
+export KATA_HYPERVISOR
+
 # TODO: Replace with is_confidential_gpu_hardware() once available
 TEE=false
 [[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
@@ -39,6 +42,8 @@ setup() {
             "${kernel_params_annotation}" \
             "${kernel_params_value}"
     fi
+
+    setup_cdi_override_for_nvidia_gpu_snp
 }
 
 @test "CUDA Vector Addition Test" {
@@ -61,6 +66,8 @@ teardown() {
     # Debugging information
     echo "=== CUDA vectoradd Pod Logs ==="
     kubectl logs "${POD_NAME_CUDA}" || true
+
+    teardown_cdi_override_for_nvidia_gpu_snp
 
     teardown_common "${node}" "${node_start_time:-}"
 }
