@@ -92,6 +92,16 @@ is_coco_platform() {
 	esac
 }
 
+is_nvidia_gpu_platform() {
+	case "${KATA_HYPERVISOR}" in
+		qemu-nvidia-gpu*)
+			return 0
+			;;
+		*)
+			return 1
+	esac
+}
+
 is_aks_cluster() {
 	case "${KATA_HYPERVISOR}" in
 		"qemu-tdx"|"qemu-snp"|qemu-nvidia-gpu*)
@@ -159,12 +169,21 @@ adapt_common_policy_settings_for_cbl_mariner() {
 	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
+# Adapt common policy settings for NVIDIA GPU platforms (CI runners use containerd 2.x).
+adapt_common_policy_settings_for_nvidia_gpu() {
+	local settings_dir=$1
+
+	info "Adapting common policy settings for NVIDIA GPU platform (${KATA_HYPERVISOR})"
+	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
 
 	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
 	is_aks_cluster && adapt_common_policy_settings_for_aks "${settings_dir}"
+	is_nvidia_gpu_platform && adapt_common_policy_settings_for_nvidia_gpu "${settings_dir}"
 
 	case "${KATA_HOST_OS}" in
 		"cbl-mariner")
