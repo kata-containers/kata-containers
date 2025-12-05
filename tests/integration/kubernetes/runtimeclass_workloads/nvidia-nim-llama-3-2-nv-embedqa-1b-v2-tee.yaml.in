@@ -73,7 +73,7 @@ spec:
       limits:
         nvidia.com/pgpu: 1
         cpu: "16"
-        memory: "96Gi"
+        memory: "64Gi"
 ---
 apiVersion: v1
 kind: Secret
