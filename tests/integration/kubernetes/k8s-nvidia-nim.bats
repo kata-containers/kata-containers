@@ -15,10 +15,10 @@ export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
 
-# TODO: Replace with is_confidential_gpu_hardware() once available
 TEE=false
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+if is_confidential_gpu_hardware; then
+    TEE=true
+fi
 export TEE
 
 POD_NAME_EMBEDQA="nvidia-nim-llama-3-2-nv-embedqa-1b-v2"
