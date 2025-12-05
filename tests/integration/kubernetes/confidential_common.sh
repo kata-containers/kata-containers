@@ -310,6 +310,82 @@ EOF
     echo "${initdata_annotation}"
 }
 
+# Setup CDI file override for nvidia.com-pgpu.yaml when using qemu-nvidia-gpu-snp
+# NOTE: This is a temporary workaround needed until NVIDIA releases what's needed
+# for the GPU Operator to properly deal with cold plugged devices, which is work
+# in progress right now. After that's released, we can revert/drop this patch.
+setup_cdi_override_for_nvidia_gpu_snp() {
+	local kata_hypervisor="${KATA_HYPERVISOR:-}"
+	local backup_dir
+	local backup_file
+	local cdi_var_run_file="/var/run/cdi/nvidia.com-pgpu.yaml"
+	local cdi_etc_file="/etc/cdi/nvidia.com-pgpu.yaml"
+
+	if [[ "${kata_hypervisor}" != "qemu-nvidia-gpu-snp" ]]; then
+		return 0
+	fi
+
+	backup_dir=$(mktemp -d)
+	backup_file="${backup_dir}/nvidia.com-pgpu.yaml.backup"
+	export CDI_BACKUP_FILE="${backup_file}"
+
+	if [[ -f "${cdi_var_run_file}" ]]; then
+		sudo cp "${cdi_var_run_file}" "${backup_file}"
+	fi
+
+	sudo rm -f "${cdi_var_run_file}"
+	sudo mkdir -p /etc/cdi
+
+	sudo tee "${cdi_etc_file}" > /dev/null <<EOF
+---
+cdiVersion: 0.5.0
+containerEdits: {}
+devices:
+- containerEdits:
+    deviceNodes:
+    - path: /dev/vfio/devices/vfio0
+  name: "0"
+- containerEdits:
+    deviceNodes:
+    - path: /dev/vfio/devices/vfio1
+  name: "1"
+- containerEdits:
+    deviceNodes:
+    - path: /dev/vfio/devices/vfio0
+  name: "50"
+- containerEdits:
+    deviceNodes:
+    - path: /dev/vfio/devices/vfio1
+  name: "59"
+kind: nvidia.com/pgpu
+EOF
+}
+
+# Teardown CDI file override for nvidia.com-pgpu.yaml when using qemu-nvidia-gpu-snp
+# NOTE: This is a temporary workaround needed until NVIDIA releases what's needed
+# for the GPU Operator to properly deal with cold plugged devices, which is work
+# in progress right now. After that's released, we can revert/drop this patch.
+teardown_cdi_override_for_nvidia_gpu_snp() {
+	local kata_hypervisor="${KATA_HYPERVISOR:-}"
+	local backup_file="${CDI_BACKUP_FILE:-}"
+	local backup_dir
+	local cdi_var_run_file="/var/run/cdi/nvidia.com-pgpu.yaml"
+	local cdi_etc_file="/etc/cdi/nvidia.com-pgpu.yaml"
+
+	if [[ "${kata_hypervisor}" != "qemu-nvidia-gpu-snp" ]]; then
+		return 0
+	fi
+
+	sudo rm -f "${cdi_etc_file}"
+
+	if [[ -f "${backup_file}" ]]; then
+		sudo mkdir -p /var/run/cdi
+		sudo cp "${backup_file}" "${cdi_var_run_file}"
+		backup_dir=$(dirname "${backup_file}")
+		sudo rm -rf "${backup_dir}"
+	fi
+}
+
 confidential_teardown_common() {
 	local node="$1"
 	local node_start_time="$2"
