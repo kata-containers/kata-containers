@@ -65,9 +65,7 @@ setup_kbs_credentials() {
     # Get KBS address and export it for pod template substitution
     export CC_KBS_ADDR="$(kbs_k8s_svc_http_addr)"
 
-    # Set allow all resources policy (hardening will be done later)
-    # TODO: Replace with kbs_set_gpu_attestation_policy() once available
-    kbs_set_allow_all_resources
+    kbs_set_gpu0_resource_policy
 
     # Set up Kubernetes secret for the containerd metadata pull
     kubectl delete secret ngc-secret-instruct --ignore-not-found
