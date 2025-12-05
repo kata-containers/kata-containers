@@ -78,7 +78,7 @@ setup() {
 }
 
 @test "Cannot Unseal Env Secrets with CDH without key" {
-	k8s_create_pod "${K8S_TEST_ENV_YAML}"
+	k8s_create_pod_enhanced "${K8S_TEST_ENV_YAML}"
 
 	kubectl logs secret-test-pod-cc
 	kubectl logs secret-test-pod-cc | grep -q "UNPROTECTED_SECRET = not_sealed_secret"
@@ -90,7 +90,7 @@ setup() {
 
 @test "Unseal Env Secrets with CDH" {
 	kbs_set_resource "default" "sealed-secret" "test" "unsealed_secret"
-	k8s_create_pod "${K8S_TEST_ENV_YAML}"
+	k8s_create_pod_enhanced "${K8S_TEST_ENV_YAML}"
 
 	kubectl logs secret-test-pod-cc
 	kubectl logs secret-test-pod-cc | grep -q "UNPROTECTED_SECRET = not_sealed_secret"
@@ -99,7 +99,7 @@ setup() {
 
 @test "Unseal File Secrets with CDH" {
 	kbs_set_resource "default" "sealed-secret" "test" "unsealed_secret"
-	k8s_create_pod "${K8S_TEST_FILE_YAML}"
+	k8s_create_pod_enhanced "${K8S_TEST_FILE_YAML}"
 
 	kubectl logs secret-test-pod-cc
 	kubectl logs secret-test-pod-cc | grep -q "UNPROTECTED_SECRET = not_sealed_secret"

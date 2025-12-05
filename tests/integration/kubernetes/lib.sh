@@ -103,6 +103,47 @@ k8s_create_pod() {
 	fi
 }
 
+# Enhanced k8s create a ready pod
+k8s_create_pod_enhanced() {
+	local pod_yaml="$1"
+	local wait_time="${2:-120}"
+	local max_attempts="${3:-5}"
+	local pod_name=""
+	local attempt
+
+	for attempt in $(seq 1 "$max_attempts"); do
+		# check file
+		if [ ! -f "${pod_yaml}" ]; then
+			echo "Pod config file '${pod_yaml}' does not exist"
+			return 1
+		fi
+		# First,forcefully deleting resources
+		kubectl delete -f "${pod_yaml}" --ignore-not-found=true --now --timeout=$timeout
+
+		# retry create pod
+		retry_kubectl_apply "${pod_yaml}"
+		if ! pod_name=$(kubectl get pods -o jsonpath='{.items..metadata.name}'); then
+			info "Failed to apply YAML for pod ${pod_name} on attempt ${attempt}"
+			continue
+		fi
+
+		# wait pod ready
+		if k8s_wait_pod_be_ready "${pod_name}" "${wait_time}"; then
+			info "Pod ${pod_name} ready on attempt ${attempt}"
+			return 0
+		fi
+
+		# Retry
+		if [ "${attempt}" -lt "${max_attempts}" ]; then
+			info "Waiting for 5 seconds before next attempt..."
+			sleep 5
+		fi
+	done
+
+	info "Pod ${pod_name} failed to be ready after ${max_attempts} attempts"
+	return 1
+}
+
 # Runs a command in the host filesystem.
 #
 # Parameters:

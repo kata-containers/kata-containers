@@ -65,7 +65,7 @@ function setup_kbs_decryption_key() {
     # For debug sake
     echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod}"
+    k8s_create_pod_enhanced "${kata_pod}"
     echo "Kata pod test-e2e from encrypted image is running"
 }
 

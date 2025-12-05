@@ -38,7 +38,7 @@ setup() {
     cat $runc_pod_config
 
     add_allow_all_policy_to_yaml "$runc_pod_config"
-    k8s_create_pod "$runc_pod_config"
+    k8s_create_pod_enhanced "$runc_pod_config"
 
     echo "Runc pod test-e2e is running"
     kubectl delete -f "$runc_pod_config"
@@ -58,7 +58,7 @@ setup() {
     cat $kata_pod_with_nydus_config
 
     add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
-    k8s_create_pod "$kata_pod_with_nydus_config"
+    k8s_create_pod_enhanced "$kata_pod_with_nydus_config"
 }
 
 @test "Test we cannot pull an image that exceeds the memory limit inside the guest" {
@@ -134,7 +134,7 @@ setup() {
     add_allow_all_policy_to_yaml "$pod_config"
     local wait_time=120
     [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && wait_time=300
-    k8s_create_pod "$pod_config" "$wait_time"
+    k8s_create_pod_enhanced "$pod_config" "$wait_time"
 }
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
@@ -237,7 +237,7 @@ setup() {
     add_allow_all_policy_to_yaml "$pod_config"
     local wait_time=120
     [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && wait_time=600
-    k8s_create_pod "$pod_config" "$wait_time"
+    k8s_create_pod_enhanced "$pod_config" "$wait_time"
 }
 
 teardown() {
