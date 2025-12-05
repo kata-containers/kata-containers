@@ -16,4 +16,8 @@ pub enum Error {
     UnexpectedResponse(TaskResponse, String),
     #[error("unexpected sandbox response {0} to shim {1}")]
     UnexpectedSandboxResponse(SandboxResponse, String),
+    #[error("agent connection closed")]
+    AgentConnectionClosed,
+    #[error("process already terminated")]
+    ProcessAlreadyTerminated,
 }
