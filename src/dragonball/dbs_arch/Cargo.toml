@@ -21,6 +21,8 @@ libc = ">=0.2.39"
 
 [dev-dependencies]
 vm-memory = { workspace = true, features = ["backend-mmap"] }
+test-utils = { workspace = true }
+nix = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true

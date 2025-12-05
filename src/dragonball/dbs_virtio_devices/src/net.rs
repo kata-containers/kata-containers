@@ -848,6 +848,7 @@ mod tests {
     use dbs_utils::epoll_manager::SubscriberOps;
     use dbs_utils::rate_limiter::TokenBucket;
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_not_root;
     use vm_memory::{GuestAddress, GuestMemoryMmap};
 
     use super::*;
@@ -963,6 +964,7 @@ mod tests {
 
     #[test]
     fn test_net_virtio_device_active() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
         {
             // config queue size is not 2
@@ -1150,6 +1152,7 @@ mod tests {
 
     #[test]
     fn test_net_get_patch_rate_limiters() {
+        skip_if_not_root!();
         let mut handler = create_net_epoll_handler("test_1".to_string());
         let tokenbucket = TokenBucket::new(1, 1, 4);
 
@@ -1174,6 +1177,7 @@ mod tests {
 
     #[test]
     fn test_net_epoll_handler_handle_event() {
+        skip_if_not_root!();
         let handler = create_net_epoll_handler("test_1".to_string());
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
@@ -1212,6 +1216,7 @@ mod tests {
 
     #[test]
     fn test_net_epoll_handler_handle_unknown_event() {
+        skip_if_not_root!();
         let handler = create_net_epoll_handler("test_1".to_string());
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
@@ -1228,6 +1233,7 @@ mod tests {
 
     #[test]
     fn test_net_epoll_handler_process_queue() {
+        skip_if_not_root!();
         {
             let mut handler = create_net_epoll_handler("test_1".to_string());
 
@@ -1253,6 +1259,7 @@ mod tests {
 
     #[test]
     fn test_net_bandwidth_rate_limiter() {
+        skip_if_not_root!();
         let handler = create_net_epoll_handler("test_1".to_string());
 
         let event_fd = EventFd::new(0).unwrap();
@@ -1330,6 +1337,7 @@ mod tests {
 
     #[test]
     fn test_net_ops_rate_limiter() {
+        skip_if_not_root!();
         let handler = create_net_epoll_handler("test_1".to_string());
 
         let event_fd = EventFd::new(0).unwrap();
