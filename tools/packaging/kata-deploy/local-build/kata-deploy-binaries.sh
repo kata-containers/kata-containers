@@ -195,10 +195,7 @@ get_kernel_modules_dir() {
 }
 
 cleanup_and_fail_shim_v2_specifics() {
-	for variant in confidential nvidia-gpu-confidential; do
-		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash_${variant}.txt"
-		[ -f "${root_hash_file}" ] && rm -f "${root_hash_file}"
-	done
+	rm -f "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash.txt"
 
 	return $(cleanup_and_fail "${1:-}" "${2:-}")
 }
@@ -227,22 +224,12 @@ install_cached_shim_v2_tarball_get_root_hash() {
 	fi
 
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	local image_conf_tarball="kata-static-rootfs-image-confidential.tar.zst"
+
 	local root_hash_basedir="./opt/kata/share/kata-containers/"
-	local found_any=""
 
-	for variant in confidential nvidia-gpu-confidential; do
-		local image_conf_tarball="kata-static-rootfs-image-${variant}.tar.zst"
-		local tarball_path="${tarball_dir}/${image_conf_tarball}"
-
-		# If variant does not exist we skip the current iteration
-		[ ! -f "${tarball_path}" ] && continue
-
-		tar --zstd -xvf "${tarball_path}" "${root_hash_basedir}root_hash_${variant}.txt" --transform s,"${root_hash_basedir}",, || die "Failed to extract root hash from ${tarball_path}"
-		mv "root_hash_${variant}.txt" "${tarball_dir}/"
-		found_any="yes"
-	done
-
-	[ -z "${found_any}" ] && die "No files to copy for shim-v2 with MEASURED_ROOTFS support"
+	tar --zstd -xvf "${tarball_dir}/${image_conf_tarball}" ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,
+	mv root_hash.txt "${tarball_dir}/root_hash.txt"
 
 	return 0
 }
@@ -252,17 +239,11 @@ install_cached_shim_v2_tarball_compare_root_hashes() {
 		return 0
 	fi
 
-	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	for variant in confidential nvidia-gpu-confidential; do
-		# skip if one or the other does not exist
-		[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ] && continue
+	[ -f shim-v2-root_hash.txt ] || return 1
 
-		diff "${tarball_dir}/root_hash_${variant}.txt" "shim-v2-root_hash_${variant}.txt" || return 1
-		found_any="yes"
-	done
-	[ -z "${found_any}" ] && die "No root_hash_variant.txt files found for diff with MEASURED_ROOTFS support"
+	diff "${tarball_dir}/root_hash.txt" shim-v2-root_hash.txt || return 1
 
 	return 0
 }
@@ -624,8 +605,8 @@ install_initrd_nvidia_gpu() {
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS=yes
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
+	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu-confidential"
 }
@@ -773,7 +754,6 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	export MEASURED_ROOTFS=yes
 	install_kernel_helper \
 		"assets.kernel.confidential" \
 		"kernel-nvidia-gpu-confidential" \
@@ -1007,22 +987,17 @@ install_shimv2() {
 	export RUNTIME_CHOICE
 
 	if [ "${MEASURED_ROOTFS}" = "yes" ]; then
-		local found_any=""
-		for variant in confidential nvidia-gpu-confidential; do
-			local image_conf_tarball="$(find "${workdir}" -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
-			# only one variant may be built at a time so we need to
-			# skip one or the other if not available
-			[ -f "${image_conf_tarball}" ] || continue
+		local image_conf_tarball="${workdir}/kata-static-rootfs-image-confidential.tar.zst"
+		if [ ! -f "${image_conf_tarball}" ]; then
+			die "Building the shim-v2 with MEASURED_ROOTFS support requires a rootfs confidential image tarball"
+		fi
 
-			local root_hash_basedir="./opt/kata/share/kata-containers/"
-			if ! tar --zstd -xvf "${image_conf_tarball}" --transform s,"${root_hash_basedir}",, "${root_hash_basedir}root_hash_${variant}.txt"; then
-				die "Cannot extract root hash from ${image_conf_tarball} for shim-v2 with MEASURED_ROOTFS support, needs a rootfs with MEASURED_ROOTFS support"
-			fi
+		local root_hash_basedir="./opt/kata/share/kata-containers/"
+		if ! tar --zstd -xvf ${image_conf_tarball} --transform s,${root_hash_basedir},, ${root_hash_basedir}root_hash.txt; then
+			die "Building the shim-v2 with MEASURED_ROOTFS support requires a rootfs confidential image tarball built with MEASURED_ROOTFS support"
+		fi
 
-			mv "root_hash_${variant}.txt" "${workdir}/root_hash_${variant}.txt"
-			found_any="yes"
-		done
-		[ -z "${found_any}" ] && die "No root_hash_variant.txt files found for shim-v2 with MEASURED_ROOTFS support, needs a rootfs with MEASURED_ROOTFS support"
+		mv root_hash.txt ${workdir}/root_hash.txt
 	fi
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
@@ -1465,9 +1440,7 @@ handle_build() {
 			;;
 		shim-v2)
 			if [ "${MEASURED_ROOTFS}" = "yes" ]; then
-				for variant in confidential nvidia-gpu-confidential; do
-					[ -f "${workdir}/root_hash_${variant}.txt" ] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/shim-v2-root_hash_${variant}.txt"
-				done
+				mv ${workdir}/root_hash.txt ${workdir}/shim-v2-root_hash.txt
 			fi
 			;;
 	esac
@@ -1537,14 +1510,9 @@ handle_build() {
 				;;
 			shim-v2)
 				if [ "${MEASURED_ROOTFS}" = "yes" ]; then
-					local found_any=""
-					for variant in confidential nvidia-gpu-confidential; do
-						# The variants could be built independently we need to check if
-						# they exist and then push them to the registry
-						[ -f "${workdir}/shim-v2-root_hash_${variant}.txt" ] && files_to_push+=("shim-v2-root_hash_${variant}.txt")
-						found_any="yes"
-					done
-					[ -z "${found_any}" ] && die "No files to push for shim-v2 with MEASURED_ROOTFS support"
+					files_to_push+=(
+						"shim-v2-root_hash.txt"
+					)
 				fi
 				;;
 			*)

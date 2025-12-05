@@ -23,7 +23,6 @@ ARCH=${ARCH:-$(uname -m)}
 [ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
 TARGET_OS=${TARGET_OS:-linux}
 [ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
-VARIANT=${VARIANT:-}
 
 readonly script_name="${0##*/}"
 readonly script_dir=$(dirname "$(readlink -f "$0")")
@@ -178,7 +177,6 @@ build_with_container() {
 		   --env USER="$(id -u)" \
 		   --env GROUP="$(id -g)" \
 		   --env IMAGE_SIZE_ALIGNMENT_MB="${IMAGE_SIZE_ALIGNMENT_MB}" \
-		   --env VARIANT="${VARIANT}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
@@ -489,8 +487,7 @@ create_rootfs_image() {
 	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -b "${device}p2" ]; then
 		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
 		local image_dir=$(dirname "${image}")
-		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash_${VARIANT}.txt 2>&1
-		OK "Root hash file created for variant: ${VARIANT}"
+		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash.txt 2>&1
 	fi
 
 	losetup -d "${device}"
