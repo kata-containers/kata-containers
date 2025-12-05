@@ -61,13 +61,10 @@ spec:
         value: "${NGC_API_KEY}"
     # GPU resource request/limit (for NVIDIA GPU)
     resources:
-      requests:
-        cpu: "16"
-        memory: "96Gi"
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "96Gi"
+        memory: "64Gi"
 ---
 apiVersion: v1
 kind: Secret
