@@ -14,10 +14,10 @@ export RUNTIME_CLASS_NAME
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-${RUNTIME_CLASS_NAME#kata-}}
 export KATA_HYPERVISOR
 
-# TODO: Replace with is_confidential_gpu_hardware() once available
 TEE=false
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+if is_confidential_gpu_hardware; then
+    TEE=true
+fi
 export TEE
 
 export POD_NAME_CUDA="nvidia-cuda-vectoradd"
