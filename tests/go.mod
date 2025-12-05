@@ -9,7 +9,7 @@ go 1.24.11
 require (
 	github.com/olekukonko/tablewriter v0.0.6-0.20210304033056-74c60be0ef68
 	github.com/russross/blackfriday/v2 v2.1.0
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.8.3
 	github.com/stretchr/testify v1.7.1
 	github.com/urfave/cli v1.22.0
 	gopkg.in/yaml.v2 v2.4.0
