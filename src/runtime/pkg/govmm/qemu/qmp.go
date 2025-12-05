@@ -43,6 +43,10 @@ type QMPLog interface {
 	// Errorf writes error output to the log.  A newline will be
 	// added to the output if one is not provided.
 	Errorf(string, ...interface{})
+
+	// Debugf writes debug output to the log.  A newline will be
+	// added to the output if one is not provided.
+	Debugf(string, ...interface{})
 }
 
 type qmpNullLogger struct{}
@@ -58,6 +62,9 @@ func (l qmpNullLogger) Warningf(format string, v ...interface{}) {
 }
 
 func (l qmpNullLogger) Errorf(format string, v ...interface{}) {
+}
+
+func (l qmpNullLogger) Debugf(format string, v ...interface{}) {
 }
 
 // QMPConfig is a configuration structure that can be used to specify a
@@ -653,6 +660,7 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 
 func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
 	filter *qmpEventFilter) error {
+	q.cfg.Logger.Debugf("Executing QMP command: %s: %v", name, args)
 
 	_, err := q.executeCommandWithResponse(ctx, name, args, nil, filter)
 	return err
@@ -1160,7 +1168,8 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 // devID is the id of the device to add. Must be valid QMP identifier.
 // bdf is the PCI bus-device-function of the pci device.
 // bus is optional. When hot plugging a PCIe device, the bus can be the ID of the pcie-root-port.
-func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string) error {
+// iommufdID is the ID of the iommufd object to be created for this device. If empty, no iommufd object will be created.
+func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string, iommufdID string) error {
 	var driver string
 	var transport VirtioTransport
 
@@ -1178,6 +1187,17 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 	}
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if iommufdID != "" {
+		iommufdIDFull := "iommufd" + iommufdID
+		objectAddArgs := map[string]interface{}{
+			"qom-type": "iommufd",
+			"id":       iommufdIDFull,
+		}
+		if err := q.executeCommand(ctx, "object-add", objectAddArgs, nil); err != nil {
+			return err
+		}
+		args["iommufd"] = iommufdIDFull
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }

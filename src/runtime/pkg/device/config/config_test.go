@@ -68,3 +68,12 @@ func TestGetSysDevPathImpl(t *testing.T) {
 	assert.Contains(path, expectedFormat)
 	assert.Contains(path, "block")
 }
+
+func TestIOMMUFDID(t *testing.T) {
+	assert := assert.New(t)
+
+	info := VFIODev{
+		DevfsDev: "/dev/vfio/devices/vfio5",
+	}
+	assert.Equal("5", info.IOMMUFDID())
+}

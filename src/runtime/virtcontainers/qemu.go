@@ -37,6 +37,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	pkgDevice "github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
@@ -174,6 +175,10 @@ func (l qmpLogger) Warningf(format string, v ...interface{}) {
 
 func (l qmpLogger) Errorf(format string, v ...interface{}) {
 	l.logger.Errorf(format, v...)
+}
+
+func (l qmpLogger) Debugf(format string, v ...interface{}) {
+	l.logger.Debugf(format, v...)
 }
 
 // Logger returns a logrus logger appropriate for logging qemu messages
@@ -849,7 +854,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		// In the case of IOMMUFD the device.HostPath will look like
 		// /dev/vfio/devices/vfio0
 		// (1) Check if we have the new IOMMUFD or old container based VFIO
-		if strings.HasPrefix(dev.HostPath, drivers.IommufdDevPath) {
+		if strings.HasPrefix(dev.HostPath, pkgDevice.IommufdDevPath) {
 			q.Logger().Infof("### IOMMUFD Path: %s", dev.HostPath)
 			vfioDevices, err = drivers.GetDeviceFromVFIODev(dev)
 			if err != nil {
@@ -1876,7 +1881,7 @@ func (q *qemu) executePCIVFIODeviceAdd(device *config.VFIODev, addr string, brid
 func (q *qemu) executeVFIODeviceAdd(device *config.VFIODev) error {
 	switch device.Type {
 	case config.VFIOPCIDeviceNormalType:
-		return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.BDF, device.Bus, romFile)
+		return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.BDF, device.Bus, romFile, device.IOMMUFDID())
 	case config.VFIOPCIDeviceMediatedType:
 		return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.ID, device.SysfsDev, "", device.Bus, romFile)
 	case config.VFIOAPDeviceMediatedType:
