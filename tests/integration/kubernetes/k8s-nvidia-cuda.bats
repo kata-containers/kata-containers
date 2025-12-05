@@ -11,10 +11,13 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu}
 export RUNTIME_CLASS_NAME
 
-# TODO: Replace with is_confidential_gpu_hardware() once available
+KATA_HYPERVISOR=${KATA_HYPERVISOR:-${RUNTIME_CLASS_NAME#kata-}}
+export KATA_HYPERVISOR
+
 TEE=false
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-snp" ]] && TEE=true
-[[ "${RUNTIME_CLASS_NAME}" = "kata-qemu-nvidia-gpu-tdx" ]] && TEE=true
+if is_confidential_gpu_hardware; then
+    TEE=true
+fi
 export TEE
 
 export POD_NAME_CUDA="nvidia-cuda-vectoradd"
