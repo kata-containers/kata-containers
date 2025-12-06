@@ -10,6 +10,7 @@ use common::{
     error::Error,
     types::{ContainerID, ContainerProcess, ProcessExitStatus, ProcessStatus, ProcessType},
 };
+use containerd_shim_protos::ttrpc;
 use hypervisor::device::device_manager::DeviceManager;
 use nix::sys::signal::Signal;
 use oci::LinuxResources;
@@ -287,9 +288,34 @@ impl ContainerInner {
 
         self.agent
             .signal_process(agent::SignalProcessRequest { process_id, signal })
-            .await?;
+            .await
+            .map_err(Self::convert_agent_error)?;
 
         Ok(())
+    }
+
+    /// Convert agent/ttrpc errors into typed Error enum variants.
+    fn convert_agent_error(err: anyhow::Error) -> anyhow::Error {
+        if let Some(ttrpc_err) = err.downcast_ref::<ttrpc::error::Error>() {
+            match ttrpc_err {
+                // Handle connection issues (local/remote connection closed)
+                ttrpc::error::Error::LocalClosed
+                | ttrpc::error::Error::RemoteClosed
+                | ttrpc::error::Error::Eof => {
+                    return Error::AgentConnectionClosed.into();
+                }
+                // Handle errors returned by the agent (RPC status errors)
+                ttrpc::error::Error::RpcStatus(status) => {
+                    if status.code() == ttrpc::Code::NOT_FOUND {
+                        return Error::ProcessAlreadyTerminated.into();
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Return original error if no known patterns matched
+        err
     }
 
     pub async fn new_container_io(&self, process: &ContainerProcess) -> Result<ContainerIo> {
