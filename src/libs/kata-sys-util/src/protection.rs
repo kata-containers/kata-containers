@@ -37,7 +37,6 @@ pub enum GuestProtection {
     #[default]
     NoProtection,
     Tdx,
-    Sev(SevSnpDetails),
     Snp(SevSnpDetails),
     Pef,
     Se,
@@ -47,7 +46,6 @@ impl fmt::Display for GuestProtection {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             GuestProtection::Tdx => write!(f, "tdx"),
-            GuestProtection::Sev(details) => write!(f, "sev (cbitpos: {}", details.cbitpos),
             GuestProtection::Snp(details) => write!(f, "snp (cbitpos: {}", details.cbitpos),
             GuestProtection::Pef => write!(f, "pef"),
             GuestProtection::Se => write!(f, "se"),
@@ -81,20 +79,15 @@ pub enum ProtectionError {
 #[cfg(target_arch = "x86_64")]
 pub const TDX_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_intel/parameters/tdx";
 #[cfg(target_arch = "x86_64")]
-pub const SEV_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev";
-#[cfg(target_arch = "x86_64")]
 pub const SNP_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev_snp";
 
 #[cfg(target_arch = "x86_64")]
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
-    arch_guest_protection(SEV_KVM_PARAMETER_PATH, SNP_KVM_PARAMETER_PATH)
+    arch_guest_protection(SNP_KVM_PARAMETER_PATH)
 }
 
 #[cfg(target_arch = "x86_64")]
-pub fn arch_guest_protection(
-    sev_path: &str,
-    snp_path: &str,
-) -> Result<GuestProtection, ProtectionError> {
+pub fn arch_guest_protection(snp_path: &str) -> Result<GuestProtection, ProtectionError> {
     // Check if /sys/module/kvm_intel/parameters/tdx is set to 'Y'
     if Path::new(TDX_KVM_PARAMETER_PATH).exists() {
         if let Ok(content) = fs::read(TDX_KVM_PARAMETER_PATH) {
@@ -120,7 +113,7 @@ pub fn arch_guest_protection(
         Ok(false)
     };
 
-    let retrieve_sev_params = || -> Result<(u32, u32), ProtectionError> {
+    let retrieve_sev_snp_params = || -> Result<(u32, u32), ProtectionError> {
         // The initial checks for AMD and SEV shouldn't be necessary due to
         // the context this function is currently called from, however it
         // shouldn't hurt to double-check and have better logging if anything
@@ -141,7 +134,9 @@ pub fn arch_guest_protection(
         // AMD64 Architecture Prgrammer's Manual Fn8000_001f docs on pg. 640
         let fn8000_001f = unsafe { x86_64::__cpuid(0x8000_001f) };
         if fn8000_001f.eax & 0x10 == 0 {
-            return Err(ProtectionError::CheckFailed("SEV not supported".to_owned()));
+            return Err(ProtectionError::CheckFailed(
+                "SEV SNP not supported".to_owned(),
+            ));
         }
 
         let cbitpos = fn8000_001f.ebx & 0b11_1111;
@@ -151,18 +146,13 @@ pub fn arch_guest_protection(
     };
 
     let is_snp_available = check_contents(snp_path)?;
-    let is_sev_available = is_snp_available || check_contents(sev_path)?;
-    if is_snp_available || is_sev_available {
-        let (cbitpos, phys_addr_reduction) = retrieve_sev_params()?;
+    if is_snp_available {
+        let (cbitpos, phys_addr_reduction) = retrieve_sev_snp_params()?;
         let sev_snp_details = SevSnpDetails {
             cbitpos,
             phys_addr_reduction,
         };
-        return Ok(if is_snp_available {
-            GuestProtection::Snp(sev_snp_details)
-        } else {
-            GuestProtection::Sev(sev_snp_details)
-        });
+        return Ok(GuestProtection::Snp(sev_snp_details));
     }
 
     Ok(GuestProtection::NoProtection)
@@ -255,36 +245,12 @@ mod tests {
         let mut snp_file = fs::File::create(snp_file_path).unwrap();
         writeln!(snp_file, "Y").unwrap();
 
-        let actual = arch_guest_protection("/xyz/tmp", path.to_str().unwrap());
+        let actual = arch_guest_protection(path.to_str().unwrap());
         assert!(actual.is_ok());
         assert!(matches!(actual.unwrap(), GuestProtection::Snp(_)));
 
         writeln!(snp_file, "N").unwrap();
-        let actual = arch_guest_protection("/xyz/tmp", path.to_str().unwrap());
-        assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
-    }
-
-    #[test]
-    fn test_arch_guest_protection_sev() {
-        // Test sev
-        let dir = tempdir().unwrap();
-        let sev_file_path = dir.path().join("sev");
-        if !sev_file_path.exists() {
-            println!("INFO: skipping {} which needs sev", module_path!());
-            return;
-        }
-
-        let sev_path = sev_file_path.clone();
-        let mut sev_file = fs::File::create(sev_file_path).unwrap();
-        writeln!(sev_file, "Y").unwrap();
-
-        let actual = arch_guest_protection(sev_path.to_str().unwrap(), "/xyz/tmp");
-        assert!(actual.is_ok());
-        assert!(matches!(actual.unwrap(), GuestProtection::Sev(_)));
-
-        writeln!(sev_file, "N").unwrap();
-        let actual = arch_guest_protection(sev_path.to_str().unwrap(), "/xyz/tmp");
+        let actual = arch_guest_protection(path.to_str().unwrap());
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
     }
@@ -306,14 +272,14 @@ mod tests {
 
         std::fs::create_dir_all(tdx_path.clone()).unwrap();
 
-        let actual = arch_guest_protection(invalid_dir, invalid_dir);
+        let actual = arch_guest_protection(invalid_dir);
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
 
-        let actual = arch_guest_protection(invalid_dir, invalid_dir);
+        let actual = arch_guest_protection(invalid_dir);
         assert!(actual.is_err());
 
-        let result = arch_guest_protection(invalid_dir, invalid_dir);
+        let result = arch_guest_protection(invalid_dir);
         assert!(result.is_ok());
 
         let result = result.unwrap();

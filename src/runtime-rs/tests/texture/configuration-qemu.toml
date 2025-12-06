@@ -49,7 +49,6 @@ valid_file_mem_backends = ["/dev/shm","/dev/snd","./test_file_backend_mem_root"]
 pflashes = ["/proc/mounts"]
 enable_debug = true
 msize_9p = 16384
-disable_image_nvdimm = true
 hotplug_vfio_on_root_bus = true
 pcie_root_port = 2
 disable_vhost_net = true
