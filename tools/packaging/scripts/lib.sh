@@ -34,7 +34,7 @@ install_yq() {
 }
 
 get_from_kata_deps() {
-  local dependency="$1 | explode(.)"
+	local dependency="$1"
 	versions_file="${this_script_dir}/../../../versions.yaml"
 
 	command -v yq &>/dev/null || die 'yq command is not in your $PATH'
@@ -50,6 +50,10 @@ die() {
 
 info() {
 	echo >&2 "INFO: $*"
+}
+
+warn() {
+	echo >&2 "WARN: $*"
 }
 
 get_repo_hash() {
