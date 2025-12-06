@@ -592,7 +592,7 @@ impl ResourceManagerInner {
             self.agent
                 .online_cpu_mem(OnlineCPUMemRequest {
                     wait: false,
-                    nb_cpus: self.cpu_resource.current_vcpu().await,
+                    nb_cpus: self.cpu_resource.current_vcpu().await.ceil() as u32,
                     cpu_only: false,
                 })
                 .await
