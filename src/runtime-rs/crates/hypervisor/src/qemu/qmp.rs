@@ -719,25 +719,41 @@ impl Qmp {
     pub fn hotplug_vfio_device(
         &mut self,
         hostdev_id: &str,
+        sysfs_path: &str,
         bus_slot_func: &str,
         driver: &str,
         bus: &str,
     ) -> Result<Option<PciPath>> {
         let mut vfio_args = Dictionary::new();
-        let bdf = if !bus_slot_func.starts_with("0000") {
-            format!("0000:{}", bus_slot_func)
-        } else {
-            bus_slot_func.to_owned()
-        };
-        vfio_args.insert("addr".to_owned(), "0x0".into());
-        vfio_args.insert("host".to_owned(), bdf.into());
-        vfio_args.insert("multifunction".to_owned(), "off".into());
 
-        let vfio_device_add = qmp::device_add {
-            driver: driver.to_string(),
-            bus: Some(bus.to_string()),
-            id: Some(hostdev_id.to_string()),
-            arguments: vfio_args,
+        let (vfio_device_add, early_return) = match driver {
+            "vfio-ap" => {
+                vfio_args.insert("sysfsdev".to_owned(), sysfs_path.to_string().into());
+                let device_add = qmp::device_add {
+                    driver: driver.to_string(),
+                    bus: None,
+                    id: Some(hostdev_id.to_string()),
+                    arguments: vfio_args,
+                };
+                (device_add, Some(Ok(None)))
+            }
+            _ => {
+                let bdf = if !bus_slot_func.starts_with("0000") {
+                    format!("0000:{}", bus_slot_func)
+                } else {
+                    bus_slot_func.to_owned()
+                };
+                vfio_args.insert("addr".to_owned(), "0x0".into());
+                vfio_args.insert("host".to_owned(), bdf.into());
+                vfio_args.insert("multifunction".to_owned(), "off".into());
+                let device_add = qmp::device_add {
+                    driver: driver.to_string(),
+                    bus: Some(bus.to_string()),
+                    id: Some(hostdev_id.to_string()),
+                    arguments: vfio_args,
+                };
+                (device_add, None)
+            }
         };
         info!(sl!(), "vfio_device_add: {:?}", vfio_device_add.clone());
 
@@ -767,6 +783,11 @@ impl Qmp {
                 .inner_mut()
                 .get_mut_write()
                 .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))?;
+        }
+
+        // For AP devices, we don't need to get the PCI path as it's not available.
+        if let Some(result) = early_return {
+            return result;
         }
 
         let pci_path = self

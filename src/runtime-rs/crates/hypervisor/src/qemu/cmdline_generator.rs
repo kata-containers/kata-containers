@@ -6,7 +6,8 @@
 use crate::device::topology::{PCIePortBusPrefix, TopologyPortDevice, DEFAULT_PCIE_ROOT_BUS};
 use crate::qemu::qmp::get_qmp_socket_path;
 use crate::utils::{
-    chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, SocketAddress,
+    chown_to_parent, clear_cloexec, create_vhost_net_fds, open_named_tuntap, uses_native_ccw_bus,
+    SocketAddress,
 };
 
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
@@ -79,8 +80,8 @@ impl Display for VirtioBusType {
     }
 }
 
-fn bus_type(config: &HypervisorConfig) -> VirtioBusType {
-    if config.machine_info.machine_type.contains("-ccw-") {
+fn bus_type() -> VirtioBusType {
+    if uses_native_ccw_bus() {
         VirtioBusType::Ccw
     } else {
         VirtioBusType::Pci
@@ -2210,7 +2211,7 @@ pub struct QemuCmdLine<'a> {
 
 impl<'a> QemuCmdLine<'a> {
     pub fn new(id: &str, config: &'a HypervisorConfig) -> Result<QemuCmdLine<'a>> {
-        let ccw_subchannel = match bus_type(config) {
+        let ccw_subchannel = match bus_type() {
             VirtioBusType::Ccw => Some(CcwSubChannel::new()),
             _ => None,
         };
@@ -2242,11 +2243,11 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_template();
         }
 
-        if bus_type(config) != VirtioBusType::Ccw {
+        if bus_type() != VirtioBusType::Ccw {
             qemu_cmd_line.add_rng();
         }
 
-        if bus_type(config) != VirtioBusType::Ccw && config.device_info.default_bridges > 0 {
+        if bus_type() != VirtioBusType::Ccw && config.device_info.default_bridges > 0 {
             qemu_cmd_line.add_bridges(config.device_info.default_bridges);
         }
 
@@ -2314,16 +2315,10 @@ impl<'a> QemuCmdLine<'a> {
 
     fn add_scsi_controller(&mut self) {
         let devno = get_devno_ccw(&mut self.ccw_subchannel, "scsi0");
-        let mut virtio_scsi = DeviceVirtioScsi::new(
-            "scsi0",
-            should_disable_modern(),
-            bus_type(self.config),
-            devno,
-        );
+        let mut virtio_scsi =
+            DeviceVirtioScsi::new("scsi0", should_disable_modern(), bus_type(), devno);
 
-        if self.config.device_info.enable_iommu_platform
-            && bus_type(self.config) == VirtioBusType::Ccw
-        {
+        if self.config.device_info.enable_iommu_platform && bus_type() == VirtioBusType::Ccw {
             virtio_scsi.set_iommu_platform(true);
         }
 
@@ -2352,7 +2347,7 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
-        let bus_type = bus_type(self.config);
+        let bus_type = bus_type();
         let devno = get_devno_ccw(&mut self.ccw_subchannel, chardev_name);
         let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, bus_type, devno);
         virtiofs_device.set_queue_size(queue_size);
@@ -2389,15 +2384,13 @@ impl<'a> QemuCmdLine<'a> {
         clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
         let devno = get_devno_ccw(&mut self.ccw_subchannel, "vsock-0");
-        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(self.config), devno);
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(), devno);
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
         }
 
-        if self.config.device_info.enable_iommu_platform
-            && bus_type(self.config) == VirtioBusType::Ccw
-        {
+        if self.config.device_info.enable_iommu_platform && bus_type() == VirtioBusType::Ccw {
             vhost_vsock_pci.set_iommu_platform(true);
         }
 
@@ -2449,11 +2442,8 @@ impl<'a> QemuCmdLine<'a> {
             self.devices
                 .push(Box::new(DeviceScsiHd::new(device_id, "scsi0.0", devno)));
         } else {
-            self.devices.push(Box::new(DeviceVirtioBlk::new(
-                device_id,
-                bus_type(self.config),
-                devno,
-            )));
+            self.devices
+                .push(Box::new(DeviceVirtioBlk::new(device_id, bus_type(), devno)));
         }
 
         Ok(())
@@ -2484,10 +2474,8 @@ impl<'a> QemuCmdLine<'a> {
 
     pub fn add_console(&mut self, console_socket_path: &str) {
         let devno = get_devno_ccw(&mut self.ccw_subchannel, "serial0");
-        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(self.config), devno);
-        if self.config.device_info.enable_iommu_platform
-            && bus_type(self.config) == VirtioBusType::Ccw
-        {
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(), devno);
+        if self.config.device_info.enable_iommu_platform && bus_type() == VirtioBusType::Ccw {
             serial_dev.set_iommu_platform(true);
         }
         self.devices.push(Box::new(serial_dev));
@@ -2777,13 +2765,12 @@ pub fn get_network_device(
     }
 
     let devno = get_devno_ccw(ccw_subchannel, &netdev.id);
-    let mut virtio_net_device =
-        DeviceVirtioNet::new(&netdev.id, guest_mac, bus_type(config), devno);
+    let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac, bus_type(), devno);
 
     if should_disable_modern() {
         virtio_net_device.set_disable_modern(true);
     }
-    if config.device_info.enable_iommu_platform && bus_type(config) == VirtioBusType::Ccw {
+    if config.device_info.enable_iommu_platform && bus_type() == VirtioBusType::Ccw {
         virtio_net_device.set_iommu_platform(true);
     }
     if config.network_info.network_queues > 1 {
