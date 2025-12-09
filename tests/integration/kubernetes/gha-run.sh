@@ -593,40 +593,6 @@ function cleanup_nydus_snapshotter() {
 	echo "::endgroup::"
 }
 
-function deploy_csi_driver() {
-	echo "::group::deploy_csi_driver"
-	ensure_yq
-
-	csi_image="ghcr.io/kata-containers/csi-kata-directvolume:${GH_PR_NUMBER}"
-	csi_plugin="${csi_deploy_dir}/kata-directvolume/csi-directvol-plugin.yaml"
-
-	# Deploy the driver pods.
-	yq -i "(.spec.template.spec.containers[] | select(.name == \"kata-directvolume\") | .image) = \"${csi_image}\"" "${csi_plugin}"
-	grep -q "${csi_image}" "${csi_plugin}" || die "Could not set CSI image"
-	bash "${csi_deploy_dir}/deploy.sh"
-
-	# Deploy the storage class.
-	yq -i ".parameters.\"katacontainers.direct.volume/volumetype\" = \"blk\"" "${csi_storage_class}"
-	yq -i ".parameters.\"katacontainers.direct.volume/loop\" = \"True\"" "${csi_storage_class}"
-	yq -i ".parameters.\"katacontainers.direct.volume/cocoephemeral\" = \"True\"" "${csi_storage_class}"
-	yq -i ".volumeBindingMode = \"WaitForFirstConsumer\"" "${csi_storage_class}"
-	kubectl apply -f "${csi_storage_class}"
-
-	echo "::endgroup::"
-}
-
-function delete_csi_driver() {
-	echo "::group::delete_csi_driver"
-
-	# Delete the storage class.
-	kubectl delete --ignore-not-found -f "${csi_storage_class}"
-
-	# Delete the driver pods.
-	kubectl delete --ignore-not-found -f "${csi_deploy_dir}/kata-directvolume/"
-
-	echo "::endgroup::"
-}
-
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
@@ -661,7 +627,7 @@ function main() {
 		install-kata-tools) install_kata_tools ;;
 		install-kbs-client) install_kbs_client ;;
 		get-cluster-credentials) get_cluster_credentials ;;
-		deploy-csi-driver) deploy_csi_driver ;;
+		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
@@ -686,7 +652,7 @@ function main() {
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
-		delete-csi-driver) delete_csi_driver ;;
+		delete-csi-driver) return 0 ;;
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
