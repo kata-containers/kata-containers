@@ -201,6 +201,7 @@ impl std::default::Default for RemoveContainerRequest {
 pub struct SignalProcessRequest {
     pub process_id: ContainerProcessID,
     pub signal: u32,
+    pub all: bool,
 }
 
 #[derive(PartialEq, Clone, Default)]
