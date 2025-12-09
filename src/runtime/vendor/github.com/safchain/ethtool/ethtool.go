@@ -29,7 +29,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"strings"
+	"sync"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -53,37 +54,75 @@ const (
 	ETH_SS_FEATURES   = 4
 
 	// CMD supported
-	ETHTOOL_GSET     = 0x00000001 /* Get settings. */
-	ETHTOOL_SSET     = 0x00000002 /* Set settings. */
-	ETHTOOL_GWOL     = 0x00000005 /* Get wake-on-lan options. */
-	ETHTOOL_SWOL     = 0x00000006 /* Set wake-on-lan options. */
-	ETHTOOL_GDRVINFO = 0x00000003 /* Get driver info. */
-	ETHTOOL_GMSGLVL  = 0x00000007 /* Get driver message level */
-	ETHTOOL_SMSGLVL  = 0x00000008 /* Set driver msg level. */
+	ETHTOOL_GSET          = 0x00000001                 /* Get settings. */
+	ETHTOOL_SSET          = 0x00000002                 /* Set settings. */
+	ETHTOOL_GWOL          = 0x00000005                 /* Get wake-on-lan options. */
+	ETHTOOL_SWOL          = 0x00000006                 /* Set wake-on-lan options. */
+	ETHTOOL_GDRVINFO      = 0x00000003                 /* Get driver info. */
+	ETHTOOL_GMSGLVL       = 0x00000007                 /* Get driver message level */
+	ETHTOOL_SMSGLVL       = 0x00000008                 /* Set driver msg level. */
+	ETHTOOL_GLINKSETTINGS = unix.ETHTOOL_GLINKSETTINGS // 0x4c
+	ETHTOOL_SLINKSETTINGS = unix.ETHTOOL_SLINKSETTINGS // 0x4d
 
 	// Get link status for host, i.e. whether the interface *and* the
 	// physical port (if there is one) are up (ethtool_value).
-	ETHTOOL_GLINK         = 0x0000000a
-	ETHTOOL_GCOALESCE     = 0x0000000e /* Get coalesce config */
-	ETHTOOL_SCOALESCE     = 0x0000000f /* Set coalesce config */
-	ETHTOOL_GRINGPARAM    = 0x00000010 /* Get ring parameters */
-	ETHTOOL_SRINGPARAM    = 0x00000011 /* Set ring parameters. */
-	ETHTOOL_GPAUSEPARAM   = 0x00000012 /* Get pause parameters */
-	ETHTOOL_SPAUSEPARAM   = 0x00000013 /* Set pause parameters. */
-	ETHTOOL_GSTRINGS      = 0x0000001b /* Get specified string set */
-	ETHTOOL_GSTATS        = 0x0000001d /* Get NIC-specific statistics */
-	ETHTOOL_GPERMADDR     = 0x00000020 /* Get permanent hardware address */
-	ETHTOOL_GFLAGS        = 0x00000025 /* Get flags bitmap(ethtool_value) */
-	ETHTOOL_GPFLAGS       = 0x00000027 /* Get driver-private flags bitmap */
-	ETHTOOL_SPFLAGS       = 0x00000028 /* Set driver-private flags bitmap */
-	ETHTOOL_GSSET_INFO    = 0x00000037 /* Get string set info */
-	ETHTOOL_GFEATURES     = 0x0000003a /* Get device offload settings */
-	ETHTOOL_SFEATURES     = 0x0000003b /* Change device offload settings */
-	ETHTOOL_GCHANNELS     = 0x0000003c /* Get no of channels */
-	ETHTOOL_SCHANNELS     = 0x0000003d /* Set no of channels */
-	ETHTOOL_GET_TS_INFO   = 0x00000041 /* Get time stamping and PHC info */
-	ETHTOOL_GMODULEINFO   = 0x00000042 /* Get plug-in module information */
-	ETHTOOL_GMODULEEEPROM = 0x00000043 /* Get plug-in module eeprom */
+	ETHTOOL_GLINK            = 0x0000000a
+	ETHTOOL_GCOALESCE        = 0x0000000e /* Get coalesce config */
+	ETHTOOL_SCOALESCE        = 0x0000000f /* Set coalesce config */
+	ETHTOOL_GRINGPARAM       = 0x00000010 /* Get ring parameters */
+	ETHTOOL_SRINGPARAM       = 0x00000011 /* Set ring parameters. */
+	ETHTOOL_GPAUSEPARAM      = 0x00000012 /* Get pause parameters */
+	ETHTOOL_SPAUSEPARAM      = 0x00000013 /* Set pause parameters. */
+	ETHTOOL_GSTRINGS         = 0x0000001b /* Get specified string set */
+	ETHTOOL_PHYS_ID          = 0x0000001c /* Identify the NIC */
+	ETHTOOL_GSTATS           = 0x0000001d /* Get NIC-specific statistics */
+	ETHTOOL_GPERMADDR        = 0x00000020 /* Get permanent hardware address */
+	ETHTOOL_GFLAGS           = 0x00000025 /* Get flags bitmap(ethtool_value) */
+	ETHTOOL_GPFLAGS          = 0x00000027 /* Get driver-private flags bitmap */
+	ETHTOOL_SPFLAGS          = 0x00000028 /* Set driver-private flags bitmap */
+	ETHTOOL_GSSET_INFO       = 0x00000037 /* Get string set info */
+	ETHTOOL_GFEATURES        = 0x0000003a /* Get device offload settings */
+	ETHTOOL_SFEATURES        = 0x0000003b /* Change device offload settings */
+	ETHTOOL_GCHANNELS        = 0x0000003c /* Get no of channels */
+	ETHTOOL_SCHANNELS        = 0x0000003d /* Set no of channels */
+	ETHTOOL_GET_TS_INFO      = 0x00000041 /* Get time stamping and PHC info */
+	ETHTOOL_GMODULEINFO      = 0x00000042 /* Get plug-in module information */
+	ETHTOOL_GMODULEEEPROM    = 0x00000043 /* Get plug-in module eeprom */
+	ETHTOOL_GRXFHINDIR       = 0x00000038 /* Get RX flow hash indir'n table */
+	ETHTOOL_SRXFHINDIR       = 0x00000039 /* Set RX flow hash indir'n table */
+	ETH_RXFH_INDIR_NO_CHANGE = 0xFFFFFFFF
+
+	// Speed and Duplex unknowns/constants (Manually defined based on <linux/ethtool.h>)
+	SPEED_UNKNOWN  = 0xffffffff // ((__u32)-1) SPEED_UNKNOWN
+	DUPLEX_HALF    = 0x00       // DUPLEX_HALF
+	DUPLEX_FULL    = 0x01       // DUPLEX_FULL
+	DUPLEX_UNKNOWN = 0xff       // DUPLEX_UNKNOWN
+
+	// Port types (Manually defined based on <linux/ethtool.h>)
+	PORT_TP    = 0x00 // PORT_TP
+	PORT_AUI   = 0x01 // PORT_AUI
+	PORT_MII   = 0x02 // PORT_MII
+	PORT_FIBRE = 0x03 // PORT_FIBRE
+	PORT_BNC   = 0x04 // PORT_BNC
+	PORT_DA    = 0x05 // PORT_DA
+	PORT_NONE  = 0xef // PORT_NONE
+	PORT_OTHER = 0xff // PORT_OTHER
+
+	// Autoneg settings (Manually defined based on <linux/ethtool.h>)
+	AUTONEG_DISABLE = 0x00 // AUTONEG_DISABLE
+	AUTONEG_ENABLE  = 0x01 // AUTONEG_ENABLE
+
+	// MDIX states (Manually defined based on <linux/ethtool.h>)
+	ETH_TP_MDI_INVALID = 0x00 // ETH_TP_MDI_INVALID
+	ETH_TP_MDI         = 0x01 // ETH_TP_MDI
+	ETH_TP_MDI_X       = 0x02 // ETH_TP_MDI_X
+	ETH_TP_MDI_AUTO    = 0x03 // Control value ETH_TP_MDI_AUTO
+
+	// Link mode mask bits count (Manually defined based on ethtool.h)
+	ETHTOOL_LINK_MODE_MASK_NBITS = 92 // __ETHTOOL_LINK_MODE_MASK_NBITS
+
+	// Calculate max nwords based on NBITS using the manually defined constant
+	MAX_LINK_MODE_MASK_NWORDS = (ETHTOOL_LINK_MODE_MASK_NBITS + 31) / 32 // = 3
 )
 
 // MAX_GSTRINGS maximum number of stats entries that ethtool can
@@ -98,6 +137,27 @@ const (
 // ethtool sset_info related constants
 const (
 	MAX_SSET_INFO = 64
+)
+
+const (
+	DEFAULT_BLINK_DURATION = 60 * time.Second
+)
+
+var (
+	gstringsPool = sync.Pool{
+		New: func() interface{} {
+			// new() will allocate and zero-initialize the struct.
+			// The large data array within ethtoolGStrings will be zeroed.
+			return new(EthtoolGStrings)
+		},
+	}
+	statsPool = sync.Pool{
+		New: func() interface{} {
+			// new() will allocate and zero-initialize the struct.
+			// The large data array within ethtoolStats will be zeroed.
+			return new(EthtoolStats)
+		},
+	}
 )
 
 type ifreq struct {
@@ -207,6 +267,12 @@ type Coalesce struct {
 	TxCoalesceUsecsHigh      uint32
 	TxMaxCoalescedFramesHigh uint32
 	RateSampleInterval       uint32
+}
+
+// IdentityConf is an identity config for an interface
+type IdentityConf struct {
+	Cmd      uint32
+	Duration uint32
 }
 
 // WoL options
@@ -324,14 +390,14 @@ type TimestampingInformation struct {
 	rxReserved     [3]uint32
 }
 
-type ethtoolGStrings struct {
+type EthtoolGStrings struct {
 	cmd        uint32
 	string_set uint32
 	len        uint32
 	data       [MAX_GSTRINGS * ETH_GSTRING_LEN]byte
 }
 
-type ethtoolStats struct {
+type EthtoolStats struct {
 	cmd     uint32
 	n_stats uint32
 	data    [MAX_GSTRINGS]uint64
@@ -389,6 +455,22 @@ type Ethtool struct {
 	fd int
 }
 
+// max values for my setup dont know how to make this dynamic
+const MAX_INDIR_SIZE = 256
+const MAX_CORES = 32
+
+type Indir struct {
+	Cmd       uint32
+	Size      uint32
+	RingIndex [MAX_INDIR_SIZE]uint32 // statically definded otherwise crash
+
+}
+
+type SetIndir struct {
+	Equal  uint8    // used to set number of cores
+	Weight []uint32 // used to select cores
+}
+
 // Convert zero-terminated array of chars (string in C) to a Go string.
 func goString(s []byte) string {
 	strEnd := bytes.IndexByte(s, 0)
@@ -426,7 +508,7 @@ func (e *Ethtool) ModuleEeprom(intf string) ([]byte, error) {
 	return eeprom.data[:eeprom.len], nil
 }
 
-// ModuleEeprom returns Eeprom information of the given interface name.
+// ModuleEepromHex returns Eeprom information as hexadecimal string
 func (e *Ethtool) ModuleEepromHex(intf string) (string, error) {
 	eeprom, _, err := e.getModuleEeprom(intf)
 	if err != nil {
@@ -459,6 +541,36 @@ func (e *Ethtool) DriverInfo(intf string) (DrvInfo, error) {
 	}
 
 	return drvInfo, nil
+}
+
+// GetIndir retrieves the indirection table of the given interface name.
+func (e *Ethtool) GetIndir(intf string) (Indir, error) {
+	indir, err := e.getIndir(intf)
+	if err != nil {
+		return Indir{}, err
+	}
+
+	return indir, nil
+}
+
+// SetIndir sets the indirection table of the given interface from the SetIndir struct
+func (e *Ethtool) SetIndir(intf string, setIndir SetIndir) (Indir, error) {
+
+	if setIndir.Equal != 0 && setIndir.Weight != nil {
+		return Indir{}, fmt.Errorf("equal and weight options are mutually exclusive")
+	}
+
+	indir, err := e.GetIndir(intf)
+	if err != nil {
+		return Indir{}, err
+	}
+
+	newindir, err := e.setIndir(intf, indir, setIndir)
+	if err != nil {
+		return Indir{}, err
+	}
+
+	return newindir, nil
 }
 
 // GetChannels returns the number of channels for the given interface name.
@@ -584,6 +696,92 @@ func (e *Ethtool) getDriverInfo(intf string) (ethtoolDrvInfo, error) {
 	}
 
 	return drvinfo, nil
+}
+
+// parsing of do_grxfhindir from ethtool.c
+func (e *Ethtool) getIndir(intf string) (Indir, error) {
+	indir_head := Indir{
+		Cmd:  ETHTOOL_GRXFHINDIR,
+		Size: 0,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&indir_head))); err != nil {
+		return Indir{}, err
+	}
+
+	indir := Indir{
+		Cmd:  ETHTOOL_GRXFHINDIR,
+		Size: indir_head.Size,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&indir))); err != nil {
+		return Indir{}, err
+	}
+
+	return indir, nil
+}
+
+// parsing of do_srxfhindir from ethtool.c
+func (e *Ethtool) setIndir(intf string, indir Indir, setIndir SetIndir) (Indir, error) {
+
+	err := fillIndirTable(&indir.Size, indir.RingIndex[:], 0, 0, int(setIndir.Equal), setIndir.Weight, uint32(len(setIndir.Weight)))
+	if err != nil {
+		return Indir{}, err
+	}
+
+	if indir.Size == ETH_RXFH_INDIR_NO_CHANGE {
+		indir.Size = MAX_INDIR_SIZE
+		return indir, nil
+	}
+
+	indir.Cmd = ETHTOOL_SRXFHINDIR
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&indir))); err != nil {
+		return Indir{}, err
+	}
+
+	return indir, nil
+}
+
+func fillIndirTable(indirSize *uint32, indir []uint32, rxfhindirDefault int,
+	rxfhindirStart int, rxfhindirEqual int, rxfhindirWeight []uint32,
+	numWeights uint32) error {
+
+	switch {
+	case rxfhindirEqual != 0:
+		for i := uint32(0); i < *indirSize; i++ {
+			indir[i] = uint32(rxfhindirStart) + (i % uint32(rxfhindirEqual))
+		}
+	case rxfhindirWeight != nil:
+		var sum, partial uint32 = 0, 0
+		var j, weight uint32
+		for j = range numWeights {
+			weight = rxfhindirWeight[j]
+			sum += weight
+		}
+
+		if sum == 0 {
+			return fmt.Errorf("at least one weight must be non-zero")
+		}
+
+		if sum > *indirSize {
+			return fmt.Errorf("total weight exceeds the size of the indirection table")
+		}
+
+		j = ^uint32(0) // equivalent to -1 for unsigned
+		for i := uint32(0); i < *indirSize; i++ {
+			for i >= (*indirSize*partial)/sum {
+				j++
+				weight = rxfhindirWeight[j]
+				partial += weight
+			}
+			indir[i] = uint32(rxfhindirStart) + j
+		}
+	case rxfhindirDefault != 0:
+		*indirSize = 0
+	default:
+		*indirSize = ETH_RXFH_INDIR_NO_CHANGE
+	}
+	return nil
 }
 
 func (e *Ethtool) getChannels(intf string) (Channels, error) {
@@ -781,7 +979,7 @@ func (e *Ethtool) getNames(intf string, mask int) (map[string]uint, error) {
 		return nil, fmt.Errorf("ethtool currently doesn't support more than %d entries, received %d", MAX_GSTRINGS, length)
 	}
 
-	gstrings := ethtoolGStrings{
+	gstrings := EthtoolGStrings{
 		cmd:        ETHTOOL_GSTRINGS,
 		string_set: uint32(mask),
 		len:        length,
@@ -969,7 +1167,23 @@ func (e *Ethtool) LinkState(intf string) (uint32, error) {
 }
 
 // Stats retrieves stats of the given interface name.
+// This maintains backward compatibility with existing code.
 func (e *Ethtool) Stats(intf string) (map[string]uint64, error) {
+	// Create temporary buffers and delegate to StatsWithBuffer
+	gstrings := gstringsPool.Get().(*EthtoolGStrings)
+	stats := statsPool.Get().(*EthtoolStats)
+	defer func() {
+		gstringsPool.Put(gstrings)
+		statsPool.Put(stats)
+	}()
+
+	return e.StatsWithBuffer(intf, gstrings, stats)
+}
+
+// StatsWithBuffer retrieves stats of the given interface name using pre-allocated buffers.
+// This allows the caller to control where the large structures are allocated,
+// which can be useful to avoid heap allocations in Go 1.24+.
+func (e *Ethtool) StatsWithBuffer(intf string, gstringsPtr *EthtoolGStrings, statsPtr *EthtoolStats) (map[string]uint64, error) {
 	drvinfo := ethtoolDrvInfo{
 		cmd: ETHTOOL_GDRVINFO,
 	}
@@ -978,41 +1192,37 @@ func (e *Ethtool) Stats(intf string) (map[string]uint64, error) {
 		return nil, err
 	}
 
-	if drvinfo.n_stats*ETH_GSTRING_LEN > MAX_GSTRINGS*ETH_GSTRING_LEN {
+	if drvinfo.n_stats > MAX_GSTRINGS {
 		return nil, fmt.Errorf("ethtool currently doesn't support more than %d entries, received %d", MAX_GSTRINGS, drvinfo.n_stats)
 	}
 
-	gstrings := ethtoolGStrings{
-		cmd:        ETHTOOL_GSTRINGS,
-		string_set: ETH_SS_STATS,
-		len:        drvinfo.n_stats,
-		data:       [MAX_GSTRINGS * ETH_GSTRING_LEN]byte{},
-	}
+	gstringsPtr.cmd = ETHTOOL_GSTRINGS
+	gstringsPtr.string_set = ETH_SS_STATS
+	gstringsPtr.len = drvinfo.n_stats
 
-	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&gstrings))); err != nil {
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(gstringsPtr))); err != nil {
 		return nil, err
 	}
 
-	stats := ethtoolStats{
-		cmd:     ETHTOOL_GSTATS,
-		n_stats: drvinfo.n_stats,
-		data:    [MAX_GSTRINGS]uint64{},
-	}
+	statsPtr.cmd = ETHTOOL_GSTATS
+	statsPtr.n_stats = drvinfo.n_stats
 
-	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&stats))); err != nil {
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(statsPtr))); err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]uint64)
+	result := make(map[string]uint64, drvinfo.n_stats)
 	for i := 0; i != int(drvinfo.n_stats); i++ {
-		b := gstrings.data[i*ETH_GSTRING_LEN : i*ETH_GSTRING_LEN+ETH_GSTRING_LEN]
-		strEnd := strings.Index(string(b), "\x00")
+		b := gstringsPtr.data[i*ETH_GSTRING_LEN : (i+1)*ETH_GSTRING_LEN]
+
+		strEnd := bytes.IndexByte(b, 0)
 		if strEnd == -1 {
 			strEnd = ETH_GSTRING_LEN
 		}
 		key := string(b[:strEnd])
+
 		if len(key) != 0 {
-			result[key] = stats.data[i]
+			result[key] = statsPtr.data[i]
 		}
 	}
 
@@ -1022,6 +1232,20 @@ func (e *Ethtool) Stats(intf string) (map[string]uint64, error) {
 // Close closes the ethool handler
 func (e *Ethtool) Close() {
 	unix.Close(e.fd)
+}
+
+// Identity the nic with blink duration, if not specify blink for 60 seconds
+func (e *Ethtool) Identity(intf string, duration *time.Duration) error {
+	dur := uint32(DEFAULT_BLINK_DURATION.Seconds())
+	if duration != nil {
+		dur = uint32(duration.Seconds())
+	}
+	return e.identity(intf, IdentityConf{Duration: dur})
+}
+
+func (e *Ethtool) identity(intf string, identity IdentityConf) error {
+	identity.Cmd = ETHTOOL_PHYS_ID
+	return e.ioctl(intf, uintptr(unsafe.Pointer(&identity)))
 }
 
 // NewEthtool returns a new ethtool handler
@@ -1076,13 +1300,23 @@ func PermAddr(intf string) (string, error) {
 	return e.PermAddr(intf)
 }
 
+// Identity the nic with blink duration, if not specify blink infinity
+func Identity(intf string, duration *time.Duration) error {
+	e, err := NewEthtool()
+	if err != nil {
+		return err
+	}
+	defer e.Close()
+	return e.Identity(intf, duration)
+}
+
 func supportedSpeeds(mask uint64) (ret []struct {
 	name  string
 	mask  uint64
 	speed uint64
 }) {
 	for _, mode := range supportedCapabilities {
-		if ((1 << mode.mask) & mask) != 0 {
+		if mode.speed > 0 && ((1<<mode.mask)&mask) != 0 {
 			ret = append(ret, mode)
 		}
 	}
