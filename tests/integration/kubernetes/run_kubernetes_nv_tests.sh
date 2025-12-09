@@ -13,14 +13,7 @@ source "${kubernetes_dir}/../../common.bash"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime
 enable_nvrc_trace() {
-	local config_file=""
-	if [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu" ]]; then
-		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu.toml"
-	elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-snp" ]]; then
-		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-snp.toml"
-	elif [[ ${RUNTIME_CLASS_NAME} == "kata-qemu-nvidia-gpu-tdx" ]]; then
-		config_file="/opt/kata/share/defaults/kata-containers/configuration-qemu-nvidia-gpu-tdx.toml"
-	fi
+	local config_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
 
 	if ! grep -q "nvrc.log=trace" "${config_file}"; then
 		sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 nvrc.log=trace"/g' "${config_file}"
@@ -47,17 +40,12 @@ else
 		"k8s-nvidia-nim.bats")
 fi
 
-RUNTIME_CLASS_NAME="kata-qemu-nvidia-gpu"
-if [[ -n "${KATA_HYPERVISOR:-}" ]]; then
-	SUPPORTED_VMMS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
-	# shellcheck disable=SC2076 # intentionally use literal string matching
-	if [[ ! " ${SUPPORTED_VMMS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
-		die "Unsupported KATA_HYPERVISOR=${KATA_HYPERVISOR}. Must be one of: ${SUPPORTED_VMMS[*]}"
-	fi
-	RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
-	info "Set RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME} from KATA_HYPERVISOR=${KATA_HYPERVISOR}"
+SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
+# shellcheck disable=SC2076 # intentionally use literal string matching
+if [[ ! " ${SUPPORTED_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
+	die "Unsupported KATA_HYPERVISOR=${KATA_HYPERVISOR}. Must be one of: ${SUPPORTED_HYPERVISORS[*]}"
 fi
-export RUNTIME_CLASS_NAME
 
 ensure_yq
 

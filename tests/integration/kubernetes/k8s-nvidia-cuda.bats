@@ -8,11 +8,8 @@
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
-RUNTIME_CLASS_NAME=${RUNTIME_CLASS_NAME:-kata-qemu-nvidia-gpu}
-export RUNTIME_CLASS_NAME
-
-KATA_HYPERVISOR=${KATA_HYPERVISOR:-${RUNTIME_CLASS_NAME#kata-}}
-export KATA_HYPERVISOR
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
+export RUNTIME_CLASS_NAME="kata-${KATA_HYPERVISOR}"
 
 TEE=false
 if is_confidential_gpu_hardware; then
