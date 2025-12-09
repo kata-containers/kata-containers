@@ -1076,6 +1076,11 @@ type DeviceRelation struct {
 // otherwise we do not know which GPU is which.
 func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error {
 
+	if ContainerType(c.config.Annotations[vcAnnotations.ContainerTypeKey]).IsCriSandbox() {
+		c.Logger().Info("Skipping VFIO metadata annotation for sandbox container")
+		return nil
+	}
+
 	modeIsGK := (c.sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 
 	if modeIsGK {
