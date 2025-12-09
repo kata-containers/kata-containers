@@ -9,8 +9,6 @@ metadata:
   name: ${POD_NAME_EMBEDQA}
   labels:
     app: ${POD_NAME_EMBEDQA}
-  annotations:
-    cdi.k8s.io/gpu: "nvidia.com/pgpu=1"
 spec:
   restartPolicy: Always
   runtimeClassName: "${RUNTIME_CLASS_NAME}"

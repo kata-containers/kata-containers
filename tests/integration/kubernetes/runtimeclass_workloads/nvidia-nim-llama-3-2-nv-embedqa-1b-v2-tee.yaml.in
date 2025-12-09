@@ -10,7 +10,6 @@ metadata:
   labels:
     app: ${POD_NAME_EMBEDQA}
   annotations:
-    cdi.k8s.io/gpu: "nvidia.com/pgpu=1"
     io.katacontainers.config.hypervisor.kernel_params: "agent.image_registry_auth=kbs:///default/credentials/nvcr agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
 spec:
   restartPolicy: Always
