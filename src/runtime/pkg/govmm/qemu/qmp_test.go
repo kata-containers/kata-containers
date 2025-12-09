@@ -1140,6 +1140,51 @@ func TestQMPAPVFIOMediatedDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+func TestExecuteVFIODeviceAdd(t *testing.T) {
+	bdf := "04:00.0"
+	romfile := ""
+
+	for _, tc := range []struct {
+		name      string
+		iommufdID string
+	}{
+		{
+			name:      "with IOMMUFD",
+			iommufdID: "0",
+		},
+		{
+			name:      "without IOMMUFD",
+			iommufdID: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			connectedCh := make(chan *QMPVersion)
+			disconnectedCh := make(chan struct{})
+
+			buf := newQMPTestCommandBuffer(t)
+
+			// Note: At the time of writing, the QMPTestCommandBuffer does not
+			// support verifying parameters passed to object-add and device_add.
+			// So we just verify that the commands are sent in the correct order.
+			if tc.iommufdID != "" {
+				buf.AddCommand("object-add", nil, "return", nil)
+			}
+			buf.AddCommand("device_add", nil, "return", nil)
+
+			cfg := QMPConfig{Logger: qmpTestLogger{}}
+			q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+			checkVersion(t, connectedCh)
+
+			err := q.ExecuteVFIODeviceAdd(context.Background(), "devID", bdf, "rp1", romfile, tc.iommufdID)
+			if err != nil {
+				t.Fatalf("Unexpected error %v", err)
+			}
+			q.Shutdown()
+			<-disconnectedCh
+		})
+	}
+}
+
 // Checks that CPU are correctly added using device_add
 func TestQMPCPUDeviceAdd(t *testing.T) {
 	drivers := []string{"host-x86_64-cpu", "host-s390x-cpu", "host-powerpc64-cpu"}
