@@ -54,10 +54,12 @@ spec:
       timeoutSeconds: 10
       successThreshold: 1
       failureThreshold: 300
-    # Environment variable for NGC_API_KEY. In production, use a Secret.
     env:
       - name: NGC_API_KEY
-        value: "${NGC_API_KEY}"
+        valueFrom:
+          secretKeyRef:
+            name: ngc-api-key-instruct
+            key: api-key
     # GPU resource request/limit (for NVIDIA GPU)
     resources:
       limits:
@@ -72,3 +74,11 @@ metadata:
 type: kubernetes.io/dockerconfigjson
 data:
   .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-api-key-instruct
+type: Opaque
+data:
+  api-key: "${NGC_API_KEY_BASE64}"

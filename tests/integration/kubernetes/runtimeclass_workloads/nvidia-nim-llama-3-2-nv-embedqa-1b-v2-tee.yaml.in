@@ -27,7 +27,10 @@ spec:
     imagePullPolicy: IfNotPresent
     env:
       - name: NGC_API_KEY
-        value: "${NGC_API_KEY}"
+        valueFrom:
+          secretKeyRef:
+            name: ngc-api-key-embedqa
+            key: api-key
       - name: NIM_HTTP_API_PORT
         value: "8000"
       - name: NIM_JSONL_LOGGING
@@ -81,3 +84,11 @@ metadata:
 type: kubernetes.io/dockerconfigjson
 data:
   .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-api-key-embedqa
+type: Opaque
+data:
+  api-key: "${NGC_API_KEY_BASE64}"
