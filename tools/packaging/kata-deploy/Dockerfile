@@ -12,7 +12,7 @@ FROM golang:1.24-alpine AS nydus-binary-downloader
 
 # Keep the version here aligned with "ndyus-snapshotter.version"
 # in versions.yaml
-ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.2
+ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.9
 ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
 
 RUN \
