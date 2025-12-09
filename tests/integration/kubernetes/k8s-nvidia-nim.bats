@@ -48,6 +48,12 @@ KBS_AUTH_CONFIG_JSON=$(
 )
 export KBS_AUTH_CONFIG_JSON
 
+# Base64 encoding for use as Kubernetes Secret in pod manifests
+NGC_API_KEY_BASE64=$(
+    echo -n "${NGC_API_KEY}" | base64 -w0
+)
+export NGC_API_KEY_BASE64
+
 setup_langchain_flow() {
     # shellcheck disable=SC1091  # Sourcing virtual environment activation script
     source "${HOME}"/.cicd/venv/bin/activate
