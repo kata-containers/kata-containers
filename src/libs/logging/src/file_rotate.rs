@@ -64,10 +64,10 @@ impl FileRotator {
         match p.metadata() {
             Ok(md) => {
                 if !md.is_file() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("path '{}' is not a file", p.to_string_lossy()),
-                    ));
+                    return Err(std::io::Error::other(format!(
+                        "path '{}' is not a file",
+                        p.to_string_lossy()
+                    )));
                 }
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
@@ -77,10 +77,10 @@ impl FileRotator {
             if p.has_root() || !parent.as_os_str().is_empty() {
                 let md = parent.metadata()?;
                 if !md.is_dir() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("'{}' is not a directory", parent.to_string_lossy()),
-                    ));
+                    return Err(std::io::Error::other(format!(
+                        "'{}' is not a directory",
+                        parent.to_string_lossy()
+                    )));
                 }
             }
         }
@@ -208,10 +208,10 @@ impl Write for FileRotator {
             match self.file.as_mut() {
                 Some(file) => file.write_all(buf)?,
                 None => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Cannot open file: {:?}", self.path),
-                    ))
+                    return Err(std::io::Error::other(format!(
+                        "Cannot open file: {:?}",
+                        self.path
+                    )))
                 }
             }
         }

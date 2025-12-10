@@ -14,7 +14,7 @@ use crate::config::default::MAX_CH_VCPUS;
 use crate::config::default::MIN_CH_MEMORY_SIZE_MB;
 
 use crate::config::{ConfigPlugin, TomlConfig};
-use crate::{eother, resolve_path, validate_path};
+use crate::{resolve_path, validate_path};
 
 /// Hypervisor name for CH, used to index `TomlConfig::hypervisor`.
 pub const HYPERVISOR_NAME_CH: &str = "cloud-hypervisor";
@@ -96,41 +96,45 @@ impl ConfigPlugin for CloudHypervisorConfig {
             validate_path!(ch.path, "CH binary path `{}` is invalid: {}")?;
             validate_path!(ch.ctlpath, "CH control path `{}` is invalid: {}")?;
             if !ch.jailer_path.is_empty() {
-                return Err(eother!("Path for CH jailer should be empty"));
+                return Err(std::io::Error::other("Path for CH jailer should be empty"));
             }
             if !ch.valid_jailer_paths.is_empty() {
-                return Err(eother!("Valid CH jailer path list should be empty"));
+                return Err(std::io::Error::other(
+                    "Valid CH jailer path list should be empty",
+                ));
             }
 
             if ch.boot_info.kernel.is_empty() {
-                return Err(eother!("Guest kernel image for CH is empty"));
+                return Err(std::io::Error::other("Guest kernel image for CH is empty"));
             }
             if ch.boot_info.image.is_empty() && ch.boot_info.initrd.is_empty() {
-                return Err(eother!("Both guest boot image and initrd for CH are empty"));
+                return Err(std::io::Error::other(
+                    "Both guest boot image and initrd for CH are empty",
+                ));
             }
 
             if (ch.cpu_info.default_vcpus > 0.0
                 && ch.cpu_info.default_vcpus as u32 > default::MAX_CH_VCPUS)
                 || ch.cpu_info.default_maxvcpus > default::MAX_CH_VCPUS
             {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "CH hypervisor cannot support {} vCPUs",
-                    ch.cpu_info.default_maxvcpus
-                ));
+                    ch.cpu_info.default_maxvcpus,
+                )));
             }
 
             if ch.device_info.default_bridges > default::MAX_CH_PCI_BRIDGES {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "CH hypervisor cannot support {} PCI bridges",
-                    ch.device_info.default_bridges
-                ));
+                    ch.device_info.default_bridges,
+                )));
             }
 
             if ch.memory_info.default_memory < MIN_CH_MEMORY_SIZE_MB {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "CH hypervisor has minimal memory limitation {}",
-                    MIN_CH_MEMORY_SIZE_MB
-                ));
+                    MIN_CH_MEMORY_SIZE_MB,
+                )));
             }
         }
 

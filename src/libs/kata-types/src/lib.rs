@@ -74,25 +74,13 @@ macro_rules! sl {
     };
 }
 
-/// Helper to create std::io::Error(std::io::ErrorKind::Other)
-#[macro_export]
-macro_rules! eother {
-    () => (std::io::Error::new(std::io::ErrorKind::Other, ""));
-    ($fmt:expr) => ({
-        std::io::Error::new(std::io::ErrorKind::Other, format!($fmt))
-    });
-    ($fmt:expr, $($arg:tt)*) => ({
-        std::io::Error::new(std::io::ErrorKind::Other, format!($fmt, $($arg)*))
-    });
-}
-
 /// Resolve a path to its final value.
 #[macro_export]
 macro_rules! resolve_path {
     ($field:expr, $fmt:expr) => {{
         if !$field.is_empty() {
             match Path::new(&$field).canonicalize() {
-                Err(e) => Err(eother!($fmt, &$field, e)),
+                Err(e) => Err(std::io::Error::other(format!($fmt, &$field, e))),
                 Ok(path) => {
                     $field = path.to_string_lossy().to_string();
                     Ok(())
@@ -111,7 +99,7 @@ macro_rules! validate_path {
         if !$field.is_empty() {
             Path::new(&$field)
                 .canonicalize()
-                .map_err(|e| eother!($fmt, &$field, e))
+                .map_err(|e| std::io::Error::other(format!($fmt, &$field, e)))
                 .map(|_| ())
         } else {
             Ok(())

@@ -318,10 +318,7 @@ where
 
         match result {
             Ok(_) => Ok(()),
-            Err(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "failed to drain log".to_string(),
-            )),
+            Err(_) => Err(io::Error::other("failed to drain log")),
         }
     }
 }

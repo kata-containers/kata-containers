@@ -32,10 +32,10 @@ impl ScopedDirBuilder {
         let root = root.as_ref().canonicalize()?;
         let root = PinnedPathBuf::from_path(root)?;
         if !root.metadata()?.is_dir() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!("Invalid root path: {}", root.display()),
-            ));
+            return Err(Error::other(format!(
+                "Invalid root path: {}",
+                root.display()
+            )));
         }
 
         Ok(ScopedDirBuilder {
@@ -66,25 +66,19 @@ impl ScopedDirBuilder {
     /// It is considered an error if the directory already exists unless recursive mode is enabled.
     pub fn create_with_unscoped_path<P: AsRef<Path>>(&self, path: P) -> Result<PinnedPathBuf> {
         if !path.as_ref().is_absolute() {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Expected absolute directory path: {}",
-                    path.as_ref().display()
-                ),
-            ));
+            return Err(Error::other(format!(
+                "Expected absolute directory path: {}",
+                path.as_ref().display()
+            )));
         }
         // Partially canonicalize `path` so we can strip the `root` part.
         let scoped_path = scoped_join("/", path)?;
         let stripped_path = scoped_path.strip_prefix(self.root.target()).map_err(|_| {
-            Error::new(
-                ErrorKind::Other,
-                format!(
-                    "Path {} is not under {}",
-                    scoped_path.display(),
-                    self.root.target().display()
-                ),
-            )
+            Error::other(format!(
+                "Path {} is not under {}",
+                scoped_path.display(),
+                self.root.target().display()
+            ))
         })?;
 
         self.do_mkdir(stripped_path)
@@ -118,10 +112,10 @@ impl ScopedDirBuilder {
             match dir.open_child(comp) {
                 Ok(v) => {
                     if !v.metadata()?.is_dir() {
-                        return Err(Error::new(
-                            ErrorKind::Other,
-                            format!("Path {} is not a directory", v.display()),
-                        ));
+                        return Err(Error::other(format!(
+                            "Path {} is not a directory",
+                            v.display()
+                        )));
                     } else if !self.recursive && idx == levels {
                         return Err(Error::new(
                             ErrorKind::AlreadyExists,
