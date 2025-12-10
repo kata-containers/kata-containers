@@ -26,7 +26,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 const HEADER_SIZE_BYTES: u64 = std::mem::size_of::<u64>() as u64;
 
 fn mk_io_err(msg: &str) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, msg.to_string())
+    std::io::Error::other(msg.to_string())
 }
 
 async fn handle_async_connection<'a>(
