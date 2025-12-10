@@ -1159,7 +1159,7 @@ impl<
 #[cfg(test)]
 pub(crate) mod tests {
     #[cfg(target_arch = "aarch64")]
-    use arch::aarch64::gic::create_gic;
+    use dbs_arch::gic::create_gic;
     use dbs_device::resources::MsiIrqType;
     use dbs_interrupt::kvm::KvmIrqManager;
     use dbs_utils::epoll_manager::EpollManager;
