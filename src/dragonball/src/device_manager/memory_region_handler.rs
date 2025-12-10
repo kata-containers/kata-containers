@@ -63,14 +63,11 @@ impl DeviceVirtioRegionHandler {
             error!("inserting address apace error: {}", e);
             // dbs-virtio-devices should not depend on dbs-address-space.
             // So here io::Error is used instead of AddressSpaceError directly.
-            VirtioError::IOError(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "invalid address space region ({0:#x}, {1:#x})",
-                    region.start_addr().0,
-                    region.len()
-                ),
-            ))
+            VirtioError::IOError(io::Error::other(format!(
+                "invalid address space region ({0:#x}, {1:#x})",
+                region.start_addr().0,
+                region.len()
+            )))
         })?;
         Ok(())
     }

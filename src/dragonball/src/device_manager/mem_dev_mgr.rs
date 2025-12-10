@@ -507,13 +507,10 @@ impl MemRegionFactory for MemoryRegionFactory {
                 error!(self.logger, "failed to insert address space region: {}", e);
                 // dbs-virtio-devices should not depend on dbs-address-space.
                 // So here io::Error is used instead of AddressSpaceError directly.
-                VirtioError::IOError(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "invalid address space region ({0:#x}, {1:#x})",
-                        guest_addr.0, region_len
-                    ),
-                ))
+                VirtioError::IOError(io::Error::other(format!(
+                    "invalid address space region ({0:#x}, {1:#x})",
+                    guest_addr.0, region_len
+                )))
             })?,
         );
         info!(
@@ -574,13 +571,10 @@ impl MemRegionFactory for MemoryRegionFactory {
             error!(self.logger, "failed to insert address space region: {}", e);
             // dbs-virtio-devices should not depend on dbs-address-space.
             // So here io::Error is used instead of AddressSpaceError directly.
-            VirtioError::IOError(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "invalid address space region ({0:#x}, {1:#x})",
-                    guest_addr.0, region_len
-                ),
-            ))
+            VirtioError::IOError(io::Error::other(format!(
+                "invalid address space region ({0:#x}, {1:#x})",
+                guest_addr.0, region_len
+            )))
         })?;
 
         Ok(memory_region)

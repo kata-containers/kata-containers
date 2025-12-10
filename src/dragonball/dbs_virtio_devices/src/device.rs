@@ -564,10 +564,9 @@ impl VirtioDeviceInfo {
     /// Unregister event handler for the device.
     pub fn remove_event_handler(&mut self, id: SubscriberId) -> Result<EpollSubscriber> {
         self.epoll_manager.remove_subscriber(id).map_err(|e| {
-            Error::IOError(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("remove_event_handler failed: {e:?}"),
-            ))
+            Error::IOError(std::io::Error::other(format!(
+                "remove_event_handler failed: {e:?}"
+            )))
         })
     }
 }
