@@ -17,7 +17,8 @@ name = "shim-ctl"
 path = "crates/shim-ctl/src/main.rs"
 
 [features]
-dragonball = []
+dragonball = ["hypervisor/dragonball"]
+cloud-hypervisor = ["hypervisor/cloud-hypervisor"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -28,3 +29,4 @@ shim = { path = "crates/shim" }
 common = { workspace = true }
 logging = { workspace = true }
 runtimes = { workspace = true }
+hypervisor = { workspace = true }

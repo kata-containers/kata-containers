@@ -4029,6 +4029,7 @@ dependencies = [
  "anyhow",
  "common",
  "go-flag",
+ "hypervisor",
  "logging",
  "nix 0.26.4",
  "runtimes",
