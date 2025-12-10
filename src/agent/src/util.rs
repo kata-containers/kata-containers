@@ -147,7 +147,7 @@ mod tests {
 
             let v = vec_locked
                 .as_deref_mut()
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
 
             std::io::Write::flush(v)
         }
