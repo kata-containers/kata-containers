@@ -132,11 +132,20 @@ function create_cluster() {
 }
 
 function install_bats() {
-	# Installing bats from the noble repo.
-	sudo apt install -y software-properties-common
-	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
-	sudo apt install -y bats
-	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
+	source /etc/os-release
+	case "${ID}" in
+		ubuntu)
+			# Installing bats from the noble repo.
+			sudo apt install -y software-properties-common
+			sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
+			sudo apt install -y bats
+			sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
+			;;
+		*)
+			echo "${ID} is not a supported distro, install bats manually"
+			;;
+	esac
+
 }
 
 # Install the kustomize tool in /usr/local/bin if it doesn't exist on
