@@ -74,10 +74,10 @@ fn use_serde(protos: &[&str], out_dir: &Path) -> Result<(), std::io::Error> {
                     let t = s.replace(".proto", ".rs");
                     out_dir.join(t)
                 })
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+                .map_err(std::io::Error::other)?
                 .to_str()
                 .ok_or(format!("cannot convert {:?} path to string", f))
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+                .map_err(std::io::Error::other)?
                 .to_string();
 
             replace_text_in_file(
@@ -166,7 +166,7 @@ fn codegen(path: &str, protos: &[&str], async_all: bool) -> Result<(), std::io::
         let generated_file = proto_filename
             .to_str()
             .ok_or("failed")
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+            .map_err(std::io::Error::other)?
             .replace(".proto", ".rs");
 
         let out_file = out_dir.join(generated_file);
@@ -174,7 +174,7 @@ fn codegen(path: &str, protos: &[&str], async_all: bool) -> Result<(), std::io::
         let out_file_str = out_file
             .to_str()
             .ok_or("failed")
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(std::io::Error::other)?;
 
         handle_file(&autogen_comment, out_file_str)?;
     }

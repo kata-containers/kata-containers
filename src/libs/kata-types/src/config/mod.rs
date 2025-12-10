@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 
 use lazy_static::lazy_static;
 
-use crate::{eother, sl};
+use crate::sl;
 
 /// Default configuration values.
 pub mod default;
@@ -331,10 +331,9 @@ impl TomlConfig {
 ///
 /// Each member in `patterns` is a path pattern as described by glob(3)
 pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Result<()> {
-    let path = path
-        .as_ref()
-        .to_str()
-        .ok_or_else(|| eother!("Invalid path {}", path.as_ref().to_string_lossy()))?;
+    let path = path.as_ref().to_str().ok_or_else(|| {
+        std::io::Error::other(format!("Invalid path {}", path.as_ref().to_string_lossy()))
+    })?;
     for p in patterns.iter() {
         if let Ok(glob) = glob::Pattern::new(p) {
             if glob.matches(path) {
@@ -343,7 +342,10 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
         }
     }
 
-    Err(eother!("Path {} is not permitted", path))
+    Err(std::io::Error::other(format!(
+        "Path {} is not permitted",
+        path
+    )))
 }
 
 /// Kata configuration information.
