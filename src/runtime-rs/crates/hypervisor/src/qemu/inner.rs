@@ -229,10 +229,7 @@ impl QemuInner {
                     .rootless_user
                     .clone()
                     .ok_or_else(|| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "rootless user must be specified for rootless qemu",
-                        )
+                        std::io::Error::other("rootless user must be specified for rootless qemu")
                     })?,
             )
         } else {
