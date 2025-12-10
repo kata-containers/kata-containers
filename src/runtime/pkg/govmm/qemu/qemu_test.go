@@ -516,8 +516,8 @@ func TestAppendMemoryHugePages(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     true,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=/dev/hugepages,id=dimm1,size=1G,share=on,prealloc=on"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -547,7 +547,7 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 		MemShared:   true,
 	}
 	objMemString := "-object memory-backend-ram,id=dimm1,size=1G,share=on,prealloc=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -576,8 +576,8 @@ func TestAppendMemoryMemShared(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     true,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=foobar,id=dimm1,size=1G,share=on"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -606,8 +606,8 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 		FileBackedMem: true,
 		MemShared:     false,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=foobar,id=dimm1,size=1G"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -637,8 +637,8 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 		MemShared:     true,
 		MemPrealloc:   true,
 	}
-	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on,prealloc=on"
-	numaMemString := "-numa node,memdev=dimm1"
+	objMemString := "-object memory-backend-file,mem-path=foobar,id=dimm1,size=1G,share=on,prealloc=on"
+	numaMemString := "-numa node,nodeid=0,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
@@ -687,7 +687,7 @@ func TestAppendMemory(t *testing.T) {
 	testAppend(memory, memoryString, t)
 }
 
-var cpusString = "-smp 2,cores=1,threads=2,sockets=2,maxcpus=6"
+var cpusString = "-smp 2,cores=1,threads=2,sockets=2,maxcpus=4"
 
 func TestAppendCPUs(t *testing.T) {
 	smp := SMP{
@@ -695,7 +695,7 @@ func TestAppendCPUs(t *testing.T) {
 		Sockets: 2,
 		Cores:   1,
 		Threads: 2,
-		MaxCPUs: 6,
+		MaxCPUs: 4,
 	}
 
 	testAppend(smp, cpusString, t)
@@ -709,6 +709,22 @@ func TestFailToAppendCPUs(t *testing.T) {
 			Cores:   1,
 			Threads: 2,
 			MaxCPUs: 1,
+		},
+	}
+
+	if err := config.appendCPUs(); err == nil {
+		t.Fatalf("Expected appendCPUs to fail")
+	}
+}
+
+func TestFailToAppendCPUsWrongTopology(t *testing.T) {
+	config := Config{
+		SMP: SMP{
+			CPUs:    2,
+			Sockets: 2,
+			Cores:   1,
+			Threads: 2,
+			MaxCPUs: 6,
 		},
 	}
 

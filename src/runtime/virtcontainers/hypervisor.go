@@ -641,6 +641,12 @@ type HypervisorConfig struct {
 	// IOMMUPlatform is used to indicate if IOMMU_PLATFORM is enabled for supported devices
 	IOMMUPlatform bool
 
+	// NUMA states if we have NUMA enabled or not
+	NUMA bool
+
+	// NUMANodes defines VM NUMA topology and mapping to host NUMA nodes and CPUs.
+	NUMANodes []types.NUMANode
+
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool
@@ -720,7 +726,8 @@ type HypervisorConfig struct {
 
 // vcpu mapping from vcpu number to thread number
 type VcpuThreadIDs struct {
-	vcpus map[int]int
+	vcpus        map[int]int
+	vcpuToNodeId map[int]uint32
 }
 
 func (conf *HypervisorConfig) CheckTemplateConfig() error {
@@ -914,6 +921,10 @@ func RoundUpNumVCPUs(cpus float32) uint32 {
 
 func (conf HypervisorConfig) NumVCPUs() uint32 {
 	return RoundUpNumVCPUs(conf.NumVCPUsF)
+}
+
+func (conf HypervisorConfig) NumNUMA() uint32 {
+	return uint32(len(conf.NUMANodes))
 }
 
 func appendParam(params []Param, parameter string, value string) []Param {

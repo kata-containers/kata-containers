@@ -113,7 +113,7 @@ func (m *mockHypervisor) Disconnect(ctx context.Context) {
 
 func (m *mockHypervisor) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	vcpus := map[int]int{0: os.Getpid()}
-	return VcpuThreadIDs{vcpus}, nil
+	return VcpuThreadIDs{vcpus, nil}, nil
 }
 
 func (m *mockHypervisor) Cleanup(ctx context.Context) error {
