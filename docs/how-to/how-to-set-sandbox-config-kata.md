@@ -97,6 +97,8 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU) |
 | `io.katacontainers.config.hypervisor.default_gpus` | uint32 | the minimum number of GPUs required for the VM. Only used by remote hypervisor to help with instance selection |
 | `io.katacontainers.config.hypervisor.default_gpu_model` | string | the GPU model required for the VM. Only used by remote hypervisor to help with instance selection |
+| `io.katacontainers.config.hypervisor.block_device_num_queues` | `usize` | The number of queues to use for block devices (runtime-rs only) |
+| `io.katacontainers.config.hypervisor.block_device_queue_size` | uint32 | The size of the of the queue to use for block devices (runtime-rs only) |
 
 ## Container Options
 | Key | Value Type | Comments |
