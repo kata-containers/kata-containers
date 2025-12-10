@@ -822,6 +822,7 @@ impl QemuInner {
 
                 primary_device.guest_pci_path = qmp.hotplug_vfio_device(
                     &primary_device.hostdev_id,
+                    &primary_device.sysfs_path,
                     &primary_device.bus_slot_func,
                     &vfiodev.driver_type,
                     &vfiodev.bus,
