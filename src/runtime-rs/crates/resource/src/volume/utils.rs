@@ -31,10 +31,10 @@ pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
         .file_name()
         .map(|v| v.to_os_string())
         .ok_or_else(|| {
-            io::Error::other(
+            std::io::Error::other(format!(
                 "failed to get file name of path {}",
                 src.as_ref().to_string_lossy()
-            )
+            ))
         })?
         .into_string()
         .map_err(|e| anyhow!("failed to convert to string {:?}", e))?;

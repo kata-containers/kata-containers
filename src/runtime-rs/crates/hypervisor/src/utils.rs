@@ -225,7 +225,7 @@ pub fn chown_to_parent<P: AsRef<Path>>(path: P) -> io::Result<()> {
 
     let parent = path
         .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no parent directory"))?;
+        .ok_or_else(|| io::Error::other("no parent directory"))?;
 
     let st = stat::stat(parent).map_err(|e| io::Error::from_raw_os_error(e as i32))?;
     let uid = Uid::from_raw(st.st_uid);
