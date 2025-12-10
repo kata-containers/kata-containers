@@ -68,6 +68,7 @@ pub fn initrd_load_addr<M: GuestMemory>(guest_mem: &M, initrd_size: u64) -> supe
     }
 }
 
+#[allow(missing_docs)]
 #[cfg(test)]
 pub mod tests {
     use dbs_arch::{DeviceInfoForFDT, Error as ArchError};
