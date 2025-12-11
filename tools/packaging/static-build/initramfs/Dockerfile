@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-FROM ubuntu:22.04
+FROM quay.io/kata-containers/ubuntu:22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG cryptsetup_repo=${cryptsetup_repo}
