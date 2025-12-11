@@ -22,7 +22,7 @@ POD_WAIT_TIMEOUT=${POD_WAIT_TIMEOUT:-300s}
 export POD_WAIT_TIMEOUT
 
 setup() {
-    setup_common
+    setup_common || die "setup_common failed"
     get_pod_config_dir
 
     pod_yaml_in="${pod_config_dir}/${POD_NAME_CUDA}.yaml.in"

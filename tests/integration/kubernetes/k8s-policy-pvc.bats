@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] ) && skip "https://github.com/kata-containers/kata-containers/issues/9846"
-
+	setup_common || die "setup_common failed"
 	pod_name="policy-pod-pvc"
 	pvc_name="policy-dev"
 
@@ -63,7 +63,7 @@ teardown() {
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"
-
+	teardown_common "${node}" "${node_start_time:-}"
 	# Clean-up
 	kubectl delete -f "${correct_pod_yaml}"
 	kubectl delete -f "${pvc_yaml}"

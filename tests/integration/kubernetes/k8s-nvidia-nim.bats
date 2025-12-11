@@ -109,7 +109,7 @@ create_embedqa_pod() {
 
 # With setup_file and teardown_file being used, we use >&3 in some places to direct output to the terminal
 setup_file() {
-    setup_common
+    setup_common || die "setup_common failed"
 
     get_pod_config_dir
 

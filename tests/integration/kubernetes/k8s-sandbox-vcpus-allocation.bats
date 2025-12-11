@@ -13,7 +13,7 @@ setup() {
 	[ "$(uname -m)" == "aarch64" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10928"
 	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
 
-	setup_common
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
 	expected_vcpus=( 1 1 2 )

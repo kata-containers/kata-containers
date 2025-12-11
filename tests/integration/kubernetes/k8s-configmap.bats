@@ -10,6 +10,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+	setup_common || die "setup_common failed"
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
 	cmd="env"
@@ -52,4 +53,5 @@ teardown() {
 	kubectl delete configmap "$config_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

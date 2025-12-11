@@ -9,6 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common || die "setup_common failed"
 	pod_name="pod-oom"
 	get_pod_config_dir
 
@@ -42,4 +43,5 @@ teardown() {
 	kubectl get "pod/$pod_name" -o yaml
 
 	kubectl delete pod "$pod_name"
+	teardown_common "${node}" "${node_start_time:-}"
 }

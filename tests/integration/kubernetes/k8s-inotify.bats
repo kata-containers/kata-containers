@@ -13,6 +13,9 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
         [[ "${KATA_HYPERVISOR}" == qemu-se* ]] && skip "test not working for IBM Z LPAR (see ${issue_url})"
+
+	setup_common || die "setup_common failed"
+
 	get_pod_config_dir
 
 	pod_yaml="${pod_config_dir}"/inotify-configmap-pod.yaml
@@ -57,4 +60,5 @@ teardown() {
 
 	kubectl delete pod "$pod_name"
 	kubectl delete configmap cm
+	teardown_common "${node}" "${node_start_time:-}"
 }

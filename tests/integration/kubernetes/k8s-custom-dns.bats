@@ -12,7 +12,7 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 setup() {
 	is_confidential_runtime_class && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/9663"
-
+	setup_common || die "setup_common failed"
 	pod_name="custom-dns-test"
 	file_name="/etc/resolv.conf"
 	get_pod_config_dir
@@ -50,4 +50,5 @@ teardown() {
 	kubectl delete pod "$pod_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

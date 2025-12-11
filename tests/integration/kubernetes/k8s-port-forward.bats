@@ -12,6 +12,7 @@ issue="https://github.com/kata-containers/runtime/issues/1834"
 
 setup() {
 	skip "test not working see: ${issue}"
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 }
 
@@ -68,4 +69,5 @@ teardown() {
 	skip "test not working see: ${issue}"
 	kubectl delete -f "${pod_config_dir}/redis-master-deployment.yaml"
 	kubectl delete -f "${pod_config_dir}/redis-master-service.yaml"
+	teardown_common "${node}" "${node_start_time:-}"
 }

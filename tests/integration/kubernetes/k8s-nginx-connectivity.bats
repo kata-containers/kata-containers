@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
-
+	setup_common || die "setup_common failed"
 	busybox_image="quay.io/prometheus/busybox:latest"
 	deployment="nginx-deployment"
 
@@ -54,4 +54,5 @@ teardown() {
 	kubectl delete deployment "$deployment"
 	kubectl delete service "$deployment"
 	kubectl delete pod "$busybox_pod"
+	teardown_common "${node}" "${node_start_time:-}"
 }

@@ -12,7 +12,7 @@ setup() {
 	pod_name="footubuntu"
 	config_name="ssh-config-map"
 	get_pod_config_dir
-
+	setup_common || die "setup_common failed"
 	# Creates ssh-key
 	key_path=$(mktemp --tmpdir)
 	public_key_path="${key_path}.pub"
@@ -59,4 +59,5 @@ teardown() {
 	sudo rm -rf "$public_key_path"
 	sudo rm -rf "$key_path"
 	sudo rm -rf "$configmap_yaml"
+	teardown_common "${node}" "${node_start_time:-}"
 }

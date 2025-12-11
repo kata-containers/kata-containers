@@ -9,6 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 	job_name="job-pi-test"
 	yaml_file="${pod_config_dir}/job.yaml"
@@ -65,4 +66,5 @@ teardown() {
 	[[ "$output" =~ "No resources found" ]]
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

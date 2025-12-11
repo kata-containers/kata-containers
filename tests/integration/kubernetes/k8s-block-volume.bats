@@ -14,6 +14,8 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ]  && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
 	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
+	setup_common || die "setup_common failed"
+
 	get_pod_config_dir
 
 	node="$(get_one_kata_node)"
@@ -116,4 +118,6 @@ teardown() {
 	exec_host "$node" rm -f "$tmp_disk_image"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+
+	teardown_common "${node}" "${node_start_time:-}"
 }
