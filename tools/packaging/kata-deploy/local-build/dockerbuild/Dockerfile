@@ -8,6 +8,8 @@ ENV INSTALL_IN_GOPATH=false
 # Required for libxml2-dev
 ENV TZ=Etc/UTC
 ARG ARCH
+# GH_TOKEN is used to authenticate with GitHub API to avoid rate limiting
+ARG GH_TOKEN
 
 COPY install_yq.sh /usr/bin/install_yq.sh
 COPY install_oras.sh /usr/bin/install_oras.sh
@@ -15,6 +17,7 @@ COPY install_oras.sh /usr/bin/install_oras.sh
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install yq, oras, and docker
+# Note: GH_TOKEN is passed to install_oras.sh to avoid GitHub rate limiting
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -26,7 +29,7 @@ RUN apt-get update && \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
-    install_oras.sh
+    GH_TOKEN="${GH_TOKEN}" install_oras.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000

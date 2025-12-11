@@ -47,7 +47,12 @@ pull_clh_released_binary() {
 	[ "${ARCH}" == "aarch64" ] && \
 		cloud_hypervisor_binary="${cloud_hypervisor_binary}-aarch64"
 
-	curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
+	# Use GH_TOKEN for authenticated requests to avoid rate limiting
+	curl_auth_header=""
+	if [[ -n "${GH_TOKEN:-}" ]]; then
+		curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""
+	fi
+	eval curl --fail -L ${curl_auth_header} ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
 	mkdir -p cloud-hypervisor
 	mv -f cloud-hypervisor-static cloud-hypervisor/cloud-hypervisor
 	chmod +x cloud-hypervisor/cloud-hypervisor

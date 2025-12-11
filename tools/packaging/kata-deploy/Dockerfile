@@ -14,6 +14,8 @@ FROM quay.io/kata-containers/golang:1.24-alpine AS nydus-binary-downloader
 # in versions.yaml
 ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.2
 ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
+# GH_TOKEN is used to authenticate with GitHub API to avoid rate limiting
+ARG GH_TOKEN
 
 RUN \
 	mkdir -p /opt/nydus-snapshotter && \
@@ -21,7 +23,9 @@ RUN \
 	if [[ "${ARCH}" == "x86_64" ]]; then ARCH=amd64 ; fi && \
 	if [[ "${ARCH}" == "aarch64" ]]; then ARCH=arm64; fi && \
 	apk add --no-cache curl && \
-	curl -fOL --progress-bar ${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz && \
+	curl_auth_header=""; \
+	if [[ -n "${GH_TOKEN:-}" ]]; then curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""; fi && \
+	eval curl -fOL --progress-bar ${curl_auth_header} ${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz && \
 	tar xvzpf nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz -C /opt/nydus-snapshotter && \
 	rm nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz
 
@@ -33,6 +37,8 @@ FROM base
 
 ARG KATA_ARTIFACTS=./kata-static.tar.zst
 ARG DESTINATION=/opt/kata-artifacts
+# GH_TOKEN is used to authenticate with GitHub API to avoid rate limiting
+ARG GH_TOKEN
 
 COPY ${KATA_ARTIFACTS} /
 
@@ -51,9 +57,11 @@ RUN \
 	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
 	DEBIAN_ARCH=${ARCH} && \
 	if [ "${DEBIAN_ARCH}" = "ppc64le" ]; then DEBIAN_ARCH=ppc64el; fi && \
+	curl_auth_header=""; \
+	if [ -n "${GH_TOKEN:-}" ]; then curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""; fi && \
 	curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl && \
 	chmod +x /usr/bin/kubectl && \
-	curl -fL --progress-bar -o /usr/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${DEBIAN_ARCH} && \
+	eval curl -fL --progress-bar ${curl_auth_header} -o /usr/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${DEBIAN_ARCH} && \
 	chmod +x /usr/bin/jq && \
 	mkdir -p ${DESTINATION} && \
 	tar --zstd -xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \

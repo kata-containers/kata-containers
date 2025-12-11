@@ -128,7 +128,12 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	popd  >> /dev/null
 
 	pushd "${BUILD_DIR}" >> /dev/null
-	curl -LO "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
+	# Use GH_TOKEN for authenticated requests to avoid rate limiting
+	curl_auth_header=""
+	if [[ -n "${GH_TOKEN:-}" ]]; then
+		curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""
+	fi
+	eval curl -LO ${curl_auth_header} "https://github.com/upx/upx/releases/download/v4.2.4/upx-4.2.4-${distro_arch}_linux.tar.xz"
 	tar xvf "upx-4.2.4-${distro_arch}_linux.tar.xz"
 	popd  >> /dev/null
 }

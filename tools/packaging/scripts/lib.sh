@@ -85,7 +85,12 @@ get_gh() {
 	fi
 
 	local goarch=$(arch_to_golang $(uname -m))
-	curl -sSL https://github.com/cli/cli/releases/download/v2.37.0/gh_2.37.0_linux_${goarch}.tar.gz | tar -xz
+	# Use GH_TOKEN for authenticated requests to avoid rate limiting
+	local curl_auth_header=""
+	if [[ -n "${GH_TOKEN:-}" ]]; then
+		curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""
+	fi
+	eval curl -sSL ${curl_auth_header} https://github.com/cli/cli/releases/download/v2.37.0/gh_2.37.0_linux_${goarch}.tar.gz | tar -xz
 	mv gh_2.37.0_linux_${goarch}/bin/gh "${gh_cli}"
 	rm -rf gh_2.37.0_linux_amd64
 }

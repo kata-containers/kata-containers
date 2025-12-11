@@ -28,14 +28,20 @@ nydus_tarball_url="${nydus_url}/releases/download"
 file_name="nydus-static-${nydus_version}-linux-$(arch_to_golang $arch).tgz"
 download_url="${nydus_tarball_url}/${nydus_version}/${file_name}"
 
+# Use GH_TOKEN for authenticated requests to avoid rate limiting
+curl_auth_header=""
+if [[ -n "${GH_TOKEN:-}" ]]; then
+	curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""
+fi
+
 info "Download nydus version: ${nydus_version} from ${download_url}"
-curl -o ${file_name} -L $download_url
+eval curl -o ${file_name} -L ${curl_auth_header} $download_url
 
 sha256sum="${file_name}.sha256sum"
 sha256sum_url="${nydus_tarball_url}/${nydus_version}/${sha256sum}"
 
 info "Download nydus ${sha256sum} from ${sha256sum_url}"
-curl -o ${sha256sum} -L $sha256sum_url
+eval curl -o ${sha256sum} -L ${curl_auth_header} $sha256sum_url
 
 sha256sum -c ${sha256sum}
 tar zxvf ${file_name}
