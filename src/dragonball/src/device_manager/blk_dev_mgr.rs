@@ -316,7 +316,7 @@ pub struct BlockDeviceMgr {
 
 impl BlockDeviceMgr {
     /// returns a front-to-back iterator.
-    pub fn iter(&self) -> vec_deque::Iter<BlockDeviceInfo> {
+    pub fn iter(&self) -> vec_deque::Iter<'_, BlockDeviceInfo> {
         self.info_list.iter()
     }
 

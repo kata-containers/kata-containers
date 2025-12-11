@@ -198,7 +198,7 @@ impl VhostUserNetDevice {
             // recreate it again.
             let (master, avail_features) = self.listener.accept()?;
             if !avail_features & self.device_info.acked_features() != 0 {
-                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.", 
+                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.",
                     self.id, avail_features, self.device_info.acked_features());
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
             }
@@ -304,7 +304,7 @@ impl VhostUserNetDevice {
             // recreate it again.
             let (master, avail_features) = self.listener.accept()?;
             if !avail_features & self.device_info.acked_features() != 0 {
-                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.", 
+                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.",
                     self.id, avail_features, self.device_info.acked_features());
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
             }
@@ -360,7 +360,7 @@ where
         })
     }
 
-    fn device(&self) -> MutexGuard<VhostUserNetDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserNetDevice> {
         // Do not expect poisoned lock.
         self.device.lock().unwrap()
     }
@@ -466,7 +466,7 @@ where
     Q: QueueT + Send + 'static,
     R: GuestMemoryRegion + Sync + Send + 'static,
 {
-    fn device(&self) -> MutexGuard<VhostUserNetDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserNetDevice> {
         // Do not expect poisoned lock here
         self.device.lock().unwrap()
     }

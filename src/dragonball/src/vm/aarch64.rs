@@ -142,7 +142,7 @@ impl Vm {
     }
 
     /// Generate fdt information about devices
-    fn get_fdt_device_info(&self) -> FdtDeviceInfo<MMIODeviceInfo> {
+    fn get_fdt_device_info(&self) -> FdtDeviceInfo<'_, MMIODeviceInfo> {
         FdtDeviceInfo::new(
             self.device_manager().get_mmio_device_info(),
             self.get_irqchip(),

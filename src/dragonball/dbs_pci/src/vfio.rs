@@ -1640,7 +1640,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
             );
             let _ = state.unregister_regions(&self.vm_fd).map_err(|e| {
                 // If unregistering regions goes wrong, the memory region in Dragonball will be in a mess,
-                // so we panic here to avoid more serious problem. 
+                // so we panic here to avoid more serious problem.
                 panic!("failed to rollback changes of VfioPciDevice::register_regions() because error {:?}", e);
             });
         }
@@ -1656,7 +1656,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
         Ok(())
     }
 
-    pub fn state(&self) -> MutexGuard<VfioPciDeviceState<C>> {
+    pub fn state(&self) -> MutexGuard<'_, VfioPciDeviceState<C>> {
         // Don't expect poisoned lock
         self.state
             .lock()
