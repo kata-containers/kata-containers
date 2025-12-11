@@ -49,7 +49,7 @@ vfio-ioctls = "0.1.0"
 virtio-bindings = "0.1.0"
 virtio-queue = "0.7.0"
 vm-fdt = "0.2.0"
-vm-memory = "0.10.0"
+vm-memory = "0.16.2"
 vm-superio = "0.5.0"
 vmm-sys-util = "0.11.0"
 
