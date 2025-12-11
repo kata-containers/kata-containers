@@ -13,7 +13,7 @@ spec:
   runtimeClassName: ${RUNTIME_CLASS_NAME}
   containers:
     - name: bash-curl
-      image: nvidia/cuda:12.2.0-base-ubuntu22.04
+      image: nvcr.io/nvidia/cuda:12.2.0-base-ubuntu22.04
       imagePullPolicy: Always
       command:
         - sh
