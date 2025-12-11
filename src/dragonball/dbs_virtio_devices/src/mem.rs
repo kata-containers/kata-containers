@@ -305,7 +305,7 @@ struct MemTool {}
 impl MemTool {
     fn virtio_mem_valid_range(config: &VirtioMemConfig, addr: u64, size: u64) -> bool {
         // address properly aligned?
-        if addr % config.block_size != 0 || size % config.block_size != 0 {
+        if !addr.is_multiple_of(config.block_size) || !size.is_multiple_of(config.block_size) {
             return false;
         }
 
@@ -938,7 +938,7 @@ impl<AS: GuestAddressSpace> Mem<AS> {
         let requested_size = requested_size_mib * 1024 * 1024;
         if capacity == 0
             || requested_size > capacity
-            || requested_size % VIRTIO_MEM_DEFAULT_BLOCK_SIZE != 0
+            || !requested_size.is_multiple_of(VIRTIO_MEM_DEFAULT_BLOCK_SIZE)
         {
             return Err(Error::InvalidInput);
         }
@@ -961,7 +961,7 @@ impl<AS: GuestAddressSpace> Mem<AS> {
         // adding curly braces means that a copy of the field is made, stored
         // in a (properly aligned) temporary, and a reference to that temporary
         // is being formatted.
-        info!(target: MEM_DRIVER_NAME, "{}: {}: new block_size: 0x{:x} region_size: 0x{:x} requested_size: 0x{:x} usable_region_size: 0x{:x} multi_region: {} numa_node_id: {:?}", 
+        info!(target: MEM_DRIVER_NAME, "{}: {}: new block_size: 0x{:x} region_size: 0x{:x} requested_size: 0x{:x} usable_region_size: 0x{:x} multi_region: {} numa_node_id: {:?}",
             MEM_DRIVER_NAME, id, {config.block_size}, {config.region_size}, {config.requested_size}, {config.usable_region_size}, multi_region, numa_node_id);
 
         let device_info = VirtioDeviceInfo::new(
@@ -993,7 +993,9 @@ impl<AS: GuestAddressSpace> Mem<AS> {
     pub fn set_requested_size(&self, requested_size_mb: u64) -> Result<()> {
         // Align to 4MB.
         let requested_size = requested_size_mb * 1024 * 1024;
-        if requested_size > self.capacity || requested_size % VIRTIO_MEM_DEFAULT_BLOCK_SIZE != 0 {
+        if requested_size > self.capacity
+            || !requested_size.is_multiple_of(VIRTIO_MEM_DEFAULT_BLOCK_SIZE)
+        {
             return Err(Error::InvalidInput);
         }
 

@@ -167,7 +167,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                 let mut next_desc = desc_chain.next();
                 let mut len = 0;
                 while let Some(avail_desc) = next_desc {
-                    if avail_desc.len() as usize % size_of::<u32>() != 0 {
+                    if !(avail_desc.len() as usize).is_multiple_of(size_of::<u32>()) {
                         error!("the request size {} is not right", avail_desc.len());
                         break;
                     }

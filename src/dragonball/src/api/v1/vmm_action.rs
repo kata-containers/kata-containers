@@ -568,7 +568,9 @@ impl VmmService {
 
         let mem_size_mib_value = machine_config.mem_size_mib;
         // Support 1TB memory at most, 2MB aligned for huge page.
-        if mem_size_mib_value == 0 || mem_size_mib_value > 0x10_0000 || mem_size_mib_value % 2 != 0
+        if mem_size_mib_value == 0
+            || mem_size_mib_value > 0x10_0000
+            || !mem_size_mib_value.is_multiple_of(2)
         {
             return Err(MachineConfig(InvalidMemorySize(mem_size_mib_value)));
         }

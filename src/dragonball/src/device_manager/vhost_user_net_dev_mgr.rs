@@ -132,7 +132,7 @@ impl VhostUserNetDeviceMgr {
         config: VhostUserNetDeviceConfigInfo,
     ) -> Result<(), VhostUserNetDeviceError> {
         // Validate device configuration first.
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VhostUserNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {

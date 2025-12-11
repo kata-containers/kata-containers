@@ -502,7 +502,7 @@ where
 
         // Do not support control queue and multi-queue.
         let vq_pairs = config.queues.len() / 2;
-        if config.queues.len() % 2 != 0 || self.taps.len() != vq_pairs {
+        if !config.queues.len().is_multiple_of(2) || self.taps.len() != vq_pairs {
             self.metrics.activate_fails.inc();
             return Err(crate::ActivateError::InvalidParam);
         }

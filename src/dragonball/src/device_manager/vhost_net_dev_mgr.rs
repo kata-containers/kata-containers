@@ -170,7 +170,7 @@ impl VhostNetDeviceMgr {
         mut ctx: DeviceOpContext,
         config: VhostNetDeviceConfigInfo,
     ) -> Result<(), VhostNetDeviceError> {
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VhostNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
