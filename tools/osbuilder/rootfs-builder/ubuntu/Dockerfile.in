@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-ARG IMAGE_REGISTRY=docker.io
+ARG IMAGE_REGISTRY=quay.io/kata-containers
 FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 @SET_PROXY@
 

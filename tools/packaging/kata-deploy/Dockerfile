@@ -2,13 +2,13 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-ARG BASE_IMAGE_NAME=alpine
+ARG BASE_IMAGE_NAME=quay.io/kata-containers/alpine
 ARG BASE_IMAGE_TAG=3.22
 FROM ${BASE_IMAGE_NAME}:${BASE_IMAGE_TAG} AS base
 
 #### Nydus snapshotter & nydus image
 
-FROM golang:1.24-alpine AS nydus-binary-downloader
+FROM quay.io/kata-containers/golang:1.24-alpine AS nydus-binary-downloader
 
 # Keep the version here aligned with "ndyus-snapshotter.version"
 # in versions.yaml
