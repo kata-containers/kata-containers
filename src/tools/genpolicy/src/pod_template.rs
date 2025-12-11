@@ -12,6 +12,7 @@ use crate::pod;
 use serde::{Deserialize, Serialize};
 
 /// Reference / Kubernetes API / Workload /  Resources / PodTemplate.
+#[allow(dead_code)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PodTemplate {
     apiVersion: String,
