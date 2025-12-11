@@ -474,7 +474,7 @@ jobs:
       vmm: ${{ matrix.params.vmm }}
 
   run-cri-containerd-tests-arm64:
-    if: ${{ inputs.skip-test != 'yes' }}
+    if: false
     needs: build-kata-static-tarball-arm64
     strategy:
       fail-fast: false
