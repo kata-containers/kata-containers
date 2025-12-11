@@ -1186,6 +1186,12 @@ func getCtrResourceSpecWithShares(memory, quota int64, period uint64, shares uin
 	return spec
 }
 
+func getCtrResourceSpecWithSharesAndCPUSet(memory, quota int64, period uint64, shares uint64, cpuSet string) *specs.Spec {
+	spec := getCtrResourceSpecWithShares(memory, quota, period, shares)
+	spec.Linux.Resources.CPU.Cpus = cpuSet
+	return spec
+}
+
 func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	spec := specs.Spec{
 		Annotations: make(map[string]string),
@@ -1205,6 +1211,18 @@ func makeSizingAnnotationsWithShares(memory, quota, period, shares string) *spec
 
 func makeSizingAnnotationsWithCPUSet(memory, quota, period, cpuSet string) *specs.Spec {
 	spec := makeSizingAnnotations(memory, quota, period)
+	spec.Linux = &specs.Linux{
+		Resources: &specs.LinuxResources{
+			CPU: &specs.LinuxCPU{
+				Cpus: cpuSet,
+			},
+		},
+	}
+	return spec
+}
+
+func makeSizingAnnotationsWithSharesAndCPUSet(memory, quota, period, shares, cpuSet string) *specs.Spec {
+	spec := makeSizingAnnotationsWithShares(memory, quota, period, shares)
 	spec.Linux = &specs.Linux{
 		Resources: &specs.LinuxResources{
 			CPU: &specs.LinuxCPU{
@@ -1285,6 +1303,11 @@ func TestCalculateContainerSizing(t *testing.T) {
 			expectedCPU: 0,
 			expectedMem: 1,
 		},
+		{
+			spec:        getCtrResourceSpecWithSharesAndCPUSet(1024*1024, -1, 100000, 2048, "0-63"),
+			expectedCPU: 2,
+			expectedMem: 1,
+		},
 	}
 
 	for _, tt := range testCases {
@@ -1356,6 +1379,11 @@ func TestCalculateSandboxSizing(t *testing.T) {
 		{
 			spec:        makeSizingAnnotationsWithShares("1048576", "-1", "100000", "2"),
 			expectedCPU: 0,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeSizingAnnotationsWithSharesAndCPUSet("1048576", "-1", "100000", "2048", "0-63"),
+			expectedCPU: 2,
 			expectedMem: 1,
 		},
 	}
