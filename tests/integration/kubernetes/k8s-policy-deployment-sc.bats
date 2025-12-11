@@ -113,8 +113,10 @@ teardown() {
 
     # Clean-up
     kubectl delete deployment "${deployment_name}"
+    if [ "${BATS_TEST_NUMBER}" == "1" ]; then
+        delete_tmp_policy_settings_dir "${policy_settings_dir}"
+    fi
 
-    delete_tmp_policy_settings_dir "${policy_settings_dir}"
     rm -f "${incorrect_deployment_yaml}"
     teardown_common "${node}" "${node_start_time:-}"
 }
