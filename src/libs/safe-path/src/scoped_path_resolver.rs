@@ -111,7 +111,7 @@ pub fn scoped_resolve<R: AsRef<Path>, U: AsRef<Path>>(root: R, unsafe_path: U) -
 ///   components (they will all get expanded).
 /// - When expanding symlinks, all symlink path components must be resolved relative to the provided
 ///   `root`. In particular, this can be considered a userspace implementation of how chroot(2)
-///    operates on file paths.
+///   operates on file paths.
 /// - Non-existent path components are unaffected.
 ///
 /// Note that the guarantees provided by this function only apply if the path components in the
