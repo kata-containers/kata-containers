@@ -40,6 +40,13 @@ GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 
+# Delete all pods if any exist, otherwise just return
+#
+k8s_delete_all_pods_if_any_exists2() {
+	[ -z "$(kubectl get --no-headers pods)" ] || \
+		kubectl delete --all pods
+}
+
 # Common setup for tests.
 #
 # Global variables exported:
@@ -62,7 +69,7 @@ setup_common() {
 	[[ -n "${node_start_time}" ]]
 	export node node_start_time
 
-	k8s_delete_all_pods_if_any_exists || true
+	k8s_delete_all_pods_if_any_exists2 || true
 }
 
 get_pod_config_dir() {
@@ -460,7 +467,7 @@ teardown_common() {
 	local node_start_time="$2"
 
 	kubectl describe pods
-	k8s_delete_all_pods_if_any_exists || true
+	k8s_delete_all_pods_if_any_exists2 || true
 
 	# Print the node journal since the test start time if a bats test is not completed
 	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then

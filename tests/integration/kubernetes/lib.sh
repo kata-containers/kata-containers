@@ -13,10 +13,10 @@ sleep_time=3
 
 # Delete all pods if any exist, otherwise just return
 #
-k8s_delete_all_pods_if_any_exists() {
-	[ -z "$(kubectl get --no-headers pods)" ] || \
-		kubectl delete --all pods
-}
+# k8s_delete_all_pods_if_any_exists() {
+# 	[ -z "$(kubectl get --no-headers pods)" ] || \
+# 		kubectl delete --all pods
+# }
 
 # Wait until the pod is not 'Ready'. Fail if it hits the timeout.
 #
