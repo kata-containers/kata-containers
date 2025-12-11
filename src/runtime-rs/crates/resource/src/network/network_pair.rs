@@ -17,9 +17,6 @@ use super::{
 
 const TAP_SUFFIX: &str = "_kata";
 
-#[derive(Default, Copy, Clone, Debug, PartialEq, Eq)]
-pub struct NetInterworkingModel(u32);
-
 #[derive(Default, Debug, Clone)]
 pub struct NetworkInterface {
     pub name: String,
