@@ -40,7 +40,6 @@ use nix::unistd::setgid;
 use nix::unistd::setuid;
 use nix::unistd::Gid;
 use nix::unistd::Uid;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -77,14 +76,6 @@ enum CloudHypervisorLogLevel {
     Info,
     Warn,
     Error,
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-pub struct VmmPingResponse {
-    pub build_version: String,
-    pub version: String,
-    pub pid: i64,
-    pub features: Vec<String>,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
