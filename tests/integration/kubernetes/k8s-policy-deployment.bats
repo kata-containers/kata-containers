@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+    setup_common || die "setup_common failed"
     get_pod_config_dir
 
     deployment_name="policy-redis-deployment"
@@ -76,4 +76,5 @@ teardown() {
 
     delete_tmp_policy_settings_dir "${policy_settings_dir}"
     rm -f "${incorrect_deployment_yaml}"
+    teardown_common "${node}" "${node_start_time:-}"
 }

@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
-	
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 
 	pod_name="nested-configmap-secret-pod"
@@ -53,4 +53,5 @@ teardown() {
 	kubectl delete -f "${yaml_file}"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

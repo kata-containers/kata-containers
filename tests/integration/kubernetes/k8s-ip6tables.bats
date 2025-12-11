@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "$(uname -m)" == "ppc64le" ] && skip "ip6tables tests for ppc64le"
 
-	setup_common
+	setup_common || die "setup_common failed"
 	pod_name="pod-istio"
 	get_pod_config_dir
 

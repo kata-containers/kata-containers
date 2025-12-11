@@ -111,7 +111,7 @@ create_embedqa_pod() {
 }
 
 setup_file() {
-    setup_common
+    setup_common || die "setup_common failed"
 
     get_pod_config_dir
 
