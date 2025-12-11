@@ -174,7 +174,7 @@ fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
     }
     let mem_size = (memory_in_byte / MIB) as u32;
     // memory size must be 2MB aligned for hugepage support
-    if mem_size % 2 != 0 {
+    if !mem_size.is_multiple_of(2) {
         return mem_size + 1;
     }
 

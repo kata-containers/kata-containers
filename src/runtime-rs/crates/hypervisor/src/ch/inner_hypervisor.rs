@@ -917,7 +917,7 @@ impl CloudHypervisorInner {
             bytes_to_megs(guest_mem_block_size)
         );
 
-        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
             new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
                 new_hotplugged_mem,

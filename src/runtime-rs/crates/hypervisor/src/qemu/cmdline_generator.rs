@@ -232,9 +232,9 @@ impl ToQemuParams for Kernel {
 }
 
 fn format_memory(mem_size: u64) -> String {
-    if mem_size % GI_B == 0 {
+    if mem_size.is_multiple_of(GI_B) {
         format!("{}G", mem_size / GI_B)
-    } else if mem_size % MI_B == 0 {
+    } else if mem_size.is_multiple_of(MI_B) {
         format!("{}M", mem_size / MI_B)
     } else {
         format!("{mem_size}")
