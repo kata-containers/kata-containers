@@ -17,14 +17,14 @@
 ///
 /// Note: there is a certain asymmetry to the RX and TX data flows:
 /// - RX transfers do not need any data buffering, since data is read straight
-///       from the host stream and into the guest-provided RX buffer;
+///   from the host stream and into the guest-provided RX buffer;
 /// - TX transfers may require some data to be buffered by `VsockConnection`, if
-///       the host peer can't keep up with reading the data that we're writing.
-///       This is because, once the guest driver provides some data in a virtio
-///       TX buffer, the vsock device must consume it.  If that data can't be
-///       forwarded straight to the host stream, we'll have to store it in a
-///       buffer (and flush it at a later time). Vsock flow control ensures that
-///       our TX buffer doesn't overflow.
+///   the host peer can't keep up with reading the data that we're writing.
+///   This is because, once the guest driver provides some data in a virtio
+///   TX buffer, the vsock device must consume it.  If that data can't be
+///   forwarded straight to the host stream, we'll have to store it in a
+///   buffer (and flush it at a later time). Vsock flow control ensures that
+///   our TX buffer doesn't overflow.
 // The code in this file is best read with a fresh memory of the vsock protocol
 // inner-workings. To help with that, here is a
 //
@@ -157,9 +157,9 @@ impl VsockChannel for VsockConnection {
     /// - `Ok(())`: the packet has been successfully filled in and is ready for
     ///   delivery;
     /// - `Err(VsockError::NoData)`: there was no data available with which to
-    ///    fill in the packet;
+    ///   fill in the packet;
     /// - `Err(VsockError::PktBufMissing)`: the packet would've been filled in
-    ///    with data, but it is missing the data buffer.
+    ///   with data, but it is missing the data buffer.
     fn recv_pkt(&mut self, pkt: &mut VsockPacket) -> VsockResult<()> {
         // Perform some generic initialization that is the same for any packet
         // operation (e.g. source, destination, credit, etc).
