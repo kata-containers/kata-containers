@@ -371,7 +371,6 @@ disable_image_nvdimm = false
 # a large PCI bar, as this is a current limitation with hotplugging on
 # a bridge.
 # Default false
-hotplug_vfio_on_root_bus = false
 
 # Enable hot-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 

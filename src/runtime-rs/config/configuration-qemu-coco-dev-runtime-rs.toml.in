@@ -371,12 +371,6 @@ msize_9p = @DEFMSIZE9P@
 # Default is false
 disable_image_nvdimm = false
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-hotplug_vfio_on_root_bus = false
 
 # Enable hot-plugging of VFIO devices to a bridge-port,
 # root-port or switch-port.
