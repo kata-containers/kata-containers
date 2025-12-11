@@ -122,7 +122,7 @@ where
     }
 
     /// Returns an immutable iterator over the config items
-    pub fn iter(&self) -> ::std::slice::Iter<T> {
+    pub fn iter(&self) -> ::std::slice::Iter<'_, T> {
         self.configs.iter()
     }
 
@@ -269,12 +269,12 @@ where
     }
 
     /// Iterator for configuration information objects.
-    pub fn iter(&self) -> std::slice::Iter<DeviceConfigInfo<T>> {
+    pub fn iter(&self) -> std::slice::Iter<'_, DeviceConfigInfo<T>> {
         self.info_list.iter()
     }
 
     /// Mutable iterator for configuration information objects.
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<DeviceConfigInfo<T>> {
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, DeviceConfigInfo<T>> {
         self.info_list.iter_mut()
     }
 

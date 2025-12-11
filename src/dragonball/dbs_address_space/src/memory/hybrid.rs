@@ -207,7 +207,7 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionHybrid<B> {
         &self,
         offset: MemoryRegionAddress,
         count: usize,
-    ) -> guest_memory::Result<VolatileSlice<BS<B>>> {
+    ) -> guest_memory::Result<VolatileSlice<'_, BS<'_, B>>> {
         match self {
             GuestRegionHybrid::Mmap(region) => region.get_slice(offset, count),
             GuestRegionHybrid::Raw(region) => region.get_slice(offset, count),
@@ -359,7 +359,7 @@ impl<B: Bitmap + 'static> GuestMemory for GuestMemoryHybrid<B> {
         index.map(|x| self.regions[x].as_ref())
     }
 
-    fn iter(&self) -> Iter<B> {
+    fn iter(&self) -> Iter<'_, B> {
         Iter(self.regions.iter())
     }
 }

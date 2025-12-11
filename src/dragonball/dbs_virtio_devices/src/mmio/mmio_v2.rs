@@ -136,7 +136,7 @@ where
     }
 
     /// Acquires the state while holding the lock.
-    pub fn state(&self) -> MutexGuard<MmioV2DeviceState<AS, Q, R>> {
+    pub fn state(&self) -> MutexGuard<'_, MmioV2DeviceState<AS, Q, R>> {
         // Safe to unwrap() because we don't expect poisoned lock here.
         self.state.lock().unwrap()
     }
