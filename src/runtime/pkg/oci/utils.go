@@ -1206,14 +1206,17 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 	}
 
 	// If we are utilizing static resource management for the sandbox, ensure that the hypervisor is started
-	// with the base number of CPU/memory (which is equal to the default CPU/memory specified for the runtime
-	// configuration or annotations) as well as any specified workload resources.
+	// with sufficient CPU/memory for the workload at boot time (since we won't perform later resource updates).
 	if sandboxConfig.StaticResourceMgmt {
 		sandboxConfig.SandboxResources.BaseCPUs = sandboxConfig.HypervisorConfig.NumVCPUsF
 		sandboxConfig.SandboxResources.BaseMemMB = sandboxConfig.HypervisorConfig.MemorySize
 
-		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
-		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+		if sandboxConfig.HypervisorConfig.NumVCPUsF < sandboxConfig.SandboxResources.WorkloadCPUs {
+			sandboxConfig.HypervisorConfig.NumVCPUsF = sandboxConfig.SandboxResources.WorkloadCPUs
+		}
+		if sandboxConfig.HypervisorConfig.MemorySize < sandboxConfig.SandboxResources.WorkloadMemMB {
+			sandboxConfig.HypervisorConfig.MemorySize = sandboxConfig.SandboxResources.WorkloadMemMB
+		}
 
 		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
