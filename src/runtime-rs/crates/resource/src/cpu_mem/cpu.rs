@@ -130,8 +130,8 @@ impl CpuResource {
         // integral part in case a rewritten quota ends up non-integral.
         // Determine the largest CPU period among containers, will be used to normalize quotas
         let max_period = resources
-            .iter()
-            .map(|(_, cpu_resource)| cpu_resource.period())
+            .values()
+            .map(|cpu_resource| cpu_resource.period())
             .max()
             // It's ok to unwrap() here as we have checked that 'resources' is
             // not empty.
