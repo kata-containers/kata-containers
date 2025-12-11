@@ -1050,7 +1050,7 @@ async fn cloud_hypervisor_log_output(
 // For performance, the line is scanned exactly once and all log levels
 // are search for.
 fn parse_ch_log_level(line: &str) -> CloudHypervisorLogLevel {
-    for (i, c) in line.chars().enumerate() {
+    for (i, c) in line.char_indices() {
         if c == 'I' && line[i..].starts_with("INFO:") {
             return CloudHypervisorLogLevel::Info;
         } else if c == 'D' && line[i..].starts_with("DEBG:") {
