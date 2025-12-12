@@ -1479,7 +1479,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         let table_size: u64 = u64::from(msix_cap.table_size()) * (MSIX_TABLE_ENTRY_SIZE as u64);
         let pba_bir: u32 = msix_cap.pba_bir();
         let pba_offset: u64 = u64::from(msix_cap.pba_offset());
-        let pba_size: u64 = (u64::from(msix_cap.table_size()) + 7) / 8;
+        let pba_size: u64 = u64::from(msix_cap.table_size()).div_ceil(8);
 
         self.interrupt.msix = Some(VfioMsix {
             state: msix_config,
