@@ -13,7 +13,7 @@ metadata:
     io.katacontainers.config.hypervisor.kernel_params: "agent.image_registry_auth=kbs:///default/credentials/nvcr agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
 spec:
   restartPolicy: Always
-  runtimeClassName: "${RUNTIME_CLASS_NAME}"
+  runtimeClassName: kata
   serviceAccountName: default
   imagePullSecrets:
     - name: ngc-secret-embedqa

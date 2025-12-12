@@ -549,6 +549,7 @@ function helm_helper() {
 	# Do not enable on nvidia-gpu-* tests, as it'll be deployed by the GPU operator
 	if [[ "${KATA_HYPERVISOR}" == *"nvidia-gpu"* ]]; then
 		yq -i ".node-feature-discovery.enabled = false" "${values_yaml}"
+		yq -i ".runtimeClasses.createDefault = true" "${values_yaml}"
 	fi
 
 	if [[ -z "${HELM_IMAGE_REFERENCE}" ]]; then
