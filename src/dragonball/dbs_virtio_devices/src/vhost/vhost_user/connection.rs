@@ -353,10 +353,7 @@ impl Endpoint {
         // N.B. it's really TDD, we just found it works in this way. Any spec about this?
         for queue_index in 0..queue_num {
             let base = if let Some(conn) = &mut old {
-                match conn.get_vring_base(queue_index) {
-                    Ok(val) => Some(val),
-                    Err(_) => None,
-                }
+                conn.get_vring_base(queue_index).ok()
             } else if !config.reconnect {
                 Some(0)
             } else {
