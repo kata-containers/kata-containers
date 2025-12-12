@@ -25,7 +25,7 @@ machine_type = "@MACHINETYPE@"
 rootfs_type = @DEFROOTFSTYPE@
 
 # Block storage driver to be used for the VM rootfs is backed
-# by a block device. This is virtio-blk-pci, virtio-blk-mmio or nvdimm
+# by a block device. This is virtio-blk-pci or virtio-blk-mmio
 vm_rootfs_driver = "@VMROOTFSDRIVER_QEMU@"
 
 # Enable confidential guest support.
@@ -39,7 +39,6 @@ vm_rootfs_driver = "@VMROOTFSDRIVER_QEMU@"
 # * Does not work by design:
 #   - CPU Hotplug
 #   - Memory Hotplug
-#   - NVDIMM devices
 #
 # Default false
 confidential_guest = false
@@ -163,9 +162,6 @@ memory_slots = @DEFMEMSLOTS@
 default_maxmemory = @DEFMAXMEMSZ@
 
 # The size in MiB will be plused to max memory of hypervisor.
-# It is the memory address space for the NVDIMM devie.
-# If set block storage driver (block_device_driver) to "nvdimm",
-# should set memory_offset to the size of block device.
 # Default 0
 memory_offset = 0
 
@@ -230,8 +226,7 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
 # Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
-# or nvdimm.
+# rootfs is backed by a block device. This is virtio-scsi or virtio-blk
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # aio is the I/O mechanism used by qemu
@@ -362,14 +357,6 @@ disable_nesting_checks = false
 # This is the msize used for 9p shares. It is the number of bytes
 # used for 9p packet payload.
 msize_9p = @DEFMSIZE9P@
-
-# If false and nvdimm is supported, use nvdimm device to plug guest image.
-# Otherwise virtio-block device is used.
-#
-# nvdimm is not supported when `confidential_guest = true`.
-#
-# Default is false
-disable_image_nvdimm = false
 
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
