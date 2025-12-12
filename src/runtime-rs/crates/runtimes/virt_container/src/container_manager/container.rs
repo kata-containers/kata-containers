@@ -34,7 +34,7 @@ use super::{
     process::{Process, ProcessWatcher},
     ContainerInner,
 };
-use crate::container_manager::logger_with_process;
+use crate::container_manager::{is_termination_signal, logger_with_process};
 
 pub struct Exec {
     pub(crate) process: Process,
@@ -430,6 +430,31 @@ impl Container {
         all: bool,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
+
+        // Check if process is already stopped before signaling.
+        // For SIGKILL/SIGTERM, if the process is already stopped, return success immediately.
+        // This is critical for proper cleanup when VM dies - the wait thread sets status to
+        // Stopped even on error, so subsequent Kill() calls will see it as already stopped.
+        let is_term_signal = is_termination_signal(signal);
+        let process_status = if container_process.exec_id.is_empty() {
+            inner.init_process.get_status().await
+        } else if let Some(exec) = inner.exec_processes.get(&container_process.exec_id) {
+            exec.process.get_status().await
+        } else {
+            ProcessStatus::Unknown
+        };
+
+        if is_term_signal && process_status == ProcessStatus::Stopped {
+            info!(
+                self.logger,
+                "process has already stopped, skipping signal";
+                "container" => &self.container_id.container_id,
+                "process" => ?container_process,
+                "signal" => signal
+            );
+            return Ok(());
+        }
+
         inner.signal_process(container_process, signal, all).await
     }
 

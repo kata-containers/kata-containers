@@ -18,7 +18,7 @@ use resource::{rootfs::Rootfs, volume::Volume};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
-use crate::container_manager::logger_with_process;
+use crate::container_manager::{convert_agent_error, logger_with_process};
 
 use super::{
     io::ContainerIo,
@@ -287,7 +287,8 @@ impl ContainerInner {
 
         self.agent
             .signal_process(agent::SignalProcessRequest { process_id, signal })
-            .await?;
+            .await
+            .map_err(convert_agent_error)?;
 
         Ok(())
     }
