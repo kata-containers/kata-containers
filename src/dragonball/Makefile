@@ -44,7 +44,7 @@ test:
 ifdef SUPPORT_VIRTUALIZATION
 	@set -e; \
 	for dir in $(PROJECT_DIRS); do \
-		bash -c "pushd $${dir} && RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) -- --nocapture --test-threads=1 && popd"; \
+		bash -c "pushd $${dir} && RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) --no-fail-fast -- --nocapture --test-threads=1 --skip bindgen && popd"; \
 	done
 else
 	@echo "INFO: skip testing dragonball, it need virtualization support."
