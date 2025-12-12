@@ -1345,6 +1345,7 @@ pub(crate) mod tests {
     use std::ffi::CString;
     use std::fs::File;
     use std::os::unix::io::FromRawFd;
+    use test_utils::skip_if_not_root;
 
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
@@ -1797,6 +1798,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mem_virtio_device_set_resource() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
         let id = "mem0".to_string();
         let factory = Arc::new(Mutex::new(DummyMemRegionFactory {}));
@@ -1874,6 +1876,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mem_virtio_device_activate() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
         let id = "mem0".to_string();
         let factory = Arc::new(Mutex::new(DummyMemRegionFactory {}));
@@ -1976,6 +1979,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mem_virtio_device_remove() {
+        skip_if_not_root!();
         let epoll_mgr = EpollManager::default();
         let id = "mem0".to_string();
         let factory = Arc::new(Mutex::new(DummyMemRegionFactory {}));
@@ -2011,6 +2015,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mem_epoll_handler_handle_event() {
+        skip_if_not_root!();
         let handler = create_mem_epoll_handler("test_1".to_string());
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
@@ -2032,6 +2037,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_mem_epoll_handler_process_queue() {
+        skip_if_not_root!();
         let mut handler = create_mem_epoll_handler("test_1".to_string());
         let m = &handler.config.vm_as.clone();
         // fail to parse available descriptor chain

@@ -50,6 +50,7 @@ vm-memory = { workspace = true, features = [
     "backend-mmap",
     "backend-atomic",
 ] }
+test-utils = { workspace = true }
 
 [features]
 virtio-mmio = []

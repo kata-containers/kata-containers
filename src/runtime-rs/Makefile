@@ -583,7 +583,7 @@ ifneq ($(EXTRA_RUSTFEATURES),)
 endif
 
 
-TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
+TARGET_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR ?= /
