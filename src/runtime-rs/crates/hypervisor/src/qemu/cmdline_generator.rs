@@ -2582,6 +2582,7 @@ impl<'a> QemuCmdLine<'a> {
     /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.
     /// The design origins from https://github.com/qemu/qemu/blob/master/docs/pcie.txt
     ///
+    /// ```text
     ///     pcie.0 bus
     ///     ---------------------------------------------------------------------
     ///          |                                         |
@@ -2600,6 +2601,7 @@ impl<'a> QemuCmdLine<'a> {
     ///                                  ------------
     ///                                  | PCIe Dev |
     ///                                  ------------
+    /// ```
     ///  Using multi-function PCI Express Root Ports:
     ///     -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0] \
     ///     -device pcie-root-port,id=root_port2,chassis=x1,addr=z.1[,slot=y1][,bus=pcie.0] \
