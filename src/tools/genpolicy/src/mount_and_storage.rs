@@ -105,6 +105,7 @@ pub fn get_mount_and_storage(
     storages: &mut Vec<agent::Storage>,
     yaml_volume: &volume::Volume,
     yaml_mount: &pod::VolumeMount,
+    pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
     debug!(
         "get_mount_and_storage: adding mount and storage for: {:?}",
@@ -125,7 +126,7 @@ pub fn get_mount_and_storage(
             volume = Some(&settings_volumes.emptyDir);
         }
 
-        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
+        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap(), pod_security_context);
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
     } else if yaml_volume.hostPath.is_some() {
@@ -147,16 +148,21 @@ fn get_empty_dir_mount_and_storage(
     storages: &mut Vec<agent::Storage>,
     yaml_mount: &pod::VolumeMount,
     settings_empty_dir: &settings::EmptyDirVolume,
+    pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
     debug!("Settings emptyDir: {:?}", settings_empty_dir);
 
     if yaml_mount.subPathExpr.is_none() {
+        let mut options = settings_empty_dir.options.clone();
+        if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
+            options.push(format!("fsgid={}", gid));
+        }
         storages.push(agent::Storage {
             driver: settings_empty_dir.driver.clone(),
             driver_options: Vec::new(),
             source: settings_empty_dir.source.clone(),
             fstype: settings_empty_dir.fstype.clone(),
-            options: settings_empty_dir.options.clone(),
+            options,
             mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
             fs_group: protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),

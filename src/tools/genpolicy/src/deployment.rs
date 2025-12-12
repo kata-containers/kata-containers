@@ -114,7 +114,7 @@ impl yaml::K8sResource for Deployment {
             storages,
             container,
             settings,
-            &self.spec.template.spec.volumes,
+            &self.spec.template.spec,
         );
     }
 
