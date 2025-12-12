@@ -18,7 +18,6 @@ setup() {
 		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
 
-
 	pod_name="constraints-cpu-test"
 	container_name="first-cpu-container"
 
@@ -31,6 +30,8 @@ setup() {
 	# weight = (1 + ((request - 2) * 9999) / 262142)
 	total_requests=20
 	total_cpu_container=1
+
+	setup_common || die "setup_common failed"
 
 	get_pod_config_dir
 	yaml_file="${pod_config_dir}/pod-cpu.yaml"
@@ -127,6 +128,6 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
-
+	teardown_common "${node}" "${node_start_time:-}"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }

@@ -13,7 +13,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
-
+	setup_common || die "setup_common failed"
 	pod_yaml="${pod_config_dir}/pod-projected-volume.yaml"
 	add_allow_all_policy_to_yaml "${pod_yaml}"
 }
@@ -59,7 +59,7 @@ teardown() {
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
-
+	teardown_common "${node}" "${node_start_time:-}"
 	rm -f $TMP_FILE $SECOND_TMP_FILE
 	kubectl delete pod "$pod_name"
 	kubectl delete secret pass user

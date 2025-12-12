@@ -9,6 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 	namespace_name="default-cpu-example"
 	pod_name="default-cpu-test"
@@ -44,4 +45,5 @@ teardown() {
 	kubectl delete namespaces "$namespace_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

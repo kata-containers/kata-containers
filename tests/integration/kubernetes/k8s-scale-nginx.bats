@@ -12,7 +12,7 @@ setup() {
 	replicas="3"
 	deployment="nginx-deployment"
 	get_pod_config_dir
-
+	setup_common || die "setup_common failed"
 	# Create the yaml file
 	test_yaml="${pod_config_dir}/test-${deployment}.yaml"
 	set_nginx_image "${pod_config_dir}/${deployment}.yaml" "${test_yaml}"
@@ -37,4 +37,5 @@ teardown() {
 	kubectl delete deployment "$deployment"
 	kubectl delete service "$deployment"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

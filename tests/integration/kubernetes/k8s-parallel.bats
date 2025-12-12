@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	setup_common
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 	job_name="jobtest"
 	names=( "test1" "test2" "test3" )

@@ -9,6 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common || die "setup_common failed"
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
@@ -59,4 +60,5 @@ teardown() {
 
 	rm "${test_yaml_file}"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

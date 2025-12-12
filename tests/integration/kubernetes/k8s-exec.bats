@@ -13,7 +13,7 @@ setup() {
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
-
+	setup_common || die "setup_common failed"
 	test_yaml_file="${pod_config_dir}/test-busybox-pod.yaml"
 	cp "$pod_config_dir/busybox-pod.yaml" "${test_yaml_file}"
 
@@ -86,4 +86,5 @@ teardown() {
 
 	rm "${test_yaml_file}"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

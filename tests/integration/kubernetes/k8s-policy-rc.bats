@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+    setup_common || die "setup_common failed"
     replication_name="policy-rc-test"
     app_name="policy-nginx-rc"
 
@@ -173,7 +173,7 @@ teardown() {
 
     # Clean-up
     kubectl delete rc "${replication_name}"
-
+    teardown_common "${node}" "${node_start_time:-}"
     info "Deleting ${incorrect_yaml}"
     rm -f "${incorrect_yaml}"
 

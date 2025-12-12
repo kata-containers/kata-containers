@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+    setup_common || die "setup_common failed"
     get_pod_config_dir
 
     deployment_name="policy-redis-deployment"
@@ -74,6 +74,9 @@ teardown() {
     # Clean-up
     kubectl delete deployment "${deployment_name}"
 
-    delete_tmp_policy_settings_dir "${policy_settings_dir}"
+    if [ "${BATS_TEST_NUMBER}" == "1" ]; then
+        delete_tmp_policy_settings_dir "${policy_settings_dir}"
+    fi
     rm -f "${incorrect_deployment_yaml}"
+    teardown_common "${node}" "${node_start_time:-}"
 }

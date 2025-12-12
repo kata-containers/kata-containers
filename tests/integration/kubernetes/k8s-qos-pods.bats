@@ -11,13 +11,14 @@ TEST_INITRD="${TEST_INITRD:-no}"
 
 # Not working on ARM CI see https://github.com/kata-containers/tests/issues/4727  
 setup() {
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 }
 
 @test "Guaranteed QoS" {
 	pod_name="qos-test"
 	yaml_file="${pod_config_dir}/pod-guaranteed.yaml"
-
+	echo "info node: ${node:-} and node start time: ${node_start_time:-}"
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
@@ -72,6 +73,8 @@ setup() {
 }
 
 teardown() {
+	echo "teardown(): node: ${node:-} and node start time: ${node_start_time:-}"
 	kubectl delete pod "$pod_name"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }
