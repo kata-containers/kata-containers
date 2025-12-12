@@ -1,3 +1,8 @@
+// Copyright (c) 2023
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use std::io::Result;
 
 use regex::Regex;
