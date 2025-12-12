@@ -140,7 +140,7 @@ if [[ -n "$device_name" && -b "$device_path" ]]; then
 	rm "$storage_key_path"
 
 	if [ "$data_integrity" == "false" ]; then
-		mkfs.ext4 "/dev/mapper/$opened_device_name" -E lazy_journal_init
+		mkfs.ext4 "/dev/mapper/$opened_device_name" -O ^has_journal -m 0 -i 163840 -I 128
 	else
 		# mkfs.ext4 doesn't perform whole sector writes and this will cause checksum failures
 		# with an unwiped integrity device. Therefore, first perform a dry run.
@@ -179,7 +179,7 @@ if [[ -n "$device_name" && -b "$device_path" ]]; then
 		# Now perform the actual ext4 format. Use lazy_journal_init so that the journal is
 		# initialized on demand. This is safe for ephemeral storage since we don't expect
 		# ephemeral storage to survice a power cycle.
-		mkfs.ext4 "/dev/mapper/$opened_device_name" -E lazy_journal_init
+		mkfs.ext4 "/dev/mapper/$opened_device_name" -O ^has_journal -m 0 -i 163840 -I 128
 	fi
 
 	[ ! -d "$mount_point" ] && mkdir -p "$mount_point"
