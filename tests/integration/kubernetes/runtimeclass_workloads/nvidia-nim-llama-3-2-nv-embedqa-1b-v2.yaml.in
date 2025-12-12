@@ -11,7 +11,7 @@ metadata:
     app: ${POD_NAME_EMBEDQA}
 spec:
   restartPolicy: Always
-  runtimeClassName: "${RUNTIME_CLASS_NAME}"
+  runtimeClassName: kata
   serviceAccountName: default
   imagePullSecrets:
     - name: ngc-secret-embedqa

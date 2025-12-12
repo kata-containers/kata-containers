@@ -11,7 +11,7 @@ metadata:
     app: ${POD_NAME_INSTRUCT}
 spec:
   restartPolicy: Never
-  runtimeClassName: "${RUNTIME_CLASS_NAME}"
+  runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
   securityContext:
