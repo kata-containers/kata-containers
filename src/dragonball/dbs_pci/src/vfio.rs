@@ -1595,7 +1595,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
     pub fn activate(&self, device: Weak<dyn DeviceIo>, resources: DeviceResources) -> Result<()> {
         let mut state = self.state();
 
-        if resources.len() == 0 {
+        if resources.is_empty() {
             return Err(VfioPciError::InvalidResources);
         }
 
