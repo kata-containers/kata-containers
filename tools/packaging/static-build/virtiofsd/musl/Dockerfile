@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM alpine:3.16.2
+FROM quay.io/kata-containers/alpine:3.16.2
 ARG RUST_TOOLCHAIN
 
 ENV RUSTUP_HOME="/opt/rustup"

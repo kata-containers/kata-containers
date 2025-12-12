@@ -37,7 +37,12 @@ fi
 oras_tarball="oras_${oras_required_version#v}_linux_${arch}.tar.gz"
 
 echo "Downloading ORAS ${oras_required_version}"
-curl -OL https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}
+# Use GH_TOKEN for authenticated requests to avoid rate limiting
+curl_auth_header=""
+if [[ -n "${GH_TOKEN:-}" ]]; then
+	curl_auth_header="-H \"Authorization: token ${GH_TOKEN}\""
+fi
+eval curl -OL ${curl_auth_header} https://github.com/oras-project/oras/releases/download/${oras_required_version}/${oras_tarball}
 
 echo "Installing ORAS to ${install_dest}"
 sudo mkdir -p "${install_dest}"

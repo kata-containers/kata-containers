@@ -4,7 +4,7 @@
 
 ARG GO_VERSION=
 
-FROM busybox:1.37.0 AS resources
+FROM quay.io/kata-containers/busybox:1.37.0 AS resources
 
 WORKDIR /usr/local
 

@@ -69,6 +69,7 @@ if [ ! -d "$HOME/.docker" ]; then
 fi
 
 "${script_dir}"/kata-deploy-copy-yq-installer.sh
+GH_TOKEN="${GH_TOKEN:-}"
 docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
@@ -77,6 +78,7 @@ docker build -q -t build-kata-deploy \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
 	--build-arg ARCH="${ARCH}" \
+	--build-arg GH_TOKEN="${GH_TOKEN}" \
 	"${script_dir}/dockerbuild/"
 
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
@@ -120,6 +122,7 @@ docker run \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v "${kata_dir}:${kata_dir}" \
 	--env USER=${USER} \
+	--env GH_TOKEN="${GH_TOKEN}" \
 	--env ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY}" \
 	--env ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY}" \
 	--env ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME}" \

@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:24.04
+FROM quay.io/kata-containers/ubuntu:24.04
 ARG RUST_TOOLCHAIN
 
 ENV DEBIAN_FRONTEND=noninteractive
