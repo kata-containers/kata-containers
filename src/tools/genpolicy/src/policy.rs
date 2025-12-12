@@ -289,6 +289,7 @@ pub struct ContainerPolicy {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Volumes {
     /// K8s EmptyDir Volume.
     pub emptyDir: Option<EmptyDirVolume>,
@@ -299,6 +300,7 @@ pub struct Volumes {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct EmptyDirVolume {
     pub mount_type: String,
     pub mount_point: String,
@@ -311,6 +313,7 @@ pub struct EmptyDirVolume {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PersistentVolumeClaimVolume {
     pub mount_type: String,
     pub mount_source: String,

@@ -669,7 +669,7 @@ where
         Ok(())
     }
 
-    pub fn device(&self) -> MutexGuard<Box<dyn VirtioDevice<AS, Q, R>>> {
+    pub fn device(&self) -> MutexGuard<'_, Box<dyn VirtioDevice<AS, Q, R>>> {
         self.device.lock().expect("Poisoned lock of device")
     }
 
@@ -677,21 +677,21 @@ where
         self.device.clone()
     }
 
-    pub fn common_config(&self) -> MutexGuard<VirtioPciCommonConfig> {
+    pub fn common_config(&self) -> MutexGuard<'_, VirtioPciCommonConfig> {
         self.common_config
             .lock()
             .expect("Poisoned lock of common_config")
     }
 
-    pub fn state(&self) -> MutexGuard<VirtioPciDeviceState<AS, Q>> {
+    pub fn state(&self) -> MutexGuard<'_, VirtioPciDeviceState<AS, Q>> {
         self.state.lock().expect("Poisoned lock of state")
     }
 
-    pub fn msix_state(&self) -> MutexGuard<MsixState> {
+    pub fn msix_state(&self) -> MutexGuard<'_, MsixState> {
         self.msix_state.lock().expect("Poisoned lock of msix_state")
     }
 
-    pub fn intr_mgr(&self) -> MutexGuard<DeviceInterruptManager<Arc<KvmIrqManager>>> {
+    pub fn intr_mgr(&self) -> MutexGuard<'_, DeviceInterruptManager<Arc<KvmIrqManager>>> {
         // Safe to unwrap() because we don't expect poisoned lock here.
         self.intr_mgr.lock().expect("Poisoned lock of intr_mgr")
     }

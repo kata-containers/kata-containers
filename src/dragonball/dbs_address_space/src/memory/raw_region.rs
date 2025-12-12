@@ -202,7 +202,7 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionRaw<B> {
         &self,
         offset: MemoryRegionAddress,
         count: usize,
-    ) -> guest_memory::Result<VolatileSlice<BS<B>>> {
+    ) -> guest_memory::Result<VolatileSlice<'_, BS<'_, B>>> {
         let offset = offset.raw_value() as usize;
         let end = compute_offset(offset, count)?;
         if end > self.size {

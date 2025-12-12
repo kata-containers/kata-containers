@@ -653,7 +653,7 @@ pub fn client(cfg: &mut Config, commands: Vec<&str>) -> Result<()> {
     let result = run_commands(cfg, commands);
 
     // stop the vm if booted
-    if vm_ref.is_some() {
+    if let Some(vm_ref) = vm_ref {
         info!(sl!(), "stopping test vm");
         // TODO: The error handling here is for cloud-hypervisor.
         // We use tokio::runtime to call the async operations of
@@ -663,7 +663,7 @@ pub fn client(cfg: &mut Config, commands: Vec<&str>) -> Result<()> {
         // But since we return from the tokio::runtime block
         // the runtime is dropped. During stop_vm call, cloud hypervisor
         // waits for the logger task which is in cancelled state as a result.
-        match vm::remove_vm(vm_ref.unwrap()) {
+        match vm::remove_vm(vm_ref) {
             Ok(_) => info!(sl!(), "Successfully shut down test vm"),
             Err(e) => warn!(sl!(), "Error shutting down vm:{:?}", e),
         }

@@ -32,14 +32,6 @@ macro_rules! sl {
     };
 }
 
-#[macro_export]
-macro_rules! eother {
-    () => (std::io::Error::new(std::io::ErrorKind::Other, ""));
-    ($fmt:expr, $($arg:tt)*) => ({
-        std::io::Error::new(std::io::ErrorKind::Other, format!($fmt, $($arg)*))
-    })
-}
-
 pub fn check_kernel_cmd_line(
     kernel_cmdline_path: &str,
     search_param: &str,

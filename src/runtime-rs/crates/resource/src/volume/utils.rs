@@ -14,10 +14,7 @@ use crate::{
     volume::share_fs_volume::generate_mount_path,
 };
 use anyhow::{anyhow, Context, Result};
-use kata_sys_util::{
-    eother,
-    mount::{get_mount_options, get_mount_path},
-};
+use kata_sys_util::mount::{get_mount_options, get_mount_path};
 use oci_spec::runtime as oci;
 
 use hypervisor::device::DeviceType;
@@ -34,10 +31,10 @@ pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
         .file_name()
         .map(|v| v.to_os_string())
         .ok_or_else(|| {
-            eother!(
+            std::io::Error::other(format!(
                 "failed to get file name of path {}",
                 src.as_ref().to_string_lossy()
-            )
+            ))
         })?
         .into_string()
         .map_err(|e| anyhow!("failed to convert to string {:?}", e))?;

@@ -352,12 +352,8 @@ impl Endpoint {
         // base is not zero any more. So don't set queue base on reconnection.
         // N.B. it's really TDD, we just found it works in this way. Any spec about this?
         for queue_index in 0..queue_num {
-            let base = if old.is_some() {
-                let conn = old.as_mut().unwrap();
-                match conn.get_vring_base(queue_index) {
-                    Ok(val) => Some(val),
-                    Err(_) => None,
-                }
+            let base = if let Some(conn) = &mut old {
+                conn.get_vring_base(queue_index).ok()
             } else if !config.reconnect {
                 Some(0)
             } else {

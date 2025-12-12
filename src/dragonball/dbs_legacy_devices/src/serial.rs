@@ -111,7 +111,7 @@ impl ConsoleHandler for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
     fn raw_input(&mut self, data: &[u8]) -> std::io::Result<usize> {
         self.serial
             .enqueue_raw_bytes(data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{e:?}")))
+            .map_err(|e| std::io::Error::other(format!("{e:?}")))
     }
 
     fn set_output_stream(&mut self, out: Option<Box<dyn Write + Send>>) {

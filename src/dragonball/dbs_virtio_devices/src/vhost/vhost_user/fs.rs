@@ -560,7 +560,7 @@ impl<AS: GuestAddressSpace> VhostUserFs<AS> {
         self.device.clone()
     }
 
-    fn device(&self) -> MutexGuard<VhostUserFsDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserFsDevice> {
         // Do not expect poisoned lock.
         self.device.lock().unwrap()
     }

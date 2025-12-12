@@ -40,7 +40,6 @@ use nix::unistd::setgid;
 use nix::unistd::setuid;
 use nix::unistd::Gid;
 use nix::unistd::Uid;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -77,14 +76,6 @@ enum CloudHypervisorLogLevel {
     Info,
     Warn,
     Error,
-}
-
-#[derive(Clone, Deserialize, Serialize)]
-pub struct VmmPingResponse {
-    pub build_version: String,
-    pub version: String,
-    pub pid: i64,
-    pub features: Vec<String>,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
@@ -929,7 +920,7 @@ impl CloudHypervisorInner {
             bytes_to_megs(guest_mem_block_size)
         );
 
-        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
             new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
                 new_hotplugged_mem,
@@ -1050,7 +1041,7 @@ async fn cloud_hypervisor_log_output(
 // For performance, the line is scanned exactly once and all log levels
 // are search for.
 fn parse_ch_log_level(line: &str) -> CloudHypervisorLogLevel {
-    for (i, c) in line.chars().enumerate() {
+    for (i, c) in line.char_indices() {
         if c == 'I' && line[i..].starts_with("INFO:") {
             return CloudHypervisorLogLevel::Info;
         } else if c == 'D' && line[i..].starts_with("DEBG:") {

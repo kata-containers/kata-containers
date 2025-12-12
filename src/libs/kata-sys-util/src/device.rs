@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use nix::sys::stat;
 
-use crate::{eother, sl};
+use crate::sl;
 
 const SYS_DEV_BLOCK_PATH: &str = "/sys/dev/block";
 const BLKDEV_PARTITION: &str = "partition";
@@ -56,11 +56,10 @@ fn get_block_device_id(dev: stat::dev_t) -> Result<Option<(u64, u64)>> {
         blk_dev_path = match blk_dev_path.parent() {
             Some(p) => p.to_path_buf(),
             None => {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "Can't find real device for dev {}:{}",
-                    major,
-                    minor
-                ))
+                    major, minor,
+                )))
             }
         };
     }
@@ -75,19 +74,19 @@ fn get_block_device_id(dev: stat::dev_t) -> Result<Option<(u64, u64)>> {
     );
 
     if let Some((major, minor)) = dev_buf.split_once(':') {
-        let major = major
-            .parse::<u64>()
-            .map_err(|_e| eother!("Failed to parse major number: {}", major))?;
-        let minor = minor
-            .parse::<u64>()
-            .map_err(|_e| eother!("Failed to parse minor number: {}", minor))?;
+        let major = major.parse::<u64>().map_err(|_e| {
+            std::io::Error::other(format!("Failed to parse major number: {}", major))
+        })?;
+        let minor = minor.parse::<u64>().map_err(|_e| {
+            std::io::Error::other(format!("Failed to parse minor number: {}", minor))
+        })?;
         Ok(Some((major, minor)))
     } else {
-        Err(eother!(
+        Err(std::io::Error::other(format!(
             "Wrong format in {}: {}",
             dev_path.to_string_lossy(),
-            dev_buf
-        ))
+            dev_buf,
+        )))
     }
 }
 

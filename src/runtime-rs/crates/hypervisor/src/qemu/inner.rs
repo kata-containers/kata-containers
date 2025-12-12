@@ -229,10 +229,7 @@ impl QemuInner {
                     .rootless_user
                     .clone()
                     .ok_or_else(|| {
-                        std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "rootless user must be specified for rootless qemu",
-                        )
+                        std::io::Error::other("rootless user must be specified for rootless qemu")
                     })?,
             )
         } else {
@@ -627,7 +624,7 @@ impl QemuInner {
             bytes_to_megs(new_hotplugged_mem)
         );
 
-        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
             new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
                 new_hotplugged_mem,
