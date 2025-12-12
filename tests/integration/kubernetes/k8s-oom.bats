@@ -6,9 +6,11 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	setup_common || die "setup_common failed"
 	pod_name="pod-oom"
 	get_pod_config_dir
 
@@ -17,6 +19,7 @@ setup() {
 }
 
 @test "Test OOM events for pods" {
+	set_node "${yaml_file}" "$node"
 	# Create pod
 	kubectl create -f "${yaml_file}"
 
@@ -41,5 +44,5 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 	kubectl get "pod/$pod_name" -o yaml
 
-	kubectl delete pod "$pod_name"
+	teardown_common "${node}" "${node_start_time:-}"
 }
