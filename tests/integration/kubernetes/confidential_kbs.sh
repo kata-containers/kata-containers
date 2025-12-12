@@ -33,6 +33,8 @@ readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
 readonly KBS_SVC_NAME="kbs"
 # The kbs ingress name
 readonly KBS_INGRESS_NAME="kbs"
+# Workdir for installing snphost
+readonly SNPHOST_DIR="/tmp/snphost-workdir"
 
 # Set "allow all" policy to resources.
 #
@@ -74,6 +76,27 @@ kbs_set_gpu0_resource_policy() {
 	return "${rc}"
 }
 
+# Set KBS resource policy requiring CPU0's EAR status to be affirming.
+#
+kbs_set_cpu0_resource_policy() {
+	local policy_file
+	policy_file=$(mktemp -t kbs-cpu-policy-XXXXX.rego)
+
+	cat > "${policy_file}" <<-'EOF'
+		package policy
+		import rego.v1
+		default allow = false
+		allow if {
+		    input["submods"]["cpu0"]["ear.status"] == "affirming"
+		}
+	EOF
+
+	kbs_set_resources_policy "${policy_file}"
+	local rc=$?
+	rm -f "${policy_file}"
+	return "${rc}"
+}
+
 # Set resources policy.
 #
 # Parameters:
@@ -90,6 +113,17 @@ kbs_set_resources_policy() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "${KBS_PRIVATE_KEY}" set-resource-policy \
 		--policy-file "${file}"
+}
+
+# Execute an admin command via the KBS client using the correct
+# URI and admin authentication key.
+#
+# Parameters:
+#	$1 - config command to run
+#
+kbs_config_command() {
+	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+                --auth-private-key "${KBS_PRIVATE_KEY}" "$@"
 }
 
 # Set resource data in base64 encoded.
@@ -245,6 +279,31 @@ kbs_uninstall_cli() {
 	else
 		echo "${COCO_KBS_DIR} does not exist in the machine, skip uninstalling the kbs cli"
 	fi
+}
+
+# Ensure the sev-snp-measure utility is installed.
+#
+ensure_sev_snp_measure() {
+	command -v sev-snp-measure >/dev/null && return
+
+	source "${HOME}"/.cicd/venv/bin/activate
+	pip install sev-snp-measure
+}
+
+# Ensure that snphost utility is installed
+#
+ensure_snphost() {
+	command -v snphost >/dev/null && return
+
+	git clone https://github.com/virtee/snphost.git "${SNPHOST_DIR}"
+	pushd "${SNPHOST_DIR}"
+
+	_ensure_rust "1.85.0"
+	cargo build --release
+	sudo install -m 755 target/release/snphost /usr/local/bin/
+
+	popd
+	rm -rf "${SNPHOST_DIR}"
 }
 
 # Delete the kbs on Kubernetes
