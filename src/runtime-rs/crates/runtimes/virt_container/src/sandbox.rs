@@ -513,7 +513,7 @@ impl VirtSandbox {
         if initdata.is_empty() {
             return Ok(None);
         }
-        info!(sl!(), "Init Data Content String: {:?}", &initdata);
+        debug!(sl!(), "Init Data Content String: {:?}", &initdata);
         let available_protection = available_guest_protection()?;
         info!(
             sl!(),
@@ -531,10 +531,7 @@ impl VirtSandbox {
             // TODO: there's more `GuestProtection` types to be supported.
             _ => return Ok(None),
         };
-        info!(
-            sl!(),
-            "calculate initdata: {:?} with initdata  digest {:?}", &initdata, &initdata_digest
-        );
+        info!(sl!(), "initdata  digest {:?}", &initdata_digest);
 
         // initdata within compressed rawblock
         let image_path = Path::new(kata_shared_init_data_path().as_str())
