@@ -40,9 +40,9 @@ tempfile = "3.19.1"
 hex = "0.4"
 
 ## Dependencies from `rust-netlink`
-netlink-packet-route = "0.22"
+netlink-packet-route = "0.26"
 netlink-sys = "0.8"
-rtnetlink = "0.16"
+rtnetlink = "0.19"
 
 # Local dependencies
 agent = { workspace = true }
