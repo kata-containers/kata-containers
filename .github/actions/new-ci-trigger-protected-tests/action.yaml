@@ -1,0 +1,42 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Trigger Protected Tests
+description: Send repository_dispatch event to trigger protected tests
+
+inputs:
+  pr-number:
+    description: The pull request number
+    required: true
+  head-sha:
+    description: The head commit SHA of the PR
+    required: true
+  tag:
+    description: Image tag to use
+    required: true
+  github-token:
+    description: GitHub token with repo scope
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Trigger protected tests workflow
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        INPUT_PR_NUMBER: ${{ inputs.pr-number }}
+        INPUT_HEAD_SHA: ${{ inputs.head-sha }}
+        INPUT_TAG: ${{ inputs.tag }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        echo "Triggering protected tests workflow"
+        gh api "repos/${GITHUB_REPOSITORY}/dispatches" \
+          --method POST \
+          -f event_type="new-ci-protected-tests" \
+          -f "client_payload[pr_number]=${INPUT_PR_NUMBER}" \
+          -f "client_payload[head_sha]=${INPUT_HEAD_SHA}" \
+          -f "client_payload[tag]=${INPUT_TAG}"
+        echo "Protected tests workflow triggered"
