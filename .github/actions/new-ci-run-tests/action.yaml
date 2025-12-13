@@ -1,0 +1,40 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Run Kata Tests
+description: Run tests using existing gha-run.sh scripts
+
+inputs:
+  test-category:
+    description: Test category (integration, functional, stability)
+    required: true
+  test-type:
+    description: Test type within category
+    required: true
+  action:
+    description: Action to run (install-dependencies, install-kata, run)
+    required: true
+  kata-tarball-dir:
+    description: Directory containing kata artifacts
+    required: false
+    default: 'kata-artifacts'
+
+runs:
+  using: composite
+  steps:
+    - name: Run tests
+      shell: bash
+      env:
+        INPUT_TEST_CATEGORY: ${{ inputs.test-category }}
+        INPUT_TEST_TYPE: ${{ inputs.test-type }}
+        INPUT_ACTION: ${{ inputs.action }}
+        INPUT_TARBALL_DIR: ${{ inputs.kata-tarball-dir }}
+      run: |
+        script_path="./tests/${INPUT_TEST_CATEGORY}/${INPUT_TEST_TYPE}/gha-run.sh"
+        if [[ ! -f "${script_path}" ]]; then
+          echo "Error: Script not found: ${script_path}"
+          exit 1
+        fi
+        "${script_path}" "${INPUT_ACTION}" "${INPUT_TARBALL_DIR}"

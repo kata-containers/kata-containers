@@ -1,0 +1,33 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Install Kata from Tarball
+description: Install Kata Containers from a pre-built tarball
+
+inputs:
+  tarball-path:
+    description: Path to the kata-static tarball directory
+    required: false
+    default: 'kata-artifacts'
+  install-type:
+    description: Type of installation (full, tools-only)
+    required: false
+    default: 'full'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Kata
+      shell: bash
+      env:
+        kata_tarball_dir: ${{ inputs.tarball-path }}
+        INPUT_INSTALL_TYPE: ${{ inputs.install-type }}
+      run: |
+        source ./tests/common.bash
+        if [[ "${INPUT_INSTALL_TYPE}" == "tools-only" ]]; then
+          install_kata_tools
+        else
+          install_kata
+        fi
