@@ -25,6 +25,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/new-ci-build-amd64.yaml
     with:
       tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
@@ -36,6 +38,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     uses: ./.github/workflows/new-ci-build-arm64.yaml
     with:
       tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
