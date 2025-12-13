@@ -181,10 +181,6 @@ spec:
         - name: DEFAULT_SHIM_PPC64LE
           value: {{ $defaultShimPpc64le | quote }}
         {{- end }}
-        - name: CREATE_RUNTIMECLASSES
-          value: {{ .Values.env.createRuntimeClasses | quote }}
-        - name: CREATE_DEFAULT_RUNTIMECLASS
-          value: {{ .Values.env.createDefaultRuntimeClass | quote }}
         {{- $allowedHypervisorAnnotationsAmd64 := include "kata-deploy.getAllowedHypervisorAnnotationsForArch" (dict "root" . "arch" "amd64") | trim -}}
         {{- if $allowedHypervisorAnnotationsAmd64 }}
         - name: ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64
@@ -272,17 +268,17 @@ spec:
         {{- $forceGuestPullArm64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "arm64") | trim -}}
         {{- if $forceGuestPullArm64 }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64
-          value: {{ $forceGuestPullAmd64 | quote }}
+          value: {{ $forceGuestPullArm64 | quote }}
         {{- end }}
         {{- $forceGuestPullS390x := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "s390x") | trim -}}
         {{- if $forceGuestPullS390x }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_S390X
-          value: {{ $forceGuestPullAmd64 | quote }}
+          value: {{ $forceGuestPullS390x | quote }}
         {{- end }}
         {{- $forceGuestPullPpc64le := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "ppc64le") | trim -}}
         {{- if $forceGuestPullPpc64le }}
         - name: EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE
-          value: {{ $forceGuestPullAmd64 | quote }}
+          value: {{ $forceGuestPullPpc64le | quote }}
         {{- end }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
