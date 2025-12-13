@@ -1,0 +1,172 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: New CI | Protected Tests
+on:
+  repository_dispatch:
+    types: [new-ci-protected-tests]
+
+permissions: {}
+
+jobs:
+  trigger-s390x-build:
+    name: Trigger s390x build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.head_sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/new-ci-trigger-arch-build
+        with:
+          arch: s390x
+          pr-number: ${{ github.event.client_payload.pr_number }}
+          head-sha: ${{ github.event.client_payload.head_sha }}
+          tag: ${{ github.event.client_payload.tag }}-s390x
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  trigger-ppc64le-build:
+    name: Trigger ppc64le build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.head_sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/new-ci-trigger-arch-build
+        with:
+          arch: ppc64le
+          pr-number: ${{ github.event.client_payload.pr_number }}
+          head-sha: ${{ github.event.client_payload.head_sha }}
+          tag: ${{ github.event.client_payload.tag }}-ppc64le
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  run-k8s-tests-on-aks:
+    name: Run K8s tests on AKS
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of main
+        run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: main
+
+      - name: Run AKS tests
+        run: echo "AKS tests would run here"
+        env:
+          DOCKER_REGISTRY: ghcr.io
+          DOCKER_REPO: ${{ github.repository_owner }}/kata-deploy-ci
+          DOCKER_TAG: ${{ github.event.client_payload.tag }}-amd64
+
+  run-k8s-tests-on-arm64:
+    name: Run K8s tests on arm64
+    runs-on: arm64-k8s
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of main
+        run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: main
+
+      - name: Run arm64 K8s tests
+        run: echo "arm64 K8s tests would run here"
+        env:
+          DOCKER_REGISTRY: ghcr.io
+          DOCKER_REPO: ${{ github.repository_owner }}/kata-deploy-ci
+          DOCKER_TAG: ${{ github.event.client_payload.tag }}-arm64
+
+  run-kata-coco-tests:
+    name: Run CoCo tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: tdx
+            vmm: qemu-tdx
+          - runner: sev-snp
+            vmm: qemu-snp
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of main
+        run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: main
+
+      - name: Run CoCo tests
+        run: echo "CoCo tests would run here"
+        env:
+          DOCKER_REGISTRY: ghcr.io
+          DOCKER_REPO: ${{ github.repository_owner }}/kata-deploy-ci
+          DOCKER_TAG: ${{ github.event.client_payload.tag }}-amd64
+          KATA_HYPERVISOR: ${{ matrix.vmm }}
+
+  run-k8s-tests-on-nvidia-gpu:
+    name: Run K8s tests on NVIDIA GPU
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: nvidia-gpu
+            vmm: qemu-nvidia-gpu
+            runner: amd64-nvidia-a100
+          - name: nvidia-gpu-snp
+            vmm: qemu-nvidia-gpu-snp
+            runner: amd64-nvidia-h100-snp
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      DOCKER_REGISTRY: ghcr.io
+      DOCKER_REPO: ${{ github.repository_owner }}/kata-deploy-ci
+      DOCKER_TAG: ${{ github.event.client_payload.tag }}-amd64
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KBS: ${{ matrix.name == 'nvidia-gpu-snp' && 'true' || 'false' }}
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.client_payload.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of main
+        run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: main
+
+      - name: Run NVIDIA GPU tests
+        run: echo "NVIDIA GPU tests would run here"
