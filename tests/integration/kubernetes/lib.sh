@@ -103,23 +103,15 @@ k8s_create_pod() {
 	fi
 }
 
-# Runs a command in the host filesystem.
+# Creates a debugger pod if one doesn't already exist.
 #
 # Parameters:
 #	$1 - the node name
 #
-exec_host() {
+create_debugger_pod() {
 	local node="$1"
-	# Validate the node
-	if ! kubectl get node "${node}" > /dev/null 2>&1; then
-		die "A given node ${node} is not valid"
-	fi
-	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
-	local command="${@:2}"
-	# Make 7 character hash from the node name
 	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
 
-	# Run a debug pod
 	# Check if there is an existing node debugger pod and reuse it
 	# Otherwise, create a new one
 	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
@@ -133,6 +125,40 @@ exec_host() {
 			return $?
 		fi
 	fi
+
+	echo "${pod_name}"
+}
+
+# Copies a file into the host filesystem.
+#
+# Parameters:
+#	$1 - source file path on the client
+#   $2 - node
+#   $3 - destination path on the node
+#
+copy_file_to_host() {
+	local source="$1"
+	local node="$2"
+	local destination="$3"
+
+	debugger_pod="$(create_debugger_pod "${node}")"
+	kubectl cp -n kube-system "${source}" "${debugger_pod}:/host/${destination}"
+}
+
+# Runs a command in the host filesystem.
+#
+# Parameters:
+#	$1 - the node name
+#
+exec_host() {
+	local node="$1"
+	# Validate the node
+	if ! kubectl get node "${node}" > /dev/null 2>&1; then
+		die "A given node ${node} is not valid"
+	fi
+
+	local command="${@:2}"
+	local pod_name="$(create_debugger_pod "${node}")"
 
 	# Execute the command and capture the output
 	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051
