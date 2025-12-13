@@ -1,0 +1,208 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: New CI | Publish and Type 2 Tests
+on:
+  workflow_run:
+    workflows: ["New CI | Pull Request"]
+    types:
+      - completed
+
+permissions: {}
+
+jobs:
+  check-trigger:
+    name: Check if publish is needed
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: read
+    outputs:
+      should-publish: ${{ steps.check.outputs.should-publish }}
+      pr-number: ${{ steps.check.outputs.pr-number }}
+      head-sha: ${{ steps.check.outputs.head-sha }}
+      run-id: ${{ steps.check.outputs.run-id }}
+    steps:
+      - name: Check workflow trigger
+        id: check
+        env:
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_EVENT: ${{ github.event.workflow_run.event }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          echo "Workflow conclusion: ${WORKFLOW_CONCLUSION}"
+          echo "Workflow event: ${WORKFLOW_EVENT}"
+          echo "PR number: ${PR_NUMBER}"
+          echo "Head SHA: ${HEAD_SHA}"
+          
+          if [[ "${WORKFLOW_CONCLUSION}" == "success" && "${WORKFLOW_EVENT}" == "pull_request" && -n "${PR_NUMBER}" ]]; then
+            echo "should-publish=true" >> "${GITHUB_OUTPUT}"
+            echo "pr-number=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
+            echo "head-sha=${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
+            echo "run-id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "should-publish=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+  publish-amd64:
+    name: Publish amd64 payload
+    needs: check-trigger
+    if: ${{ needs.check-trigger.outputs.should-publish == 'true' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.check-trigger.outputs.head-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of main
+        run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: main
+
+      - name: Download amd64 artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-static-tarball-amd64
+          path: kata-artifacts
+          run-id: ${{ needs.check-trigger.outputs.run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish amd64 payload
+        env:
+          PR_NUMBER: ${{ needs.check-trigger.outputs.pr-number }}
+          HEAD_SHA: ${{ needs.check-trigger.outputs.head-sha }}
+          REGISTRY: ghcr.io
+          REPO: ${{ github.repository_owner }}/kata-deploy-ci
+        run: |
+          TAG="${PR_NUMBER}-${HEAD_SHA}-amd64"
+          ./ci/gha-publish-payload.sh publish-payload \
+            "kata-artifacts/kata-static.tar.zst" \
+            "${REGISTRY}/${REPO}" \
+            "${TAG}"
+
+  publish-arm64:
+    name: Publish arm64 payload
+    needs: check-trigger
+    if: ${{ needs.check-trigger.outputs.should-publish == 'true' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.check-trigger.outputs.head-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of main
+        run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: main
+
+      - name: Download arm64 artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-static-tarball-arm64
+          path: kata-artifacts
+          run-id: ${{ needs.check-trigger.outputs.run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish arm64 payload
+        env:
+          PR_NUMBER: ${{ needs.check-trigger.outputs.pr-number }}
+          HEAD_SHA: ${{ needs.check-trigger.outputs.head-sha }}
+          REGISTRY: ghcr.io
+          REPO: ${{ github.repository_owner }}/kata-deploy-ci
+        run: |
+          TAG="${PR_NUMBER}-${HEAD_SHA}-arm64"
+          ./ci/gha-publish-payload.sh publish-payload \
+            "kata-artifacts/kata-static.tar.zst" \
+            "${REGISTRY}/${REPO}" \
+            "${TAG}"
+
+  run-kata-deploy-tests:
+    name: Run kata-deploy tests
+    needs: [check-trigger, publish-amd64]
+    if: ${{ needs.check-trigger.outputs.should-publish == 'true' }}
+    uses: ./.github/workflows/run-kata-deploy-tests.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ needs.check-trigger.outputs.pr-number }}-${{ needs.check-trigger.outputs.head-sha }}-amd64
+      commit-hash: ${{ needs.check-trigger.outputs.head-sha }}
+      pr-number: ${{ needs.check-trigger.outputs.pr-number }}
+      target-branch: main
+
+  gate-type2a-tests:
+    name: Gate - Type 2a tests
+    needs:
+      - check-trigger
+      - publish-amd64
+      - publish-arm64
+      - run-kata-deploy-tests
+    if: ${{ needs.check-trigger.outputs.should-publish == 'true' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    outputs:
+      pr-number: ${{ needs.check-trigger.outputs.pr-number }}
+      head-sha: ${{ needs.check-trigger.outputs.head-sha }}
+    steps:
+      - name: All Type 2a tests passed
+        run: echo "All Type 2a tests completed!"
+
+  trigger-protected-tests:
+    name: Trigger protected tests
+    needs: gate-type2a-tests
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.gate-type2a-tests.outputs.head-sha }}
+          persist-credentials: false
+
+      - name: Trigger protected tests
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.gate-type2a-tests.outputs.pr-number }}
+          HEAD_SHA: ${{ needs.gate-type2a-tests.outputs.head-sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          TAG="${PR_NUMBER}-${HEAD_SHA}"
+          gh api "repos/${GITHUB_REPOSITORY}/dispatches" \
+            --method POST \
+            -f event_type="new-ci-protected-tests" \
+            -f "client_payload[pr_number]=${PR_NUMBER}" \
+            -f "client_payload[head_sha]=${HEAD_SHA}" \
+            -f "client_payload[tag]=${TAG}"
