@@ -1,0 +1,36 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: Setup Kata Build Environment
+description: Checkout code and rebase on target branch
+
+inputs:
+  commit-hash:
+    description: The commit SHA to checkout
+    required: true
+  target-branch:
+    description: Branch to rebase onto
+    required: false
+    default: 'main'
+  fetch-depth:
+    description: Number of commits to fetch (0 for full history)
+    required: false
+    default: '0'
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        ref: ${{ inputs.commit-hash }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        persist-credentials: false
+
+    - name: Rebase atop of the latest target branch
+      shell: bash
+      run: ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+      env:
+        TARGET_BRANCH: ${{ inputs.target-branch }}
