@@ -239,44 +239,6 @@ env:
   # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
   #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
   multiInstallSuffix: ""
-  
-  # DEPRECATED: Use 'runtimeClasses.enabled' and 'runtimeClasses.createDefault' instead
-  # Will be removed in 2 releases
-  createRuntimeClasses: "false"
-  createDefaultRuntimeClass: "false"
-  
-  # DEPRECATED: Use structured 'shims' and 'defaultShim' sections above
-  # Will be removed in 2 releases
-  debug: ""
-  shims: ""
-  shims_x86_64: ""
-  shims_aarch64: ""
-  shims_s390x: ""
-  shims_ppc64le: ""
-  defaultShim: ""
-  defaultShim_x86_64: ""
-  defaultShim_aarch64: ""
-  defaultShim_s390x: ""
-  defaultShim_ppc64le: ""
-  allowedHypervisorAnnotations: ""
-  _experimentalSetupSnapshotter: ""
-  snapshotterHandlerMapping: ""
-  snapshotterHandlerMapping_x86_64: ""
-  snapshotterHandlerMapping_aarch64: ""
-  snapshotterHandlerMapping_s390x: ""
-  snapshotterHandlerMapping_ppc64le: ""
-  agentHttpsProxy: ""
-  agentNoProxy: ""
-  pullTypeMapping: ""
-  pullTypeMapping_x86_64: ""
-  pullTypeMapping_aarch64: ""
-  pullTypeMapping_s390x: ""
-  pullTypeMapping_ppc64le: ""
-  _experimentalForceGuestPull: ""
-  _experimentalForceGuestPull_x86_64: ""
-  _experimentalForceGuestPull_aarch64: ""
-  _experimentalForceGuestPull_s390x: ""
-  _experimentalForceGuestPull_ppc64le: ""
 
 # Node Feature Discovery (NFD) configuration
 # node-feature-discovery is used to detect hardware features, including virtualization support

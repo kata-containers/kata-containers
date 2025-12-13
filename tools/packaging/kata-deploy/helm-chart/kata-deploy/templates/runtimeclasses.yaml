@@ -3,17 +3,11 @@
 {{- $createDefaultRC := .Values.runtimeClasses.createDefault }}
 {{- $defaultRCName := .Values.runtimeClasses.defaultName }}
 
-{{- /* Get enabled shims - supports backward compatibility */ -}}
+{{- /* Get enabled shims from structured config */ -}}
 {{- $enabledShims := list -}}
-{{- /* Check for legacy env.shims first */ -}}
-{{- if .Values.env.shims -}}
-{{- $enabledShims = splitList " " .Values.env.shims -}}
-{{- else -}}
-{{- /* Use new structured config */ -}}
 {{- range $shimName, $shimConfig := .Values.shims -}}
 {{- if $shimConfig.enabled -}}
 {{- $enabledShims = append $enabledShims $shimName -}}
-{{- end -}}
 {{- end -}}
 {{- end -}}
 
@@ -69,15 +63,8 @@ scheduling:
 
 {{- /* Create default RuntimeClass if requested */ -}}
 {{- if and $createDefaultRC (not $multiInstallSuffix) }}
-{{- /* Get default shim - supports backward compatibility */ -}}
-{{- $defaultShim := "" -}}
-{{- /* Check for legacy env.defaultShim first */ -}}
-{{- if .Values.env.defaultShim -}}
-{{- $defaultShim = .Values.env.defaultShim -}}
-{{- else -}}
-{{- /* Use new structured config - get default shim for amd64 (fallback) */ -}}
-{{- $defaultShim = index .Values.defaultShim "amd64" | default (index .Values.defaultShim "arm64") | default (index .Values.defaultShim "s390x") | default (index .Values.defaultShim "ppc64le") }}
-{{- end -}}
+{{- /* Get default shim from structured config - use amd64 as the primary reference */ -}}
+{{- $defaultShim := index .Values.defaultShim "amd64" | default (index .Values.defaultShim "arm64") | default (index .Values.defaultShim "s390x") | default (index .Values.defaultShim "ppc64le") }}
 {{- $defaultConfig := index $runtimeClassConfigs $defaultShim }}
 {{- if and $defaultShim $defaultConfig }}
 ---

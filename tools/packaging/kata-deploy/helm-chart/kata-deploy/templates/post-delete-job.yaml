@@ -28,9 +28,6 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "patch"]
-- apiGroups: ["node.k8s.io"]
-  resources: ["runtimeclasses"]
-  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 - apiGroups: ["apiextensions.k8s.io"]
   resources: ["customresourcedefinitions"]
   verbs: ["get", "list"]
@@ -155,10 +152,6 @@ spec:
         - name: DEFAULT_SHIM_PPC64LE
           value: {{ $defaultShimPpc64le | quote }}
         {{- end }}
-        - name: CREATE_RUNTIMECLASSES
-          value: {{ .Values.env.createRuntimeClasses | quote }}
-        - name: CREATE_DEFAULT_RUNTIMECLASS
-          value: {{ .Values.env.createDefaultRuntimeClass | quote }}
         {{- $allowedHypervisorAnnotationsAmd64 := include "kata-deploy.getAllowedHypervisorAnnotationsForArch" (dict "root" . "arch" "amd64") | trim -}}
         {{- if $allowedHypervisorAnnotationsAmd64 }}
         - name: ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64
