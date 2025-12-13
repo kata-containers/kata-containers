@@ -31,6 +31,9 @@ exclude = [
     "src/libs",
     "src/runtime-rs",
 
+    # kata-deploy binary is standalone and has its own Cargo.toml
+    "tools/packaging/kata-deploy/binary",
+
     # We are cloning and building rust packages under
     # "tools/packaging/kata-deploy/local-build/build" folder, which may mislead
     # those packages to think they are part of the kata root workspace
