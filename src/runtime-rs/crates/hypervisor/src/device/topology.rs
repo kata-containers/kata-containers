@@ -333,7 +333,9 @@ pub struct PCIeTopology {
     pub bridges: u32,
     pub pcie_root_ports: u32,
     pub pcie_switch_ports: u32,
-    pub hotplug_vfio_on_root_bus: bool,
+    // pub hotplug_vfio_on_root_bus: bool,
+    pub hot_plug_vfio: PCIePort, // parsed from option<String>
+    pub cold_plug_vfio: PCIePort, // parsed from option<String>
     // pcie_port_devices keeps track of the devices attached to different types of PCI ports.
     pub pcie_port_devices: HashMap<u32, TopologyPortDevice>,
 }
@@ -360,7 +362,21 @@ impl PCIeTopology {
             bridges: topo_config.device_info.default_bridges,
             pcie_root_ports: total_rp,
             pcie_switch_ports: total_swp,
-            hotplug_vfio_on_root_bus: topo_config.device_info.hotplug_vfio_on_root_bus,
+            
+            // hotplug_vfio_on_root_bus: topo_config.device_info.hotplug_vfio_on_root_bus,
+            hot_plug_vfio: match topo_config.device_info.hot_plug_vfio.as_deref() {
+                Some("root-port") => PCIePort::RootPort,
+                Some("switch-port") => PCIePort::SwitchPort,
+                _ => PCIePort::NoPort,
+            },
+
+            cold_plug_vfio: match topo_config.device_info.cold_plug_vfio.as_deref() {
+                Some("root-port") => PCIePort::RootPort,
+                Some("switch-port") => PCIePort::SwitchPort,
+                _ => PCIePort::NoPort,
+            },
+        
+
             pcie_port_devices: HashMap::new(),
         })
     }

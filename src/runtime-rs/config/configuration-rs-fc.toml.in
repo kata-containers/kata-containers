@@ -207,12 +207,14 @@ disable_nesting_checks = false
 # used for 9p packet payload.
 msize_9p = @DEFMSIZE9P@
 
-# VFIO devices are hotplugged on a bridge by default.
-# Enable hotplugging on root bus. This may be required for devices with
-# a large PCI bar, as this is a current limitation with hotplugging on
-# a bridge.
-# Default false
-hotplug_vfio_on_root_bus = false
+# Configure how VFIO devices are hot-plugged.
+# Supported values: "no-port", "root-port", "switch-port"
+# "no-port" disables hot-plugging.
+hot_plug_vfio = "no-port"
+
+# Configure how VFIO devices are cold-plugged at VM creation time.
+# Supported values: "no-port", "root-port", "switch-port"
+cold_plug_vfio = "no-port"
 
 #
 # Default entropy source.
