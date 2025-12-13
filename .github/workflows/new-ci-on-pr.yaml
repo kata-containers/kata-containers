@@ -1,0 +1,91 @@
+# Copyright (c) 2025 Kata Containers Community
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+name: New CI | Pull Request
+on:
+  pull_request:
+    branches:
+      - 'main'
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-kata-static-tarball-amd64:
+    name: Build kata-static tarball (amd64)
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/new-ci-build-amd64.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  build-kata-static-tarball-arm64:
+    name: Build kata-static tarball (arm64)
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/new-ci-build-arm64.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  run-kata-monitor-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-kata-monitor-tests.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  run-basic-amd64-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/basic-ci-amd64.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  run-cri-containerd-amd64:
+    needs: build-kata-static-tarball-amd64
+    strategy:
+      fail-fast: false
+      matrix:
+        containerd_version: [lts, active]
+        vmm: [clh, dragonball, qemu, cloud-hypervisor, qemu-runtime-rs]
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+      runner: ubuntu-22.04
+      arch: amd64
+      containerd_version: ${{ matrix.containerd_version }}
+      vmm: ${{ matrix.vmm }}
+
+  gate-type1-tests:
+    name: Gate - Type 1 tests
+    needs:
+      - build-kata-static-tarball-amd64
+      - build-kata-static-tarball-arm64
+      - run-kata-monitor-tests
+      - run-basic-amd64-tests
+      - run-cri-containerd-amd64
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - name: All Type 1 tests passed
+        run: echo "All Type 1 tests completed!"
