@@ -5,6 +5,9 @@
 
 name: New CI | Publish and Type 2 Tests
 on:
+  # zizmor: ignore[dangerous-triggers] - workflow_run is intentionally used here
+  # to securely publish artifacts after PR validation. We verify the triggering
+  # workflow was successful and only then proceed with publishing.
   workflow_run:
     workflows: ["New CI | Pull Request"]
     types:
@@ -37,12 +40,14 @@ jobs:
           echo "Workflow event: ${WORKFLOW_EVENT}"
           echo "PR number: ${PR_NUMBER}"
           echo "Head SHA: ${HEAD_SHA}"
-          
+
           if [[ "${WORKFLOW_CONCLUSION}" == "success" && "${WORKFLOW_EVENT}" == "pull_request" && -n "${PR_NUMBER}" ]]; then
-            echo "should-publish=true" >> "${GITHUB_OUTPUT}"
-            echo "pr-number=${PR_NUMBER}" >> "${GITHUB_OUTPUT}"
-            echo "head-sha=${HEAD_SHA}" >> "${GITHUB_OUTPUT}"
-            echo "run-id=${RUN_ID}" >> "${GITHUB_OUTPUT}"
+            {
+              echo "should-publish=true"
+              echo "pr-number=${PR_NUMBER}"
+              echo "head-sha=${HEAD_SHA}"
+              echo "run-id=${RUN_ID}"
+            } >> "${GITHUB_OUTPUT}"
           else
             echo "should-publish=false" >> "${GITHUB_OUTPUT}"
           fi
