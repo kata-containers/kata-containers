@@ -119,11 +119,6 @@ create_debugger_pod() {
 			kubectl apply -n kube-system -f - > /dev/null
 		# Wait for the newly created pod to be ready
 		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
-		# Manually check the exit status of the previous command to handle errors explicitly
-		# since `set -e` is not enabled, allowing subsequent commands to run if needed.
-		if [ $? -ne 0 ]; then
-			return $?
-		fi
 	fi
 
 	echo "${pod_name}"

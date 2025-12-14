@@ -91,11 +91,6 @@ setup() {
 }
 
 teardown() {
-	# Debugging information
-	kubectl describe "pod/$pod_name"
-
-	kubectl delete pod "$pod_name"
-
 	[ ! -f "$pod_logs_file" ] || rm -f "$pod_logs_file"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
