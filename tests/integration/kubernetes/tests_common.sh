@@ -474,12 +474,7 @@ teardown_common() {
 	node_end_time=$(measure_node_time "${node}")
 
 	echo "Journal LOG starts at ${node_start_time:-}, ends at ${node_end_time:-}"
-
-	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
-		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
-	fi
+	print_node_journal_since_test_start "${node}" "${node_start_time}" "${BATS_TEST_COMPLETED:-}"
 }
 
 measure_node_time() {
@@ -598,6 +593,6 @@ print_node_journal_since_test_start() {
 
 	if [[ -n "${node_start_time:-}" && -z "${BATS_TEST_COMPLETED:-}" ]]; then
 		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
+		exec_host "${node}" journalctl -t "kata" --since '"'"${node_start_time}"'"' -o cat || true
 	fi
 }
