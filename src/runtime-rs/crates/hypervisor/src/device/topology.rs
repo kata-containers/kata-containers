@@ -368,11 +368,11 @@ impl PCIeTopology {
             _ => PCIePort::NoPort,
         };
 
-        let (hot_plug, cold_plug) = if hot_plug != PCIePort::NoPort && cold_plug != PCIePort::NoPort {
-            (hot_plug, PCIePort::NoPort)
-        } else {
-            (hot_plug, cold_plug)
-        };
+        if hot_plug != PCIePort::NoPort && cold_plug != PCIePort::NoPort {
+            return Err(anyhow!(
+                "hot_plug_vfio and cold_plug_vfio cannot both be set"
+            ));
+        }
         
         Some(Self {
             hypervisor_name: topo_config.hypervisor_name.to_owned(),
