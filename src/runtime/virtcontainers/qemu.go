@@ -1235,19 +1235,17 @@ func (q *qemu) waitVM(ctx context.Context, qmpConn net.Conn, timeout int) error 
 
 	// clear any possible old state before trying to connect again.
 	q.qmpShutdown()
-	timeStart := time.Now()
-	for {
-		disconnectCh = make(chan struct{})
-		qmp, ver, err = govmmQemu.QMPStartWithConn(q.qmpMonitorCh.ctx, qmpConn, cfg, disconnectCh)
-		if err == nil {
-			break
-		}
 
-		if int(time.Since(timeStart).Seconds()) > timeout {
+	timeoutCtx, cancel := context.WithTimeout(q.qmpMonitorCh.ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	disconnectCh = make(chan struct{})
+	qmp, ver, err = govmmQemu.QMPStartWithConn(timeoutCtx, qmpConn, cfg, disconnectCh)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf("Failed to connect to QEMU instance (timeout %ds): %v", timeout, err)
 		}
-
-		time.Sleep(time.Duration(50) * time.Millisecond)
+		return err
 	}
 	q.qmpMonitorCh.qmp = qmp
 	q.qmpMonitorCh.disconn = disconnectCh
