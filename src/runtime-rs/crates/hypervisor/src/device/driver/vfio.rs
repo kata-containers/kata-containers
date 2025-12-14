@@ -585,11 +585,12 @@ impl PCIeDevice for VfioDevice {
                 }
             };
             // vfio device attached onto port(root port | switch port)
-            let port_device = avail_port
-                .ok_or_else(|| anyhow!("No available node found for {:?} device", port_type))?;
-            self.bus = match port_device {
-                AvailableNode::TopologyPortDevice(root_port) => root_port.port_id(),
-                AvailableNode::SwitchDownPort(swdown_port) => swdown_port.port_id(),
+            // let port_device = avail_port
+            //     .ok_or_else(|| anyhow!("No available node found for {:?} device", port_type))?;
+            self.bus = match avail_port {
+                Some(AvailableNode::TopologyPortDevice(root_port)) => root_port.port_id(),
+                Some(AvailableNode::SwitchDownPort(swdown_port)) => swdown_port.port_id(),
+                _ => "pcie.0".to_string(),
             };
 
             self.port = port_type;
