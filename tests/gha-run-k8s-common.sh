@@ -473,6 +473,7 @@ function deploy_k8s() {
 
 function set_test_cluster_namespace() {
 	# Delete any spurious tests namespace that was left behind
+	echo "Deleting test namespace ${TEST_CLUSTER_NAMESPACE}"
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}" &> /dev/null || true
 
 	# Create a new namespace for the tests and switch to it
@@ -485,6 +486,7 @@ function set_default_cluster_namespace() {
 }
 
 function delete_test_cluster_namespace() {
+	echo "Deleting test namespace ${TEST_CLUSTER_NAMESPACE}"
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
 	set_default_cluster_namespace
 }
