@@ -29,7 +29,7 @@ rules:
   verbs: ["get", "list"]
 - apiGroups: ["nfd.k8s-sigs.io"]
   resources: ["nodefeaturerules"]
-  verbs: ["create", "get", "list", "watch"]
+  verbs: ["create", "get", "list", "patch", "update", "watch"]
 - apiGroups: ["apps"]
   resources: ["daemonsets"]
   verbs: ["get", "list", "watch"]
