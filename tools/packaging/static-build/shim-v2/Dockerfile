@@ -27,6 +27,7 @@ RUN apt-get update && \
         gcc \
         git \
         make \
+        cmake \
         musl-tools \
         protobuf-compiler \
         sudo && \
