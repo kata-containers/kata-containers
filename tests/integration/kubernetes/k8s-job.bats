@@ -23,7 +23,6 @@ setup() {
 	local cmd
 	local logs
 	local pi_number
-	local pod_name
 
 	# Create job
 	kubectl apply -f "${yaml_file}"
