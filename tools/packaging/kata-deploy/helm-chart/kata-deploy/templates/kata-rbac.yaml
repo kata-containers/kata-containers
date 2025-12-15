@@ -23,7 +23,7 @@ rules:
   verbs: ["get", "patch"]
 - apiGroups: ["node.k8s.io"]
   resources: ["runtimeclasses"]
-  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+  verbs: ["get", "patch"]
 - apiGroups: ["apiextensions.k8s.io"]
   resources: ["customresourcedefinitions"]
   verbs: ["get", "list"]

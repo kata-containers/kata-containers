@@ -69,41 +69,35 @@ DEBUG="${DEBUG:-"false"}"
 
 ARCH=$(uname -m)
 
-SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca"}"
-SHIMS_X86_64="${SHIMS_X86_64:-${SHIMS}}"
-SHIMS_AARCH64="${SHIMS_AARCH64:-${SHIMS}}"
-SHIMS_S390X="${SHIMS_S390X:-${SHIMS}}"
-SHIMS_PPC64LE="${SHIMS_PPC64LE:-${SHIMS}}"
+SHIMS_X86_64="${SHIMS_X86_64:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-snp qemu-tdx qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
+SHIMS_AARCH64="${SHIMS_AARCH64:-"clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-cca"}"
+SHIMS_S390X="${SHIMS_S390X:-"qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs"}"
+SHIMS_PPC64LE="${SHIMS_PPC64LE:-"qemu"}"
 
-DEFAULT_SHIM="${DEFAULT_SHIM:-"qemu"}"
-DEFAULT_SHIM_X86_64="${DEFAULT_SHIM_X86_64:-${DEFAULT_SHIM}}"
-DEFAULT_SHIM_AARCH64="${DEFAULT_SHIM_AARCH64:-${DEFAULT_SHIM}}"
-DEFAULT_SHIM_S390X="${DEFAULT_SHIM_S390X:-${DEFAULT_SHIM}}"
-DEFAULT_SHIM_PPC64LE="${DEFAULT_SHIM_PPC64LE:-${DEFAULT_SHIM}}"
+DEFAULT_SHIM_X86_64="${DEFAULT_SHIM_X86_64:-"qemu"}"
+DEFAULT_SHIM_AARCH64="${DEFAULT_SHIM_AARCH64:-"qemu"}"
+DEFAULT_SHIM_S390X="${DEFAULT_SHIM_S390X:-"qemu"}"
+DEFAULT_SHIM_PPC64LE="${DEFAULT_SHIM_PPC64LE:-"qemu"}"
 
-SNAPSHOTTER_HANDLER_MAPPING="${SNAPSHOTTER_HANDLER_MAPPING:-}"
-SNAPSHOTTER_HANDLER_MAPPING_X86_64="${SNAPSHOTTER_HANDLER_MAPPING_X86_64:-${SNAPSHOTTER_HANDLER_MAPPING}}"
-SNAPSHOTTER_HANDLER_MAPPING_AARCH64="${SNAPSHOTTER_HANDLER_MAPPING_AARCH64:-${SNAPSHOTTER_HANDLER_MAPPING}}"
-SNAPSHOTTER_HANDLER_MAPPING_S390X="${SNAPSHOTTER_HANDLER_MAPPING_S390X:-${SNAPSHOTTER_HANDLER_MAPPING}}"
-SNAPSHOTTER_HANDLER_MAPPING_PPC64LE="${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE:-${SNAPSHOTTER_HANDLER_MAPPING}}"
+SNAPSHOTTER_HANDLER_MAPPING_X86_64="${SNAPSHOTTER_HANDLER_MAPPING_X86_64:-}"
+SNAPSHOTTER_HANDLER_MAPPING_AARCH64="${SNAPSHOTTER_HANDLER_MAPPING_AARCH64:-}"
+SNAPSHOTTER_HANDLER_MAPPING_S390X="${SNAPSHOTTER_HANDLER_MAPPING_S390X:-}"
+SNAPSHOTTER_HANDLER_MAPPING_PPC64LE="${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE:-}"
 
-ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
-ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64="${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
-ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64="${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
-ALLOWED_HYPERVISOR_ANNOTATIONS_S390X="${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
-ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE="${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE:-${ALLOWED_HYPERVISOR_ANNOTATIONS}}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64="${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64="${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_S390X="${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE="${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE:-}"
 
-PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
-PULL_TYPE_MAPPING_X86_64="${PULL_TYPE_MAPPING_X86_64:-${PULL_TYPE_MAPPING}}"
-PULL_TYPE_MAPPING_AARCH64="${PULL_TYPE_MAPPING_AARCH64:-${PULL_TYPE_MAPPING}}"
-PULL_TYPE_MAPPING_S390X="${PULL_TYPE_MAPPING_S390X:-${PULL_TYPE_MAPPING}}"
-PULL_TYPE_MAPPING_PPC64LE="${PULL_TYPE_MAPPING_PPC64LE:-${PULL_TYPE_MAPPING}}"
+PULL_TYPE_MAPPING_X86_64="${PULL_TYPE_MAPPING_X86_64:-}"
+PULL_TYPE_MAPPING_AARCH64="${PULL_TYPE_MAPPING_AARCH64:-}"
+PULL_TYPE_MAPPING_S390X="${PULL_TYPE_MAPPING_S390X:-}"
+PULL_TYPE_MAPPING_PPC64LE="${PULL_TYPE_MAPPING_PPC64LE:-}"
 
-EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
-EXPERIMENTAL_FORCE_GUEST_PULL_X86_64="${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64:-${EXPERIMENTAL_FORCE_GUEST_PULL}}"
-EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64="${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64:-${EXPERIMENTAL_FORCE_GUEST_PULL}}"
-EXPERIMENTAL_FORCE_GUEST_PULL_S390X="${EXPERIMENTAL_FORCE_GUEST_PULL_S390X:-${EXPERIMENTAL_FORCE_GUEST_PULL}}"
-EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE:-${EXPERIMENTAL_FORCE_GUEST_PULL}}"
+EXPERIMENTAL_FORCE_GUEST_PULL_X86_64="${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64:-}"
+EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64="${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64:-}"
+EXPERIMENTAL_FORCE_GUEST_PULL_S390X="${EXPERIMENTAL_FORCE_GUEST_PULL_S390X:-}"
+EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE:-}"
 
 SHIMS_FOR_ARCH=""
 DEFAULT_SHIM_FOR_ARCH=""
@@ -145,12 +139,7 @@ case ${ARCH} in
 		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE}"
 		;;
 	*)
-		SHIMS_FOR_ARCH="${SHIMS}"
-		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM}"
-		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING}"
-		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS}"
-		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING}"
-		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL}"
+		die "Unsupported architecture: ${ARCH}"
 		;;
 esac
 
@@ -165,9 +154,6 @@ IFS=' ' read -a hypervisor_annotations <<< "${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR
 IFS=',' read -a pull_types <<< "${PULL_TYPE_MAPPING_FOR_ARCH}"
 
 IFS="," read -a experimental_force_guest_pull <<< "${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
-
-CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
-CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
 
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
@@ -212,25 +198,6 @@ function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
 
-function adjust_shim_for_nfd() {
-	local shim="${1}"
-	local expand_runtime_classes_for_nfd="${2}"
-
-	if [[ "${expand_runtime_classes_for_nfd}" == "true" ]]; then
-		file="/opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml"
-		case "${shim}" in
-			*tdx*)
-				yq -yi --arg k "tdx.intel.com/keys" '.overhead.podFixed[$k] = 1' "${file}"
-				;;
-			*snp*)
-				yq -yi --arg k "sev-snp.amd.com/esids" '.overhead.podFixed[$k] = 1' "${file}"
-				;;
-			*)
-				;;
-		esac
-	fi
-}
-
 function patch_runtimeclasses_for_nfd() {
 	info "Patching existing runtime classes for NFD"
 
@@ -264,78 +231,6 @@ function patch_runtimeclasses_for_nfd() {
 				;;
 		esac
 	done
-}
-
-function create_runtimeclasses() {
-	echo "Creating the runtime classes"
-
-	local expand_runtime_classes_for_nfd="${1:-false}"
-
-	for shim in "${shims[@]}"; do
-		echo "Creating the kata-${shim} runtime class"
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-		fi
-
-		adjust_shim_for_nfd "${shim}" "${expand_runtime_classes_for_nfd}"
-
-		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			# Move the file back to its original state, as the deletion is done
-			# differently in the helm and in the kata-deploy daemonset case, meaning
-			# that we should assume those files are always as they were during the
-			# time the image was built
-			sed -i -e "s|kata-${shim}-${MULTI_INSTALL_SUFFIX}|kata-${shim}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-		fi
-
-	done
-
-	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			warn "CREATE_DEFAULT_RUNTIMECLASS is being ignored!"
-			warn "multi installation does not support creating a default runtime class"
-
-			return
-		fi
-
-		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
-		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
-		kubectl apply -f /tmp/kata.yaml
-		rm -f /tmp/kata.yaml
-	fi
-}
-
-function delete_runtimeclasses() {
-	echo "Deleting the runtime classes"
-
-	for shim in "${shims[@]}"; do
-		echo "Deleting the kata-${shim} runtime class"
-		canonical_shim_name="kata-${shim}"
-		shim_name="${canonical_shim_name}"
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			shim_name+="-${MULTI_INSTALL_SUFFIX}"
-			sed -i -e "s|${canonical_shim_name}|${shim_name}|g" /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
-		fi
-
-		kubectl delete --ignore-not-found -f /opt/kata-artifacts/runtimeclasses/${canonical_shim_name}.yaml
-	done
-
-
-	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			# There's nothing to be done here, as a default runtime class is never created
-			# for multi installations
-			return
-		fi
-
-		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
-		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
-		kubectl delete --ignore-not-found -f /tmp/kata.yaml
-		rm -f /tmp/kata.yaml
-	fi
 }
 
 function get_container_runtime() {
@@ -897,25 +792,18 @@ function install_artifacts() {
 		tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.path = "'"${clh_path}"'"' "${config_path}" 2>/dev/null || true
 	fi
 
-	local expand_runtime_classes_for_nfd=false
 	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io &>/dev/null; then
 		arch="$(uname -m)"
 		if [[ ${arch} == "x86_64" ]]; then
 			node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
 
 			kubectl apply -f "${node_feature_rule_file}"
-			expand_runtime_classes_for_nfd=true
 
 			info "As NFD is deployed on the node, rules for ${arch} TEEs have been created"
-		fi
-	fi
 
-	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
-		create_runtimeclasses "${expand_runtime_classes_for_nfd}"
-	elif [[ "${expand_runtime_classes_for_nfd}" == "true" ]]; then
-		# Even if we're not creating runtime classes, we need to patch existing ones
-		# for TDX/SNP when NFD is detected
-		patch_runtimeclasses_for_nfd 
+			# Patch existing runtime classes for TDX/SNP when NFD is detected
+			patch_runtimeclasses_for_nfd
+		fi
 	fi
 }
 
@@ -1144,10 +1032,6 @@ function remove_artifacts() {
 
 			info "As NFD is deployed on the node, rules for ${arch} TEEs have been deleted"
 		fi
-	fi
-
-	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
-		delete_runtimeclasses
 	fi
 }
 
@@ -1424,44 +1308,36 @@ function main() {
 	echo "Environment variables passed to this script"
 	echo "* NODE_NAME: ${NODE_NAME}"
 	echo "* DEBUG: ${DEBUG}"
-	echo "* SHIMS: ${SHIMS_FOR_ARCH}"
-	echo "  * x86_64: ${SHIMS_X86_64}"
-	echo "  * aarch64: ${SHIMS_AARCH64}"
-	echo "  * s390x: ${SHIMS_S390X}"
-	echo "  * ppc64le: ${SHIMS_PPC64LE}"
-	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM_FOR_ARCH}"
-	echo "  * x86_64: ${DEFAULT_SHIM_X86_64}"
-	echo "  * aarch64: ${DEFAULT_SHIM_AARCH64}"
-	echo "  * s390x: ${DEFAULT_SHIM_S390X}"
-	echo "  * ppc64le: ${DEFAULT_SHIM_PPC64LE}"
-	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
-	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
-	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH}"
-	echo "  * x86_64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
-	echo "  * aarch64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
-	echo "  * s390x: ${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
-	echo "  * ppc64le: ${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
-	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}"
-	echo "  * x86_64: ${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
-	echo "  * aarch64: ${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
-	echo "  * s390x: ${SNAPSHOTTER_HANDLER_MAPPING_S390X}"
-	echo "  * ppc64le: ${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE}"
+	echo "* SHIMS_X86_64: ${SHIMS_X86_64}"
+	echo "* SHIMS_AARCH64: ${SHIMS_AARCH64}"
+	echo "* SHIMS_S390X: ${SHIMS_S390X}"
+	echo "* SHIMS_PPC64LE: ${SHIMS_PPC64LE}"
+	echo "* DEFAULT_SHIM_X86_64: ${DEFAULT_SHIM_X86_64}"
+	echo "* DEFAULT_SHIM_AARCH64: ${DEFAULT_SHIM_AARCH64}"
+	echo "* DEFAULT_SHIM_S390X: ${DEFAULT_SHIM_S390X}"
+	echo "* DEFAULT_SHIM_PPC64LE: ${DEFAULT_SHIM_PPC64LE}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_S390X: ${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE: ${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_X86_64: ${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_AARCH64: ${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_S390X: ${SNAPSHOTTER_HANDLER_MAPPING_S390X}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_PPC64LE: ${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE}"
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
-	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING_FOR_ARCH}"
-	echo "  * x86_64: ${PULL_TYPE_MAPPING_X86_64}"
-	echo "  * aarch64: ${PULL_TYPE_MAPPING_AARCH64}"
-	echo "  * s390x: ${PULL_TYPE_MAPPING_S390X}"
-	echo "  * ppc64le: ${PULL_TYPE_MAPPING_PPC64LE}"
+	echo "* PULL_TYPE_MAPPING_X86_64: ${PULL_TYPE_MAPPING_X86_64}"
+	echo "* PULL_TYPE_MAPPING_AARCH64: ${PULL_TYPE_MAPPING_AARCH64}"
+	echo "* PULL_TYPE_MAPPING_S390X: ${PULL_TYPE_MAPPING_S390X}"
+	echo "* PULL_TYPE_MAPPING_PPC64LE: ${PULL_TYPE_MAPPING_PPC64LE}"
 	echo "* INSTALLATION_PREFIX: ${INSTALLATION_PREFIX}"
 	echo "* MULTI_INSTALL_SUFFIX: ${MULTI_INSTALL_SUFFIX}"
 	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
 	echo "* EXPERIMENTAL_SETUP_SNAPSHOTTER: ${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
-	echo "* EXPERIMENTAL_FORCE_GUEST_PULL: ${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
-	echo "  * x86_64: ${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64}"
-	echo "  * aarch64: ${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64}"
-	echo "  * s390x: ${EXPERIMENTAL_FORCE_GUEST_PULL_S390X}"
-	echo "  * ppc64le: ${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_X86_64: ${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64: ${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_S390X: ${EXPERIMENTAL_FORCE_GUEST_PULL_S390X}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE: ${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE}"
 
 	# script requires that user is root
 	euid=$(id -u)
