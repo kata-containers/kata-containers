@@ -47,10 +47,10 @@ func TestIOStream(t *testing.T) {
 	assert.NotNil(t, err, "stdin write closed should fail")
 
 	_, err = stdout.Read(buffer)
-	assert.NotNil(t, err, "stdout read closed should fail")
+	assert.Nil(t, err, "stdout read closed should fail only on EOF")
 
 	_, err = stderr.Read(buffer)
-	assert.NotNil(t, err, "stderr read closed should fail")
+	assert.Nil(t, err, "stderr read closed should fail only on EOF")
 
 	err = stdin.Close()
 	assert.NotNil(t, err, "stdin close closed should fail")
