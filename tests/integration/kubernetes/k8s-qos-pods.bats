@@ -1,3 +1,4 @@
+#!/usr/bin/env bats
 #
 # Copyright (c) 2018 Intel Corporation
 #
