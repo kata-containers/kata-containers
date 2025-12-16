@@ -444,51 +444,51 @@ fn value_to_string(item: &Item) -> Result<String> {
 }
 
 // ============================================================================
-// Public API functions (backward compatible)
+// Test helper functions
 // ============================================================================
 
-/// Set a TOML value at a given path.
-pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
+#[cfg(test)]
+fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
     let mut editor = TomlEditor::open(file_path)?;
     editor.set(path, value)?;
     editor.save()
 }
 
-/// Get a TOML value at a given path.
-pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
+#[cfg(test)]
+fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
     let editor = TomlEditor::open(file_path)?;
     editor.get(path)
 }
 
-/// Get a TOML array value.
-pub fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
+#[cfg(test)]
+fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
     let editor = TomlEditor::open(file_path)?;
     editor.get_array(path)
 }
 
-/// Set a TOML array value.
-pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result<()> {
+#[cfg(test)]
+fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result<()> {
     let mut editor = TomlEditor::open(file_path)?;
     editor.set_array(path, values)?;
     editor.save()
 }
 
-/// Append to a TOML array.
-pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
+#[cfg(test)]
+fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
     let mut editor = TomlEditor::open(file_path)?;
     editor.append_to_array(path, value)?;
     editor.save()
 }
 
-/// Remove from a TOML array.
-pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
+#[cfg(test)]
+fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
     let mut editor = TomlEditor::open(file_path)?;
     editor.remove_from_array(path, value)?;
     editor.save()
 }
 
-/// Append to a TOML string value.
-pub fn append_to_toml_string(file_path: &Path, path: &str, value: &str) -> Result<()> {
+#[cfg(test)]
+fn append_to_toml_string(file_path: &Path, path: &str, value: &str) -> Result<()> {
     let mut editor = TomlEditor::open(file_path)?;
     editor.append_to_string(path, value)?;
     editor.save()
