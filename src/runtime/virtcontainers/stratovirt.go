@@ -1169,7 +1169,9 @@ func (s *stratovirt) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBl
 func (s *stratovirt) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	return 0, 0, nil
 }
-
+func (s *stratovirt) ResizeBlock(ctx context.Context, deviceID string, size uint64) error {
+	return nil
+}
 func (s *stratovirt) GetVMConsole(ctx context.Context, id string) (string, string, error) {
 	span, _ := katatrace.Trace(ctx, s.Logger(), "GetVMConsole", stratovirtTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
