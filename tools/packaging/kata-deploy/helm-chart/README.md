@@ -269,6 +269,7 @@ This includes all available Kata Containers shims:
 - Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
 - TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
 - NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
+- Remote shims: `remote` (for `peer-pods`/`cloud-api-adaptor`, disabled by default)
 
 To enable only specific shims, you can override the configuration:
 
@@ -411,6 +412,8 @@ shims:
   qemu-coco-dev:
     enabled: false
   qemu-coco-dev-runtime-rs:
+    enabled: false
+  remote:
     enabled: false
 ```
 

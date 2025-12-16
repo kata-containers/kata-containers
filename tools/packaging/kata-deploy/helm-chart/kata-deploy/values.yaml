@@ -220,6 +220,20 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
+  remote:
+    enabled: false
+    supportedArches:
+      - amd64
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
 # Default shim per architecture
 defaultShim:
   amd64: qemu
