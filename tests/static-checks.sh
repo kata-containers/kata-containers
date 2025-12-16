@@ -1395,7 +1395,11 @@ static_check_kata_agent_features()
 {
 	local cargo_toml="${repo_path}/src/agent/Cargo.toml"
 	local features_rs="${repo_path}/src/agent/src/features.rs"
+	
+	[ ! -f "$cargo_toml" ] && die "File $cargo_toml not found"
+	[ ! -f "$features_rs" ] && die "File $features_rs not found"
 
+	info "Checking consistency between $cargo_toml and $features_rs"
 
 	# Extract features from [features] section of Cargo.toml
 	local cargo_features=$(sed -n '/^\[features\]/,/^\[/p' "$cargo_toml" | grep '=' | cut -d= -f1)
