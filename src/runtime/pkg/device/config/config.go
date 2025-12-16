@@ -714,20 +714,28 @@ func InjectCDIDevices(spec *specs.Spec, devices []string) error {
 }
 
 func injectDevices(cdiSpecDirs []string, spec *specs.Spec, devices []string) error {
-	var registry cdi.Registry
+	var cache *cdi.Cache
+	var err error
+
 	if len(cdiSpecDirs) > 0 {
 		// We can override the directories where to search for CDI specs
 		// if needed, the default is /etc/cdi /var/run/cdi
-		registry = cdi.GetRegistry(cdi.WithSpecDirs(cdiSpecDirs...))
+		cache, err = cdi.NewCache(cdi.WithSpecDirs(cdiSpecDirs...))
+		if err != nil {
+			return fmt.Errorf("creating CDI registry: %w", err)
+		}
 	} else {
-		registry = cdi.GetRegistry()
+		cache, err = cdi.NewCache()
+		if err != nil {
+			return fmt.Errorf("creating CDI registry: %w", err)
+		}
 	}
 
-	if err := registry.Refresh(); err != nil {
+	if err := cache.Refresh(); err != nil {
 		return fmt.Errorf("CDI registry refresh failed: %w", err)
 	}
 
-	if _, err := registry.InjectDevices(spec, devices...); err != nil {
+	if _, err := cache.InjectDevices(spec, devices...); err != nil {
 		return fmt.Errorf("CDI device injection failed: %w", err)
 	}
 
