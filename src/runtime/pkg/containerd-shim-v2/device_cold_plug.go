@@ -124,21 +124,11 @@ func getDeviceSpec(ctx context.Context, socket string, ann map[string]string) ([
 		for _, d := range container.Devices {
 			shimLog.WithField("container", container.Name).Debugf("Pod Resources Device: %s = %v\n",
 				d.ResourceName, d.DeviceIds)
-			cdiDevs := formatCDIDevIDs(d.ResourceName, d.DeviceIds)
-			devices = append(devices, cdiDevs...)
+			devices = append(devices, d.DeviceIds...)
 		}
 	}
 
 	return devices, nil
-}
-
-// formatCDIDevIDs formats the way CDI package expects
-func formatCDIDevIDs(specName string, devIDs []string) []string {
-	var result []string
-	for _, id := range devIDs {
-		result = append(result, fmt.Sprintf("%s=%s", specName, id))
-	}
-	return result
 }
 
 func debugPodID(ann map[string]string) string {
