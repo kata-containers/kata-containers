@@ -300,7 +300,7 @@ externals:
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
     url: "https://gitlab.com/cryptsetup/cryptsetup"
-    version: "v2.5.0"
+    version: "v2.8.1"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
