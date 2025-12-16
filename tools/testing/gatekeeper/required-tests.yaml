@@ -103,11 +103,9 @@ mapping:
     names:
       # ci-on-push.yaml (ci.yaml)
       - Kata Containers CI / kata-containers-ci-on-push / build-and-publish-tee-confidential-unencrypted-image
-      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (agent-ctl, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (cloud-hypervisor-glibc, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (cloud-hypervisor, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (firecracker, test)
-      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kata-ctl, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-dragonball-experimental, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel-nvidia-gpu, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (kernel, test)
@@ -116,9 +114,15 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (ovmf, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu-snp-experimental, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (qemu, test)
-      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (trace-forwarder, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-asset (virtiofsd, test)
       - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / create-kata-tarball
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-tools-asset (agent-ctl, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-tools-asset (csi-kata-directvolume, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-tools-asset (genpolicy, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-tools-asset (kata-ctl, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-tools-asset (kata-manager, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / build-tools-asset (trace-forwarder, test)
+      - Kata Containers CI / kata-containers-ci-on-push / build-kata-static-tarball-amd64 / create-kata-tools-tarball
       - Kata Containers CI / kata-containers-ci-on-push / publish-kata-deploy-payload-amd64 / kata-payload
     required-labels:
   static:
