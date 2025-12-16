@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM alpine:3.16.2
+FROM alpine:3.23.0
 ARG RUST_TOOLCHAIN
 
 ENV RUSTUP_HOME="/opt/rustup"
