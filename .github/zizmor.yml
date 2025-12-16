@@ -1,3 +1,0 @@
-rules:
-  undocumented-permissions:
-    disable: true
