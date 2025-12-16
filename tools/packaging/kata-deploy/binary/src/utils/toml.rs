@@ -4,34 +4,368 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Result};
-use std::path::Path;
-use toml_edit::{DocumentMut, Item, Value};
+use std::path::{Path, PathBuf};
+use toml_edit::{DocumentMut, Formatted, Item, Value};
 
-/// Parse a TOML path into components, respecting quoted keys
-/// Example: `.plugins."io.containerd.cri.v1.runtime".containerd.runtimes."kata"`
-/// Results in: ["plugins", "io.containerd.cri.v1.runtime", "containerd", "runtimes", "kata"]
+// ============================================================================
+// Macros for path-based TOML access
+// ============================================================================
+
+/// Macro to set a value at a TOML path.
+///
+/// Usage:
+/// ```ignore
+/// toml_set!(editor, "hypervisor.qemu.path", "\"value\"");
+/// toml_set!(editor, "runtime.enable_debug", "true");
+/// ```
+#[macro_export]
+macro_rules! toml_set {
+    ($editor:expr, $path:expr, $value:expr) => {{
+        $editor.set($path, $value)
+    }};
+}
+
+/// Macro to get a value from a TOML path.
+///
+/// Usage:
+/// ```ignore
+/// let value = toml_get!(editor, "hypervisor.qemu.path")?;
+/// ```
+#[macro_export]
+macro_rules! toml_get {
+    ($editor:expr, $path:expr) => {{
+        $editor.get($path)
+    }};
+}
+
+// ============================================================================
+// TomlEditor - A wrapper for format-preserving TOML manipulation
+// ============================================================================
+
+/// A TOML editor that preserves formatting and provides path-based access.
+///
+/// Paths use dot notation with support for quoted keys containing dots:
+/// - Simple: `"hypervisor.qemu.path"`
+/// - Quoted: `r#"plugins."io.containerd.cri.v1.runtime".runtimes"#`
+///
+/// # Example
+/// ```ignore
+/// let mut editor = TomlEditor::open("/etc/containerd/config.toml")?;
+///
+/// // Set values using path strings
+/// editor.set("hypervisor.qemu.path", "\"/usr/bin/qemu\"")?;
+/// editor.set("runtime.enable_debug", "true")?;
+///
+/// // Get values
+/// let path = editor.get("hypervisor.qemu.path")?;
+///
+/// // Array operations
+/// editor.set_array("hypervisor.qemu.enable_annotations", &["ann1", "ann2"])?;
+/// editor.append_to_array("hypervisor.qemu.enable_annotations", "ann3")?;
+///
+/// // Save changes
+/// editor.save()?;
+/// ```
+pub struct TomlEditor {
+    path: PathBuf,
+    doc: DocumentMut,
+}
+
+impl TomlEditor {
+    /// Open a TOML file for editing. Creates an empty document if the file doesn't exist.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read TOML file: {path:?}"))?;
+
+        let doc = content
+            .parse::<DocumentMut>()
+            .context("Failed to parse TOML")?;
+
+        Ok(Self {
+            path: path.to_path_buf(),
+            doc,
+        })
+    }
+
+    /// Create a new editor from a TOML string (useful for testing).
+    #[cfg(test)]
+    pub fn from_str(content: &str) -> Result<Self> {
+        let doc = content
+            .parse::<DocumentMut>()
+            .context("Failed to parse TOML")?;
+
+        Ok(Self {
+            path: PathBuf::new(),
+            doc,
+        })
+    }
+
+    /// Save the document back to the file.
+    pub fn save(&self) -> Result<()> {
+        std::fs::write(&self.path, self.doc.to_string())
+            .with_context(|| format!("Failed to write TOML file: {:?}", self.path))
+    }
+
+    /// Get the document as a string.
+    #[cfg(test)]
+    #[allow(dead_code)]
+    pub fn to_string(&self) -> String {
+        self.doc.to_string()
+    }
+
+    /// Set a value at the given path.
+    ///
+    /// Path syntax: `"key1.key2.key3"` or `r#"key1."dotted.key".key3"#` for quoted segments.
+    ///
+    /// Value can be:
+    /// - `"\"string\""` - quoted string
+    /// - `"true"` / `"false"` - boolean
+    /// - `"123"` - integer
+    /// - `"[\"a\", \"b\"]"` - array
+    pub fn set(&mut self, path: &str, value: &str) -> Result<()> {
+        let parts = parse_toml_path(path)?;
+        let value_item = parse_toml_value(value);
+
+        self.navigate_and_set(&parts, value_item)
+    }
+
+    /// Get a string value at the given path.
+    pub fn get(&self, path: &str) -> Result<String> {
+        let parts = parse_toml_path(path)?;
+        self.navigate_and_get(&parts)
+    }
+
+    /// Get an array value at the given path.
+    pub fn get_array(&self, path: &str) -> Result<Vec<String>> {
+        let parts = parse_toml_path(path)?;
+
+        let mut current_table = self.doc.as_table();
+        for (i, part) in parts.iter().enumerate() {
+            let is_last = i == parts.len() - 1;
+
+            if let Some(item) = current_table.get(part.as_str()) {
+                if is_last {
+                    if let Item::Value(Value::Array(arr)) = item {
+                        return Ok(arr
+                            .iter()
+                            .map(|v| match v {
+                                Value::String(s) => s.value().to_string(),
+                                other => other.to_string(),
+                            })
+                            .collect());
+                    }
+                    return Err(anyhow::anyhow!("Path '{path}' is not an array"));
+                }
+                current_table = item
+                    .as_table()
+                    .ok_or_else(|| anyhow::anyhow!("Path component '{part}' is not a table"))?;
+            } else {
+                return Ok(Vec::new()); // Not found = empty array
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
+    /// Set an array value at the given path.
+    pub fn set_array(&mut self, path: &str, values: &[String]) -> Result<()> {
+        let parts = parse_toml_path(path)?;
+
+        let mut current = self.doc.as_table_mut();
+        for part in &parts[..parts.len() - 1] {
+            current = ensure_table(current, part)?;
+        }
+
+        let key = parts.last().unwrap();
+        let mut array = toml_edit::Array::new();
+        for val in values {
+            array.push(Value::String(Formatted::new(val.clone())));
+        }
+        current[key.as_str()] = Item::Value(Value::Array(array));
+
+        Ok(())
+    }
+
+    /// Append a value to an array (idempotent - won't add duplicates).
+    pub fn append_to_array(&mut self, path: &str, value: &str) -> Result<()> {
+        let parts = parse_toml_path(path)?;
+        let normalized_value = value.trim_matches('"');
+
+        let mut current = self.doc.as_table_mut();
+        for part in &parts[..parts.len() - 1] {
+            current = ensure_table(current, part)?;
+        }
+
+        let key = parts.last().unwrap();
+
+        // Create array if it doesn't exist
+        if !current.contains_key(key.as_str()) {
+            current.insert(key, Item::Value(Value::Array(toml_edit::Array::new())));
+        }
+
+        if let Some(Item::Value(Value::Array(arr))) = current.get_mut(key.as_str()) {
+            // Check for duplicates (idempotent)
+            let exists = arr.iter().any(|v| {
+                if let Value::String(s) = v {
+                    s.value() == normalized_value
+                } else {
+                    false
+                }
+            });
+
+            if !exists {
+                arr.push(Value::String(Formatted::new(normalized_value.to_string())));
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "Path component '{}' is not an array",
+                key
+            ))
+        }
+    }
+
+    /// Remove a value from an array.
+    pub fn remove_from_array(&mut self, path: &str, value: &str) -> Result<()> {
+        let parts = parse_toml_path(path)?;
+        let normalized_value = value.trim_matches('"');
+
+        let mut current = self.doc.as_table_mut();
+        for part in &parts[..parts.len() - 1] {
+            current = ensure_table(current, part)?;
+        }
+
+        let key = parts.last().unwrap();
+        if let Some(Item::Value(Value::Array(arr))) = current.get_mut(key.as_str()) {
+            arr.retain(|v| match v {
+                Value::String(s) => s.value() != normalized_value,
+                _ => true,
+            });
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!(
+                "Path component '{}' is not an array",
+                key
+            ))
+        }
+    }
+
+    /// Append to a string value (e.g., kernel_params). Idempotent.
+    pub fn append_to_string(&mut self, path: &str, append_value: &str) -> Result<()> {
+        let current = self.get(path).unwrap_or_default();
+        let current = current.trim().trim_matches('"');
+        let append_trimmed = append_value.trim();
+
+        // Check if already exists
+        let tokens: Vec<&str> = current.split_whitespace().collect();
+        let exists = if append_trimmed.contains('=') {
+            let key = append_trimmed.split('=').next().unwrap();
+            tokens.iter().any(|t| t.starts_with(&format!("{key}=")))
+        } else {
+            tokens.contains(&append_trimmed)
+        };
+
+        let new_value = if current.is_empty() {
+            append_trimmed.to_string()
+        } else if exists {
+            current.to_string()
+        } else {
+            format!("{current} {append_trimmed}")
+        };
+
+        self.set(path, &format!("\"{new_value}\""))
+    }
+
+    // ========================================================================
+    // Private helper methods
+    // ========================================================================
+
+    /// Navigate to parent tables and set the final value.
+    fn navigate_and_set(&mut self, parts: &[String], value: Item) -> Result<()> {
+        let mut current = self.doc.as_table_mut();
+        for part in &parts[..parts.len() - 1] {
+            current = ensure_table(current, part)?;
+        }
+
+        let key = parts.last().unwrap();
+        current[key.as_str()] = value;
+        Ok(())
+    }
+
+    /// Navigate through tables and get the final value.
+    fn navigate_and_get(&self, parts: &[String]) -> Result<String> {
+        let mut current_table = self.doc.as_table();
+
+        for (i, part) in parts.iter().enumerate() {
+            let is_last = i == parts.len() - 1;
+
+            let item = current_table
+                .get(part.as_str())
+                .ok_or_else(|| anyhow::anyhow!("Path component '{part}' not found"))?;
+
+            if is_last {
+                return value_to_string(item);
+            }
+
+            match item {
+                Item::Table(t) => current_table = t,
+                Item::Value(Value::InlineTable(_)) => {
+                    return Err(anyhow::anyhow!(
+                        "Inline table navigation not fully supported. \
+                         Use proper table structure: [plugins.cri] instead of cri = {{ ... }}"
+                    ));
+                }
+                _ => {
+                    return Err(anyhow::anyhow!("Path component '{part}' is not a table"));
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!("Path not found"))
+    }
+
+}
+
+/// Ensure a table exists at the given key, creating it if necessary.
+fn ensure_table<'a>(
+    current: &'a mut toml_edit::Table,
+    key: &str,
+) -> Result<&'a mut toml_edit::Table> {
+    if !current.contains_key(key) {
+        let mut new_table = toml_edit::Table::new();
+        new_table.set_implicit(true);
+        current.insert(key, Item::Table(new_table));
+    }
+    current
+        .get_mut(key)
+        .and_then(|item| item.as_table_mut())
+        .ok_or_else(|| anyhow::anyhow!("Path component '{key}' is not a table"))
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+/// Parse a TOML path into components, respecting quoted keys.
+///
+/// Example: `.plugins."io.containerd.cri.v1.runtime".runtimes`
+/// Results in: `["plugins", "io.containerd.cri.v1.runtime", "runtimes"]`
 fn parse_toml_path(path: &str) -> Result<Vec<String>> {
     let path = path.trim_start_matches('.');
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut in_quotes = false;
-    let mut chars = path.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in path.chars() {
         match ch {
-            '"' => {
-                in_quotes = !in_quotes;
-                // Don't include the quote characters themselves
-            }
+            '"' => in_quotes = !in_quotes,
             '.' if !in_quotes => {
                 if !current.is_empty() {
-                    parts.push(current);
-                    current = String::new();
+                    parts.push(std::mem::take(&mut current));
                 }
             }
-            _ => {
-                current.push(ch);
-            }
+            _ => current.push(ch),
         }
     }
 
@@ -40,102 +374,57 @@ fn parse_toml_path(path: &str) -> Result<Vec<String>> {
     }
 
     if in_quotes {
-        return Err(anyhow::anyhow!("Unmatched quotes in TOML path: {path}"));
+        anyhow::bail!("Unmatched quotes in TOML path: {path}");
     }
-
     if parts.is_empty() {
-        return Err(anyhow::anyhow!("Invalid TOML path: {path}"));
+        anyhow::bail!("Invalid TOML path: {path}");
     }
 
     Ok(parts)
 }
 
-/// Set a TOML value at a given path (e.g., ".plugins.cri.containerd.runtimes.kata.runtime_type")
-pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
-    let content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
-
-    let mut doc = content
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-
-    let parts = parse_toml_path(path)?;
-
-    let mut current_table = doc.as_table_mut();
-    for (i, part) in parts.iter().enumerate() {
-        let is_last = i == parts.len() - 1;
-
-        if is_last {
-            // Set the value
-            let value_item = parse_toml_value(value);
-            current_table[part.as_str()] = value_item;
-        } else {
-            // Navigate/create intermediate tables
-            if !current_table.contains_key(part.as_str()) {
-                let mut new_table = toml_edit::Table::new();
-                new_table.set_implicit(true); // Make intermediate tables implicit
-                current_table.insert(part, Item::Table(new_table));
-            }
-            current_table = current_table
-                .get_mut(part.as_str())
-                .and_then(|item| item.as_table_mut())
-                .ok_or_else(|| anyhow::anyhow!("Path component '{part}' is not a table"))?;
-        }
+/// Parse a string into a TOML value.
+fn parse_toml_value(value: &str) -> Item {
+    // Boolean
+    if value == "true" || value == "false" {
+        return Item::Value(Value::Boolean(Formatted::new(value == "true")));
     }
 
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
+    // Integer
+    if let Ok(i) = value.parse::<i64>() {
+        return Item::Value(Value::Integer(Formatted::new(i)));
+    }
 
-    Ok(())
+    // Float
+    if let Ok(f) = value.parse::<f64>() {
+        return Item::Value(Value::Float(Formatted::new(f)));
+    }
+
+    // Array: ["a", "b", "c"]
+    if value.starts_with('[') && value.ends_with(']') {
+        let inner = &value[1..value.len() - 1];
+        let mut array = toml_edit::Array::new();
+        for item in inner.split(',') {
+            let item = item.trim().trim_matches('"');
+            if !item.is_empty() {
+                array.push(Value::String(Formatted::new(item.to_string())));
+            }
+        }
+        return Item::Value(Value::Array(array));
+    }
+
+    // String (with or without quotes)
+    let string_value = if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+        value[1..value.len() - 1].to_string()
+    } else {
+        value.to_string()
+    };
+    Item::Value(Value::String(Formatted::new(string_value)))
 }
 
-/// Get a TOML value at a given path
-pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
-    let content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
-
-    let doc = content
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-
-    let parts = parse_toml_path(path)?;
-
-    // Navigate through the document table
-    let table = doc.as_table();
-    let mut current_item: Option<&Item> = None;
-    let mut current_table = table;
-
-    for (i, part) in parts.iter().enumerate() {
-        let is_last = i == parts.len() - 1;
-
-        if let Some(item) = current_table.get(part.as_str()) {
-            if is_last {
-                current_item = Some(item);
-                break;
-            } else {
-                // Handle both Table and inline table (Value::InlineTable)
-                match item {
-                    Item::Table(t) => {
-                        current_table = t;
-                    }
-                    Item::Value(toml_edit::Value::InlineTable(_t)) => {
-                        // Inline tables are not fully supported for navigation
-                        // The test has been updated to use proper table structure
-                        return Err(anyhow::anyhow!("Inline table navigation not fully supported. Use proper table structure: [plugins.cri] instead of cri = {{ ... }}"));
-                    }
-                    _ => {
-                        return Err(anyhow::anyhow!("Path component '{part}' is not a table"));
-                    }
-                }
-            }
-        } else {
-            return Err(anyhow::anyhow!("Path component '{part}' not found"));
-        }
-    }
-
-    let current = current_item.ok_or_else(|| anyhow::anyhow!("Path not found"))?;
-
-    match current {
+/// Convert a TOML item to a string representation.
+fn value_to_string(item: &Item) -> Result<String> {
+    match item {
         Item::Value(Value::String(s)) => Ok(s.value().to_string()),
         Item::Value(Value::Integer(i)) => Ok(i.value().to_string()),
         Item::Value(Value::Float(f)) => Ok(f.value().to_string()),
@@ -145,290 +434,174 @@ pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
                 .iter()
                 .map(|v| match v {
                     Value::String(s) => s.value().to_string(),
-                    _ => format!("{v:?}"),
+                    other => format!("{other:?}"),
                 })
                 .collect();
             Ok(format!("[{}]", values.join(", ")))
         }
-        _ => Err(anyhow::anyhow!(
-            "Value at path '{path}' is not a simple value"
-        )),
+        _ => Err(anyhow::anyhow!("Value is not a simple type")),
     }
 }
 
-/// Append to a TOML array
-pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
-    let content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
+// ============================================================================
+// Public API functions (backward compatible)
+// ============================================================================
 
-    let mut doc = content
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-
-    let parts = parse_toml_path(path)?;
-
-    // Navigate to the array
-    let mut current = doc.as_table_mut();
-    for (i, part) in parts.iter().enumerate() {
-        let is_last = i == parts.len() - 1;
-
-        if is_last {
-            // This is the array itself - use .get() to avoid panic on missing key
-            let key_exists = current.get(part.as_str()).is_some();
-            if !key_exists {
-                current.insert(part.as_str(), Item::Value(Value::Array(toml_edit::Array::new())));
-            }
-            if let Some(Item::Value(Value::Array(arr))) = current.get_mut(part.as_str()) {
-                let value_item = parse_toml_value(value);
-                if let Item::Value(val) = value_item {
-                    // Check if value already exists (idempotency)
-                    // Normalize by trimming quotes for comparison
-                    let value_str = val.to_string();
-                    let value_normalized = value_str.trim().trim_matches('"');
-
-                    let already_exists = arr.iter().any(|existing| {
-                        let existing_str = existing.to_string();
-                        let existing_normalized = existing_str.trim().trim_matches('"');
-                        existing_normalized == value_normalized
-                    });
-
-                    if !already_exists {
-                        arr.push(val);
-                    }
-                }
-            } else {
-                return Err(anyhow::anyhow!("Path component '{part}' is not an array"));
-            }
-        } else {
-            // Navigate through intermediate tables - use .get() to avoid panic
-            let key_exists = current.get(part.as_str()).is_some();
-            if !key_exists {
-                let mut new_table = toml_edit::Table::new();
-                new_table.set_implicit(true); // Make intermediate tables implicit
-                current.insert(part.as_str(), Item::Table(new_table));
-            }
-            current = current
-                .get_mut(part.as_str())
-                .and_then(|item| item.as_table_mut())
-                .ok_or_else(|| anyhow::anyhow!("Path component '{part}' is not a table"))?;
-        }
-    }
-
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
-
-    Ok(())
+/// Set a TOML value at a given path.
+pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
+    let mut editor = TomlEditor::open(file_path)?;
+    editor.set(path, value)?;
+    editor.save()
 }
 
-/// Remove from a TOML array
-pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
-    let content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
-
-    let mut doc = content
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-
-    let parts = parse_toml_path(path)?;
-
-    // Normalize the value to remove quotes for comparison
-    let normalized_value = value.trim_matches('"');
-
-    // Navigate to the array
-    let mut current = doc.as_table_mut();
-    for (i, part) in parts.iter().enumerate() {
-        let is_last = i == parts.len() - 1;
-
-        if is_last {
-            // This is the array itself - remove matching values
-            if let Some(Item::Value(Value::Array(arr))) = current.get_mut(part.as_str()) {
-                arr.retain(|v| match v {
-                    Value::String(s) => s.value() != normalized_value,
-                    _ => true,
-                });
-            } else {
-                return Err(anyhow::anyhow!("Path component '{part}' is not an array"));
-            }
-            break;
-        } else {
-            // Navigate through intermediate tables - use .get() to avoid panic
-            let key_exists = current.get(part.as_str()).is_some();
-            if !key_exists {
-                let mut new_table = toml_edit::Table::new();
-                new_table.set_implicit(true); // Make intermediate tables implicit
-                current.insert(part.as_str(), Item::Table(new_table));
-            }
-            current = current
-                .get_mut(part.as_str())
-                .and_then(|item| item.as_table_mut())
-                .ok_or_else(|| anyhow::anyhow!("Path component '{part}' is not a table"))?;
-        }
-    }
-
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
-
-    Ok(())
+/// Get a TOML value at a given path.
+pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
+    let editor = TomlEditor::open(file_path)?;
+    editor.get(path)
 }
 
-/// Get a TOML array value as a Vec<String>
+/// Get a TOML array value.
 pub fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
-    let content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
-
-    let doc = content
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-
-    let parts = parse_toml_path(path)?;
-
-    let mut current_table = doc.as_table();
-    for (i, part) in parts.iter().enumerate() {
-        let is_last = i == parts.len() - 1;
-
-        if let Some(item) = current_table.get(part.as_str()) {
-            if is_last {
-                match item {
-                    Item::Value(Value::Array(arr)) => {
-                        let values: Vec<String> = arr
-                            .iter()
-                            .map(|v| match v {
-                                Value::String(s) => s.value().to_string(),
-                                _ => format!("{v:?}"),
-                            })
-                            .collect();
-                        return Ok(values);
-                    }
-                    _ => return Err(anyhow::anyhow!("Path '{path}' is not an array")),
-                }
-            } else {
-                current_table = item
-                    .as_table()
-                    .ok_or_else(|| anyhow::anyhow!("Path component '{part}' is not a table"))?;
-            }
-        } else {
-            return Ok(Vec::new()); // Return empty array if not found
-        }
-    }
-
-    Ok(Vec::new())
+    let editor = TomlEditor::open(file_path)?;
+    editor.get_array(path)
 }
 
-/// Set a TOML array value
+/// Set a TOML array value.
 pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result<()> {
-    let content = std::fs::read_to_string(file_path)
-        .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
-
-    let mut doc = content
-        .parse::<DocumentMut>()
-        .context("Failed to parse TOML")?;
-
-    let parts = parse_toml_path(path)?;
-
-    let mut current_table = doc.as_table_mut();
-    for (i, part) in parts.iter().enumerate() {
-        let is_last = i == parts.len() - 1;
-
-        if is_last {
-            let mut array = toml_edit::Array::new();
-            for val in values {
-                array.push(Value::String(toml_edit::Formatted::new(val.clone())));
-            }
-            current_table[part.as_str()] = Item::Value(Value::Array(array));
-        } else {
-            if !current_table.contains_key(part.as_str()) {
-                let mut new_table = toml_edit::Table::new();
-                new_table.set_implicit(true); // Make intermediate tables implicit
-                current_table.insert(part, Item::Table(new_table));
-            }
-            current_table = current_table
-                .get_mut(part.as_str())
-                .and_then(|item| item.as_table_mut())
-                .ok_or_else(|| anyhow::anyhow!("Path component '{part}' is not a table"))?;
-        }
-    }
-
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
-
-    Ok(())
+    let mut editor = TomlEditor::open(file_path)?;
+    editor.set_array(path, values)?;
+    editor.save()
 }
 
-/// Append a string to a TOML string value (e.g., kernel_params)
-/// This function is idempotent - it won't duplicate existing values
-pub fn append_to_toml_string(file_path: &Path, path: &str, append_value: &str) -> Result<()> {
-    let current_value = get_toml_value(file_path, path).unwrap_or_else(|_| String::new());
-    let current_value = current_value.trim().trim_matches('"');
-
-    // Split current value into tokens and check if append_value already exists
-    let tokens: Vec<&str> = current_value.split_whitespace().collect();
-    let append_trimmed = append_value.trim();
-
-    // Check if the value (or any param with same key) already exists
-    let value_already_exists = if append_trimmed.contains('=') {
-        // For key=value params, check if the key already exists
-        let append_key = append_trimmed.split('=').next().unwrap();
-        tokens
-            .iter()
-            .any(|token| token.contains('=') && token.split('=').next().unwrap() == append_key)
-    } else {
-        // For simple values, check exact match
-        tokens.contains(&append_trimmed)
-    };
-
-    let new_value = if current_value.is_empty() {
-        append_trimmed.to_string()
-    } else if value_already_exists {
-        // Value already exists, don't append (idempotency)
-        current_value.to_string()
-    } else {
-        format!("{} {}", current_value, append_trimmed)
-    };
-
-    set_toml_value(file_path, path, &format!("\"{new_value}\""))
+/// Append to a TOML array.
+pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
+    let mut editor = TomlEditor::open(file_path)?;
+    editor.append_to_array(path, value)?;
+    editor.save()
 }
 
-fn parse_toml_value(value: &str) -> Item {
-    use toml_edit::Formatted;
-
-    // Try to parse as different types
-    if matches!(value, "true" | "false") {
-        return Item::Value(Value::Boolean(Formatted::new(value == "true")));
-    }
-
-    if let Ok(i) = value.parse::<i64>() {
-        return Item::Value(Value::Integer(Formatted::new(i)));
-    }
-
-    if let Ok(f) = value.parse::<f64>() {
-        return Item::Value(Value::Float(Formatted::new(f)));
-    }
-
-    // Check if it's an array
-    if value.starts_with('[') && value.ends_with(']') {
-        let array_str = &value[1..value.len() - 1];
-        let mut array = toml_edit::Array::new();
-        for item in array_str.split(',') {
-            let item = item.trim().trim_matches('"');
-            array.push(Value::String(Formatted::new(item.to_string())));
-        }
-        return Item::Value(Value::Array(array));
-    }
-
-    // Default to string
-    // If the value is quoted, extract the content; otherwise use as-is
-    let string_value = if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
-        value[1..value.len() - 1].to_string()
-    } else {
-        value.to_string()
-    };
-    Item::Value(Value::String(Formatted::new(string_value)))
+/// Remove from a TOML array.
+pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Result<()> {
+    let mut editor = TomlEditor::open(file_path)?;
+    editor.remove_from_array(path, value)?;
+    editor.save()
 }
+
+/// Append to a TOML string value.
+pub fn append_to_toml_string(file_path: &Path, path: &str, value: &str) -> Result<()> {
+    let mut editor = TomlEditor::open(file_path)?;
+    editor.append_to_string(path, value)?;
+    editor.save()
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::NamedTempFile;
+
+    // ========================================================================
+    // TomlEditor tests
+    // ========================================================================
+
+    #[test]
+    fn test_editor_set_and_get() {
+        let mut editor = TomlEditor::from_str("[hypervisor]\n").unwrap();
+
+        editor
+            .set("hypervisor.qemu.path", "\"/usr/bin/qemu\"")
+            .unwrap();
+        editor
+            .set("hypervisor.qemu.enable_debug", "true")
+            .unwrap();
+
+        assert_eq!(editor.get("hypervisor.qemu.path").unwrap(), "/usr/bin/qemu");
+        assert_eq!(editor.get("hypervisor.qemu.enable_debug").unwrap(), "true");
+    }
+
+    #[test]
+    fn test_editor_quoted_path() {
+        let mut editor = TomlEditor::from_str("").unwrap();
+
+        // Containerd-style path with quoted segment
+        editor
+            .set(
+                r#"plugins."io.containerd.cri.v1.runtime".containerd.runtimes.kata.runtime_type"#,
+                "\"io.containerd.kata.v2\"",
+            )
+            .unwrap();
+
+        let value = editor
+            .get(r#"plugins."io.containerd.cri.v1.runtime".containerd.runtimes.kata.runtime_type"#)
+            .unwrap();
+        assert_eq!(value, "io.containerd.kata.v2");
+    }
+
+    #[test]
+    fn test_editor_arrays() {
+        let mut editor =
+            TomlEditor::from_str("[hypervisor]\n[hypervisor.qemu]\n").unwrap();
+
+        editor
+            .set_array(
+                "hypervisor.qemu.enable_annotations",
+                &["ann1".to_string(), "ann2".to_string()],
+            )
+            .unwrap();
+
+        let arr = editor
+            .get_array("hypervisor.qemu.enable_annotations")
+            .unwrap();
+        assert_eq!(arr, vec!["ann1", "ann2"]);
+
+        // Append (idempotent)
+        editor
+            .append_to_array("hypervisor.qemu.enable_annotations", "ann3")
+            .unwrap();
+        editor
+            .append_to_array("hypervisor.qemu.enable_annotations", "ann2")
+            .unwrap(); // duplicate
+
+        let arr = editor
+            .get_array("hypervisor.qemu.enable_annotations")
+            .unwrap();
+        assert_eq!(arr, vec!["ann1", "ann2", "ann3"]);
+    }
+
+    #[test]
+    fn test_editor_append_string() {
+        let mut editor = TomlEditor::from_str(
+            "[hypervisor]\n[hypervisor.qemu]\nkernel_params = \"console=ttyS0\"\n",
+        )
+        .unwrap();
+
+        editor
+            .append_to_string("hypervisor.qemu.kernel_params", "agent.log=debug")
+            .unwrap();
+        editor
+            .append_to_string("hypervisor.qemu.kernel_params", "agent.log=debug")
+            .unwrap(); // idempotent
+
+        let value = editor.get("hypervisor.qemu.kernel_params").unwrap();
+        assert_eq!(value, "console=ttyS0 agent.log=debug");
+    }
+
+    #[test]
+    fn test_macro_usage() {
+        let mut editor = TomlEditor::from_str("").unwrap();
+
+        toml_set!(editor, "runtime.enable_debug", "true").unwrap();
+
+        let value = toml_get!(editor, "runtime.enable_debug").unwrap();
+        assert_eq!(value, "true");
+    }
+
+    // ========================================================================
+    // Backward-compatible API tests (existing tests)
+    // ========================================================================
 
     #[test]
     fn test_set_toml_value() {
