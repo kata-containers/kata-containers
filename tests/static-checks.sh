@@ -97,6 +97,7 @@ long_options=(
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
 	[json]="Check JSON files"
+	[kata-agent-features]="Check kata-agent features consistency"
 	[labels]="Check labels databases"
 	[licenses]="Check licenses"
 	[list]="List tests that would run"
@@ -1390,6 +1391,25 @@ static_check_rego()
 	fi
 }
 
+static_check_kata_agent_features()
+{
+	local cargo_toml="${repo_path}/src/agent/Cargo.toml"
+	local features_rs="${repo_path}/src/agent/src/features.rs"
+
+
+	# Extract features from [features] section of Cargo.toml
+	local cargo_features=$(sed -n '/^\[features\]/,/^\[/p' "$cargo_toml" | grep '=' | cut -d= -f1)
+
+	# Extract features from features.rs
+	local rs_features=$(grep -E '^\s*".*",\s*$' "$features_rs" | tr -d ' ",' | sort)
+
+	local diff=$(comm -3 <(echo "$cargo_features") <(echo "$rs_features"))
+
+	if [ -n "$diff" ]; then
+		die "Mismatch between Cargo.toml and features.rs features:\n$diff"
+	fi
+}
+
 # Run the specified function (after first checking it is compatible with the
 # users architectural preferences), or simply list the function name if list
 # mode is active.
@@ -1528,6 +1548,7 @@ main()
 			--golang) func=static_check_go_arch_specific ;;
 			-h|--help) usage; exit 0 ;;
 			--json) func=static_check_json ;;
+			--kata-agent-features) func=static_check_kata_agent_features ;;
 			--labels) func=static_check_labels;;
 			--licenses) func=static_check_license_headers ;;
 			--list) list_only="true" ;;
