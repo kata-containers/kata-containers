@@ -217,13 +217,13 @@ download_upstream() {
 		local sig_file="${output_dir}/${tarball_name}.sig"
 		if curl -sSL -o "${sig_file}" "${gpg_sig_url}" 2>/dev/null; then
 			info "Verifying GPG signature..."
-			# Import GPG key from keyserver
-			gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys C9E9416F76E610DBD09D040F47B70C55ACC9965B >&2 2>/dev/null || true
+			# Import GPG key from keyserver (gperf maintainer: Marcel Schaible)
+			gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys EDEB87A500CC0A211677FBFD93C08C88471097CD >&2 2>/dev/null || true
 			pushd "${output_dir}" > /dev/null
 			if gpg --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
 				info "GPG signature verified"
 				# Export the GPG key to cache alongside the signature for offline verification
-				gpg --export C9E9416F76E610DBD09D040F47B70C55ACC9965B > "${tarball_name}.gpg-keyring" 2>/dev/null || true
+				gpg --export EDEB87A500CC0A211677FBFD93C08C88471097CD > "${tarball_name}.gpg-keyring" 2>/dev/null || true
 				info "Exported GPG public key for caching"
 			else
 				warn "GPG signature verification failed"
@@ -283,8 +283,8 @@ download_with_cache() {
 						gpg --import "${tarball_name}.gpg-keyring" >&2 2>/dev/null || true
 						info "Imported GPG key from cache"
 					fi
-					# Verify if key is now available
-					if gpg --list-keys C9E9416F76E610DBD09D040F47B70C55ACC9965B &>/dev/null; then
+					# Verify if key is now available (gperf maintainer: Marcel Schaible)
+					if gpg --list-keys EDEB87A500CC0A211677FBFD93C08C88471097CD &>/dev/null; then
 						if gpg --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
 							info "GPG signature verified for cached ${artifact_name}"
 							popd > /dev/null
