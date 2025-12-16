@@ -32,6 +32,7 @@ use rustjail::container::BaseContainer;
 use rustjail::container::LinuxContainer;
 use rustjail::process::Process;
 use slog::Logger;
+use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
@@ -47,7 +48,16 @@ use crate::storage::StorageDeviceGeneric;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 
-pub const ERR_INVALID_CONTAINER_ID: &str = "Invalid container id";
+/// Errors that can occur when looking up processes in the sandbox.
+#[derive(Debug, Error)]
+pub enum SandboxError {
+    #[error("Invalid container id")]
+    InvalidContainerId,
+    #[error("Process not found: init process missing")]
+    InitProcessNotFound,
+    #[error("Process not found: invalid exec id")]
+    InvalidExecId,
+}
 
 type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 
@@ -282,10 +292,14 @@ impl Sandbox {
         None
     }
 
-    pub fn find_container_process(&mut self, cid: &str, eid: &str) -> Result<&mut Process> {
+    pub fn find_container_process(
+        &mut self,
+        cid: &str,
+        eid: &str,
+    ) -> Result<&mut Process, SandboxError> {
         let ctr = self
             .get_container(cid)
-            .ok_or_else(|| anyhow!(ERR_INVALID_CONTAINER_ID))?;
+            .ok_or(SandboxError::InvalidContainerId)?;
 
         if eid.is_empty() {
             let init_pid = ctr.init_process_pid;
@@ -293,10 +307,11 @@ impl Sandbox {
                 .processes
                 .values_mut()
                 .find(|p| p.pid == init_pid)
-                .ok_or_else(|| anyhow!("cannot find init process!"));
+                .ok_or(SandboxError::InitProcessNotFound);
         }
 
-        ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
+        ctr.get_process(eid)
+            .map_err(|_| SandboxError::InvalidExecId)
     }
 
     #[instrument]
