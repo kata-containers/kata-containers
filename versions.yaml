@@ -245,7 +245,7 @@ externals:
   helm:
     description: "Kubernetes package manager"
     url: "https://get.helm.sh/"
-    version: "v3.15.2"
+    version: "v4.0.4"
 
   cni-plugins:
     description: "CNI network plugins"
