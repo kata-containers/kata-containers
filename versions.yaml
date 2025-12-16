@@ -315,7 +315,7 @@ externals:
   lvm2:
     description: "LVM2 and device-mapper tools and libraries"
     url: "https://github.com/lvmteam/lvm2"
-    version: "v2_03_16"
+    version: "v2_03_38"
 
   kubernetes:
     description: "Kubernetes project container manager"
