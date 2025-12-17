@@ -648,7 +648,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_virtio_device_normal() {
-        let device_socket = "/tmp/vhost.1";
+        let device_socket = concat!("vhost.", line!());
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {
@@ -699,7 +699,7 @@ mod tests {
     #[test]
     fn test_vhost_user_net_virtio_device_activate() {
         skip_if_not_root!();
-        let device_socket = "/tmp/vhost.1";
+        let device_socket = concat!("vhost.", line!());
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {

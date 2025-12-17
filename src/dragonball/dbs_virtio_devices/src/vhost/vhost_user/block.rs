@@ -631,7 +631,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_block_virtio_device_spdk() {
-        let socket_path = "/tmp/vhost.1";
+        let socket_path = concat!("vhost.", line!());
 
         let handler = thread::spawn(move || {
             let listener = Listener::new(socket_path, true).unwrap();
@@ -692,7 +692,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_block_virtio_device_activate_spdk() {
-        let socket_path = "/tmp/vhost.2";
+        let socket_path = concat!("vhost.", line!());
 
         let handler = thread::spawn(move || {
             // create vhost user block device
