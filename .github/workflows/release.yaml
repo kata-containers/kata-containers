@@ -65,23 +65,10 @@ jobs:
       CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  build-and-push-assets-ppc64le:
-    needs: release
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/release-ppc64le.yaml
-    with:
-      target-arch: ppc64le
-    secrets:
-      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
   publish-multi-arch-images:
     name: publish-multi-arch-images
     runs-on: ubuntu-22.04
-    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
+    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x]
     permissions:
       contents: write # needed for the `gh release` commands
       packages: write # needed to push the multi-arch manifest to ghcr.io
@@ -118,7 +105,7 @@ jobs:
 
   upload-multi-arch-static-tarball:
     name: upload-multi-arch-static-tarball
-    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
+    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x]
     permissions:
       contents: write # needed for the `gh release` commands
     runs-on: ubuntu-22.04
@@ -168,18 +155,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: s390x
-
-      - name: Download ppc64le artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: kata-static-tarball-ppc64le
-
-      - name: Upload ppc64le static tarball to GitHub
-        run: |
-          ./tools/packaging/release/release.sh upload-kata-static-tarball
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARCHITECTURE: ppc64le
 
       - name: Set KATA_TOOLS_STATIC_TARBALL env var
         run: |
@@ -292,7 +267,7 @@ jobs:
 
   publish-release:
     name: publish-release
-    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
+    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
     runs-on: ubuntu-22.04
     permissions:
       contents: write # needed for the `gh release` commands

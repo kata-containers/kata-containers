@@ -129,18 +129,6 @@ jobs:
       CI_HKD_PATH: ${{ secrets.ci_hkd_path }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
-  build-kata-static-tarball-ppc64le:
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets:
-      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
     permissions:
@@ -156,25 +144,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-24.04-s390x
       arch: s390x
-      build-type: ${{ inputs.build-type }}
-    secrets:
-      QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
-  publish-kata-deploy-payload-ppc64le:
-    needs: build-kata-static-tarball-ppc64le
-    permissions:
-      contents: read
-      packages: write
-    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-ppc64le
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: ubuntu-24.04-ppc64le
-      arch: ppc64le
       build-type: ${{ inputs.build-type }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
@@ -373,18 +342,6 @@ jobs:
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
 
-  run-k8s-tests-on-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: publish-kata-deploy-payload-ppc64le
-    uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-ppc64le${{ inputs.build-type == 'rust' && '-rust' || '' }}
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-
   run-kata-deploy-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: [publish-kata-deploy-payload-amd64]
@@ -460,25 +417,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: s390x-large
       arch: s390x
-      containerd_version: ${{ matrix.params.containerd_version }}
-      vmm: ${{ matrix.params.vmm }}
-
-  run-cri-containerd-tests-ppc64le:
-    if: ${{ inputs.skip-test != 'yes' }}
-    needs: build-kata-static-tarball-ppc64le
-    strategy:
-      fail-fast: false
-      matrix:
-        params: [
-          { containerd_version: active, vmm: qemu },
-         ]
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-      runner: ppc64le-small
-      arch: ppc64le
       containerd_version: ${{ matrix.params.containerd_version }}
       vmm: ${{ matrix.params.vmm }}
 

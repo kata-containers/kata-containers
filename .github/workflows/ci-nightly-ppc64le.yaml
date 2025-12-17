@@ -1,0 +1,60 @@
+on:
+  schedule:
+    - cron: '0 5 * * *'
+
+name: Nightly CI for ppc64le
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  build-kata-static-tarball-ppc64le:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
+    with:
+      tarball-suffix: -${{ github.sha }}
+      commit-hash: ${{ github.sha }}
+      target-branch: ${{ github.ref_name }}
+
+  publish-kata-deploy-payload-ppc64le:
+    needs: build-kata-static-tarball-ppc64le
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish-kata-deploy-payload.yaml
+    with:
+      tarball-suffix: -${{ github.sha }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ github.sha }}-ppc64le
+      commit-hash: ${{ github.sha }}
+      target-branch: ${{ github.ref_name }}
+      runner: ubuntu-24.04-ppc64le
+      arch: ppc64le
+
+  run-k8s-tests-on-ppc64le:
+    needs: publish-kata-deploy-payload-ppc64le
+    uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ github.sha }}-ppc64le
+      commit-hash: ${{ github.sha }}
+      pr-number: ""
+      target-branch: ${{ github.ref_name }}
+
+  build-checks:
+    strategy:
+      fail-fast: false
+      matrix:
+        instance:
+          - "ubuntu-24.04-ppc64le"
+    uses: ./.github/workflows/build-checks.yaml
+    with:
+      instance: ${{ matrix.instance }}
+
