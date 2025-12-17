@@ -358,14 +358,14 @@ disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
 # Enable hot-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 
 # The default setting is  "no-port"
-hot_plug_vfio = "@DEFAULTVFIOPORT_NV@"
+hot_plug_vfio = "no-port"
 
 # In a confidential compute environment hot-plugging can compromise
 # security. 
 # Enable cold-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 
 # The default setting is  "no-port", which means disabled. 
-cold_plug_vfio = "no-port"
+cold_plug_vfio = "@DEFAULTVFIOPORT_NV@"
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
