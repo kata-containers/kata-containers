@@ -233,10 +233,72 @@ prepare_distribution_drivers() {
 		libnvidia-nscq-"${driver_version}"
 }
 
+# Install drivers from NVIDIA's official repository
+# Per https://docs.nvidia.com/datacenter/tesla/driver-installation-guide/ubuntu.html
+# Always installs the latest available driver from NVIDIA's repo
+prepare_nvidia_repo_drivers() {
+	echo "chroot: Prepare NVIDIA drivers from NVIDIA repository (latest)"
+
+	# Replace the default pinning that blocks NVIDIA repo packages
+	# We want to prioritize NVIDIA repo and block Ubuntu's driver packages
+	cat > /etc/apt/preferences.d/nvidia-priority << 'EOF'
+# Block nvidia driver packages from Ubuntu repositories
+Package: nvidia-* libnvidia-*
+Pin: origin us.archive.ubuntu.com
+Pin-Priority: -1
+
+Package: nvidia-* libnvidia-*
+Pin: origin archive.ubuntu.com
+Pin-Priority: -1
+
+Package: nvidia-* libnvidia-*
+Pin: origin ports.ubuntu.com
+Pin-Priority: -1
+
+# Prioritize NVIDIA repository for driver packages
+Package: nvidia-* libnvidia-* cuda-drivers*
+Pin: origin developer.download.nvidia.com
+Pin-Priority: 900
+
+# NVIDIA Container Toolkit
+Package: nvidia-container-toolkit* libnvidia-container*
+Pin: origin nvidia.github.io
+Pin-Priority: 500
+
+# Allow non-driver CUDA packages from CUDA repository
+Package: *
+Pin: origin developer.download.nvidia.com
+Pin-Priority: 100
+EOF
+
+	apt update
+
+	eval "${APT_INSTALL}"                   \
+		nvidia-driver-pinning-590.48.01 \
+		nvidia-headless-no-dkms-open
+
+	# Install additional required library components
+	eval "${APT_INSTALL}" \
+		libnvidia-cfg1 \
+		libnvidia-compute \
+		libnvidia-decode \
+		libnvidia-encode \
+		libnvidia-extra \
+		libnvidia-fbc1 \
+		libnvidia-gl \
+		nvidia-kernel-common
+}
+
 prepare_nvidia_drivers() {
 	local driver_source_dir=""
 
+	# Priority order:
+	# 1. Run file (.run) - if manually provided in BUILD_DIR
+	# 2. NVIDIA repository - opt-in via "nvidia-repo" in NVIDIA_GPU_STACK
+	# 3. Distribution (Ubuntu) repository - default
+
 	if [[ -f /"${run_file_name}" ]]; then
+		echo "chroot: Using NVIDIA driver from run file"
 		prepare_run_file_drivers
 
 		for source_dir in /NVIDIA-*; do
@@ -248,7 +310,23 @@ prepare_nvidia_drivers() {
 		done
 		get_supported_gpus_from_run_file "${driver_source_dir}"
 
+	elif is_feature_enabled "nvidia-repo"; then
+		# Opt-in to use NVIDIA's official repository
+		echo "chroot: Using NVIDIA driver from NVIDIA repository"
+		prepare_nvidia_repo_drivers
+
+		for source_dir in /usr/src/nvidia*; do
+			if [[ -d "${source_dir}" ]]; then
+				driver_source_files="${source_dir}"
+				driver_source_dir="${source_dir}"
+				break
+			fi
+		done
+		get_supported_gpus_from_distro_drivers "${driver_source_dir}"
+
 	else
+		# Default: Use Ubuntu's distribution packages
+		echo "chroot: Using NVIDIA driver from Ubuntu distribution repository"
 		prepare_distribution_drivers
 
 		for source_dir in /usr/src/nvidia*; do
@@ -354,7 +432,25 @@ get_supported_gpus_from_run_file() {
 get_supported_gpus_from_distro_drivers() {
 	local supported_gpus_json="./usr/share/doc/nvidia-kernel-common-${driver_version}-server/supported-gpus.json"
 
-	jq . < "${supported_gpus_json}"  | grep '"devid"' | awk '{ print $2 }' | tr -d ',"'  > "${supported_gpu_devids}"
+	# For nvidia-repo, download nvidia-driver package and extract supported-gpus.json
+	if is_feature_enabled "nvidia-repo"; then
+		mkdir _tmp
+		pushd _tmp >> /dev/null
+
+		apt download nvidia-driver
+		ar -x nvidia-driver*.deb
+		tar -xvf data.tar.*
+
+		supported_gpus_json=./usr/share/doc/nvidia-driver/supported-gpus.json
+
+		jq . < "${supported_gpus_json}" | grep '"devid"' | awk '{ print $2 }' | tr -d ',"' > "${supported_gpu_devids}"
+
+		popd >> /dev/null
+		rm -rf _tmp
+		return
+	fi
+
+	jq . < "${supported_gpus_json}" | grep '"devid"' | awk '{ print $2 }' | tr -d ',"' > "${supported_gpu_devids}"
 }
 
 export_driver_version() {
@@ -379,9 +475,23 @@ install_nvidia_dcgm() {
 cleanup_rootfs() {
 	echo "chroot: Cleanup NVIDIA GPU rootfs"
 
-	apt-mark hold libstdc++6 libzstd1 libgnutls30t64 pciutils
+	apt-mark hold libstdc++6 libzstd1 libgnutls30t64 pciutils linuxptp libnftnl11
 
-	if [[ -n "${driver_version}" ]]; then
+	# Hold NVIDIA packages - handle both naming conventions
+	if is_feature_enabled "nvidia-repo"; then
+		# NVIDIA repo uses packages without version suffixes
+		# Only hold packages we actually installed in prepare_nvidia_repo_drivers()
+		apt-mark hold \
+			libnvidia-cfg1 \
+			libnvidia-compute \
+			libnvidia-decode \
+			libnvidia-encode \
+			libnvidia-extra \
+			libnvidia-fbc1 \
+			libnvidia-gl \
+			nvidia-kernel-common
+	else
+		# Ubuntu distro uses packages with version suffixes
 		apt-mark hold libnvidia-cfg1-"${driver_version}"-server \
 			nvidia-utils-"${driver_version}"-server         \
 			nvidia-kernel-common-"${driver_version}"-server \
@@ -393,8 +503,7 @@ cleanup_rootfs() {
 			libnvidia-decode-"${driver_version}"-server     \
 			libnvidia-fbc1-"${driver_version}"-server       \
 			libnvidia-encode-"${driver_version}"-server     \
-			libnvidia-nscq-"${driver_version}"              \
-			linuxptp libnftnl11
+			libnvidia-nscq-"${driver_version}"
 	fi
 
 	kernel_headers=$(dpkg --get-selections | cut -f1 | grep linux-headers)
@@ -405,7 +514,10 @@ cleanup_rootfs() {
 
 	apt purge -yqq jq make gcc xz-utils linux-libc-dev
 
-	if [[ -n "${driver_version}" ]]; then
+	# Purge kernel source packages
+	if is_feature_enabled "nvidia-repo"; then
+		apt purge -yqq nvidia-kernel-source-open nvidia-kernel-source 2>/dev/null || true
+	else
 		apt purge -yqq nvidia-headless-no-dkms-"${driver_version}"-server"${driver_type}" \
 			nvidia-kernel-source-"${driver_version}"-server"${driver_type}"
 	fi
