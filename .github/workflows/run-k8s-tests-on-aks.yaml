@@ -93,14 +93,14 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: get-kata-tarball
+      - name: get-kata-tools-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
 
-      - name: Install kata
-        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Download Azure CLI
         uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1

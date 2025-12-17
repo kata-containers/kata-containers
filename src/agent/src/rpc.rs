@@ -72,7 +72,7 @@ use crate::network::setup_guest_dns;
 use crate::passfd_io;
 use crate::pci;
 use crate::random;
-use crate::sandbox::Sandbox;
+use crate::sandbox::{Sandbox, SandboxError};
 use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
@@ -139,6 +139,16 @@ fn sl() -> slog::Logger {
 // Convenience function to wrap an error and response to ttrpc client
 pub fn ttrpc_error(code: ttrpc::Code, err: impl Debug) -> ttrpc::Error {
     get_rpc_status(code, format!("{:?}", err))
+}
+
+/// Convert SandboxError to ttrpc error with appropriate code.
+/// Process not found errors map to NOT_FOUND, others to INVALID_ARGUMENT.
+fn sandbox_err_to_ttrpc(err: SandboxError) -> ttrpc::Error {
+    let code = match &err {
+        SandboxError::InitProcessNotFound | SandboxError::InvalidExecId => ttrpc::Code::NOT_FOUND,
+        SandboxError::InvalidContainerId => ttrpc::Code::INVALID_ARGUMENT,
+    };
+    ttrpc_error(code, err)
 }
 
 #[cfg(not(feature = "agent-policy"))]
@@ -460,7 +470,9 @@ impl AgentService {
         let mut sig: libc::c_int = req.signal as libc::c_int;
         {
             let mut sandbox = self.sandbox.lock().await;
-            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
+            let p = sandbox
+                .find_container_process(cid.as_str(), eid.as_str())
+                .map_err(sandbox_err_to_ttrpc)?;
             // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
             // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
             // instead of "SIGTERM" to terminate it.
@@ -568,7 +580,9 @@ impl AgentService {
         let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
         let exit_rx = {
             let mut sandbox = self.sandbox.lock().await;
-            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
+            let p = sandbox
+                .find_container_process(cid.as_str(), eid.as_str())
+                .map_err(sandbox_err_to_ttrpc)?;
 
             p.exit_watchers.push(exit_send);
             pid = p.pid;
@@ -665,7 +679,9 @@ impl AgentService {
         let term_exit_notifier;
         let reader = {
             let mut sandbox = self.sandbox.lock().await;
-            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
+            let p = sandbox
+                .find_container_process(cid.as_str(), eid.as_str())
+                .map_err(sandbox_err_to_ttrpc)?;
 
             term_exit_notifier = p.term_exit_notifier.clone();
 
@@ -947,12 +963,7 @@ impl agent_ttrpc::AgentService for AgentService {
 
         let p = sandbox
             .find_container_process(cid.as_str(), eid.as_str())
-            .map_err(|e| {
-                ttrpc_error(
-                    ttrpc::Code::INVALID_ARGUMENT,
-                    format!("invalid argument: {:?}", e),
-                )
-            })?;
+            .map_err(sandbox_err_to_ttrpc)?;
 
         p.close_stdin().await;
 
@@ -970,12 +981,7 @@ impl agent_ttrpc::AgentService for AgentService {
         let mut sandbox = self.sandbox.lock().await;
         let p = sandbox
             .find_container_process(req.container_id(), req.exec_id())
-            .map_err(|e| {
-                ttrpc_error(
-                    ttrpc::Code::UNAVAILABLE,
-                    format!("invalid argument: {:?}", e),
-                )
-            })?;
+            .map_err(sandbox_err_to_ttrpc)?;
 
         let fd = p
             .term_master
@@ -2629,12 +2635,12 @@ mod tests {
             },
             TestData {
                 create_container: false,
-                result: Err(anyhow!(crate::sandbox::ERR_INVALID_CONTAINER_ID)),
+                result: Err(anyhow!(crate::sandbox::SandboxError::InvalidContainerId)),
                 ..Default::default()
             },
             TestData {
                 container_id: "8181",
-                result: Err(anyhow!(crate::sandbox::ERR_INVALID_CONTAINER_ID)),
+                result: Err(anyhow!(crate::sandbox::SandboxError::InvalidContainerId)),
                 ..Default::default()
             },
             TestData {

@@ -56,3 +56,6 @@ default = ["virt"]
 linux = ["linux_container"]
 virt = ["virt_container"]
 wasm = ["wasm_container"]
+
+dragonball = ["virt_container/dragonball"]
+cloud-hypervisor = ["virt_container/cloud-hypervisor"]

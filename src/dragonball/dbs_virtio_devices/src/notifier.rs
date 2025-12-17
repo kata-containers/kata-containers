@@ -44,9 +44,11 @@ pub fn create_queue_notifier(
 mod tests {
     use super::*;
     use dbs_interrupt::InterruptManager;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_create_virtio_legacy_notifier() {
+        skip_if_not_root!();
         let (_vmfd, irq_manager) = crate::tests::create_vm_and_irq_manager();
         let group = irq_manager
             .create_group(InterruptSourceType::LegacyIrq, 0, 1)
@@ -68,6 +70,7 @@ mod tests {
 
     #[test]
     fn test_create_virtio_msi_notifier() {
+        skip_if_not_root!();
         let (_vmfd, irq_manager) = crate::tests::create_vm_and_irq_manager();
         let group = irq_manager
             .create_group(InterruptSourceType::MsiIrq, 0, 3)
