@@ -14,7 +14,6 @@ issue="https://github.com/kata-containers/runtime/issues/1834"
 setup() {
 	skip "test not working see: ${issue}"
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 }
 
 @test "Port forwarding" {

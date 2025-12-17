@@ -56,6 +56,8 @@ setup_common() {
 	export node node_start_time
 
 	k8s_delete_all_pods_if_any_exists || true
+
+	get_pod_config_dir
 }
 
 get_pod_config_dir() {

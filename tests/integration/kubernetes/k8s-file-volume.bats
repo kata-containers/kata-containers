@@ -21,7 +21,6 @@ setup() {
 	exec_host "$node" touch $tmp_file
 	mount_path="/tmp/foo.txt"
 	file_body="test"
-	get_pod_config_dir
 
 	# Write test body to temp file
 	exec_host "$node" "echo "$file_body" > $tmp_file"

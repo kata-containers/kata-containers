@@ -15,7 +15,7 @@ setup() {
 	setup_common || die "setup_common failed"
 	pod_name="cpu-test"
 	container_name="c1"
-	get_pod_config_dir
+
 	yaml_file="${pod_config_dir}/pod-number-cpu.yaml"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"

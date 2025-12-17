@@ -12,7 +12,7 @@ setup() {
 	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && \
 		skip "This test fails intermittently for ${KATA_HYPERVISOR:-}"
 	pod_name="seccomp-container"
-	get_pod_config_dir
+
 	setup_common || die "setup_common failed"
 	yaml_file="${pod_config_dir}/pod-seccomp.yaml"
 	add_allow_all_policy_to_yaml "${yaml_file}"

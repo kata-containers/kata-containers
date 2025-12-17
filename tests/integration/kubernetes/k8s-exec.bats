@@ -10,7 +10,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	get_pod_config_dir
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"

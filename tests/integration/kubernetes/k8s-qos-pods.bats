@@ -13,7 +13,6 @@ TEST_INITRD="${TEST_INITRD:-no}"
 # Not working on ARM CI see https://github.com/kata-containers/tests/issues/4727  
 setup() {
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 }
 
 @test "Guaranteed QoS" {

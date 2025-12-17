@@ -12,7 +12,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	pod_name="handlers"
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 	yaml_file="${pod_config_dir}/test-lifecycle-events.yaml"
 
 	# Create yaml

@@ -11,7 +11,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	pod_name="test-env"
-	get_pod_config_dir
 	setup_common || die "setup_common failed"
 	yaml_file="${pod_config_dir}/pod-env.yaml"
 	cmd="printenv"

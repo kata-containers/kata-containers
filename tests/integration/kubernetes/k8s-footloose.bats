@@ -12,7 +12,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	pod_name="footubuntu"
 	config_name="ssh-config-map"
-	get_pod_config_dir
 	setup_common || die "setup_common failed"
 	# Creates ssh-key
 	key_path=$(mktemp --tmpdir)

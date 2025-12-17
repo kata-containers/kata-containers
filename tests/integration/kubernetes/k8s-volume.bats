@@ -14,7 +14,6 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 
 	node=$(get_one_kata_node)
 	tmp_file=$(mktemp -u /tmp/data.XXXX)

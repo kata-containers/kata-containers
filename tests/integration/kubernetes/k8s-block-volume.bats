@@ -16,8 +16,6 @@ setup() {
 
 	setup_common || die "setup_common failed"
 
-	get_pod_config_dir
-
 	node="$(get_one_kata_node)"
 	pod_name="pod-block-pv"
 	volume_name="block-loop-pv"

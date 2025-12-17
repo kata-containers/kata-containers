@@ -16,7 +16,6 @@ setup() {
     [ "$(uname -m)" == "s390x" ] && skip "container image not built for s390x"
 
     setup_common || die "setup_common failed"
-    get_pod_config_dir
 
     init_pod_name="openvpn-init-secrets"
     server_pod_name="openvpn-server"

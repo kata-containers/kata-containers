@@ -15,8 +15,6 @@ setup() {
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
 
-	get_pod_config_dir
-
 	test_yaml_file="${pod_config_dir}/pid-ns-busybox-pod.yaml"
 	cp "$pod_config_dir/busybox-pod.yaml" "${test_yaml_file}"
 

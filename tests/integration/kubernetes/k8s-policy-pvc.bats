@@ -16,8 +16,6 @@ setup() {
 	pod_name="policy-pod-pvc"
 	pvc_name="policy-dev"
 
-	get_pod_config_dir
-
 	correct_pod_yaml="${pod_config_dir}/k8s-policy-pod-pvc.yaml"
 	incorrect_pod_yaml="${pod_config_dir}/k8s-policy-pod-pvc-incorrect.yaml"
 	pvc_yaml="${pod_config_dir}/k8s-policy-pvc.yaml"

@@ -34,7 +34,6 @@ setup() {
 
 	setup_common || die "setup_common failed"
 
-	get_pod_config_dir
 	yaml_file="${pod_config_dir}/pod-cpu.yaml"
 
 	# Add policy to the yaml file

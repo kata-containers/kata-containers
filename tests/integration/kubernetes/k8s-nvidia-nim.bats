@@ -111,8 +111,6 @@ create_embedqa_pod() {
 setup_file() {
     setup_common || die "setup_common failed"
 
-    get_pod_config_dir
-
     export POD_INSTRUCT_YAML_IN="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml.in"
     export POD_INSTRUCT_YAML="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml"
     export POD_EMBEDQA_YAML_IN="${pod_config_dir}/${POD_NAME_EMBEDQA}.yaml.in"

@@ -13,7 +13,6 @@ setup() {
 	[[ "${KATA_HYPERVISOR}" == qemu-se* ]] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 }
 
 @test "Containers with shared volume" {

@@ -16,7 +16,6 @@ setup() {
 	setup_common || die "setup_common failed"
 	pod_name="custom-dns-test"
 	file_name="/etc/resolv.conf"
-	get_pod_config_dir
 	yaml_file="${pod_config_dir}/pod-custom-dns.yaml"
 
 	# Add policy to the yaml file

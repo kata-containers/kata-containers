@@ -17,8 +17,6 @@ setup() {
 
 	setup_common || die "setup_common failed"
 
-	get_pod_config_dir
-
 	pod_yaml="${pod_config_dir}"/inotify-configmap-pod.yaml
 	auto_generate_policy "${pod_config_dir}" "${pod_yaml}"
 }

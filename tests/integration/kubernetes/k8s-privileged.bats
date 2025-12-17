@@ -11,7 +11,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 
     pod_name="privileged"
 	yaml_file="${pod_config_dir}/pod-privileged.yaml"

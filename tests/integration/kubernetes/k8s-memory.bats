@@ -12,7 +12,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	setup_common || die "setup_common failed"
 	pod_name="memory-test"
-	get_pod_config_dir
 }
 
 setup_yaml() {

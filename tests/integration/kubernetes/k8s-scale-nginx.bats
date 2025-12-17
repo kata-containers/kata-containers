@@ -12,7 +12,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	replicas="3"
 	deployment="nginx-deployment"
-	get_pod_config_dir
+
 	setup_common || die "setup_common failed"
 	# Create the yaml file
 	test_yaml="${pod_config_dir}/test-${deployment}.yaml"

@@ -22,7 +22,6 @@ setup() {
 	fi
 
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 
 #	setup_unencrypted_confidential_pod
 

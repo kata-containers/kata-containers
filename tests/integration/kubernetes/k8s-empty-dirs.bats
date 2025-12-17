@@ -20,7 +20,6 @@ assert_equal() {
 
 setup() {
 	pod_name="sharevol-kata"
-	get_pod_config_dir
 	pod_logs_file=""
 	setup_common || die "setup_common failed"
 	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"

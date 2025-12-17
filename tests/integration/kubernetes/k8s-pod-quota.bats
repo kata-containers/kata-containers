@@ -11,7 +11,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 
 	deployment_yaml="${pod_config_dir}/pod-quota-deployment.yaml"
 	auto_generate_policy "${pod_config_dir}" "${deployment_yaml}"

@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
+
 	job_name="job-pi-test"
 	yaml_file="${pod_config_dir}/job.yaml"
 

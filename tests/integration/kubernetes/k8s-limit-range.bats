@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
+
 	namespace_name="default-cpu-example"
 	pod_name="default-cpu-test"
 	pod_yaml="${pod_config_dir}/pod-cpu-defaults.yaml"

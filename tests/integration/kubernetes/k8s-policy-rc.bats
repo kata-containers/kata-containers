@@ -15,8 +15,6 @@ setup() {
     replication_name="policy-rc-test"
     app_name="policy-nginx-rc"
 
-    get_pod_config_dir
-
     correct_yaml="${pod_config_dir}/test-k8s-policy-rc.yaml"
     incorrect_yaml="${pod_config_dir}/test-k8s-policy-rc-incorrect.yaml"
 

@@ -18,7 +18,6 @@ setup() {
 	pod_name="policy-pod"
 	priority_class_name="test-high-priority"
 
-	get_pod_config_dir
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
 	exec_command=(printenv data-3)

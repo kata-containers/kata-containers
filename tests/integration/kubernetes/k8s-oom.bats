@@ -12,7 +12,6 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	setup_common || die "setup_common failed"
 	pod_name="pod-oom"
-	get_pod_config_dir
 
 	yaml_file="${pod_config_dir}/$pod_name.yaml"
 	auto_generate_policy "${pod_config_dir}" "${yaml_file}"

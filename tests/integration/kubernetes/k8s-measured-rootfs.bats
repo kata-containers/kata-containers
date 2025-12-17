@@ -25,7 +25,7 @@ check_and_skip() {
 
 setup() {
 	check_and_skip
-	get_pod_config_dir
+
 	setup_common || die "setup_common failed"
 }
 

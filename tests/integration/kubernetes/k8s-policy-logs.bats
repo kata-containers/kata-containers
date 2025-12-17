@@ -11,7 +11,6 @@ setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled"
 
     setup_common || die "setup_common failed"
-    get_pod_config_dir
 
     pod_name="test-pod-hostname"
     yaml_file="${pod_config_dir}/pod-hostname.yaml"

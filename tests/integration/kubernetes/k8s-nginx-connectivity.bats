@@ -15,8 +15,6 @@ setup() {
 	busybox_image="quay.io/prometheus/busybox:latest"
 	deployment="nginx-deployment"
 
-	get_pod_config_dir
-
 	# Create test .yaml
 	yaml_file="${pod_config_dir}/test-${deployment}.yaml"
 	set_nginx_image "${pod_config_dir}/${deployment}.yaml" "${yaml_file}"

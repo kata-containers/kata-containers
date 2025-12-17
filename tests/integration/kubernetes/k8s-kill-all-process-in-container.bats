@@ -15,7 +15,6 @@ setup() {
 	pod_name="busybox"
 	first_container_name="first-test-container"
 
-	get_pod_config_dir
 	yaml_file="${pod_config_dir}/initcontainer-shareprocesspid.yaml"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
