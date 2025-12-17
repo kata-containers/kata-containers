@@ -19,6 +19,8 @@ sys_bus_base="/sys/bus/ap"
 sys_device_base="/sys/devices/vfio_ap/matrix"
 command_file="mdev_supported_types/vfio_ap-passthrough/create"
 test_image_name="localhost:${registry_port}/vfio-ap-test:latest"
+kata_base="/opt/kata"
+runtime_config_base="${kata_base}/share/defaults/kata-containers"
 
 test_category="[kata][vfio-ap][containerd]"
 
@@ -32,7 +34,8 @@ setup_config_file() {
     local target_item=$1
     local action=$2
     local replacement=${3:-}
-    local kata_config_file=$(kata-runtime env --json | jq -r '.Runtime.Config.Path')
+    local runtime_dir=${4:-}
+    local kata_config_file="${runtime_config_base}/${runtime_dir}/configuration.toml"
 
     if [ "${action}" == "comment_out" ]; then
         sudo sed -i -e 's/.*\('${target_item}'.*\)/#\1/g' ${kata_config_file}
@@ -42,38 +45,50 @@ setup_config_file() {
 }
 
 show_config_file() {
-    local kata_config_file=$(kata-runtime env --json | jq -r '.Runtime.Config.Path')
+    local runtime_dir=${1:-}
+    local kata_config_file="${runtime_config_base}/${runtime_dir}/configuration.toml"
     echo "Show kata configuration"
     # Print out the configuration by excluding comments and empty lines
     cat "${kata_config_file}" | grep -v '^\s*$\|^\s*\#'
 }
 
 setup_hotplug() {
-    echo "Set up the configuration file for Hotplug"
-    setup_config_file "vfio_mode" "replace" "vfio"
-    setup_config_file "cold_plug_vfio" "comment_out"
-    setup_config_file "hot_plug_vfio" "replace" "bridge-port"
-    show_config_file
+    local runtime=$1
+    echo "Set up the configuration file for Hotplug for ${runtime}"
+    if [ "${runtime}" == "runtime" ]; then
+        setup_config_file "vfio_mode" "replace" "vfio"
+        setup_config_file "cold_plug_vfio" "comment_out"
+        setup_config_file "hot_plug_vfio" "replace" "bridge-port"
+        show_config_file
+    elif [ "${runtime}" == "runtime-rs" ]; then
+        setup_config_file "vfio_mode" "replace" "vfio" "runtime-rs"
+        show_config_file "runtime-rs"
+    else
+        echo "Invalid runtime: ${runtime}" >&2
+        exit 1
+    fi
 }
 
 setup_coldplug() {
-    echo "Set up the configuration file for Coldplug"
-    setup_config_file "vfio_mode" "replace" "vfio"
-    setup_config_file "hot_plug_vfio" "comment_out"
-    setup_config_file "cold_plug_vfio" "replace" "bridge-port"
-    show_config_file
+    local runtime=$1
+    echo "Set up the configuration file for Coldplug for ${runtime}"
+    if [ "${runtime}" == "runtime" ]; then
+        setup_config_file "vfio_mode" "replace" "vfio"
+        setup_config_file "hot_plug_vfio" "comment_out"
+        setup_config_file "cold_plug_vfio" "replace" "bridge-port"
+        show_config_file
+    elif [ "${runtime}" == "runtime-rs" ]; then
+        echo "Coldplug is not supported for runtime-rs" >&2
+        exit 1
+    else
+        echo "Invalid runtime: ${runtime}" >&2
+        exit 1
+    fi
 }
 
 cleanup() {
     # Clean up ctr resources
     sudo ctr image rm $(sudo ctr image list -q) || true
-
-    # Clean up crictl resources
-    for pod_id in $(sudo crictl pods -q); do
-        sudo crictl stopp $pod_id
-        sudo crictl rmp $pod_id
-    done
-    sudo crictl rmi $(sudo crictl images -q) || true
 
     # Remove the test image
     ${container_engine} rmi -f ${test_image_name} > /dev/null 2>&1
@@ -99,7 +114,7 @@ validate_env() {
         echo "zcrypttest not found" >&2
         exit 1
     fi
-    necessary_commands=( "${container_engine}" "ctr" "crictl" "lszcrypt" )
+    necessary_commands=( "${container_engine}" "ctr" "lszcrypt" )
     for cmd in "${necessary_commands[@]}"; do
         if ! which ${cmd} > /dev/null 2>&1; then
             echo "${cmd} not found" >&2
@@ -112,27 +127,6 @@ validate_env() {
         ${container_engine} run -d -p ${registry_port}:5000 --restart=always --name "${registry_name}" "${registry_image}"
         # wait for registry container
         waitForProcess 15 3 "curl http://localhost:${registry_port}"
-    fi
-
-    # Check if /etc/containerd/config.toml containers `privileged_without_host_devices = true`
-    if [ -f /etc/containerd/config.toml ]; then
-        if ! grep -q "privileged_without_host_devices *= *true" /etc/containerd/config.toml; then
-            echo "privileged_without_host_devices = true not found in /etc/containerd/config.toml"
-            echo "Adding it..."
-            local runtime_type='runtime_type *= *"io.containerd.kata.v2"'
-            local new_line='privileged_without_host_devices = true'
-            local file_path='/etc/containerd/config.toml'
-            # Find a line with a pattern runtime_type and duplicate it
-            sudo sed -i "/$runtime_type/{h;G}" "$file_path"
-            # Replace the duplicated line with new_line
-            sudo sed -i "/$runtime_type/{n;s/^\([[:space:]]*\).*/\1$new_line/;}" "$file_path"
-            # Restart containerd
-            sudo systemctl daemon-reload
-            sudo systemctl restart containerd
-        fi
-    else
-        echo "/etc/containerd/config.toml not found" >&2
-        exit 1
     fi
 
     sudo modprobe vfio
@@ -202,17 +196,27 @@ create_mediated_device() {
 
 run_test() {
     local run_index=$1
-    local test_message=$2
-    local extra_cmd=${3:-}
+    local runtime=$2
+    local test_message=$3
+    local extra_cmd=${4:-}
     local start_time=$(date +"%Y-%m-%d %H:%M:%S")
     [ -n "${dev_index}" ] || { echo "No dev_index" >&2; exit 1; }
+
+    if [ "${runtime}" == "runtime" ]; then
+        local runtime_type="io.containerd.run.kata.v2"
+    elif [ "${runtime}" == "runtime-rs" ]; then
+        local runtime_type="io.containerd.kata-qemu-runtime-rs.v2"
+    else
+        echo "Invalid runtime: ${runtime}" >&2
+        exit 1
+    fi
 
     # Set time granularity to a second for capturing the log
     sleep 1
 
     sudo ctr image pull --plain-http ${test_image_name}
     # Create a container and run the test
-    sudo ctr run --runtime io.containerd.run.kata.v2 --rm \
+    sudo ctr run --runtime ${runtime_type} --rm \
         --privileged --privileged-without-host-devices \
         --device ${dev_base}/${dev_index} ${test_image_name} test \
         bash -c "lszcrypt ${_APID}.${_APQI} | grep ${APQN} ${extra_cmd}"
@@ -220,20 +224,61 @@ run_test() {
     [ $? -eq 0 ] && result=0 || result=1
 
     if [ $result -eq 0 ]; then
-        echo "ok ${run_index} ${test_category} ${test_message}"
+        echo "ok ${run_index} ${test_category}[${runtime}] ${test_message}"
     else
-        echo "not ok ${run_index} ${test_category} ${test_message}"
+        echo "not ok ${run_index} ${test_category}[${runtime}] ${test_message}"
         echo "Logging the journal..."
         sudo journalctl --no-pager --since "${start_time}"
     fi
 }
 
-run_tests() {
-    setup_hotplug
-    run_test "1" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug" "&& zcrypttest -a -v"
+configure_containerd_for_runtime_rs() {
+    local config_file="/etc/containerd/config.toml"
 
-    setup_coldplug
-    run_test "2" "Test can assign a CEX device inside the guest via VFIO-AP Coldplug" "&& zcrypttest -a -v"
+    sudo rm -f /usr/local/bin/containerd-shim-kata-qemu-runtime-rs-v2 \
+        ${runtime_config_base}/runtime-rs/configuration.toml
+    if [ ! -f ${kata_base}/runtime-rs/bin/containerd-shim-kata-v2 ]; then
+        echo "${kata_base}/runtime-rs/bin/containerd-shim-kata-v2 not found" >&2
+        exit 1
+    fi
+    if [ ! -f ${runtime_config_base}/runtime-rs/configuration-qemu-runtime-rs.toml ]; then
+        echo "${runtime_config_base}/runtime-rs/configuration-qemu-runtime-rs.toml not found" >&2
+        exit 1
+    fi
+    sudo ln -sf ${kata_base}/runtime-rs/bin/containerd-shim-kata-v2 \
+        /usr/local/bin/containerd-shim-kata-qemu-runtime-rs-v2
+    sudo ln -sf ${runtime_config_base}/runtime-rs/configuration-qemu-runtime-rs.toml \
+        ${runtime_config_base}/runtime-rs/configuration.toml
+
+    if [ ! -f ${config_file} ]; then
+        echo "/etc/containerd/config.toml not found" >&2
+        exit 1
+    fi
+
+    if ! grep -q "kata-qemu-runtime-rs" ${config_file}; then
+        cat <<EOF | sudo tee -a ${config_file}
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu-runtime-rs]
+          runtime_type = "io.containerd.kata-qemu-runtime-rs.v2"
+EOF
+    fi
+
+    sudo systemctl daemon-reload
+    sudo systemctl restart containerd
+    # Wait for containerd to restart and the configuration to take effect
+    sleep 1
+}
+
+run_tests() {
+    setup_hotplug "runtime"
+    run_test "1" "runtime" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug" "&& zcrypttest -a -v"
+
+    setup_coldplug "runtime"
+    run_test "2" "runtime" "Test can assign a CEX device inside the guest via VFIO-AP Coldplug" "&& zcrypttest -a -v"
+
+    configure_containerd_for_runtime_rs
+
+    setup_hotplug "runtime-rs"
+    run_test "3" "runtime-rs" "Test can assign a CEX device inside the guest via VFIO-AP Hotplug" "&& zcrypttest -a -v"
 }
 
 main() {
