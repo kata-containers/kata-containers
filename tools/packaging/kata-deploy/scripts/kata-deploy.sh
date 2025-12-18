@@ -1186,11 +1186,17 @@ function configure_nydus_snapshotter() {
 		containerd_nydus="${containerd_nydus}-${MULTI_INSTALL_SUFFIX}"
 	fi
 
-	configuration_file="${1}"
-	pluginid="${2}"
+	local configuration_file="${1}"
+	local pluginid="${2}"
+	local main_conf_file="${3}"
 
-	tomlq -i -t $(printf '.plugins.%s.disable_snapshot_annotations=false' ${pluginid}) ${configuration_file}
-	tomlq -i -t $(printf '.plugins.%s.discard_unpacked_layers=false' ${pluginid}) ${configuration_file}
+	# NOTE: Boolean settings like disable_snapshot_annotations and discard_unpacked_layers
+	# MUST be set in the main config file, not drop-in files. This is because containerd's
+	# mergo-based config merge doesn't override non-zero values with zero values.
+	# Setting 'false' (zero value) in a drop-in won't override 'true' in the main config.
+	# See: https://github.com/containerd/containerd/blob/main/cmd/containerd/server/config/config.go#L418
+	tomlq -i -t $(printf '.plugins.%s.disable_snapshot_annotations=false' ${pluginid}) ${main_conf_file}
+	tomlq -i -t $(printf '.plugins.%s.discard_unpacked_layers=false' ${pluginid}) ${main_conf_file}
 
 	tomlq -i -t $(printf '.proxy_plugins."%s".type="snapshot"' ${nydus} ) ${configuration_file}
 	tomlq -i -t $(printf '.proxy_plugins."%s".address="/run/%s/containerd-nydus-grpc.sock"' ${nydus} ${containerd_nydus}) ${configuration_file}
@@ -1219,7 +1225,7 @@ function configure_snapshotter() {
 
 	case "${snapshotter}" in
 		nydus)
-			configure_nydus_snapshotter "${configuration_file}" "${pluginid}"
+			configure_nydus_snapshotter "${configuration_file}" "${pluginid}" "${containerd_root_conf_file}"
 
 			nydus_snapshotter="nydus-snapshotter"
 			if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
