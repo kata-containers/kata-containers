@@ -651,7 +651,7 @@ function helm_helper() {
 		disable_snapshotter_setup=false
 		for shim in ${HELM_SHIMS}; do
 			case "${shim}" in
-				qemu-tdx|qemu-snp|qemu-nvidia-gpu-tdx|qemu-nvidia-gpu-snp)
+				qemu-tdx|qemu-snp)
 					disable_snapshotter_setup=true
 					break
 					;;
