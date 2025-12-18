@@ -23,7 +23,6 @@ use crate::secret;
 use crate::settings;
 use crate::stateful_set;
 use crate::utils::Config;
-use crate::volume;
 
 use async_trait::async_trait;
 use core::fmt::Debug;
@@ -292,9 +291,9 @@ pub fn get_container_mounts_and_storages(
     storages: &mut Vec<agent::Storage>,
     container: &pod::Container,
     settings: &settings::Settings,
-    volumes_option: &Option<Vec<volume::Volume>>,
+    podSpec: &pod::PodSpec,
 ) {
-    if let Some(volumes) = volumes_option {
+    if let Some(volumes) = &podSpec.volumes {
         if let Some(volume_mounts) = &container.volumeMounts {
             for volume in volumes {
                 for volume_mount in volume_mounts {
@@ -305,6 +304,7 @@ pub fn get_container_mounts_and_storages(
                             storages,
                             volume,
                             volume_mount,
+                            &podSpec.securityContext,
                         );
                     }
                 }

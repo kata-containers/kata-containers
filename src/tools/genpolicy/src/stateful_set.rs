@@ -147,7 +147,7 @@ impl yaml::K8sResource for StatefulSet {
             storages,
             container,
             settings,
-            &self.spec.template.spec.volumes,
+            &self.spec.template.spec,
         );
     }
 

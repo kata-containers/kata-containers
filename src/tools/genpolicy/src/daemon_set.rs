@@ -103,7 +103,7 @@ impl yaml::K8sResource for DaemonSet {
             storages,
             container,
             settings,
-            &self.spec.template.spec.volumes,
+            &self.spec.template.spec,
         );
     }
 

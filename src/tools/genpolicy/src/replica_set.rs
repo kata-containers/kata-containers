@@ -73,7 +73,7 @@ impl yaml::K8sResource for ReplicaSet {
             storages,
             container,
             settings,
-            &self.spec.template.spec.volumes,
+            &self.spec.template.spec,
         );
     }
 
