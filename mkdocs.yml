@@ -94,7 +94,6 @@ plugins:
     blog_toc: true
     categories_pagination: true
     draft: true
-    post_excerpt: required
     post_readtime: true
 - glightbox:
     touchNavigation: true
