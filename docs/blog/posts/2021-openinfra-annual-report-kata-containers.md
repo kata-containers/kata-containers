@@ -9,6 +9,8 @@ date: 2022-01-26
 
 Kata Containers continues to deliver the speed of containers with the security of virtual machines. Kata Containers became a pilot project in December 2017, in conjunction with the Open Infrastructure Foundation’s evolution from being the home for OpenStack to becoming the home of open infrastructure collaboration. In April of 2019, Kata Containers was the first Open Infrastructure Foundation pilot project to graduate, becoming an official open infrastructure project. In 2021, Kata Containers continued to expand its use cases and gain more users.
 
+<!-- more -->
+
 Kata Containers started by providing stronger isolation than traditional containers. In 2021, the Kata Containers community expanded Kata Containers’ usage scenario from security isolation to also cover performance isolation. It prevents different workloads from affecting each other in both security and performance aspects. Kata Containers is also supporting confidential containers use case with TDX/SEV/IBM SE enabled isolation, further expanding Kata Containers’ threat model from protecting the infrastructure to also protecting the workloads.
 
 In 2021, the Kata Containers community continues to present its strategic relevance, well-defined governance procedures, commitment to technical best practices and open collaboration, and, most importantly, an actively engaged ecosystem of developers and users.
