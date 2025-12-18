@@ -1,0 +1,115 @@
+site_name: Kata Containers
+site_url: https://topofmind.dev
+site_description: An OpenInfra Foundation Project
+
+repo_name: kata-containers.github.io
+repo_url: https://github.com/kata-containers/kata-containers
+edit_uri: edit/main/docs
+
+theme:
+  name: material
+  favicon: assets/favicon.svg
+  logo: assets/favicon.svg
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/link
+        name: Switch to light mode
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep-orange
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep-orange
+      toggle:
+        icon: material/toggle-switch-off
+        name: Switch to system preference
+  features:
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - content.footnote.tooltips
+    - content.tabs.link
+    - content.tooltips    
+    - navigation.expand
+    - navigation.indexes
+    - navigation.path
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tracking
+    - navigation.top
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - toc.follow
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+      auto_title: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      auto_append:
+        - includes/abbreviations.md
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tilde
+  - pymdownx.caret
+  - pymdownx.mark
+  - toc:
+      permalink: true
+
+
+plugins:
+- blog:
+    archive: true
+    blog_toc: true
+    categories_pagination: true
+    draft: true
+    post_excerpt: required
+    post_readtime: true
+- glightbox:
+    touchNavigation: true
+    loop: false
+    effect: zoom
+    slide_effect: slide
+    width: 100%
+    height: auto
+    zoomable: true
+    draggable: true
+    auto_caption: true
+    caption_position: bottom
+- meta
+- social
+- search
+- typeset:
+    enabled: true
+- open-in-new-tab

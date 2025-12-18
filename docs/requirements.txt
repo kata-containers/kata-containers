@@ -1,0 +1,8 @@
+mkdocs==1.6.1
+mkdocs-glightbox==0.4.0
+mkdocs-open-in-new-tab
+mkdocs-redirects
+CairoSVG==2.7.1
+pillow
+mkdocs-material==9.7.1
+click==8.2.1
