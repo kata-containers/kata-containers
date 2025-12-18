@@ -361,7 +361,7 @@ mod tests {
     use dbs_device::resources::{DeviceResources, MsiIrqType, Resource};
     use dbs_interrupt::KvmIrqManager;
     use kvm_ioctls::{Kvm, VmFd};
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
 
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_set_msg_ctl() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let mut config = MsixState::new(0x10);
         let mut intr_mgr = create_interrupt_manager();
 
@@ -454,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_read_write_table() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let mut intr_mgr = create_interrupt_manager();
         let mut config = MsixState::new(0x10);
 

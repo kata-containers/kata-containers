@@ -791,7 +791,7 @@ pub mod tests {
     use arc_swap::ArcSwap;
     use dbs_device::device_manager::IoManager;
     use lazy_static::lazy_static;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
     use crate::kvm_context::KvmContext;
@@ -901,7 +901,7 @@ pub mod tests {
 
     #[test]
     fn test_vcpu_run_emulation() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let (mut vcpu, _) = create_vcpu();
 
@@ -987,7 +987,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_vcpu_check_io_port_info() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let (vcpu, _receiver) = create_vcpu();
 

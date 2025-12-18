@@ -235,7 +235,7 @@ mod tests {
     use super::*;
 
     use crate::{InterruptManager, InterruptSourceType};
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     const VIRTIO_INTR_VRING: u32 = 0x01;
     const VIRTIO_INTR_CONFIG: u32 = 0x02;
@@ -251,7 +251,7 @@ mod tests {
     #[cfg(feature = "kvm-legacy-irq")]
     #[test]
     fn test_create_legacy_notifier() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let (_vmfd, irq_manager) = crate::kvm::tests::create_kvm_irq_manager();
         let group = irq_manager
             .create_group(InterruptSourceType::LegacyIrq, 0, 1)
@@ -282,7 +282,7 @@ mod tests {
     #[cfg(feature = "kvm-msi-irq")]
     #[test]
     fn test_virtio_msi_notifier() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let (_vmfd, irq_manager) = crate::kvm::tests::create_kvm_irq_manager();
         let group = irq_manager
             .create_group(InterruptSourceType::MsiIrq, 0, 3)

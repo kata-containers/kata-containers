@@ -271,7 +271,7 @@ pub fn from_sys_util_errno(e: vmm_sys_util::errno::Error) -> std::io::Error {
 pub(crate) mod tests {
     use super::*;
     use crate::manager::tests::create_vm_fd;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     fn create_irq_group(
         manager: Arc<KvmIrqManager>,
@@ -307,13 +307,13 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_kvm_irq_manager() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let _ = create_kvm_irq_manager();
     }
 
     #[test]
     fn test_kvm_irq_manager_opt() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vmfd = Arc::new(create_vm_fd());
         vmfd.create_irq_chip().unwrap();
         let manager = Arc::new(KvmIrqManager::new(vmfd.clone()));

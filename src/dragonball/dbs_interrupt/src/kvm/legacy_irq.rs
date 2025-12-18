@@ -220,7 +220,7 @@ impl InterruptSourceGroup for LegacyIrq {
 mod test {
     use super::*;
     use crate::manager::tests::create_vm_fd;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     const MASTER_PIC: usize = 7;
     const SLAVE_PIC: usize = 8;
@@ -229,7 +229,7 @@ mod test {
     #[test]
     #[allow(unreachable_patterns)]
     fn test_legacy_interrupt_group() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vmfd = Arc::new(create_vm_fd());
         let rounting = Arc::new(KvmIrqRouting::new(vmfd.clone()));
         let base = 0;
@@ -265,7 +265,7 @@ mod test {
 
     #[test]
     fn test_irq_routing_initialize_legacy() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vmfd = Arc::new(create_vm_fd());
         let routing = KvmIrqRouting::new(vmfd.clone());
 
@@ -281,7 +281,7 @@ mod test {
 
     #[test]
     fn test_routing_opt() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vmfd = Arc::new(create_vm_fd());
         let routing = KvmIrqRouting::new(vmfd.clone());
 
@@ -313,7 +313,7 @@ mod test {
 
     #[test]
     fn test_routing_set_routing() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vmfd = Arc::new(create_vm_fd());
         let routing = KvmIrqRouting::new(vmfd.clone());
 

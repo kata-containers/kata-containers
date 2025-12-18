@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     fn test_create_gic() {
-        test_utils::skip_if_not_root!();
+        test_utils::skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         assert!(create_gic(&vm, 1).is_ok());

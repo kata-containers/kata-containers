@@ -609,7 +609,7 @@ where
 #[cfg(test)]
 pub(crate) mod tests {
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::QueueSync;
     use vm_memory::{GuestAddress, GuestMemoryMmap, GuestRegionMmap};
 
@@ -653,7 +653,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_virtio_mmio_state_new() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let mut state = get_mmio_state(false, false, 1);
 
         assert_eq!(state.queues.len(), 3);

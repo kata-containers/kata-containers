@@ -78,7 +78,7 @@ pub fn set_lint(vcpu: &VcpuFd) -> Result<()> {
 mod tests {
     use super::*;
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     const KVM_APIC_REG_SIZE: usize = 0x400;
 
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_setlint() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         assert!(kvm.check_extension(kvm_ioctls::Cap::Irqchip));
         let vm = kvm.create_vm().unwrap();
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_setlint_fails() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();

@@ -682,7 +682,7 @@ mod tests {
     };
     use dbs_utils::epoll_manager::SubscriberOps;
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::{Queue, QueueSync};
     use vm_memory::{GuestAddress, GuestMemoryMmap, GuestRegionMmap};
     use vmm_sys_util::eventfd::EventFd;
@@ -719,7 +719,7 @@ mod tests {
 
     #[test]
     fn test_vhost_kern_net_virtio_normal() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let guest_mac_str = "11:22:33:44:55:66";
         let guest_mac = MacAddr::parse_str(guest_mac_str).unwrap();
         let queue_sizes = Arc::new(vec![128]);
@@ -759,7 +759,7 @@ mod tests {
 
     #[test]
     fn test_vhost_kern_net_virtio_activate() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let guest_mac_str = "11:22:33:44:55:66";
         let guest_mac = MacAddr::parse_str(guest_mac_str).unwrap();
         // Invalid queue sizes
@@ -844,7 +844,7 @@ mod tests {
 
     #[test]
     fn test_vhost_kern_net_epoll_handler_handle_event() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let handler = create_vhost_kern_net_epoll_handler("test_1".to_string());
         let event_fd = EventFd::new(0).unwrap();
         let mgr = EpollManager::default();
