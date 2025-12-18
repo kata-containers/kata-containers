@@ -374,11 +374,14 @@ function disable_swap() {
 	sudo swapoff -a
 }
 
-# Always deploys the latest k8s version
+# Deploy k8s
+# Note: We pin to v1.34 because v1.35 has broken dependencies (kubernetes-cni >= 1.2.0 not installable)
 function do_deploy_k8s() {
+	local k8s_version="v1.34"
+
 	# Add the pkgs.k8s.io repo
-	curl -fsSL https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/Release.key | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
-	echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/$(curl -Ls https://dl.k8s.io/release/stable.txt | cut -d. -f-2)/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+	curl -fsSL "https://pkgs.k8s.io/core:/stable:/${k8s_version}/deb/Release.key" | sudo gpg --batch --yes --no-tty --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+	echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/${k8s_version}/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
 
 	# Pin the packages to ensure they'll be downloaded from the pkgs.k8s.io repo
 	#
