@@ -11,10 +11,8 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "$(uname -m)" == "ppc64le" ] && skip "ip6tables tests for ppc64le"
 
-	setup_common
+	setup_common || die "setup_common failed"
 	pod_name="pod-istio"
-	get_pod_config_dir
-
 	yaml_file="${pod_config_dir}/pod-istio.yaml"
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"

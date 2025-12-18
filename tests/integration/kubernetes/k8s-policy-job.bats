@@ -11,8 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-    setup_common
-    get_pod_config_dir
+    setup_common || die "setup_common failed"
 
     job_name="policy-job"
     correct_yaml="${pod_config_dir}/k8s-policy-job.yaml"

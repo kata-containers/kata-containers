@@ -5,16 +5,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+    setup_common || die "setup_common failed"
     replication_name="policy-rc-test"
     app_name="policy-nginx-rc"
-
-    get_pod_config_dir
 
     correct_yaml="${pod_config_dir}/test-k8s-policy-rc.yaml"
     incorrect_yaml="${pod_config_dir}/test-k8s-policy-rc-incorrect.yaml"
@@ -173,7 +172,7 @@ teardown() {
 
     # Clean-up
     kubectl delete rc "${replication_name}"
-
+    teardown_common "${node}" "${node_start_time:-}"
     info "Deleting ${incorrect_yaml}"
     rm -f "${incorrect_yaml}"
 

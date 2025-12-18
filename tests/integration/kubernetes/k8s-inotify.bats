@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
@@ -13,7 +14,8 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
         [[ "${KATA_HYPERVISOR}" == qemu-se* ]] && skip "test not working for IBM Z LPAR (see ${issue_url})"
-	get_pod_config_dir
+
+	setup_common || die "setup_common failed"
 
 	pod_yaml="${pod_config_dir}"/inotify-configmap-pod.yaml
 	auto_generate_policy "${pod_config_dir}" "${pod_yaml}"
@@ -57,4 +59,5 @@ teardown() {
 
 	kubectl delete pod "$pod_name"
 	kubectl delete configmap cm
+	teardown_common "${node}" "${node_start_time:-}"
 }

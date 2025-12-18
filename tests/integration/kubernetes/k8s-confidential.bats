@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
@@ -13,6 +14,7 @@ setup() {
 	if ! is_confidential_hardware; then
 		skip "Test is supported only on confidential hardware (which ${KATA_HYPERVISOR} is not)"
 	fi
+	setup_common || die "setup_common failed"
 	setup_unencrypted_confidential_pod
 }
 
@@ -50,4 +52,5 @@ teardown() {
 	
 	kubectl describe "pod/${pod_name}" || true
 	kubectl delete -f "${pod_config_dir}/pod-confidential-unencrypted.yaml" || true
+	teardown_common "${node}" "${node_start_time:-}"
 }

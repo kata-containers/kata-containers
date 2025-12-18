@@ -5,16 +5,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" = "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
 	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
-
+	setup_common || die "setup_common failed"
 	pod_name="cpu-test"
 	container_name="c1"
-	get_pod_config_dir
+
 	yaml_file="${pod_config_dir}/pod-number-cpu.yaml"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -61,4 +62,5 @@ teardown() {
 	kubectl delete pod "$pod_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

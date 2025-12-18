@@ -21,8 +21,7 @@ setup() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	setup_common
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
 
 	# install SNP measurement dependencies
 	if [[ "${KATA_HYPERVISOR}" == *snp* ]]; then

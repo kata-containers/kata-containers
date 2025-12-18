@@ -5,13 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	hard_coded_policy_tests_enabled || skip "Policy tests are disabled."
+	setup_common || die "setup_common failed"
 
-	get_pod_config_dir
 	pod_name="hard-coded-policy-pod"
 	pod_yaml="${pod_config_dir}/k8s-policy-hard-coded.yaml"
 }
@@ -65,4 +66,5 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+	teardown_common "${node}" "${node_start_time:-}"
 }

@@ -5,13 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-
+	setup_common || die "setup_common failed"
 	pod_name="sysctl-test"
-	get_pod_config_dir
 
 	yaml_file="${pod_config_dir}/pod-sysctl.yaml"
 
@@ -46,4 +46,5 @@ teardown() {
 	kubectl delete pod "$pod_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

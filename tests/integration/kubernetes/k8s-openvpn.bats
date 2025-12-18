@@ -15,8 +15,7 @@ setup() {
     # built the container image only for x86 and arm64 so far
     [ "$(uname -m)" == "s390x" ] && skip "container image not built for s390x"
 
-    setup_common
-    get_pod_config_dir
+    setup_common || die "setup_common failed"
 
     init_pod_name="openvpn-init-secrets"
     server_pod_name="openvpn-server"

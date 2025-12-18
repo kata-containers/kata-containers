@@ -5,11 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
+
 	job_name="job-pi-test"
 	yaml_file="${pod_config_dir}/job.yaml"
 
@@ -22,7 +24,6 @@ setup() {
 	local cmd
 	local logs
 	local pi_number
-	local pod_name
 
 	# Create job
 	kubectl apply -f "${yaml_file}"
@@ -65,4 +66,5 @@ teardown() {
 	[[ "$output" =~ "No resources found" ]]
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

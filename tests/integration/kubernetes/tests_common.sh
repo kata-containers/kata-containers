@@ -50,19 +50,14 @@ KATA_HOST_OS="${KATA_HOST_OS:-}"
 setup_common() {
 	node=$(get_one_kata_node)
 	[[ -n "${node}" ]]
-	node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
-	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
-	count=0
-	while [[ -z "${node_start_time}" ]] && [[ "${count}" -lt 3 ]]; do
-		echo "node_start_time is empty, trying again..."
-		sleep 5
-		node_start_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
-		count=$((count + 1))
-	done
-	[[ -n "${node_start_time}" ]]
+
+	node_start_time=$(measure_node_time "${node}")
+
 	export node node_start_time
 
 	k8s_delete_all_pods_if_any_exists || true
+
+	get_pod_config_dir
 }
 
 get_pod_config_dir() {
@@ -481,11 +476,34 @@ teardown_common() {
 	kubectl describe pods
 	k8s_delete_all_pods_if_any_exists || true
 
+	local node_end_time
+	node_end_time=$(measure_node_time "${node}")
+
+	echo "Journal LOG starts at ${node_start_time:-}, ends at ${node_end_time:-}"
+
 	# Print the node journal since the test start time if a bats test is not completed
 	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
 		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
 		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
 	fi
+}
+
+measure_node_time() {
+	local node="$1"
+	[[ -n "${node}" ]]
+
+	local node_time
+	node_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
+	local count=0
+	while [[ -z "${node_time}" ]] && [[ "${count}" -lt 3 ]]; do
+		echo "node_time is empty, trying again..."
+		sleep 2
+		node_time=$(exec_host "${node}" date +\"%Y-%m-%d %H:%M:%S\")
+		count=$((count + 1))
+	done
+	[[ -n "${node_time}" ]]
+
+	printf '%s\n' "${node_time}"
 }
 
 # Execute a command in a pod and grep kubectl's output.

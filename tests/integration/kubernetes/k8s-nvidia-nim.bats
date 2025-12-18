@@ -109,9 +109,7 @@ create_embedqa_pod() {
 
 # With setup_file and teardown_file being used, we use >&3 in some places to direct output to the terminal
 setup_file() {
-    setup_common
-
-    get_pod_config_dir
+    setup_common || die "setup_common failed"
 
     export POD_INSTRUCT_YAML_IN="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml.in"
     export POD_INSTRUCT_YAML="${pod_config_dir}/${POD_NAME_INSTRUCT}.yaml"

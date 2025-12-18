@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
@@ -12,10 +13,9 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 setup() {
 	is_confidential_runtime_class && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/9663"
-
+	setup_common || die "setup_common failed"
 	pod_name="custom-dns-test"
 	file_name="/etc/resolv.conf"
-	get_pod_config_dir
 	yaml_file="${pod_config_dir}/pod-custom-dns.yaml"
 
 	# Add policy to the yaml file
@@ -50,4 +50,5 @@ teardown() {
 	kubectl delete pod "$pod_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

@@ -13,12 +13,11 @@ issue="https://github.com/kata-containers/kata-containers/issues/10297"
 
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-    setup_common
+    setup_common || die "setup_common failed"
 	configmap_name="policy-configmap"
 	pod_name="policy-pod"
 	priority_class_name="test-high-priority"
 
-	get_pod_config_dir
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
 	exec_command=(printenv data-3)
@@ -283,7 +282,7 @@ teardown() {
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"
-
+	teardown_common "${node}" "${node_start_time:-}"
 	# Clean-up
 	kubectl delete pod "${pod_name}"
 	kubectl delete configmap "${configmap_name}"

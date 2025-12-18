@@ -13,8 +13,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
-	setup_common
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
 
 	# Add policy to pod-secret.yaml.
 	pod_yaml_file="${pod_config_dir}/pod-secret.yaml"
