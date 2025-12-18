@@ -58,7 +58,6 @@ setup() {
 	local image
 	local logs
 	local pod_file
-	local pod_logs_file
 	local uid
 
 	[[ "${KATA_HYPERVISOR}" = qemu-se* ]] && \
