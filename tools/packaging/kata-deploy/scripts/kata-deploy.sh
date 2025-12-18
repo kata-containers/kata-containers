@@ -1190,6 +1190,7 @@ function configure_nydus_snapshotter() {
 	pluginid="${2}"
 
 	tomlq -i -t $(printf '.plugins.%s.disable_snapshot_annotations=false' ${pluginid}) ${configuration_file}
+	tomlq -i -t $(printf '.plugins.%s.discard_unpacked_layers=false' ${pluginid}) ${configuration_file}
 
 	tomlq -i -t $(printf '.proxy_plugins."%s".type="snapshot"' ${nydus} ) ${configuration_file}
 	tomlq -i -t $(printf '.proxy_plugins."%s".address="/run/%s/containerd-nydus-grpc.sock"' ${nydus} ${containerd_nydus}) ${configuration_file}

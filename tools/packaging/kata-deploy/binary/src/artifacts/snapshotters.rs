@@ -65,6 +65,11 @@ pub async fn configure_nydus_snapshotter(
         &format!(".plugins.{pluginid}.disable_snapshot_annotations"),
         "false",
     )?;
+    toml_utils::set_toml_value(
+        configuration_file,
+        &format!(".plugins.{pluginid}.discard_unpacked_layers"),
+        "false",
+    )?;
 
     toml_utils::set_toml_value(
         configuration_file,
