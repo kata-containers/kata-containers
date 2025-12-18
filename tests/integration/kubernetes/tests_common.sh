@@ -134,9 +134,9 @@ install_genpolicy_drop_ins() {
 	# 20-* OCI version overlay
 	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
 		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
-	elif is_k3s_or_rke2 || is_nvidia_gpu_platform; then
+	elif is_k3s_or_rke2; then
 		cp "${examples_dir}/20-oci-1.2.1-drop-in.json" "${settings_d}/"
-	elif [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_nvidia_gpu_platform || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 
