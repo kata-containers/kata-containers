@@ -22,7 +22,7 @@ async fn passfd_connect(uds: &str, port: u32, fd: OwnedFd) -> Result<u32> {
 
     // Since we have already keep stdin_w/stdout_r/stderr_r, "keep" of passfd is no longer needed.
     // Also, we can't keep connection here or the stdin would be stuck.
-    let buf = format!("{}", port);
+    let buf = format!("{port}");
     stream
         .send_with_fd(buf.as_bytes(), &[fd.as_raw_fd()])
         .context("send port and fd")?;

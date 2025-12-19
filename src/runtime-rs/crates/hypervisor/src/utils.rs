@@ -38,7 +38,7 @@ use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
 pub fn get_child_threads(pid: u32) -> HashSet<u32> {
     let mut result = HashSet::new();
-    let path_name = format!("/proc/{}/task", pid);
+    let path_name = format!("/proc/{pid}/task");
     let path = std::path::Path::new(path_name.as_str());
     if path.is_dir() {
         if let Ok(dir) = path.read_dir() {
@@ -140,7 +140,7 @@ pub fn open_named_tuntap(if_name: &str, queues: u32) -> Result<Vec<File>> {
 // for example: /dev/tap2381
 #[allow(dead_code)]
 pub fn create_macvtap_fds(ifindex: u32, queues: u32) -> Result<Vec<File>> {
-    let macvtap = format!("/dev/tap{}", ifindex);
+    let macvtap = format!("/dev/tap{ifindex}");
     create_fds(macvtap.as_str(), queues as usize)
 }
 
@@ -348,7 +348,7 @@ impl std::fmt::Display for SocketAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         serde_json::to_string(self)
             .map_err(|_| std::fmt::Error)
-            .and_then(|s| write!(f, "{}", s))
+            .and_then(|s| write!(f, "{s}"))
     }
 }
 
@@ -463,7 +463,7 @@ mod tests {
     fn test_socket_address_display() {
         let socket = SocketAddress::new(6688);
         let expected_json = r#"{"type":"vsock","cid":"2","port":"6688"}"#;
-        assert_eq!(format!("{}", socket), expected_json);
+        assert_eq!(format!("{socket}"), expected_json);
     }
 
     #[test]

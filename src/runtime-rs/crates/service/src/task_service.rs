@@ -37,17 +37,18 @@ impl TaskService {
         <TtrpcResp as TryFrom<TaskResponse>>::Error: std::fmt::Debug,
     {
         let r = req.try_into().map_err(|err| {
-            ttrpc::Error::Others(format!("failed to translate from shim {:?}", err))
+            ttrpc::Error::Others(format!("failed to translate from shim {err:?}"))
         })?;
         let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
         debug!(logger, "====> task service {:?}", &r);
-        let resp =
-            self.handler.handler_task_message(r).await.map_err(|err| {
-                ttrpc::Error::Others(format!("failed to handle message {:?}", err))
-            })?;
+        let resp = self
+            .handler
+            .handler_task_message(r)
+            .await
+            .map_err(|err| ttrpc::Error::Others(format!("failed to handle message {err:?}")))?;
         debug!(logger, "<==== task service {:?}", &resp);
         resp.try_into()
-            .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {:?}", err)))
+            .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {err:?}")))
     }
 }
 

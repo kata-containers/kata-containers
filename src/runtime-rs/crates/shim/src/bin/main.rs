@@ -47,7 +47,7 @@ fn parse_args(args: &[OsString]) -> Result<Action> {
         flags.add_flag("help", &mut help);
         flags.add_flag("version", &mut version);
     })
-    .context(Error::ParseArgument(format!("{:?}", args)))?;
+    .context(Error::ParseArgument(format!("{args:?}")))?;
 
     if help {
         Ok(Action::Help)
@@ -74,7 +74,7 @@ fn show_help(cmd: &OsStr) {
     let name = name.unwrap_or(config::RUNTIME_NAME);
 
     println!(
-        r#"Usage of {}:
+        r#"Usage of {name}:
   -address string
         grpc address back to main containerd
   -bundle string
@@ -89,8 +89,7 @@ fn show_help(cmd: &OsStr) {
         path to publish binary (used for publishing events) (default "containerd")
   --version
         show the runtime version detail and exit
-"#,
-        name
+"#
     );
 }
 
@@ -111,7 +110,7 @@ fn show_version(err: Option<anyhow::Error>) {
             err
         );
     } else {
-        println!("{}", data)
+        println!("{data}")
     }
 }
 

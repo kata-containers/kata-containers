@@ -414,7 +414,7 @@ impl QemuInner {
             None => return Err(anyhow!("uninitialized agent vsock".to_owned())),
         };
 
-        Ok(format!("{}://{}", VSOCK_SCHEME, guest_cid))
+        Ok(format!("{VSOCK_SCHEME}://{guest_cid}"))
     }
 
     pub(crate) async fn disconnect(&mut self) {

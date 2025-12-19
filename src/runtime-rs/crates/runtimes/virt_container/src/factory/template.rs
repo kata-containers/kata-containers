@@ -121,7 +121,7 @@ impl Template {
         // Create memory file
         let memory_file = self.state_path.join("memory");
         File::create(&memory_file)
-            .context(format!("failed to create memory file: {:?}", memory_file))?;
+            .context(format!("failed to create memory file: {memory_file:?}"))?;
 
         // Verify memory file was created successfully
         if !memory_file.exists() {

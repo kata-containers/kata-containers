@@ -29,7 +29,7 @@ pub(crate) fn set_logger(_path: &str, sid: &str, is_debug: bool) -> Result<slog_
     } else {
         log::Level::Info
     };
-    slog_stdlog::init_with_level(level).context(format!("init with level {}", level))?;
+    slog_stdlog::init_with_level(level).context(format!("init with level {level}"))?;
 
     // Regist component loggers for later use, there loggers are set directly by configuration
     logging::register_component_logger("agent");

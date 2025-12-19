@@ -346,9 +346,9 @@ mod tests {
         ];
 
         for (i, t) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, t);
+            let msg = format!("test[{i}]: {t:?}");
             let result = KernelParams::new_rootfs_kernel_params(t.rootfs_driver, t.rootfs_type);
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
             if t.result.is_ok() {
                 assert!(result.is_ok(), "{}", msg);
                 assert_eq!(t.expect_params, result.unwrap());

@@ -36,7 +36,7 @@ impl CpuResource {
         let hypervisor_config = config
             .hypervisor
             .get(&hypervisor_name)
-            .context(format!("failed to get hypervisor {}", hypervisor_name))?;
+            .context(format!("failed to get hypervisor {hypervisor_name}"))?;
         Ok(Self {
             current_vcpu: Arc::new(RwLock::new(hypervisor_config.cpu_info.default_vcpus)),
             default_vcpu: hypervisor_config.cpu_info.default_vcpus,

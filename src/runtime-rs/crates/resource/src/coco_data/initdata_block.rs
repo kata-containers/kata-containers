@@ -23,9 +23,9 @@ impl fmt::Display for InitDataError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::InvalidPath(p) => write!(f, "Invalid path: {}", p.display()),
-            Self::IoError(ctx, e) => write!(f, "I/O error during {}: {}", ctx, e),
-            Self::CompressionError(e) => write!(f, "Compression failed: {}", e),
-            Self::PersistError(e) => write!(f, "File persistence failed: {}", e),
+            Self::IoError(ctx, e) => write!(f, "I/O error during {ctx}: {e}"),
+            Self::CompressionError(e) => write!(f, "Compression failed: {e}"),
+            Self::PersistError(e) => write!(f, "File persistence failed: {e}"),
         }
     }
 }

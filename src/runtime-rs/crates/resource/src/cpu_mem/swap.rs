@@ -261,10 +261,10 @@ impl SwapTask {
         );
         let mut file = File::create(swap_path)
             .await
-            .context(format!("swap: File::create {:?}", swap_path))?;
+            .context(format!("swap: File::create {swap_path:?}"))?;
         fs::set_permissions(swap_path, Permissions::from_mode(0o700))
             .await
-            .context(format!("swap: File::set_permissions {:?}", swap_path))?;
+            .context(format!("swap: File::set_permissions {swap_path:?}"))?;
 
         let buffer = vec![0; CHUNK_SIZE];
         let mut total_written = 0;
@@ -349,7 +349,7 @@ impl SwapTask {
 
     async fn get_swap_path(&self) -> PathBuf {
         let id = self.core.lock().await.next_swap_id;
-        self.path.join(format!("swap{}", id))
+        self.path.join(format!("swap{id}"))
     }
 }
 

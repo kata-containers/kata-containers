@@ -41,7 +41,7 @@ pub struct HybridVsockDevice {
 impl HybridVsockDevice {
     pub fn new(device_id: &String, config: &HybridVsockConfig) -> Self {
         Self {
-            id: format!("vsock-{}", device_id),
+            id: format!("vsock-{device_id}"),
             config: config.clone(),
         }
     }
@@ -193,8 +193,7 @@ pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
         .open(VHOST_VSOCK_DEVICE)
         .await
         .context(format!(
-            "failed to open {}, try to run modprobe vhost_vsock.",
-            VHOST_VSOCK_DEVICE
+            "failed to open {VHOST_VSOCK_DEVICE}, try to run modprobe vhost_vsock."
         ))?;
     let mut rng = rand::thread_rng();
 

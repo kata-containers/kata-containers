@@ -48,8 +48,8 @@ impl NetworkPair {
     ) -> Result<Self> {
         let unique_id = kata_sys_util::rand::UUID::new();
         let model = network_model::new(model).context("new network model")?;
-        let tap_iface_name = format!("tap{}{}", idx, TAP_SUFFIX);
-        let virt_iface_name = format!("eth{}", idx);
+        let tap_iface_name = format!("tap{idx}{TAP_SUFFIX}");
+        let virt_iface_name = format!("eth{idx}");
         let tap_link = create_link(handle, &tap_iface_name, queues)
             .await
             .context("create link")?;
@@ -109,7 +109,7 @@ impl NetworkPair {
         let mut net_pair = NetworkPair {
             tap: TapInterface {
                 id: String::from(&unique_id),
-                name: format!("br{}{}", idx, TAP_SUFFIX),
+                name: format!("br{idx}{TAP_SUFFIX}"),
                 tap_iface: NetworkInterface {
                     name: tap_iface_name,
                     hard_addr: tap_hard_addr,

@@ -85,12 +85,12 @@ pub(crate) async fn handle_direct_volume(
         DirectVolumeType::Spdk => Arc::new(
             spdk_volume::SPDKVolume::new(d, m, &mount_info, read_only, sid)
                 .await
-                .with_context(|| format!("create spdk volume {:?}", m))?,
+                .with_context(|| format!("create spdk volume {m:?}"))?,
         ),
         DirectVolumeType::Vfio => Arc::new(
             vfio_volume::VfioVolume::new(d, m, &mount_info, read_only, sid)
                 .await
-                .with_context(|| format!("new vfio volume {:?}", m))?,
+                .with_context(|| format!("new vfio volume {m:?}"))?,
         ),
     };
 
@@ -116,7 +116,7 @@ pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
     match get_direct_volume_path(get_mount_path(m.source()).as_str()) {
         Ok(directvol_path) => {
             let fstat = stat::stat(directvol_path.as_str())
-                .context(format!("stat mount source {} failed.", directvol_path))?;
+                .context(format!("stat mount source {directvol_path} failed."))?;
             Ok(SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFDIR)
         }
         Err(_) => Ok(false),

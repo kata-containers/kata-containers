@@ -15,7 +15,7 @@ use anyhow::{anyhow, Context, Result};
 // defined by the orchestrator.
 pub(crate) fn gen_overhead_path(systemd: bool, path: &str) -> String {
     if systemd {
-        format!("kata-overhead.slice:runtime-rs:{}", path)
+        format!("kata-overhead.slice:runtime-rs:{path}")
     } else {
         format!("kata_overhead/{}", path.trim_start_matches('/'))
     }
@@ -23,7 +23,7 @@ pub(crate) fn gen_overhead_path(systemd: bool, path: &str) -> String {
 
 /// Get the thread group ID (TGID) from `/proc/{pid}/status`.
 pub(crate) fn get_tgid_from_pid(pid: i32) -> Result<i32> {
-    let status = std::fs::read_to_string(format!("/proc/{}/status", pid))
+    let status = std::fs::read_to_string(format!("/proc/{pid}/status"))
         .map_err(|e| anyhow!("failed to read /proc/{}/status: {}", pid, e))?;
     status
         .lines()

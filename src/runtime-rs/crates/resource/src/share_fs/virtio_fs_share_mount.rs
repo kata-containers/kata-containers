@@ -85,8 +85,7 @@ impl ShareFsMount for VirtiofsShareMount {
                 .join(WATCHABLE_PATH_NAME);
 
             mkdir_with_permissions(watchable_host_path.clone(), 0o750).context(format!(
-                "unable to create watchable path {:?}",
-                watchable_host_path
+                "unable to create watchable path {watchable_host_path:?}"
             ))?;
 
             // path: /run/kata-containers/shared/containers/passthrough/watchable/config-map-name

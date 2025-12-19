@@ -44,7 +44,7 @@ impl ShimExecutor {
 
     pub(crate) fn write_pid_file(&self, path: &Path, pid: u32) -> Result<()> {
         let file_path = &path.join(SHIM_PID_FILE);
-        std::fs::write(file_path, format!("{}", pid))
+        std::fs::write(file_path, format!("{pid}"))
             .context(Error::FileWrite(format!("{:?}", &file_path)))
     }
 
@@ -56,7 +56,7 @@ impl ShimExecutor {
     pub(crate) fn read_pid_file(&self, path: &Path) -> Result<u32> {
         let file_path = path.join(SHIM_PID_FILE);
         let data = std::fs::read_to_string(&file_path)
-            .context(Error::FileOpen(format!("{:?}", file_path)))?;
+            .context(Error::FileOpen(format!("{file_path:?}")))?;
 
         data.parse::<u32>().context(Error::ParsePid)
     }

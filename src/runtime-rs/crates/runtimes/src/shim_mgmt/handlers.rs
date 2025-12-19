@@ -161,8 +161,7 @@ async fn metrics_url_handler(
     let shim_metrics = get_shim_metrics().unwrap_or_default();
 
     Ok(Response::new(Body::from(format!(
-        "{}{}{}",
-        agent_metrics, hypervisor_metrics, shim_metrics
+        "{agent_metrics}{hypervisor_metrics}{shim_metrics}"
     ))))
 }
 

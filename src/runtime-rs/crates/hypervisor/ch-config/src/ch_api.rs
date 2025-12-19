@@ -227,7 +227,7 @@ pub async fn cloud_hypervisor_vm_info(mut socket: UnixStream) -> Result<VmInfo> 
     .await??;
 
     let vm_info = vm_info.ok_or(anyhow!("failed to get vminfo"))?;
-    serde_json::from_str(&vm_info).with_context(|| format!("failed to serde {}", vm_info))
+    serde_json::from_str(&vm_info).with_context(|| format!("failed to serde {vm_info}"))
 }
 
 pub async fn cloud_hypervisor_vm_resize(

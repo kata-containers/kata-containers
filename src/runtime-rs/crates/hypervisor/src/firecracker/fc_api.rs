@@ -145,7 +145,7 @@ impl FcInner {
         // We create some placeholder drives to be used for patching block devices while the vmm is
         // running, as firecracker does not support device hotplug.
         for i in 1..DISK_POOL_SIZE {
-            let full_path_name = format!("{}/drive{}", abs_path, i);
+            let full_path_name = format!("{abs_path}/drive{i}");
 
             let _ = File::create(&full_path_name)
                 .await
@@ -163,7 +163,7 @@ impl FcInner {
             })
             .to_string();
 
-            self.request_with_retry(Method::PUT, &format!("/drives/drive{}", i), body)
+            self.request_with_retry(Method::PUT, &format!("/drives/drive{i}"), body)
                 .await?;
         }
 
@@ -191,7 +191,7 @@ impl FcInner {
         );
 
         let rate_limiter = serde_json::to_string(&block_rate_limit)
-            .with_context(|| format!("serde {:?} to json", block_rate_limit))?;
+            .with_context(|| format!("serde {block_rate_limit:?} to json"))?;
 
         let body: String = json!({
             "drive_id": format!("drive{drive_id}"),
