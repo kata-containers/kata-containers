@@ -150,8 +150,7 @@ impl HookStates {
         )
         .map_err(|e| {
             std::io::Error::other(format!(
-                "failed to create subprocess for hook {:?}: {}",
-                hook, e
+                "failed to create subprocess for hook {hook:?}: {e}"
             ))
         })?;
 
@@ -203,15 +202,13 @@ impl<'a> HookExecutor<'a> {
         // Ensure Hook.path is present and is an absolute path.
         let executable = if !hook.path().exists() {
             return Err(std::io::Error::other(format!(
-                "path of hook {:?} is empty",
-                hook
+                "path of hook {hook:?} is empty"
             )));
         } else {
             let path = hook.path();
             if !path.is_absolute() {
                 return Err(std::io::Error::other(format!(
-                    "path of hook {:?} is not absolute",
-                    hook
+                    "path of hook {hook:?} is not absolute"
                 )));
             }
             Some(path.as_os_str().to_os_string())
@@ -548,9 +545,8 @@ mod tests {
         let create_shell = |shell_path: &str, data_path: &str| -> Result<()> {
             let shell = format!(
                 r#"#!/bin/sh
-echo -n "K1=${{K1}}" > {}
-"#,
-                data_path
+echo -n "K1=${{K1}}" > {data_path}
+"#
             );
             let mut output = File::create(shell_path)?;
             output.write_all(shell.as_bytes())?;

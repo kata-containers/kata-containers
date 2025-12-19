@@ -69,8 +69,7 @@ impl SharedMount {
             Ok(re) => re,
             Err(e) => {
                 return Err(std::io::Error::other(format!(
-                    "Compiling the regular expression failed: {}.",
-                    e,
+                    "Compiling the regular expression failed: {e}.",
                 )))
             }
         };
@@ -251,17 +250,17 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let m: SharedMount = serde_json::from_str(d.shared_mount_annotation).unwrap();
             let result = m.validate();
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
-            assert_eq!(result.is_ok(), d.result, "{}", msg);
+            assert_eq!(result.is_ok(), d.result, "{msg}");
 
             if !d.result {
-                assert_eq!(result.unwrap_err().to_string(), d.message, "{}", msg);
+                assert_eq!(result.unwrap_err().to_string(), d.message, "{msg}");
             }
         }
     }

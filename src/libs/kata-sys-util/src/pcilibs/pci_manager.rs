@@ -244,7 +244,7 @@ impl PCIDeviceManager {
             if values.len() != 3 {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("there's more than 3 entries in line '{}'", i),
+                    format!("there's more than 3 entries in line '{i}'"),
                 ));
             }
 
@@ -262,7 +262,7 @@ impl PCIDeviceManager {
                         start: mem_start,
                         end: mem_end,
                         flags: mem_flags,
-                        path: device_path.join(format!("resource{}", i)),
+                        path: device_path.join(format!("resource{i}")),
                     },
                 );
             }
@@ -276,7 +276,7 @@ impl PCIDeviceManager {
 /// The sysbus_pci_root is the path "/sys/bus/pci/devices"
 pub fn is_pcie_device(bdf: &str, sysbus_pci_root: &str) -> bool {
     let bdf_with_domain = if bdf.split(':').count() == 2 {
-        format!("{}:{}", PCI_DEV_DOMAIN, bdf)
+        format!("{PCI_DEV_DOMAIN}:{bdf}")
     } else {
         bdf.to_string()
     };
@@ -412,7 +412,7 @@ mod tests {
     #[test]
     fn test_is_pcie_device() {
         // Create a mock PCI device config file
-        let bdf = format!("{}:ff:00.0", TEST_PCI_DEV_DOMAIN);
+        let bdf = format!("{TEST_PCI_DEV_DOMAIN}:ff:00.0");
         let tmpdir = tempfile::tempdir().expect("tempdir should not fail");
         let config_path = tmpdir.path().join(&bdf).join("config");
         let _ = fs::create_dir_all(config_path.parent().unwrap());

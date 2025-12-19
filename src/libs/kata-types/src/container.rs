@@ -67,9 +67,9 @@ impl ContainerType {
 impl Display for ContainerType {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ContainerType::PodContainer => write!(f, "{}", POD_CONTAINER),
-            ContainerType::PodSandbox => write!(f, "{}", POD_SANDBOX),
-            ContainerType::SingleContainer => write!(f, "{}", SINGLE_CONTAINER),
+            ContainerType::PodContainer => write!(f, "{POD_CONTAINER}"),
+            ContainerType::PodSandbox => write!(f, "{POD_SANDBOX}"),
+            ContainerType::SingleContainer => write!(f, "{SINGLE_CONTAINER}"),
         }
     }
 }
@@ -102,10 +102,10 @@ pub enum State {
 impl Display for State {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            State::Ready => write!(f, "{}", STATE_READY),
-            State::Running => write!(f, "{}", STATE_RUNNING),
-            State::Stopped => write!(f, "{}", STATE_STOPPED),
-            State::Paused => write!(f, "{}", STATE_PAUSED),
+            State::Ready => write!(f, "{STATE_READY}"),
+            State::Running => write!(f, "{STATE_RUNNING}"),
+            State::Stopped => write!(f, "{STATE_STOPPED}"),
+            State::Paused => write!(f, "{STATE_PAUSED}"),
         }
     }
 }

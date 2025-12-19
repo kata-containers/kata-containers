@@ -250,7 +250,7 @@ impl Compact {
         }
 
         config.psi_path =
-            psi::check(&config.psi_path).map_err(|e| anyhow!("psi::check failed: {}", e))?;
+            psi::check(&config.psi_path).map_err(|e| anyhow!("psi::check failed: {e}"))?;
 
         let c = Self {
             core: Arc::new(RwLock::new(CompactCore::new(config))),
@@ -309,10 +309,10 @@ impl Compact {
 
     fn set_prev(&mut self) -> Result<()> {
         let memfree_kb =
-            proc::get_memfree_kb().map_err(|e| anyhow!("get_memfree_kb failed: {}", e))?;
+            proc::get_memfree_kb().map_err(|e| anyhow!("get_memfree_kb failed: {e}"))?;
         let free_movable_pages = self
             .calculate_free_movable_pages()
-            .map_err(|e| anyhow!("calculate_free_movable_pages failed: {}", e))?;
+            .map_err(|e| anyhow!("calculate_free_movable_pages failed: {e}"))?;
 
         self.core
             .blocking_write()
@@ -336,7 +336,7 @@ impl Compact {
             .arg("-c")
             .arg("echo 1 > /proc/sys/vm/compact_memory")
             .spawn()
-            .map_err(|e| anyhow!("Command::new failed: {}", e))?;
+            .map_err(|e| anyhow!("Command::new failed: {e}"))?;
 
         debug!("compact pid {}", child.id());
 
@@ -359,13 +359,13 @@ impl Compact {
                         debug!("compact timeout");
                         child
                             .kill()
-                            .map_err(|e| anyhow!("child.kill failed: {}", e))?;
+                            .map_err(|e| anyhow!("child.kill failed: {e}"))?;
                         killed = true;
                     }
 
                     let percent = compact_psi
                         .get_percent()
-                        .map_err(|e| anyhow!("compact_psi.get_percent failed: {}", e))?;
+                        .map_err(|e| anyhow!("compact_psi.get_percent failed: {e}"))?;
                     if percent > compact_psi_percent_limit as u64 {
                         info!(
                             "compaction need stop because period psi {}% exceeds limit",
@@ -373,7 +373,7 @@ impl Compact {
                         );
                         child
                             .kill()
-                            .map_err(|e| anyhow!("child.kill failed: {}", e))?;
+                            .map_err(|e| anyhow!("child.kill failed: {e}"))?;
                         killed = true;
                     }
                 }
@@ -425,7 +425,7 @@ impl Compact {
 
         if can_work {
             self.do_compact()
-                .map_err(|e| anyhow!("do_compact failed: {}", e))?;
+                .map_err(|e| anyhow!("do_compact failed: {e}"))?;
 
             self.set_prev()?;
 

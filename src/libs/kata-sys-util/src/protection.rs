@@ -111,7 +111,7 @@ pub fn arch_guest_protection(
         }
 
         let contents = fs::read_to_string(file_name).map_err(|err| {
-            ProtectionError::CheckFailed(format!("Error reading file {} : {}", file_name, err))
+            ProtectionError::CheckFailed(format!("Error reading file {file_name} : {err}"))
         })?;
 
         if contents.trim() == "Y" {

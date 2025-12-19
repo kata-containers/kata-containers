@@ -273,7 +273,7 @@ impl KV for HashSerializer {
 
 impl slog::Serializer for HashSerializer {
     fn emit_arguments(&mut self, key: Key, value: &std::fmt::Arguments) -> slog::Result {
-        self.add_field(format!("{}", key), format!("{}", value));
+        self.add_field(format!("{key}"), format!("{value}"));
         Ok(())
     }
 }
@@ -453,11 +453,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = level_name_to_slog_level(d.name);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert!(result.is_ok());
@@ -513,11 +513,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = slog_level_to_level_name(d.level);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert!(result == d.result, "{}", msg);
@@ -699,7 +699,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]", i);
+            let msg = format!("test[{i}]");
 
             // Create a writer for the logger drain to use
             let writer = NamedTempFile::new()
@@ -738,44 +738,44 @@ mod tests {
             let field_ts = fields
                 .get("ts")
                 .unwrap_or_else(|| panic!("{:?}: failed to find timestamp field", msg));
-            assert_ne!(field_ts, "", "{}", msg);
+            assert_ne!(field_ts, "", "{msg}");
 
             let field_version = fields
                 .get("version")
                 .unwrap_or_else(|| panic!("{:?}: failed to find version field", msg));
-            assert_eq!(field_version, env!("CARGO_PKG_VERSION"), "{}", msg);
+            assert_eq!(field_version, env!("CARGO_PKG_VERSION"), "{msg}");
 
             let field_pid = fields
                 .get("pid")
                 .unwrap_or_else(|| panic!("{:?}: failed to find pid field", msg));
-            assert_ne!(field_pid, "", "{}", msg);
+            assert_ne!(field_pid, "", "{msg}");
 
             let field_level = fields
                 .get("level")
                 .unwrap_or_else(|| panic!("{:?}: failed to find level field", msg));
-            assert_eq!(field_level, d.slog_level_tag, "{}", msg);
+            assert_eq!(field_level, d.slog_level_tag, "{msg}");
 
             let field_msg = fields
                 .get("msg")
                 .unwrap_or_else(|| panic!("{:?}: failed to find msg field", msg));
-            assert_eq!(field_msg, &json!(d.msg), "{}", msg);
+            assert_eq!(field_msg, &json!(d.msg), "{msg}");
 
             let field_name = fields
                 .get("name")
                 .unwrap_or_else(|| panic!("{:?}: failed to find name field", msg));
-            assert_eq!(field_name, name, "{}", msg);
+            assert_eq!(field_name, name, "{msg}");
 
             let field_source = fields
                 .get("source")
                 .unwrap_or_else(|| panic!("{:?}: failed to find source field", msg));
-            assert_eq!(field_source, source, "{}", msg);
+            assert_eq!(field_source, source, "{msg}");
 
             let field_subsystem = fields
                 .get("subsystem")
                 .unwrap_or_else(|| panic!("{:?}: failed to find subsystem field", msg));
 
             // No explicit subsystem, so should be the default
-            assert_eq!(field_subsystem, &json!(DEFAULT_SUBSYSTEM), "{}", msg);
+            assert_eq!(field_subsystem, &json!(DEFAULT_SUBSYSTEM), "{msg}");
         }
     }
 }

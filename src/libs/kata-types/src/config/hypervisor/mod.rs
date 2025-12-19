@@ -432,7 +432,7 @@ impl BootInfo {
                 if value.is_empty() {
                     key.clone()
                 } else {
-                    format!("{}={}", key, value)
+                    format!("{key}={value}")
                 }
             })
             .collect();
@@ -1221,10 +1221,7 @@ impl SharedFsInfo {
                 }
                 Ok(())
             }
-            Some(v) => Err(std::io::Error::other(format!(
-                "Invalid shared_fs type {}",
-                v
-            ))),
+            Some(v) => Err(std::io::Error::other(format!("Invalid shared_fs type {v}"))),
         }
     }
 
@@ -1537,8 +1534,7 @@ impl ConfigOps for Hypervisor {
                 )?;
             } else {
                 return Err(std::io::Error::other(format!(
-                    "Can not find plugin for hypervisor {}",
-                    hypervisor,
+                    "Can not find plugin for hypervisor {hypervisor}",
                 )));
             }
         }
@@ -1584,8 +1580,7 @@ impl ConfigOps for Hypervisor {
                 )?;
             } else {
                 return Err(std::io::Error::other(format!(
-                    "Can not find plugin for hypervisor {}",
-                    hypervisor,
+                    "Can not find plugin for hypervisor {hypervisor}",
                 )));
             }
         }

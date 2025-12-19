@@ -588,7 +588,7 @@ fn mount_at<P: AsRef<Path>>(
                 }
             }
         })?;
-    child.join().map_err(|e| Error::Join(format!("{:?}", e)))?;
+    child.join().map_err(|e| Error::Join(format!("{e:?}")))?;
 
     if !rx.load(Ordering::Acquire) {
         Err(Error::Mount(

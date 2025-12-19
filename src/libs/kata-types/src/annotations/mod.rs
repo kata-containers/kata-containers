@@ -514,13 +514,13 @@ impl Annotation {
         let hv = config.hypervisor.get_mut(hypervisor_name).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid hypervisor name {}", hypervisor_name),
+                format!("Invalid hypervisor name {hypervisor_name}"),
             )
         })?;
         let ag = config.agent.get_mut(agent_name).ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid agent name {}", agent_name),
+                format!("Invalid agent name {agent_name}"),
             )
         })?;
         for (key, value) in &self.annotations {
@@ -714,8 +714,7 @@ impl Annotation {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     format!(
-                                        "root ports allocated exceeds the max {}",
-                                        MAX_PCIE_ROOT_PORT
+                                        "root ports allocated exceeds the max {MAX_PCIE_ROOT_PORT}"
                                     ),
                                 ));
                             } else {
@@ -733,8 +732,7 @@ impl Annotation {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     format!(
-                                        "switch ports allocated exceeds the max {}",
-                                        MAX_PCIE_SWITCH_PORT
+                                        "switch ports allocated exceeds the max {MAX_PCIE_SWITCH_PORT}"
                                     ),
                                 ));
                             } else {
@@ -845,7 +843,7 @@ impl Annotation {
                             Err(e) => {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
-                                    format!("parse huge pages type: {}, error: {}", value, e),
+                                    format!("parse huge pages type: {value}, error: {e}"),
                                 ));
                             }
                         }
@@ -991,7 +989,7 @@ impl Annotation {
                     _ => {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidInput,
-                            format!("Invalid annotation type {}", key),
+                            format!("Invalid annotation type {key}"),
                         ));
                     }
                 }

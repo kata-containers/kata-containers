@@ -110,8 +110,7 @@ impl ConfigPlugin for RemoteConfig {
             }
             if remote.memory_info.default_memory < MIN_REMOTE_MEMORY_SIZE_MB {
                 return Err(std::io::Error::other(format!(
-                    "Remote hypervisor has minimal memory limitation {}",
-                    MIN_REMOTE_MEMORY_SIZE_MB,
+                    "Remote hypervisor has minimal memory limitation {MIN_REMOTE_MEMORY_SIZE_MB}",
                 )));
             }
         }

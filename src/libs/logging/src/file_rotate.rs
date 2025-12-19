@@ -191,7 +191,7 @@ impl FileRotator {
 
     fn rotated_path(&self, i: usize) -> PathBuf {
         let mut path = self.path.clone().into_os_string();
-        path.push(format!(".{}", i));
+        path.push(format!(".{i}"));
         PathBuf::from(path)
     }
 }

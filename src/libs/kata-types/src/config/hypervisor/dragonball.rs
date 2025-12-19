@@ -187,16 +187,14 @@ impl ConfigPlugin for DragonballConfig {
             if let Some(v) = db.shared_fs.shared_fs.as_ref() {
                 if v != VIRTIO_FS && v != VIRTIO_FS_INLINE {
                     return Err(std::io::Error::other(format!(
-                        "dragonball hypervisor doesn't support {}",
-                        v,
+                        "dragonball hypervisor doesn't support {v}",
                     )));
                 }
             }
 
             if db.memory_info.default_memory < MIN_DRAGONBALL_MEMORY_SIZE_MB {
                 return Err(std::io::Error::other(format!(
-                    "dragonball hypervisor has minimal memory limitation {}",
-                    MIN_DRAGONBALL_MEMORY_SIZE_MB,
+                    "dragonball hypervisor has minimal memory limitation {MIN_DRAGONBALL_MEMORY_SIZE_MB}",
                 )));
             }
         }
