@@ -13,7 +13,7 @@ pub fn create_jaeger_trace_exporter(
 ) -> Result<opentelemetry_jaeger::Exporter, std::io::Error> {
     let exporter_type = "jaeger";
 
-    let jaeger_addr = format!("{}:{}", jaeger_host, jaeger_port);
+    let jaeger_addr = format!("{jaeger_host}:{jaeger_port}");
 
     let socket_addr: SocketAddr = match jaeger_addr.parse() {
         Ok(a) => a,
