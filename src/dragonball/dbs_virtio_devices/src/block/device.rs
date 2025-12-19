@@ -94,9 +94,8 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
         let disk_size = disk_image.seek(SeekFrom::End(0)).map_err(Error::IOError)?;
         if disk_size % SECTOR_SIZE != 0 {
             warn!(
-                "Disk size {} is not a multiple of sector size {}; \
-                 the remainder will not be visible to the guest.",
-                disk_size, SECTOR_SIZE
+                "Disk size {disk_size} is not a multiple of sector size {SECTOR_SIZE}; \
+                 the remainder will not be visible to the guest."
             );
         }
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1;
@@ -186,10 +185,7 @@ impl<AS: DbsGuestAddressSpace> Block<AS> {
 
         for kill_evt in self.kill_evts.iter() {
             if let Err(e) = kill_evt.write(1) {
-                error!(
-                    "virtio-blk: failed to write rate-limiter patch event {:?}",
-                    e
-                );
+                error!("virtio-blk: failed to write rate-limiter patch event {e:?}");
                 return Err(Error::InternalError);
             }
         }
@@ -281,12 +277,12 @@ where
                 .name(format!("{}_q{}", "blk_iothread", i))
                 .spawn(move || {
                     if let Err(e) = handler.run() {
-                        error!("Error running worker: {:?}", e);
+                        error!("Error running worker: {e:?}");
                     }
                 })
                 .map(|thread| self.epoll_threads.push(thread))
                 .map_err(|e| {
-                    error!("failed to clone the virtio-block epoll thread: {}", e);
+                    error!("failed to clone the virtio-block epoll thread: {e}");
                     ActivateError::InternalError
                 })?;
 
@@ -314,9 +310,9 @@ where
             // Remove BlockEpollHandler from event manager, so it could be dropped and the resources
             // could be freed, e.g. close disk_image, so vmm won't hold the backend file.
             match self.device_info.remove_event_handler(subscriber_id) {
-                Ok(_) => debug!("virtio-blk: removed subscriber_id {:?}", subscriber_id),
+                Ok(_) => debug!("virtio-blk: removed subscriber_id {subscriber_id:?}"),
                 Err(e) => {
-                    warn!("virtio-blk: failed to remove event handler: {:?}", e);
+                    warn!("virtio-blk: failed to remove event handler: {e:?}");
                 }
             }
         }
@@ -330,13 +326,13 @@ where
         // notify the io threads handlers to terminate.
         for kill_evt in self.kill_evts.iter() {
             if let Err(e) = kill_evt.write(1) {
-                error!("virtio-blk: failed to write kill event {:?}", e);
+                error!("virtio-blk: failed to write kill event {e:?}");
             }
         }
 
         while let Some(thread) = self.epoll_threads.pop() {
             if let Err(e) = thread.join() {
-                error!("virtio-blk: failed to reap the io threads: {:?}", e);
+                error!("virtio-blk: failed to reap the io threads: {e:?}");
             } else {
                 info!("io thread got reaped.");
             }

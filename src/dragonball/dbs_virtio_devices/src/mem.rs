@@ -603,7 +603,7 @@ impl MemTool {
                     )?;
                     let mut host_addr = region
                         .get_host_address(MemoryRegionAddress(0))
-                        .map_err(|e| MemError::RsizeUsabeRegionFail(format!("{:?}", e)))?
+                        .map_err(|e| MemError::RsizeUsabeRegionFail(format!("{e:?}")))?
                         as u64;
                     info!(target: MEM_DRIVER_NAME,
                           "{}: {}: new map_region index {}-{} new region guest_addr 0x{:x}-0x{:x} host_addr 0x{:x} len 0x{:x}",
@@ -623,11 +623,7 @@ impl MemTool {
         let oldsize = config.usable_region_size;
         info!(
             target: MEM_DRIVER_NAME,
-            "{}: {}: virtio_mem_resize_usable_region {:?} {:?}",
-            MEM_DRIVER_NAME,
-            id,
-            oldsize,
-            newsize
+            "{MEM_DRIVER_NAME}: {id}: virtio_mem_resize_usable_region {oldsize:?} {newsize:?}"
         );
         config.usable_region_size = newsize;
 
@@ -807,7 +803,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> MemEpollH
             Err(e) => {
                 debug!(
                     target: MEM_DRIVER_NAME,
-                    "{}: {}: bad guest memory address, {}", MEM_DRIVER_NAME, id, e
+                    "{MEM_DRIVER_NAME}: {id}: bad guest memory address, {e}"
                 );
                 0
             }
@@ -913,9 +909,7 @@ impl<AS: GuestAddressSpace> Mem<AS> {
     ) -> Result<Self> {
         trace!(
             target: MEM_DRIVER_NAME,
-            "{}: {}: Mem::new()",
-            MEM_DRIVER_NAME,
-            id
+            "{MEM_DRIVER_NAME}: {id}: Mem::new()"
         );
 
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1 as u64;
@@ -1181,9 +1175,9 @@ where
             // Remove MemEpollHandler from event manager, so it could be dropped and the resources
             // could be freed.
             match self.device_info.remove_event_handler(subscriber_id) {
-                Ok(_) => debug!("virtio-mem: removed subscriber_id {:?}", subscriber_id),
+                Ok(_) => debug!("virtio-mem: removed subscriber_id {subscriber_id:?}"),
                 Err(e) => {
-                    warn!("virtio-mem: failed to remove event handler: {:?}", e);
+                    warn!("virtio-mem: failed to remove event handler: {e:?}");
                 }
             }
         }

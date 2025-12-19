@@ -462,7 +462,7 @@ impl DeviceOpContext {
             dev_info.insert(
                 (
                     DeviceType::Virtio(dev_type),
-                    format!("virtio-{}@0x{:08x?}", dev_type, mmio_base),
+                    format!("virtio-{dev_type}@0x{mmio_base:08x?}"),
                 ),
                 MMIODeviceInfo::new(mmio_base, mmio_size, vec![irq], device_id),
             );

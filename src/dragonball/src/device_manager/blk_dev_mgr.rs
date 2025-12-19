@@ -593,13 +593,13 @@ impl BlockDeviceMgr {
                 UpcallClientResponse::DevMgr(response) => {
                     if let DevMgrResponse::Other(resp) = response {
                         if let Err(e) = result_sender.send(Some(resp.result)) {
-                            log::error!("send upcall result failed, due to {:?}!", e);
+                            log::error!("send upcall result failed, due to {e:?}!");
                         }
                     }
                 }
                 UpcallClientResponse::UpcallReset => {
                     if let Err(e) = result_sender.send(None) {
-                        log::error!("send upcall result failed, due to {:?}!", e);
+                        log::error!("send upcall result failed, due to {e:?}!");
                     }
                 }
                 #[allow(unreachable_patterns)]
@@ -772,7 +772,7 @@ impl BlockDeviceMgr {
             let cmdline = kernel_config.kernel_cmdline_mut();
             if let Some(ref uuid) = self.part_uuid {
                 cmdline
-                    .insert("root", &format!("PART_UUID={}", uuid))
+                    .insert("root", &format!("PART_UUID={uuid}"))
                     .map_err(DeviceMgrError::Cmdline)?;
             } else {
                 cmdline

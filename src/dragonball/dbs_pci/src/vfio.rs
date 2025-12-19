@@ -268,7 +268,7 @@ impl Interrupt {
         if let Some(msix) = &self.msix {
             if let Some(offset) = msix.with_in_range(offset) {
                 if let Err(e) = self.update_msix_capability(offset, data) {
-                    error!("Could not update MSI-X capability: {}", e);
+                    error!("Could not update MSI-X capability: {e}");
                 }
                 return true;
             }
@@ -277,7 +277,7 @@ impl Interrupt {
         if let Some(msi) = self.msi.as_mut() {
             if let Some(offset) = msi.with_in_range(offset) {
                 if let Err(e) = self.update_msi_capability(offset, data) {
-                    error!("Could not update MSI capability: {}", e);
+                    error!("Could not update MSI capability: {e}");
                 }
             }
         }
@@ -491,7 +491,7 @@ impl Interrupt {
                 if let Some(fd) = group.notifier(idx) {
                     irqfds.push(fd)
                 } else {
-                    warn!("pci_vfio: failed to get irqfd 0x{:x} for vfio device", idx);
+                    warn!("pci_vfio: failed to get irqfd 0x{idx:x} for vfio device");
                     return Err(VfioPciError::InternalError);
                 }
             }
@@ -529,7 +529,7 @@ impl Interrupt {
             let intr_mgr = self.irq_manager.as_mut().unwrap();
             let offset = offset - u64::from(msix.cap.table_offset());
             if let Err(e) = msix.state.write_table(offset, data, intr_mgr) {
-                debug!("failed to update PCI MSI-x table entry, {}", e);
+                debug!("failed to update PCI MSI-x table entry, {e}");
             }
         }
     }
@@ -685,7 +685,7 @@ impl Region {
                     match self.set_user_memory_region(j, false, vm) {
                         Ok(_) => {}
                         Err(err) => {
-                            error!("Could not delete kvm memory slot, error:{}", err);
+                            error!("Could not delete kvm memory slot, error:{err}");
                         }
                     }
 
@@ -711,10 +711,7 @@ impl Region {
                 self.mmaps[i].mmap_size,
                 host_addr as u64,
             ) {
-                error!(
-                    "vfio dma map failed, pci p2p dma may not work, due to {:?}",
-                    e
-                );
+                error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
             }
         }
 
@@ -749,10 +746,7 @@ impl Region {
                 self.start.raw_value() + self.mmaps[i].mmap_offset,
                 self.mmaps[i].mmap_size,
             ) {
-                error!(
-                    "vfio dma unmap failed, pci p2p dma may not work, due to {:?}",
-                    e
-                );
+                error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
             }
         }
 
@@ -779,10 +773,7 @@ impl Region {
                     self.start.raw_value() + self.mmaps[i].mmap_offset,
                     self.mmaps[i].mmap_size,
                 ) {
-                    error!(
-                        "vfio dma unmap failed, pci p2p dma may not work, due to {:?}",
-                        e
-                    );
+                    error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
                 }
                 self.start = GuestAddress(params.new_base);
                 self.set_user_memory_region(i, true, vm)?;
@@ -793,10 +784,7 @@ impl Region {
                     self.mmaps[i].mmap_size,
                     self.mmaps[i].mmap_host_addr,
                 ) {
-                    error!(
-                        "vfio dma map failed, pci p2p dma may not work, due to {:?}",
-                        e
-                    );
+                    error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
                 }
             }
         }
@@ -1159,7 +1147,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 mappable
             );
 
-            log::info!("mmap_size {}, mmap_offset {} ", mmap_size, mmap_offset);
+            log::info!("mmap_size {mmap_size}, mmap_offset {mmap_offset} ");
 
             self.regions.push(Region {
                 bar_index: bar_id,
@@ -1818,7 +1806,7 @@ impl<C: 'static + PciSystemContext> PciDevice for VfioPciDevice<C> {
             state.configuration.write_config(offset as usize, data);
             if let Some(params) = state.configuration.get_bar_programming_params() {
                 if let Err(e) = state.program_bar(reg_idx, params, &self.vm_fd) {
-                    debug!("failed to program VFIO PCI BAR, {}", e);
+                    debug!("failed to program VFIO PCI BAR, {e}");
                 }
             }
             // For device like nvidia vGPU the config space must also be updated.

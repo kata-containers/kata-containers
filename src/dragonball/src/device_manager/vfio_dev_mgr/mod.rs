@@ -349,13 +349,13 @@ impl VfioDeviceMgr {
                     UpcallClientResponse::DevMgr(response) => {
                         if let DevMgrResponse::Other(resp) = response {
                             if let Err(e) = result_sender.send(Some(resp.result)) {
-                                error!("send upcall result failed, due to {:?}!", e);
+                                error!("send upcall result failed, due to {e:?}!");
                             }
                         }
                     }
                     UpcallClientResponse::UpcallReset => {
                         if let Err(e) = result_sender.send(None) {
-                            error!("send upcall result failed, due to {:?}!", e);
+                            error!("send upcall result failed, due to {e:?}!");
                         }
                     }
                     #[allow(unreachable_patterns)]
@@ -538,9 +538,9 @@ impl VfioDeviceMgr {
             if len == 0 {
                 Err(VfioDeviceError::InvalidConfig)
             } else if len == 2 {
-                Ok(format!("/sys/bus/pci/devices/{:04}:{}", domain, bdf))
+                Ok(format!("/sys/bus/pci/devices/{domain:04}:{bdf}"))
             } else {
-                Ok(format!("/sys/bus/pci/devices/{}", bdf))
+                Ok(format!("/sys/bus/pci/devices/{bdf}"))
             }
         } else {
             Ok(cfg.sysfs_path.clone())

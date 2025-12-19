@@ -136,12 +136,12 @@ impl Request {
         let mut desc = desc_chain
             .next()
             .ok_or(Error::DescriptorChainTooShort)
-            .inspect_err(|_| error!("virtio-blk: Request {:?} has only head descriptor", req))?;
+            .inspect_err(|_| error!("virtio-blk: Request {req:?} has only head descriptor"))?;
         if !desc.has_next() {
             status_desc = desc;
             // Only flush requests are allowed to skip the data descriptor.
             if req.request_type != RequestType::Flush {
-                error!("virtio-blk: Request {:?} need a data descriptor", req);
+                error!("virtio-blk: Request {req:?} need a data descriptor");
                 return Err(Error::DescriptorChainTooShort);
             }
         } else {
@@ -178,10 +178,7 @@ impl Request {
         match self.request_type {
             RequestType::Out => {
                 if desc.is_write_only() {
-                    error!(
-                        "virtio-blk: Request {:?} sees unexpected write-only descriptor",
-                        self
-                    );
+                    error!("virtio-blk: Request {self:?} sees unexpected write-only descriptor");
                     return Err(Error::UnexpectedWriteOnlyDescriptor);
                 } else if desc.len() > max_size {
                     error!(
@@ -196,8 +193,7 @@ impl Request {
             RequestType::In => {
                 if !desc.is_write_only() {
                     error!(
-                        "virtio-blk: Request {:?} sees unexpected read-only descriptor for read",
-                        self
+                        "virtio-blk: Request {self:?} sees unexpected read-only descriptor for read"
                     );
                     return Err(Error::UnexpectedReadOnlyDescriptor);
                 } else if desc.len() > max_size {
@@ -212,8 +208,7 @@ impl Request {
             }
             RequestType::GetDeviceID if !desc.is_write_only() => {
                 error!(
-                    "virtio-blk: Request {:?} sees unexpected read-only descriptor for GetDeviceID",
-                    self
+                    "virtio-blk: Request {self:?} sees unexpected read-only descriptor for GetDeviceID"
                 );
                 return Err(Error::UnexpectedReadOnlyDescriptor);
             }

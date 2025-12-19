@@ -229,7 +229,7 @@ impl VhostUserBlockDevice {
 
         let init_queues = queue_sizes.len() as u32;
 
-        info!("vhost-user-blk: try to connect to {:?}", vhost_socket);
+        info!("vhost-user-blk: try to connect to {vhost_socket:?}");
         // Connect to the vhost-user socket.
         let mut master = Master::connect(&vhost_socket, 1).map_err(VirtIoError::VhostError)?;
 
@@ -641,7 +641,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(20));
 
-        let spdk_path = format!("spdk://{}", socket_path);
+        let spdk_path = format!("spdk://{socket_path}");
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let mut dev: VhostUserBlock<Arc<GuestMemoryMmap>> =
@@ -707,7 +707,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(20));
 
-        let spdk_path = format!("spdk://{}", socket_path);
+        let spdk_path = format!("spdk://{socket_path}");
         let queue_sizes = Arc::new(vec![128, 128]);
         let epoll_mgr = EpollManager::default();
         let mut dev: VhostUserBlock<Arc<GuestMemoryMmap>> =

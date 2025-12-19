@@ -406,7 +406,7 @@ impl PciCapability for MsiCap {
         let mut buf = [0u8; 1];
 
         if let Err(e) = self.read(offset as u64, &mut buf) {
-            error!("failed to read PCI MSI capability structure, {}", e);
+            error!("failed to read PCI MSI capability structure, {e}");
             fill_config_data(&mut buf);
         }
 
@@ -417,7 +417,7 @@ impl PciCapability for MsiCap {
         let mut buf = [0u8; 2];
 
         if let Err(e) = self.read(offset as u64, &mut buf) {
-            error!("failed to read PCI MSI capability structure, {}", e);
+            error!("failed to read PCI MSI capability structure, {e}");
             fill_config_data(&mut buf);
         }
 
@@ -428,7 +428,7 @@ impl PciCapability for MsiCap {
         let mut buf = [0u8; 4];
 
         if let Err(e) = self.read(offset as u64, &mut buf) {
-            error!("failed to read PCI MSI capability structure, {}", e);
+            error!("failed to read PCI MSI capability structure, {e}");
             fill_config_data(&mut buf);
         }
 
@@ -437,7 +437,7 @@ impl PciCapability for MsiCap {
 
     fn write_u8(&mut self, offset: usize, value: u8) {
         if let Err(e) = self.write(offset as u64, &[value]) {
-            error!("failed to write PCI MSI capability structure, {}", e);
+            error!("failed to write PCI MSI capability structure, {e}");
         }
     }
 
@@ -445,7 +445,7 @@ impl PciCapability for MsiCap {
         let mut buf = [0u8; 2];
         LittleEndian::write_u16(&mut buf, value);
         if let Err(e) = self.write(offset as u64, &buf) {
-            error!("failed to write PCI MSI capability structure, {}", e);
+            error!("failed to write PCI MSI capability structure, {e}");
         }
     }
 
@@ -453,7 +453,7 @@ impl PciCapability for MsiCap {
         let mut buf = [0u8; 4];
         LittleEndian::write_u32(&mut buf, value);
         if let Err(e) = self.write(offset as u64, &buf) {
-            error!("failed to write PCI MSI capability structure, {}", e);
+            error!("failed to write PCI MSI capability structure, {e}");
         }
     }
 

@@ -423,11 +423,11 @@ impl VhostUserFsDevice {
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
         // Connect to the vhost-user socket.
-        info!("{}: try to connect to {:?}", VHOST_USER_FS_NAME, path);
+        info!("{VHOST_USER_FS_NAME}: try to connect to {path:?}");
         let num_queues = NUM_QUEUE_OFFSET + req_num_queues;
         let master = Master::connect(path, num_queues as u64).map_err(VirtioError::VhostError)?;
 
-        info!("{}: get features", VHOST_USER_FS_NAME);
+        info!("{VHOST_USER_FS_NAME}: get features");
         let avail_features = master.get_features().map_err(VirtioError::VhostError)?;
 
         // Create virtio device config space.

@@ -103,7 +103,7 @@ impl FsCacheReqHandler for CacheHandler {
         };
         if ret == libc::MAP_FAILED {
             let e = IOError::last_os_error();
-            error!("{}: CacheHandler::map() failed: {}", VIRTIO_FS_NAME, e);
+            error!("{VIRTIO_FS_NAME}: CacheHandler::map() failed: {e}");
             return Err(e);
         }
 
@@ -279,7 +279,7 @@ where
                     let queue = &mut config.lock().unwrap().queues[queue_index];
                     queue.add_used(mem, head_index, total as u32);
                     if let Err(e) = queue.notify() {
-                        error!("failed to signal used queue: {:?}", e);
+                        error!("failed to signal used queue: {e:?}");
                     }
                 } else {
                     tx.send((head_index, total as u32))
@@ -288,7 +288,7 @@ where
             };
 
             if let Some(pool) = &self.thread_pool {
-                trace!("{}: poping new fuse req to thread pool.", VIRTIO_FS_NAME,);
+                trace!("{VIRTIO_FS_NAME}: poping new fuse req to thread pool.",);
                 pool.execute(work_func);
             } else {
                 work_func();
@@ -311,7 +311,7 @@ where
 
         if notify {
             if let Err(e) = queue.notify() {
-                error!("failed to signal used queue: {:?}", e);
+                error!("failed to signal used queue: {e:?}");
             }
         }
 
@@ -319,7 +319,7 @@ where
     }
 
     pub fn get_patch_rate_limiters(&mut self, bytes: BucketUpdate, ops: BucketUpdate) {
-        info!("{}: Update rate limiter for fs device", VIRTIO_FS_NAME);
+        info!("{VIRTIO_FS_NAME}: Update rate limiter for fs device");
         match &bytes {
             BucketUpdate::Update(tb) => {
                 info!(
@@ -331,10 +331,10 @@ where
                 );
             }
             BucketUpdate::None => {
-                info!("{}: no update for bandwidth", VIRTIO_FS_NAME);
+                info!("{VIRTIO_FS_NAME}: no update for bandwidth");
             }
             _ => {
-                info!("{}: bandwidth limiting is disabled", VIRTIO_FS_NAME);
+                info!("{VIRTIO_FS_NAME}: bandwidth limiting is disabled");
             }
         }
         match &ops {
@@ -348,10 +348,10 @@ where
                 );
             }
             BucketUpdate::None => {
-                info!("{}: no update for ops", VIRTIO_FS_NAME);
+                info!("{VIRTIO_FS_NAME}: no update for ops");
             }
             _ => {
-                info!("{}: ops limiting is disabled", VIRTIO_FS_NAME);
+                info!("{VIRTIO_FS_NAME}: ops limiting is disabled");
             }
         }
         self.rate_limiter.update_buckets(bytes, ops);
@@ -392,7 +392,7 @@ where
 
         match slot {
             s if s >= RATE_LIMITER_EVENT_COUNT + QUEUE_AVAIL_EVENT + queues_len => {
-                error!("{}: unknown epoll event slot {}", VIRTIO_FS_NAME, slot);
+                error!("{VIRTIO_FS_NAME}: unknown epoll event slot {slot}");
             }
 
             s if s == rate_limiter_event => match self.rate_limiter.event_handler() {
@@ -401,21 +401,20 @@ where
                     for idx in QUEUE_AVAIL_EVENT as usize..(QUEUE_AVAIL_EVENT + queues_len) as usize
                     {
                         if let Err(e) = self.process_queue(idx) {
-                            error!("{}: error in queue {}, {:?}", VIRTIO_FS_NAME, idx, e);
+                            error!("{VIRTIO_FS_NAME}: error in queue {idx}, {e:?}");
                         }
                     }
                 }
                 Err(e) => {
                     error!(
-                        "{}: the rate limiter is disabled or is not blocked, {:?}",
-                        VIRTIO_FS_NAME, e
+                        "{VIRTIO_FS_NAME}: the rate limiter is disabled or is not blocked, {e:?}"
                     );
                 }
             },
 
             s if s == patch_rate_limiter_event => {
                 if let Err(e) = self.patch_rate_limiter_fd.read() {
-                    error!("{}: failed to get patch event, {:?}", VIRTIO_FS_NAME, e);
+                    error!("{VIRTIO_FS_NAME}: failed to get patch event, {e:?}");
                 }
                 if let Some(receiver) = &self.receiver {
                     if let Ok((bytes, ops)) = receiver.try_recv() {
@@ -428,16 +427,13 @@ where
             _ => {
                 let idx = (slot - QUEUE_AVAIL_EVENT) as usize;
                 if let Err(e) = queues[idx].consume_event() {
-                    error!("{}: failed to read queue event, {:?}", VIRTIO_FS_NAME, e);
+                    error!("{VIRTIO_FS_NAME}: failed to read queue event, {e:?}");
                     return;
                 }
                 drop(guard);
 
                 if let Err(e) = self.process_queue(idx) {
-                    error!(
-                        "{}: process_queue failed due to error {:?}",
-                        VIRTIO_FS_NAME, e
-                    );
+                    error!("{VIRTIO_FS_NAME}: process_queue failed due to error {e:?}");
                 }
             }
         }
@@ -460,8 +456,7 @@ where
             );
             if let Err(e) = ops.add(events) {
                 error!(
-                    "{}: failed to register epoll event for event queue {}, {:?}",
-                    VIRTIO_FS_NAME, idx, e
+                    "{VIRTIO_FS_NAME}: failed to register epoll event for event queue {idx}, {e:?}"
                 );
             }
         }
@@ -473,10 +468,7 @@ where
                 QUEUE_AVAIL_EVENT + queues.len() as u32,
                 EventSet::IN,
             )) {
-                error!(
-                    "{}: failed to register rate limiter event, {:?}",
-                    VIRTIO_FS_NAME, e
-                );
+                error!("{VIRTIO_FS_NAME}: failed to register rate limiter event, {e:?}");
             }
         }
 
@@ -485,10 +477,7 @@ where
             1 + QUEUE_AVAIL_EVENT + queues.len() as u32,
             EventSet::IN,
         )) {
-            error!(
-                "{}: failed to register rate limiter patch event {:?}",
-                VIRTIO_FS_NAME, e
-            );
+            error!("{VIRTIO_FS_NAME}: failed to register rate limiter patch event {e:?}");
         }
     }
 }
@@ -732,10 +721,7 @@ pub mod tests {
 
         // test for PATCH_RATE_LIMITER_EVENT
         if let Err(e) = handler.patch_rate_limiter_fd.write(1) {
-            error!(
-                "{} test: failed to write patch_rate_limiter_fd, {:?}",
-                VIRTIO_FS_NAME, e
-            );
+            error!("{VIRTIO_FS_NAME} test: failed to write patch_rate_limiter_fd, {e:?}");
         }
         let events = Events::with_data(&event_fd, 1 + QUEUE_AVAIL_EVENT + queues_len, event_set);
         handler.process(events, &mut event_op);

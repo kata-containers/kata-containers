@@ -146,28 +146,24 @@ impl VirtioPciCommonConfig {
     }
 
     fn read_common_config_byte(&self, offset: u64) -> u8 {
-        trace!("read_common_config_byte: offset 0x{:x}", offset);
+        trace!("read_common_config_byte: offset 0x{offset:x}");
         // The driver is only allowed to do aligned, properly sized access.
         match offset {
             0x14 => self.driver_status,
             0x15 => self.config_generation,
             _ => {
-                warn!("invalid virtio config byte read: 0x{:x}", offset);
+                warn!("invalid virtio config byte read: 0x{offset:x}");
                 0
             }
         }
     }
 
     fn write_common_config_byte(&mut self, offset: u64, value: u8) {
-        trace!(
-            "write_common_config_byte: offset 0x{:x} value 0x{:x}",
-            offset,
-            value
-        );
+        trace!("write_common_config_byte: offset 0x{offset:x} value 0x{value:x}");
         match offset {
             0x14 => self.driver_status = value,
             _ => {
-                warn!("invalid virtio config byte write: 0x{:x}", offset);
+                warn!("invalid virtio config byte write: 0x{offset:x}");
             }
         }
     }
@@ -177,7 +173,7 @@ impl VirtioPciCommonConfig {
         offset: u64,
         queues: &[VirtioQueueConfig<Q>],
     ) -> u16 {
-        trace!("read_common_config_word: offset 0x{:x}", offset);
+        trace!("read_common_config_word: offset 0x{offset:x}");
         match offset {
             0x10 => self.msix_config.load(Ordering::Acquire),
             0x12 => queues.len() as u16, // num_queues
@@ -187,7 +183,7 @@ impl VirtioPciCommonConfig {
             0x1c => u16::from(self.with_queue(queues, |q| q.ready()).unwrap_or(false)),
             0x1e => self.queue_select, // notify_off
             _ => {
-                warn!("invalid virtio register word read: 0x{:x}", offset);
+                warn!("invalid virtio register word read: 0x{offset:x}");
                 0
             }
         }
@@ -199,11 +195,7 @@ impl VirtioPciCommonConfig {
         value: u16,
         queues: &mut [VirtioQueueConfig<Q>],
     ) {
-        trace!(
-            "write_common_config_word: offset 0x{:x} value 0x{:x}",
-            offset,
-            value
-        );
+        trace!("write_common_config_word: offset 0x{offset:x} value 0x{value:x}");
         match offset {
             0x10 => self.msix_config.store(value, Ordering::Release),
             0x16 => self.queue_select = value,
@@ -214,7 +206,7 @@ impl VirtioPciCommonConfig {
                 q.set_ready(ready);
             }),
             _ => {
-                warn!("invalid virtio register word write: 0x{:x}", offset);
+                warn!("invalid virtio register word write: 0x{offset:x}");
             }
         }
     }
@@ -228,7 +220,7 @@ impl VirtioPciCommonConfig {
         offset: u64,
         device: ArcMutexBoxDynVirtioDevice<AS, Q, R>,
     ) -> u32 {
-        trace!("read_common_config_dword: offset 0x{:x}", offset);
+        trace!("read_common_config_dword: offset 0x{offset:x}");
         match offset {
             0x00 => self.device_feature_select,
             0x04 => {
@@ -243,7 +235,7 @@ impl VirtioPciCommonConfig {
             }
             0x08 => self.driver_feature_select,
             _ => {
-                warn!("invalid virtio register dword read: 0x{:x}", offset);
+                warn!("invalid virtio register dword read: 0x{offset:x}");
                 0
             }
         }
@@ -260,11 +252,7 @@ impl VirtioPciCommonConfig {
         queues: &mut [VirtioQueueConfig<Q>],
         device: ArcMutexBoxDynVirtioDevice<AS, Q, R>,
     ) {
-        trace!(
-            "write_common_config_dword: offset 0x{:x} value 0x{:x}",
-            offset,
-            value
-        );
+        trace!("write_common_config_dword: offset 0x{offset:x} value 0x{value:x}");
 
         match offset {
             0x00 => self.device_feature_select = value,
@@ -287,13 +275,13 @@ impl VirtioPciCommonConfig {
             0x30 => self.with_queue_mut(queues, |q| q.set_used_ring_address(Some(value), None)),
             0x34 => self.with_queue_mut(queues, |q| q.set_used_ring_address(None, Some(value))),
             _ => {
-                warn!("invalid virtio register dword write: 0x{:x}", offset);
+                warn!("invalid virtio register dword write: 0x{offset:x}");
             }
         }
     }
 
     fn read_common_config_qword(&self, _offset: u64) -> u64 {
-        trace!("read_common_config_qword: offset 0x{:x}", _offset);
+        trace!("read_common_config_qword: offset 0x{_offset:x}");
         0 // Assume the guest has no reason to read write-only registers.
     }
 
@@ -303,11 +291,7 @@ impl VirtioPciCommonConfig {
         value: u64,
         queues: &mut [VirtioQueueConfig<Q>],
     ) {
-        trace!(
-            "write_common_config_qword: offset 0x{:x}, value 0x{:x}",
-            offset,
-            value
-        );
+        trace!("write_common_config_qword: offset 0x{offset:x}, value 0x{value:x}");
 
         let low = Some((value & 0xffff_ffff) as u32);
         let high = Some((value >> 32) as u32);
@@ -317,7 +301,7 @@ impl VirtioPciCommonConfig {
             0x28 => self.with_queue_mut(queues, |q| q.set_avail_ring_address(low, high)),
             0x30 => self.with_queue_mut(queues, |q| q.set_used_ring_address(low, high)),
             _ => {
-                warn!("invalid virtio register qword write: 0x{:x}", offset);
+                warn!("invalid virtio register qword write: 0x{offset:x}");
             }
         }
     }

@@ -137,7 +137,7 @@ where
         queue_sizes: Arc<Vec<u16>>,
         event_mgr: EpollManager,
     ) -> VirtioResult<Self> {
-        trace!(target: "vhost-net", "{}: Net::new_with_tap()", NET_DRIVER_NAME);
+        trace!(target: "vhost-net", "{NET_DRIVER_NAME}: Net::new_with_tap()");
 
         let vq_pairs = queue_sizes.len() / 2;
 
@@ -258,12 +258,11 @@ where
         R: GuestMemoryRegion + Sync + Send + 'static,
     {
         let vq_pairs = self.queue_sizes.len() / 2;
-        trace!(target: "vhost-net", "{}: Net::setup_vhost_backend(vq_pairs: {})", NET_DRIVER_NAME, vq_pairs);
+        trace!(target: "vhost-net", "{NET_DRIVER_NAME}: Net::setup_vhost_backend(vq_pairs: {vq_pairs})");
 
         if vq_pairs < 1 {
             error!(
-                "{}: Invalid virtio queue pairs, expected a value greater than 0, but got {}",
-                NET_DRIVER_NAME, vq_pairs
+                "{NET_DRIVER_NAME}: Invalid virtio queue pairs, expected a value greater than 0, but got {vq_pairs}"
             );
             return Err(VirtioError::ActivateError(Box::new(
                 ActivateError::InvalidParam,
@@ -300,7 +299,7 @@ where
         Q: QueueT + Send + 'static,
         R: GuestMemoryRegion + Sync + Send + 'static,
     {
-        trace!(target: "vhost-net", "{}: Net::init_vhost_dev(pair_index: {})", NET_DRIVER_NAME, pair_index);
+        trace!(target: "vhost-net", "{NET_DRIVER_NAME}: Net::init_vhost_dev(pair_index: {pair_index})");
 
         let handle = &mut self.handles[pair_index];
         handle
@@ -364,7 +363,7 @@ where
         Q: QueueT + Send + 'static,
         R: GuestMemoryRegion + Sync + Send + 'static,
     {
-        trace!(target: "vhost-net", "{}: Net::init_vhost_queues(pair_index: {})", NET_DRIVER_NAME, pair_index);
+        trace!(target: "vhost-net", "{NET_DRIVER_NAME}: Net::init_vhost_queues(pair_index: {pair_index})");
 
         let handle = &mut self.handles[pair_index];
         let tap = &self.taps[pair_index];
@@ -548,7 +547,7 @@ where
         if let Some(subscriber_id) = subscriber_id {
             match self.device_info.remove_event_handler(subscriber_id) {
                 Ok(_) => debug!("vhost-net: removed subscriber_id {:?}", self.subscriber_id),
-                Err(err) => warn!("vhost-net: failed to remove event handler: {:?}", err),
+                Err(err) => warn!("vhost-net: failed to remove event handler: {err:?}"),
             }
         }
     }
@@ -614,7 +613,7 @@ where
             match ctrl_hdr.class as u32 {
                 VIRTIO_NET_CTRL_MQ => {
                     virtio_handle_ctrl_mq::<AS, _>(desc_chain, ctrl_hdr.cmd, mem, |curr_queues| {
-                        info!("{}: vq pairs: {}", NET_DRIVER_NAME, curr_queues);
+                        info!("{NET_DRIVER_NAME}: vq pairs: {curr_queues}");
                         Ok(())
                     })?;
                     return virtio_handle_ctrl_status::<AS>(

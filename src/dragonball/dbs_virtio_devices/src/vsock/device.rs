@@ -194,8 +194,8 @@ where
         let subscriber_id = self.subscriber_id.take();
         if let Some(subscriber_id) = subscriber_id {
             match self.device_info.remove_event_handler(subscriber_id) {
-                Ok(_) => debug!("virtio-vsock: removed subscriber_id {:?}", subscriber_id),
-                Err(err) => warn!("virtio-vsock: failed to remove event handler: {:?}", err),
+                Ok(_) => debug!("virtio-vsock: removed subscriber_id {subscriber_id:?}"),
+                Err(err) => warn!("virtio-vsock: failed to remove event handler: {err:?}"),
             };
         } else {
             self.muxer.take();

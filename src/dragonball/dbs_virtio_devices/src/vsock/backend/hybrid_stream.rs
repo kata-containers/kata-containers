@@ -63,7 +63,7 @@ impl VsockStream for HybridStream {
         let ret = unsafe { libc::fcntl(fd, libc::F_SETFL, flag) };
 
         if ret < 0 {
-            error!("failed to set fcntl for fd {} with ret {}", fd, ret);
+            error!("failed to set fcntl for fd {fd} with ret {ret}");
             return Err(Error::last_os_error());
         }
 

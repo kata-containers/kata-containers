@@ -105,7 +105,7 @@ where
             }
         }
 
-        debug!("mmiov2: fast-mmio enabled: {}", doorbell_enabled);
+        debug!("mmiov2: fast-mmio enabled: {doorbell_enabled}");
 
         let state = MmioV2DeviceState::new(
             device,
@@ -120,7 +120,7 @@ where
 
         let mut device_vendor = MMIO_VENDOR_ID_DRAGONBALL | msi_feature;
         if let Some(ft) = features {
-            debug!("mmiov2: feature bit is 0x{:0X}", ft);
+            debug!("mmiov2: feature bit is 0x{ft:0X}");
             device_vendor |= ft & DRAGONBALL_FEATURE_MASK;
         }
 
@@ -206,7 +206,7 @@ where
                     // Reset internal status to initial state on failure.
                     // Error is ignored since the device will go to DEVICE_FAILED status.
                     let _ = state.reset();
-                    warn!("failed to activate MMIO Virtio device: {:?}", e);
+                    warn!("failed to activate MMIO Virtio device: {e:?}");
                     result = Err(DEVICE_FAILED);
                 }
             }
@@ -216,13 +216,13 @@ where
             } else if state.device_activated() {
                 let ret = state.get_inner_device_mut().reset();
                 if ret.is_err() {
-                    warn!("failed to reset MMIO Virtio device: {:?}.", ret);
+                    warn!("failed to reset MMIO Virtio device: {ret:?}.");
                 } else {
                     state.deactivate();
                     // it should reset the device's status to init, otherwise, the guest would
                     // get the wrong device's status.
                     if let Err(e) = state.reset() {
-                        warn!("failed to reset device state due to {:?}", e);
+                        warn!("failed to reset device state due to {e:?}");
                         result = Err(DEVICE_FAILED);
                     } else {
                         result = self
@@ -311,7 +311,7 @@ where
         let mut state = self.state();
         if self.check_driver_status(DEVICE_DRIVER, DEVICE_FAILED) {
             if let Err(e) = state.get_inner_device_mut().read_config(offset, data) {
-                warn!("device read config err: {}", e);
+                warn!("device read config err: {e}");
             }
         } else {
             info!("can not read from device config data area before driver is ready");
@@ -323,7 +323,7 @@ where
         let mut state = self.state();
         if self.check_driver_status(DEVICE_DRIVER, DEVICE_FAILED) {
             if let Err(e) = state.get_inner_device_mut().write_config(offset, data) {
-                warn!("device write config err: {}", e);
+                warn!("device write config err: {e}");
             }
         } else {
             info!("can not write to device config data area before driver is ready");
@@ -386,7 +386,7 @@ where
                 REG_MMIO_SHM_BASE_HIGH => self.get_shm_base_high(),
                 REG_MMIO_CONFIG_GENERATI => self.config_generation.load(Ordering::SeqCst),
                 _ => {
-                    info!("unknown virtio mmio readl at 0x{:x}", offset);
+                    info!("unknown virtio mmio readl at 0x{offset:x}");
                     return;
                 }
             };
@@ -401,7 +401,7 @@ where
                     }
                 }
                 _ => {
-                    info!("unknown virtio mmio readw from 0x{:x}", offset);
+                    info!("unknown virtio mmio readw from 0x{offset:x}");
                     return;
                 }
             };
@@ -453,7 +453,7 @@ where
                 REG_MMIO_MSI_ADDRESS_L => self.state().set_msi_address_low(v),
                 REG_MMIO_MSI_ADDRESS_H => self.state().set_msi_address_high(v),
                 REG_MMIO_MSI_DATA => self.state().set_msi_data(v),
-                _ => info!("unknown virtio mmio writel to 0x{:x}", offset),
+                _ => info!("unknown virtio mmio writel to 0x{offset:x}"),
             }
         } else if data.len() == 2 {
             let v = LittleEndian::read_u16(data);
@@ -461,7 +461,7 @@ where
                 REG_MMIO_MSI_CSR => self.state().update_msi_enable(v, self),
                 REG_MMIO_MSI_COMMAND => self.state().handle_msi_cmd(v, self),
                 _ => {
-                    info!("unknown virtio mmio writew to 0x{:x}", offset);
+                    info!("unknown virtio mmio writew to 0x{offset:x}");
                 }
             }
         } else {
