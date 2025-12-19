@@ -157,6 +157,16 @@ if [[ -z "${CAA_IMAGE}" ]]; then
 fi
 
 # Get latest PP image
+#
+# You can list the CI images by:
+#     az sig image-version list-community --location "eastus" --public-gallery-name "cocopodvm-d0e4f35f-5530-4b9c-8596-112487cdea85" --gallery-image-definition "podvm_image0" --output table
+# or the release images by:
+#     az sig image-version list-community --location "eastus" --public-gallery-name "cococommunity-42d8482d-92cd-415b-b332-7648bd978eff" --gallery-image-definition "peerpod-podvm-fedora" --output table
+# or the release debug images by:
+#     az sig image-version list-community --location "eastus" --public-gallery-name "cococommunity-42d8482d-92cd-415b-b332-7648bd978eff" --gallery-image-definition "peerpod-podvm-fedora-debug" --output table
+#
+# Note there are other flavours of the released images, you can list them by:
+#     az sig image-definition list-community --location "eastus" --public-gallery-name "cococommunity-42d8482d-92cd-415b-b332-7648bd978eff" --output table
 if [[ -z "${PP_IMAGE_ID}" ]]; then
 	SUCCESS_TIME=$(curl -s \
 	  -H "Accept: application/vnd.github+json" \
