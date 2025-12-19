@@ -1,4 +1,4 @@
-403
+409
 ACPI/AB
 ACS/AB
 API/AB
@@ -33,7 +33,6 @@ Docker/B
 Dockerfile/AB
 Dragonball/B
 EulerOS/B
-erofs/A
 FS/AB
 FaaS/B
 Facebook/B
@@ -195,6 +194,7 @@ aarch64/B
 ack/A
 acpi
 amd64/B
+api/AB
 arg
 arm64/B
 auditability
@@ -210,6 +210,7 @@ centric/B
 cgroup/AB
 checkbox/A
 chipset/AB
+chroot
 ci/AB
 cnn/B
 codebase
@@ -247,6 +248,7 @@ fio/B
 freeform
 fs/B
 gRPC/AB
+genpolicy/AB
 gic
 golang/B
 goroutine/AB
@@ -276,6 +278,7 @@ jq/B
 k8s/B
 kata
 keypair/A
+kubernetes/B
 libcontainer/B
 libelf/B
 libvirt/B
@@ -303,8 +306,8 @@ nack/AB
 namespace/ABCD
 netlink
 netns/AB
+nv/AB
 nvidia/A
-nydus/A
 onwards
 openSUSE/B
 openshift/B
@@ -387,9 +390,11 @@ util/A
 vCPU/AB
 vGPU
 vSphere/B
+vectorAdd
 vendored
 vendoring
 versioning
+vfio/AB
 vhost/AB
 virtcontainers/B
 virtio/AB

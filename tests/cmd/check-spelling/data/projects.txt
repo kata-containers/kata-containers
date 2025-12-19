@@ -46,6 +46,7 @@ Kata/B
 Kibana/B
 Kubelet/B
 Kubernetes/B
+kubernetes/B		# when used in links or paths
 Launchpad/B
 LevelDB/B
 libcontainer/B

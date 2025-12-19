@@ -8,6 +8,7 @@ ACPI/AB
 acpi
 ACS/AB
 API/AB
+api/AB		# when used in links like "api.github.com"
 AUFS # Another Union FS
 AWS/AB
 BDF/AB
@@ -52,6 +53,7 @@ memdisk/B
 MDEV/AB
 NEMU/AB
 NIC/AB
+nv/AB		# NVIDIA abbreviation (lowercase)
 NVDIMM/AB
 OCI/AB
 OVMF/AB
@@ -92,6 +94,7 @@ vCPU/AB
 VETH/AB
 VF/AB
 VFIO/AB
+vfio/AB		# For terms like "vfio-pci"
 VGPU/AB
 vhost/AB
 VHOST/AB
@@ -119,8 +122,8 @@ msg/AB
 UDS
 dbs # Dragonball Sandbox
 TDX
-tdx 
-mptable 
+tdx
+mptable
 fdt
 gic
 msr
