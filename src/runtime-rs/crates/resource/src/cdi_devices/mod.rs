@@ -55,7 +55,7 @@ pub fn sort_options_by_pcipath(mut device_options: Vec<String>) -> Vec<String> {
 
 // Resolve the CDI vendor ID/device Class by a lookup table based on the provided vendor and class.
 pub fn resolve_cdi_device_kind<'a>(vendor_id: &'a str, class_id: &'a str) -> Option<&'a str> {
-    let vendor_class = format!("{}-{}", vendor_id, class_id);
+    let vendor_class = format!("{vendor_id}-{class_id}");
     // The first 12 characters of the string ("0x10de-0x030") provide a concise
     // and clear identification of both the manufacturer and the device category.
     // it returns "nvidia.com/gpu", "amd.com/gpu" or others.

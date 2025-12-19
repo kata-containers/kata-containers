@@ -36,7 +36,7 @@ impl SandboxService {
         <TtrpcResp as TryFrom<SandboxResponse>>::Error: std::fmt::Debug,
     {
         let r = req.try_into().map_err(|err| {
-            ttrpc::Error::Others(format!("failed to translate from shim {:?}", err))
+            ttrpc::Error::Others(format!("failed to translate from shim {err:?}"))
         })?;
         let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
         debug!(logger, "====> sandbox service {:?}", &r);
@@ -45,11 +45,11 @@ impl SandboxService {
             .handler_sandbox_message(r)
             .await
             .map_err(|err| {
-                ttrpc::Error::Others(format!("failed to handle sandbox message {:?}", err))
+                ttrpc::Error::Others(format!("failed to handle sandbox message {err:?}"))
             })?;
         debug!(logger, "<==== sandbox service {:?}", &resp);
         resp.try_into()
-            .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {:?}", err)))
+            .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {err:?}")))
     }
 }
 

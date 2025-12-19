@@ -814,7 +814,7 @@ fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
     let uid = user.uid.as_raw();
     let gid = user.gid.as_raw();
 
-    let user_tmp_dir = PathBuf::from_str(&format!("/run/user/{}", uid))?;
+    let user_tmp_dir = PathBuf::from_str(&format!("/run/user/{uid}"))?;
 
     match std::fs::create_dir_all(&user_tmp_dir) {
         Ok(_) => match chown(&user_tmp_dir, Some(uid), Some(gid)) {

@@ -64,7 +64,7 @@ pub fn do_check_iommu_on() -> Result<bool> {
 }
 
 fn override_driver(bdf: &str, driver: &str) -> Result<()> {
-    let driver_override = format!("/sys/bus/pci/devices/{}/driver_override", bdf);
+    let driver_override = format!("/sys/bus/pci/devices/{bdf}/driver_override");
     fs::write(&driver_override, driver)
         .with_context(|| format!("echo {} > {}", driver, &driver_override))?;
     info!(sl!(), "echo {} > {}", driver, driver_override);
@@ -703,7 +703,7 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
     info!(sl!(), "host driver : {}", host_driver);
     override_driver(bdf, VFIO_PCI_DRIVER).context("override driver")?;
 
-    let unbind_path = format!("/sys/bus/pci/devices/{}/driver/unbind", bdf);
+    let unbind_path = format!("/sys/bus/pci/devices/{bdf}/driver/unbind");
     // echo bdf > /sys/bus/pci/drivers/virtio-pci/unbind"
     fs::write(&unbind_path, bdf)
         .with_context(|| format!("Failed to echo {} > {}", bdf, &unbind_path))?;
@@ -712,7 +712,7 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
     // echo bdf > /sys/bus/pci/drivers_probe
     fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
-        .with_context(|| format!("Failed to echo {} > {}", bdf, SYS_BUS_PCI_DRIVER_PROBE))?;
+        .with_context(|| format!("Failed to echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"))?;
 
     info!(sl!(), "echo {} > /sys/bus/pci/drivers_probe", bdf);
 
@@ -752,12 +752,12 @@ pub fn bind_device_to_host(bdf: &str, host_driver: &str, _vendor_device_id: &str
 
     // echo bdf > /sys/bus/pci/drivers/vfio-pci/unbind"
     std::fs::write(VFIO_PCI_DRIVER_UNBIND, bdf)
-        .with_context(|| format!("echo {}> {}", bdf, VFIO_PCI_DRIVER_UNBIND))?;
+        .with_context(|| format!("echo {bdf}> {VFIO_PCI_DRIVER_UNBIND}"))?;
     info!(sl!(), "echo {} > {}", bdf, VFIO_PCI_DRIVER_UNBIND);
 
     // echo bdf > /sys/bus/pci/drivers_probe
     std::fs::write(SYS_BUS_PCI_DRIVER_PROBE, bdf)
-        .with_context(|| format!("echo {} > {}", bdf, SYS_BUS_PCI_DRIVER_PROBE))?;
+        .with_context(|| format!("echo {bdf} > {SYS_BUS_PCI_DRIVER_PROBE}"))?;
     info!(sl!(), "echo {} > {}", bdf, SYS_BUS_PCI_DRIVER_PROBE);
 
     Ok(())
@@ -784,7 +784,7 @@ fn get_device_bdf(dev_sys_str: String) -> Option<String> {
 fn normalize_device_bdf(bdf: &str) -> String {
     let parts: Vec<&str> = bdf.split(':').collect();
     if parts.len() == 2 {
-        format!("0000:{}", bdf)
+        format!("0000:{bdf}")
     } else {
         bdf.to_string()
     }
@@ -792,7 +792,7 @@ fn normalize_device_bdf(bdf: &str) -> String {
 
 // make_device_nameid: generate a ID for the hypervisor commandline
 fn make_device_nameid(name_type: &str, id: usize, max_len: usize) -> String {
-    let name_id = format!("{}_{}", name_type, id);
+    let name_id = format!("{name_type}_{id}");
 
     if name_id.len() > max_len {
         name_id[0..max_len].to_string()
@@ -875,7 +875,7 @@ pub fn get_vfio_iommu_group(bdf: String) -> Result<String> {
         ));
     }
 
-    Ok(format!("/dev/vfio/{}", iommu_group))
+    Ok(format!("/dev/vfio/{iommu_group}"))
 }
 
 pub fn get_vfio_device(device: String) -> Result<String> {

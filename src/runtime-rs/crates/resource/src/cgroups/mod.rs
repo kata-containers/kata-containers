@@ -46,7 +46,7 @@ impl CgroupConfig {
                 })
                 .unwrap_or_default()
         } else {
-            format!("{}/{}", SANDBOXED_CGROUP_PATH, sid)
+            format!("{SANDBOXED_CGROUP_PATH}/{sid}")
         };
 
         let overhead_path = utils::gen_overhead_path(is_systemd_cgroup(&path), sid);

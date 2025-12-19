@@ -34,7 +34,7 @@ fn open_fifo_write(path: &str) -> Result<AsyncUnixStream> {
         // will be add into tokio runtime.
         .custom_flags(libc::O_NONBLOCK)
         .open(path)
-        .with_context(|| format!("open {} with write", path))?;
+        .with_context(|| format!("open {path} with write"))?;
     let fd = std_file.into_raw_fd();
     let std_stream = unsafe { StdUnixStream::from_raw_fd(fd) };
 

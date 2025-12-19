@@ -271,11 +271,11 @@ impl DeviceManager {
         let virt_path = if dev_type == DEVICE_TYPE_BLOCK {
             let current_index = self.shared_info.declare_device_index(is_pmem)?;
             let drive_name = if is_pmem {
-                format!("pmem{}", current_index)
+                format!("pmem{current_index}")
             } else {
                 get_virt_drive_name(current_index as i32)?
             };
-            let virt_path_name = format!("/dev/{}", drive_name);
+            let virt_path_name = format!("/dev/{drive_name}");
             Some((current_index, virt_path_name))
         } else {
             // only dev_type is block, otherwise, it's None.
@@ -505,7 +505,7 @@ impl DeviceManager {
     fn new_device_id(&self) -> Result<String> {
         for _ in 0..5 {
             let rand_bytes = RandomBytes::new(8);
-            let id = format!("{:x}", rand_bytes);
+            let id = format!("{rand_bytes:x}");
 
             // check collision in devices
             if !self.devices.contains_key(&id) {

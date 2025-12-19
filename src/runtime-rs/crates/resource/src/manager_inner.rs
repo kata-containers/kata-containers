@@ -334,7 +334,7 @@ impl ResourceManagerInner {
             storages.append(&mut s);
         }
 
-        let shm_size_option = format!("size={}", shm_size);
+        let shm_size_option = format!("size={shm_size}");
         let mount_point = format!("{}/{}", kata_guest_sandbox_dir(), SHM_DIR);
 
         let shm_storage = Storage {

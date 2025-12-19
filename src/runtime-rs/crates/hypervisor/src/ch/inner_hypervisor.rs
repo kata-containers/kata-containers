@@ -317,10 +317,7 @@ impl CloudHypervisorInner {
     async fn cloud_hypervisor_check_running(&mut self) -> Result<()> {
         let timeout_secs = self.timeout_secs;
 
-        let timeout_msg = format!(
-            "API socket connect timed out after {} seconds",
-            timeout_secs
-        );
+        let timeout_msg = format!("API socket connect timed out after {timeout_secs} seconds");
 
         let join_handle = self.cloud_hypervisor_ping_until_ready(CH_POLL_TIME_MS);
 
@@ -444,7 +441,7 @@ impl CloudHypervisorInner {
 
         debug!(sl!(), "launching {} as: {:?}", CH_NAME, cmd);
 
-        let child = cmd.spawn().context(format!("{} spawn failed", CH_NAME))?;
+        let child = cmd.spawn().context(format!("{CH_NAME} spawn failed"))?;
 
         // Save process PID
         self.pid = child.id();
@@ -505,7 +502,7 @@ impl CloudHypervisorInner {
 
         for result in results {
             if let Err(e) = result {
-                eprintln!("wait task error: {:#?}", e);
+                eprintln!("wait task error: {e:#?}");
 
                 wait_errors.push(e);
             }
@@ -523,12 +520,12 @@ impl CloudHypervisorInner {
         let mut child = self
             .process
             .take()
-            .ok_or(format!("{} not running", CH_NAME))
+            .ok_or(format!("{CH_NAME} not running"))
             .map_err(|e| anyhow!(e))?;
 
         let _pid = child
             .id()
-            .ok_or(format!("{} missing PID", CH_NAME))
+            .ok_or(format!("{CH_NAME} missing PID"))
             .map_err(|e| anyhow!(e))?;
 
         // Note that this kills _and_ waits for the process!
@@ -733,7 +730,7 @@ impl CloudHypervisorInner {
 
         let vsock_path = get_vsock_path(&self.id)?;
 
-        let uri = format!("{}://{}", HYBRID_VSOCK_SCHEME, vsock_path);
+        let uri = format!("{HYBRID_VSOCK_SCHEME}://{vsock_path}");
 
         Ok(uri)
     }
@@ -820,7 +817,7 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn get_ns_path(&self) -> Result<String> {
         if let Some(pid) = self.pid {
-            let ns_path = format!("/proc/{}/ns", pid);
+            let ns_path = format!("/proc/{pid}/ns");
             Ok(ns_path)
         } else {
             Err(anyhow!("could not get ns path"))
@@ -1226,7 +1223,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             set_fake_guest_protection(d.value.clone());
 
@@ -1235,10 +1232,10 @@ mod tests {
                     .await
                     .unwrap();
 
-            let msg = format!("{}: actual result: {:?}", msg, result);
+            let msg = format!("{msg}: actual result: {result:?}");
 
             if std::env::var("DEBUG").is_ok() {
-                eprintln!("DEBUG: {}", msg);
+                eprintln!("DEBUG: {msg}");
             }
 
             assert_result!(d.result, result, msg);
@@ -1268,9 +1265,9 @@ mod tests {
                 .unwrap();
 
         if std::env::var("DEBUG").is_ok() {
-            let msg = format!("have_tdx: {:?}, protection: {:?}", have_tdx, protection);
+            let msg = format!("have_tdx: {have_tdx:?}, protection: {protection:?}");
 
-            eprintln!("DEBUG: {}", msg);
+            eprintln!("DEBUG: {msg}");
         }
 
         if have_tdx {
@@ -1339,7 +1336,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             set_fake_guest_protection(d.available_protection.clone());
 
@@ -1359,10 +1356,10 @@ mod tests {
 
             let result = ch.handle_guest_protection().await;
 
-            let msg = format!("{}: actual result: {:?}", msg, result);
+            let msg = format!("{msg}: actual result: {result:?}");
 
             if std::env::var("DEBUG").is_ok() {
-                eprintln!("DEBUG: {}", msg);
+                eprintln!("DEBUG: {msg}");
             }
 
             if d.result.is_ok() && result.is_ok() {
@@ -1373,8 +1370,7 @@ mod tests {
 
             assert_eq!(
                 ch.guest_protection_to_use, d.guest_protection_to_use,
-                "{}",
-                msg
+                "{msg}"
             );
         }
 
@@ -1411,7 +1407,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let mut ch = CloudHypervisorInner::default();
 
@@ -1428,10 +1424,10 @@ mod tests {
 
                 let result = ch.get_kernel_params().await;
 
-                let msg = format!("{}: actual result: {:?}", msg, result);
+                let msg = format!("{msg}: actual result: {result:?}");
 
                 if std::env::var("DEBUG").is_ok() {
-                    eprintln!("DEBUG: {}", msg);
+                    eprintln!("DEBUG: {msg}");
                 }
 
                 if d.fails {
@@ -1547,17 +1543,17 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let level = parse_ch_log_level(d.line);
 
-            let msg = format!("{}: actual level: {:?}", msg, level);
+            let msg = format!("{msg}: actual level: {level:?}");
 
             if std::env::var("DEBUG").is_ok() {
-                eprintln!("DEBUG: {}", msg);
+                eprintln!("DEBUG: {msg}");
             }
 
-            assert_eq!(d.level, level, "{}", msg);
+            assert_eq!(d.level, level, "{msg}");
         }
     }
 
@@ -1599,14 +1595,14 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test: [{}]: {:?}", i, d);
+            let msg = format!("test: [{i}]: {d:?}");
 
             if std::env::var("DEBUG").is_ok() {
                 println!("DEBUG: {msg}");
             }
 
             let result = get_ch_vcpu_tids(d.proc_path);
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             let expected_error = format!("{}", d.result.as_ref().unwrap_err());
             let actual_error = format!("{}", result.unwrap_err());

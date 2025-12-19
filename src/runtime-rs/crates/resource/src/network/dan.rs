@@ -79,7 +79,7 @@ impl DanInner {
 
         let mut entity_list = Vec::with_capacity(config.devices.len());
         for (idx, device) in config.devices.iter().enumerate() {
-            let name = format!("eth{}", idx);
+            let name = format!("eth{idx}");
             let endpoint: Arc<dyn Endpoint> = match &device.device {
                 Device::VhostUser {
                     path,
@@ -95,7 +95,7 @@ impl DanInner {
                         *queue_size,
                     )
                     .await
-                    .with_context(|| format!("create a vhost user endpoint, path: {}", path))?,
+                    .with_context(|| format!("create a vhost user endpoint, path: {path}"))?,
                 ),
                 Device::HostTap {
                     tap_name,
@@ -112,7 +112,7 @@ impl DanInner {
                         dev_mgr,
                     )
                     .await
-                    .with_context(|| format!("create a {} tap endpoint", tap_name))?,
+                    .with_context(|| format!("create a {tap_name} tap endpoint"))?,
                 ),
             };
 
@@ -341,7 +341,7 @@ fn default_mtu() -> u64 {
 /// Path of DAN config, the file contains an array of DanDevices.
 #[inline]
 pub fn dan_config_path(config: &TomlConfig, sandbox_id: &str) -> PathBuf {
-    PathBuf::from(config.runtime.dan_conf.as_str()).join(format!("{}.json", sandbox_id))
+    PathBuf::from(config.runtime.dan_conf.as_str()).join(format!("{sandbox_id}.json"))
 }
 
 #[cfg(test)]

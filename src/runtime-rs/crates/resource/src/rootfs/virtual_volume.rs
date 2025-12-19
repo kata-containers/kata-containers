@@ -150,8 +150,7 @@ impl VirtualVolume {
             if let Some(stripped_str) = o.strip_prefix(KATA_VIRTUAL_VOLUME_PREFIX) {
                 // Ensure `from_base64` provides a descriptive error on failure
                 let virt_volume = KataVirtualVolume::from_base64(stripped_str).context(format!(
-                    "Failed to decode KataVirtualVolume from base64: {}",
-                    stripped_str
+                    "Failed to decode KataVirtualVolume from base64: {stripped_str}"
                 ))?;
 
                 let vol = handle_virtual_volume_storage(cid, annotations, &virt_volume)

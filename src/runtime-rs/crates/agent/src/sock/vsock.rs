@@ -53,7 +53,7 @@ impl Sock for Vsock {
 
             // Connect the socket to vsock server.
             connect(socket.as_raw_fd(), &sock_addr)
-                .with_context(|| format!("failed to connect to {}", sock_addr))?;
+                .with_context(|| format!("failed to connect to {sock_addr}"))?;
 
             // Started from tokio v1.44.0+, it would panic when giving
             // `from_std()` a blocking socket. A workaround is to set the

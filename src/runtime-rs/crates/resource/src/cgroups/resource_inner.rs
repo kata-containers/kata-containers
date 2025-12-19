@@ -162,7 +162,7 @@ impl CgroupsResourceInner {
             let tgid = get_tgid_from_pid(vcpu as i32).context("get tgid from vCPU thread")? as u64;
             self.sandbox_cgroup
                 .add_proc(CgroupPid::from(tgid))
-                .with_context(|| format!("add vcpu tgid {}", tgid))?;
+                .with_context(|| format!("add vcpu tgid {tgid}"))?;
         }
 
         Ok(hv_pids.vcpus.len())
