@@ -1119,7 +1119,7 @@ mod tests {
 
     use crossbeam_channel::unbounded;
     use dbs_utils::epoll_manager::EpollManager;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use vmm_sys_util::tempfile::TempFile;
 
     use super::*;
@@ -1165,7 +1165,7 @@ mod tests {
 
     #[test]
     fn test_vmm_action_receive_unknown() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let (_to_vmm, from_api) = unbounded();
         let (to_api, _from_vmm) = unbounded();
@@ -1195,7 +1195,7 @@ mod tests {
 
     #[test]
     fn test_vmm_action_config_boot_source() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let kernel_file = TempFile::new().unwrap();
 
@@ -1260,7 +1260,7 @@ mod tests {
 
     #[test]
     fn test_vmm_action_set_vm_configuration() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid state
@@ -1464,7 +1464,7 @@ mod tests {
 
     #[test]
     fn test_vmm_action_start_microvm() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid state (running)
@@ -1510,7 +1510,7 @@ mod tests {
 
     #[test]
     fn test_vmm_action_shutdown_microvm() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // success
@@ -1531,7 +1531,7 @@ mod tests {
     #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     #[test]
     fn test_vmm_action_insert_block_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let dummy_file = TempFile::new().unwrap();
         let dummy_path = dummy_file.as_path().to_owned();
@@ -1589,7 +1589,7 @@ mod tests {
     #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     #[test]
     fn test_vmm_action_update_block_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid id
@@ -1622,7 +1622,7 @@ mod tests {
     #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     #[test]
     fn test_vmm_action_remove_block_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid state
@@ -1671,7 +1671,7 @@ mod tests {
     #[cfg(feature = "virtio-fs")]
     #[test]
     fn test_vmm_action_insert_fs_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid state
@@ -1711,7 +1711,7 @@ mod tests {
     #[cfg(feature = "virtio-fs")]
     #[test]
     fn test_vmm_action_manipulate_fs_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid state
@@ -1760,7 +1760,7 @@ mod tests {
     #[cfg(feature = "virtio-net")]
     #[test]
     fn test_vmm_action_insert_network_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // hotplug unready
@@ -1800,7 +1800,7 @@ mod tests {
     #[cfg(feature = "virtio-net")]
     #[test]
     fn test_vmm_action_update_network_interface() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid id
@@ -1836,7 +1836,7 @@ mod tests {
     #[cfg(feature = "virtio-vsock")]
     #[test]
     fn test_vmm_action_insert_vsock_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // invalid state
@@ -1896,7 +1896,7 @@ mod tests {
     #[cfg(feature = "virtio-mem")]
     #[test]
     fn test_vmm_action_insert_mem_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // hotplug unready
@@ -1936,7 +1936,7 @@ mod tests {
     #[cfg(feature = "virtio-balloon")]
     #[test]
     fn test_vmm_action_insert_balloon_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let tests = &mut [
             // hotplug unready

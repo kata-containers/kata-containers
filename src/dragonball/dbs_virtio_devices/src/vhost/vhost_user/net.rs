@@ -604,7 +604,7 @@ mod tests {
     use dbs_interrupt::{InterruptManager, InterruptSourceType, MsiNotifier, NoopNotifier};
     use dbs_utils::epoll_manager::EpollManager;
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use vhost_rs::vhost_user::message::VhostUserU64;
     use vhost_rs::vhost_user::{VhostUserProtocolFeatures, VhostUserVirtioFeatures};
     use virtio_queue::QueueSync;
@@ -698,7 +698,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_virtio_device_activate() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let device_socket = concat!("vhost.", line!());
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();

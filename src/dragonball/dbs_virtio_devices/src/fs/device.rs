@@ -962,7 +962,7 @@ pub mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::sync::Arc;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
@@ -1188,7 +1188,7 @@ pub mod tests {
 
     #[test]
     fn test_virtio_fs_device_active() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         {
             // config queue size is not 2
@@ -1677,7 +1677,7 @@ pub mod tests {
 
     #[test]
     fn test_register_mmap_region() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         let rate_limiter = RateLimiter::new(100, 0, 300, 10, 0, 300).unwrap();
         let mut fs: VirtioFs<Arc<GuestMemoryMmap>> = VirtioFs::new(
@@ -1720,7 +1720,7 @@ pub mod tests {
 
     #[test]
     fn test_get_resource_requirements() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         let rate_limiter = RateLimiter::new(100, 0, 300, 10, 0, 300).unwrap();
         let dax_on = 0x4000;
@@ -1765,7 +1765,7 @@ pub mod tests {
 
     #[test]
     fn test_set_resource() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         let rate_limiter = RateLimiter::new(100, 0, 300, 10, 0, 300).unwrap();
         let mut fs: VirtioFs<Arc<GuestMemoryMmap>> = VirtioFs::new(

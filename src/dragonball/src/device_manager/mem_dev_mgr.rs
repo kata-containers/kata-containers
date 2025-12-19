@@ -612,7 +612,7 @@ impl MemRegionFactory for MemoryRegionFactory {
 
 #[cfg(test)]
 mod tests {
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::GuestMemoryRegion;
 
     use super::*;
@@ -651,7 +651,7 @@ mod tests {
 
     #[test]
     fn test_mem_insert_or_update_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         // Init vm for test.
         let mut vm = create_vm_for_test();
 
@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn test_mem_attach_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         // Init vm and insert mem config for test.
         let mut vm = create_vm_for_test();
         let dummy_mem_device = MemDeviceConfigInfo::default();
@@ -707,7 +707,7 @@ mod tests {
 
     #[test]
     fn test_mem_create_region() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let ctx = DeviceOpContext::new(
             Some(vm.epoll_manager().clone()),

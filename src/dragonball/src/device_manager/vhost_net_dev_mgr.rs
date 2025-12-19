@@ -277,7 +277,7 @@ impl Default for VhostNetDeviceMgr {
 mod tests {
     use dbs_utils::net::MacAddr;
     use dbs_virtio_devices::Error as VirtioError;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use crate::{
         device_manager::{
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_create_vhost_net_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mgr = DeviceManager::new_test_mgr();
         let id_1 = String::from("id_1");
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_attach_vhost_net_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         // Init vm for test.
         let mut vm = create_vm_for_test();
         let device_op_ctx = DeviceOpContext::new(
@@ -376,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_insert_vhost_net_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
 
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn test_vhost_net_insert_error_cases() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
 

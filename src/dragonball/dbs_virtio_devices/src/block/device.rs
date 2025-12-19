@@ -376,7 +376,7 @@ mod tests {
     use dbs_interrupt::NoopNotifier;
     use dbs_utils::rate_limiter::{TokenBucket, TokenType};
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::QueueSync;
     use vm_memory::{Bytes, GuestAddress, GuestMemoryMmap, GuestRegionMmap};
     use vmm_sys_util::eventfd::EventFd;
@@ -910,7 +910,7 @@ mod tests {
 
     #[test]
     fn test_block_virtio_device_active() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let device_id = "dummy_device_id";
         let epoll_mgr = EpollManager::default();
 

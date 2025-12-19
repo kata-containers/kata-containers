@@ -1109,7 +1109,7 @@ mod tests {
     #[cfg(feature = "hotplug")]
     use dbs_virtio_devices::vsock::backend::VsockInnerBackend;
     use seccompiler::BpfProgram;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use vmm_sys_util::eventfd::EventFd;
 
     use super::*;
@@ -1166,7 +1166,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_config() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let instance_info = Arc::new(RwLock::new(InstanceInfo::default()));
         let epoll_manager = EpollManager::default();
         let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
@@ -1222,7 +1222,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_boot_vcpus() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = get_vm();
         let mut vcpu_manager = vm.vcpu_manager().unwrap();
 
@@ -1241,7 +1241,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_operate_vcpus() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = get_vm();
         let mut vcpu_manager = vm.vcpu_manager().unwrap();
 
@@ -1279,7 +1279,7 @@ mod tests {
     }
     #[test]
     fn test_vcpu_manager_pause_resume_vcpus() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
 
         let vm = get_vm();
@@ -1321,7 +1321,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_exit_vcpus() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
 
         let vm = get_vm();
@@ -1352,7 +1352,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_exit_all_vcpus() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
 
         let vm = get_vm();
@@ -1378,7 +1378,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_revalidate_vcpus_cache() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
 
         let vm = get_vm();
@@ -1409,7 +1409,7 @@ mod tests {
 
     #[test]
     fn test_vcpu_manager_revalidate_all_vcpus_cache() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         *(EMULATE_RES.lock().unwrap()) = EmulationCase::Error(libc::EINTR);
 
         let vm = get_vm();
@@ -1434,7 +1434,7 @@ mod tests {
     #[test]
     #[cfg(feature = "hotplug")]
     fn test_vcpu_manager_resize_cpu() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = get_vm();
         let mut vcpu_manager = vm.vcpu_manager().unwrap();
 

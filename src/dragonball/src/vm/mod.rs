@@ -910,7 +910,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     use kvm_ioctls::VcpuExit;
     use linux_loader::cmdline::Cmdline;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::GuestMemory;
     use vmm_sys_util::tempfile::TempFile;
 
@@ -936,7 +936,7 @@ pub mod tests {
 
     #[test]
     fn test_create_vm_instance() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_instance();
         assert!(vm.check_health().is_err());
         assert!(vm.kernel_config.is_none());
@@ -948,7 +948,7 @@ pub mod tests {
 
     #[test]
     fn test_vm_init_guest_memory() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let vm_config = VmConfigInfo {
             vcpu_count: 1,
             max_vcpu_count: 3,
@@ -1022,7 +1022,7 @@ pub mod tests {
 
     #[test]
     fn test_vm_create_devices() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let epoll_mgr = EpollManager::default();
         let vmm = Arc::new(Mutex::new(crate::vmm::tests::create_vmm_instance(
             epoll_mgr.clone(),
@@ -1077,7 +1077,7 @@ pub mod tests {
 
     #[test]
     fn test_vm_delete_devices() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let mut vm = create_vm_for_test();
         let epoll_mgr = EpollManager::default();
 
@@ -1089,7 +1089,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_run_code() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         use std::io::{self, Write};
         // This example is based on https://lwn.net/Articles/658511/

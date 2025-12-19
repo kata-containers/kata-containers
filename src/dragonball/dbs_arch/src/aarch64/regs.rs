@@ -166,11 +166,11 @@ pub fn read_mpidr(vcpu: &VcpuFd) -> Result<u64> {
 mod tests {
     use super::*;
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     #[test]
     fn test_setup_regs() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();
@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_read_mpidr() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();

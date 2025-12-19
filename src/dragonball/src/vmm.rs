@@ -219,7 +219,7 @@ impl std::fmt::Debug for Vmm {
 pub(crate) mod tests {
     use std::collections::HashMap;
 
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
 
@@ -232,7 +232,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_vmm_instance() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         create_vmm_instance(EpollManager::default());
     }

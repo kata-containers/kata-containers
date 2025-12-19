@@ -208,7 +208,7 @@ mod tests {
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::QueueSync;
     use vm_memory::{GuestAddress, GuestMemoryMmap, GuestRegionMmap};
 
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_virtio_device() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let mut ctx = TestContext::new();
         let device_features = VSOCK_AVAIL_FEATURES;
         let driver_features: u64 = VSOCK_AVAIL_FEATURES | 1 | (1 << 32);

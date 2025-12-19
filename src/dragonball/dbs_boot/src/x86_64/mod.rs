@@ -258,7 +258,7 @@ mod tests {
 
     #[test]
     fn test_setup_page_tables() {
-        test_utils::skip_if_not_root!();
+        test_utils::skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();

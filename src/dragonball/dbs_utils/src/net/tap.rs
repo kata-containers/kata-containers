@@ -286,7 +286,7 @@ mod tests {
     use std::net::Ipv4Addr;
     use std::str;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
 
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_tap_name() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         // Sanity check that the assumed max iface name length is correct.
         assert_eq!(
             IFACE_NAME_MAX_LEN,
@@ -417,13 +417,13 @@ mod tests {
 
     #[test]
     fn test_tap_partial_eq() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         assert_ne!(Tap::new().unwrap(), Tap::new().unwrap());
     }
 
     #[test]
     fn test_tap_configure() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         // `fetch_add` adds to the current value, returning the previous value.
         let next_ip = NEXT_IP.fetch_add(1, Ordering::SeqCst);
 
@@ -456,7 +456,7 @@ mod tests {
 
     #[test]
     fn test_tap_enable() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let tap = Tap::new().unwrap();
         let ret = tap.enable();
         assert!(ret.is_ok());
@@ -464,7 +464,7 @@ mod tests {
 
     #[test]
     fn test_tap_get_ifreq() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let tap = Tap::new().unwrap();
         let ret = tap.get_ifreq();
         assert_eq!(
@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_raw_fd() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let tap = Tap::new().unwrap();
         assert_eq!(tap.as_raw_fd(), tap.tap_file.as_raw_fd());
     }

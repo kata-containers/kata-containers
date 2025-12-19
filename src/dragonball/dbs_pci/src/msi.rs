@@ -654,7 +654,7 @@ mod tests {
     use dbs_device::resources::{DeviceResources, MsiIrqType, Resource};
     use dbs_interrupt::KvmIrqManager;
     use kvm_ioctls::{Kvm, VmFd};
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
 
@@ -736,7 +736,7 @@ mod tests {
 
     #[test]
     fn test_msi_state_struct() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
         let flags = MSI_CTL_ENABLE | MSI_CTL_64_BITS | MSI_CTL_PER_VECTOR | 0x6 | 0x20;
         let mut cap = MsiCap::new(0xa5, flags);
 
