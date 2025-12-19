@@ -46,16 +46,12 @@ fi
 [[ ${SELINUX_PERMISSIVE} == "yes" ]] && oc delete -f "${deployments_dir}/machineconfig_selinux.yaml.in"
 
 # Delete kata-containers
-pushd "${katacontainers_repo_dir}/tools/packaging/kata-deploy" || { echo "Failed to push to ${katacontainers_repo_dir}/tools/packaging/kata-deploy"; exit 125; }
-oc delete -f kata-deploy/base/kata-deploy.yaml
+helm uninstall kata-deploy --wait --namespace kube-system
 oc -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-oc apply -f kata-cleanup/base/kata-cleanup.yaml
 echo "Wait for all related pods to be gone"
 ( repeats=1; for _ in $(seq 1 600); do
   oc get pods -l name="kubelet-kata-cleanup" --no-headers=true -n kube-system 2>&1 | grep "No resources found" -q && ((repeats++)) || repeats=1
   [[ "${repeats}" -gt 5 ]] && echo kata-cleanup finished && break
   sleep 1
 done) || { echo "There are still some kata-cleanup related pods after 600 iterations"; oc get all -n kube-system; exit 1; }
-oc delete -f kata-cleanup/base/kata-cleanup.yaml
-oc delete -f kata-rbac/base/kata-rbac.yaml
 oc delete -f runtimeclasses/kata-runtimeClasses.yaml
