@@ -1097,7 +1097,7 @@ impl Manager {
                             devices_group_info
                         );
                         Self::setup_allowed_all_mode(pod_cg).with_context(|| {
-                            format!("Setup allowed all devices mode for {}", pod_cpath)
+                            format!("Setup allowed all devices mode for {pod_cpath}")
                         })?;
                         devices_group_info.allowed_all = true;
                     }
@@ -1109,11 +1109,11 @@ impl Manager {
 
                     if !is_allowded_all {
                         Self::setup_devcg_whitelist(pod_cg).with_context(|| {
-                            format!("Setup device cgroup whitelist for {}", pod_cpath)
+                            format!("Setup device cgroup whitelist for {pod_cpath}")
                         })?;
                     } else {
                         Self::setup_allowed_all_mode(pod_cg)
-                            .with_context(|| format!("Setup allowed all mode for {}", pod_cpath))?;
+                            .with_context(|| format!("Setup allowed all mode for {pod_cpath}"))?;
                         devices_group_info.allowed_all = true;
                     }
 
@@ -1132,7 +1132,7 @@ impl Manager {
         if let Some(devices_group_info) = devices_group_info.as_ref() {
             if !devices_group_info.allowed_all {
                 Self::setup_devcg_whitelist(&cg)
-                    .with_context(|| format!("Setup device cgroup whitelist for {}", cpath))?;
+                    .with_context(|| format!("Setup device cgroup whitelist for {cpath}"))?;
             }
         }
 

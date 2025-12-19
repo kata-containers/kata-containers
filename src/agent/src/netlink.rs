@@ -41,9 +41,9 @@ pub enum LinkFilter<'a> {
 impl fmt::Display for LinkFilter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LinkFilter::Name(name) => write!(f, "Name: {}", name),
-            LinkFilter::Index(idx) => write!(f, "Index: {}", idx),
-            LinkFilter::Address(addr) => write!(f, "Address: {}", addr),
+            LinkFilter::Name(name) => write!(f, "Name: {name}"),
+            LinkFilter::Index(idx) => write!(f, "Index: {idx}"),
+            LinkFilter::Address(addr) => write!(f, "Address: {addr}"),
         }
     }
 }
@@ -272,7 +272,7 @@ impl Handle {
             use LinkAttribute as Nla;
 
             let mac_addr = parse_mac_address(addr)
-                .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
+                .with_context(|| format!("Failed to parse MAC address: {addr}"))?;
 
             // Hardware filter might not be supported by netlink,
             // we may have to dump link list and then find the target link.
@@ -924,7 +924,7 @@ mod tests {
     /// Helper function to check if the result is a netlink EACCES error
     fn is_netlink_permission_error<T>(result: &Result<T>) -> bool {
         if let Err(e) = result {
-            let error_string = format!("{:?}", e);
+            let error_string = format!("{e:?}");
             if error_string.contains("code: Some(-13)") {
                 println!("INFO: skipping test - netlink operations are restricted in this environment (EACCES)");
                 return true;
@@ -1000,7 +1000,7 @@ mod tests {
             .unwrap()
             .list_routes()
             .await
-            .context(format!("available devices: {:?}", devices))
+            .context(format!("available devices: {devices:?}"))
             .expect("Failed to list routes");
 
         assert_ne!(all.len(), 0);
@@ -1186,7 +1186,7 @@ mod tests {
         );
         assert_eq!(
             stdout.trim(),
-            format!("{} lladdr {} PERMANENT", TEST_ARP_IP, mac)
+            format!("{TEST_ARP_IP} lladdr {mac} PERMANENT")
         );
 
         clean_env_for_test_add_one_arp_neighbor(TEST_DUMMY_INTERFACE, TEST_ARP_IP);

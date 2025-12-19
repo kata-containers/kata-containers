@@ -18,10 +18,10 @@ pub fn is_enabled() -> Result<bool> {
 
 pub fn add_mount_label(data: &mut String, label: &str) {
     if data.is_empty() {
-        let context = format!("context=\"{}\"", label);
+        let context = format!("context=\"{label}\"");
         data.push_str(&context);
     } else {
-        let context = format!(",context=\"{}\"", label);
+        let context = format!(",context=\"{label}\"");
         data.push_str(&context);
     }
 }

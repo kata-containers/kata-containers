@@ -191,13 +191,13 @@ mod tests {
     fn test_slotfn() {
         // Valid slots
         let sf = SlotFn::new(0x00, 0x0).unwrap();
-        assert_eq!(format!("{}", sf), "00.0");
+        assert_eq!(format!("{sf}"), "00.0");
 
         let sf = SlotFn::from_str("00.0").unwrap();
-        assert_eq!(format!("{}", sf), "00.0");
+        assert_eq!(format!("{sf}"), "00.0");
 
         let sf = SlotFn::from_str("00").unwrap();
-        assert_eq!(format!("{}", sf), "00.0");
+        assert_eq!(format!("{sf}"), "00.0");
 
         let sf = SlotFn::new(31, 7).unwrap();
         let sf2 = SlotFn::from_str("1f.7").unwrap();
@@ -256,12 +256,12 @@ mod tests {
         let sf1f_7 = SlotFn::new(0x1f, 7).unwrap();
 
         let addr = Address::new(0, 0, sf0_0);
-        assert_eq!(format!("{}", addr), "0000:00:00.0");
+        assert_eq!(format!("{addr}"), "0000:00:00.0");
         let addr2 = Address::from_str("0000:00:00.0").unwrap();
         assert_eq!(addr, addr2);
 
         let addr = Address::new(0xffff, 0xff, sf1f_7);
-        assert_eq!(format!("{}", addr), "ffff:ff:1f.7");
+        assert_eq!(format!("{addr}"), "ffff:ff:1f.7");
         let addr2 = Address::from_str("ffff:ff:1f.7").unwrap();
         assert_eq!(addr, addr2);
 
@@ -299,7 +299,7 @@ mod tests {
 
         // Valid paths
         let pcipath = Path::new(vec![sf3_0]).unwrap();
-        assert_eq!(format!("{}", pcipath), "03.0");
+        assert_eq!(format!("{pcipath}"), "03.0");
         let pcipath2 = Path::from_str("03.0").unwrap();
         assert_eq!(pcipath, pcipath2);
         let pcipath2 = Path::from_str("03").unwrap();
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(pcipath[0], sf3_0);
 
         let pcipath = Path::new(vec![sf3_0, sf4_0]).unwrap();
-        assert_eq!(format!("{}", pcipath), "03.0/04.0");
+        assert_eq!(format!("{pcipath}"), "03.0/04.0");
         let pcipath2 = Path::from_str("03.0/04.0").unwrap();
         assert_eq!(pcipath, pcipath2);
         let pcipath2 = Path::from_str("03/04").unwrap();
@@ -318,7 +318,7 @@ mod tests {
         assert_eq!(pcipath[1], sf4_0);
 
         let pcipath = Path::new(vec![sf3_0, sf4_0, sf5_0]).unwrap();
-        assert_eq!(format!("{}", pcipath), "03.0/04.0/05.0");
+        assert_eq!(format!("{pcipath}"), "03.0/04.0/05.0");
         let pcipath2 = Path::from_str("03.0/04.0/05.0").unwrap();
         assert_eq!(pcipath, pcipath2);
         let pcipath2 = Path::from_str("03/04/05").unwrap();
@@ -329,7 +329,7 @@ mod tests {
         assert_eq!(pcipath[2], sf5_0);
 
         let pcipath = Path::new(vec![sfa_5, sfb_6, sfc_7]).unwrap();
-        assert_eq!(format!("{}", pcipath), "0a.5/0b.6/0c.7");
+        assert_eq!(format!("{pcipath}"), "0a.5/0b.6/0c.7");
         let pcipath2 = Path::from_str("0a.5/0b.6/0c.7").unwrap();
         assert_eq!(pcipath, pcipath2);
         assert_eq!(pcipath.len(), 3);

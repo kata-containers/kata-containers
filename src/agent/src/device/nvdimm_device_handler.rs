@@ -67,7 +67,7 @@ pub struct PmemBlockMatcher {
 
 impl PmemBlockMatcher {
     pub fn new(devname: &str) -> PmemBlockMatcher {
-        let suffix = format!(r"/block/{}", devname);
+        let suffix = format!(r"/block/{devname}");
 
         PmemBlockMatcher { suffix }
     }

@@ -110,7 +110,7 @@ impl CDHClient {
 
     pub async fn get_resource(&self, resource_path: &str) -> Result<Vec<u8>> {
         let req = GetResourceRequest {
-            ResourcePath: format!("kbs://{}", resource_path),
+            ResourcePath: format!("kbs://{resource_path}"),
             ..Default::default()
         };
         let res = self

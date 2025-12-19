@@ -170,7 +170,7 @@ pub struct VfioMatcher {
 impl VfioMatcher {
     pub fn new(grp: IommuGroup) -> VfioMatcher {
         VfioMatcher {
-            syspath: format!("/devices/virtual/vfio/{}", grp),
+            syspath: format!("/devices/virtual/vfio/{grp}"),
         }
     }
 }
@@ -215,7 +215,7 @@ impl PciMatcher {
     pub fn new(relpath: &str) -> Result<PciMatcher> {
         let root_bus = create_pci_root_bus_path();
         Ok(PciMatcher {
-            devpath: format!("{}{}", root_bus, relpath),
+            devpath: format!("{root_bus}{relpath}"),
         })
     }
 }
@@ -425,12 +425,12 @@ mod tests {
 
         let mut uev_a = crate::uevent::Uevent::default();
         uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.devname = format!("vfio/{}", grpa);
-        uev_a.devpath = format!("/devices/virtual/vfio/{}", grpa);
+        uev_a.devname = format!("vfio/{grpa}");
+        uev_a.devpath = format!("/devices/virtual/vfio/{grpa}");
         let matcher_a = VfioMatcher::new(grpa);
 
         let mut uev_b = uev_a.clone();
-        uev_b.devpath = format!("/devices/virtual/vfio/{}", grpb);
+        uev_b.devpath = format!("/devices/virtual/vfio/{grpb}");
         let matcher_b = VfioMatcher::new(grpb);
 
         assert!(matcher_a.is_match(&uev_a));

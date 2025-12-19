@@ -169,7 +169,7 @@ pub struct VirtioBlkPciMatcher {
 impl VirtioBlkPciMatcher {
     pub fn new(relpath: &str) -> VirtioBlkPciMatcher {
         let root_bus = create_pci_root_bus_path();
-        let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
+        let re = format!(r"^{root_bus}{relpath}/virtio[0-9]+/block/");
 
         VirtioBlkPciMatcher {
             rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkPciMatcher regex"),
@@ -191,7 +191,7 @@ pub struct VirtioBlkMmioMatcher {
 impl VirtioBlkMmioMatcher {
     pub fn new(devname: &str) -> VirtioBlkMmioMatcher {
         VirtioBlkMmioMatcher {
-            suffix: format!(r"/block/{}", devname),
+            suffix: format!(r"/block/{devname}"),
         }
     }
 }
@@ -243,12 +243,12 @@ mod tests {
         uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
         uev_a.subsystem = BLOCK.to_string();
         uev_a.devname = devname.to_string();
-        uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
+        uev_a.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}");
         let matcher_a = VirtioBlkPciMatcher::new(relpath_a);
 
         let mut uev_b = uev_a.clone();
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
-        uev_b.devpath = format!("{}{}/virtio0/block/{}", root_bus, relpath_b, devname);
+        uev_b.devpath = format!("{root_bus}{relpath_b}/virtio0/block/{devname}");
         let matcher_b = VirtioBlkPciMatcher::new(relpath_b);
 
         assert!(matcher_a.is_match(&uev_a));
@@ -326,17 +326,13 @@ mod tests {
         uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
         uev_a.subsystem = BLOCK.to_string();
         uev_a.devname = devname_a.to_string();
-        uev_a.devpath = format!(
-            "/sys/devices/virtio-mmio-cmdline/virtio-mmio.0/virtio0/block/{}",
-            devname_a
-        );
+        uev_a.devpath =
+            format!("/sys/devices/virtio-mmio-cmdline/virtio-mmio.0/virtio0/block/{devname_a}");
         let matcher_a = VirtioBlkMmioMatcher::new(devname_a);
 
         let mut uev_b = uev_a.clone();
-        uev_b.devpath = format!(
-            "/sys/devices/virtio-mmio-cmdline/virtio-mmio.4/virtio4/block/{}",
-            devname_b
-        );
+        uev_b.devpath =
+            format!("/sys/devices/virtio-mmio-cmdline/virtio-mmio.4/virtio4/block/{devname_b}");
         let matcher_b = VirtioBlkMmioMatcher::new(devname_b);
 
         assert!(matcher_a.is_match(&uev_a));

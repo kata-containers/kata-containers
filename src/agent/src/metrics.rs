@@ -239,7 +239,7 @@ fn update_guest_metrics() {
         Ok(kernel_stats) => {
             set_gauge_vec_cpu_time(&GUEST_CPU_TIME, "total", &kernel_stats.total);
             for (i, cpu_time) in kernel_stats.cpu_time.iter().enumerate() {
-                set_gauge_vec_cpu_time(&GUEST_CPU_TIME, format!("{}", i).as_str(), cpu_time);
+                set_gauge_vec_cpu_time(&GUEST_CPU_TIME, format!("{i}").as_str(), cpu_time);
             }
         }
     }
