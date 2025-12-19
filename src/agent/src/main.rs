@@ -301,12 +301,12 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         tracer::end_tracing();
     }
 
-    eprintln!("{} shutdown complete", NAME);
+    eprintln!("{NAME} shutdown complete");
 
     let mut wait_errors: Vec<tokio::task::JoinError> = vec![];
     for result in results {
         if let Err(e) = result {
-            eprintln!("wait task error: {:#?}", e);
+            eprintln!("wait task error: {e:#?}");
             wait_errors.push(e);
         }
     }
@@ -746,7 +746,7 @@ mod tests {
                 skip_if_root!();
             }
 
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
             defer!({
                 // XXX: Never try to close rfd, because it will be closed by PipeStream in
@@ -759,7 +759,7 @@ mod tests {
             shutdown_tx.send(true).unwrap();
             let result = create_logger_task(rfd, d.vsock_port, shutdown_rx).await;
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
             assert_result!(d.result, result, msg);
         }
     }

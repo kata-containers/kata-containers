@@ -425,7 +425,7 @@ pub fn update_env_pci(
         let mut guest_addrs = Vec::<String>::new();
         for host_addr_str in val.split(',') {
             let host_addr = pci::Address::from_str(host_addr_str)
-                .with_context(|| format!("Can't parse {} environment variable", name))?;
+                .with_context(|| format!("Can't parse {name} environment variable"))?;
             let host_guest = pcimap
                 .get(cid)
                 .ok_or_else(|| anyhow!("No PCI mapping found for container {}", cid))?;
@@ -433,11 +433,11 @@ pub fn update_env_pci(
                 .get(&host_addr)
                 .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
 
-            guest_addrs.push(format!("{}", guest_addr));
-            addr_map.insert(host_addr_str.to_string(), format!("{}", guest_addr));
+            guest_addrs.push(format!("{guest_addr}"));
+            addr_map.insert(host_addr_str.to_string(), format!("{guest_addr}"));
         }
 
-        pci_dev_map.insert(format!("{}_INFO", name), addr_map);
+        pci_dev_map.insert(format!("{name}_INFO"), addr_map);
 
         envvar.replace_range(eqpos + 1.., guest_addrs.join(",").as_str());
     }
@@ -526,7 +526,7 @@ fn update_spec_devices(
             "Missing devices in OCI spec: {:?}",
             updates
                 .keys()
-                .map(|d| format!("{:?}", d))
+                .map(|d| format!("{d:?}"))
                 .collect::<Vec<_>>()
                 .join(" ")
         ));
@@ -572,7 +572,7 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
     for i in 0..pcipath.len() {
         let bdf = format!("{}:{}", bus, pcipath[i]);
 
-        relpath = format!("{}/{}", relpath, bdf);
+        relpath = format!("{relpath}/{bdf}");
 
         if i == pcipath.len() - 1 {
             // Final device need not be a bridge
@@ -580,7 +580,7 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
         }
 
         // Find out the bus exposed by bridge
-        let bridgebuspath = format!("{}{}/pci_bus", root_bus_sysfs, relpath);
+        let bridgebuspath = format!("{root_bus_sysfs}{relpath}/pci_bus");
         let mut files: Vec<_> = fs::read_dir(&bridgebuspath)?.collect();
 
         match files.pop() {
@@ -1120,7 +1120,7 @@ mod tests {
 
         // Create mock sysfs files to indicate that 0000:00:02.0 is a bridge to bus 01
         let bridge2bus = "0000:01";
-        let bus2path = format!("{}/pci_bus/{}", bridge2path, bridge2bus);
+        let bus2path = format!("{bridge2path}/pci_bus/{bridge2bus}");
 
         fs::create_dir_all(bus2path).unwrap();
 
@@ -1134,9 +1134,9 @@ mod tests {
         assert!(relpath.is_err());
 
         // Create mock sysfs files for a bridge at 0000:01:03.0 to bus 02
-        let bridge3path = format!("{}/0000:01:03.0", bridge2path);
+        let bridge3path = format!("{bridge2path}/0000:01:03.0");
         let bridge3bus = "0000:02";
-        let bus3path = format!("{}/pci_bus/{}", bridge3path, bridge3bus);
+        let bus3path = format!("{bridge3path}/pci_bus/{bridge3bus}");
 
         fs::create_dir_all(bus3path).unwrap();
 
@@ -1169,7 +1169,7 @@ mod tests {
         let devname = "vda";
         let root_bus = create_pci_root_bus_path();
         let relpath = "/0000:00:0a.0/0000:03:0b.0";
-        let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
+        let devpath = format!("{root_bus}{relpath}/virtio4/block/{devname}");
 
         let mut uev = crate::uevent::Uevent::default();
         uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
@@ -1272,7 +1272,7 @@ mod tests {
             cdi_timeout,
         )
         .await;
-        println!("modfied spec {:?}", spec);
+        println!("modfied spec {spec:?}");
         assert!(res.is_ok(), "{}", res.err().unwrap());
 
         let linux = spec.linux().as_ref().unwrap();

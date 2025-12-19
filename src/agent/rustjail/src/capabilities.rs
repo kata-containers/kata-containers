@@ -21,7 +21,7 @@ fn to_capshashset(cfd_log: RawFd, capabilities: &Option<HashSet<LinuxCapability>
     let binding: HashSet<LinuxCapability> = HashSet::new();
     let caps = capabilities.as_ref().unwrap_or(&binding);
     for cap in caps.iter() {
-        match Capability::from_str(&format!("CAP_{}", cap)) {
+        match Capability::from_str(&format!("CAP_{cap}")) {
             Err(_) => {
                 log_child!(cfd_log, "{} is not a cap", &cap.to_string());
                 continue;

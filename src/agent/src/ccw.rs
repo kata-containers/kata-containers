@@ -102,10 +102,10 @@ mod tests {
     fn test_new_device() {
         // Valid devices
         let device = Device::new(0, 0).unwrap();
-        assert_eq!(format!("{}", device), "0.0.0000");
+        assert_eq!(format!("{device}"), "0.0.0000");
 
         let device = Device::new(3, 0xffff).unwrap();
-        assert_eq!(format!("{}", device), "0.3.ffff");
+        assert_eq!(format!("{device}"), "0.3.ffff");
 
         // Invalid device
         let device = Device::new(4, 0);
@@ -116,13 +116,13 @@ mod tests {
     fn test_device_from_str() {
         // Valid devices
         let device = Device::from_str("0.0.0").unwrap();
-        assert_eq!(format!("{}", device), "0.0.0000");
+        assert_eq!(format!("{device}"), "0.0.0000");
 
         let device = Device::from_str("0.0.0000").unwrap();
-        assert_eq!(format!("{}", device), "0.0.0000");
+        assert_eq!(format!("{device}"), "0.0.0000");
 
         let device = Device::from_str("0.3.ffff").unwrap();
-        assert_eq!(format!("{}", device), "0.3.ffff");
+        assert_eq!(format!("{device}"), "0.3.ffff");
 
         // Invalid devices
         let device = Device::from_str("0.0");

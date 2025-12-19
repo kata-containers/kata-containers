@@ -138,7 +138,7 @@ fn sl() -> slog::Logger {
 
 // Convenience function to wrap an error and response to ttrpc client
 pub fn ttrpc_error(code: ttrpc::Code, err: impl Debug) -> ttrpc::Error {
-    get_rpc_status(code, format!("{:?}", err))
+    get_rpc_status(code, format!("{err:?}"))
 }
 
 /// Convert SandboxError to ttrpc error with appropriate code.
@@ -996,7 +996,7 @@ impl agent_ttrpc::AgentService for AgentService {
         let err = unsafe { libc::ioctl(fd, TIOCSWINSZ, &win) };
         Errno::result(err)
             .map(drop)
-            .map_ttrpc_err(|e| format!("ioctl error: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("ioctl error: {e:?}"))?;
 
         Ok(Empty::new())
     }
@@ -1020,20 +1020,20 @@ impl agent_ttrpc::AgentService for AgentService {
             #[cfg(not(target_arch = "s390x"))]
             {
                 let pcipath = pci::Path::from_str(&interface.devicePath).map_ttrpc_err(|e| {
-                    format!("Unexpected pci-path for network interface: {:?}", e)
+                    format!("Unexpected pci-path for network interface: {e:?}")
                 })?;
                 wait_for_pci_net_interface(&self.sandbox, &pcipath)
                     .await
-                    .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+                    .map_ttrpc_err(|e| format!("interface not available: {e:?}"))?;
             }
             #[cfg(target_arch = "s390x")]
             {
                 let ccw_dev = ccw::Device::from_str(&interface.devicePath).map_ttrpc_err(|e| {
-                    format!("Unexpected CCW path for network interface: {:?}", e)
+                    format!("Unexpected CCW path for network interface: {e:?}")
                 })?;
                 wait_for_ccw_net_interface(&self.sandbox, &ccw_dev)
                     .await
-                    .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+                    .map_ttrpc_err(|e| format!("interface not available: {e:?}"))?;
             }
         }
 
@@ -1043,7 +1043,7 @@ impl agent_ttrpc::AgentService for AgentService {
             .rtnl
             .update_interface(&interface)
             .await
-            .map_ttrpc_err(|e| format!("update interface: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("update interface: {e:?}"))?;
 
         Ok(interface)
     }
@@ -1068,13 +1068,13 @@ impl agent_ttrpc::AgentService for AgentService {
             .rtnl
             .update_routes(new_routes)
             .await
-            .map_ttrpc_err(|e| format!("Failed to update routes: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("Failed to update routes: {e:?}"))?;
 
         let list = sandbox
             .rtnl
             .list_routes()
             .await
-            .map_ttrpc_err(|e| format!("Failed to list routes after update: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("Failed to list routes after update: {e:?}"))?;
 
         Ok(protocols::agent::Routes {
             Routes: list,
@@ -1092,7 +1092,7 @@ impl agent_ttrpc::AgentService for AgentService {
 
         update_ephemeral_mounts(sl(), &req.storages, &self.sandbox)
             .await
-            .map_ttrpc_err(|e| format!("Failed to update mounts: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("Failed to update mounts: {e:?}"))?;
         Ok(Empty::new())
     }
 
@@ -1243,7 +1243,7 @@ impl agent_ttrpc::AgentService for AgentService {
             .rtnl
             .list_interfaces()
             .await
-            .map_ttrpc_err(|e| format!("Failed to list interfaces: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("Failed to list interfaces: {e:?}"))?;
 
         Ok(protocols::agent::Interfaces {
             Interfaces: list,
@@ -1266,7 +1266,7 @@ impl agent_ttrpc::AgentService for AgentService {
             .rtnl
             .list_routes()
             .await
-            .map_ttrpc_err(|e| format!("list routes: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("list routes: {e:?}"))?;
 
         Ok(protocols::agent::Routes {
             Routes: list,
@@ -1383,7 +1383,7 @@ impl agent_ttrpc::AgentService for AgentService {
             .rtnl
             .add_arp_neighbors(neighs)
             .await
-            .map_ttrpc_err(|e| format!("Failed to add ARP neighbours: {:?}", e))?;
+            .map_ttrpc_err(|e| format!("Failed to add ARP neighbours: {e:?}"))?;
 
         Ok(Empty::new())
     }
@@ -1603,7 +1603,7 @@ impl agent_ttrpc::AgentService for AgentService {
             ma.memcg_set_config_async(mem_agent_memcgconfig_to_memcg_optionconfig(&config))
                 .await
                 .map_err(|e| {
-                    let estr = format!("ma.memcg_set_config_async fail: {}", e);
+                    let estr = format!("ma.memcg_set_config_async fail: {e}");
                     error!(sl(), "{}", estr);
                     ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, estr))
                 })?;
@@ -1627,7 +1627,7 @@ impl agent_ttrpc::AgentService for AgentService {
             ma.compact_set_config_async(mem_agent_compactconfig_to_compact_optionconfig(&config))
                 .await
                 .map_err(|e| {
-                    let estr = format!("ma.compact_set_config_async fail: {}", e);
+                    let estr = format!("ma.compact_set_config_async fail: {e}");
                     error!(sl(), "{}", estr);
                     ttrpc::Error::RpcStatus(ttrpc::get_status(ttrpc::Code::INTERNAL, estr))
                 })?;
@@ -2239,10 +2239,8 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         Some(code) => {
             let std_out = String::from_utf8_lossy(&output.stdout);
             let std_err = String::from_utf8_lossy(&output.stderr);
-            let msg = format!(
-                "load_kernel_module return code: {} stdout:{} stderr:{}",
-                code, std_out, std_err
-            );
+            let msg =
+                format!("load_kernel_module return code: {code} stdout:{std_out} stderr:{std_err}");
             Err(anyhow!(msg))
         }
         None => Err(anyhow!("Process terminated by signal")),
@@ -2491,9 +2489,9 @@ mod tests {
         // Skip test if loading kernel modules is not permitted
         // or kernel module is not found
         if let Err(e) = &result {
-            let error_string = format!("{:?}", e);
+            let error_string = format!("{e:?}");
             // Let's print out the error message first
-            println!("DEBUG: error: {}", error_string);
+            println!("DEBUG: error: {error_string}");
             if error_string.contains("Operation not permitted")
                 || error_string.contains("EPERM")
                 || error_string.contains("Permission denied")
@@ -2654,7 +2652,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let logger = slog::Logger::root(slog::Discard, o!());
             let mut sandbox = Sandbox::new(&logger).unwrap();
@@ -2725,7 +2723,7 @@ mod tests {
             // the fd will be closed on Process's dropping.
             // unistd::close(wfd).unwrap();
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
             assert_result!(d.result, result, msg);
         }
     }
@@ -2829,7 +2827,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let logger = slog::Logger::root(slog::Discard, o!());
             let mut sandbox = Sandbox::new(&logger).unwrap();
@@ -2849,15 +2847,14 @@ mod tests {
 
             let result = update_container_namespaces(&sandbox, &mut oci, d.use_sandbox_pidns);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             assert_result!(d.result, result, msg);
             if let Some(linux) = oci.linux() {
                 assert_eq!(
                     d.expected_namespaces,
                     linux.namespaces().clone().unwrap(),
-                    "{}",
-                    msg
+                    "{msg}"
                 );
             }
         }
@@ -2950,7 +2947,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let dir = tempdir().expect("failed to make tempdir");
             let block_size_path = dir.path().join("block_size_bytes");
@@ -2970,7 +2967,7 @@ mod tests {
                 hotplug_probe_path.to_str().unwrap(),
             );
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }
@@ -3080,7 +3077,7 @@ OtherField:other
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let dir = tempdir().expect("failed to make tempdir");
             let proc_status_file_path = dir.path().join("status");
@@ -3091,9 +3088,9 @@ OtherField:other
 
             let result = is_signal_handled(proc_status_file_path.to_str().unwrap(), d.signum);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
-            assert_eq!(d.result, result, "{}", msg);
+            assert_eq!(d.result, result, "{msg}");
         }
     }
 
@@ -3392,9 +3389,9 @@ COMMIT
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let result = is_sealed_secret_path(d.source_path);
-            assert_eq!(d.result, result, "{}", msg);
+            assert_eq!(d.result, result, "{msg}");
         }
     }
 }
