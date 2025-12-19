@@ -444,7 +444,7 @@ where
         })
     }
 
-    fn device(&self) -> MutexGuard<VhostUserBlockDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserBlockDevice> {
         self.device.lock().unwrap()
     }
 }

@@ -421,7 +421,7 @@ mod tests {
 
         fn flush(&mut self) -> io::Result<()> {
             if self.flush_error {
-                Err(io::Error::new(io::ErrorKind::Other, "test flush error"))
+                Err(std::io::Error::other("test flush error"))
             } else {
                 Ok(())
             }
@@ -445,7 +445,7 @@ mod tests {
         fn get_device_id(&self) -> io::Result<String> {
             match &self.device_id {
                 Some(id) => Ok(id.to_string()),
-                None => Err(io::Error::new(io::ErrorKind::Other, "dummy_error")),
+                None => Err(std::io::Error::other("dummy_error")),
             }
         }
 

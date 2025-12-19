@@ -25,7 +25,7 @@
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
 use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
-use crate::{eother, resolve_path, sl, validate_path};
+use crate::{resolve_path, sl, validate_path};
 use byte_unit::{Byte, Unit};
 use lazy_static::lazy_static;
 use regex::RegexSet;
@@ -220,10 +220,10 @@ impl BlockDeviceInfo {
                 default::DEFAULT_BLOCK_DEVICE_AIO_THREADS,
             ];
             if !VALID_BLOCK_DEVICE_AIO.contains(&self.block_device_aio.as_str()) {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "{} is unsupported block device AIO mode.",
-                    self.block_device_aio
-                ));
+                    self.block_device_aio,
+                )));
             }
         }
 
@@ -264,10 +264,10 @@ impl BlockDeviceInfo {
             VIRTIO_SCSI,
         ];
         if !l.contains(&self.block_device_driver.as_str()) {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "{} is unsupported block device type.",
-                self.block_device_driver
-            ));
+                self.block_device_driver,
+            )));
         }
         validate_path!(
             self.vhost_user_store_path,
@@ -343,7 +343,9 @@ impl BootInfo {
         validate_path!(self.initrd, "guest initrd image file {} is invalid: {}")?;
         validate_path!(self.firmware, "firmware image file {} is invalid: {}")?;
         if !self.image.is_empty() && !self.initrd.is_empty() {
-            return Err(eother!("Can not configure both initrd and image for boot"));
+            return Err(std::io::Error::other(
+                "Can not configure both initrd and image for boot",
+            ));
         }
 
         let l = [
@@ -354,10 +356,10 @@ impl BootInfo {
             VIRTIO_SCSI,
         ];
         if !l.contains(&self.vm_rootfs_driver.as_str()) {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "{} is unsupported block device type.",
-                self.vm_rootfs_driver
-            ));
+                self.vm_rootfs_driver,
+            )));
         }
 
         Ok(())
@@ -508,11 +510,10 @@ impl CpuInfo {
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
         if self.default_vcpus > self.default_maxvcpus as f32 {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "The default_vcpus({}) is greater than default_maxvcpus({})",
-                self.default_vcpus,
-                self.default_maxvcpus
-            ));
+                self.default_vcpus, self.default_maxvcpus,
+            )));
         }
         Ok(())
     }
@@ -650,15 +651,15 @@ impl DeviceInfo {
     /// Validate the configuration information.
     pub fn validate(&self) -> Result<()> {
         if self.default_bridges > MAX_BRIDGE_SIZE {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "The configured PCI bridges {} are too many",
-                self.default_bridges
-            ));
+                self.default_bridges,
+            )));
         }
         // Root Port and Switch Port cannot be set simultaneously
         if self.pcie_root_port > 0 && self.pcie_switch_port > 0 {
-            return Err(eother!(
-                "Root Port and Switch Port set at the same time is forbidden."
+            return Err(std::io::Error::other(
+                "Root Port and Switch Port set at the same time is forbidden.",
             ));
         }
 
@@ -900,10 +901,14 @@ impl MemoryInfo {
             "Memory backend file {} is invalid: {}"
         )?;
         if self.default_memory == 0 {
-            return Err(eother!("Configured memory size for guest VM is zero"));
+            return Err(std::io::Error::other(
+                "Configured memory size for guest VM is zero",
+            ));
         }
         if self.memory_slots == 0 {
-            return Err(eother!("Configured memory slots for guest VM are zero"));
+            return Err(std::io::Error::other(
+                "Configured memory slots for guest VM are zero",
+            ));
         }
 
         Ok(())
@@ -1209,14 +1214,17 @@ impl SharedFsInfo {
                 if self.msize_9p < default::MIN_SHARED_9PFS_SIZE_MB
                     || self.msize_9p > default::MAX_SHARED_9PFS_SIZE_MB
                 {
-                    return Err(eother!(
+                    return Err(std::io::Error::other(format!(
                         "Invalid 9p configuration msize 0x{:x}, min value is 0x{:x}, max value is 0x{:x}",
                         self.msize_9p,default::MIN_SHARED_9PFS_SIZE_MB, default::MAX_SHARED_9PFS_SIZE_MB
-                    ));
+                    )));
                 }
                 Ok(())
             }
-            Some(v) => Err(eother!("Invalid shared_fs type {}", v)),
+            Some(v) => Err(std::io::Error::other(format!(
+                "Invalid shared_fs type {}",
+                v
+            ))),
         }
     }
 
@@ -1270,16 +1278,16 @@ impl SharedFsInfo {
         let l = ["never", "auto", "always"];
 
         if !l.contains(&self.virtio_fs_cache.as_str()) {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs cache mode: {}",
-                &self.virtio_fs_cache
-            ));
+                &self.virtio_fs_cache,
+            )));
         }
         if self.virtio_fs_is_dax && self.virtio_fs_cache_size == 0 {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "Invalid virtio-fs DAX window size: {}",
-                &self.virtio_fs_cache_size
-            ));
+                &self.virtio_fs_cache_size,
+            )));
         }
         Ok(())
     }
@@ -1528,7 +1536,10 @@ impl ConfigOps for Hypervisor {
                     "prefetch_list_path `{}` is invalid: {}"
                 )?;
             } else {
-                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
+                return Err(std::io::Error::other(format!(
+                    "Can not find plugin for hypervisor {}",
+                    hypervisor,
+                )));
             }
         }
 
@@ -1572,7 +1583,10 @@ impl ConfigOps for Hypervisor {
                     "prefetch_files.list path `{}` is invalid: {}"
                 )?;
             } else {
-                return Err(eother!("Can not find plugin for hypervisor {}", hypervisor));
+                return Err(std::io::Error::other(format!(
+                    "Can not find plugin for hypervisor {}",
+                    hypervisor,
+                )));
             }
         }
 

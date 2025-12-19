@@ -207,7 +207,7 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionHybrid<B> {
         &self,
         offset: MemoryRegionAddress,
         count: usize,
-    ) -> guest_memory::Result<VolatileSlice<BS<B>>> {
+    ) -> guest_memory::Result<VolatileSlice<'_, BS<'_, B>>> {
         match self {
             GuestRegionHybrid::Mmap(region) => region.get_slice(offset, count),
             GuestRegionHybrid::Raw(region) => region.get_slice(offset, count),
@@ -246,8 +246,8 @@ impl<B: Bitmap> GuestMemoryHybrid<B> {
     /// # Arguments
     ///
     /// * `regions` - The vector of regions.
-    ///               The regions shouldn't overlap and they should be sorted
-    ///               by the starting address.
+    ///   The regions shouldn't overlap and they should be sorted
+    ///   by the starting address.
     pub fn from_regions(mut regions: Vec<GuestRegionHybrid<B>>) -> Result<Self, Error> {
         Self::from_arc_regions(regions.drain(..).map(Arc::new).collect())
     }
@@ -262,8 +262,8 @@ impl<B: Bitmap> GuestMemoryHybrid<B> {
     /// # Arguments
     ///
     /// * `regions` - The vector of `Arc` regions.
-    ///               The regions shouldn't overlap and they should be sorted
-    ///               by the starting address.
+    ///   The regions shouldn't overlap and they should be sorted
+    ///   by the starting address.
     pub fn from_arc_regions(regions: Vec<Arc<GuestRegionHybrid<B>>>) -> Result<Self, Error> {
         if regions.is_empty() {
             return Err(Error::NoMemoryRegion);
@@ -359,7 +359,7 @@ impl<B: Bitmap + 'static> GuestMemory for GuestMemoryHybrid<B> {
         index.map(|x| self.regions[x].as_ref())
     }
 
-    fn iter(&self) -> Iter<B> {
+    fn iter(&self) -> Iter<'_, B> {
         Iter(self.regions.iter())
     }
 }

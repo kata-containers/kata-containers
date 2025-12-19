@@ -1479,7 +1479,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         let table_size: u64 = u64::from(msix_cap.table_size()) * (MSIX_TABLE_ENTRY_SIZE as u64);
         let pba_bir: u32 = msix_cap.pba_bir();
         let pba_offset: u64 = u64::from(msix_cap.pba_offset());
-        let pba_size: u64 = (u64::from(msix_cap.table_size()) + 7) / 8;
+        let pba_size: u64 = u64::from(msix_cap.table_size()).div_ceil(8);
 
         self.interrupt.msix = Some(VfioMsix {
             state: msix_config,
@@ -1595,7 +1595,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
     pub fn activate(&self, device: Weak<dyn DeviceIo>, resources: DeviceResources) -> Result<()> {
         let mut state = self.state();
 
-        if resources.len() == 0 {
+        if resources.is_empty() {
             return Err(VfioPciError::InvalidResources);
         }
 
@@ -1640,7 +1640,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
             );
             let _ = state.unregister_regions(&self.vm_fd).map_err(|e| {
                 // If unregistering regions goes wrong, the memory region in Dragonball will be in a mess,
-                // so we panic here to avoid more serious problem. 
+                // so we panic here to avoid more serious problem.
                 panic!("failed to rollback changes of VfioPciDevice::register_regions() because error {:?}", e);
             });
         }
@@ -1656,7 +1656,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
         Ok(())
     }
 
-    pub fn state(&self) -> MutexGuard<VfioPciDeviceState<C>> {
+    pub fn state(&self) -> MutexGuard<'_, VfioPciDeviceState<C>> {
         // Don't expect poisoned lock
         self.state
             .lock()

@@ -75,7 +75,7 @@ impl<'inner> ContainerIoWrite<'inner> {
         match write_future.as_mut().poll(cx) {
             Poll::Ready(v) => match v {
                 Ok(resp) => Poll::Ready(Ok(resp.length as usize)),
-                Err(err) => Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, err))),
+                Err(err) => Poll::Ready(Err(std::io::Error::other(err))),
             },
             Poll::Pending => {
                 self.write_future = Some(write_future);
@@ -99,7 +99,7 @@ impl<'inner> ContainerIoWrite<'inner> {
         match shutdown_future.as_mut().poll(cx) {
             Poll::Ready(v) => match v {
                 Ok(_) => Poll::Ready(Ok(())),
-                Err(err) => Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, err))),
+                Err(err) => Poll::Ready(Err(std::io::Error::other(err))),
             },
             Poll::Pending => {
                 self.shutdown_future = Some(shutdown_future);
@@ -177,7 +177,7 @@ impl<'inner> ContainerIoRead<'inner> {
                     buf.put_slice(&resp.data);
                     Poll::Ready(Ok(()))
                 }
-                Err(err) => Poll::Ready(Err(std::io::Error::new(std::io::ErrorKind::Other, err))),
+                Err(err) => Poll::Ready(Err(std::io::Error::other(err))),
             },
             Poll::Pending => {
                 self.read_future = Some(read_future);

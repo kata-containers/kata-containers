@@ -31,10 +31,10 @@ impl ConfigOps for RuntimeVendor {
     /// Validate the configuration information.
     fn validate(conf: &TomlConfig) -> Result<()> {
         if conf.runtime.vendor.log_level > 10 {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "log level {} in configuration file is invalid",
-                conf.runtime.vendor.log_level
-            ));
+                conf.runtime.vendor.log_level,
+            )));
         }
 
         Ok(())

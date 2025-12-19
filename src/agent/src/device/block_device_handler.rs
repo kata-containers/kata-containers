@@ -16,7 +16,10 @@ use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
-use kata_types::device::{DRIVER_BLK_CCW_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE};
+
+#[cfg(target_arch = "s390x")]
+use kata_types::device::DRIVER_BLK_CCW_TYPE;
+use kata_types::device::{DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE};
 use protocols::agent::Device;
 use regex::Regex;
 use std::path::Path;
@@ -28,6 +31,7 @@ use tracing::instrument;
 #[derive(Debug)]
 pub struct VirtioBlkPciDeviceHandler {}
 
+#[cfg(target_arch = "s390x")]
 #[derive(Debug)]
 pub struct VirtioBlkCcwDeviceHandler {}
 
@@ -52,6 +56,7 @@ impl DeviceHandler for VirtioBlkPciDeviceHandler {
     }
 }
 
+#[cfg(target_arch = "s390x")]
 #[async_trait::async_trait]
 impl DeviceHandler for VirtioBlkCcwDeviceHandler {
     #[instrument]

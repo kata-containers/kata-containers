@@ -14,7 +14,7 @@ use crate::config::default::MIN_QEMU_MEMORY_SIZE_MB;
 
 use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
-use crate::{eother, resolve_path, validate_path};
+use crate::{resolve_path, validate_path};
 
 /// Hypervisor name for qemu, used to index `TomlConfig::hypervisor`.
 pub const HYPERVISOR_NAME_QEMU: &str = "qemu";
@@ -106,28 +106,36 @@ impl ConfigPlugin for QemuConfig {
             validate_path!(qemu.path, "QEMU binary path `{}` is invalid: {}")?;
             validate_path!(qemu.ctlpath, "QEMU control path `{}` is invalid: {}")?;
             if !qemu.jailer_path.is_empty() {
-                return Err(eother!("Path for QEMU jailer should be empty"));
+                return Err(std::io::Error::other(
+                    "Path for QEMU jailer should be empty",
+                ));
             }
             if !qemu.valid_jailer_paths.is_empty() {
-                return Err(eother!("Valid Qemu jailer path list should be empty"));
+                return Err(std::io::Error::other(
+                    "Valid Qemu jailer path list should be empty",
+                ));
             }
 
             if !qemu.blockdev_info.disable_block_device_use
                 && qemu.blockdev_info.block_device_driver == VIRTIO_BLK_MMIO
             {
-                return Err(eother!("Qemu doesn't support virtio-blk-mmio"));
+                return Err(std::io::Error::other(
+                    "Qemu doesn't support virtio-blk-mmio",
+                ));
             }
 
             if qemu.boot_info.kernel.is_empty() {
-                return Err(eother!("Guest kernel image for qemu is empty"));
+                return Err(std::io::Error::other(
+                    "Guest kernel image for qemu is empty",
+                ));
             }
             if qemu.boot_info.image.is_empty() && qemu.boot_info.initrd.is_empty() {
                 // IBM SE (CCW + confidential guest) does not require neither image nor initrd.
                 if !(qemu.boot_info.vm_rootfs_driver.ends_with("ccw")
                     && qemu.security_info.confidential_guest)
                 {
-                    return Err(eother!(
-                        "Both guest boot image and initrd for qemu are empty"
+                    return Err(std::io::Error::other(
+                        "Both guest boot image and initrd for qemu are empty",
                     ));
                 }
             }
@@ -136,28 +144,30 @@ impl ConfigPlugin for QemuConfig {
                 && qemu.cpu_info.default_vcpus as u32 > default::MAX_QEMU_VCPUS)
                 || qemu.cpu_info.default_maxvcpus > default::MAX_QEMU_VCPUS
             {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "Qemu hypervisor can not support {} vCPUs",
-                    qemu.cpu_info.default_maxvcpus
-                ));
+                    qemu.cpu_info.default_maxvcpus,
+                )));
             }
 
             if qemu.device_info.default_bridges > default::MAX_QEMU_PCI_BRIDGES {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "Qemu hypervisor can not support {} PCI bridges",
-                    qemu.device_info.default_bridges
-                ));
+                    qemu.device_info.default_bridges,
+                )));
             }
 
             if qemu.memory_info.default_memory < MIN_QEMU_MEMORY_SIZE_MB {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "Qemu hypervisor has minimal memory limitation {}",
-                    MIN_QEMU_MEMORY_SIZE_MB
-                ));
+                    MIN_QEMU_MEMORY_SIZE_MB,
+                )));
             }
 
             if qemu.memory_info.enable_guest_swap {
-                return Err(eother!("Qemu hypervisor doesn't support enable_guest_swap"));
+                return Err(std::io::Error::other(
+                    "Qemu hypervisor doesn't support enable_guest_swap",
+                ));
             }
         }
 

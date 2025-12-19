@@ -371,7 +371,7 @@ impl Qmp {
                     // from virtcontainers' bridges.go
                     let pci_bridge_max_capacity = 30;
                     for slot in 0..pci_bridge_max_capacity {
-                        if !occupied_slots.iter().any(|elem| *elem == slot) {
+                        if !occupied_slots.contains(&slot) {
                             info!(
                                 sl!(),
                                 "found free slot on bridge {}: {}", pci_dev.qdev_id, slot

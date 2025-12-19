@@ -9,7 +9,7 @@ use std::path::Path;
 use super::default;
 use crate::config::{ConfigOps, TomlConfig};
 use crate::mount::split_bind_mounts;
-use crate::{eother, validate_path};
+use crate::validate_path;
 
 #[path = "shared_mount.rs"]
 pub mod shared_mount;
@@ -198,7 +198,12 @@ impl ConfigOps for Runtime {
             // Split the bind mount, canonicalize the path and then append rw mode to it.
             let (real_path, mode) = split_bind_mounts(bind);
             match Path::new(real_path).canonicalize() {
-                Err(e) => return Err(eother!("sandbox bind mount `{}` is invalid: {}", bind, e)),
+                Err(e) => {
+                    return Err(std::io::Error::other(format!(
+                        "sandbox bind mount `{}` is invalid: {}",
+                        bind, e,
+                    )))
+                }
                 Ok(path) => {
                     *bind = format!("{}{}", path.display(), mode);
                 }
@@ -217,18 +222,18 @@ impl ConfigOps for Runtime {
             && net_model != "none"
             && net_model != "tcfilter"
         {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "Invalid internetworking_model `{}` in configuration file",
-                net_model
-            ));
+                net_model,
+            )));
         }
 
         let vfio_mode = &conf.runtime.vfio_mode;
         if !vfio_mode.is_empty() && vfio_mode != "vfio" && vfio_mode != "guest-kernel" {
-            return Err(eother!(
+            return Err(std::io::Error::other(format!(
                 "Invalid vfio_mode `{}` in configuration file",
-                vfio_mode
-            ));
+                vfio_mode,
+            )));
         }
 
         for shared_mount in &conf.runtime.shared_mounts {
