@@ -462,7 +462,7 @@ fn setup_hybrid_vsock(path: &str, hybrid_vsock_port: u64) -> Result<UnixStream> 
         // waiting for the hybrid vsock hypervisor to route the call for us ;)
         //
         // See: https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md#host-initiated-connections
-        let msg = format!("{} {}\n", CONNECT_CMD, hybrid_vsock_port);
+        let msg = format!("{CONNECT_CMD} {hybrid_vsock_port}\n");
         stream.write_all(msg.as_bytes())?;
 
         // Now, see if we get the expected response
@@ -474,7 +474,7 @@ fn setup_hybrid_vsock(path: &str, hybrid_vsock_port: u64) -> Result<UnixStream> 
         if msg.starts_with(OK_CMD) {
             let response = msg
                 .strip_prefix(OK_CMD)
-                .ok_or(format!("invalid response: {:?}", msg))
+                .ok_or(format!("invalid response: {msg:?}"))
                 .map_err(|e| anyhow!(e))?
                 .trim();
 
@@ -630,7 +630,7 @@ pub fn client(cfg: &mut Config, commands: Vec<&str>) -> Result<()> {
 
         let mut builtin_cmds = get_builtin_cmd_details();
         builtin_cmds.sort();
-        builtin_cmds.iter().for_each(|n| println!("  {}", n));
+        builtin_cmds.iter().for_each(|n| println!("  {n}"));
 
         println!();
 
@@ -638,7 +638,7 @@ pub fn client(cfg: &mut Config, commands: Vec<&str>) -> Result<()> {
 
         let mut agent_cmds = get_agent_cmd_details();
         agent_cmds.sort();
-        agent_cmds.iter().for_each(|n| println!("  {}", n));
+        agent_cmds.iter().for_each(|n| println!("  {n}"));
 
         println!();
 
@@ -955,17 +955,17 @@ fn interactive_client_loop(
 }
 
 fn readline(prompt: &str) -> std::result::Result<String, String> {
-    print!("{}: ", prompt);
+    print!("{prompt}: ");
 
     io::stdout()
         .flush()
-        .map_err(|e| format!("failed to flush: {:?}", e))?;
+        .map_err(|e| format!("failed to flush: {e:?}"))?;
 
     let mut line = String::new();
 
     std::io::stdin()
         .read_line(&mut line)
-        .map_err(|e| format!("failed to read line: {:?}", e))?;
+        .map_err(|e| format!("failed to read line: {e:?}"))?;
 
     // Remove NL
     Ok(line.trim_end().to_string())
@@ -1162,10 +1162,7 @@ fn agent_cmd_container_exec(
         let process = ttrpc_spec
             .Process
             .into_option()
-            .ok_or(format!(
-                "failed to get process from OCI spec: {}",
-                bundle_dir,
-            ))
+            .ok_or(format!("failed to get process from OCI spec: {bundle_dir}",))
             .map_err(|e| anyhow!(e))?;
 
         req.set_container_id(cid);
@@ -2149,7 +2146,7 @@ fn builtin_cmd_sleep(args: &str) -> (Result<()>, bool) {
 }
 
 fn builtin_cmd_echo(args: &str) -> (Result<()>, bool) {
-    println!("{}", args);
+    println!("{args}");
 
     (Ok(()), false)
 }
@@ -2161,7 +2158,7 @@ fn builtin_cmd_quit(_args: &str) -> (Result<()>, bool) {
 fn builtin_cmd_list(_args: &str) -> (Result<()>, bool) {
     let cmds = get_all_cmd_details();
 
-    cmds.iter().for_each(|n| println!(" - {}", n));
+    cmds.iter().for_each(|n| println!(" - {n}"));
 
     println!();
 

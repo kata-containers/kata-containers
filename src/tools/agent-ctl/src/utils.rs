@@ -99,7 +99,7 @@ pub fn signame_to_signum(name: &str) -> Result<u8> {
     let mut search_term = if name.starts_with("SIG") {
         name.to_string()
     } else {
-        format!("SIG{}", name)
+        format!("SIG{name}")
     };
 
     search_term = search_term.to_uppercase();
