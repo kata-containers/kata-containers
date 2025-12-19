@@ -27,7 +27,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
 	"github.com/moby/sys/mountinfo"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -319,6 +318,8 @@ type RootFs struct {
 	Options []string
 	// Mounted specifies whether the rootfs has be mounted or not
 	Mounted bool
+	// PluggedBlockDevice specifies whether Source should be plugged into the Guest as block block.
+	PluggedBlockDevice bool
 }
 
 // Container is composed of a set of containers and a runtime environment.
@@ -1237,7 +1238,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}()
 
-	if c.checkBlockDeviceSupport(ctx) && !IsNydusRootFSType(c.rootFs.Type) && !IsErofsRootFS(c.rootFs) {
+	if c.checkBlockDeviceSupport(ctx) {
 		// If the rootfs is backed by a block device, go ahead and hotplug it to the guest
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
@@ -1586,19 +1587,21 @@ func (c *Container) resume(ctx context.Context) error {
 // hotplugDrive will attempt to hotplug the container rootfs if it is backed by a
 // block device
 func (c *Container) hotplugDrive(ctx context.Context) error {
-	var dev device
-	var err error
+	c.Logger().WithFields(logrus.Fields{
+		"rootfs-source": c.rootFs.Source,
+		"rootfs-mounted": c.rootFs.Mounted,
+		"plugged-device": c.rootFs.PluggedBlockDevice,
+	}).Info("rootfs properties")
 
-	// Check to see if the rootfs is an umounted block device (source) or if the
-	// mount (target) is backed by a block device:
-	if !c.rootFs.Mounted {
-		dev, err = getDeviceForPath(c.rootFs.Source)
-		// there is no "rootfs" dir on block device backed rootfs
-		c.rootfsSuffix = ""
-	} else {
-		dev, err = getDeviceForPath(c.rootFs.Target)
+	if !c.rootFs.PluggedBlockDevice {
+		return nil
 	}
 
+	if c.rootFs.Mounted {
+		panic("Mounted cannot be true when PluggedBlockDevice is true")
+	}
+
+	dev, err := getDeviceForPath(c.rootFs.Source)
 	if err == errMountPointNotFound {
 		return nil
 	}
@@ -1606,6 +1609,8 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	c.rootfsSuffix = ""
 
 	c.Logger().WithFields(logrus.Fields{
 		"device-major": dev.major,
@@ -1622,23 +1627,11 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 		return nil
 	}
 
-	devicePath := c.rootFs.Source
-	fsType := c.rootFs.Type
-	if c.rootFs.Mounted {
-		if dev.mountPoint == c.rootFs.Target {
-			c.rootfsSuffix = ""
-		}
-		// If device mapper device, then fetch the full path of the device
-		devicePath, fsType, _, err = utils.GetDevicePathAndFsTypeOptions(dev.mountPoint)
-		if err != nil {
-			return err
-		}
-	}
-
-	devicePath, err = filepath.EvalSymlinks(devicePath)
+	devicePath, err := filepath.EvalSymlinks(c.rootFs.Source)
 	if err != nil {
 		return err
 	}
+	fsType := c.rootFs.Type
 
 	c.Logger().WithFields(logrus.Fields{
 		"device-path": devicePath,

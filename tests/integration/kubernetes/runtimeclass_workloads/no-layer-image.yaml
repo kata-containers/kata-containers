@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: no-layer-image
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: no-layer-image
+    image: ghcr.io/kata-containers/no-layer-image:latest
+    resources: {}
+    command:
+    - sleep
+    - infinity

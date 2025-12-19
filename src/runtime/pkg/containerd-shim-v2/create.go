@@ -157,7 +157,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateContainerSizing(ociSpec)
 		}
 
-		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
+		if rootFs.Mounted, rootFs.PluggedBlockDevice, err = checkAndMount(s, r); err != nil {
 			return nil, err
 		}
 
@@ -211,7 +211,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
 		}
 
-		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {
+		if rootFs.Mounted, rootFs.PluggedBlockDevice, err = checkAndMount(s, r); err != nil {
 			return nil, err
 		}
 
@@ -308,33 +308,39 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string
 	return &runtimeConfig, nil
 }
 
-func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
+func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, bool, error) {
+	mounted := false
+	pluggedBlockDevice := false
+
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 
 		// Plug the block backed rootfs directly instead of mounting it.
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
-			return false, nil
+			pluggedBlockDevice = true
+			return mounted, pluggedBlockDevice, nil
 		}
 
 		if virtcontainers.HasOptionPrefix(m.Options, annotations.FileSystemLayer) {
-			return false, nil
+			return mounted, pluggedBlockDevice, nil
 		}
 
 		if virtcontainers.IsErofsRootFS(virtcontainers.RootFs{Options: m.Options, Type: m.Type}) {
-			return false, nil
+			return mounted, pluggedBlockDevice, nil
 		}
 
 		if vc.IsNydusRootFSType(m.Type) {
 			// if kata + nydus, do not mount
-			return false, nil
+			return mounted, pluggedBlockDevice, nil
 		}
 	}
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 	if err := doMount(r.Rootfs, rootfs); err != nil {
-		return false, err
+		return mounted, pluggedBlockDevice, err
 	}
-	return true, nil
+	
+	mounted = true
+	return mounted, pluggedBlockDevice, nil
 }
 
 func doMount(mounts []*containerd_types.Mount, rootfs string) error {
