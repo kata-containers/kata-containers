@@ -66,7 +66,7 @@ pub fn share_rootfs(bundle_dir: &str, host_path: &str, id: &str) -> Result<Strin
     let rootfs_host_path = get_host_share_path(host_path, id);
     info!(sl!(), "share_rootfs:: target: {}", rootfs_host_path);
 
-    let rootfs_src_path = format!("{}/{}", bundle_dir, ROOTFS);
+    let rootfs_src_path = format!("{bundle_dir}/{ROOTFS}");
 
     // Mount the src path to shared path
     mount::bind_mount_unchecked(
@@ -123,5 +123,5 @@ fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
 
 // Create the container rootfs host share path
 fn get_host_share_path(host_path: &str, id: &str) -> String {
-    format!("{}/{}/{}", host_path, id, ROOTFS)
+    format!("{host_path}/{id}/{ROOTFS}")
 }
