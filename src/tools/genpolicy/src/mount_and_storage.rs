@@ -165,7 +165,7 @@ fn get_empty_dir_mount_and_storage(
             // This matches the runtime behavior of only setting the fsgid if the mountpoint GID is not 0.
             // https://github.com/kata-containers/kata-containers/blob/b69da5f3ba8385c5833b31db41a846a203812675/src/runtime/virtcontainers/kata_agent.go#L1602-L1607
             if gid != 0 {
-                options.push(format!("fsgid={}", gid));
+                options.push(format!("fsgid={gid}"));
             }
         }
         storages.push(agent::Storage {

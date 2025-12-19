@@ -88,8 +88,7 @@ impl Settings {
             Self::validate_settings(&settings);
             settings
         } else {
-            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -j parameter.",
-                json_settings_path);
+            panic!("Cannot open file {json_settings_path}. Please copy it to the current directory or specify the path to it using the -j parameter.");
         }
     }
 

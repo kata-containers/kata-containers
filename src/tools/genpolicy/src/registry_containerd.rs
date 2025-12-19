@@ -274,7 +274,7 @@ pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {
                     &stderr, &stdout);
             }
         }
-        Err(e) => panic!("Error handling docker configuration file: {}", e),
+        Err(e) => panic!("Error handling docker configuration file: {e}"),
     }
 
     None

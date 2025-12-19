@@ -384,7 +384,7 @@ pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
 /// with hard to predict outcomes.
 fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     if !silent_unsupported_fields {
-        panic!("Unsupported field: {}", path);
+        panic!("Unsupported field: {path}");
     }
 }
 
