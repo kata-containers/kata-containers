@@ -185,8 +185,7 @@ fn real_main() -> Result<()> {
             Arg::new("vsock-cid")
                 .long("vsock-cid")
                 .help(format!(
-                    "VSOCK CID number (or {:?}) (QEMU hypervisor only)",
-                    VSOCK_CID_ANY_STR
+                    "VSOCK CID number (or {VSOCK_CID_ANY_STR:?}) (QEMU hypervisor only)"
                 ))
                 .required(false)
                 .default_value(VSOCK_CID_ANY_STR),
@@ -288,7 +287,7 @@ fn real_main() -> Result<()> {
 
 fn main() {
     if let Err(e) = real_main() {
-        eprintln!("ERROR: {:#?}", e);
+        eprintln!("ERROR: {e:#?}");
         exit(1);
     }
     exit(0);
@@ -322,7 +321,7 @@ mod tests {
                 socket_path: "/foo/bar",
                 port: None,
                 result: Ok(VsockType::Hybrid {
-                    socket_path: format!("/foo/bar_{}", DEFAULT_KATA_VSOCK_TRACING_PORT),
+                    socket_path: format!("/foo/bar_{DEFAULT_KATA_VSOCK_TRACING_PORT}"),
                 }),
             },
             TestData {
@@ -345,11 +344,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = handle_hybrid_vsock(d.socket_path, d.port);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }
@@ -425,11 +424,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = handle_standard_vsock(d.cid, d.port);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }
