@@ -185,6 +185,53 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	assert.NoError(os.Remove(configPath))
 }
 
+func TestSandboxConfigStaticResourceMgmtUsesMaxResources(t *testing.T) {
+	assert := assert.New(t)
+	configPath, err := createConfig("config.json", minimalConfig)
+	assert.NoError(err)
+
+	savedFunc := config.GetHostPathFunc
+
+	// Simply assign container path to host path for device.
+	config.GetHostPathFunc = func(devInfo config.DeviceInfo, vhostUserStoreEnabled bool,
+		vhostUserStorePath string) (string, error) {
+		return devInfo.ContainerPath, nil
+	}
+
+	defer func() {
+		config.GetHostPathFunc = savedFunc
+	}()
+
+	spec, err := compatoci.ParseConfigJSON(tempBundlePath)
+	assert.NoError(err)
+
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.QemuHypervisor,
+		HypervisorConfig: vc.HypervisorConfig{
+			NumVCPUsF:  1,
+			MemorySize: 2048,
+		},
+		SandboxCPUs:               50,
+		SandboxMemMB:              4096,
+		StaticSandboxResourceMgmt: true,
+	}
+
+	sandboxConfig, err := SandboxConfig(spec, runtimeConfig, tempBundlePath, containerID, false, true)
+	assert.NoError(err)
+
+	assert.True(sandboxConfig.StaticResourceMgmt)
+	assert.Equal(float32(1), sandboxConfig.SandboxResources.BaseCPUs)
+	assert.Equal(float32(50), sandboxConfig.SandboxResources.WorkloadCPUs)
+	assert.Equal(float32(50), sandboxConfig.HypervisorConfig.NumVCPUsF)
+	assert.Equal(uint32(50), sandboxConfig.HypervisorConfig.DefaultMaxVCPUs)
+
+	assert.Equal(uint32(2048), sandboxConfig.SandboxResources.BaseMemMB)
+	assert.Equal(uint32(4096), sandboxConfig.SandboxResources.WorkloadMemMB)
+	assert.Equal(uint32(4096), sandboxConfig.HypervisorConfig.MemorySize)
+
+	assert.NoError(os.Remove(configPath))
+}
+
 func TestContainerType(t *testing.T) {
 	assert := assert.New(t)
 	tests := []struct {
