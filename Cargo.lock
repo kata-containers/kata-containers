@@ -974,7 +974,7 @@ dependencies = [
 name = "dbs-arch"
 version = "0.2.3"
 dependencies = [
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "libc",
  "memoffset 0.6.5",
@@ -992,7 +992,7 @@ dependencies = [
  "dbs-arch",
  "dbs-device",
  "device_tree",
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "lazy_static",
  "libc",
@@ -1016,7 +1016,7 @@ version = "0.2.2"
 dependencies = [
  "dbs-arch",
  "dbs-device",
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "libc",
  "nix 0.26.4",
@@ -1051,7 +1051,7 @@ dependencies = [
  "dbs-utils",
  "dbs-virtio-devices",
  "downcast-rs",
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "libc",
  "log",
@@ -1070,7 +1070,7 @@ dependencies = [
 name = "dbs-tdx"
 version = "0.1.0"
 dependencies = [
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "serde_json",
  "thiserror 1.0.48",
  "vmm-sys-util 0.11.1",
@@ -1119,7 +1119,7 @@ dependencies = [
  "epoll",
  "fuse-backend-rs",
  "io-uring",
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "libc",
  "log",
@@ -1302,7 +1302,7 @@ dependencies = [
  "dbs-virtio-devices",
  "derivative",
  "fuse-backend-rs",
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "lazy_static",
  "libc",
@@ -2344,14 +2344,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "kvm-ioctls"
-version = "0.12.1"
+name = "kvm-bindings"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d592c9b0da14bacab1fe89c78e7ed873b20cf7f502d0fc26f628d733215b1e5"
+checksum = "4b3c06ff73c7ce03e780887ec2389d62d2a2a9ddf471ab05c2ff69207cd3f3b4"
 dependencies = [
- "kvm-bindings",
+ "vmm-sys-util 0.15.0",
+]
+
+[[package]]
+name = "kvm-ioctls"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "333f77a20344a448f3f70664918135fddeb804e938f28a99d685bd92926e0b19"
+dependencies = [
+ "bitflags 2.10.0",
+ "kvm-bindings 0.14.0",
  "libc",
- "vmm-sys-util 0.11.1",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -5416,7 +5426,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "068bac78842164a8ecc1d1a84a8d8a9168ab29fa3c96942689e286a30ae22ac4"
 dependencies = [
  "byteorder",
- "kvm-bindings",
+ "kvm-bindings 0.6.0",
  "kvm-ioctls",
  "libc",
  "log",
@@ -5531,6 +5541,16 @@ name = "vmm-sys-util"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd64fe09d8e880e600c324e7d664760a17f56e9672b7495a86381b49e4f72f46"
+dependencies = [
+ "bitflags 1.3.2",
+ "libc",
+]
+
+[[package]]
+name = "vmm-sys-util"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "506c62fdf617a5176827c2f9afbcf1be155b03a9b4bf9617a60dbc07e3a1642f"
 dependencies = [
  "bitflags 1.3.2",
  "libc",
