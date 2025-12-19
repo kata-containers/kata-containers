@@ -17,7 +17,6 @@ pub const MEMCGS_V1_PATH: &str = "/sys/fs/cgroup/memory";
 pub fn is_cgroup_v2() -> Result<bool> {
     let cgroup_path = Path::new("/sys/fs/cgroup");
 
-    let stat =
-        statfs(cgroup_path).map_err(|e| anyhow!("statfs {:?} failed: {}", cgroup_path, e))?;
+    let stat = statfs(cgroup_path).map_err(|e| anyhow!("statfs {cgroup_path:?} failed: {e}"))?;
     Ok(stat.filesystem_type() == CGROUP2_SUPER_MAGIC)
 }

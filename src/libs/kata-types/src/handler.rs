@@ -37,7 +37,7 @@ where
         for &id in ids {
             match self.handlers.entry(id.to_string()) {
                 Entry::Occupied(_) => {
-                    return Err(anyhow!("handler for {} already exists", id));
+                    return Err(anyhow!("handler for {id} already exists"));
                 }
                 Entry::Vacant(entry) => {
                     entry.insert(handler.clone());

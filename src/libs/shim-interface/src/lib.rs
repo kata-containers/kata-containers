@@ -75,7 +75,7 @@ fn get_uds_with_sid(short_id: &str, path: &str) -> Result<String> {
 // return sandbox's storage path
 pub fn sb_storage_path() -> Result<&'static str> {
     //make sure the path existed
-    std::fs::create_dir_all(KATA_PATH).context(format!("failed to create dir: {}", KATA_PATH))?;
+    std::fs::create_dir_all(KATA_PATH).context(format!("failed to create dir: {KATA_PATH}"))?;
 
     Ok(KATA_PATH)
 }

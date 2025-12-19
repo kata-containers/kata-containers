@@ -107,8 +107,7 @@ impl ConfigPlugin for FirecrackerConfig {
 
             if firecracker.memory_info.default_memory < MIN_FIRECRACKER_MEMORY_SIZE_MB {
                 return Err(std::io::Error::other(format!(
-                    "Firecracker hypervisor has minimal memory limitation {}",
-                    MIN_FIRECRACKER_MEMORY_SIZE_MB,
+                    "Firecracker hypervisor has minimal memory limitation {MIN_FIRECRACKER_MEMORY_SIZE_MB}",
                 )));
             }
         }

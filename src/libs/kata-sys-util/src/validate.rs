@@ -265,11 +265,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = verify_id(d.id);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if result.is_ok() {
                 assert!(!d.expect_error, "{}", msg);
@@ -315,11 +315,11 @@ mod tests {
         let invalid_str = vec![97, b'\0', 98];
         let invalid_string = std::str::from_utf8(&invalid_str).unwrap();
 
-        let invalid_env = format!("{}=value", invalid_string);
+        let invalid_env = format!("{invalid_string}=value");
         let env = valid_env(&invalid_env);
         assert_eq!(None, env);
 
-        let invalid_env = format!("key={}", invalid_string);
+        let invalid_env = format!("key={invalid_string}");
         let env = valid_env(&invalid_env);
         assert_eq!(None, env);
     }

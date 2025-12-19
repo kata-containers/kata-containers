@@ -60,7 +60,7 @@ async fn handle_agent_cmd(
 
     ret_tx
         .send(ret_msg)
-        .map_err(|e| anyhow!("ret_tx.send failed: {:?}", e))?;
+        .map_err(|e| anyhow!("ret_tx.send failed: {e:?}"))?;
 
     Ok(need_reset_mas)
 }
@@ -109,14 +109,13 @@ fn agent_work(mut memcg: memcg::MemCG, mut comp: compact::Compact) -> Result<Dur
         info!("memcg.work start");
         memcg
             .work(&memcg_work_list)
-            .map_err(|e| anyhow!("memcg.work failed: {}", e))?;
+            .map_err(|e| anyhow!("memcg.work failed: {e}"))?;
         info!("memcg.work stop");
     }
 
     let compact_need_reset = if comp.need_work() {
         info!("compact.work start");
-        comp.work()
-            .map_err(|e| anyhow!("comp.work failed: {}", e))?;
+        comp.work().map_err(|e| anyhow!("comp.work failed: {e}"))?;
         info!("compact.work stop");
         true
     } else {
@@ -209,7 +208,7 @@ async fn mem_agent_loop(
         info!("mem_agent_loop wait timeout {:?}", mas.duration);
         select! {
             Some((cmd, ret_tx)) = cmd_rx.recv() => {
-                if handle_agent_cmd(cmd, ret_tx, &mut memcg, &mut comp).await.map_err(|e| anyhow!("handle_agent_cmd failed: {}", e))? && !mas.timeout{
+                if handle_agent_cmd(cmd, ret_tx, &mut memcg, &mut comp).await.map_err(|e| anyhow!("handle_agent_cmd failed: {e}"))? && !mas.timeout{
                     mas.set_sleep(async_get_remaining_tokio_duration(&memcg, &comp).await);
                 }
             }
@@ -244,10 +243,10 @@ impl MemAgent {
         }
 
         let mg = memcg::MemCG::new(is_cg_v2, memcg_config)
-            .map_err(|e| anyhow!("memcg::MemCG::new fail: {}", e))?;
+            .map_err(|e| anyhow!("memcg::MemCG::new fail: {e}"))?;
 
         let comp = compact::Compact::new(is_cg_v2, compact_config)
-            .map_err(|e| anyhow!("compact::Compact::new fail: {}", e))?;
+            .map_err(|e| anyhow!("compact::Compact::new fail: {e}"))?;
 
         let (cmd_tx, cmd_rx) = mpsc::channel(10);
 
@@ -255,7 +254,7 @@ impl MemAgent {
             .worker_threads(1)
             .enable_all()
             .build()
-            .map_err(|e| anyhow!("Builder::new_multi_threa failed: {}", e))?;
+            .map_err(|e| anyhow!("Builder::new_multi_threa failed: {e}"))?;
 
         runtime.spawn(async move {
             info!("mem-agent start");
@@ -274,11 +273,11 @@ impl MemAgent {
         self.cmd_tx
             .send((cmd, ret_tx))
             .await
-            .map_err(|e| anyhow!("cmd_tx.send cmd failed: {}", e))?;
+            .map_err(|e| anyhow!("cmd_tx.send cmd failed: {e}"))?;
 
         let ret = ret_rx
             .await
-            .map_err(|e| anyhow!("ret_rx.recv failed: {}", e))?;
+            .map_err(|e| anyhow!("ret_rx.recv failed: {e}"))?;
 
         Ok(ret)
     }
@@ -287,12 +286,11 @@ impl MemAgent {
         let ret = self
             .send_cmd_async(AgentCmd::MemcgSet(opt))
             .await
-            .map_err(|e| anyhow!("send_cmd failed: {}", e))?;
+            .map_err(|e| anyhow!("send_cmd failed: {e}"))?;
 
         match ret {
             AgentReturn::Err(e) => Err(anyhow!(
-                "mem_agent thread memcg_set_config_async failed: {}",
-                e
+                "mem_agent thread memcg_set_config_async failed: {e}"
             )),
             AgentReturn::Ok => Ok(()),
             _ => Err(anyhow!(
@@ -305,12 +303,11 @@ impl MemAgent {
         let ret = self
             .send_cmd_async(AgentCmd::CompactSet(opt))
             .await
-            .map_err(|e| anyhow!("send_cmd failed: {}", e))?;
+            .map_err(|e| anyhow!("send_cmd failed: {e}"))?;
 
         match ret {
             AgentReturn::Err(e) => Err(anyhow!(
-                "mem_agent thread compact_set_config_async failed: {}",
-                e
+                "mem_agent thread compact_set_config_async failed: {e}"
             )),
             AgentReturn::Ok => Ok(()),
             _ => Err(anyhow!(
@@ -323,11 +320,11 @@ impl MemAgent {
         let ret = self
             .send_cmd_async(AgentCmd::MemcgStatus)
             .await
-            .map_err(|e| anyhow!("send_cmd failed: {}", e))?;
+            .map_err(|e| anyhow!("send_cmd failed: {e}"))?;
 
         let status = match ret {
             AgentReturn::Err(e) => {
-                return Err(anyhow!("mem_agent thread memcg_status_async failed: {}", e))
+                return Err(anyhow!("mem_agent thread memcg_status_async failed: {e}"))
             }
             AgentReturn::Ok => {
                 return Err(anyhow!(

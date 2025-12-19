@@ -175,7 +175,7 @@ fn format_path(path: &str) -> String {
     let with_prefix = if path.starts_with('/') {
         path.to_string()
     } else {
-        format!("/{}", path)
+        format!("/{path}")
     };
 
     let trimmed = with_prefix.trim_end_matches('/');
@@ -322,7 +322,7 @@ impl Numa {
         let percent = self
             .psi
             .get_percent()
-            .map_err(|e| anyhow!("psi.get_percent failed: {}", e))?;
+            .map_err(|e| anyhow!("psi.get_percent failed: {e}"))?;
 
         if percent > limit {
             info!("period psi {}% exceeds limit {}%", percent, limit);
@@ -828,7 +828,7 @@ impl MemCgroups {
     fn set_config(&mut self, config: OptionConfig) -> Result<bool> {
         // refresh
         let mg_hash = mglru::host_memcgs_get(&HashSet::new(), true, self.is_cg_v2)
-            .map_err(|e| anyhow!("mglru::host_memcgs_get failed: {}", e))?;
+            .map_err(|e| anyhow!("mglru::host_memcgs_get failed: {e}"))?;
         self.remove_changed(&mg_hash);
         self.update_and_add(&mg_hash, true);
 
@@ -862,11 +862,7 @@ impl MemCgroups {
                     for cg in numa_cgs.clone() {
                         if cg.numa_id == numa {
                             self.config = orig_config;
-                            return Err(anyhow!(
-                                "path {} numa_id {:?} already exists",
-                                cur_path,
-                                numa
-                            ));
+                            return Err(anyhow!("path {cur_path} numa_id {numa:?} already exists"));
                         }
                     }
 
@@ -952,14 +948,14 @@ fn div_round(a: u64, b: u64) -> u64 {
 
 impl MemCG {
     pub fn new(is_cg_v2: bool, mut config: Config) -> Result<Self> {
-        mglru::check().map_err(|e| anyhow!("mglru::check failed: {}", e))?;
+        mglru::check().map_err(|e| anyhow!("mglru::check failed: {e}"))?;
 
         if is_cg_v2 {
             config.psi_path = PathBuf::from(CGROUP_PATH);
         }
 
         config.psi_path =
-            psi::check(&config.psi_path).map_err(|e| anyhow!("psi::check failed: {}", e))?;
+            psi::check(&config.psi_path).map_err(|e| anyhow!("psi::check failed: {e}"))?;
 
         config.format();
 
@@ -973,7 +969,7 @@ impl MemCG {
         /* Refresh memcgroups to self.memcgs.  */
         memcg
             .refresh(&HashSet::new())
-            .map_err(|e| anyhow!("init refresh failed: {}", e))?;
+            .map_err(|e| anyhow!("init refresh failed: {e}"))?;
 
         Ok(memcg)
     }
@@ -981,7 +977,7 @@ impl MemCG {
     pub fn work(&mut self, work_list: &Vec<u64>) -> Result<()> {
         /* Refresh memcgroups to self.memcgs.  */
         self.refresh(&HashSet::new())
-            .map_err(|e| anyhow!("first refresh failed: {}", e))?;
+            .map_err(|e| anyhow!("first refresh failed: {e}"))?;
 
         for sec in work_list {
             let sec = *sec;
@@ -991,7 +987,7 @@ impl MemCG {
             self.run_aging(&mut infov);
 
             self.run_eviction(&mut infov)
-                .map_err(|e| anyhow!("run_eviction second {} failed: {}", sec, e))?;
+                .map_err(|e| anyhow!("run_eviction second {sec} failed: {e}"))?;
         }
 
         Ok(())
@@ -1004,7 +1000,7 @@ impl MemCG {
      */
     fn refresh(&mut self, target_paths: &HashSet<String>) -> Result<()> {
         let mg_hash = mglru::host_memcgs_get(target_paths, true, self.is_cg_v2)
-            .map_err(|e| anyhow!("lru_gen_parse::file_parse failed: {}", e))?;
+            .map_err(|e| anyhow!("lru_gen_parse::file_parse failed: {e}"))?;
 
         let mut mgs = self.memcgs.blocking_write();
 
@@ -1125,7 +1121,7 @@ impl MemCG {
             match self.refresh(&path_set) {
                 Ok(_) => {}
                 Err(e) => {
-                    ret = Err(anyhow!("refresh failed: {}", e));
+                    ret = Err(anyhow!("refresh failed: {e}"));
                     break 'main_loop;
                 }
             };
@@ -1235,7 +1231,7 @@ impl MemCG {
                     let swap_not_available = match self.swap_not_available() {
                         Ok(b) => b,
                         Err(e) => {
-                            ret = Err(anyhow!("swap_not_available failed: {:?}", e));
+                            ret = Err(anyhow!("swap_not_available failed: {e:?}"));
                             break 'main_loop;
                         }
                     };
