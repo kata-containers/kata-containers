@@ -51,7 +51,7 @@ const DEBUG_MONITOR_SOCKET: &str = "debug-monitor.sock";
 // instance is on stack which makes it necessary for QemuCmdLine to be
 // Send + Sync, and for that ToQemuParams has to be Send + Sync. :-(
 #[async_trait]
-trait ToQemuParams: Send + Sync {
+pub trait ToQemuParams: Send + Sync {
     // OsString could look as a better fit here, however since foreign strings
     // come to this code from the outside as Strings already and this code adds
     // nothing but UTF-8 (in fact probably just ASCII) switching to OsStrings
@@ -1996,7 +1996,6 @@ impl ToQemuParams for ObjectTdxGuest {
         Ok(vec!["-object".to_owned(), self.to_string()])
     }
 }
-
 /// PCIeRootPortDevice directly attached onto the root bus
 /// -device pcie-root-port,id=rp0,bus=pcie.0,chassis=0,slot=0,multifunction=off,pref64-reserve=<X>B,mem-reserve=<Y>B
 #[derive(Debug, Default)]
@@ -2185,7 +2184,7 @@ fn should_disable_modern() -> bool {
 
 pub struct QemuCmdLine<'a> {
     id: String,
-    config: &'a HypervisorConfig,
+    pub config: &'a HypervisorConfig,
 
     // In principle, all objects implementing ToQemuParams could be just stored
     // in the `devices` container.  However, there are several special cases
@@ -2205,7 +2204,7 @@ pub struct QemuCmdLine<'a> {
 
     knobs: Knobs,
 
-    devices: Vec<Box<dyn ToQemuParams>>,
+    pub devices: Vec<Box<dyn ToQemuParams>>,
     ccw_subchannel: Option<CcwSubChannel>,
 }
 
@@ -2579,27 +2578,28 @@ impl<'a> QemuCmdLine<'a> {
             .set_nvdimm(false);
     }
 
-    /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.
-    /// The design origins from https://github.com/qemu/qemu/blob/master/docs/pcie.txt
+    /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's
+    /// related implementations of vfio devices. The design origins from
+    /// https://github.com/qemu/qemu/blob/master/docs/pcie.txt
     ///
     ///     pcie.0 bus
-    ///     ---------------------------------------------------------------------
-    ///          |                                         |
-    ///     -------------                            -------------
-    ///     | Root Port |                            | Root Port |
-    ///     ------------                             -------------
-    ///           |               -------------------------|------------------------
-    ///      ------------         |                 -----------------              |
-    ///      | PCIe Dev |         |    PCI Express  | Upstream Port |              |
-    ///      ------------         |      Switch     -----------------              |
-    ///                           |                  |            |                |
-    ///                           |    -------------------    -------------------  |
-    ///                           |    | Downstream Port |    | Downstream Port |  |
-    ///                           |    -------------------    -------------------  |
-    ///                           -------------|-----------------------|------------
-    ///                                  ------------
-    ///                                  | PCIe Dev |
-    ///                                  ------------
+    ///     --------------------------------------------------------------------
+    ///          |                                     |
+    ///     -------------                        -------------
+    ///     | Root Port |                        | Root Port |
+    ///     ------------                         -------------
+    ///           |           -------------------------|------------------------
+    ///      ------------     |                 -----------------              |
+    ///      | PCIe Dev |     |    PCI Express  | Upstream Port |              |
+    ///      ------------     |      Switch     -----------------              |
+    ///                       |                  |            |                |
+    ///                       |    -------------------    -------------------  |
+    ///                       |    | Downstream Port |    | Downstream Port |  |
+    ///                       |    -------------------    -------------------  |
+    ///                       -------------|-----------------------|------------
+    ///                              ------------
+    ///                              | PCIe Dev |
+    ///                              ------------
     ///  Using multi-function PCI Express Root Ports:
     ///     -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0] \
     ///     -device pcie-root-port,id=root_port2,chassis=x1,addr=z.1[,slot=y1][,bus=pcie.0] \
