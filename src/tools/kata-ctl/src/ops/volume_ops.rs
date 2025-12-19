@@ -235,9 +235,9 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let result = join_path(d.rootfs, d.volume_path);
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
             if result.is_ok() {
                 assert!(
                     result.as_ref().unwrap() == d.result.as_ref().unwrap(),

@@ -267,7 +267,7 @@ impl SockHandler for HvsockConfig {
             if msg.starts_with(CMD_OK) {
                 let response = msg
                     .strip_prefix(CMD_OK)
-                    .ok_or(format!("invalid response: {:?}", msg))
+                    .ok_or(format!("invalid response: {msg:?}"))
                     .map_err(|e| anyhow!(e))?
                     .trim();
                 debug!(sl!(), "Hybrid Vsock host-side port: {:?}", response);
