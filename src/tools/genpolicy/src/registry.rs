@@ -699,7 +699,7 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
                     &stderr, &stdout);
             }
         }
-        Err(e) => panic!("Error handling docker configuration file: {}", e),
+        Err(e) => panic!("Error handling docker configuration file: {e}"),
     }
 
     RegistryAuth::Anonymous

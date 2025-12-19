@@ -158,10 +158,10 @@ impl Config {
         let initdata = match args.initdata_path.as_deref() {
             Some(p) => {
                 let s = std::fs::read_to_string(p)
-                    .context(format!("Failed to read initdata file {}", p))
+                    .context(format!("Failed to read initdata file {p}"))
                     .unwrap();
                 kata_types::initdata::parse_initdata(&s)
-                    .context(format!("Failed to parse initdata from {}", p))
+                    .context(format!("Failed to parse initdata from {p}"))
                     .unwrap()
             }
             None => kata_types::initdata::InitData::new("sha256", "0.1.0"),
