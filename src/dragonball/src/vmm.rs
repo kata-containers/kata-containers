@@ -151,7 +151,7 @@ impl Vmm {
                     }
                 }
                 Err(e) => {
-                    error!("Abruptly exited VMM control loop: {:?}", e);
+                    error!("Abruptly exited VMM control loop: {e:?}");
                     if let EpollError::EpollMgr(dbs_utils::epoll_manager::Error::Epoll(e)) = e {
                         if e.errno() == libc::EAGAIN || e.errno() == libc::EINTR {
                             continue 'poll;
@@ -170,16 +170,16 @@ impl Vmm {
         if let Some(vm) = self.get_vm_mut() {
             if vm.is_vm_initialized() {
                 if let Err(e) = vm.remove_devices() {
-                    warn!("failed to remove devices: {:?}", e);
+                    warn!("failed to remove devices: {e:?}");
                 }
 
                 #[cfg(feature = "dbs-upcall")]
                 if let Err(e) = vm.remove_upcall() {
-                    warn!("failed to remove upcall: {:?}", e);
+                    warn!("failed to remove upcall: {e:?}");
                 }
 
                 if let Err(e) = vm.reset_console() {
-                    warn!("Cannot set canonical mode for the terminal. {:?}", e);
+                    warn!("Cannot set canonical mode for the terminal. {e:?}");
                 }
 
                 // Now, we use exit_code instead of invoking _exit to
@@ -188,12 +188,12 @@ impl Vmm {
                 match vm.vcpu_manager() {
                     Ok(mut mgr) => {
                         if let Err(e) = mgr.exit_all_vcpus() {
-                            warn!("Failed to exit vcpu thread. {:?}", e);
+                            warn!("Failed to exit vcpu thread. {e:?}");
                         }
                         #[cfg(feature = "dbs-upcall")]
                         mgr.set_upcall_channel(None);
                     }
-                    Err(e) => warn!("Failed to get vcpu manager {:?}", e),
+                    Err(e) => warn!("Failed to get vcpu manager {e:?}"),
                 }
 
                 // save exit state to VM, instead of exit process.

@@ -97,7 +97,7 @@ impl EpollHelper {
                         // appropriate to retry, by calling into epoll_wait().
                         continue;
                     }
-                    error!("io thread epoll wait failed: {:?}", e);
+                    error!("io thread epoll wait failed: {e:?}");
                     return Err(EpollHelperError::Wait(e));
                 }
             };

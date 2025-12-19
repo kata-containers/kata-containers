@@ -336,7 +336,7 @@ impl VmmService {
                 panic!("The channel's sending half was disconnected. Cannot receive data.");
             }
         };
-        debug!("receive vmm action: {:?}", request);
+        debug!("receive vmm action: {request:?}");
 
         let response = match request {
             VmmAction::ConfigureBootSource(boot_source_body) => {
@@ -421,7 +421,7 @@ impl VmmService {
             VmmAction::RemoveHostDevice(hostdev_cfg) => self.remove_vfio_device(vmm, &hostdev_cfg),
         };
 
-        debug!("send vmm response: {:?}", response);
+        debug!("send vmm response: {response:?}");
         self.send_response(response)
     }
 
@@ -559,7 +559,7 @@ impl VmmService {
         }
         if max_vcpu_from_topo != max_vcpu_count {
             max_vcpu_count = max_vcpu_from_topo;
-            info!("Since max_vcpu_count is not equal to cpu topo information, we have changed the max vcpu count to {}", max_vcpu_from_topo);
+            info!("Since max_vcpu_count is not equal to cpu topo information, we have changed the max vcpu count to {max_vcpu_from_topo}");
         }
         config.max_vcpu_count = max_vcpu_count;
 
@@ -640,7 +640,7 @@ impl VmmService {
 
         info!("add_vsock_device: {:?}", config);
         let ctx = vm.create_device_op_context(None).map_err(|e| {
-            info!("create device op context error: {:?}", e);
+            info!("create device op context error: {e:?}");
             VmmActionError::Vsock(VsockDeviceError::UpdateNotAllowedPostBoot)
         })?;
 
@@ -713,9 +713,9 @@ impl VmmService {
             VfioDeviceError::InvalidVMID,
         ))?;
 
-        info!("prepare_remove_block_device: {:?}", blockdev_id);
+        info!("prepare_remove_block_device: {blockdev_id:?}");
         let ctx = vm.create_device_op_context(None).map_err(|e| {
-            info!("create device op context error: {:?}", e);
+            info!("create device op context error: {e:?}");
             if let StartMicroVmError::MicroVMAlreadyRunning = e {
                 VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
             } else if let StartMicroVmError::UpcallServerNotReady = e {
@@ -857,7 +857,7 @@ impl VmmService {
         }
 
         let ctx = vm.create_device_op_context(None).map_err(|e| {
-            info!("create device op context error: {:?}", e);
+            info!("create device op context error: {e:?}");
             VmmActionError::FsDevice(FsDeviceError::UpdateNotAllowedPostBoot)
         })?;
         FsDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
@@ -906,10 +906,10 @@ impl VmmService {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
             VfioDeviceError::InvalidVMID,
         ))?;
-        info!("add_vfio_device: {:?}", config);
+        info!("add_vfio_device: {config:?}");
 
         let mut ctx = vm.create_device_op_context(None).map_err(|e| {
-            info!("create device op context error: {:?}", e);
+            info!("create device op context error: {e:?}");
             if let StartMicroVmError::MicroVMAlreadyRunning = e {
                 VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
             } else if let StartMicroVmError::UpcallServerNotReady = e {
@@ -936,9 +936,9 @@ impl VmmService {
             VfioDeviceError::InvalidVMID,
         ))?;
 
-        info!("prepare_remove_vfio_device: {:?}", hostdev_id);
+        info!("prepare_remove_vfio_device: {hostdev_id:?}");
         let ctx = vm.create_device_op_context(None).map_err(|e| {
-            info!("create device op context error: {:?}", e);
+            info!("create device op context error: {e:?}");
             if let StartMicroVmError::MicroVMAlreadyRunning = e {
                 VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
             } else if let StartMicroVmError::UpcallServerNotReady = e {
@@ -965,9 +965,9 @@ impl VmmService {
             VfioDeviceError::InvalidVMID,
         ))?;
 
-        info!("remove_vfio_device: {:?}", hostdev_id);
+        info!("remove_vfio_device: {hostdev_id:?}");
         let mut ctx = vm.create_device_op_context(None).map_err(|e| {
-            info!("create device op context error: {:?}", e);
+            info!("create device op context error: {e:?}");
             if let StartMicroVmError::MicroVMAlreadyRunning = e {
                 VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
             } else if let StartMicroVmError::UpcallServerNotReady = e {
@@ -1743,7 +1743,7 @@ mod tests {
                         ))
                     ));
                     let err_string = format!("{}", result.unwrap_err());
-                    println!("{}", err_string);
+                    println!("{err_string}");
                     let expected_err = String::from(
                         "virtio-fs device error: \
                     Fs device attach a backend fs failed",

@@ -54,8 +54,7 @@ extern "C" fn sigsys_handler(num: c_int, info: *mut siginfo_t, _unused: *mut c_v
     // so it actually only collects the count for bad syscalls.
     METRICS.read().unwrap().seccomp.num_faults.inc();
     error!(
-        "Shutting down VM after intercepting a bad syscall ({}).",
-        syscall
+        "Shutting down VM after intercepting a bad syscall ({syscall})."
     );
 
     // Safe because we're terminating the process anyway. We don't actually do anything when
@@ -89,8 +88,7 @@ extern "C" fn sigbus_sigsegv_handler(num: c_int, info: *mut siginfo_t, _unused: 
     }
 
     error!(
-        "Shutting down VM after intercepting signal {}, code {}.",
-        si_signo, si_code
+        "Shutting down VM after intercepting signal {si_signo}, code {si_code}."
     );
 
     // Safe because we're terminating the process anyway. We don't actually do anything when
