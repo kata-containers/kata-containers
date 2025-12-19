@@ -16,6 +16,7 @@ bootloader/AB
 centric/B
 checkbox/A
 chipset/AB
+chroot		# Unix change root command
 codebase
 commandline
 config/AB
@@ -38,6 +39,7 @@ ethernet
 filename/AB
 filesystem/AB
 freeform
+genpolicy/AB	# Kata policy generation tool
 goroutine/AB
 hostname/AB
 hostPath
@@ -125,6 +127,7 @@ untrusted
 untrusting
 userid/AB
 userspace/B
+vectorAdd		# CUDA sample name
 vendored
 vendoring
 versioning

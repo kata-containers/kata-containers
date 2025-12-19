@@ -5,6 +5,14 @@ to a Kata Containers container, provides host system requirements, explains how
 Kata Containers guest components can be built to support the NVIDIA GPU
 scenario, and gives practical usage examples using `ctr`.
 
+Please see the guide
+[Enabling NVIDIA GPU workloads using GPU passthrough with Kata Containers](NVIDIA-GPU-passthrough-and-Kata-QEMU.md)
+for a documentation of an end-to-end reference implementation of a Kata
+Containers stack for GPU passthrough using QEMU, the go-based Kata Runtime,
+and an NVIDIA-specific root filesystem. This reference implementation is built
+and validated in Kata's CI, and it can be used to test GPU workloads with Kata
+components and Kubernetes out of the box.
+
 ## Comparison between Passthrough and vGPU Modes
 
 An NVIDIA GPU device can be passed to a Kata Containers container using GPU
