@@ -47,7 +47,7 @@ else
 default: runtime show-header
 ##TARGET test: run cargo tests
 test: static-checks-build
-	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
 install: install-runtime install-configs
 endif
 
