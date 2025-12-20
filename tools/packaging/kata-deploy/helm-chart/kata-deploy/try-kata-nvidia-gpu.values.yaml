@@ -9,7 +9,7 @@
 debug: false
 
 snapshotter:
-  setup: []
+  setup: ["nydus"]
 
 # Enable NVIDIA GPU shims
 # First disable all shims (since values.yaml enables all by default)
@@ -57,8 +57,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
     crio:
       guestPull: true
     agent:
@@ -71,8 +70,7 @@ shims:
       - amd64
     allowedHypervisorAnnotations: []
     containerd:
-      snapshotter: ""
-      forceGuestPull: true
+      snapshotter: "nydus"
     crio:
       guestPull: true
     agent:
