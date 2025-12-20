@@ -50,10 +50,18 @@ docs-url-alive-check:
 build-and-publish-kata-debug:
 	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG} 
 
+docs-build:
+	docker build -t kata-docs docs/
+
+docs-serve: docs-build
+	docker run --rm -p 8000:8000 -v .:/build kata-docs serve -a 0.0.0.0:8000
+
 .PHONY: \
 	all \
 	kata-tarball \
 	install-tarball \
 	default \
 	static-checks \
-	docs-url-alive-check
+	docs-url-alive-check \
+	docs-build \
+	docs-serve
