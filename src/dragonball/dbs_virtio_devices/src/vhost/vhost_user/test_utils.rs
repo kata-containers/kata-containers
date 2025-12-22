@@ -526,7 +526,7 @@ impl<R: Req> Endpoint<R> {
         payload: &[P],
         fds: Option<&[RawFd]>,
     ) -> Result<()> {
-        let len = payload.len() * mem::size_of::<P>();
+        let len = std::mem::size_of_val(payload);
         if len > MAX_MSG_SIZE - mem::size_of::<T>() {
             return Err(Error::OversizedMsg);
         }
