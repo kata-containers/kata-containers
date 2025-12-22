@@ -612,7 +612,7 @@ mod tests {
 
         // get config
         let config_len = mem::size_of::<VirtioBlockConfig>();
-        let mut config_space: Vec<u8> = vec![0u8; config_len as usize];
+        let mut config_space: Vec<u8> = vec![0u8; config_len];
         let (hdr, _msg, _payload, rfds) = slave
             .recv_payload_into_buf::<VhostUserConfig>(&mut config_space)
             .unwrap();
