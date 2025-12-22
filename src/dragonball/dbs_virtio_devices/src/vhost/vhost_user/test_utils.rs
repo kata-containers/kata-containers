@@ -103,9 +103,9 @@ pub enum MasterReq {
     MAX_CMD = 33,
 }
 
-impl Into<u32> for MasterReq {
-    fn into(self) -> u32 {
-        self as u32
+impl From<MasterReq> for u32 {
+    fn from(val: MasterReq) -> Self {
+        val as u32
     }
 }
 
