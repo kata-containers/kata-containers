@@ -566,7 +566,7 @@ impl<R: Req> Endpoint<R> {
     /// * - SocketError: other socket related errors.
     /// * - PartialMessage: received a partial message.
     /// * - InvalidMessage: received a invalid message.
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::type_complexity))]
+    #[cfg_attr(clippy, allow(clippy::type_complexity))]
     pub fn recv_payload_into_buf<T: Sized + Default + VhostUserMsgValidator>(
         &mut self,
         buf: &mut [u8],
