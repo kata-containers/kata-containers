@@ -733,7 +733,7 @@ mod tests {
 
         assert_eq!(dev.device_type(), TYPE_NET);
 
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(dev.queue_max_sizes(), &queue_size[..]);
         assert_eq!(
             dev.get_avail_features(0),

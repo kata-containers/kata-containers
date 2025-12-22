@@ -841,7 +841,7 @@ pub(crate) mod tests {
         assert_eq!(data, vec![1; 16]);
 
         // test config space invalid write
-        let write_data = vec![0xffu8; 16];
+        let write_data = [0xffu8; 16];
         let mut read_data = vec![0x0; 16];
         assert_eq!(
             device.write_config(4, &write_data[..13]).unwrap_err(),

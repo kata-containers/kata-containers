@@ -639,7 +639,7 @@ pub(crate) mod tests {
         d: &mut MmioV2Device<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap>,
         status: u32,
     ) {
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
         LittleEndian::write_u32(&mut buf[..], status);
         d.write(IoAddress(0), IoAddress(REG_MMIO_STATUS), &buf[..]);
     }
@@ -785,7 +785,7 @@ pub(crate) mod tests {
         // the length is ok again
         buf.pop();
 
-        let mut dev_cfg = vec![0; 4];
+        let mut dev_cfg = [0; 4];
         d.read(
             IoAddress(0),
             IoAddress(MMIO_CFG_SPACE_OFF),
@@ -871,17 +871,17 @@ pub(crate) mod tests {
         assert_eq!(buf[..], buf_copy[..]);
 
         // test for no msi_feature
-        let mut buf = vec![0; 2];
+        let mut buf = [0; 2];
         d.read(IoAddress(0), IoAddress(REG_MMIO_MSI_CSR), &mut buf[..]);
         assert_eq!(LittleEndian::read_u16(&buf[..]), 0);
 
         // test for msi_feature
         d.device_vendor |= DRAGONBALL_FEATURE_MSI_INTR;
-        let mut buf = vec![0; 2];
+        let mut buf = [0; 2];
         d.read(IoAddress(0), IoAddress(REG_MMIO_MSI_CSR), &mut buf[..]);
         assert_eq!(LittleEndian::read_u16(&buf[..]), MMIO_MSI_CSR_SUPPORTED);
 
-        let mut dev_cfg = vec![0; 4];
+        let mut dev_cfg = [0; 4];
         assert_eq!(
             d.exchange_driver_status(0, DEVICE_DRIVER | DEVICE_INIT)
                 .unwrap(),
@@ -900,7 +900,7 @@ pub(crate) mod tests {
         skip_if_kvm_unaccessable!();
         let mut d = get_mmio_device();
 
-        let mut buf = vec![0; 5];
+        let mut buf = [0; 5];
         LittleEndian::write_u32(&mut buf[..4], 1);
 
         // Nothing should happen, because the slice len > 4.
@@ -917,7 +917,7 @@ pub(crate) mod tests {
         set_driver_status(&mut d, DEVICE_STATUS_DRIVER);
         assert_eq!(d.driver_status(), DEVICE_STATUS_DRIVER);
 
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
         buf[0] = 0xa5;
         d.write(IoAddress(0), IoAddress(MMIO_CFG_SPACE_OFF), &buf[..]);
         buf[0] = 0;
@@ -1069,7 +1069,7 @@ pub(crate) mod tests {
             DEVICE_ACKNOWLEDGE | DEVICE_DRIVER | DEVICE_FEATURES_OK
         );
 
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
         let size = d.state().queues().len();
         for q in 0..size {
             d.state().set_queue_select(q as u32);
@@ -1119,7 +1119,7 @@ pub(crate) mod tests {
         set_driver_status(d, DEVICE_ACKNOWLEDGE | DEVICE_DRIVER | DEVICE_FEATURES_OK);
 
         // Setup queue data structures
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
         let size = d.state().queues().len();
         for q in 0..size {
             d.state().set_queue_select(q as u32);
@@ -1148,7 +1148,7 @@ pub(crate) mod tests {
         skip_if_kvm_unaccessable!();
         let resources = get_device_resource(false, false);
         let mut d = get_mmio_device_inner(true, 0, resources);
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
 
         assert!(!d.state().check_queues_valid());
         assert!(!d.state().device_activated());
@@ -1196,7 +1196,7 @@ pub(crate) mod tests {
         let resources = get_device_resource(true, false);
         let mut d = get_mmio_device_inner(true, 0, resources);
 
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
         LittleEndian::write_u32(&mut buf[..], 0x1234);
         d.write(IoAddress(0), IoAddress(REG_MMIO_MSI_ADDRESS_L), &buf[..]);
         LittleEndian::write_u32(&mut buf[..], 0x5678);
@@ -1239,7 +1239,7 @@ pub(crate) mod tests {
         let resources = get_device_resource(true, true);
         let d = get_mmio_device_inner(true, 0, resources);
 
-        let mut buf = vec![0; 4];
+        let mut buf = [0; 4];
 
         // shm select 0
         d.write(IoAddress(0), IoAddress(REG_MMIO_SHM_SEL), &buf[..]);

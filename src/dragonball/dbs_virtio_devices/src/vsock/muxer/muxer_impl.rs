@@ -1153,7 +1153,7 @@ mod tests {
             self.init_pkt(local_port, peer_port, uapi::VSOCK_OP_RESPONSE);
             self.send();
 
-            let mut buf = vec![0u8; 32];
+            let mut buf = [0u8; 32];
             let len = stream.read(&mut buf[..]).unwrap();
             assert_eq!(&buf[..len], format!("OK {local_port}\n").as_bytes());
 
