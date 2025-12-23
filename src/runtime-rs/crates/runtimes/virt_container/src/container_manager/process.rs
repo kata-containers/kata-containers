@@ -296,7 +296,7 @@ impl Process {
         mut reader: Box<dyn AsyncRead + Send + Unpin>,
         mut writer: Box<dyn AsyncWrite + Send + Unpin>,
     ) -> Result<()> {
-        let io_name = format!("{:?}", io_type);
+        let io_name = format!("{io_type:?}");
 
         info!(self.logger, "run_io_copy[{}] starts", io_name);
         let logger = self.logger.new(o!("io_name" => io_name.clone()));

@@ -21,7 +21,7 @@ fn get_meminfo(opt: &str) -> Result<u64> {
         }
     }
 
-    Err(anyhow!("no {} found", opt))
+    Err(anyhow!("no {opt} found"))
 }
 
 pub fn get_memfree_kb() -> Result<u64> {

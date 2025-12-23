@@ -583,7 +583,7 @@ impl AgentPolicy {
         for i in 0..self.resources.len() {
             let annotation = self.resources[i].generate_initdata_anno(self);
             if self.config.base64_out {
-                println!("{}", annotation);
+                println!("{annotation}");
             }
             yaml_string += &self.resources[i].serialize(&annotation);
         }

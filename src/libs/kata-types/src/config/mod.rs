@@ -343,8 +343,7 @@ pub fn validate_path_pattern<P: AsRef<Path>>(patterns: &[String], path: P) -> Re
     }
 
     Err(std::io::Error::other(format!(
-        "Path {} is not permitted",
-        path
+        "Path {path} is not permitted"
     )))
 }
 

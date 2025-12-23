@@ -245,7 +245,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> NetEpollH
             }
             Err(e) => {
                 metrics.tx_fails.inc();
-                error!("{}: failed to write to tap, {:?}", NET_DRIVER_NAME, e);
+                error!("{NET_DRIVER_NAME}: failed to write to tap, {e:?}");
             }
         }
     }
@@ -612,7 +612,7 @@ impl<AS: GuestAddressSpace> Net<AS> {
         rx_rate_limiter: Option<RateLimiter>,
         tx_rate_limiter: Option<RateLimiter>,
     ) -> Result<Self> {
-        trace!(target: "virtio-net", "{}: Net::new_with_tap()", NET_DRIVER_NAME);
+        trace!(target: "virtio-net", "{NET_DRIVER_NAME}: Net::new_with_tap()");
 
         // Set offload flags to match the virtio features below.
         tap.set_offload(
@@ -673,7 +673,7 @@ impl<AS: GuestAddressSpace> Net<AS> {
         rx_rate_limiter: Option<RateLimiter>,
         tx_rate_limiter: Option<RateLimiter>,
     ) -> Result<Self> {
-        info!("open net tap {}", host_dev_name);
+        info!("open net tap {host_dev_name}");
         let tap = Tap::open_named(host_dev_name.as_str(), false)
             .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::Open(err))))?;
         info!("net tap opened");
@@ -704,10 +704,7 @@ impl<AS: GuestAddressSpace + 'static> Net<AS> {
         if let Some(sender) = &self.sender {
             if sender.send((rx_bytes, rx_ops, tx_bytes, tx_ops)).is_ok() {
                 if let Err(e) = self.patch_rate_limiter_fd.write(1) {
-                    error!(
-                        "virtio-net: failed to write rate-limiter patch event {:?}",
-                        e
-                    );
+                    error!("virtio-net: failed to write rate-limiter patch event {e:?}");
                     Err(Error::InternalError)
                 } else {
                     Ok(())
@@ -827,8 +824,8 @@ where
         let subscriber_id = self.subscriber_id.take();
         if let Some(subscriber_id) = subscriber_id {
             match self.device_info.remove_event_handler(subscriber_id) {
-                Ok(_) => debug!("virtio-net: removed subscriber_id {:?}", subscriber_id),
-                Err(err) => warn!("virtio-net: failed to remove event handler: {:?}", err),
+                Ok(_) => debug!("virtio-net: removed subscriber_id {subscriber_id:?}"),
+                Err(err) => warn!("virtio-net: failed to remove event handler: {err:?}"),
             };
         } else {
             self.tap.take();
@@ -838,7 +835,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
+
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
     use std::time::Duration;
@@ -920,7 +917,7 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_NET
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

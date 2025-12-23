@@ -64,7 +64,7 @@ impl DeviceIoMut for I8042Wrapper<EventFdTrigger> {
         }
         if let Err(e) = self.device.write(offset.raw_value() as u8, data[0]) {
             self.metrics.error_count.inc();
-            error!("Failed to trigger i8042 reset event: {:?}", e);
+            error!("Failed to trigger i8042 reset event: {e:?}");
         } else {
             self.metrics.write_count.inc();
         }

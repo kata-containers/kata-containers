@@ -305,7 +305,7 @@ struct MemTool {}
 impl MemTool {
     fn virtio_mem_valid_range(config: &VirtioMemConfig, addr: u64, size: u64) -> bool {
         // address properly aligned?
-        if addr % config.block_size != 0 || size % config.block_size != 0 {
+        if !addr.is_multiple_of(config.block_size) || !size.is_multiple_of(config.block_size) {
             return false;
         }
 
@@ -603,7 +603,7 @@ impl MemTool {
                     )?;
                     let mut host_addr = region
                         .get_host_address(MemoryRegionAddress(0))
-                        .map_err(|e| MemError::RsizeUsabeRegionFail(format!("{:?}", e)))?
+                        .map_err(|e| MemError::RsizeUsabeRegionFail(format!("{e:?}")))?
                         as u64;
                     info!(target: MEM_DRIVER_NAME,
                           "{}: {}: new map_region index {}-{} new region guest_addr 0x{:x}-0x{:x} host_addr 0x{:x} len 0x{:x}",
@@ -623,11 +623,7 @@ impl MemTool {
         let oldsize = config.usable_region_size;
         info!(
             target: MEM_DRIVER_NAME,
-            "{}: {}: virtio_mem_resize_usable_region {:?} {:?}",
-            MEM_DRIVER_NAME,
-            id,
-            oldsize,
-            newsize
+            "{MEM_DRIVER_NAME}: {id}: virtio_mem_resize_usable_region {oldsize:?} {newsize:?}"
         );
         config.usable_region_size = newsize;
 
@@ -807,7 +803,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion> MemEpollH
             Err(e) => {
                 debug!(
                     target: MEM_DRIVER_NAME,
-                    "{}: {}: bad guest memory address, {}", MEM_DRIVER_NAME, id, e
+                    "{MEM_DRIVER_NAME}: {id}: bad guest memory address, {e}"
                 );
                 0
             }
@@ -913,9 +909,7 @@ impl<AS: GuestAddressSpace> Mem<AS> {
     ) -> Result<Self> {
         trace!(
             target: MEM_DRIVER_NAME,
-            "{}: {}: Mem::new()",
-            MEM_DRIVER_NAME,
-            id
+            "{MEM_DRIVER_NAME}: {id}: Mem::new()"
         );
 
         let mut avail_features = 1u64 << VIRTIO_F_VERSION_1 as u64;
@@ -944,7 +938,7 @@ impl<AS: GuestAddressSpace> Mem<AS> {
         let requested_size = requested_size_mib * 1024 * 1024;
         if capacity == 0
             || requested_size > capacity
-            || requested_size % VIRTIO_MEM_DEFAULT_BLOCK_SIZE != 0
+            || !requested_size.is_multiple_of(VIRTIO_MEM_DEFAULT_BLOCK_SIZE)
         {
             return Err(Error::InvalidInput);
         }
@@ -967,7 +961,7 @@ impl<AS: GuestAddressSpace> Mem<AS> {
         // adding curly braces means that a copy of the field is made, stored
         // in a (properly aligned) temporary, and a reference to that temporary
         // is being formatted.
-        info!(target: MEM_DRIVER_NAME, "{}: {}: new block_size: 0x{:x} region_size: 0x{:x} requested_size: 0x{:x} usable_region_size: 0x{:x} multi_region: {} numa_node_id: {:?}", 
+        info!(target: MEM_DRIVER_NAME, "{}: {}: new block_size: 0x{:x} region_size: 0x{:x} requested_size: 0x{:x} usable_region_size: 0x{:x} multi_region: {} numa_node_id: {:?}",
             MEM_DRIVER_NAME, id, {config.block_size}, {config.region_size}, {config.requested_size}, {config.usable_region_size}, multi_region, numa_node_id);
 
         let device_info = VirtioDeviceInfo::new(
@@ -999,7 +993,9 @@ impl<AS: GuestAddressSpace> Mem<AS> {
     pub fn set_requested_size(&self, requested_size_mb: u64) -> Result<()> {
         // Align to 4MB.
         let requested_size = requested_size_mb * 1024 * 1024;
-        if requested_size > self.capacity || requested_size % VIRTIO_MEM_DEFAULT_BLOCK_SIZE != 0 {
+        if requested_size > self.capacity
+            || !requested_size.is_multiple_of(VIRTIO_MEM_DEFAULT_BLOCK_SIZE)
+        {
             return Err(Error::InvalidInput);
         }
 
@@ -1181,9 +1177,9 @@ where
             // Remove MemEpollHandler from event manager, so it could be dropped and the resources
             // could be freed.
             match self.device_info.remove_event_handler(subscriber_id) {
-                Ok(_) => debug!("virtio-mem: removed subscriber_id {:?}", subscriber_id),
+                Ok(_) => debug!("virtio-mem: removed subscriber_id {subscriber_id:?}"),
                 Err(e) => {
-                    warn!("virtio-mem: failed to remove event handler: {:?}", e);
+                    warn!("virtio-mem: failed to remove event handler: {e:?}");
                 }
             }
         }
@@ -1716,7 +1712,7 @@ pub(crate) mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_MEM
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

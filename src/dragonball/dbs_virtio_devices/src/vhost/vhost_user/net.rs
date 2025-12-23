@@ -66,10 +66,7 @@ impl VhostUserNetDevice {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
-        info!(
-            "{}: slave support features 0x{:x}",
-            NET_DRIVER_NAME, avail_features
-        );
+        info!("{NET_DRIVER_NAME}: slave support features 0x{avail_features:x}");
 
         avail_features |= (1 << VIRTIO_NET_F_MTU) as u64;
         // All these features depends on availability of control channel
@@ -117,10 +114,7 @@ impl VhostUserNetDevice {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
-        info!(
-            "{}: creating Unix Domain Socket listener...",
-            NET_DRIVER_NAME
-        );
+        info!("{NET_DRIVER_NAME}: creating Unix Domain Socket listener...");
 
         let listener = Listener::new(
             NET_DRIVER_NAME.to_string(),
@@ -129,12 +123,9 @@ impl VhostUserNetDevice {
             LISTENER_SLOT,
         )?;
 
-        info!(
-            "{}: waiting for incoming connection from the slave...",
-            NET_DRIVER_NAME
-        );
+        info!("{NET_DRIVER_NAME}: waiting for incoming connection from the slave...");
         let (master, avail_features) = listener.accept()?;
-        info!("{}: connection to slave is ready.", NET_DRIVER_NAME);
+        info!("{NET_DRIVER_NAME}: connection to slave is ready.");
 
         Self::new(
             master,
@@ -661,7 +652,7 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_NET
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

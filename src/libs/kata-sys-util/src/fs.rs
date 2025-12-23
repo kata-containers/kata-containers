@@ -81,8 +81,7 @@ pub fn reflink_copy<S: AsRef<Path>, D: AsRef<Path>>(src: S, dst: D) -> Result<()
 
     if !src_path.is_file() {
         return Err(std::io::Error::other(format!(
-            "reflink_copy src {} is not a regular file",
-            src
+            "reflink_copy src {src} is not a regular file"
         )));
     }
 
@@ -90,8 +89,7 @@ pub fn reflink_copy<S: AsRef<Path>, D: AsRef<Path>>(src: S, dst: D) -> Result<()
     if dst_path.exists() {
         if !dst_path.is_file() {
             return Err(std::io::Error::other(format!(
-                "reflink_copy dst {} is not a regular file",
-                dst,
+                "reflink_copy dst {dst} is not a regular file",
             )));
         } else {
             fs::remove_file(dst_path)?;
@@ -107,8 +105,7 @@ pub fn reflink_copy<S: AsRef<Path>, D: AsRef<Path>>(src: S, dst: D) -> Result<()
             }
         } else if !dst_parent.is_dir() {
             return Err(std::io::Error::other(format!(
-                "reflink_copy parent of {} is not a directory",
-                dst,
+                "reflink_copy parent of {dst} is not a directory",
             )));
         }
     }
@@ -129,16 +126,14 @@ pub fn reflink_copy<S: AsRef<Path>, D: AsRef<Path>>(src: S, dst: D) -> Result<()
                 );
                 if let Err(e) = do_regular_copy(src.as_ref(), dst.as_ref()) {
                     return Err(std::io::Error::other(format!(
-                        "reflink_copy: regular copy {} to {} failed: {:?}",
-                        src, dst, e,
+                        "reflink_copy: regular copy {src} to {dst} failed: {e:?}",
                     )));
                 }
             }
             // Reflink copy failed
             _ => {
                 return Err(std::io::Error::other(format!(
-                    "reflink_copy: copy {} to {} failed: {:?}",
-                    src, dst, e,
+                    "reflink_copy: copy {src} to {dst} failed: {e:?}",
                 )))
             }
         }
@@ -156,14 +151,10 @@ fn do_regular_copy(src: &str, dst: &str) -> Result<()> {
         Ok(output) => match output.status.success() {
             true => Ok(()),
             false => Err(std::io::Error::other(format!(
-                "`{:?}` failed: {:?}",
-                cmd, output
+                "`{cmd:?}` failed: {output:?}"
             ))),
         },
-        Err(e) => Err(std::io::Error::other(format!(
-            "`{:?}` failed: {:?}",
-            cmd, e
-        ))),
+        Err(e) => Err(std::io::Error::other(format!("`{cmd:?}` failed: {e:?}"))),
     }
 }
 

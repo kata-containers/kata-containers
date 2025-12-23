@@ -41,7 +41,7 @@ async fn handle_async_connection<'a>(
 
     handle_trace_data(logger.clone(), &mut conn, exporter, dump_only)
         .await
-        .map_err(|e| mk_io_err(&format!("failed to handle data: {:}", e)))?;
+        .map_err(|e| mk_io_err(&format!("failed to handle data: {e:}")))?;
 
     debug!(&logger, "handled connection");
 

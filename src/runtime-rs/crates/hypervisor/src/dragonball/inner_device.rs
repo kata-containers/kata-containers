@@ -340,7 +340,7 @@ impl DragonballInner {
             flags.add_flag("drop-sys-resource", &mut fs_cfg.drop_sys_resource);
             flags.add_flag("o", &mut opt_list);
         })
-        .with_context(|| format!("parse args: {:?}", args))?;
+        .with_context(|| format!("parse args: {args:?}"))?;
 
         // more options parsed for inline virtio-fs' custom config
         args.append(options);

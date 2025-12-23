@@ -58,7 +58,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
 
         let mut iter = match queue.iter(mem) {
             Err(e) => {
-                error!("virtio-blk: failed to iterate queue. {}", e);
+                error!("virtio-blk: failed to iterate queue. {e}");
                 return false;
             }
             Ok(iter) => iter,
@@ -78,7 +78,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
             match Request::parse(&mut desc_chain, data_descs, self.disk_image.get_max_size()) {
                 Err(e) => {
                     // It's caused by invalid request from guest, simple...
-                    debug!("Failed to parse available descriptor chain: {:?}", e);
+                    debug!("Failed to parse available descriptor chain: {e:?}");
                     used_desc_vec.push((index, 0));
                 }
                 Ok(req) => {
@@ -189,13 +189,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                 let err_code = match &e {
                     ExecuteError::BadRequest(e) => {
                         // It's caused by invalid request from guest, simple...
-                        debug!("Failed to execute GetDeviceID request: {:?}", e);
+                        debug!("Failed to execute GetDeviceID request: {e:?}");
                         VIRTIO_BLK_S_IOERR
                     }
                     ExecuteError::Flush(e) => {
                         // only temporary errors are possible here
                         // TODO recovery
-                        debug!("Failed to execute Flush request: {:?}", e);
+                        debug!("Failed to execute Flush request: {e:?}");
                         VIRTIO_BLK_S_IOERR
                     }
                     ExecuteError::Read(e) | ExecuteError::Write(e) => {
@@ -206,25 +206,22 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                         // Hopefully AIO are used and read/write requests never ever
                         // reaches here when TDC live upgrading is enabled.
                         // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        warn!("virtio-blk: Failed to execute Read/Write request: {:?}", e);
+                        warn!("virtio-blk: Failed to execute Read/Write request: {e:?}");
                         VIRTIO_BLK_S_IOERR
                     }
                     ExecuteError::Seek(e) => {
                         // It's caused by invalid request from guest, simple...
-                        warn!(
-                            "virtio-blk: Failed to execute out-of-boundary request: {:?}",
-                            e
-                        );
+                        warn!("virtio-blk: Failed to execute out-of-boundary request: {e:?}");
                         VIRTIO_BLK_S_IOERR
                     }
                     ExecuteError::GetDeviceID(e) => {
                         // It's caused by invalid request from guest, simple...
-                        warn!("virtio-blk: Failed to execute GetDeviceID request: {:?}", e);
+                        warn!("virtio-blk: Failed to execute GetDeviceID request: {e:?}");
                         VIRTIO_BLK_S_IOERR
                     }
                     ExecuteError::Unsupported(e) => {
                         // It's caused by invalid request from guest, simple...
-                        warn!("virtio-blk: Failed to execute request: {:?}", e);
+                        warn!("virtio-blk: Failed to execute request: {e:?}");
                         VIRTIO_BLK_S_UNSUPP
                     }
                 };
@@ -294,7 +291,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                 Ok(true)
             }
             Err(e) => {
-                warn!("virtio-blk: submit request {:?} error. {}", req, e);
+                warn!("virtio-blk: submit request {req:?} error. {e}");
                 // Failure may be caused by:
                 // no enough resource to queue the AIO request
                 // TODO recover
@@ -377,7 +374,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> EpollHelperHandler for InnerBlockEpoll
         match slot {
             QUEUE_AVAIL_EVENT => {
                 if let Err(e) = self.queue.consume_event() {
-                    error!("virtio-blk: failed to get queue event: {:?}", e);
+                    error!("virtio-blk: failed to get queue event: {e:?}");
                     return true;
                 } else if self.rate_limiter.is_blocked() {
                     // While limiter is blocked, don't process any more requests.

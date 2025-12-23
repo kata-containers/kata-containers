@@ -65,7 +65,7 @@ pub fn make_hybrid_socket_path(
 
     let port = port_str_to_port(port_str)?;
 
-    let full_path = format!("{}_{}", socket_path, port);
+    let full_path = format!("{socket_path}_{port}");
 
     Ok(full_path)
 }
@@ -164,11 +164,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = port_str_to_port(d.port);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }
@@ -227,11 +227,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = str_to_vsock_port(d.port, d.default_port);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }
@@ -273,11 +273,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = str_to_vsock_cid(d.cid);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }
@@ -345,11 +345,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = make_hybrid_socket_path(d.socket_path, d.user_port, d.default_port);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             assert_result!(d.result, result, msg);
         }

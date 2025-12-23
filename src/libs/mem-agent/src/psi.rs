@@ -25,9 +25,9 @@ fn find_psi_subdirs() -> Result<PathBuf> {
             }
         }
 
-        Err(anyhow!("cannot find cpuacct dir in {}", CGROUP_PATH))
+        Err(anyhow!("cannot find cpuacct dir in {CGROUP_PATH}"))
     } else {
-        Err(anyhow!("{} is not a directory", CGROUP_PATH))
+        Err(anyhow!("{CGROUP_PATH} is not a directory"))
     }
 }
 
@@ -37,7 +37,7 @@ pub fn check(psi_path: &Path) -> Result<PathBuf> {
     }
 
     let p = if psi_path.as_os_str().is_empty() {
-        find_psi_subdirs().map_err(|e| anyhow!("find_psi_subdirs failed: {}", e))?
+        find_psi_subdirs().map_err(|e| anyhow!("find_psi_subdirs failed: {e}"))?
     } else {
         psi_path.to_path_buf()
     };
@@ -47,7 +47,7 @@ pub fn check(psi_path: &Path) -> Result<PathBuf> {
         .read(true)
         .write(true)
         .open(mem_psi_path.clone())
-        .map_err(|e| anyhow!("open file {:?} failed: {}", mem_psi_path, e))?;
+        .map_err(|e| anyhow!("open file {mem_psi_path:?} failed: {e}"))?;
 
     info!("psi is available at {:?}", p);
 
@@ -55,13 +55,13 @@ pub fn check(psi_path: &Path) -> Result<PathBuf> {
 }
 
 fn read_pressure_some_total(file_path: PathBuf) -> Result<u64> {
-    let file = File::open(file_path).map_err(|e| anyhow!("File::open failed: {}", e))?;
+    let file = File::open(file_path).map_err(|e| anyhow!("File::open failed: {e}"))?;
     let mut reader = BufReader::new(file);
 
     let mut first_line = String::new();
     if reader
         .read_line(&mut first_line)
-        .map_err(|e| anyhow!("reader.read_line failed: {}", e))?
+        .map_err(|e| anyhow!("reader.read_line failed: {e}"))?
         == 0
     {
         return Err(anyhow!("File is empty"));
@@ -76,7 +76,7 @@ fn read_pressure_some_total(file_path: PathBuf) -> Result<u64> {
 
     let total_value = val
         .parse::<u64>()
-        .map_err(|e| anyhow!("parse {} failed: {}", total_str, e))?;
+        .map_err(|e| anyhow!("parse {total_str} failed: {e}"))?;
 
     Ok(total_value)
 }
@@ -102,21 +102,21 @@ impl Period {
     fn get_path_pressure_us(&self, psi_name: &str) -> Result<u64> {
         let cur_path = self.path.join(psi_name);
         let mut parent_val = read_pressure_some_total(cur_path.clone())
-            .map_err(|e| anyhow!("read_pressure_some_total {:?} failed: {}", cur_path, e))?;
+            .map_err(|e| anyhow!("read_pressure_some_total {cur_path:?} failed: {e}"))?;
 
         if !self.include_child {
             let mut child_val = 0;
-            let entries = fs::read_dir(self.path.clone())
-                .map_err(|e| anyhow!("fs::read_dir failed: {}", e))?;
+            let entries =
+                fs::read_dir(self.path.clone()).map_err(|e| anyhow!("fs::read_dir failed: {e}"))?;
             for entry in entries {
-                let entry = entry.map_err(|e| anyhow!("get path failed: {}", e))?;
+                let entry = entry.map_err(|e| anyhow!("get path failed: {e}"))?;
                 let epath = entry.path();
 
                 if epath.is_dir() {
                     let full_path = self.path.join(entry.file_name()).join(psi_name);
 
                     child_val += read_pressure_some_total(full_path.clone()).map_err(|e| {
-                        anyhow!("read_pressure_some_total {:?} failed: {}", full_path, e)
+                        anyhow!("read_pressure_some_total {full_path:?} failed: {e}")
                     })?;
                 }
             }

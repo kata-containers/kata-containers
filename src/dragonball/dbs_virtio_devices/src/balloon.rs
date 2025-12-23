@@ -144,7 +144,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
         self.metrics.reporting_count.inc();
         if let Some(queue) = &mut self.reporting {
             if let Err(e) = queue.consume_event() {
-                error!("Failed to get reporting queue event: {:?}", e);
+                error!("Failed to get reporting queue event: {e:?}");
                 return false;
             }
             let mut used_desc_heads = [(0, 0); QUEUE_SIZE as usize];
@@ -157,7 +157,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
 
             let mut iter = match queue_guard.iter(mem) {
                 Err(e) => {
-                    error!("virtio-balloon: failed to process reporting queue. {}", e);
+                    error!("virtio-balloon: failed to process reporting queue. {e}");
                     return false;
                 }
                 Ok(iter) => iter,
@@ -167,7 +167,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                 let mut next_desc = desc_chain.next();
                 let mut len = 0;
                 while let Some(avail_desc) = next_desc {
-                    if avail_desc.len() as usize % size_of::<u32>() != 0 {
+                    if !(avail_desc.len() as usize).is_multiple_of(size_of::<u32>()) {
                         error!("the request size {} is not right", avail_desc.len());
                         break;
                     }
@@ -200,7 +200,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                                     size,
                                     file_fd
                                 );
-                                error!("fallocate get error {}", e);
+                                error!("fallocate get error {e}");
                             }
                         } else {
                             // when guest memory have no file backend or comes from we use madvise free memory
@@ -217,7 +217,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                                     1 << PAGE_SHIFT,
                                     advise
                                 );
-                                error!("madvise get error {}", e);
+                                error!("madvise get error {e}");
                             }
                         }
                     }
@@ -236,10 +236,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                 match queue.notify() {
                     Ok(_v) => true,
                     Err(e) => {
-                        error!(
-                            "{}: Failed to signal device change event: {}",
-                            BALLOON_DRIVER_NAME, e
-                        );
+                        error!("{BALLOON_DRIVER_NAME}: Failed to signal device change event: {e}");
                         false
                     }
                 }
@@ -247,10 +244,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                 true
             }
         } else {
-            error!(
-                "{}: Invalid event: Free pages reporting was not configured",
-                BALLOON_DRIVER_NAME
-            );
+            error!("{BALLOON_DRIVER_NAME}: Invalid event: Free pages reporting was not configured");
             false
         }
     }
@@ -266,16 +260,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
             INFLATE_QUEUE_AVAIL_EVENT => &mut self.inflate,
             DEFLATE_QUEUE_AVAIL_EVENT => &mut self.deflate,
             _ => {
-                error!("{}: unsupport idx {}", BALLOON_DRIVER_NAME, idx);
+                error!("{BALLOON_DRIVER_NAME}: unsupport idx {idx}");
                 return false;
             }
         };
 
         if let Err(e) = queue.consume_event() {
-            error!(
-                "{}: Failed to get idx {} queue event: {:?}",
-                BALLOON_DRIVER_NAME, idx, e
-            );
+            error!("{BALLOON_DRIVER_NAME}: Failed to get idx {idx} queue event: {e:?}");
             return false;
         }
 
@@ -283,10 +274,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
             INFLATE_QUEUE_AVAIL_EVENT => libc::MADV_DONTNEED,
             DEFLATE_QUEUE_AVAIL_EVENT => libc::MADV_WILLNEED,
             _ => {
-                error!(
-                    "{}: balloon idx: {:?} is not right",
-                    BALLOON_DRIVER_NAME, idx
-                );
+                error!("{BALLOON_DRIVER_NAME}: balloon idx: {idx:?} is not right");
                 return false;
             }
         };
@@ -300,7 +288,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
 
         let mut iter = match queue_guard.iter(mem) {
             Err(e) => {
-                error!("virtio-balloon: failed to process queue. {}", e);
+                error!("virtio-balloon: failed to process queue. {e}");
                 return false;
             }
             Ok(iter) => iter,
@@ -311,26 +299,19 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                 Some(avail_desc) => avail_desc,
                 None => {
                     error!(
-                        "{}: Failed to parse balloon available descriptor chain",
-                        BALLOON_DRIVER_NAME
+                        "{BALLOON_DRIVER_NAME}: Failed to parse balloon available descriptor chain"
                     );
                     return false;
                 }
             };
 
             if avail_desc.is_write_only() {
-                error!(
-                    "{}: The head contains the request type is not right",
-                    BALLOON_DRIVER_NAME
-                );
+                error!("{BALLOON_DRIVER_NAME}: The head contains the request type is not right");
                 continue;
             }
             let avail_desc_len = avail_desc.len();
-            if avail_desc_len as usize % size_of::<u32>() != 0 {
-                error!(
-                    "{}: the request size {} is not right",
-                    BALLOON_DRIVER_NAME, avail_desc_len
-                );
+            if !(avail_desc_len as usize).is_multiple_of(size_of::<u32>()) {
+                error!("{BALLOON_DRIVER_NAME}: the request size {avail_desc_len} is not right");
                 continue;
             }
 
@@ -355,20 +336,12 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                 let pfn_len = match idx {
                     INFLATE_QUEUE_AVAIL_EVENT | DEFLATE_QUEUE_AVAIL_EVENT => 1 << PAGE_SHIFT,
                     _ => {
-                        error!(
-                            "{}: balloon idx: {:?} is not right",
-                            BALLOON_DRIVER_NAME, idx
-                        );
+                        error!("{BALLOON_DRIVER_NAME}: balloon idx: {idx:?} is not right");
                         return false;
                     }
                 };
 
-                trace!(
-                    "{}: process_queue pfn {} len {}",
-                    BALLOON_DRIVER_NAME,
-                    pfn,
-                    pfn_len
-                );
+                trace!("{BALLOON_DRIVER_NAME}: process_queue pfn {pfn} len {pfn_len}");
 
                 let guest_addr = (pfn as u64) << VIRTIO_BALLOON_PFN_SHIFT;
 
@@ -383,15 +356,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
                         advice,
                     ) {
                         info!(
-                            "{}: guest address: {:?}  host address: {:?} size {:?} advise {:?}",
-                            BALLOON_DRIVER_NAME, guest_addr, host_addr, pfn_len, advice
+                            "{BALLOON_DRIVER_NAME}: guest address: {guest_addr:?}  host address: {host_addr:?} size {pfn_len:?} advise {advice:?}"
                         );
-                        error!("{}: madvise get error {}", BALLOON_DRIVER_NAME, e);
+                        error!("{BALLOON_DRIVER_NAME}: madvise get error {e}");
                     }
                 } else {
                     error!(
-                        "{}: guest address 0x{:x} size {:?} advise {:?} is not available",
-                        BALLOON_DRIVER_NAME, guest_addr, pfn_len, advice
+                        "{BALLOON_DRIVER_NAME}: guest address 0x{guest_addr:x} size {pfn_len:?} advise {advice:?} is not available"
                     );
                 }
             }
@@ -409,10 +380,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
             match queue.notify() {
                 Ok(_v) => true,
                 Err(e) => {
-                    error!(
-                        "{}: Failed to signal device queue event: {}",
-                        BALLOON_DRIVER_NAME, e
-                    );
+                    error!("{BALLOON_DRIVER_NAME}: Failed to signal device queue event: {e}");
                     false
                 }
             }
@@ -455,8 +423,7 @@ where
     fn init(&mut self, ops: &mut EventOps) {
         trace!(
             target: BALLOON_DRIVER_NAME,
-            "{}: BalloonEpollHandler::init()",
-            BALLOON_DRIVER_NAME,
+            "{BALLOON_DRIVER_NAME}: BalloonEpollHandler::init()",
         );
         let events = Events::with_data(
             self.inflate.eventfd.as_ref(),
@@ -464,10 +431,7 @@ where
             EventSet::IN,
         );
         if let Err(e) = ops.add(events) {
-            error!(
-                "{}: failed to register INFLATE QUEUE event, {:?}",
-                BALLOON_DRIVER_NAME, e
-            );
+            error!("{BALLOON_DRIVER_NAME}: failed to register INFLATE QUEUE event, {e:?}");
         }
 
         let events = Events::with_data(
@@ -476,10 +440,7 @@ where
             EventSet::IN,
         );
         if let Err(e) = ops.add(events) {
-            error!(
-                "{}: failed to register deflate queue event, {:?}",
-                BALLOON_DRIVER_NAME, e
-            );
+            error!("{BALLOON_DRIVER_NAME}: failed to register deflate queue event, {e:?}");
         }
 
         if let Some(reporting) = &self.reporting {
@@ -489,10 +450,7 @@ where
                 EventSet::IN,
             );
             if let Err(e) = ops.add(events) {
-                error!(
-                    "{}: failed to register reporting queue event, {:?}",
-                    BALLOON_DRIVER_NAME, e
-                );
+                error!("{BALLOON_DRIVER_NAME}: failed to register reporting queue event, {e:?}");
             }
         }
     }
@@ -504,16 +462,14 @@ where
 
         trace!(
             target: BALLOON_DRIVER_NAME,
-            "{}: BalloonEpollHandler::process() idx {}",
-            BALLOON_DRIVER_NAME,
-            idx
+            "{BALLOON_DRIVER_NAME}: BalloonEpollHandler::process() idx {idx}"
         );
         self.metrics.event_count.inc();
         match idx {
             INFLATE_QUEUE_AVAIL_EVENT | DEFLATE_QUEUE_AVAIL_EVENT => {
                 if !self.process_queue(idx) {
                     self.metrics.event_fails.inc();
-                    error!("{}: Failed to handle {} queue", BALLOON_DRIVER_NAME, idx);
+                    error!("{BALLOON_DRIVER_NAME}: Failed to handle {idx} queue");
                 }
             }
             REPORTING_QUEUE_AVAIL_EVENT => {
@@ -526,7 +482,7 @@ where
                 debug!("kill_evt received");
             }
             _ => {
-                error!("{}: unknown idx {}", BALLOON_DRIVER_NAME, idx);
+                error!("{BALLOON_DRIVER_NAME}: unknown idx {idx}");
             }
         }
     }
@@ -598,10 +554,7 @@ impl<AS: GuestAddressSpace> Balloon<AS> {
         let balloon_config = &mut self.config.lock().unwrap();
         balloon_config.num_pages = num_pages as u32;
         if let Err(e) = self.device_change_notifier.notify() {
-            error!(
-                "{}: failed to signal device change event: {}",
-                BALLOON_DRIVER_NAME, e
-            );
+            error!("{BALLOON_DRIVER_NAME}: failed to signal device change event: {e}");
             return Err(Error::IOError(e));
         }
 
@@ -634,10 +587,7 @@ where
     fn set_acked_features(&mut self, page: u32, value: u32) {
         trace!(
             target: BALLOON_DRIVER_NAME,
-            "{}: VirtioDevice::set_acked_features({}, 0x{:x})",
-            BALLOON_DRIVER_NAME,
-            page,
-            value
+            "{BALLOON_DRIVER_NAME}: VirtioDevice::set_acked_features({page}, 0x{value:x})"
         );
         self.device_info.set_acked_features(page, value)
     }
@@ -645,18 +595,14 @@ where
     fn read_config(&mut self, offset: u64, mut data: &mut [u8]) -> ConfigResult {
         trace!(
             target: BALLOON_DRIVER_NAME,
-            "{}: VirtioDevice::read_config(0x{:x}, {:?})",
-            BALLOON_DRIVER_NAME,
-            offset,
-            data
+            "{BALLOON_DRIVER_NAME}: VirtioDevice::read_config(0x{offset:x}, {data:?})"
         );
         let config = &self.config.lock().unwrap();
         let config_space = config.as_slice().to_vec();
         let config_len = config_space.len() as u64;
         if offset >= config_len {
             error!(
-                "{}: config space read request out of range, offset {}",
-                BALLOON_DRIVER_NAME, offset
+                "{BALLOON_DRIVER_NAME}: config space read request out of range, offset {offset}"
             );
             return Err(ConfigError::InvalidOffset(offset));
         }
@@ -818,7 +764,7 @@ pub(crate) mod tests {
             TYPE_BALLOON
         );
 
-        let queue_size = vec![128, 128, 128];
+        let queue_size = [128, 128, 128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev

@@ -649,7 +649,7 @@ pub(crate) mod tests {
         );
 
         let desc = cfg.get_next_descriptor(mem.memory()).unwrap();
-        assert!(matches!(desc, None));
+        assert!(desc.is_none());
 
         cfg.notify().unwrap();
         assert_eq!(cfg.index(), 1);
@@ -681,12 +681,12 @@ pub(crate) mod tests {
         );
 
         let desc = cfg.get_next_descriptor(mem.memory()).unwrap();
-        assert!(matches!(desc, None));
+        assert!(desc.is_none());
 
         {
             let mut guard = cfg.queue_mut().lock();
             let mut iter = guard.iter(mem.memory()).unwrap();
-            assert!(matches!(iter.next(), None));
+            assert!(iter.next().is_none());
         }
 
         cfg.notify().unwrap();
@@ -841,7 +841,7 @@ pub(crate) mod tests {
         assert_eq!(data, vec![1; 16]);
 
         // test config space invalid write
-        let write_data = vec![0xffu8; 16];
+        let write_data = [0xffu8; 16];
         let mut read_data = vec![0x0; 16];
         assert_eq!(
             device.write_config(4, &write_data[..13]).unwrap_err(),

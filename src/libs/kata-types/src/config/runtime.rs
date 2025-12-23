@@ -200,8 +200,7 @@ impl ConfigOps for Runtime {
             match Path::new(real_path).canonicalize() {
                 Err(e) => {
                     return Err(std::io::Error::other(format!(
-                        "sandbox bind mount `{}` is invalid: {}",
-                        bind, e,
+                        "sandbox bind mount `{bind}` is invalid: {e}",
                     )))
                 }
                 Ok(path) => {
@@ -223,16 +222,14 @@ impl ConfigOps for Runtime {
             && net_model != "tcfilter"
         {
             return Err(std::io::Error::other(format!(
-                "Invalid internetworking_model `{}` in configuration file",
-                net_model,
+                "Invalid internetworking_model `{net_model}` in configuration file",
             )));
         }
 
         let vfio_mode = &conf.runtime.vfio_mode;
         if !vfio_mode.is_empty() && vfio_mode != "vfio" && vfio_mode != "guest-kernel" {
             return Err(std::io::Error::other(format!(
-                "Invalid vfio_mode `{}` in configuration file",
-                vfio_mode,
+                "Invalid vfio_mode `{vfio_mode}` in configuration file",
             )));
         }
 

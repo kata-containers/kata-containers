@@ -246,7 +246,7 @@ impl Qmp {
             })
             .count();
 
-        let memory_backend_id = format!("hotplugged-{}", memdev_idx);
+        let memory_backend_id = format!("hotplugged-{memdev_idx}");
 
         let memory_backend = qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
             id: memory_backend_id.clone(),
@@ -274,7 +274,7 @@ impl Qmp {
         });
         self.qmp.execute(&memory_backend)?;
 
-        let memory_frontend_id = format!("frontend-to-{}", memory_backend_id);
+        let memory_frontend_id = format!("frontend-to-{memory_backend_id}");
 
         let mut mem_frontend_args = Dictionary::new();
         mem_frontend_args.insert("memdev".to_owned(), memory_backend_id.into());
@@ -389,10 +389,8 @@ impl Qmp {
         info!(sl!(), "passing fd {:?} as {}", fd, fdname);
 
         // Put the QMP 'getfd' command itself into the message payload.
-        let getfd_cmd = format!(
-            "{{ \"execute\": \"getfd\", \"arguments\": {{ \"fdname\": \"{}\" }} }}",
-            fdname
-        );
+        let getfd_cmd =
+            format!("{{ \"execute\": \"getfd\", \"arguments\": {{ \"fdname\": \"{fdname}\" }} }}");
         let buf = getfd_cmd.as_bytes();
         let bufs = &mut [std::io::IoSlice::new(buf)][..];
 
@@ -437,14 +435,14 @@ impl Qmp {
 
         let mut fd_names = vec![];
         for (idx, fd) in netdev.get_fds().iter().enumerate() {
-            let fdname = format!("fd{}", idx);
+            let fdname = format!("fd{idx}");
             self.pass_fd(fd.as_raw_fd(), fdname.as_ref())?;
             fd_names.push(fdname);
         }
 
         let mut vhostfd_names = vec![];
         for (idx, fd) in netdev.get_vhostfds().iter().enumerate() {
-            let vhostfdname = format!("vhostfd{}", idx);
+            let vhostfdname = format!("vhostfd{idx}");
             self.pass_fd(fd.as_raw_fd(), vhostfdname.as_ref())?;
             vhostfd_names.push(vhostfdname);
         }
@@ -486,7 +484,7 @@ impl Qmp {
             "netdev".to_owned(),
             virtio_net_device.get_netdev_id().clone().into(),
         );
-        netdev_frontend_args.insert("addr".to_owned(), format!("{:02}", slot).into());
+        netdev_frontend_args.insert("addr".to_owned(), format!("{slot:02}").into());
         netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
         netdev_frontend_args.insert("mq".to_owned(), true.into());
         // As the golang runtime documents the vectors computation, it's
@@ -519,7 +517,7 @@ impl Qmp {
     pub fn get_device_by_qdev_id(&mut self, qdev_id: &str) -> Result<PciPath> {
         let format_str = |vec: &Vec<i64>| -> String {
             vec.iter()
-                .map(|num| format!("{:02x}", num))
+                .map(|num| format!("{num:02x}"))
                 .collect::<Vec<String>>()
                 .join("/")
         };
@@ -666,7 +664,7 @@ impl Qmp {
 
             // Safely convert the u64 index to u16, ensuring it does not exceed `u16::MAX` (65535).
             let (scsi_id, lun) = get_scsi_id_lun(u16::try_from(index)?)?;
-            let scsi_addr = format!("{}:{}", scsi_id, lun);
+            let scsi_addr = format!("{scsi_id}:{lun}");
 
             // add SCSI frontend device
             blkdev_add_args.insert("scsi-id".to_string(), scsi_id.into());
@@ -691,7 +689,7 @@ impl Qmp {
             Ok((None, Some(scsi_addr)))
         } else {
             let (bus, slot) = self.find_free_slot()?;
-            blkdev_add_args.insert("addr".to_owned(), format!("{:02}", slot).into());
+            blkdev_add_args.insert("addr".to_owned(), format!("{slot:02}").into());
             blkdev_add_args.insert("share-rw".to_string(), true.into());
 
             self.qmp
@@ -739,7 +737,7 @@ impl Qmp {
             }
             _ => {
                 let bdf = if !bus_slot_func.starts_with("0000") {
-                    format!("0000:{}", bus_slot_func)
+                    format!("0000:{bus_slot_func}")
                 } else {
                     bus_slot_func.to_owned()
                 };
@@ -868,7 +866,7 @@ impl Qmp {
 }
 
 fn vcpu_id_from_core_id(core_id: i64) -> String {
-    format!("cpu-{}", core_id)
+    format!("cpu-{core_id}")
 }
 
 // The get_pci_path_by_qdev_id function searches a device list for a device matching a given qdev_id,

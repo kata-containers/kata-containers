@@ -80,7 +80,7 @@ pub struct DriverInfo {
 }
 
 pub fn get_driver_info(name: &str) -> Result<DriverInfo> {
-    let mut req = DeviceInfoReq::from_name(name).context(format!("ifreq from name {}", name))?;
+    let mut req = DeviceInfoReq::from_name(name).context(format!("ifreq from name {name}"))?;
     let mut ereq: Driver = unsafe { mem::zeroed() };
     ereq.cmd = ETHTOOL_DRIVER_INFO;
     req.ifr_ifru.ifr_data = &mut ereq as *mut _ as *mut _;

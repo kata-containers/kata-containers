@@ -163,7 +163,7 @@ fn get_page_size(fs_options: Vec<String>) -> Result<Byte> {
             let page_size = fs_option
                 .strip_prefix("pagesize=")
                 // the parameters passed are in unit M or G, append i to be Mi and Gi
-                .map(|s| format!("{}i", s))
+                .map(|s| format!("{s}i"))
                 .context("failed to strip prefix pagesize")?;
             return Byte::parse_str(page_size, true)
                 .map_err(|_| anyhow!("failed to convert string to byte"));

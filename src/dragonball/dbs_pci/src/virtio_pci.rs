@@ -410,7 +410,7 @@ where
         let msix_res = device_resource
             .get_pci_msix_irqs()
             .ok_or(VirtioPciDeviceError::InvalidMsixResource)?;
-        info!("{:?}: virtio pci device msix_res: {:?}", dev_id, msix_res);
+        info!("{dev_id:?}: virtio pci device msix_res: {msix_res:?}");
 
         let msix_state = MsixState::new(msix_res.1 as u16);
 
@@ -553,7 +553,7 @@ where
             let addr =
                 IoEventAddress::Mmio(notify_base + i as u64 * u64::from(NOTIFY_OFF_MULTIPLIER));
             if let Err(e) = self.vm_fd.register_ioevent(&q.eventfd, &addr, NoDatamatch) {
-                error!("failed to register ioevent: {:?}", e);
+                error!("failed to register ioevent: {e:?}");
                 return Err(std::io::Error::from_raw_os_error(e.errno()));
             }
         }
@@ -806,7 +806,7 @@ impl<
             .activate(device_config)
             .map(|_| self.device_activated.store(true, Ordering::SeqCst))
             .map_err(|e| {
-                error!("device activate error: {:?}", e);
+                error!("device activate error: {e:?}");
                 e
             })?;
 
@@ -885,7 +885,7 @@ impl<
             .device()
             .set_resource(self.vm_fd.clone(), self.device_resource.clone())
             .map_err(|e| {
-                error!("Failed to assign device resource to virtio device: {}", e);
+                error!("Failed to assign device resource to virtio device: {e}");
                 VirtioPciDeviceError::SetResource(e)
             })?;
 
@@ -954,7 +954,7 @@ impl<
             {
                 let mut device = self.device();
                 if let Err(e) = device.read_config(o - DEVICE_CONFIG_BAR_OFFSET, data) {
-                    warn!("device read config err: {}", e);
+                    warn!("device read config err: {e}");
                 }
             }
             o if (NOTIFICATION_BAR_OFFSET..NOTIFICATION_BAR_OFFSET + NOTIFICATION_SIZE)
@@ -1004,7 +1004,7 @@ impl<
             {
                 let mut device = self.device();
                 if let Err(e) = device.write_config(o - DEVICE_CONFIG_BAR_OFFSET, data) {
-                    warn!("pci device write config err: {}", e);
+                    warn!("pci device write config err: {e}");
                 }
             }
             o if (NOTIFICATION_BAR_OFFSET..NOTIFICATION_BAR_OFFSET + NOTIFICATION_SIZE)
@@ -1051,7 +1051,7 @@ impl<
         if self.device_activated.load(Ordering::SeqCst) && self.is_driver_init() {
             let mut device = self.device();
             if let Err(e) = device.reset() {
-                error!("Attempt to reset device when not implemented or reset error in underlying device, err: {:?}", e);
+                error!("Attempt to reset device when not implemented or reset error in underlying device, err: {e:?}");
                 let mut config = self.common_config();
                 config.driver_status = DEVICE_FAILED as u8;
             } else {
@@ -1097,13 +1097,13 @@ impl<
             if reg_in_offset == 2 && data.len() == 2 {
                 if let Err(e) = msix_state.set_msg_ctl(LittleEndian::read_u16(data), &mut intr_mgr)
                 {
-                    error!("Failed to set MSI-X message control, err: {:?}", e);
+                    error!("Failed to set MSI-X message control, err: {e:?}");
                 }
             } else if reg_in_offset == 0 && data.len() == 4 {
                 if let Err(e) = msix_state
                     .set_msg_ctl((LittleEndian::read_u32(data) >> 16) as u16, &mut intr_mgr)
                 {
-                    error!("Failed to set MSI-X message control, err: {:?}", e);
+                    error!("Failed to set MSI-X message control, err: {e:?}");
                 }
             }
         }

@@ -42,7 +42,7 @@ impl NetworkInfoFromDan {
                 Some(IPAddress {
                     family: ip_family_from_ip_addr(&ipaddr),
                     address: ipaddr.to_string(),
-                    mask: format!("{}", mask),
+                    mask: format!("{mask}"),
                 })
             })
             .collect();
@@ -91,7 +91,7 @@ impl NetworkInfoFromDan {
                         .map(|(ipaddr, mask)| IPAddress {
                             family: ip_family_from_ip_addr(&ipaddr),
                             address: ipaddr.to_string(),
-                            mask: format!("{}", mask),
+                            mask: format!("{mask}"),
                         })
                 });
 

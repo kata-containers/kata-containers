@@ -44,7 +44,7 @@ fn get_block_device_id(dev: stat::dev_t) -> Result<Option<(u64, u64)>> {
     let major = stat::major(dev);
     let minor = stat::minor(dev);
     let mut blk_dev_path = PathBuf::from(SYS_DEV_BLOCK_PATH)
-        .join(format!("{}:{}", major, minor))
+        .join(format!("{major}:{minor}"))
         .canonicalize()?;
 
     // If 'partition' file exists, then it's a partition of the real device, take its parent.
@@ -57,8 +57,7 @@ fn get_block_device_id(dev: stat::dev_t) -> Result<Option<(u64, u64)>> {
             Some(p) => p.to_path_buf(),
             None => {
                 return Err(std::io::Error::other(format!(
-                    "Can't find real device for dev {}:{}",
-                    major, minor,
+                    "Can't find real device for dev {major}:{minor}",
                 )))
             }
         };
@@ -75,10 +74,10 @@ fn get_block_device_id(dev: stat::dev_t) -> Result<Option<(u64, u64)>> {
 
     if let Some((major, minor)) = dev_buf.split_once(':') {
         let major = major.parse::<u64>().map_err(|_e| {
-            std::io::Error::other(format!("Failed to parse major number: {}", major))
+            std::io::Error::other(format!("Failed to parse major number: {major}"))
         })?;
         let minor = minor.parse::<u64>().map_err(|_e| {
-            std::io::Error::other(format!("Failed to parse minor number: {}", minor))
+            std::io::Error::other(format!("Failed to parse minor number: {minor}"))
         })?;
         Ok(Some((major, minor)))
     } else {

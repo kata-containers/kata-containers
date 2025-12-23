@@ -158,8 +158,7 @@ impl DragonballInner {
         ));
         if let Some(passfd_listener_port) = self.passfd_listener_port {
             kernel_params.append(&mut KernelParams::from_string(&format!(
-                "{}={}",
-                PASSFD_LISTENER_PORT, passfd_listener_port
+                "{PASSFD_LISTENER_PORT}={passfd_listener_port}"
             )));
         }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
@@ -398,8 +397,7 @@ impl DragonballInner {
                 Some(Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT)),
             )
             .context(format!(
-                "failed to do_resize_vcpus on new_vcpus={:?}",
-                new_vcpus
+                "failed to do_resize_vcpus on new_vcpus={new_vcpus:?}"
             ))?;
         Ok((old_vcpus, new_vcpus))
     }

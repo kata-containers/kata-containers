@@ -69,14 +69,14 @@ fn use_serde(protos: &[&str], out_dir: &Path) -> Result<(), std::io::Error> {
             let out_file = Path::new(f)
                 .file_name()
                 .and_then(|s| s.to_str())
-                .ok_or(format!("failed to get proto file name for {:?}", f))
+                .ok_or(format!("failed to get proto file name for {f:?}"))
                 .map(|s| {
                     let t = s.replace(".proto", ".rs");
                     out_dir.join(t)
                 })
                 .map_err(std::io::Error::other)?
                 .to_str()
-                .ok_or(format!("cannot convert {:?} path to string", f))
+                .ok_or(format!("cannot convert {f:?} path to string"))
                 .map_err(std::io::Error::other)?
                 .to_string();
 
@@ -245,7 +245,7 @@ fn real_main() -> Result<(), std::io::Error> {
 
 fn main() {
     if let Err(e) = real_main() {
-        eprintln!("ERROR: {}", e);
+        eprintln!("ERROR: {e}");
         exit(1);
     }
 }

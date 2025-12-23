@@ -230,14 +230,14 @@ impl VmmInstance {
         self.handle_request(Request::Sync(VmmAction::PrepareRemoveHostDevice(
             id.to_string(),
         )))
-        .with_context(|| format!("Prepare to remove host device {:?} failed", id))?;
+        .with_context(|| format!("Prepare to remove host device {id:?} failed"))?;
         Ok(())
     }
 
     pub fn remove_host_device(&self, id: &str) -> Result<()> {
         info!(sl!(), "remove host device {}", id);
         self.handle_request(Request::Sync(VmmAction::RemoveHostDevice(id.to_string())))
-            .with_context(|| format!("Failed to remove host device {:?}", id))?;
+            .with_context(|| format!("Failed to remove host device {id:?}"))?;
         Ok(())
     }
 
@@ -250,7 +250,7 @@ impl VmmInstance {
             .handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
                 device_cfg.clone(),
             )))
-            .with_context(|| format!("Failed to insert block device {:?}", device_cfg))?;
+            .with_context(|| format!("Failed to insert block device {device_cfg:?}"))?;
 
         if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
             let guest_dev_id = receiver.recv_timeout(timeout)?;
@@ -266,14 +266,14 @@ impl VmmInstance {
             .handle_request(Request::Sync(VmmAction::PrepareRemoveBlockDevice(
                 id.to_string(),
             )))
-            .with_context(|| format!("Failed to prepare remove block device {:?}", id))?;
+            .with_context(|| format!("Failed to prepare remove block device {id:?}"))?;
 
         if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
             let _ = receiver.recv_timeout(timeout)?;
         }
 
         self.handle_request(Request::Sync(VmmAction::RemoveBlockDevice(id.to_string())))
-            .with_context(|| format!("Failed to remove block device {:?}", id))?;
+            .with_context(|| format!("Failed to remove block device {id:?}"))?;
         Ok(())
     }
 
@@ -281,7 +281,7 @@ impl VmmInstance {
         self.handle_request(Request::Sync(VmmAction::SetVmConfiguration(
             vm_config.clone(),
         )))
-        .with_context(|| format!("Failed to set vm configuration {:?}", vm_config))?;
+        .with_context(|| format!("Failed to set vm configuration {vm_config:?}"))?;
         Ok(())
     }
 
@@ -289,7 +289,7 @@ impl VmmInstance {
         self.handle_request_with_retry(Request::Sync(VmmAction::InsertNetworkDevice(
             net_cfg.clone(),
         )))
-        .with_context(|| format!("Failed to insert network device {:?}", net_cfg))?;
+        .with_context(|| format!("Failed to insert network device {net_cfg:?}"))?;
         Ok(())
     }
 
@@ -297,7 +297,7 @@ impl VmmInstance {
         self.handle_request(Request::Sync(VmmAction::InsertVsockDevice(
             vsock_cfg.clone(),
         )))
-        .with_context(|| format!("Failed to insert vsock device {:?}", vsock_cfg))?;
+        .with_context(|| format!("Failed to insert vsock device {vsock_cfg:?}"))?;
         Ok(())
     }
 
@@ -321,7 +321,7 @@ impl VmmInstance {
     pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo, timeout: Option<Duration>) -> Result<()> {
         let vmmdata = self
             .handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
-            .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {:?}", cfg))?;
+            .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {cfg:?}"))?;
 
         if let Some(timeout) = timeout {
             if let VmmData::SyncHotplug((_, receiver)) = vmmdata {
@@ -334,13 +334,13 @@ impl VmmInstance {
 
     pub fn insert_mem_device(&self, cfg: MemDeviceConfigInfo) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::InsertMemDevice(cfg.clone())))
-            .with_context(|| format!("Failed to insert memory device : {:?}", cfg))?;
+            .with_context(|| format!("Failed to insert memory device : {cfg:?}"))?;
         Ok(())
     }
 
     pub fn insert_balloon_device(&self, cfg: BalloonDeviceConfigInfo) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::InsertBalloonDevice(cfg.clone())))
-            .with_context(|| format!("Failed to insert balloon device: {:?}", cfg))?;
+            .with_context(|| format!("Failed to insert balloon device: {cfg:?}"))?;
         Ok(())
     }
 
@@ -390,7 +390,7 @@ impl VmmInstance {
         if let Some(ref to_vmm) = self.to_vmm {
             to_vmm
                 .send(Box::new(vmm_action.clone()))
-                .with_context(|| format!("Failed to send  {:?} via channel ", vmm_action))?;
+                .with_context(|| format!("Failed to send  {vmm_action:?} via channel "))?;
         } else {
             return Err(anyhow!("to_vmm is None"));
         }

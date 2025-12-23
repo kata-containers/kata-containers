@@ -270,7 +270,7 @@ impl AddressSpaceMgr {
 
         // Create address space regions.
         for info in numa_region_infos.iter() {
-            info!("numa_region_info {:?}", info);
+            info!("numa_region_info {info:?}");
             // convert size_in_mib to bytes
             let size = info
                 .size
@@ -521,8 +521,7 @@ impl AddressSpaceMgr {
         };
         if res < 0 {
             warn!(
-                "failed to mbind memory to host_numa_node_id {}: this may affect performance",
-                node_id
+                "failed to mbind memory to host_numa_node_id {node_id}: this may affect performance"
             );
         }
         Ok(())
@@ -580,12 +579,10 @@ impl AddressSpaceMgr {
                 let handler = thread::Builder::new()
                     .name("PreallocThread".to_string())
                     .spawn(move || {
-                        info!("PreallocThread start start_npage: {:?}, end_npage: {:?}, per_addr: {:?}, thread_number: {:?}",
-                              start_npage, end_npage, per_addr, touch_thread );
+                        info!("PreallocThread start start_npage: {start_npage:?}, end_npage: {end_npage:?}, per_addr: {per_addr:?}, thread_number: {touch_thread:?}" );
                         for _ in start_npage..end_npage {
                             if should_stop.load(Ordering::Acquire) {
-                                info!("PreallocThread stop start_npage: {:?}, end_npage: {:?}, per_addr: {:?}, thread_number: {:?}",
-                                      start_npage, end_npage, per_addr, touch_thread);
+                                info!("PreallocThread stop start_npage: {start_npage:?}, end_npage: {end_npage:?}, per_addr: {per_addr:?}, thread_number: {touch_thread:?}");
                                 break;
                             }
 
@@ -599,14 +596,12 @@ impl AddressSpaceMgr {
                             per_addr += PAGE_SIZE;
                         }
 
-                        info!("PreallocThread done start_npage: {:?}, end_npage: {:?}, per_addr: {:?}, thread_number: {:?}",
-                              start_npage, end_npage, per_addr, touch_thread );
+                        info!("PreallocThread done start_npage: {start_npage:?}, end_npage: {end_npage:?}, per_addr: {per_addr:?}, thread_number: {touch_thread:?}" );
                     });
 
                 match handler {
                     Err(e) => error!(
-                        "Failed to create working thread for async pre-allocation, {:?}. This may affect performance stability at the start of the workload.",
-                        e
+                        "Failed to create working thread for async pre-allocation, {e:?}. This may affect performance stability at the start of the workload."
                     ),
                     Ok(hdl) => self.prealloc_handlers.push(hdl),
                 }
@@ -669,7 +664,7 @@ impl AddressSpaceMgr {
         }
         while let Some(handlers) = self.prealloc_handlers.pop() {
             if let Err(e) = handlers.join() {
-                error!("wait_prealloc join fail {:?}", e);
+                error!("wait_prealloc join fail {e:?}");
                 return Err(AddressManagerError::JoinFail);
             }
         }

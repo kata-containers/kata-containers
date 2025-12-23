@@ -145,7 +145,7 @@ impl FcInner {
             false => [self.vm_path.as_str(), FC_AGENT_SOCKET_NAME].join("/"),
             true => [self.vm_path.as_str(), ROOT, FC_AGENT_SOCKET_NAME].join("/"),
         };
-        Ok(format!("{}://{}", HYBRID_VSOCK_SCHEME, vsock_path))
+        Ok(format!("{HYBRID_VSOCK_SCHEME}://{vsock_path}"))
     }
 
     pub(crate) async fn disconnect(&mut self) {
@@ -177,7 +177,7 @@ impl FcInner {
     pub(crate) async fn get_ns_path(&self) -> Result<String> {
         debug!(sl(), "Get NS path");
         if let Some(pid) = self.pid {
-            let ns_path = format!("/proc/{}/ns", pid);
+            let ns_path = format!("/proc/{pid}/ns");
             Ok(ns_path)
         } else {
             Err(anyhow!("could not get ns path"))

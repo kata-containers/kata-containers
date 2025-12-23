@@ -528,7 +528,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 
     // Change to the new root so that the pivot_root actually acts on it.
     unistd::fchdir(newroot)?;
-    pivot_root(".", ".").context(format!("failed to pivot_root on {:?}", path))?;
+    pivot_root(".", ".").context(format!("failed to pivot_root on {path:?}"))?;
 
     // Currently our "." is oldroot (according to the current kernel code).
     // However, purely for safety, we will fchdir(oldroot) since there isn't
@@ -929,7 +929,7 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
     for dev in DEFAULT_DEVICES.iter() {
         let dev_path = dev.path().display().to_string();
         let path = Path::new(&dev_path[1..]);
-        op(dev, path).context(format!("Creating container device {:?}", dev))?;
+        op(dev, path).context(format!("Creating container device {dev:?}"))?;
     }
     for dev in devices {
         let dev_path = &dev.path();
@@ -941,9 +941,9 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
             anyhow!(msg)
         })?;
         if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir).context(format!("Creating container device {:?}", dev))?;
+            fs::create_dir_all(dir).context(format!("Creating container device {dev:?}"))?;
         }
-        op(dev, path).context(format!("Creating container device {:?}", dev))?;
+        op(dev, path).context(format!("Creating container device {dev:?}"))?;
     }
     stat::umask(old);
     Ok(())

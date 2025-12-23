@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn test_from_str() {
         let device = Address::from_str("a.1").unwrap();
-        assert_eq!(format!("{}", device), "0a.0001");
+        assert_eq!(format!("{device}"), "0a.0001");
 
         assert!(Address::from_str("").is_err());
         assert!(Address::from_str(".").is_err());

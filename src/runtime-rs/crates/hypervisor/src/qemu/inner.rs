@@ -414,7 +414,7 @@ impl QemuInner {
             None => return Err(anyhow!("uninitialized agent vsock".to_owned())),
         };
 
-        Ok(format!("{}://{}", VSOCK_SCHEME, guest_cid))
+        Ok(format!("{VSOCK_SCHEME}://{guest_cid}"))
     }
 
     pub(crate) async fn disconnect(&mut self) {
@@ -624,7 +624,7 @@ impl QemuInner {
             bytes_to_megs(new_hotplugged_mem)
         );
 
-        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        let is_unaligned = !new_hotplugged_mem.is_multiple_of(guest_mem_block_size);
         if is_unaligned {
             new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
                 new_hotplugged_mem,

@@ -55,7 +55,7 @@ impl std::fmt::Display for BlockDeviceAio {
             BlockDeviceAio::Threads => "threads".to_string(),
             _ => "iouring".to_string(),
         };
-        write!(f, "{}", to_string)
+        write!(f, "{to_string}")
     }
 }
 

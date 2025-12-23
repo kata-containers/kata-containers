@@ -170,7 +170,7 @@ impl VhostNetDeviceMgr {
         mut ctx: DeviceOpContext,
         config: VhostNetDeviceConfigInfo,
     ) -> Result<(), VhostNetDeviceError> {
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VhostNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
@@ -620,24 +620,24 @@ mod tests {
     #[test]
     fn test_vhost_net_error_display() {
         let err = VhostNetDeviceError::InvalidQueueNum(0);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::DeviceManager(DeviceMgrError::GetDeviceResource);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::DeviceIdAlreadyExist(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::GuestMacAddressInUse(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::HostDeviceNameInUse(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::Virtio(VirtioError::DescriptorChainTooShort);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::UpdateNotAllowedPostBoot;
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
     }
 }

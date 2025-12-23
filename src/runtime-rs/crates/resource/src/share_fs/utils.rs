@@ -18,7 +18,7 @@ use super::*;
 pub(crate) fn mkdir_with_permissions(path_target: PathBuf, mode: u32) -> Result<()> {
     let new_path = &path_target;
     std::fs::create_dir_all(new_path)
-        .context(format!("unable to create new path: {:?}", new_path))?;
+        .context(format!("unable to create new path: {new_path:?}"))?;
 
     // mode format: 0o750, ...
     std::fs::set_permissions(new_path, std::fs::Permissions::from_mode(mode))?;
@@ -28,7 +28,7 @@ pub(crate) fn mkdir_with_permissions(path_target: PathBuf, mode: u32) -> Result<
 
 pub(crate) fn ensure_dir_exist(path: &Path) -> Result<()> {
     if !path.exists() {
-        std::fs::create_dir_all(path).context(format!("failed to create directory {:?}", path))?;
+        std::fs::create_dir_all(path).context(format!("failed to create directory {path:?}"))?;
     }
     Ok(())
 }

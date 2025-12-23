@@ -48,7 +48,7 @@ pub struct VsockUnixStreamBackend {
 
 impl VsockUnixStreamBackend {
     pub fn new(host_sock_path: String) -> Result<Self> {
-        info!("Open vsock uds: {}", host_sock_path);
+        info!("Open vsock uds: {host_sock_path}");
         // Open/bind/listen on the host Unix socket, so we can accept
         // host-initiated connections.
         let host_sock = UnixListener::bind(&host_sock_path)

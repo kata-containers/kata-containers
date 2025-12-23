@@ -232,12 +232,12 @@ impl ToQemuParams for Kernel {
 }
 
 fn format_memory(mem_size: u64) -> String {
-    if mem_size % GI_B == 0 {
+    if mem_size.is_multiple_of(GI_B) {
         format!("{}G", mem_size / GI_B)
-    } else if mem_size % MI_B == 0 {
+    } else if mem_size.is_multiple_of(MI_B) {
         format!("{}M", mem_size / MI_B)
     } else {
-        format!("{}", mem_size)
+        format!("{mem_size}")
     }
 }
 
@@ -547,10 +547,10 @@ impl ToQemuParams for Machine {
             params.push("nvdimm=on".to_owned());
         }
         if let Some(kernel_irqchip) = &self.kernel_irqchip {
-            params.push(format!("kernel_irqchip={}", kernel_irqchip));
+            params.push(format!("kernel_irqchip={kernel_irqchip}"));
         }
         if let Some(mem_backend) = &self.memory_backend {
-            params.push(format!("memory-backend={}", mem_backend));
+            params.push(format!("memory-backend={mem_backend}"));
         }
         if !self.confidential_guest_support.is_empty() {
             params.push(format!(
@@ -864,7 +864,7 @@ impl ToQemuParams for DeviceVhostUserFs {
             params.push("iommu_platform=on".to_owned());
         }
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1022,7 +1022,7 @@ impl ToQemuParams for DeviceScsiHd {
         params.push(format!("drive=image-{}", self.drive));
         params.push(format!("bus={}", self.bus));
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1079,7 +1079,7 @@ impl ToQemuParams for DeviceVirtioBlk {
         }
         params.push(format!("serial=image-{}", self.id));
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1134,7 +1134,7 @@ impl ToQemuParams for VhostVsock {
             params.push("iommu_platform=on".to_owned());
         }
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
         params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
@@ -1299,7 +1299,7 @@ impl DeviceVirtioNet {
         devno: Option<String>,
     ) -> DeviceVirtioNet {
         DeviceVirtioNet {
-            device_driver: format!("virtio-net-{}", bus_type),
+            device_driver: format!("virtio-net-{bus_type}"),
             netdev_id: netdev_id.to_owned(),
             mac_address,
             disable_modern: false,
@@ -1365,7 +1365,7 @@ impl ToQemuParams for DeviceVirtioNet {
         }
 
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
 
         params.push("mq=on".to_owned());
@@ -1411,7 +1411,7 @@ impl ToQemuParams for DeviceVirtioSerial {
             params.push("iommu_platform=on".to_owned());
         }
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1607,7 +1607,7 @@ impl DevicePciBridge {
                 _ => "pci.0",
             }
             .to_owned(),
-            id: format!("pci-bridge-{}", bridge_idx),
+            id: format!("pci-bridge-{bridge_idx}"),
             // Each bridge is required to be assigned a unique chassis id > 0.
             chassis_nr: bridge_idx + 1,
             shpc: false,
@@ -1685,7 +1685,7 @@ impl std::fmt::Display for MonitorProtocol {
             MonitorProtocol::QmpPretty => "qmp-pretty".to_string(),
             _ => "qmp".to_string(),
         };
-        write!(f, "{}", to_string)
+        write!(f, "{to_string}")
     }
 }
 
@@ -1816,7 +1816,7 @@ impl ToQemuParams for DeviceVirtioScsi {
             params.push("iommu_platform=on".to_owned());
         }
         if let Some(devno) = &self.devno {
-            params.push(format!("devno={}", devno));
+            params.push(format!("devno={devno}"));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1909,7 +1909,7 @@ impl ToQemuParams for ObjectSevSnpGuest {
                 if self.kernel_hashes { "on" } else { "off" }
             ));
             if let Some(host_data) = &self.host_data {
-                params.push(format!("host-data={}", host_data))
+                params.push(format!("host-data={host_data}"))
             }
         }
         Ok(vec!["-object".to_owned(), params.join(",")])
@@ -1960,7 +1960,7 @@ impl std::fmt::Display for ObjectTdxGuest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         serde_json::to_string(self)
             .map_err(|_| std::fmt::Error)
-            .and_then(|s| write!(f, "{}", s))
+            .and_then(|s| write!(f, "{s}"))
     }
 }
 
@@ -2047,7 +2047,7 @@ impl PCIeRootPortDevice {
 
     fn set_mem_reserve(&mut self, mem_reserve: u64) -> &mut Self {
         if mem_reserve > 0 {
-            self.mem_reserve = format!("{}B", mem_reserve);
+            self.mem_reserve = format!("{mem_reserve}B");
         }
 
         self
@@ -2055,7 +2055,7 @@ impl PCIeRootPortDevice {
 
     fn set_pref64_reserve(&mut self, pref64_reserve: u64) -> &mut Self {
         if pref64_reserve > 0 {
-            self.pref64_reserve = format!("{}B", pref64_reserve);
+            self.pref64_reserve = format!("{pref64_reserve}B");
         }
 
         self
@@ -2630,7 +2630,7 @@ impl<'a> QemuCmdLine<'a> {
 
         // -device pcie-root-port,id=root_port1,multifunction=on,chassis=x,addr=z.0[,slot=y][,bus=pcie.0]
         for (index, rp) in root_ports.iter() {
-            let (chassis, slot) = (format!("{}", index + 1), format!("{}", index));
+            let (chassis, slot) = (format!("{}", index + 1), format!("{index}"));
             let mut root_port_dev = PCIeRootPortDevice::new(
                 &rp.port_id(), // rpX
                 &rp.bus,       // pcie.0
@@ -2683,7 +2683,7 @@ impl<'a> QemuCmdLine<'a> {
             // -device pcie-root-port,id=root_port1,chassis=x,slot=y[,bus=pcie.0][,addr=z]
 
             // (slot, chassis) pair is mandatory and must be unique for each PCI Express Root Port
-            let (slot, chassis) = (format!("{}", index), format!("{}", index + 1));
+            let (slot, chassis) = (format!("{index}"), format!("{}", index + 1));
             let mut pcie_root_port = PCIeRootPortDevice::new(
                 &rp.port_id(),
                 &rp.bus, // pcie.0
@@ -2758,7 +2758,7 @@ pub fn get_network_device(
     ccw_subchannel: &mut Option<CcwSubChannel>,
 ) -> Result<(Netdev, DeviceVirtioNet)> {
     let mut netdev = Netdev::new(
-        &format!("network-{}", host_dev_name),
+        &format!("network-{host_dev_name}"),
         host_dev_name,
         config.network_info.network_queues,
     )?;

@@ -159,8 +159,7 @@ impl ConfigPlugin for QemuConfig {
 
             if qemu.memory_info.default_memory < MIN_QEMU_MEMORY_SIZE_MB {
                 return Err(std::io::Error::other(format!(
-                    "Qemu hypervisor has minimal memory limitation {}",
-                    MIN_QEMU_MEMORY_SIZE_MB,
+                    "Qemu hypervisor has minimal memory limitation {MIN_QEMU_MEMORY_SIZE_MB}",
                 )));
             }
 

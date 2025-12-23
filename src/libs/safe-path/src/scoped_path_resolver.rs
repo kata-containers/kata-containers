@@ -141,12 +141,12 @@ mod tests {
     fn exec_tests(tests: &[TestData]) {
         for (i, t) in tests.iter().enumerate() {
             // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, t);
+            let msg = format!("test[{i}]: {t:?}");
             let result = scoped_resolve(t.rootfs, t.unsafe_path).unwrap();
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             // Perform the checks
-            assert_eq!(&result, Path::new(t.result), "{}", msg);
+            assert_eq!(&result, Path::new(t.result), "{msg}");
         }
     }
 

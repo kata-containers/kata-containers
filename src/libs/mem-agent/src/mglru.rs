@@ -23,12 +23,12 @@ pub const MAX_NR_GENS: u64 = 4;
 fn lru_gen_head_parse(line: &str) -> Result<(usize, String)> {
     let words: Vec<&str> = line.split_whitespace().map(|word| word.trim()).collect();
     if words.len() != 3 || words[0] != "memcg" {
-        return Err(anyhow!("line {} format is not right", line));
+        return Err(anyhow!("line {line} format is not right"));
     }
 
     let id = words[1]
         .parse::<usize>()
-        .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
+        .map_err(|e| anyhow!("parse line {line} failed: {e}"))?;
 
     Ok((id, words[2].to_string()))
 }
@@ -81,7 +81,7 @@ fn lru_gen_lines_parse(reader: &mut BufReader<File>) -> Result<(String, HashMap<
     while !line.is_empty()
         || reader
             .read_line(&mut line)
-            .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
+            .map_err(|e| anyhow!("read file {LRU_GEN_PATH} failed: {e}"))?
             > 0
     {
         let words: Vec<&str> = line.split_whitespace().map(|word| word.trim()).collect();
@@ -89,9 +89,9 @@ fn lru_gen_lines_parse(reader: &mut BufReader<File>) -> Result<(String, HashMap<
             // Got a new node
             let node_id = words[1]
                 .parse::<usize>()
-                .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
+                .map_err(|e| anyhow!("parse line {line} failed: {e}"))?;
             let (ret_line, node_size) = lru_gen_seq_lines_parse(reader)
-                .map_err(|e| anyhow!("lru_gen_seq_lines_parse failed: {}", e))?;
+                .map_err(|e| anyhow!("lru_gen_seq_lines_parse failed: {e}"))?;
             if let Some(size) = node_size {
                 ret_hash.insert(node_id, size);
             }
@@ -122,7 +122,7 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 
     while reader
         .read_line(&mut line)
-        .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
+        .map_err(|e| anyhow!("read file {LRU_GEN_PATH} failed: {e}"))?
         > 0
     {
         let words: Vec<&str> = line.split_whitespace().map(|word| word.trim()).collect();
@@ -133,7 +133,7 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 
         let msecs = words[1]
             .parse::<i64>()
-            .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
+            .map_err(|e| anyhow!("parse line {line} failed: {e}"))?;
         // Use milliseconds because will got build error with try_milliseconds.
         #[allow(deprecated)]
         let birth = Utc::now() - Duration::milliseconds(msecs);
@@ -143,11 +143,11 @@ fn lru_gen_seq_lines_parse(reader: &mut BufReader<File>) -> Result<(String, Opti
 
         gen.seq = words[0]
             .parse::<u64>()
-            .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
+            .map_err(|e| anyhow!("parse line {line} failed: {e}"))?;
         gen.anon = str_to_u64(words[2 + WORKINGSET_ANON])
-            .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
+            .map_err(|e| anyhow!("parse line {line} failed: {e}"))?;
         gen.file = str_to_u64(words[2 + WORKINGSET_FILE])
-            .map_err(|e| anyhow!("parse line {} failed: {}", line, e))?;
+            .map_err(|e| anyhow!("parse line {line} failed: {e}"))?;
 
         if !got {
             ret.min_seq = gen.seq;
@@ -188,7 +188,7 @@ fn lru_gen_file_parse(
     while !line.is_empty()
         || reader
             .read_line(&mut line)
-            .map_err(|e| anyhow!("read file {} failed: {}", LRU_GEN_PATH, e))?
+            .map_err(|e| anyhow!("read file {LRU_GEN_PATH} failed: {e}"))?
             > 0
     {
         let mut clear_line = true;
@@ -197,11 +197,7 @@ fn lru_gen_file_parse(
             if target_patchs.is_empty() || target_patchs.contains(&path) {
                 let seq_data = if parse_line {
                     let (ret_line, data) = lru_gen_lines_parse(reader).map_err(|e| {
-                        anyhow!(
-                            "lru_gen_seq_lines_parse file {} failed: {}",
-                            LRU_GEN_PATH,
-                            e
-                        )
+                        anyhow!("lru_gen_seq_lines_parse file {LRU_GEN_PATH} failed: {e}")
                     })?;
                     line = ret_line;
                     clear_line = false;
@@ -232,8 +228,8 @@ fn file_parse(
     target_patchs: &HashSet<String>,
     parse_line: bool,
 ) -> Result<HashMap<String, (usize, HashMap<usize, MGenLRU>)>> {
-    let file = File::open(LRU_GEN_PATH)
-        .map_err(|e| anyhow!("open file {} failed: {}", LRU_GEN_PATH, e))?;
+    let file =
+        File::open(LRU_GEN_PATH).map_err(|e| anyhow!("open file {LRU_GEN_PATH} failed: {e}"))?;
 
     let mut reader = BufReader::new(file);
 
@@ -249,7 +245,7 @@ pub fn host_memcgs_get(
     is_cg_v2: bool,
 ) -> Result<HashMap<String, (usize, usize, HashMap<usize, MGenLRU>)>> {
     let mgs = file_parse(target_patchs, parse_line)
-        .map_err(|e| anyhow!("mglru file_parse failed: {}", e))?;
+        .map_err(|e| anyhow!("mglru file_parse failed: {e}"))?;
 
     let mut host_mgs = HashMap::new();
     for (path, (id, mglru)) in mgs {
@@ -281,24 +277,24 @@ pub fn check() -> Result<()> {
     }
 
     let content = fs::read_to_string(LRU_GEN_ENABLED_PATH)
-        .map_err(|e| anyhow!("open file {} failed: {}", LRU_GEN_ENABLED_PATH, e))?;
+        .map_err(|e| anyhow!("open file {LRU_GEN_ENABLED_PATH} failed: {e}"))?;
     let content = content.trim();
     let r = if let Some(stripped) = content.strip_prefix("0x") {
         u32::from_str_radix(stripped, 16)
     } else {
         content.parse()
     };
-    let enabled = r.map_err(|e| anyhow!("parse file {} failed: {}", LRU_GEN_ENABLED_PATH, e))?;
+    let enabled = r.map_err(|e| anyhow!("parse file {LRU_GEN_ENABLED_PATH} failed: {e}"))?;
     if enabled != 7 {
         fs::write(LRU_GEN_ENABLED_PATH, "7")
-            .map_err(|e| anyhow!("write file {} failed: {}", LRU_GEN_ENABLED_PATH, e))?;
+            .map_err(|e| anyhow!("write file {LRU_GEN_ENABLED_PATH} failed: {e}"))?;
     }
 
     let _ = OpenOptions::new()
         .read(true)
         .write(true)
         .open(LRU_GEN_PATH)
-        .map_err(|e| anyhow!("open file {} failed: {}", LRU_GEN_PATH, e))?;
+        .map_err(|e| anyhow!("open file {LRU_GEN_PATH} failed: {e}"))?;
 
     Ok(())
 }
@@ -316,7 +312,7 @@ pub fn run_aging(
     );
     trace!("send cmd {} to {}", cmd, LRU_GEN_PATH);
     fs::write(LRU_GEN_PATH, &cmd)
-        .map_err(|e| anyhow!("write file {} cmd {} failed: {}", LRU_GEN_PATH, cmd, e))?;
+        .map_err(|e| anyhow!("write file {LRU_GEN_PATH} cmd {cmd} failed: {e}"))?;
     Ok(())
 }
 
@@ -327,13 +323,10 @@ pub fn run_eviction(
     swappiness: u8,
     nr_to_reclaim: usize,
 ) -> Result<()> {
-    let cmd = format!(
-        "- {} {} {} {} {}",
-        memcg_id, numa_id, min_seq, swappiness, nr_to_reclaim
-    );
+    let cmd = format!("- {memcg_id} {numa_id} {min_seq} {swappiness} {nr_to_reclaim}");
     trace!("send cmd {} to {}", cmd, LRU_GEN_PATH);
     fs::write(LRU_GEN_PATH, &cmd)
-        .map_err(|e| anyhow!("write file {} cmd {} failed: {}", LRU_GEN_PATH, cmd, e))?;
+        .map_err(|e| anyhow!("write file {LRU_GEN_PATH} cmd {cmd} failed: {e}"))?;
     Ok(())
 }
 

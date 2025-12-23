@@ -132,7 +132,7 @@ impl VhostUserNetDeviceMgr {
         config: VhostUserNetDeviceConfigInfo,
     ) -> Result<(), VhostUserNetDeviceError> {
         // Validate device configuration first.
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VhostUserNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
@@ -314,16 +314,16 @@ mod tests {
     #[test]
     fn test_vhost_user_net_error_display() {
         let err = VhostUserNetDeviceError::InvalidVmId;
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::InvalidQueueNum(0);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::DeviceManager(DeviceMgrError::GetDeviceResource);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::DuplicatedUdsPath(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::Virtio(VirtioError::DescriptorChainTooShort);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::UpdateNotAllowedPostBoot;
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
     }
 }

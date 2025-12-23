@@ -111,7 +111,7 @@ pub fn arch_guest_protection(
         }
 
         let contents = fs::read_to_string(file_name).map_err(|err| {
-            ProtectionError::CheckFailed(format!("Error reading file {} : {}", file_name, err))
+            ProtectionError::CheckFailed(format!("Error reading file {file_name} : {err}"))
         })?;
 
         if contents.trim() == "Y" {
@@ -176,7 +176,7 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
     }
 
     let facilities = crate::cpu::retrieve_cpu_facilities().map_err(|err| {
-        ProtectionError::CheckFailed(format!("Error retrieving cpu facilities file : {}", err))
+        ProtectionError::CheckFailed(format!("Error retrieving cpu facilities file : {err}"))
     })?;
 
     // Secure Execution

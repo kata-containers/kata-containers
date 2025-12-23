@@ -136,7 +136,7 @@ mod tests {
                     if i == 5 {
                         panic!("Failed to generate policy after 6 attempts");
                     } else {
-                        println!("Retrying to generate policy: {}", e);
+                        println!("Retrying to generate policy: {e}");
                         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
                         continue;
                     }

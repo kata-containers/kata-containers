@@ -214,9 +214,7 @@ mod tests {
     fn test_push_wrap() {
         let mut txbuf = TxBuf::default();
         let mut sink = TestSink::new();
-        let mut tmp: Vec<u8> = Vec::new();
-
-        tmp.resize(TxBuf::SIZE - 2, 0);
+        let mut tmp: Vec<u8> = vec![0; TxBuf::SIZE - 2];
         txbuf.push(tmp.as_slice()).unwrap();
         txbuf.flush_to(&mut sink).unwrap();
         sink.clear();

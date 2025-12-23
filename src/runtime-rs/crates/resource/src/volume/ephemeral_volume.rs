@@ -36,7 +36,7 @@ impl EphemeralVolume {
 
         let source = &get_mount_path(m.source());
         let file_stat =
-            stat(Path::new(source)).with_context(|| format!("mount source {}", source))?;
+            stat(Path::new(source)).with_context(|| format!("mount source {source}"))?;
 
         // if volume's gid isn't root group(default group), this means there's
         // an specific fsGroup is set on this local volume, then it should pass

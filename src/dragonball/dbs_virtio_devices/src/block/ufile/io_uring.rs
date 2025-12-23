@@ -50,7 +50,7 @@ impl IoUring {
         let io_uring = match io_uring::IoUring::new(1) {
             Ok(io_uring) => io_uring,
             Err(e) => {
-                info!("{} failed to create io_uring instance: {}", error_msg, e);
+                info!("{error_msg} failed to create io_uring instance: {e}");
                 return false;
             }
         };
@@ -63,20 +63,20 @@ impl IoUring {
         match submitter.register_probe(&mut probe) {
             Ok(_) => {}
             Err(e) => {
-                info!("{} failed to register a probe: {}", error_msg, e);
+                info!("{error_msg} failed to register a probe: {e}");
                 return false;
             }
         }
 
         // Check IORING_OP_READ is supported
         if !probe.is_supported(opcode::Read::CODE) {
-            info!("{} IORING_OP_READ operation not supported", error_msg);
+            info!("{error_msg} IORING_OP_READ operation not supported");
             return false;
         }
 
         // Check IORING_OP_WRITE is supported
         if !probe.is_supported(opcode::Write::CODE) {
-            info!("{} IORING_OP_WRITE operation not supported", error_msg);
+            info!("{error_msg} IORING_OP_WRITE operation not supported");
             return false;
         }
 

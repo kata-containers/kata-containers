@@ -229,7 +229,7 @@ impl VhostUserBlockDevice {
 
         let init_queues = queue_sizes.len() as u32;
 
-        info!("vhost-user-blk: try to connect to {:?}", vhost_socket);
+        info!("vhost-user-blk: try to connect to {vhost_socket:?}");
         // Connect to the vhost-user socket.
         let mut master = Master::connect(&vhost_socket, 1).map_err(VirtIoError::VhostError)?;
 
@@ -612,7 +612,7 @@ mod tests {
 
         // get config
         let config_len = mem::size_of::<VirtioBlockConfig>();
-        let mut config_space: Vec<u8> = vec![0u8; config_len as usize];
+        let mut config_space: Vec<u8> = vec![0u8; config_len];
         let (hdr, _msg, _payload, rfds) = slave
             .recv_payload_into_buf::<VhostUserConfig>(&mut config_space)
             .unwrap();
@@ -641,7 +641,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(20));
 
-        let spdk_path = format!("spdk://{}", socket_path);
+        let spdk_path = format!("spdk://{socket_path}");
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let mut dev: VhostUserBlock<Arc<GuestMemoryMmap>> =
@@ -652,7 +652,7 @@ mod tests {
             TYPE_BLOCK
         );
 
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev
@@ -707,7 +707,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(20));
 
-        let spdk_path = format!("spdk://{}", socket_path);
+        let spdk_path = format!("spdk://{socket_path}");
         let queue_sizes = Arc::new(vec![128, 128]);
         let epoll_mgr = EpollManager::default();
         let mut dev: VhostUserBlock<Arc<GuestMemoryMmap>> =

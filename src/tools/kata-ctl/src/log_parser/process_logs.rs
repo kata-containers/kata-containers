@@ -47,7 +47,7 @@ fn filter_errors_to_stderr<O: AnyLogMessage>(input: Vec<Result<O, LogParserError
         .filter_map(|l| match l {
             Ok(log) => Some(log),
             Err(e) => {
-                eprintln!("{}", e);
+                eprintln!("{e}");
                 None
             }
         })

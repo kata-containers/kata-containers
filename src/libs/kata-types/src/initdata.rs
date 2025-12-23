@@ -145,7 +145,7 @@ fn calculate_digest(algorithm: &str, data: &str) -> Result<Vec<u8>> {
             hasher.update(data);
             hasher.finalize().to_vec()
         }
-        _ => return Err(anyhow!("unsupported Hash algorithm: {}", algorithm)),
+        _ => return Err(anyhow!("unsupported Hash algorithm: {algorithm}")),
     };
 
     Ok(digest)

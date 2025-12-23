@@ -40,8 +40,7 @@ impl From<&UUID> for String {
         let node = BigEndian::read_u64(&buf);
 
         format!(
-            "{:08x}-{:04x}-{:04x}-{:02x}{:02x}-{:012x}",
-            time_low, time_mid, time_hi, clk_seq_hi, clk_seq_low, node
+            "{time_low:08x}-{time_mid:04x}-{time_hi:04x}-{clk_seq_hi:02x}{clk_seq_low:02x}-{node:012x}"
         )
     }
 }

@@ -58,7 +58,7 @@ impl Drop for EventManager {
         self.epoll_mgr
             .remove_subscriber(self.subscriber_id)
             .map_err(|e| {
-                error!("event_manager: remove_subscriber err. {:?}", e);
+                error!("event_manager: remove_subscriber err. {e:?}");
                 e
             })
             .ok();
@@ -129,7 +129,7 @@ impl MutEventSubscriber for VmmEpollHandler {
         match events.data() {
             EPOLL_EVENT_API_REQUEST => {
                 if let Err(e) = vmm.event_ctx.api_event_fd.read() {
-                    error!("event_manager: failed to read API eventfd, {:?}", e);
+                    error!("event_manager: failed to read API eventfd, {e:?}");
                 }
                 vmm.event_ctx.api_event_triggered = true;
                 self.vmm_event_count.fetch_add(1, Ordering::AcqRel);
@@ -139,7 +139,7 @@ impl MutEventSubscriber for VmmEpollHandler {
                 match vm.get_reset_eventfd() {
                     Some(ev) => {
                         if let Err(e) = ev.read() {
-                            error!("event_manager: failed to read exit eventfd, {:?}", e);
+                            error!("event_manager: failed to read exit eventfd, {e:?}");
                         }
                     }
                     None => warn!("event_manager: leftover exit event in epoll context!"),
@@ -160,10 +160,7 @@ impl MutEventSubscriber for VmmEpollHandler {
             EventSet::IN,
         );
         if let Err(e) = ops.add(events) {
-            error!(
-                "event_manager: failed to register epoll event for API server, {:?}",
-                e
-            );
+            error!("event_manager: failed to register epoll event for API server, {e:?}");
         }
     }
 }

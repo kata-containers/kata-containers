@@ -69,7 +69,7 @@ fn update_monitor_metrics() -> Result<()> {
     let me = match procfs::process::Process::myself() {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("failed to create process instance: {:?}", e);
+            eprintln!("failed to create process instance: {e:?}");
 
             return Ok(());
         }

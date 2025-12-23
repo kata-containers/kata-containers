@@ -40,7 +40,7 @@ pub(super) struct Listener {
 
 impl Listener {
     pub fn new(name: String, path: String, force: bool, slot: u32) -> VirtioResult<Self> {
-        info!("vhost-user: create listener at {} for {}", path, name);
+        info!("vhost-user: create listener at {path} for {name}");
         Ok(Listener {
             listener: VhostUserListener::new(&path, force)?,
             slot,
@@ -222,7 +222,7 @@ impl Endpoint {
             let userspace_addr = region
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|e| {
-                    error!("get_host_address error! {:?}", e);
+                    error!("get_host_address error! {e:?}");
                     VirtioError::InvalidGuestAddress(guest_phys_addr)
                 })?;
 

@@ -346,7 +346,7 @@ pub fn init_child() {
         Ok(_) => log_child!(cfd_log, "temporary parent process exit successfully"),
         Err(e) => {
             log_child!(cfd_log, "temporary parent process exit:child exit: {:?}", e);
-            let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+            let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
         }
     }
 }
@@ -544,13 +544,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         sched::setns(fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e != Errno::EINVAL {
-                    let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                    let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
                     return Err(e);
                 }
 
                 Ok(())
             } else {
-                let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
                 Err(e)
             }
         })?;
@@ -685,7 +685,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
-                format!("setgroups failed: {:?}", e).as_str(),
+                format!("setgroups failed: {e:?}").as_str(),
             );
         })?;
     }
@@ -808,7 +808,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if init {
         let fd = fcntl::open(
-            format!("/proc/self/fd/{}", fifofd).as_str(),
+            format!("/proc/self/fd/{fifofd}").as_str(),
             OFlag::O_RDONLY | OFlag::O_CLOEXEC,
             Mode::from_bits_truncate(0),
         )?;
@@ -1171,14 +1171,14 @@ impl BaseContainer for LinuxContainer {
             .stderr(child_stderr)
             .env(INIT, format!("{}", p.init))
             .env(NO_PIVOT, format!("{}", self.config.no_pivot_root))
-            .env(CRFD_FD, format!("{}", crfd))
-            .env(CWFD_FD, format!("{}", cwfd))
-            .env(CLOG_FD, format!("{}", cfd_log))
+            .env(CRFD_FD, format!("{crfd}"))
+            .env(CWFD_FD, format!("{cwfd}"))
+            .env(CLOG_FD, format!("{cfd_log}"))
             .env(CONSOLE_SOCKET_FD, console_name)
             .env(PIDNS_ENABLED, format!("{}", pidns.enabled));
 
         if p.init {
-            child = child.env(FIFO_FD, format!("{}", fifofd));
+            child = child.env(FIFO_FD, format!("{fifofd}"));
         }
 
         if pidns.fd.is_some() {
@@ -1687,7 +1687,7 @@ impl LinuxContainer {
                 return anyhow!(e).context(format!("container {} already exists", id.as_str()));
             }
 
-            anyhow!(e).context(format!("fail to create container directory {}", root))
+            anyhow!(e).context(format!("fail to create container directory {root}"))
         })?;
 
         unistd::chown(
@@ -1695,7 +1695,7 @@ impl LinuxContainer {
             Some(unistd::getuid()),
             Some(unistd::getgid()),
         )
-        .context(format!("Cannot change owner of container {} root", id))?;
+        .context(format!("Cannot change owner of container {id} root"))?;
 
         let spec = config.spec.as_ref().unwrap();
         let linux_cgroups_path = spec

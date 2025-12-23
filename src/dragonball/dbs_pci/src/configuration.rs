@@ -703,7 +703,7 @@ impl PciConfiguration {
     pub fn read_u32(&self, offset: usize) -> (bool, u32) {
         let reg_idx = offset >> 2;
         if (offset & 0x3) != 0 || offset >= 256 {
-            warn!("configuration read_u32 offset invalid: 0x{:x}", offset);
+            warn!("configuration read_u32 offset invalid: 0x{offset:x}");
             return (false, 0xffff_ffff);
         }
 
@@ -731,7 +731,7 @@ impl PciConfiguration {
     /// been handled by the framework.
     pub fn read_u16(&self, offset: usize) -> (bool, u16) {
         if (offset & 0x1) != 0 || offset >= 256 {
-            warn!("configuration read_u16 offset invalid: 0x{:x}", offset);
+            warn!("configuration read_u16 offset invalid: 0x{offset:x}");
             return (false, 0xffff);
         }
 
@@ -750,7 +750,7 @@ impl PciConfiguration {
     /// been handled by the framework.
     pub fn read_u8(&self, offset: usize) -> (bool, u8) {
         if offset >= 256 {
-            warn!("configuration read_8 offset invalid: 0x{:x}", offset);
+            warn!("configuration read_8 offset invalid: 0x{offset:x}");
             return (false, 0xff);
         }
 
@@ -771,7 +771,7 @@ impl PciConfiguration {
         let reg_idx = offset >> 2;
         let mask = self.writable_bits[reg_idx];
         if (offset & 0x3) != 0 || offset >= 256 {
-            warn!("configuration write_u32 offset invalid: 0x{:x}", offset);
+            warn!("configuration write_u32 offset invalid: 0x{offset:x}");
             return false;
         }
 
@@ -816,7 +816,7 @@ impl PciConfiguration {
     /// been handled by the framework.
     pub fn write_u16(&mut self, offset: usize, value: u16) -> bool {
         if (offset & 0x1) != 0 || offset >= 256 {
-            warn!("configuration write_u16 offset invalid: 0x{:x}", offset);
+            warn!("configuration write_u16 offset invalid: 0x{offset:x}");
             return false;
         }
 
@@ -1281,7 +1281,7 @@ impl PciConfiguration {
         };
         let constraints = vec![constraint];
         if let Err(e) = self.bus.upgrade().unwrap().allocate_resources(&constraints) {
-            debug!("failed to allocate resource for PCI BAR: {:?}", e);
+            debug!("failed to allocate resource for PCI BAR: {e:?}");
         } else {
             self.set_bar_allocated(param.bar_idx, true);
         }

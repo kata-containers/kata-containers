@@ -56,7 +56,7 @@ const NUMA_NODE_CPU_LIST_NAME: &str = "cpulist";
 
 /// Get numa node id for a CPU
 pub fn get_node_id(cpu: u32) -> Result<u32> {
-    let path = NUMA_CPU_PATH.join(format!("cpu{}", cpu));
+    let path = NUMA_CPU_PATH.join(format!("cpu{cpu}"));
     let dirs = path.read_dir().map_err(|_| Error::InvalidCpu(cpu))?;
 
     for d in dirs {
