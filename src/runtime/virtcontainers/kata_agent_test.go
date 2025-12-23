@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
@@ -227,6 +228,104 @@ func TestHandleLocalStorage(t *testing.T) {
 	localMountPoint := localStorages[0].MountPoint
 	expected := filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mountSource))
 	assert.Equal(t, localMountPoint, expected)
+}
+
+func TestHandleLocalStorage_EmptyDirSubPath_RemapsSource_AndSkipsStorage(t *testing.T) {
+	k := kataAgent{}
+	sandboxID := "sandboxid"
+	rootfsSuffix := "rootfs"
+
+	origGet := getKubeletEmptyDirSubpathInfoFn
+	origEnsure := ensureLocalSubPathExistsFn
+	t.Cleanup(func() {
+		getKubeletEmptyDirSubpathInfoFn = origGet
+		ensureLocalSubPathExistsFn = origEnsure
+	})
+
+	volName := "vol1"
+	originalSource := filepath.Join(t.TempDir(), "volume-subpaths", volName, "ctr", "0")
+
+	cases := []struct {
+		name    string
+		subPath string
+	}{
+		{name: "volume-root", subPath: ""},
+		{name: "nested-subpath", subPath: filepath.Join("a", "b", "c")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mounts := []specs.Mount{
+				{Type: KataLocalDevType, Source: originalSource},
+			}
+
+			getKubeletEmptyDirSubpathInfoFn = func(mp string) *KubeletEmptyDirSubpathInfo {
+				assert.Equal(t, originalSource, mp)
+				return &KubeletEmptyDirSubpathInfo{
+					VolumeName: volName,
+					SubPath:    tc.subPath,
+					TargetPath: "/ignored",
+				}
+			}
+
+			called := 0
+			var gotGuestPath, gotMountPoint string
+			ensureLocalSubPathExistsFn = func(guestPath, mountPoint string) error {
+				called++
+				gotGuestPath = guestPath
+				gotMountPoint = mountPoint
+				return nil
+			}
+
+			storages, err := k.handleLocalStorage(mounts, sandboxID, rootfsSuffix)
+			assert.NoError(t, err)
+
+			assert.Len(t, storages, 0)
+
+			expectedGuestPath := filepath.Join(
+				kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, volName,
+			)
+			if tc.subPath != "" {
+				expectedGuestPath = filepath.Join(expectedGuestPath, tc.subPath)
+			}
+
+			assert.Equal(t, expectedGuestPath, mounts[0].Source)
+
+			assert.Equal(t, 1, called)
+			assert.Equal(t, expectedGuestPath, gotGuestPath)
+			assert.Equal(t, originalSource, gotMountPoint)
+		})
+	}
+}
+
+func TestHandleLocalStorage_EmptyDirSubPath_EnsureError_Propagates(t *testing.T) {
+	k := kataAgent{}
+	sandboxID := "sandboxid"
+	rootfsSuffix := "rootfs"
+
+	origGet := getKubeletEmptyDirSubpathInfoFn
+	origEnsure := ensureLocalSubPathExistsFn
+	t.Cleanup(func() {
+		getKubeletEmptyDirSubpathInfoFn = origGet
+		ensureLocalSubPathExistsFn = origEnsure
+	})
+
+	volName := "vol1"
+	originalSource := filepath.Join(t.TempDir(), "volume-subpaths", volName, "ctr", "0")
+	mounts := []specs.Mount{{Type: KataLocalDevType, Source: originalSource}}
+
+	getKubeletEmptyDirSubpathInfoFn = func(string) *KubeletEmptyDirSubpathInfo {
+		return &KubeletEmptyDirSubpathInfo{VolumeName: volName, SubPath: "app-logs"}
+	}
+
+	wantErr := errors.New("ensure failed")
+	ensureLocalSubPathExistsFn = func(string, string) error { return wantErr }
+
+	storages, err := k.handleLocalStorage(mounts, sandboxID, rootfsSuffix)
+	assert.ErrorIs(t, err, wantErr)
+	assert.Nil(t, storages)
+
+	assert.Equal(t, originalSource, mounts[0].Source)
 }
 
 func TestHandleDeviceBlockVolume(t *testing.T) {
