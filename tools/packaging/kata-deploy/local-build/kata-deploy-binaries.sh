@@ -564,13 +564,15 @@ install_initrd_confidential() {
 	install_initrd "confidential"
 }
 
-# For all nvidia_gpu targets we can customize the stack that is enbled
+# For all nvidia_gpu targets we can customize the stack that is enabled
 # in the VM by setting the NVIDIA_GPU_STACK= environment variable
 #
 # latest | lts | version
 #              -> use the latest and greatest driver,
 #                 lts release or e.g. version=550.127.1
 # driver       -> enable open or closed drivers
+# nvidia-repo  -> install drivers from NVIDIA's official repository
+#                 instead of Ubuntu's distribution packages
 # compute      -> enable the compute GPU stack, includes utility
 # graphics     -> enable the graphics GPU stack, includes compute
 # dcgm         -> enable the DCGM stack + DGCM exporter
@@ -584,13 +586,13 @@ install_initrd_confidential() {
 #
 # The full stack can be enabled by setting all the options like:
 #
-# NVIDIA_GPU_STACK="latest,compute,dcgm,nvswitch,gpudirect"
+# NVIDIA_GPU_STACK="latest,compute,dcgm,nvswitch,gpudirect,nvidia-repo"
 #
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm,nvidia-repo"}
 	install_image "nvidia-gpu"
 }
 
@@ -598,7 +600,7 @@ install_image_nvidia_gpu() {
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm,nvidia-repo"}
 	install_initrd "nvidia-gpu"
 }
 
@@ -607,7 +609,7 @@ install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm,nvidia-repo"}
 	install_image "nvidia-gpu-confidential"
 }
 
@@ -616,7 +618,7 @@ install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm,nvidia-repo"}
 	install_initrd "nvidia-gpu-confidential"
 }
 
