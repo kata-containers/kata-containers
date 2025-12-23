@@ -55,7 +55,7 @@ exclude = [
 # Rust-VMM crates
 event-manager = "0.2.1"
 kvm-bindings = "0.6.0"
-kvm-ioctls = "=0.12.1"
+kvm-ioctls = "=0.24.0"
 linux-loader = "0.8.0"
 seccompiler = "0.5.0"
 vfio-bindings = "0.3.0"
