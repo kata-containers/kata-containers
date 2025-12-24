@@ -17,10 +17,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
-use tokio::sync::RwLock;
 use tokio::time::Duration as TokioDuration;
 
 const PAGE_REPORTING_MIN_ORDER: u8 = 9;
@@ -263,7 +262,7 @@ impl Compact {
         let file = File::open("/proc/pagetypeinfo")?;
         let reader = BufReader::new(file);
 
-        let order_limit = self.core.blocking_read().config.compact_order as usize;
+        let order_limit = self.core.read().unwrap().config.compact_order as usize;
 
         let mut total_free_movable_pages = 0;
 
@@ -303,7 +302,7 @@ impl Compact {
         };
 
         self.core
-            .blocking_read()
+            .read().unwrap()
             .check_compact_threshold(memfree_kb, free_movable_pages)
     }
 
@@ -315,16 +314,16 @@ impl Compact {
             .map_err(|e| anyhow!("calculate_free_movable_pages failed: {}", e))?;
 
         self.core
-            .blocking_write()
+            .write().unwrap()
             .set_prev(memfree_kb, free_movable_pages);
 
         Ok(())
     }
 
     fn do_compact(&self) -> Result<()> {
-        let compact_psi_percent_limit = self.core.blocking_read().config.compact_psi_percent_limit;
-        let mut compact_psi = self.core.blocking_read().get_special_psi();
-        let mut rest_sec = self.core.blocking_read().config.compact_sec_max;
+        let compact_psi_percent_limit = self.core.read().unwrap().config.compact_psi_percent_limit;
+        let mut compact_psi = self.core.read().unwrap().get_special_psi();
+        let mut rest_sec = self.core.read().unwrap().config.compact_sec_max;
 
         if let Err(e) = sched_yield() {
             error!("sched_yield failed: {:?}", e);
@@ -395,25 +394,30 @@ impl Compact {
     }
 
     pub fn need_work(&self) -> bool {
-        self.core.blocking_read().need_work()
+        self.core.read().unwrap().need_work()
     }
 
     pub fn reset_timer(&mut self) {
-        self.core.blocking_write().timeout.reset();
+        self.core.write().unwrap().timeout.reset();
     }
 
     pub fn get_remaining_tokio_duration(&self) -> TokioDuration {
-        self.core.blocking_read().get_remaining_tokio_duration()
+        self.core.read().unwrap().get_remaining_tokio_duration()
     }
 
     pub async fn async_get_remaining_tokio_duration(&self) -> TokioDuration {
-        self.core.read().await.get_remaining_tokio_duration()
+        let core = self.core.clone();
+        tokio::task::spawn_blocking(move || {
+            core.read().unwrap().get_remaining_tokio_duration()
+        })
+        .await
+        .unwrap_or_else(|_| TokioDuration::from_secs(0))
     }
 
     pub fn work(&mut self) -> Result<()> {
-        let mut can_work = self.core.blocking_write().psi_ok();
+        let mut can_work = self.core.write().unwrap().psi_ok();
         if can_work {
-            if !self.core.blocking_read().need_force_compact() {
+            if !self.core.read().unwrap().need_force_compact() {
                 if !self.check_compact_threshold() {
                     trace!("not enough free movable pages");
                     can_work = false;
@@ -429,16 +433,21 @@ impl Compact {
 
             self.set_prev()?;
 
-            self.core.blocking_write().force_counter = 0;
+            self.core.write().unwrap().force_counter = 0;
         } else {
-            self.core.blocking_write().force_counter += 1;
+            self.core.write().unwrap().force_counter += 1;
         }
 
         Ok(())
     }
 
     pub async fn set_config(&mut self, new_config: OptionConfig) -> bool {
-        self.core.write().await.set_config(new_config)
+        let core = self.core.clone();
+        tokio::task::spawn_blocking(move || {
+            core.write().unwrap().set_config(new_config)
+        })
+        .await
+        .unwrap_or(false)
     }
 }
 

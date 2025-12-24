@@ -15,8 +15,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use tokio::time::Duration as TokioDuration;
 
 /* If last_inc_time to current_time small than IDLE_FRESH_IGNORE_SECS,
@@ -1006,7 +1005,7 @@ impl MemCG {
         let mg_hash = mglru::host_memcgs_get(target_paths, true, self.is_cg_v2)
             .map_err(|e| anyhow!("lru_gen_parse::file_parse failed: {}", e))?;
 
-        let mut mgs = self.memcgs.blocking_write();
+        let mut mgs = self.memcgs.write().unwrap();
 
         if target_paths.is_empty() {
             mgs.remove_changed(&mg_hash);
@@ -1054,7 +1053,7 @@ impl MemCG {
             }
         });
 
-        self.memcgs.blocking_write().inc_run_aging_count(infov);
+        self.memcgs.write().unwrap().inc_run_aging_count(infov);
     }
 
     fn swap_not_available(&self) -> Result<bool> {
@@ -1102,7 +1101,7 @@ impl MemCG {
             swap = false;
         }
 
-        let psi_path = self.memcgs.blocking_read().config.psi_path.clone();
+        let psi_path = self.memcgs.read().unwrap().config.psi_path.clone();
         for info in infov.iter_mut() {
             info.eviction = Some(EvictionInfo {
                 psi: psi::Period::new(&psi_path.join(info.path.trim_start_matches('/')), false),
@@ -1295,7 +1294,7 @@ impl MemCG {
             }
         }
 
-        let mut mgs = self.memcgs.blocking_write();
+        let mut mgs = self.memcgs.write().unwrap();
         mgs.record_eviction(infov);
         mgs.record_eviction(&removed_infov);
 
@@ -1303,35 +1302,50 @@ impl MemCG {
     }
 
     fn check_psi_get_infos(&mut self, sec: u64) -> Vec<(SingleConfig, Vec<Info>)> {
-        self.memcgs.blocking_write().check_psi_get_infos(sec)
+        self.memcgs.write().unwrap().check_psi_get_infos(sec)
     }
 
     fn update_info(&self, infov: &mut Vec<Info>) {
-        self.memcgs.blocking_read().update_info(infov);
+        self.memcgs.read().unwrap().update_info(infov);
     }
 
     pub fn get_timeout_list(&self) -> Vec<u64> {
-        self.memcgs.blocking_read().get_timeout_list()
+        self.memcgs.read().unwrap().get_timeout_list()
     }
 
     pub fn reset_timers(&mut self, work_list: &Vec<u64>) {
-        self.memcgs.blocking_write().reset_timers(work_list);
+        self.memcgs.write().unwrap().reset_timers(work_list);
     }
 
     pub fn get_remaining_tokio_duration(&self) -> TokioDuration {
-        self.memcgs.blocking_read().get_remaining_tokio_duration()
+        self.memcgs.read().unwrap().get_remaining_tokio_duration()
     }
 
     pub async fn async_get_remaining_tokio_duration(&self) -> TokioDuration {
-        self.memcgs.read().await.get_remaining_tokio_duration()
+        let memcgs = self.memcgs.clone();
+        tokio::task::spawn_blocking(move || {
+            memcgs.read().unwrap().get_remaining_tokio_duration()
+        })
+        .await
+        .unwrap_or_else(|_| TokioDuration::from_secs(0))
     }
 
     pub async fn set_config(&mut self, new_config: OptionConfig) -> Result<bool> {
-        self.memcgs.write().await.set_config(new_config)
+        let memcgs = self.memcgs.clone();
+        tokio::task::spawn_blocking(move || {
+            memcgs.write().unwrap().set_config(new_config)
+        })
+        .await
+        .map_err(|e| anyhow!("spawn_blocking failed: {}", e))?
     }
 
     pub async fn get_status(&self) -> HashMap<String, MemCgroup> {
-        self.memcgs.read().await.cgroups.clone()
+        let memcgs = self.memcgs.clone();
+        tokio::task::spawn_blocking(move || {
+            memcgs.read().unwrap().cgroups.clone()
+        })
+        .await
+        .unwrap_or_default()
     }
 }
 
