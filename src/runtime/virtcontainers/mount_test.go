@@ -456,10 +456,7 @@ func TestGetKubeletEmptyDirSubpathInfo_WithStubs(t *testing.T) {
 		t.Fatalf("TargetPath=%q, want %q", info.TargetPath, target)
 	}
 
-	ok, err := IsKubeletEmptyDirSubpath(mp)
-	if err != nil {
-		t.Fatalf("IsKubeletEmptyDirSubpath err: %v", err)
-	}
+	ok := IsKubeletEmptyDirSubpath(mp)
 	if !ok {
 		t.Fatalf("IsKubeletEmptyDirSubpath=%v, want true", ok)
 	}

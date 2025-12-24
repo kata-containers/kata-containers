@@ -457,19 +457,19 @@ type KubeletEmptyDirSubpathInfo struct {
 
 // indirection points for unit tests (override in *_test.go).
 var (
-    findMountSourceForMountPointFn = findMountSourceForMountPoint
-    resolveMountSourcePathFn       = resolveMountSourcePath
+	findMountSourceForMountPointFn = findMountSourceForMountPoint
+	resolveMountSourcePathFn       = resolveMountSourcePath
 )
 
 // IsKubeletEmptyDirSubpath returns true when mountPoint is a kubelet volume-subpaths mount
 // and the bind-mount ultimately targets an emptyDir volume path.
-// It returns (false, nil) when mountPoint is not such a mount.
-func IsKubeletEmptyDirSubpath(mountPoint string) (bool, error) {
+// It returns false when mountPoint is not such a mount.
+func IsKubeletEmptyDirSubpath(mountPoint string) bool {
 	info := GetKubeletEmptyDirSubpathInfo(mountPoint)
-	return info != nil, nil
+	return info != nil
 }
 
-// GetKubeletEmptyDirSubpathInfo returns nil, nil when mountPoint is not a kubelet emptyDir subPath mount.
+// GetKubeletEmptyDirSubpathInfo returns nil, when mountPoint is not a kubelet emptyDir subPath mount.
 func GetKubeletEmptyDirSubpathInfo(mountPoint string) *KubeletEmptyDirSubpathInfo {
 	volName, ok := parseKubeletVolumeSubpathsMountPoint(mountPoint)
 	if !ok {
@@ -593,7 +593,7 @@ func findMountSourceForMountPoint(mountPoint string) (string, error) {
 func findMountSourceForMountPointFromData(mountPoint string, data []byte) (string, error) {
 	mp, err := filepath.EvalSymlinks(mountPoint)
 	if err != nil {
-		return "", fmt.Errorf("mountpoint %q EvalSymlinks err: %v", mp, err)
+		return "", fmt.Errorf("mountpoint %q EvalSymlinks err: %v", mountPoint, err)
 	}
 
 	sc := bufio.NewScanner(bytes.NewReader(data))

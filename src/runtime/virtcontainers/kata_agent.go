@@ -1626,9 +1626,10 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) ([]*grpc.Storag
 	return epheStorages, nil
 }
 
+// indirection points for unit tests (override in *_test.go).
 var (
-    getKubeletEmptyDirSubpathInfoFn = GetKubeletEmptyDirSubpathInfo
-    ensureLocalSubPathExistsFn      = ensureLocalSubPathExists
+	getKubeletEmptyDirSubpathInfoFn = GetKubeletEmptyDirSubpathInfo
+	ensureLocalSubPathExistsFn      = ensureLocalSubPathExists
 )
 
 // handleLocalStorage handles local storage within the VM
