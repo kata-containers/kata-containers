@@ -56,6 +56,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (cloud-hypervisor)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nydus (active, qemu)
