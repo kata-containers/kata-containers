@@ -46,10 +46,12 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, cloud-hypervisor)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (active, qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, clh)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, cloud-hypervisor)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, dragonball)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, qemu)
+      - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-containerd-stability (lts, qemu-runtime-rs)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-kata-agent-apis
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (cloud-hypervisor)
       - Kata Containers CI / kata-containers-ci-on-push / run-basic-amd64-tests / run-nerdctl-tests (dragonball)
