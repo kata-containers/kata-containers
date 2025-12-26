@@ -112,7 +112,7 @@ actix-rt = "2.7.0"
 anyhow = "1.0"
 async-trait = "0.1.48"
 containerd-shim = { version = "0.10.0", features = ["async"] }
-containerd-shim-protos = { version = "0.10.0", features = ["async"] }
+containerd-shim-protos = { version = "0.10.0", features = ["async", "sandbox"] }
 go-flag = "0.1.0"
 hyper = "0.14.20"
 hyperlocal = "0.8.0"
