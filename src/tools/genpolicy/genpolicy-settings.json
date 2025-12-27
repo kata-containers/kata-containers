@@ -157,26 +157,44 @@
             "mount_source": "^$(cpath)/$(sandbox-id)/rootfs/local/",
             "mount_point": "^$(cpath)/$(sandbox-id)/rootfs/local/",
             "driver": "local",
+            "driver_options": [],
             "source": "local",
             "fstype": "local",
             "options": [
                 "mode=0777"
-            ]
+            ],
+            "shared": false
+        },
+        "emptyDir_encrypted": {
+            "mount_source": "",
+            "mount_type": "bind",
+            "driver": "",
+            "driver_options": [
+                "encryption_key=ephemeral"
+            ],
+            "source": "",
+            "mount_point": "^$(spath)/$(b64_device_id)$",
+            "fstype": "ext4",
+            "options": [],
+            "shared": true
         },
         "emptyDir_memory": {
             "mount_type": "bind",
             "mount_source": "^/run/kata-containers/sandbox/ephemeral/",
             "mount_point": "^/run/kata-containers/sandbox/ephemeral/",
             "driver": "ephemeral",
+            "driver_options": [],
             "source": "tmpfs",
             "fstype": "tmpfs",
-            "options": []
+            "options": [],
+            "shared": false
         },
         "configMap": {
             "mount_type": "bind",
             "mount_source": "$(sfprefix)",
             "mount_point": "$(sfprefix)",
             "driver": "local",
+            "driver_options": [],
             "fstype": "bind",
             "options": [
                 "rbind",
@@ -236,6 +254,7 @@
     },
     "common": {
         "cpath": "/run/kata-containers/shared/containers(?:/passthrough)?",
+        "spath": "/run/kata-containers/sandbox/storage",
         "root_path": "/run/kata-containers/$(bundle-id)/rootfs",
         "sfprefix": "^$(cpath)/(watchable/)?$(bundle-id)-[a-z0-9]{16}-",
         "ip_p": "[0-9]{1,5}",
@@ -310,7 +329,8 @@
     "cluster_config": {
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
         "guest_pull": true,
-        "pause_container_id_policy": "v1"
+        "pause_container_id_policy": "v1",
+        "encrypted_emptydir": true
     },
     "request_defaults": {
         "CreateContainerRequest": {

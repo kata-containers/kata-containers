@@ -142,7 +142,7 @@ func TestSetEphemeralStorageType(t *testing.T) {
 
 	ociMounts = append(ociMounts, mount)
 	ociSpec.Mounts = ociMounts
-	ociSpec = SetEphemeralStorageType(ociSpec, false)
+	ociSpec = SetEphemeralStorageType(ociSpec, false, vc.EmptyDirModeSharedFs)
 
 	mountType := ociSpec.Mounts[0].Type
 	assert.Equal(mountType, "ephemeral",

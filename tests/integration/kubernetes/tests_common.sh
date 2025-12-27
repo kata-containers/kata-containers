@@ -37,6 +37,8 @@ K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+GENPOLICY_BINARY="${GENPOLICY_BINARY:-"/opt/kata/bin/genpolicy"}"
+GENPOLICY_SETTINGS_DIR="${GENPOLICY_SETTINGS_DIR:-"/opt/kata/share/defaults/kata-containers"}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 
@@ -137,6 +139,10 @@ adapt_common_policy_settings_for_non_coco() {
 	# Disable guest pull.
 	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Disable encrypted emptyDir.
+	jq '.cluster_config.encrypted_emptydir = false' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for AKS Hosts
@@ -191,14 +197,13 @@ adapt_common_policy_settings() {
 # and change these settings to use Kata CI cluster's default namespace.
 create_common_genpolicy_settings() {
 	declare -r genpolicy_settings_dir="$1"
-	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
 
 	auto_generate_policy_enabled || return 0
 
-	adapt_common_policy_settings "${default_genpolicy_settings_dir}"
+	cp "${GENPOLICY_SETTINGS_DIR}/genpolicy-settings.json" "${genpolicy_settings_dir}"
+	cp "${GENPOLICY_SETTINGS_DIR}/rules.rego" "${genpolicy_settings_dir}"
 
-	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
-	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
+	adapt_common_policy_settings "${genpolicy_settings_dir}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -247,7 +252,7 @@ auto_generate_policy_no_added_flags() {
 	declare -r additional_flags="${4:-""}"
 
 	auto_generate_policy_enabled || return 0
-	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
+	local genpolicy_command="RUST_LOG=info ${GENPOLICY_BINARY} -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
@@ -310,6 +315,21 @@ add_requests_to_policy_settings() {
 			"${settings_dir}"/new-genpolicy-settings.json
 		mv "${settings_dir}"/new-genpolicy-settings.json \
 			"${settings_dir}"/genpolicy-settings.json
+	done
+}
+
+# Change Rego rules to allow one or more ttrpc requests from the Host to the Guest.
+allow_requests() {
+	declare -r settings_dir="$1"
+	shift
+	declare -r requests=("$@")
+
+	auto_generate_policy_enabled || return 0
+
+	for request in "${requests[@]}"
+	do
+		info "${settings_dir}/rules.rego: allowing ${request}"
+		sed -i "s/^default \(${request}\).\+/default \1 := true/" "${settings_dir}"/rules.rego
 	done
 }
 
