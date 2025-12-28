@@ -53,8 +53,6 @@ jobs:
           - ovmf
           - qemu
           - virtiofsd
-    env:
-      PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -95,7 +93,7 @@ jobs:
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        if: ${{ inputs.push-to-registry == 'yes' }}
         env:
           KATA_ASSET: ${{ matrix.asset }}
         run: |
@@ -104,20 +102,20 @@ jobs:
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
       - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        if: ${{ inputs.push-to-registry == 'yes' }}
         with:
           version: "1.2.0"
 
       # for pushing attestations to the registry
       - uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        if: ${{ inputs.push-to-registry == 'yes' }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/attest-build-provenance@ef244123eb79f2f7a7e75d99086184180e6d0018 # v1.4.4
-        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        if: ${{ inputs.push-to-registry == 'yes' }}
         with:
           subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
           subject-digest: ${{ steps.parse-oci-segments.outputs.oci-digest }}
