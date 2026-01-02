@@ -124,6 +124,7 @@ options:
 	pause-image
 	ovmf
 	ovmf-sev
+	ovmf-tdx
 	ovmf-cca
 	qemu
 	qemu-cca-experimental
@@ -1015,6 +1016,7 @@ install_ovmf() {
 
 	local component_name="ovmf"
 	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
+	[ "${ovmf_type}" == "tdx" ] && component_name="ovmf-tdx"
 
 	latest_artefact="$(get_from_kata_deps ".externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -1034,6 +1036,11 @@ install_ovmf() {
 # Install OVMF SEV
 install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
+}
+
+# Install OVMF TDX
+install_ovmf_tdx() {
+	install_ovmf "tdx" "edk2-tdx.tar.gz"
 }
 
 # Install OVMF CCA
@@ -1284,6 +1291,7 @@ handle_build() {
 		install_nydus
 		install_ovmf
 		install_ovmf_sev
+		install_ovmf_tdx
 		install_qemu
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
@@ -1337,6 +1345,8 @@ handle_build() {
 	ovmf) install_ovmf ;;
 
 	ovmf-sev) install_ovmf_sev ;;
+
+	ovmf-tdx) install_ovmf_tdx ;;
 
 	ovmf-cca) install_ovmf_cca ;;
 

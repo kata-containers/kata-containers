@@ -54,6 +54,7 @@ jobs:
           - nydus
           - ovmf
           - ovmf-sev
+          - ovmf-tdx
           - pause-image
           - qemu
           - qemu-snp-experimental
