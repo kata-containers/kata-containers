@@ -27,6 +27,7 @@ BASE_TARBALLS = serial-targets \
 	kernel-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
+	ovmf-tdx-tarball \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tdx-experimental-tarball \
@@ -154,6 +155,9 @@ nydus-tarball:
 	${MAKE} $@-build
 
 ovmf-sev-tarball:
+	${MAKE} $@-build
+
+ovmf-tdx-tarball:
 	${MAKE} $@-build
 
 ovmf-cca-tarball:
