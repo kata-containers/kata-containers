@@ -98,11 +98,10 @@ impl Qmp {
     pub fn execute_migration(&mut self, uri: &str) -> Result<()> {
         self.qmp
             .execute(&migrate {
+                channels: None,
                 detach: None,
                 resume: None,
-                blk: None,
-                inc: None,
-                uri: uri.to_string(),
+                uri: Some(uri.to_string()),
             })
             .map(|_| ())
             .context("execute migration")
@@ -111,7 +110,9 @@ impl Qmp {
     pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
         self.qmp
             .execute(&migrate_incoming {
-                uri: uri.to_string(),
+                channels: None,
+                exit_on_error: None,
+                uri: Some(uri.to_string()),
             })
             .map(|_| ())
             .context("execute migration incoming")
@@ -270,6 +271,7 @@ impl Qmp {
                 pmem: None,
                 readonly: None,
                 mem_path: "/dev/shm".to_owned(),
+                rom: None,
             },
         });
         self.qmp.execute(&memory_backend)?;
@@ -834,7 +836,6 @@ impl Qmp {
                 | qmp::CpuInfoFast::mips64(cpu_info)
                 | qmp::CpuInfoFast::mips64el(cpu_info)
                 | qmp::CpuInfoFast::mipsel(cpu_info)
-                | qmp::CpuInfoFast::nios2(cpu_info)
                 | qmp::CpuInfoFast::or1k(cpu_info)
                 | qmp::CpuInfoFast::ppc(cpu_info)
                 | qmp::CpuInfoFast::ppc64(cpu_info)
