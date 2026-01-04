@@ -14,7 +14,7 @@ use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
-    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
+    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, MigrationInfo, PciDeviceInfo,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -105,6 +105,13 @@ impl Qmp {
             })
             .map(|_| ())
             .context("execute migration")
+    }
+
+    #[allow(dead_code)]
+    pub async fn execute_query_migrate(&mut self) -> Result<MigrationInfo> {
+        let migrate_info = self.qmp.execute(&qmp::query_migrate {})?;
+
+        Ok(migrate_info)
     }
 
     pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
