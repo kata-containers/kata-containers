@@ -107,7 +107,6 @@ impl Qmp {
             .context("execute migration")
     }
 
-    #[allow(dead_code)]
     pub async fn execute_query_migrate(&mut self) -> Result<MigrationInfo> {
         let migrate_info = self.qmp.execute(&qmp::query_migrate {})?;
 
