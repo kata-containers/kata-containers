@@ -10,7 +10,7 @@ use std::sync::Arc;
 use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use common::{
-    error::Error,
+    error::{is_no_such_process_error, Error},
     types::{
         ContainerConfig, ContainerID, ContainerProcess, ProcessStateInfo, ProcessStatus,
         ProcessType,
@@ -467,7 +467,20 @@ impl Container {
             return Ok(());
         }
 
-        inner.signal_process(container_process, signal, all).await
+        match inner.signal_process(container_process, signal, all).await {
+            Ok(()) => Ok(()),
+            Err(e) if is_term_signal && is_no_such_process_error(&e) => {
+                info!(
+                    self.logger,
+                    "process already gone during kill, treating as success";
+                    "container" => &self.container_id.container_id,
+                    "process" => ?container_process,
+                    "signal" => signal
+                );
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub async fn exec_process(
