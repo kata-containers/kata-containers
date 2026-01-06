@@ -24,7 +24,7 @@ libc = { workspace = true }
 log = { workspace = true }
 nix = { workspace = true }
 protobuf = { workspace = true }
-sha2 = "=0.9.3"
+sha2 = { workspace = true }
 slog = { workspace = true, features = [
     "std",
     "release_max_level_trace",
