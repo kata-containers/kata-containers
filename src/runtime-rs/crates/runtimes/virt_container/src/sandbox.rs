@@ -12,6 +12,7 @@ use agent::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use common::error::is_normal_oom_shutdown_error;
 use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
 use common::{
@@ -749,7 +750,12 @@ impl Sandbox for VirtSandbox {
                                 }
                             }
                             Err(err) => {
-                                warn!(sl!(), "failed to get oom event error {:?}", err);
+                                // Handle errors by type
+                                if is_normal_oom_shutdown_error(&err) {
+                                    info!(sl!(), "oom watcher exit on sandbox shutdown: {:?}", err);
+                                } else {
+                                    warn!(sl!(), "failed to get oom event error {:?}", err);
+                                }
                                 break;
                             }
                         }
