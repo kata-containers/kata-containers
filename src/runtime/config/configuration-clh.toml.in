@@ -109,6 +109,14 @@ memory_slots = @DEFMEMSLOTS@
 # > amount of physical RAM      --> will be set to the actual amount of physical RAM
 default_maxmemory = @DEFMAXMEMSZ@
 
+# Disable block device from being used for a container's rootfs.
+# In case of a storage driver like devicemapper where a container's
+# root file system is backed by a block device, the block device is passed
+# directly to the hypervisor for performance reasons.
+# This flag prevents the block device from being passed to the hypervisor,
+# virtio-fs is used instead to pass the rootfs.
+disable_block_device_use = @DEFDISABLEBLOCK@
+
 # Shared file system type:
 #   - virtio-fs (default)
 #   - virtio-fs-nydus

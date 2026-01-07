@@ -42,6 +42,7 @@ else
 	)
 
 	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-empty-image.bats" \
 		"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-sealed-secret.bats" \
