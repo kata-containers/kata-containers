@@ -23,7 +23,6 @@ env_logger = "0.10"
 clap = { version = "4.5", features = ["derive"] }
 
 # TOML parsing and manipulation
-toml = "0.5.8"
 toml_edit = "0.22"
 
 # YAML parsing and manipulation
