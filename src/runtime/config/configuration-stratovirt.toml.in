@@ -103,12 +103,18 @@ default_maxmemory = @DEFMAXMEMSZ@
 # Default 0
 memory_offset = 0
 
-# Disable block device from being used for a container's rootfs.
+# Disable hotplugging host block devices to guest VMs for container rootfs.
 # In case of a storage driver like devicemapper where a container's
 # root file system is backed by a block device, the block device is passed
 # directly to the hypervisor for performance reasons.
 # This flag prevents the block device from being passed to the hypervisor,
 # virtio-fs is used instead to pass the rootfs.
+# WARNING:
+#   Don't set this flag to false if you don't understand well the behavior of
+#   your container runtime and image snapshotter. Some snapshotters might use
+#   container image storage devices that are not meant to be hotplugged into a
+#   guest VM - e.g., because they contain files used by the host or by other
+#   guests.
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:

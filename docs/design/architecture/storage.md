@@ -51,6 +51,7 @@ containers started after the VM has been launched.
 Users can check to see if the container uses the `devicemapper` block
 device as its rootfs by calling `mount(8)` within the container. If
 the `devicemapper` block device is used, the root filesystem (`/`)
-will be mounted from `/dev/vda`. Users can disable direct mounting of
-the underlying block device through the runtime
-[configuration](README.md#configuration).
+will be mounted from `/dev/vda`. Users can enable direct mounting of
+the underlying block device by setting the runtime
+[configuration](README.md#configuration) flag `disable_block_device_use` to
+`false`.
