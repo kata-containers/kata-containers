@@ -507,7 +507,7 @@ export EXTRA_PKGS="gcc make curl gnupg"
 Having the `$ROOTFS_DIR` exported in the previous step we can now install all the
 needed parts in the guest OS. In this case, we have an Ubuntu based rootfs.
 
-First off all mount the special filesystems into the rootfs
+First of all mount the special filesystems into the rootfs
 
 ```sh
 $ sudo mount -t sysfs -o ro none ${ROOTFS_DIR}/sys
