@@ -88,8 +88,8 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v10.1.1"
-      tag: "v10.1.1"
+      version: "v10.2.0"
+      tag: "v10.2.0"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -107,12 +107,12 @@ assets:
     qemu-snp-experimental:
       description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "gpu-snp-20251217"
+      tag: "gpu-snp-20260107"
 
     qemu-tdx-experimental:
       description: "QEMU with GPU+TDX support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "gpu-tdx-20251217"
+      tag: "gpu-tdx-20260107"
 
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"
