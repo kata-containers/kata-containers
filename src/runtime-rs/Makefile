@@ -149,7 +149,7 @@ DEFMEMSLOTS := 10
 # Default maximum memory in MiB
 DEFMAXMEMSZ := 0
 ##VAR DEFBRIDGES=<number> Default number of bridges
-DEFBRIDGES := 0
+DEFBRIDGES := 1
 DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\"]
 DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
