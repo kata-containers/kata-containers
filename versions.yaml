@@ -130,7 +130,7 @@ assets:
         version: "noble"  # 24.04 LTS
         confidential:
           name: "ubuntu"
-          version: "noble" # 24.04 LTS
+          version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -486,4 +486,4 @@ docker_images:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
     registry: "quay.io/kata-containers/nginx"
     # yamllint disable-line rule:line-length
-    digest: "sha256:a905609e0f9adc2607f06da2f76893c6da07caa396c41f2806fee162064cfb4b" # 1.15-alpine
+    digest: "sha256:a905609e0f9adc2607f06da2f76893c6da07caa396c41f2806fee162064cfb4b"  # 1.15-alpine
