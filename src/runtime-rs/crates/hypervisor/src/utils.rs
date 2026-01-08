@@ -526,7 +526,7 @@ mod tests {
         }
 
         let tmp2 = TempDir::new().expect("create tmp2");
-        let tmp2_path = tmp2.into_path();
+        let tmp2_path = tmp2.keep();
         let _ = fs::remove_dir_all(&tmp2_path);
 
         let target2 = tmp2_path.join("foo").join("bar");

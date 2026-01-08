@@ -519,6 +519,7 @@ impl<R: Req> Endpoint<R> {
     /// * - OversizedMsg: message size is too big.
     /// * - PartialMessage: received a partial message.
     /// * - IncorrectFds: wrong number of attached fds.
+    #[allow(dead_code)]
     pub fn send_message_with_payload<T: Sized, P: Sized>(
         &mut self,
         hdr: &VhostUserMsgHeader<R>,

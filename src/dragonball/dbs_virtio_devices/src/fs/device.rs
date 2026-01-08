@@ -1250,11 +1250,12 @@ pub mod tests {
     #[cfg(feature = "test-resources")]
     fn test_fs_manipulate_backend_fs() {
         let source = "/test_resources/nydus-rs/bootstrap/image_v2.boot";
-        let source_path = PathBuf::from(source);
-        let bootstrapfile = source_path.to_str().unwrap().to_string();
+        let source_path = PathBuf::from(&source);
         if !source_path.exists() {
-            panic!("Test resource file not found: {}", bootstrapfile);
+            eprintln!("Test resource file not found: {}", source);
+            return;
         }
+        let bootstrapfile = source.to_string();
         // mount
         {
             // invalid fs type
