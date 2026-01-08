@@ -99,6 +99,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 *DefaultApi* | [**VmReceiveMigrationPut**](docs/DefaultApi.md#vmreceivemigrationput) | **Put** /vm.receive-migration | Receive a VM migration from URL
 *DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
+*DefaultApi* | [**VmResizeDiskPut**](docs/DefaultApi.md#vmresizediskput) | **Put** /vm.resize-disk | Resize a disk
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
 *DefaultApi* | [**VmResizeZonePut**](docs/DefaultApi.md#vmresizezoneput) | **Put** /vm.resize-zone | Resize a memory zone
 *DefaultApi* | [**VmRestorePut**](docs/DefaultApi.md#vmrestoreput) | **Put** /vm.restore | Restore a VM from a snapshot.
@@ -148,6 +149,7 @@ Class | Method | HTTP request | Description
  - [VmInfo](docs/VmInfo.md)
  - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)
+ - [VmResizeDisk](docs/VmResizeDisk.md)
  - [VmResizeZone](docs/VmResizeZone.md)
  - [VmSnapshotConfig](docs/VmSnapshotConfig.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
