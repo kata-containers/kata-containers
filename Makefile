@@ -50,10 +50,14 @@ docs-url-alive-check:
 build-and-publish-kata-debug:
 	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG} 
 
+docs-serve:
+	docker run --rm -p 8000:8000 -v ./docs:/docs/docs -v ${PWD}/zensical.toml:/zensical.toml:ro zensical/zensical serve --config-file /zensical.toml -a 0.0.0.0:8000
+
 .PHONY: \
 	all \
 	kata-tarball \
 	install-tarball \
 	default \
 	static-checks \
-	docs-url-alive-check
+	docs-url-alive-check \
+	docs-serve
