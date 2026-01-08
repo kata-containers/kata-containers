@@ -250,6 +250,8 @@ externals:
     driver:
       version: "580.95.05"
       url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
+    cuda:
+      url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
