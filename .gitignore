@@ -19,3 +19,4 @@ tools/packaging/static-build/agent/install_libseccomp.sh
 .envrc
 .direnv
 **/.DS_Store
+site/
