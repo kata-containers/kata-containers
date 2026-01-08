@@ -53,6 +53,7 @@ vm-memory = { workspace = true, features = [
 test-utils = { workspace = true }
 
 [features]
+test-resources = []
 virtio-mmio = []
 virtio-vsock = ["virtio-mmio"]
 virtio-net = ["virtio-mmio"]
