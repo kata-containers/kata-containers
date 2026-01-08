@@ -221,61 +221,6 @@ jobs:
           platforms: linux/amd64, linux/s390x
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
-  publish-csi-driver-amd64:
-    name: publish-csi-driver-amd64
-    needs: build-kata-static-tarball-amd64
-    permissions:
-      contents: read
-      packages: write
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: get-kata-tools-tarball
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: kata-tools-static-tarball-amd64-${{ inputs.tag }}
-          path: kata-tools-artifacts
-
-      - name: Install kata-tools
-        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
-
-      - name: Copy binary into Docker context
-        run: |
-          # Copy to the location where the Dockerfile expects the binary.
-          mkdir -p src/tools/csi-kata-directvolume/bin/
-          cp /opt/kata/bin/csi-kata-directvolume src/tools/csi-kata-directvolume/bin/directvolplugin
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
-
-      - name: Login to Kata Containers ghcr.io
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker build and push
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
-        with:
-          tags: ghcr.io/kata-containers/csi-kata-directvolume:${{ inputs.pr-number }}
-          push: true
-          context: src/tools/csi-kata-directvolume/
-          platforms: linux/amd64
-          file: src/tools/csi-kata-directvolume/Dockerfile
-
   run-kata-monitor-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
@@ -339,7 +284,6 @@ jobs:
     needs:
      - publish-kata-deploy-payload-amd64
      - build-and-publish-tee-confidential-unencrypted-image
-     - publish-csi-driver-amd64
     uses: ./.github/workflows/run-kata-coco-tests.yaml
     permissions:
       contents: read

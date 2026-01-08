@@ -194,6 +194,7 @@ type runtime struct {
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
+	EmptyDirMode              string   `toml:"emptydir_mode"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
@@ -1610,6 +1611,12 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	config.DisableGuestEmptyDir = tomlConf.Runtime.DisableGuestEmptyDir
 
+	if tomlConf.Runtime.EmptyDirMode != "" {
+		config.EmptyDirMode = tomlConf.Runtime.EmptyDirMode
+	} else {
+		config.EmptyDirMode = vc.EmptyDirModeSharedFs
+	}
+
 	config.DanConfig = tomlConf.Runtime.DanConf
 	if err := checkConfig(config); err != nil {
 		return "", config, err
@@ -1860,6 +1867,10 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	if err := checkEmptyDirMode(config.EmptyDirMode); err != nil {
+		return err
+	}
+
 	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
@@ -1869,6 +1880,17 @@ func checkConfig(config oci.RuntimeConfig) error {
 	}
 
 	return nil
+}
+
+// checkEmptyDirMode checks that emptydir_mode has a valid value.
+func checkEmptyDirMode(mode string) error {
+	switch mode {
+	case vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted:
+		return nil
+	default:
+		return fmt.Errorf("invalid emptydir_mode=%q, allowed values: %q, %q",
+			mode, vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted)
+	}
 }
 
 // checkPCIeConfig ensures the PCIe configuration is valid.

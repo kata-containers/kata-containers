@@ -165,6 +165,10 @@ type RuntimeConfig struct {
 	// Determines if Kata creates emptyDir on the guest
 	DisableGuestEmptyDir bool
 
+	// EmptyDirMode specifies how Kubernetes emptyDir volumes are handled.
+	// Valid values are "shared-fs" (default) or "block-encrypted".
+	EmptyDirMode string
+
 	// CreateContainer timeout which, if provided, indicates the createcontainer request timeout
 	// needed for the workload ( Mostly used for pulling images in the guest )
 	CreateContainerTimeout uint64
@@ -1189,6 +1193,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		SandboxBindMounts: runtime.SandboxBindMounts,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
+
+		EmptyDirMode: runtime.EmptyDirMode,
 
 		EnableVCPUsPinning: runtime.EnableVCPUsPinning,
 
