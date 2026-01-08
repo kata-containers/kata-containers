@@ -56,7 +56,6 @@ REPO_COMPONENTS="${REPO_COMPONENTS:-}"
 AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
-KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 RELEASE="${RELEASE:-"no"}"
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 RUNTIME_CHOICE="${RUNTIME_CHOICE:-both}"
@@ -143,15 +142,6 @@ options:
 EOF
 
 	exit "${return_code}"
-}
-
-get_kernel_headers_dir() {
-	local kernel_name"=${1:-}"
-	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
-
-	local kernel_headers_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir"
-
-	echo "${kernel_headers_dir}"
 }
 
 get_kernel_modules_dir() {
@@ -684,11 +674,6 @@ install_cached_kernel_tarball_component() {
 		|| return 1
 
 	case ${kernel_name} in
-		"kernel-nvidia-gpu"*"")
-			local kernel_headers_dir=$(get_kernel_headers_dir "${kernel_name}")
-			mkdir -p ${kernel_headers_dir} || true
-			tar --zstd -xvf ${workdir}/${kernel_name}/builddir/kata-static-${kernel_name}-headers.tar.zst -C "${kernel_headers_dir}" || return 1
-			;;& # fallthrough in the confidential case we need the modules.tar.zst and for every kernel-nvidia-gpu we need the headers
 		"kernel"*"-confidential")
 			local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 			mkdir -p "${modules_dir}" || true
@@ -730,12 +715,6 @@ install_kernel_helper() {
 		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
 		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
-	fi
-
-	if [[ "${kernel_name}" == "kernel-nvidia-gpu*" ]]; then
-		local kernel_headers_tarball_name="kata-static-${kernel_name}-headers.tar.zst"
-		local kernel_headers_tarball_path="${workdir}/${kernel_headers_tarball_name}"
-		extra_tarballs+=" ${kernel_headers_tarball_name}:${kernel_headers_tarball_path}"
 	fi
 
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
@@ -791,7 +770,7 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 	install_kernel_helper \
 		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
-		"-e -t dragonball -g nvidia -H deb"
+		"-e -t dragonball -g nvidia"
 }
 
 #Install GPU enabled kernel asset
@@ -799,7 +778,7 @@ install_kernel_nvidia_gpu() {
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia -H deb"
+		"-g nvidia"
 }
 
 #Install GPU and TEE enabled kernel asset
@@ -807,7 +786,7 @@ install_kernel_nvidia_gpu_confidential() {
 	install_kernel_helper \
 		"assets.kernel.nvidia-confidential" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -H deb"
+		"-x -g nvidia"
 }
 
 install_qemu_helper() {
@@ -1457,34 +1436,6 @@ handle_build() {
 	tar --zstd -tvf "${final_tarball_path}"
 
 	case ${build_target} in
-		kernel-nvidia-gpu*)
-			local kernel_headers_final_tarball_path="${workdir}/kata-static-${build_target}-headers.tar.zst"
-			if [ ! -f "${kernel_headers_final_tarball_path}" ]; then
-				local kernel_headers_dir
-				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
-
-				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar -rvf kernel-headers.tar {} +
-				if [ -n "${KBUILD_SIGN_PIN}" ]; then
-					# For those 2 we can simply do a `|| true` as the signing_key.{pem,x509} are either:
-					# * already in ., as we're using a cached tarball
-					# * will be moved here, in case we had built the kernel
-					mv kata-linux-*/certs/signing_key.pem . || true
-					mv kata-linux-*/certs/signing_key.x509 . || true
-
-					# Then we can check for the key on ., as it should always be here on both cases
-					# (cached or built kernel).
-					head -n1 "signing_key.pem" | grep -q "ENCRYPTED PRIVATE KEY" || die "signing_key.pem is not encrypted"
-
-					tar -rvf kernel-headers.tar signing_key.pem signing_key.x509 --remove-files
-				fi
-				zstd -T0 kernel-headers.tar -o kernel-headers.tar.zst
-				mv kernel-headers.tar.zst "${kernel_headers_final_tarball_path}"
-				popd
-			fi
-			tar --zstd -tvf "${kernel_headers_final_tarball_path}"
-			;;& # fallthrough in the confidential case we need the modules.tar.zst and for every kernel-nvidia-gpu we need the headers
-
 		kernel*-confidential)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
@@ -1551,17 +1502,6 @@ handle_build() {
 		)
 		oci_image="${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${normalized_tags}"
 		case ${build_target} in
-			kernel-nvidia-gpu)
-				files_to_push+=(
-					"kata-static-${build_target}-headers.tar.zst"
-				)
-				;;
-			kernel-nvidia-gpu-confidential)
-				files_to_push+=(
-					"kata-static-${build_target}-modules.tar.zst"
-					"kata-static-${build_target}-headers.tar.zst"
-				)
-				;;
 			kernel*-confidential)
 				files_to_push+=(
 					"kata-static-${build_target}-modules.tar.zst"
