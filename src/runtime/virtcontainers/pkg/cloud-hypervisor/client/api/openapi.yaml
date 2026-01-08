@@ -153,6 +153,21 @@ paths:
           description: The VM instance could not be resized because a cpu removal
             is still pending.
       summary: Resize the VM
+  /vm.resize-disk:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmResizeDisk'
+        description: Resizes a disk attached to the VM
+        required: true
+      responses:
+        "204":
+          description: The disk was successfully resized.
+        "500":
+          description: The disk could not be resized.
+      summary: Resize a disk
   /vm.resize-zone:
     put:
       requestBody:
@@ -649,7 +664,9 @@ components:
           - tap: tap
             host_mac: host_mac
             num_queues: 6
+            offload_ufo: true
             queue_size: 1
+            offload_csum: true
             ip: 192.168.249.1
             rate_limiter_config:
               ops:
@@ -663,6 +680,7 @@ components:
             mac: mac
             mtu: 3
             pci_segment: 2
+            offload_tso: true
             vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
@@ -672,7 +690,9 @@ components:
           - tap: tap
             host_mac: host_mac
             num_queues: 6
+            offload_ufo: true
             queue_size: 1
+            offload_csum: true
             ip: 192.168.249.1
             rate_limiter_config:
               ops:
@@ -686,6 +706,7 @@ components:
             mac: mac
             mtu: 3
             pci_segment: 2
+            offload_tso: true
             vhost_mode: Client
             iommu: false
             vhost_socket: vhost_socket
@@ -1079,7 +1100,9 @@ components:
         - tap: tap
           host_mac: host_mac
           num_queues: 6
+          offload_ufo: true
           queue_size: 1
+          offload_csum: true
           ip: 192.168.249.1
           rate_limiter_config:
             ops:
@@ -1093,6 +1116,7 @@ components:
           mac: mac
           mtu: 3
           pci_segment: 2
+          offload_tso: true
           vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
@@ -1102,7 +1126,9 @@ components:
         - tap: tap
           host_mac: host_mac
           num_queues: 6
+          offload_ufo: true
           queue_size: 1
+          offload_csum: true
           ip: 192.168.249.1
           rate_limiter_config:
             ops:
@@ -1116,6 +1142,7 @@ components:
           mac: mac
           mtu: 3
           pci_segment: 2
+          offload_tso: true
           vhost_mode: Client
           iommu: false
           vhost_socket: vhost_socket
@@ -1741,7 +1768,9 @@ components:
         tap: tap
         host_mac: host_mac
         num_queues: 6
+        offload_ufo: true
         queue_size: 1
+        offload_csum: true
         ip: 192.168.249.1
         rate_limiter_config:
           ops:
@@ -1755,6 +1784,7 @@ components:
         mac: mac
         mtu: 3
         pci_segment: 2
+        offload_tso: true
         vhost_mode: Client
         iommu: false
         vhost_socket: vhost_socket
@@ -1803,6 +1833,15 @@ components:
           type: integer
         rate_limiter_config:
           $ref: '#/components/schemas/RateLimiterConfig'
+        offload_tso:
+          default: true
+          type: boolean
+        offload_ufo:
+          default: true
+          type: boolean
+        offload_csum:
+          default: true
+          type: boolean
       type: object
     RngConfig:
       example:
@@ -2100,6 +2139,19 @@ components:
           type: integer
         desired_balloon:
           description: desired balloon size in bytes
+          format: int64
+          type: integer
+      type: object
+    VmResizeDisk:
+      example:
+        desired_size: 0
+        id: id
+      properties:
+        id:
+          description: disk identifier
+          type: string
+        desired_size:
+          description: desired disk size in bytes
           format: int64
           type: integer
       type: object

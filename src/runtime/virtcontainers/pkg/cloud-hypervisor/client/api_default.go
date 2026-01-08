@@ -2226,6 +2226,106 @@ func (a *DefaultApiService) VmRemoveDevicePutExecute(r ApiVmRemoveDevicePutReque
 	return localVarHTTPResponse, nil
 }
 
+type ApiVmResizeDiskPutRequest struct {
+	ctx          _context.Context
+	ApiService   *DefaultApiService
+	vmResizeDisk *VmResizeDisk
+}
+
+// Resizes a disk attached to the VM
+func (r ApiVmResizeDiskPutRequest) VmResizeDisk(vmResizeDisk VmResizeDisk) ApiVmResizeDiskPutRequest {
+	r.vmResizeDisk = &vmResizeDisk
+	return r
+}
+
+func (r ApiVmResizeDiskPutRequest) Execute() (*_nethttp.Response, error) {
+	return r.ApiService.VmResizeDiskPutExecute(r)
+}
+
+/*
+VmResizeDiskPut Resize a disk
+
+	@param ctx _context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiVmResizeDiskPutRequest
+*/
+func (a *DefaultApiService) VmResizeDiskPut(ctx _context.Context) ApiVmResizeDiskPutRequest {
+	return ApiVmResizeDiskPutRequest{
+		ApiService: a,
+		ctx:        ctx,
+	}
+}
+
+// Execute executes the request
+func (a *DefaultApiService) VmResizeDiskPutExecute(r ApiVmResizeDiskPutRequest) (*_nethttp.Response, error) {
+	var (
+		localVarHTTPMethod   = _nethttp.MethodPut
+		localVarPostBody     interface{}
+		localVarFormFileName string
+		localVarFileName     string
+		localVarFileBytes    []byte
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultApiService.VmResizeDiskPut")
+	if err != nil {
+		return nil, GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/vm.resize-disk"
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := _neturl.Values{}
+	localVarFormParams := _neturl.Values{}
+	if r.vmResizeDisk == nil {
+		return nil, reportError("vmResizeDisk is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.vmResizeDisk
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, localVarFormFileName, localVarFileName, localVarFileBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarHTTPResponse, err
+	}
+
+	localVarBody, err := _ioutil.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = _ioutil.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		return localVarHTTPResponse, newErr
+	}
+
+	return localVarHTTPResponse, nil
+}
+
 type ApiVmResizePutRequest struct {
 	ctx        _context.Context
 	ApiService *DefaultApiService
