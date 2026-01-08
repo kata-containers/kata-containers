@@ -245,6 +245,12 @@ externals:
     version: "v0.0.1"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
+  nvidia:
+    desc: "NVIDIA driver version"
+    driver:
+      version: "580.95.05"
+      url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
+
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
     version: "1.36.1"
