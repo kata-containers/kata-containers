@@ -116,11 +116,6 @@ setup() {
             "${create_container_timeout}"
     fi
 
-    # Enable dm-integrity in guest
-    set_metadata_annotation "${pod_config}" \
-        "io.katacontainers.config.hypervisor.kernel_params" \
-        "agent.secure_storage_integrity=true"
-
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
         "io.containerd.cri.runtime-handler" \
@@ -160,11 +155,6 @@ setup() {
     set_metadata_annotation "$pod_config" \
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
-
-    # Enable dm-integrity in guest
-    set_metadata_annotation "${pod_config}" \
-        "io.katacontainers.config.hypervisor.kernel_params" \
-        "agent.secure_storage_integrity=true"
 
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
@@ -218,11 +208,6 @@ setup() {
     set_metadata_annotation "$pod_config" \
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
-
-    # Enable dm-integrity in guest
-    set_metadata_annotation "${pod_config}" \
-        "io.katacontainers.config.hypervisor.kernel_params" \
-        "agent.secure_storage_integrity=true"
 
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
