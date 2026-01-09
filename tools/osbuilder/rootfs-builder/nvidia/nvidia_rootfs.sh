@@ -93,9 +93,9 @@ setup_nvidia_gpu_rootfs_stage_one() {
     		appendix="-dragonball-experimental"
 	fi
 
-	# We need the kernel packages for building the drivers cleanly will be
-	# deinstalled and removed from the roofs once the build finishes.
-	tar --zstd -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-headers.tar.zst -C .
+	# Install the precompiled kernel modules shipped with the kernel
+	mkdir -p ./lib/modules/
+	tar --zstd -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-modules.tar.zst -C ./lib/modules/
 
 	# If we find a local downloaded run file build the kernel modules
 	# with it, otherwise use the distribution packages. Run files may have
@@ -115,13 +115,12 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount -t proc /proc ./proc
 
 	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} \
-		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK} ${KBUILD_SIGN_PIN}"
+		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK}"
 
 	umount -R ./dev
 	umount ./proc
 
 	rm ./nvidia_chroot.sh
-	rm ./*.deb
 
 	tar cfa "${stage_one}.tar.zst" --remove-files -- *
 
@@ -183,7 +182,6 @@ chisseled_dcgm() {
 chisseled_compute() {
 	echo "nvidia: chisseling GPU"
 
-	cp -a "${stage_one}"/nvidia_driver_version .
 	cp -a "${stage_one}"/lib/modules/* lib/modules/.
 
 	libdir="lib/${machine_arch}-linux-gnu"
@@ -194,6 +192,15 @@ chisseled_compute() {
 	cp -a "${stage_one}/${libdir}"/libc.so.6*         	"${libdir}"/.
 	cp -a "${stage_one}/${libdir}"/libm.so.6*         	"${libdir}"/.
 	cp -a "${stage_one}/${libdir}"/librt.so.1*        	"${libdir}"/.
+ 	# nvidia-persistenced dependencies for CUDA repo and >= 590
+	cp -a "${stage_one}/${libdir}"/libtirpc.so.3*    	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libgssapi_krb5.so.2*	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libkrb5.so.3*		"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libkrb5support.so.0*	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libk5crypto.so.3*	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*		"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libkeyutils.so.1*	"${libdir}"/.
+	cp -a "${stage_one}/etc/netconfig"	etc/.
 
 	[[ "${type}" == "confidential" ]] && cp -a "${stage_one}/${libdir}"/libnvidia-pkcs11* 	"${libdir}"/.
 
