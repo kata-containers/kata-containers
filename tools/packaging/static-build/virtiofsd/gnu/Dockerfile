@@ -12,7 +12,7 @@ ENV PATH="/opt/cargo/bin/:${PATH}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX ${RUSTUP_HOME} ${CARGO_HOME}
+RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME}
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -24,7 +24,8 @@ RUN apt-get update && \
         libseccomp-dev \
         unzip && \
     apt-get clean && rm -rf /var/lib/lists/ && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
+    chmod -R a+rwX ${RUSTUP_HOME} ${CARGO_HOME}
 
 RUN ARCH=$(uname -m); \
     	rust_arch=""; \

@@ -11,7 +11,7 @@ ENV PATH="/opt/cargo/bin/:${PATH}"
 
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
-RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX ${RUSTUP_HOME} ${CARGO_HOME}
+RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME}
 
 RUN apk --no-cache add \
         bash \
@@ -21,7 +21,8 @@ RUN apk --no-cache add \
         libcap-ng-static \
         libseccomp-static \
         musl-dev && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
+	chmod -R a+rwX ${RUSTUP_HOME} ${CARGO_HOME}
 
 RUN ARCH=$(uname -m); \
     	rust_arch=""; \
