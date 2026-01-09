@@ -269,7 +269,7 @@ impl Default for AgentConfig {
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
             guest_components_procs: GuestComponentsProcs::default(),
-            secure_storage_integrity: false,
+            secure_storage_integrity: true,
             #[cfg(feature = "agent-policy")]
             policy_file: String::from(""),
             mem_agent: None,
@@ -911,7 +911,7 @@ mod tests {
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
                     guest_components_procs: GuestComponentsProcs::default(),
-                    secure_storage_integrity: false,
+                    secure_storage_integrity: true,
                     #[cfg(feature = "agent-policy")]
                     policy_file: "",
                     mem_agent: None,
@@ -1364,7 +1364,7 @@ mod tests {
             },
             TestData {
                 contents: "",
-                secure_storage_integrity: false,
+                secure_storage_integrity: true,
                 ..Default::default()
             },
             TestData {
