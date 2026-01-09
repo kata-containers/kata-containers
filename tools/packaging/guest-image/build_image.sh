@@ -52,7 +52,7 @@ build_initrd() {
 		GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL}"
 
 	if [[ "${image_initrd_suffix}" == "nvidia-gpu"* ]]; then
-		nvidia_driver_version=$(cat "${builddir}"/initrd-image/*/nvidia_driver_version)
+		nvidia_driver_version=$(get_from_kata_deps .externals.nvidia.driver.version)
 		artifact_name=${artifact_name/.initrd/"-${nvidia_driver_version}".initrd}
 	fi
 
@@ -81,7 +81,7 @@ build_image() {
 		GUEST_HOOKS_TARBALL="${GUEST_HOOKS_TARBALL}"
 
 	if [[ "${image_initrd_suffix}" == "nvidia-gpu"* ]]; then
-		nvidia_driver_version=$(cat "${builddir}"/rootfs-image/*/nvidia_driver_version)
+		nvidia_driver_version=$(get_from_kata_deps .externals.nvidia.driver.version)
 		artifact_name=${artifact_name/.image/"-${nvidia_driver_version}".image}
 	fi
 
