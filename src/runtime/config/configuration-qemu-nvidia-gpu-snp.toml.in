@@ -15,7 +15,7 @@
 [hypervisor.qemu]
 path = "@QEMUSNPPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
-initrd = "@INITRDPATH_CONFIDENTIAL_NV@"
+image = "@IMAGEPATH_CONFIDENTIAL_NV@"
 
 machine_type = "@MACHINETYPE@"
 
