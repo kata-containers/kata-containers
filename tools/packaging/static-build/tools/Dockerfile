@@ -25,7 +25,7 @@ ENV PKG_CONFIG_PATH=${OPT_LIB}/pkgconfig:$PKG_CONFIG_PATH
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX /opt
+RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME}
 
 RUN apt-get update && \
 	apt-get --no-install-recommends -y install \
@@ -42,7 +42,8 @@ RUN apt-get update && \
 		perl \
 		protobuf-compiler && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
-	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN} && \
+	chmod -R a+rwX /opt
 
 # Install ORAS CLI for tarball caching
 ARG ORAS_VERSION=1.3.0
