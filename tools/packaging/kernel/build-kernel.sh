@@ -34,6 +34,7 @@ readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
 readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 readonly KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
+readonly TDX_REFERENCE_VALUE_CALCULATOR_URL=${TDX_REFERENCE_VALUE_CALCULATOR_URL:-""}
 
 #Path to kernel directory
 kernel_path=""
@@ -615,11 +616,28 @@ install_kata() {
 		die "failed to find image"
 	fi
 
+	if [[ -n "${conf_guest}" && "${arch_target}" = "x86_64" && -n "${TDX_REFERENCE_VALUE_CALCULATOR_URL}" ]];then
+		info "Generating reference value (TDX) for confidential kernel for x86_64..."
+		curl -fsSL ${TDX_REFERENCE_VALUE_CALCULATOR_URL} -o td_payload_qemu_hash.py 
+		reference_value=$(python3 td_payload_qemu_hash.py \
+			-k ${bzImage})
+		cat <<EOF > reference_value.json
+{
+	"rvps://coco/v0.18.0/tdx/kernel": [
+		"$reference_value"
+	]
+}
+EOF
+		info "Reference Value for confidential kernel for x86_64: $reference_value"
+		info "Reference Value saved."
+	fi
+
 	# Install compressed kernel
 	if [ "${arch_target}" = "powerpc" ]; then
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinuz}"
 	else
 		install --mode 0644 -D "${bzImage}" "${install_path}/${vmlinuz}"
+		install --mode 0666 -D "reference_value.json" "${install_path}/reference_value.json"
 	fi
 
 	# Install uncompressed kernel
