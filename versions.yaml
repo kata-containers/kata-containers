@@ -464,6 +464,9 @@ externals:
   reference_value_calculator:
     tdx:
       firmware: "https://raw.githubusercontent.com/confidential-containers/td-shim/28bfa349f59a2d8da580e032c6fdcd79abd30824/td-shim-tools/src/bin/td-shim-tee-info-hash/td_shim_tee_info_hash.py"
+      # Qemu Direct boot upon TDVF
+      kernel: "https://raw.githubusercontent.com/confidential-containers/td-shim/28bfa349f59a2d8da580e032c6fdcd79abd30824/td-shim-tools/src/bin/td-payload-reference-calculator/td_payload_qemu_hash.py"
+
 languages:
   description: |
     Details of programming languages required to build system
