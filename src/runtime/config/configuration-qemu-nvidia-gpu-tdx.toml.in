@@ -14,7 +14,7 @@
 [hypervisor.qemu]
 path = "@QEMUTDXEXPERIMENTALPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
-initrd = "@INITRDPATH_CONFIDENTIAL_NV@"
+image = "@IMAGEPATH_CONFIDENTIAL_NV@"
 
 machine_type = "@MACHINETYPE@"
 tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@

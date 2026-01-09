@@ -14,7 +14,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH_NV@"
-initrd = "@INITRDPATH_NV@"
+image = "@IMAGEPATH_NV@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
