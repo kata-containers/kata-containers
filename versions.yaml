@@ -248,7 +248,7 @@ externals:
   nvidia:
     desc: "NVIDIA driver version"
     driver:
-      version: "580.95.05"
+      version: "590.48.01"
       # yamllint disable-line rule:line-length
       url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
 
