@@ -256,7 +256,7 @@ spec:
             values:
             - NODE_NAME
   volumes:
-    - name: trusted-storage
+    - name: trusted-image-storage
       persistentVolumeClaim:
         claimName: trusted-pvc
   containers:
