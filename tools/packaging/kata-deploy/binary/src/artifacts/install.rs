@@ -7,7 +7,8 @@ use crate::config::Config;
 use crate::k8s::nfd;
 use crate::k8s::runtimeclasses;
 use crate::utils;
-use crate::utils::toml as toml_utils;
+use crate::utils::toml::TomlEditor;
+use crate::{toml_get, toml_set};
 use anyhow::{Context, Result};
 use log::info;
 use std::fs;
@@ -291,10 +292,10 @@ async fn configure_proxy(
         let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
         let param_name = "agent.https_proxy";
 
-        // Get current kernel_params and update/append the proxy setting
-        let current_params =
-            toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
+        let mut editor = TomlEditor::open(config_file)?;
 
+        // Get current kernel_params and update/append the proxy setting
+        let current_params = toml_get!(editor, &kernel_params_path).unwrap_or_default();
         let updated_params = update_kernel_param(&current_params, param_name, &proxy_value);
 
         log::debug!(
@@ -306,11 +307,8 @@ async fn configure_proxy(
         );
 
         // Set the updated kernel_params (replace entire value)
-        toml_utils::set_toml_value(
-            config_file,
-            &kernel_params_path,
-            &format!("\"{}\"", updated_params),
-        )?;
+        toml_set!(editor, &kernel_params_path, &format!("\"{}\"", updated_params))?;
+        editor.save()?;
     }
 
     Ok(())
@@ -340,10 +338,10 @@ async fn configure_no_proxy(config: &Config, shim: &str, config_file: &Path) -> 
         let hypervisor_name = get_hypervisor_name(shim)?;
         let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
 
-        // Get current kernel_params and update/append the no_proxy setting
-        let current_params =
-            toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
+        let mut editor = TomlEditor::open(config_file)?;
 
+        // Get current kernel_params and update/append the no_proxy setting
+        let current_params = toml_get!(editor, &kernel_params_path).unwrap_or_default();
         let updated_params =
             update_kernel_param(&current_params, "agent.no_proxy", &no_proxy_value);
 
@@ -356,49 +354,37 @@ async fn configure_no_proxy(config: &Config, shim: &str, config_file: &Path) -> 
         );
 
         // Set the updated kernel_params (replace entire value)
-        toml_utils::set_toml_value(
-            config_file,
-            &kernel_params_path,
-            &format!("\"{}\"", updated_params),
-        )?;
+        toml_set!(editor, &kernel_params_path, &format!("\"{}\"", updated_params))?;
+        editor.save()?;
     }
 
     Ok(())
 }
 
-/// Set a TOML boolean value to "true" if it's not already "true"
+/// Set a TOML boolean value to "true" if it's not already "true" using an editor.
 /// Reads the current value (defaulting to "false" if not found), and if it's not "true",
-/// logs the update and sets it to "true".
-fn set_toml_bool_to_true(config_file: &Path, path: &str) -> Result<()> {
-    let current_value = toml_utils::get_toml_value(config_file, path)
-        .unwrap_or_else(|_| "false".to_string());
+/// logs the update and sets it to "true". Does NOT save - caller must save the editor.
+fn set_bool_to_true(editor: &mut TomlEditor, path: &str) -> Result<()> {
+    let current_value = toml_get!(editor, path).unwrap_or_else(|_| "false".to_string());
     if current_value != "true" {
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"true\"",
-            path,
-            config_file.display(),
-            current_value
-        );
-        toml_utils::set_toml_value(config_file, path, "true")?;
+        log::debug!("Updating {}: old=\"{}\" new=\"true\"", path, current_value);
+        toml_set!(editor, path, "true")?;
     }
     Ok(())
 }
 
 async fn configure_debug(config_file: &Path, shim: &str) -> Result<()> {
     let hypervisor_name = get_hypervisor_name(shim)?;
+    let mut editor = TomlEditor::open(config_file)?;
 
     let hypervisor_enable_debug_path = format!("hypervisor.{hypervisor_name}.enable_debug");
-    set_toml_bool_to_true(config_file, &hypervisor_enable_debug_path)?;
-
-    set_toml_bool_to_true(config_file, "runtime.enable_debug")?;
-
-    set_toml_bool_to_true(config_file, "agent.kata.debug_console_enabled")?;
-
-    set_toml_bool_to_true(config_file, "agent.kata.enable_debug")?;
+    set_bool_to_true(&mut editor, &hypervisor_enable_debug_path)?;
+    set_bool_to_true(&mut editor, "runtime.enable_debug")?;
+    set_bool_to_true(&mut editor, "agent.kata.debug_console_enabled")?;
+    set_bool_to_true(&mut editor, "agent.kata.enable_debug")?;
 
     let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-    let current_params =
-        toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
+    let current_params = toml_get!(editor, &kernel_params_path).unwrap_or_default();
 
     let mut debug_params = String::new();
     if !current_params.contains("agent.log=debug") {
@@ -417,9 +403,10 @@ async fn configure_debug(config_file: &Path, shim: &str) -> Result<()> {
             current_params,
             new_params
         );
-        toml_utils::append_to_toml_string(config_file, &kernel_params_path, debug_params.trim())?;
+        editor.append_to_string(&kernel_params_path, debug_params.trim())?;
     }
 
+    editor.save()?;
     Ok(())
 }
 
@@ -458,13 +445,13 @@ async fn configure_hypervisor_annotations(
     let hypervisor_name = get_hypervisor_name(shim)?;
     let enable_annotations_path = format!("hypervisor.{hypervisor_name}.enable_annotations");
 
-    let existing = toml_utils::get_toml_array(config_file, &enable_annotations_path)
+    let mut editor = TomlEditor::open(config_file)?;
+    let existing = editor
+        .get_array(&enable_annotations_path)
         .unwrap_or_else(|_| Vec::new());
 
     let mut combined: Vec<String> = existing.clone();
-
     combined.extend(all_annotations.iter().map(|s| s.trim().to_string()));
-
     combined.sort();
     combined.dedup();
 
@@ -476,13 +463,15 @@ async fn configure_hypervisor_annotations(
         combined
     );
 
-    toml_utils::set_toml_array(config_file, &enable_annotations_path, &combined)?;
-
+    editor.set_array(&enable_annotations_path, &combined)?;
+    editor.save()?;
     Ok(())
 }
 
 async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<()> {
-    set_toml_bool_to_true(config_file, "runtime.experimental_force_guest_pull")
+    let mut editor = TomlEditor::open(config_file)?;
+    set_bool_to_true(&mut editor, "runtime.experimental_force_guest_pull")?;
+    editor.save()
 }
 
 async fn configure_tdx(config: &Config, _shim: &str, config_file: &Path) -> Result<()> {
@@ -572,8 +561,9 @@ async fn tdx_supported(
         _ => return Ok(()),
     };
 
-    let current_qemu =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.path").unwrap_or_default();
+    let mut editor = TomlEditor::open(config_file)?;
+
+    let current_qemu = toml_get!(editor, "hypervisor.qemu.path").unwrap_or_default();
     if current_qemu.contains("PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT") {
         log::debug!(
             "Updating hypervisor.qemu.path in {}: old=\"{}\" new=\"{}\"",
@@ -581,15 +571,10 @@ async fn tdx_supported(
             current_qemu,
             qemu_path
         );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.path",
-            &format!("\"{qemu_path}\""),
-        )?;
+        toml_set!(editor, "hypervisor.qemu.path", &format!("\"{qemu_path}\""))?;
     }
 
-    let current_ovmf =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.firmware").unwrap_or_default();
+    let current_ovmf = toml_get!(editor, "hypervisor.qemu.firmware").unwrap_or_default();
     if current_ovmf.contains("PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT") {
         log::debug!(
             "Updating hypervisor.qemu.firmware in {}: old=\"{}\" new=\"{}\"",
@@ -597,12 +582,10 @@ async fn tdx_supported(
             current_ovmf,
             ovmf_path
         );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.firmware",
-            &format!("\"{ovmf_path}\""),
-        )?;
+        toml_set!(editor, "hypervisor.qemu.firmware", &format!("\"{ovmf_path}\""))?;
     }
+
+    editor.save()?;
 
     let instructions = match distro {
         "ubuntu" => "https://github.com/canonical/tdx/tree/3.3",
@@ -652,8 +635,10 @@ fn adjust_qemu_cmdline(
         ),
     };
 
+    let mut editor = TomlEditor::open(config_file)?;
+
     // Get QEMU path from config
-    let qemu_binary = toml_utils::get_toml_value(config_file, ".hypervisor.qemu.path")?;
+    let qemu_binary = toml_get!(editor, ".hypervisor.qemu.path")?;
     let qemu_binary = qemu_binary.trim_matches('"');
     let qemu_binary_script = format!("{qemu_binary}-installation-prefix");
 
@@ -681,9 +666,8 @@ exec {} "$@" -L {}/share/kata-{}/qemu/
         fs::set_permissions(&qemu_binary_script_host_path, perms)?;
     }
 
-    // Update config file to use wrapper script using toml_edit
-    let current_path =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.path").unwrap_or_default();
+    // Update config file to use wrapper script
+    let current_path = toml_get!(editor, "hypervisor.qemu.path").unwrap_or_default();
     if !current_path.contains(&qemu_binary_script) {
         log::debug!(
             "Updating hypervisor.qemu.path in {}: old=\"{}\" new=\"{}\"",
@@ -691,13 +675,10 @@ exec {} "$@" -L {}/share/kata-{}/qemu/
             current_path,
             qemu_binary_script
         );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.path",
-            &format!("\"{qemu_binary_script}\""),
-        )?;
+        toml_set!(editor, "hypervisor.qemu.path", &format!("\"{qemu_binary_script}\""))?;
     }
 
+    editor.save()?;
     Ok(())
 }
 
@@ -713,15 +694,17 @@ async fn configure_mariner(config: &Config) -> Result<()> {
     }
 
     let mariner_hypervisor_name = "clh";
+    let mut editor = TomlEditor::open(config_file)?;
 
     let static_resource_mgmt_path =
         format!("hypervisor.{mariner_hypervisor_name}.static_sandbox_resource_mgmt");
-    set_toml_bool_to_true(config_file, &static_resource_mgmt_path)?;
+    set_bool_to_true(&mut editor, &static_resource_mgmt_path)?;
 
     let clh_path = format!("{}/bin/cloud-hypervisor-glibc", config.dest_dir);
     let valid_paths_field = format!("hypervisor.{mariner_hypervisor_name}.valid_hypervisor_paths");
-    let existing_paths =
-        toml_utils::get_toml_array(config_file, &valid_paths_field).unwrap_or_else(|_| Vec::new());
+    let existing_paths = editor
+        .get_array(&valid_paths_field)
+        .unwrap_or_else(|_| Vec::new());
 
     if !existing_paths.iter().any(|p| p == &clh_path) {
         let mut new_paths = existing_paths.clone();
@@ -733,11 +716,11 @@ async fn configure_mariner(config: &Config) -> Result<()> {
             existing_paths,
             new_paths
         );
-        toml_utils::set_toml_array(config_file, &valid_paths_field, &new_paths)?;
+        editor.set_array(&valid_paths_field, &new_paths)?;
     }
 
     let path_field = format!("hypervisor.{mariner_hypervisor_name}.path");
-    let current_path = toml_utils::get_toml_value(config_file, &path_field).unwrap_or_default();
+    let current_path = toml_get!(editor, &path_field).unwrap_or_default();
     if !current_path.contains(&clh_path) {
         log::debug!(
             "Updating {} in {}: old=\"{}\" new=\"{}\"",
@@ -746,9 +729,10 @@ async fn configure_mariner(config: &Config) -> Result<()> {
             current_path,
             clh_path
         );
-        toml_utils::set_toml_value(config_file, &path_field, &format!("\"{clh_path}\""))?;
+        toml_set!(editor, &path_field, &format!("\"{clh_path}\""))?;
     }
 
+    editor.save()?;
     Ok(())
 }
 
@@ -1098,8 +1082,8 @@ kernel = "/opt/kata/share/kata-containers/vmlinux.container"
         assert!(content.contains("-L /opt/kata/share/kata-qemu/qemu/"));
 
         // Verify TOML was updated
-        let updated_path =
-            crate::utils::toml::get_toml_value(&config_file, "hypervisor.qemu.path").unwrap();
+        let editor = TomlEditor::open(&config_file).unwrap();
+        let updated_path = editor.get("hypervisor.qemu.path").unwrap();
         assert!(updated_path.contains("installation-prefix"));
     }
 

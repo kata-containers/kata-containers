@@ -4,8 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::Config;
+use crate::toml_set;
 use crate::utils;
-use crate::utils::toml as toml_utils;
+use crate::utils::toml::TomlEditor;
 use anyhow::Result;
 use log::info;
 use std::fs;
@@ -17,29 +18,30 @@ pub async fn configure_erofs_snapshotter(
 ) -> Result<()> {
     info!("Configuring erofs-snapshotter");
 
-    toml_utils::set_toml_value(
-        configuration_file,
-        ".plugins.\"io.containerd.cri.v1.images\".discard_unpacked_layers",
-        "false",
+    let mut editor = TomlEditor::open(configuration_file)?;
+
+    toml_set!(
+        editor,
+        r#".plugins."io.containerd.cri.v1.images".discard_unpacked_layers"#,
+        "false"
+    )?;
+    toml_set!(
+        editor,
+        r#".plugins."io.containerd.service.v1.diff-service".default"#,
+        "[\"erofs\",\"walking\"]"
+    )?;
+    toml_set!(
+        editor,
+        r#".plugins."io.containerd.snapshotter.v1.erofs".enable_fsverity"#,
+        "true"
+    )?;
+    toml_set!(
+        editor,
+        r#".plugins."io.containerd.snapshotter.v1.erofs".set_immutable"#,
+        "true"
     )?;
 
-    toml_utils::set_toml_value(
-        configuration_file,
-        ".plugins.\"io.containerd.service.v1.diff-service\".default",
-        "[\"erofs\",\"walking\"]",
-    )?;
-
-    toml_utils::set_toml_value(
-        configuration_file,
-        ".plugins.\"io.containerd.snapshotter.v1.erofs\".enable_fsverity",
-        "true",
-    )?;
-    toml_utils::set_toml_value(
-        configuration_file,
-        ".plugins.\"io.containerd.snapshotter.v1.erofs\".set_immutable",
-        "true",
-    )?;
-
+    editor.save()?;
     Ok(())
 }
 
@@ -60,23 +62,25 @@ pub async fn configure_nydus_snapshotter(
         _ => "nydus-snapshotter".to_string(),
     };
 
-    toml_utils::set_toml_value(
-        configuration_file,
+    let mut editor = TomlEditor::open(configuration_file)?;
+
+    toml_set!(
+        editor,
         &format!(".plugins.{pluginid}.disable_snapshot_annotations"),
-        "false",
+        "false"
     )?;
-
-    toml_utils::set_toml_value(
-        configuration_file,
+    toml_set!(
+        editor,
         &format!(".proxy_plugins.\"{nydus}\".type"),
-        "\"snapshot\"",
+        "\"snapshot\""
     )?;
-    toml_utils::set_toml_value(
-        configuration_file,
+    toml_set!(
+        editor,
         &format!(".proxy_plugins.\"{nydus}\".address"),
-        &format!("\"/run/{containerd_nydus}/containerd-nydus-grpc.sock\""),
+        &format!("\"/run/{containerd_nydus}/containerd-nydus-grpc.sock\"")
     )?;
 
+    editor.save()?;
     Ok(())
 }
 

@@ -6,7 +6,8 @@
 use crate::config::Config;
 use crate::k8s;
 use crate::utils;
-use crate::utils::toml as toml_utils;
+use crate::utils::toml::TomlEditor;
+use crate::toml_set;
 use anyhow::{Context, Result};
 use log::info;
 use std::fs;
@@ -86,20 +87,15 @@ pub async fn configure_containerd_runtime(
         configuration_file
     );
     log::info!("configure_containerd_runtime: Setting runtime_type");
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.runtime_type"),
-        &runtime_type,
-    )?;
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.runtime_path"),
-        &runtime_path,
-    )?;
-    toml_utils::set_toml_value(
-        &configuration_file,
+
+    let mut editor = TomlEditor::open(&configuration_file)?;
+
+    toml_set!(editor, &format!("{runtime_table}.runtime_type"), &runtime_type)?;
+    toml_set!(editor, &format!("{runtime_table}.runtime_path"), &runtime_path)?;
+    toml_set!(
+        editor,
         &format!("{runtime_table}.privileged_without_host_devices"),
-        "true",
+        "true"
     )?;
 
     let pod_annotations = if shim.contains("nvidia-gpu-") {
@@ -107,56 +103,45 @@ pub async fn configure_containerd_runtime(
     } else {
         "[\"io.katacontainers.*\"]"
     };
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.pod_annotations"),
-        pod_annotations,
-    )?;
+    toml_set!(editor, &format!("{runtime_table}.pod_annotations"), pod_annotations)?;
 
-    toml_utils::set_toml_value(
-        &configuration_file,
+    toml_set!(
+        editor,
         &format!("{runtime_options_table}.ConfigPath"),
-        &runtime_config_path,
+        &runtime_config_path
     )?;
 
     if config.debug {
-        toml_utils::set_toml_value(&configuration_file, ".debug.level", "\"debug\"")?;
+        toml_set!(editor, ".debug.level", "\"debug\"")?;
     }
 
-    match config.snapshotter_handler_mapping_for_arch.as_ref() {
-        Some(mapping) => {
-            let snapshotters: Vec<&str> = mapping.split(',').collect();
-            for m in snapshotters {
-                // Format is already validated in snapshotter_handler_mapping_validation_check
-                // and should be validated in Helm templates
-                let parts: Vec<&str> = m.split(':').collect();
-                let key = parts[0];
-                let value = parts[1];
+    if let Some(mapping) = config.snapshotter_handler_mapping_for_arch.as_ref() {
+        for m in mapping.split(',') {
+            // Format is already validated in snapshotter_handler_mapping_validation_check
+            // and should be validated in Helm templates
+            let parts: Vec<&str> = m.split(':').collect();
+            let key = parts[0];
+            let value = parts[1];
 
-                if key != shim {
-                    continue;
-                }
-
-                let snapshotter_value = if value == "nydus" {
-                    match config.multi_install_suffix.as_ref() {
-                        Some(suffix) if !suffix.is_empty() => format!("\"{value}-{suffix}\""),
-                        _ => format!("\"{value}\""),
-                    }
-                } else {
-                    format!("\"{value}\"")
-                };
-
-                toml_utils::set_toml_value(
-                    &configuration_file,
-                    &format!("{runtime_table}.snapshotter"),
-                    &snapshotter_value,
-                )?;
-                break;
+            if key != shim {
+                continue;
             }
+
+            let snapshotter_value = if value == "nydus" {
+                match config.multi_install_suffix.as_ref() {
+                    Some(suffix) if !suffix.is_empty() => format!("\"{value}-{suffix}\""),
+                    _ => format!("\"{value}\""),
+                }
+            } else {
+                format!("\"{value}\"")
+            };
+
+            toml_set!(editor, &format!("{runtime_table}.snapshotter"), &snapshotter_value)?;
+            break;
         }
-        _ => {}
     }
 
+    editor.save()?;
     Ok(())
 }
 
@@ -200,19 +185,15 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
 
         // Add the drop-in file to the imports array in the main config
-        // The append_to_toml_array function is idempotent and will not add duplicates
+        // The append_to_array method is idempotent and will not add duplicates
         log::info!(
             "Adding drop-in to imports in: {}",
             config.containerd_conf_file
         );
-        let imports_path = ".imports";
-        let drop_in_path = format!("\"{}\"", config.containerd_drop_in_conf_file);
 
-        toml_utils::append_to_toml_array(
-            Path::new(&config.containerd_conf_file),
-            imports_path,
-            &drop_in_path,
-        )?;
+        let mut editor = TomlEditor::open(&config.containerd_conf_file)?;
+        editor.append_to_array(".imports", &config.containerd_drop_in_conf_file)?;
+        editor.save()?;
         log::info!("Successfully added drop-in to imports array");
     }
 
@@ -232,12 +213,9 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
         super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
 
     if use_drop_in {
-        let drop_in_path = config.containerd_drop_in_conf_file.clone();
-        toml_utils::remove_from_toml_array(
-            Path::new(&config.containerd_conf_file),
-            ".imports",
-            &format!("\"{drop_in_path}\""),
-        )?;
+        let mut editor = TomlEditor::open(&config.containerd_conf_file)?;
+        editor.remove_from_array(".imports", &config.containerd_drop_in_conf_file)?;
+        editor.save()?;
         return Ok(());
     }
 
