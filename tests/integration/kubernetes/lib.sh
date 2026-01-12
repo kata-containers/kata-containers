@@ -265,7 +265,7 @@ new_pod_config() {
 	# The runtimeclass is not optional.
 	[ -n "$runtimeclass" ] || return 1
 
-	new_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${base_config}").XXX")
+	new_config=$(mktemp "${BATS_FILE_TMPDIR}/pod-config.XXXXXX.yaml")
 	IMAGE="$image" RUNTIMECLASS="$runtimeclass" envsubst < "$base_config" > "$new_config"
 
 	echo "$new_config"
