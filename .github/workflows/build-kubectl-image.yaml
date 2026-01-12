@@ -45,6 +45,12 @@ jobs:
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
+      - name: Get kubectl version
+        id: kubectl-version
+        run: |
+          KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+          echo "version=${KUBECTL_VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Generate image metadata
         id: meta
         uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5.7.0
@@ -53,6 +59,7 @@ jobs:
           tags: |
             type=raw,value=latest
             type=raw,value={{date 'YYYYMMDD'}}
+            type=raw,value=${{ steps.kubectl-version.outputs.version }}
             type=sha,prefix=
 
       - name: Build and push multi-arch image
