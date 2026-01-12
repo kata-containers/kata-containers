@@ -179,7 +179,7 @@ const (
 	// Enable Hypervisor Devices IOMMU_PLATFORM
 	IOMMUPlatform = kataAnnotHypervisorPrefix + "enable_iommu_platform"
 
-	// FileBackedMemRootDir is a sandbox annotation to soecify file based memory backend root directory
+	// FileBackedMemRootDir is a sandbox annotation to specify file based memory backend root directory
 	FileBackedMemRootDir = kataAnnotHypervisorPrefix + "file_mem_backend"
 
 	// NUMAMapping is a sandbox annotation that specifies mapping VM NUMA nodes to host NUMA nodes.
