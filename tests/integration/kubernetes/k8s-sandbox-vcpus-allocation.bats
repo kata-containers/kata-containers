@@ -42,7 +42,7 @@ setup() {
 		pod="${pods[$i]}"
 		bats_unbuffered_info "Getting log for pod: ${pod}"
 
-		log=$(kubectl logs "${pod}")
+		log=$(kubectl_logs_with_retries "${pod}")
 		bats_unbuffered_info "Log: ${log}"
 
 		[ "${log}" -eq "${expected_vcpus[$i]}" ]
