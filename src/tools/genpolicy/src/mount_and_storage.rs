@@ -23,13 +23,7 @@ pub fn get_policy_mounts(
     yaml_container: &pod::Container,
     is_pause_container: bool,
 ) {
-    if let Some(volumeMounts) = &yaml_container.volumeMounts {
-        for volumeMount in volumeMounts {
-            if volumeMount.subPath.is_some() {
-                panic!("Kata Containers doesn't support volumeMounts.subPath - see https://github.com/kata-containers/runtime/issues/2812");
-            }
-        }
-    }
+    // NOTE: volumeMounts.subPath is supported for some volume types (e.g. emptyDir).
 
     let c_settings = settings.get_container_settings(is_pause_container);
     let settings_mounts = &c_settings.Mounts;
@@ -184,11 +178,16 @@ fn get_empty_dir_mount_and_storage(
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
         format!("{}{name}$", &settings.volumes.configMap.mount_source)
+    } else if let Some(sp) = &yaml_mount.subPath {
+        format!(
+            "{}{}/{}$",
+            &settings_empty_dir.mount_source, &yaml_mount.name, sp
+        )
     } else {
         format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name)
     };
 
-    let mount_type = if yaml_mount.subPathExpr.is_some() {
+    let mount_type = if yaml_mount.subPathExpr.is_some() || yaml_mount.subPath.is_some() {
         "bind"
     } else {
         &settings_empty_dir.mount_type
