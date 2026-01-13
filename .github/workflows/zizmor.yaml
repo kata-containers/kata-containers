@@ -26,4 +26,4 @@ jobs:
           advanced-security: false
           annotations: true
           persona: auditor
-          version: v1.13.0
+          version: v1.20.0
