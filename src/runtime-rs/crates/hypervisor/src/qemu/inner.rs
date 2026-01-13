@@ -29,6 +29,7 @@ use kata_types::{
 };
 use nix::unistd::{setgid, setuid, Gid, Uid};
 use persist::sandbox_persist::Persist;
+use qapi_qmp::MigrationStatus;
 use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::path::Path;
@@ -36,6 +37,7 @@ use std::process::Stdio;
 use std::time::Duration;
 
 use tokio::time::sleep;
+use tokio::time::Instant;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, Command},
@@ -331,16 +333,70 @@ impl QemuInner {
     }
 
     pub async fn wait_for_migration(&mut self) -> Result<()> {
+        // Ensure QMP is connected.
         if self.qmp.is_none() {
             return Err(anyhow!("QMP is not connected"));
         }
 
-        // The result format returned by QEMU version 9.1.2 does not match
-        // the expected format of the existing QAPI version 0.14.
-        // However, no issues were found when tested with QAPI version 0.15.
-        // Therefore, we will temporarily skip this issue.
-        sleep(Duration::from_millis(280)).await;
-        Ok(())
+        let qmp = self
+            .qmp
+            .as_mut()
+            .context("failed to get QMP connection for boot from template")?;
+
+        // Helper to migrate_completed migration state from `query-migrate`.
+        let migrate_completed = |st: Option<MigrationStatus>| -> Result<bool> {
+            match st {
+                Some(MigrationStatus::completed) => Ok(true), // done
+                Some(MigrationStatus::failed) | Some(MigrationStatus::cancelled) => {
+                    Err(anyhow!("migration ended early: {:?}", st))
+                }
+                _ => Ok(false), // still running / unknown
+            }
+        };
+
+        // If already finished, just return Ok(()).
+        let mi = qmp.execute_query_migrate().await?;
+        match migrate_completed(mi.status) {
+            Ok(true) => return Ok(()),
+            Ok(false) => {
+                info!(sl!(), "migration not yet completed, entering wait loop");
+            }
+            Err(e) => return Err(e),
+        }
+
+        // Overall timeout for migration.
+        // Regarding why the timeout is set to 280ms and whether it should be adjusted, we need more empirical data.
+        // For now, we will keep using the previous configuration.
+        let timeout = Duration::from_millis(280);
+
+        // Polling interval: start small, then back off to reduce load.
+        let poll_interval = Duration::from_millis(20);
+
+        // Deadline with a timeout.
+        let deadline = Instant::now()
+            .checked_add(timeout)
+            .ok_or_else(|| anyhow!("timeout overflow"))?;
+
+        loop {
+            // Query migration status via QMP.
+            let mi = qmp.execute_query_migrate().await?;
+            match migrate_completed(mi.status) {
+                Ok(true) => return Ok(()),
+                Ok(false) => {
+                    info!(sl!(), "migration still not completed, continuing wait loop");
+                }
+                Err(e) => return Err(e),
+            }
+
+            // Stop waiting once we hit the timeout.
+            let now = Instant::now();
+            if now >= deadline {
+                return Err(anyhow!("wait_for_migration timeout after {:?}", timeout));
+            }
+
+            // Sleep until next tick, but never beyond deadline
+            sleep(poll_interval.min(deadline - now)).await;
+        }
     }
 
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {

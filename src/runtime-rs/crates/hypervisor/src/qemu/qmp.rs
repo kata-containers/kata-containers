@@ -14,7 +14,7 @@ use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
     self as qmp, BlockdevAioOptions, BlockdevOptions, BlockdevOptionsBase,
-    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, PciDeviceInfo,
+    BlockdevOptionsGenericFormat, BlockdevOptionsRaw, BlockdevRef, MigrationInfo, PciDeviceInfo,
 };
 use qapi_qmp::{migrate, migrate_incoming, migrate_set_capabilities};
 use qapi_qmp::{MigrationCapability, MigrationCapabilityStatus};
@@ -98,20 +98,27 @@ impl Qmp {
     pub fn execute_migration(&mut self, uri: &str) -> Result<()> {
         self.qmp
             .execute(&migrate {
+                channels: None,
                 detach: None,
                 resume: None,
-                blk: None,
-                inc: None,
-                uri: uri.to_string(),
+                uri: Some(uri.to_string()),
             })
             .map(|_| ())
             .context("execute migration")
     }
 
+    pub async fn execute_query_migrate(&mut self) -> Result<MigrationInfo> {
+        let migrate_info = self.qmp.execute(&qmp::query_migrate {})?;
+
+        Ok(migrate_info)
+    }
+
     pub fn execute_migration_incoming(&mut self, uri: &str) -> Result<()> {
         self.qmp
             .execute(&migrate_incoming {
-                uri: uri.to_string(),
+                channels: None,
+                exit_on_error: None,
+                uri: Some(uri.to_string()),
             })
             .map(|_| ())
             .context("execute migration incoming")
@@ -270,6 +277,7 @@ impl Qmp {
                 pmem: None,
                 readonly: None,
                 mem_path: "/dev/shm".to_owned(),
+                rom: None,
             },
         });
         self.qmp.execute(&memory_backend)?;
@@ -834,7 +842,6 @@ impl Qmp {
                 | qmp::CpuInfoFast::mips64(cpu_info)
                 | qmp::CpuInfoFast::mips64el(cpu_info)
                 | qmp::CpuInfoFast::mipsel(cpu_info)
-                | qmp::CpuInfoFast::nios2(cpu_info)
                 | qmp::CpuInfoFast::or1k(cpu_info)
                 | qmp::CpuInfoFast::ppc(cpu_info)
                 | qmp::CpuInfoFast::ppc64(cpu_info)
