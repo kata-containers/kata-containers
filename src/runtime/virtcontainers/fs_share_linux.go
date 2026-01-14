@@ -546,8 +546,11 @@ func (f *FilesystemShare) shareRootFilesystemWithVirtualVolume(ctx context.Conte
 func (f *FilesystemShare) shareRootFilesystemWithErofs(ctx context.Context, c *Container) (*SharedFile, error) {
 	guestPath := filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix)
 	var rootFsStorages []*grpc.Storage
+	var rwStor *grpc.Storage
+
 	for i, d := range c.devices {
-		if strings.Contains(d.ContainerPath, "layer.erofs") {
+		// ref: https://github.com/containerd/containerd/blob/v2.2.0/plugins/snapshots/erofs/erofs.go#L166
+		if filepath.Base(d.ContainerPath) == "layer.erofs" {
 			device := c.sandbox.devManager.GetDeviceByID(d.ID)
 			if device == nil {
 				return nil, fmt.Errorf("failed to find device by id %q", d.ID)
@@ -562,12 +565,33 @@ func (f *FilesystemShare) shareRootFilesystemWithErofs(ctx context.Context, c *C
 			vol.MountPoint = filepath.Join(defaultKataGuestVirtualVolumedir, filename)
 			c.devices[i].ContainerPath = vol.MountPoint
 			rootFsStorages = append(rootFsStorages, vol)
+			// ref: https://github.com/containerd/containerd/blob/v2.2.0/plugins/snapshots/erofs/erofs.go#L161
+		} else if filepath.Base(d.ContainerPath) == "rwlayer.img" {
+			device := c.sandbox.devManager.GetDeviceByID(d.ID)
+			if device == nil {
+				return nil, fmt.Errorf("failed to find device by id %q", d.ID)
+			}
+			vol, err := handleBlockVolume(c, device)
+			if err != nil {
+				return nil, err
+			}
+			filename := b64.URLEncoding.EncodeToString([]byte(vol.Source))
+			vol.Fstype = "ext4"
+			vol.MountPoint = filepath.Join(defaultKataGuestVirtualVolumedir, filename)
+			c.devices[i].ContainerPath = vol.MountPoint
+			rwStor = vol
 		}
 	}
 
 	overlayDirDriverOption := "io.katacontainers.volume.overlayfs.create_directory"
-	rootfsUpperDir := filepath.Join("/run/kata-containers/", c.id, "fs")
-	rootfsWorkDir := filepath.Join("/run/kata-containers/", c.id, "work")
+	var rootfsUpperDir, rootfsWorkDir string
+	if rwStor != nil {
+		rootfsUpperDir = filepath.Join(rwStor.MountPoint, "upper")
+		rootfsWorkDir = filepath.Join(rwStor.MountPoint, "work")
+	} else {
+		rootfsUpperDir = filepath.Join("/run/kata-containers/", c.id, "fs")
+		rootfsWorkDir = filepath.Join("/run/kata-containers/", c.id, "work")
+	}
 	rootfs := &grpc.Storage{}
 	rootfs.MountPoint = guestPath
 	rootfs.Source = typeOverlayFS
@@ -586,6 +610,9 @@ func (f *FilesystemShare) shareRootFilesystemWithErofs(ctx context.Context, c *C
 	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, rootfsUpperDir))
 	rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, rootfsWorkDir))
 
+	if rwStor != nil {
+		rootFsStorages = append(rootFsStorages, rwStor)
+	}
 	rootFsStorages = append(rootFsStorages, rootfs)
 
 	return &SharedFile{

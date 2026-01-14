@@ -47,7 +47,7 @@ else
 default: runtime show-header
 ##TARGET test: run cargo tests
 test: static-checks-build
-	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
 install: install-runtime install-configs
 endif
 
@@ -77,7 +77,9 @@ CLHBINDIR := $(PREFIXDEPS)/bin
 QEMUBINDIR := $(PREFIXDEPS)/bin
 PROJECT_DIR = $(PROJECT_TAG)
 IMAGENAME = $(PROJECT_TAG).img
+IMAGECONFIDENTIALNAME = $(PROJECT_TAG)-confidential.img
 INITRDNAME = $(PROJECT_TAG)-initrd.img
+INITRDCONFIDENTIALNAME = $(PROJECT_TAG)-initrd-confidential.img
 TARGET = $(PROJECT_COMPONENT)
 SYSCONFDIR := /etc
 LOCALSTATEDIR := /var
@@ -112,7 +114,9 @@ PKGDATADIR := $(PREFIXDEPS)/share/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
 KERNELDIR := $(PKGDATADIR)
 IMAGEPATH := $(PKGDATADIR)/$(IMAGENAME)
+IMAGECONFIDENTIALPATH := $(PKGDATADIR)/$(IMAGECONFIDENTIALNAME)
 INITRDPATH := $(PKGDATADIR)/$(INITRDNAME)
+INITRDCONFIDENTIALPATH := $(PKGDATADIR)/$(INITRDCONFIDENTIALNAME)
 
 ROOTFSTYPE_EXT4 := \"ext4\"
 ROOTFSTYPE_XFS := \"xfs\"
@@ -146,7 +150,8 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 ##VAR DEFBRIDGES=<number> Default number of bridges
 DEFBRIDGES := 0
-DEFENABLEANNOTATIONS := [\"kernel_params\"]
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 ##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled
@@ -185,6 +190,8 @@ QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT := 4050
 
 # Create Container Timeout in seconds
 DEFCREATECONTAINERTIMEOUT ?= 30
+DEFCREATECONTAINERTIMEOUT_COCO ?= 60
+DEFSTATICRESOURCEMGMT_COCO = true
 
 SED = sed
 CLI_DIR = cmd
@@ -226,7 +233,7 @@ ifneq (,$(DBCMD))
     # dragonball-specific options (all should be suffixed by "_DB")
     VMROOTFSDRIVER_DB := virtio-blk-pci
     DEFMAXVCPUS_DB := 0
-    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
+    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-pci
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
     KERNELTYPE_DB = uncompressed
@@ -263,7 +270,7 @@ ifneq (,$(CLHCMD))
     VMROOTFSDRIVER_CLH := virtio-pmem
 
     DEFSANDBOXCGROUPONLY_CLH := true
-    DEFSTATICRESOURCEMGMT_CLH := true
+    DEFSTATICRESOURCEMGMT_CLH := false
 endif
 
 ifneq (,$(QEMUCMD))
@@ -297,6 +304,18 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_SE)
 
+    CONFIG_FILE_QEMU_COCO_DEV = configuration-qemu-coco-dev-runtime-rs.toml
+    CONFIG_QEMU_COCO_DEV = config/$(CONFIG_FILE_QEMU_COCO_DEV)
+    CONFIG_QEMU_COCO_DEV_IN = $(CONFIG_QEMU_COCO_DEV).in
+
+    CONFIG_PATH_QEMU_COCO_DEV = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_COCO_DEV))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_COCO_DEV)
+
+    SYSCONFIG_QEMU_COCO_DEV = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_COCO_DEV))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_COCO_DEV)
+
+    CONFIGS += $(CONFIG_QEMU_COCO_DEV)
+
     KERNELTYPE_QEMU = uncompressed
     KERNEL_NAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_QEMU))
     KERNELPATH_QEMU = $(KERNELDIR)/$(KERNEL_NAME_QEMU)
@@ -304,25 +323,37 @@ ifneq (,$(QEMUCMD))
     KERNEL_NAME_QEMU_SE = kata-containers-se.img
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
 
+    KERNEL_TYPE_COCO = compressed
+    KERNEL_NAME_COCO = $(call MAKE_KERNEL_NAME_COCO,$(KERNEL_TYPE_COCO))
+    KERNELPATH_COCO = $(KERNELDIR)/$(KERNEL_NAME_COCO)
+
     # overriding options
-    DEFSTATICRESOURCEMGMT_QEMU := true
+    DEFSTATICRESOURCEMGMT_QEMU := false
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false
 ifeq ($(ARCH), s390x)
     VMROOTFSDRIVER_QEMU := virtio-blk-ccw
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-ccw
 else
     VMROOTFSDRIVER_QEMU := virtio-pmem
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
 endif
     DEFVCPUS_QEMU := 1
     DEFMAXVCPUS_QEMU := 0
     DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
-    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    DEFSHAREDFS_QEMU_SEL_VIRTIOFS := none
+    DEFSHAREDFS_QEMU_COCO_DEV_VIRTIOFS := none
     DEFBLOCKDEVICEAIO_QEMU := io_uring
     DEFNETWORKMODEL_QEMU := tcfilter
     DEFDISABLEGUESTSELINUX := true
-    DEFSECCOMPSANDBOXPARAM := on,obsolete=deny,spawn=deny,resourcecontrol=deny
-    DEFGUESTSELINUXLABEL := system_u:system_r:container_t
+    # Default is empty string "" to match Rust default None (when commented out in config).
+    # Most users will want to set this to "on,obsolete=deny,spawn=deny,resourcecontrol=deny"
+    # for better security. Note: "elevateprivileges=deny" doesn't work with daemonize option.
+    DEFSECCOMPSANDBOXPARAM := ""
+    # Default is empty string "" to match Rust default None (when commented out in config).
+    # Most users will want to set this to "system_u:system_r:container_t" for SELinux support.
+    DEFGUESTSELINUXLABEL := ""
 endif
 
 ifneq (,$(FCCMD))
@@ -384,6 +415,7 @@ USER_VARS += CONFIG_PATH
 USER_VARS += CONFIG_QEMU_IN
 USER_VARS += CONFIG_QEMU_SE_IN
 USER_VARS += CONFIG_REMOTE_IN
+USER_VARS += CONFIG_QEMU_COCO_DEV_IN
 USER_VARS += DESTDIR
 USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILDIN_DB
@@ -409,8 +441,13 @@ USER_VARS += FCVALIDJAILERPATHS
 USER_VARS += DEFMAXMEMSZ_FC
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
+USER_VARS += IMAGECONFIDENTIALNAME
 USER_VARS += IMAGEPATH
+USER_VARS += IMAGECONFIDENTIALPATH
+USER_VARS += INITRDNAME
+USER_VARS += INITRDCONFIDENTIALNAME
 USER_VARS += INITRDPATH
+USER_VARS += INITRDCONFIDENTIALPATH
 USER_VARS += DEFROOTFSTYPE
 USER_VARS += VMROOTFSDRIVER_DB
 USER_VARS += VMROOTFSDRIVER_CLH
@@ -422,6 +459,7 @@ USER_VARS += KERNELPATH_DB
 USER_VARS += KERNELPATH_QEMU
 USER_VARS += KERNELPATH_QEMU_SE
 USER_VARS += KERNELPATH_FC
+USER_VARS += KERNELPATH_COCO
 USER_VARS += KERNELPATH
 USER_VARS += KERNELVIRTIOFSPATH
 USER_VARS += FIRMWAREPATH
@@ -472,6 +510,8 @@ USER_VARS += DEFBLOCKDEVICEAIO_QEMU
 USER_VARS += DEFBLOCKSTORAGEDRIVER_FC
 USER_VARS += DEFSHAREDFS_CLH_VIRTIOFS
 USER_VARS += DEFSHAREDFS_QEMU_VIRTIOFS
+USER_VARS += DEFSHAREDFS_QEMU_SEL_VIRTIOFS
+USER_VARS += DEFSHAREDFS_QEMU_COCO_DEV_VIRTIOFS
 USER_VARS += DEFVIRTIOFSDAEMON
 USER_VARS += DEFVALIDVIRTIOFSDAEMONPATHS
 USER_VARS += DEFVIRTIOFSCACHESIZE
@@ -479,6 +519,7 @@ USER_VARS += DEFVIRTIOFSCACHE
 USER_VARS += DEFVIRTIOFSQUEUESIZE
 USER_VARS += DEFVIRTIOFSEXTRAARGS
 USER_VARS += DEFENABLEANNOTATIONS
+USER_VARS += DEFENABLEANNOTATIONS_COCO
 USER_VARS += DEFENABLEIOTHREADS
 USER_VARS += DEFSECCOMPSANDBOXPARAM
 USER_VARS += DEFGUESTSELINUXLABEL
@@ -499,6 +540,7 @@ USER_VARS += DEFSTATICRESOURCEMGMT_DB
 USER_VARS += DEFSTATICRESOURCEMGMT_FC
 USER_VARS += DEFSTATICRESOURCEMGMT_CLH
 USER_VARS += DEFSTATICRESOURCEMGMT_QEMU
+USER_VARS += DEFSTATICRESOURCEMGMT_COCO
 USER_VARS += DEFBINDMOUNTS
 USER_VARS += DEFVFIOMODE
 USER_VARS += DEFVFIOMODE_SE
@@ -517,6 +559,7 @@ USER_VARS += DEFDANCONF
 USER_VARS += DEFFORCEGUESTPULL
 USER_VARS += QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT
 USER_VARS += DEFCREATECONTAINERTIMEOUT
+USER_VARS += DEFCREATECONTAINERTIMEOUT_COCO
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \
@@ -540,7 +583,7 @@ ifneq ($(EXTRA_RUSTFEATURES),)
 endif
 
 
-TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
+TARGET_PATH = ../../target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
 DESTDIR ?= /
@@ -603,6 +646,10 @@ endef
 #   # $1 : KERNELTYPE (compressed or uncompressed)
 define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
+endef
+
+define MAKE_KERNEL_NAME_COCO
+$(if $(findstring uncompressed,$1),vmlinux-confidential.container,vmlinuz-confidential.container)
 endef
 
 .DEFAULT_GOAL := default

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: spdk-pod-test
+spec:
+  runtimeClassName: kata  
+  containers:
+  - name: app
+    image: docker.io/library/ubuntu:22.04
+    command: ["sleep", "3600"]
+    volumeMounts:
+    - name: data
+      mountPath: /data
+  volumes:
+  - name: data
+    persistentVolumeClaim:
+      claimName: kata-spdk-directvolume-pvc

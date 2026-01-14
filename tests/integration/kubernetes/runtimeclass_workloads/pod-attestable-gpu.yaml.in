@@ -1,0 +1,38 @@
+# Copyright (c) 2025 NVIDIA Corporation
+# Copyright (c) 2023-2024 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aa-test-cc
+  annotations:
+    cdi.k8s.io/gpu: "nvidia.com/pgpu=0"
+spec:
+  runtimeClassName: ${RUNTIME_CLASS_NAME}
+  containers:
+    - name: bash-curl
+      image: nvcr.io/nvidia/cuda:12.2.0-base-ubuntu22.04
+      imagePullPolicy: Always
+      command:
+        - sh
+        - -c
+        - |
+          set -e
+          apt update && apt install -y curl
+          curl http://127.0.0.1:8006/cdh/resource/default/aa/key
+          nvidia-smi conf-compute -grs
+          sleep 1000
+      readinessProbe:
+        exec:
+          command:
+            - sh
+            - -c
+            - test -x /usr/bin/curl
+        initialDelaySeconds: 10
+        periodSeconds: 5
+      resources:
+        limits:
+          nvidia.com/pgpu: "1"
+          memory: 16Gi

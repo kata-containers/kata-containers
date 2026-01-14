@@ -101,25 +101,18 @@ where
         match &self.sender {
             Some(sender) => {
                 sender.send((bytes, ops)).map_err(|e| {
-                    error!(
-                        "{}: failed to send rate-limiter patch data {:?}",
-                        VIRTIO_FS_NAME, e
-                    );
+                    error!("{VIRTIO_FS_NAME}: failed to send rate-limiter patch data {e:?}");
                     Error::InternalError
                 })?;
                 self.patch_rate_limiter_fd.write(1).map_err(|e| {
-                    error!(
-                        "{}: failed to write rate-limiter patch event {:?}",
-                        VIRTIO_FS_NAME, e
-                    );
+                    error!("{VIRTIO_FS_NAME}: failed to write rate-limiter patch event {e:?}");
                     Error::InternalError
                 })?;
                 Ok(())
             }
             None => {
                 error!(
-                    "{}: failed to establish channel to send rate-limiter patch data",
-                    VIRTIO_FS_NAME
+                    "{VIRTIO_FS_NAME}: failed to establish channel to send rate-limiter patch data"
                 );
                 Err(Error::InternalError)
             }
@@ -148,8 +141,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         rate_limiter: Option<RateLimiter>,
     ) -> Result<Self> {
         info!(
-            "{}: tag {} req_num_queues {} queue_size {} cache_size {} cache_policy {} thread_pool_size {} writeback_cache {} no_open {} killpriv_v2 {} xattr {} drop_sys_resource {} no_readdir {}",
-            VIRTIO_FS_NAME, tag, req_num_queues, queue_size, cache_size, cache_policy, thread_pool_size, writeback_cache, no_open, killpriv_v2, xattr, drop_sys_resource, no_readdir
+            "{VIRTIO_FS_NAME}: tag {tag} req_num_queues {req_num_queues} queue_size {queue_size} cache_size {cache_size} cache_policy {cache_policy} thread_pool_size {thread_pool_size} writeback_cache {writeback_cache} no_open {no_open} killpriv_v2 {killpriv_v2} xattr {xattr} drop_sys_resource {drop_sys_resource} no_readdir {no_readdir}"
         );
 
         let num_queues = NUM_QUEUE_OFFSET + req_num_queues;
@@ -167,24 +159,18 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let cache = match CachePolicy::from_str(cache_policy) {
             Ok(c) => c,
             Err(e) => {
-                error!(
-                    "{}: Parse cache_policy \"{}\" failed: {:?}",
-                    VIRTIO_FS_NAME, cache_policy, e
-                );
+                error!("{VIRTIO_FS_NAME}: Parse cache_policy \"{cache_policy}\" failed: {e:?}");
                 return Err(Error::InvalidInput);
             }
         };
 
         // Set rlimit first, in case we dropped CAP_SYS_RESOURCE later and hit EPERM.
         if let Err(e) = set_default_rlimit_nofile() {
-            warn!("{}: failed to set rlimit: {:?}", VIRTIO_FS_NAME, e);
+            warn!("{VIRTIO_FS_NAME}: failed to set rlimit: {e:?}");
         }
 
         if drop_sys_resource && writeback_cache {
-            error!(
-                "{}: writeback_cache is not compatible with drop_sys_resource",
-                VIRTIO_FS_NAME
-            );
+            error!("{VIRTIO_FS_NAME}: writeback_cache is not compatible with drop_sys_resource");
             return Err(Error::InvalidInput);
         }
 
@@ -197,10 +183,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 nix::unistd::gettid()
             );
             if let Err(e) = caps::drop(None, CapSet::Effective, Capability::CAP_SYS_RESOURCE) {
-                warn!(
-                    "{}: failed to drop CAP_SYS_RESOURCE: {:?}",
-                    VIRTIO_FS_NAME, e
-                );
+                warn!("{VIRTIO_FS_NAME}: failed to drop CAP_SYS_RESOURCE: {e:?}");
             }
         }
 
@@ -313,13 +296,12 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         dax_threshold_size_kb: Option<u64>,
     ) -> FsResult<()> {
         debug!(
-            "source {:?}, fstype {:?}, mountpoint {:?}, config {:?}, ops {:?}, prefetch_list_path {:?}, dax_threshold_size_kb 0x{:x?}",
-            source, fstype, mountpoint, config, ops, prefetch_list_path, dax_threshold_size_kb
+            "source {source:?}, fstype {fstype:?}, mountpoint {mountpoint:?}, config {config:?}, ops {ops:?}, prefetch_list_path {prefetch_list_path:?}, dax_threshold_size_kb 0x{dax_threshold_size_kb:x?}"
         );
         match ops {
             "mount" => {
                 if source.is_none() {
-                    error!("{}: source is required for mount.", VIRTIO_FS_NAME);
+                    error!("{VIRTIO_FS_NAME}: source is required for mount.");
                     return Err(FsError::InvalidData);
                 }
                 // safe because is not None
@@ -342,7 +324,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             }
             "umount" => {
                 self.fs.umount(mountpoint).map_err(|e| {
-                    error!("umount {:?}", e);
+                    error!("umount {e:?}");
                     FsError::InvalidData
                 })?;
                 self.backend_fs.remove(mountpoint);
@@ -404,7 +386,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 Ok(())
             }
             Err(e) => {
-                error!("blobfs mount {:?}", e);
+                error!("blobfs mount {e:?}");
                 Err(FsError::InvalidData)
             }
         }
@@ -457,7 +439,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 Ok(())
             }
             Err(e) => {
-                error!("passthroughfs mount {:?}", e);
+                error!("passthroughfs mount {e:?}");
                 Err(FsError::InvalidData)
             }
         }
@@ -487,17 +469,11 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             None => return Err(FsError::BackendFs("no rafs config file".to_string())),
         };
         let prefetch_files = parse_prefetch_files(prefetch_list_path.clone());
-        debug!(
-            "{}: Import rafs with prefetch_files {:?}",
-            VIRTIO_FS_NAME, prefetch_files
-        );
+        debug!("{VIRTIO_FS_NAME}: Import rafs with prefetch_files {prefetch_files:?}");
         rafs.0
             .import(rafs.1, prefetch_files)
             .map_err(|e| FsError::BackendFs(format!("Import rafs failed: {e:?}")))?;
-        info!(
-            "{}: Rafs imported with prefetch_list_path {:?}",
-            VIRTIO_FS_NAME, prefetch_list_path
-        );
+        info!("{VIRTIO_FS_NAME}: Rafs imported with prefetch_list_path {prefetch_list_path:?}");
         let fs = Box::new(rafs.0);
         match self.fs.mount(fs, mountpoint) {
             Ok(idx) => {
@@ -512,7 +488,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 Ok(())
             }
             Err(e) => {
-                error!("Rafs mount failed: {:?}", e);
+                error!("Rafs mount failed: {e:?}");
                 Err(FsError::InvalidData)
             }
         }
@@ -684,10 +660,7 @@ fn parse_prefetch_files(prefetch_list_path: Option<String>) -> Option<Vec<PathBu
 
 fn kb_to_bytes(kb: u64) -> FsResult<u64> {
     if (kb & 0xffc0_0000_0000_0000) != 0 {
-        error!(
-            "dax_threshold_size_kb * 1024 overflow. dax_threshold_size_kb is 0x{:x}.",
-            kb
-        );
+        error!("dax_threshold_size_kb * 1024 overflow. dax_threshold_size_kb is 0x{kb:x}.");
         return Err(FsError::InvalidData);
     }
 
@@ -706,15 +679,12 @@ fn set_default_rlimit_nofile() -> Result<()> {
     // don't cause resource exhaustion.
     let mut file_max = String::new();
     let mut f = File::open("/proc/sys/fs/file-max").map_err(|e| {
-        error!(
-            "{}: failed to read /proc/sys/fs/file-max {:?}",
-            VIRTIO_FS_NAME, e
-        );
+        error!("{VIRTIO_FS_NAME}: failed to read /proc/sys/fs/file-max {e:?}");
         Error::IOError(e)
     })?;
     f.read_to_string(&mut file_max)?;
     let file_max = file_max.trim().parse::<u64>().map_err(|e| {
-        error!("{}: read fs.file-max sysctl wrong {:?}", VIRTIO_FS_NAME, e);
+        error!("{VIRTIO_FS_NAME}: read fs.file-max sysctl wrong {e:?}");
         Error::InvalidInput
     })?;
     if file_max < 2 * reserved_fds {
@@ -730,26 +700,22 @@ fn set_default_rlimit_nofile() -> Result<()> {
         .get()
         .map(|(curr, _)| if curr >= max_fds { 0 } else { max_fds })
         .map_err(|e| {
-            error!("{}: failed to get rlimit {:?}", VIRTIO_FS_NAME, e);
+            error!("{VIRTIO_FS_NAME}: failed to get rlimit {e:?}");
             Error::IOError(e)
         })?;
 
     if rlimit_nofile == 0 {
         info!(
-            "{}: original rlimit nofile is greater than max_fds({}), keep rlimit nofile setting",
-            VIRTIO_FS_NAME, max_fds
+            "{VIRTIO_FS_NAME}: original rlimit nofile is greater than max_fds({max_fds}), keep rlimit nofile setting"
         );
         Ok(())
     } else {
-        info!(
-            "{}: set rlimit {} (max_fds {})",
-            VIRTIO_FS_NAME, rlimit_nofile, max_fds
-        );
+        info!("{VIRTIO_FS_NAME}: set rlimit {rlimit_nofile} (max_fds {max_fds})");
 
         Resource::NOFILE
             .set(rlimit_nofile, rlimit_nofile)
             .map_err(|e| {
-                error!("{}: failed to set rlimit {:?}", VIRTIO_FS_NAME, e);
+                error!("{VIRTIO_FS_NAME}: failed to set rlimit {e:?}");
                 Error::IOError(e)
             })
     }
@@ -820,10 +786,7 @@ where
         self.sender = Some(sender);
         let rate_limiter = self.rate_limiter.take().unwrap_or_default();
         let patch_rate_limiter_fd = self.patch_rate_limiter_fd.try_clone().map_err(|e| {
-            error!(
-                "{}: failed to clone patch rate limiter eventfd {:?}",
-                VIRTIO_FS_NAME, e
-            );
+            error!("{VIRTIO_FS_NAME}: failed to clone patch rate limiter eventfd {e:?}");
             ActivateError::InternalError
         })?;
 
@@ -962,6 +925,7 @@ pub mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
@@ -1146,7 +1110,7 @@ pub mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&fs),
             TYPE_VIRTIO_FS
         );
-        let queue_size = vec![QUEUE_SIZE; NUM_QUEUE_OFFSET + NUM_QUEUES];
+        let queue_size = [QUEUE_SIZE; NUM_QUEUE_OFFSET + NUM_QUEUES];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &fs
@@ -1187,6 +1151,7 @@ pub mod tests {
 
     #[test]
     fn test_virtio_fs_device_active() {
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         {
             // config queue size is not 2
@@ -1285,11 +1250,12 @@ pub mod tests {
     #[cfg(feature = "test-resources")]
     fn test_fs_manipulate_backend_fs() {
         let source = "/test_resources/nydus-rs/bootstrap/image_v2.boot";
-        let source_path = PathBuf::from(source);
-        let bootstrapfile = source_path.to_str().unwrap().to_string();
+        let source_path = PathBuf::from(&source);
         if !source_path.exists() {
-            panic!("Test resource file not found: {}", bootstrapfile);
+            eprintln!("Test resource file not found: {}", source);
+            return;
         }
+        let bootstrapfile = source.to_string();
         // mount
         {
             // invalid fs type
@@ -1675,6 +1641,7 @@ pub mod tests {
 
     #[test]
     fn test_register_mmap_region() {
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         let rate_limiter = RateLimiter::new(100, 0, 300, 10, 0, 300).unwrap();
         let mut fs: VirtioFs<Arc<GuestMemoryMmap>> = VirtioFs::new(
@@ -1717,6 +1684,7 @@ pub mod tests {
 
     #[test]
     fn test_get_resource_requirements() {
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         let rate_limiter = RateLimiter::new(100, 0, 300, 10, 0, 300).unwrap();
         let dax_on = 0x4000;
@@ -1761,6 +1729,7 @@ pub mod tests {
 
     #[test]
     fn test_set_resource() {
+        skip_if_kvm_unaccessable!();
         let epoll_manager = EpollManager::default();
         let rate_limiter = RateLimiter::new(100, 0, 300, 10, 0, 300).unwrap();
         let mut fs: VirtioFs<Arc<GuestMemoryMmap>> = VirtioFs::new(

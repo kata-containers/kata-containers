@@ -5,14 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	pod_name="footubuntu"
 	config_name="ssh-config-map"
-	get_pod_config_dir
-
+	setup_common || die "setup_common failed"
 	# Creates ssh-key
 	key_path=$(mktemp --tmpdir)
 	public_key_path="${key_path}.pub"
@@ -59,4 +59,5 @@ teardown() {
 	sudo rm -rf "$public_key_path"
 	sudo rm -rf "$key_path"
 	sudo rm -rf "$configmap_yaml"
+	teardown_common "${node}" "${node_start_time:-}"
 }

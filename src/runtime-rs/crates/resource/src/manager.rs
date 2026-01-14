@@ -90,9 +90,9 @@ impl ResourceManager {
         inner.setup_after_start_vm().await
     }
 
-    pub async fn get_storage_for_sandbox(&self) -> Result<Vec<Storage>> {
+    pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
         let inner = self.inner.read().await;
-        inner.get_storage_for_sandbox().await
+        inner.get_storage_for_sandbox(shm_size).await
     }
 
     pub async fn handler_rootfs(

@@ -24,15 +24,15 @@ on:
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-asset:
+    name: build-asset
     permissions:
       contents: read
       packages: write
-    runs-on: ppc64le
+    runs-on: ubuntu-24.04-ppc64le
     strategy:
       matrix:
         asset:
@@ -83,12 +83,13 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 1
           if-no-files-found: error
 
   build-asset-rootfs:
-    runs-on: ppc64le
+    name: build-asset-rootfs
+    runs-on: ubuntu-24.04-ppc64le
     needs: build-asset
     permissions:
       contents: read
@@ -148,12 +149,13 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 1
           if-no-files-found: error
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
+    name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
     needs: build-asset-rootfs
     strategy:
@@ -167,7 +169,8 @@ jobs:
           name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
-    runs-on: ppc64le
+    name: build-asset-shim-v2
+    runs-on: ubuntu-24.04-ppc64le
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     permissions:
       contents: read
@@ -221,12 +224,13 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-ppc64le-shim-v2${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-shim-v2.tar.xz
+          path: kata-build/kata-static-shim-v2.tar.zst
           retention-days: 1
           if-no-files-found: error
 
   create-kata-tarball:
-    runs-on: ppc64le
+    name: create-kata-tarball
+    runs-on: ubuntu-24.04-ppc64le
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:
       contents: read
@@ -240,6 +244,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - name: Rebase atop of the latest target branch
         run: |
@@ -255,10 +260,12 @@ jobs:
       - name: merge-artifacts
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
+        env:
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
       - name: store-artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
-          path: kata-static.tar.xz
+          path: kata-static.tar.zst
           retention-days: 1
           if-no-files-found: error

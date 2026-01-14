@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Path** | **string** |  | 
+**Path** | Pointer to **string** |  | [optional] 
 **Readonly** | Pointer to **bool** |  | [optional] [default to false]
 **Direct** | Pointer to **bool** |  | [optional] [default to false]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
@@ -23,7 +23,7 @@ Name | Type | Description | Notes
 
 ### NewDiskConfig
 
-`func NewDiskConfig(path string, ) *DiskConfig`
+`func NewDiskConfig() *DiskConfig`
 
 NewDiskConfig instantiates a new DiskConfig object
 This constructor will assign default values to properties that have it defined,
@@ -57,6 +57,11 @@ and a boolean to check if the value has been set.
 
 SetPath sets Path field to given value.
 
+### HasPath
+
+`func (o *DiskConfig) HasPath() bool`
+
+HasPath returns a boolean if a field has been set.
 
 ### GetReadonly
 

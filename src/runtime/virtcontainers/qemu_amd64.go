@@ -38,6 +38,8 @@ type qemuAmd64 struct {
 	snpIdBlock string
 
 	snpIdAuth string
+
+	snpGuestPolicy *uint64
 }
 
 const (
@@ -126,11 +128,12 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			protection:           noneProtection,
 			legacySerial:         config.LegacySerial,
 		},
-		vmFactory:  factory,
-		snpGuest:   config.SevSnpGuest,
-		qgsPort:    config.QgsPort,
-		snpIdBlock: config.SnpIdBlock,
-		snpIdAuth:  config.SnpIdAuth,
+		vmFactory:      factory,
+		snpGuest:       config.SevSnpGuest,
+		qgsPort:        config.QgsPort,
+		snpIdBlock:     config.SnpIdBlock,
+		snpIdAuth:      config.SnpIdAuth,
+		snpGuestPolicy: config.SnpGuestPolicy,
 	}
 
 	if config.ConfidentialGuest {
@@ -315,6 +318,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
 			ReducedPhysBits: 1,
 			InitdataDigest:  initdataDigest,
+			SnpGuestPolicy:  q.snpGuestPolicy,
 		}
 		if q.snpIdBlock != "" && q.snpIdAuth != "" {
 			obj.SnpIdBlock = q.snpIdBlock

@@ -1,0 +1,84 @@
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_INSTRUCT}
+  labels:
+    app: ${POD_NAME_INSTRUCT}
+  annotations:
+    io.katacontainers.config.hypervisor.kernel_params: "agent.image_registry_auth=kbs:///default/credentials/nvcr agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata
+  imagePullSecrets:
+    - name: ngc-secret-instruct
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  containers:
+  - name: ${POD_NAME_INSTRUCT}
+    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
+    # Ports exposed by the container:
+    ports:
+      - containerPort: 8000
+        name: http-openai
+    livenessProbe:
+      httpGet:
+        path: /v1/health/live
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    readinessProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+    startupProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: http-openai
+      initialDelaySeconds: 360
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 30
+    env:
+      - name: NGC_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: ngc-api-key-instruct
+            key: api-key
+    # GPU resource limit (for NVIDIA GPU)
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
+        cpu: "16"
+        memory: "128Gi"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret-instruct
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-api-key-instruct
+type: Opaque
+data:
+  api-key: "${NGC_API_KEY_BASE64}"

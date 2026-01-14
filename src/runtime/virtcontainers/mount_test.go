@@ -65,7 +65,9 @@ func TestIsHostDeviceCreateFile(t *testing.T) {
 	assert.NoError(err)
 	f.Close()
 
-	assert.False(isHostDevice(path))
+	isDevice, err := isHostDevice(path)
+	assert.False(isDevice)
+	assert.NoError(err)
 	assert.NoError(os.Remove(path))
 }
 

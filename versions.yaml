@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v45.0"
+      version: "v48.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -83,13 +83,13 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v1.8.0"
+      version: "v1.12.1"
 
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v9.1.2"
-      tag: "v9.1.2"
+      version: "v10.2.0"
+      tag: "v10.2.0"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -99,15 +99,20 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
+    qemu-cca-experimental:
+      description: "QEMU with experimental CCA support"
+      url: "https://git.codelinaro.org/linaro/dcap/qemu.git"
+      tag: "97345ddc501d3eb45bbbf15d97608fba0c2c0c7b"
+
     qemu-snp-experimental:
       description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "gpu-snp-20250211"
+      tag: "gpu-snp-20260107"
 
     qemu-tdx-experimental:
       description: "QEMU with GPU+TDX support"
       url: "https://github.com/confidential-containers/qemu.git"
-      tag: "gpu-tdx-20250211"
+      tag: "gpu-tdx-20260107"
 
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"
@@ -123,6 +128,9 @@ assets:
       aarch64:
         name: "ubuntu"
         version: "noble"  # 24.04 LTS
+        confidential:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -162,7 +170,10 @@ assets:
     architecture:
       aarch64:
         name: "alpine"
-        version: "3.18"
+        version: "3.22"
+        confidential:
+          name: "ubuntu"
+          version: "noble"  # 24.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -182,7 +193,7 @@ assets:
           version: "noble"  # 24.04 LTS
       x86_64:
         name: "alpine"
-        version: "3.18"
+        version: "3.22"
         confidential:
           name: "ubuntu"
           version: "noble"  # 24.04 LTS
@@ -196,24 +207,35 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.28"
+    version: "v6.12.47"
     confidential:
-      description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
+      description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.12.28"
+      version: "v6.16.7"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.138"
+    confidential:
+      description: "Linux kernel with RME support on arm64"
+      url: "https://gitlab.arm.com/linux-arm/linux-cca"
+      version: "v6.15.0-rc1-916aeec68dd4500a1cdf4ebf214c5620955daf3f"
+      ref: "916aeec68dd4500a1cdf4ebf214c5620955daf3f"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.1.140"
+    version: "v6.12.47"
 
 externals:
   description: "Third-party projects used by the system"
+
+  nvrc:
+    # yamllint disable-line rule:line-length
+    desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
+    version: "v0.0.1"
+    url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
@@ -223,7 +245,7 @@ externals:
   helm:
     description: "Kubernetes package manager"
     url: "https://get.helm.sh/"
-    version: "v3.15.2"
+    version: "v4.0.4"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -233,25 +255,19 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "4cd62c3f8a6475a556eceb5f4538e523e9491400"
+    version: "dea0fa37f35d05d10af1bf4e7a6ae6ccb2a7d982"
     toolchain: "1.85.1"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "8462025ed2d2a94281344e63405bbe7500bd4484"
+    version: "94c3958250837420aea266623fe24ac990c7e5bf"
     # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "8462025ed2d2a94281344e63405bbe7500bd4484"
+    image_tag: "94c3958250837420aea266623fe24ac990c7e5bf"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "8462025ed2d2a94281344e63405bbe7500bd4484-x86_64"
+    ita_image_tag: "94c3958250837420aea266623fe24ac990c7e5bf-x86_64"
     toolchain: "1.85.1"
-
-  crio:
-    description: |
-      OCI-based Kubernetes Container Runtime Interface implementation
-    url: "https://github.com/cri-o/cri-o"
-    branch: "release-1.23"
 
   containerd:
     description: |
@@ -263,10 +279,10 @@ externals:
     # version older than them.
     version: "v1.7.25"
     lts: "v1.7"
-    active: "v2.0"
+    active: "v2.1"
     # keep the latest version to make the current PR ci work, once it was
     # merged,we can remove the latest version.
-    latest: "v2.0"
+    latest: "v2.2"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
@@ -284,12 +300,12 @@ externals:
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
     url: "https://gitlab.com/cryptsetup/cryptsetup"
-    version: "v2.5.0"
+    version: "v2.8.1"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
     url: "http://ftpmirror.gnu.org/gperf/"
-    version: "3.1"
+    version: "3.3"
 
   hadolint:
     description: "the dockerfile linter used by static-checks"
@@ -299,12 +315,7 @@ externals:
   lvm2:
     description: "LVM2 and device-mapper tools and libraries"
     url: "https://github.com/lvmteam/lvm2"
-    version: "v2_03_16"
-
-  k0s:
-    description: "K0s Kubernetes distribution, used in cri-o testing"
-    url: "https://get.k0s.sh"
-    version: "v1.31.5+k0s.0"
+    version: "v2_03_38"
 
   kubernetes:
     description: "Kubernetes project container manager"
@@ -330,51 +341,80 @@ externals:
   libseccomp:
     description: "High level interface to Linux seccomp filter"
     url: "https://github.com/seccomp/libseccomp"
-    version: "2.5.5"
+    version: "2.6.0"
 
   pause:
     description: "Kubernetes pause container image"
     repo: "docker://registry.k8s.io/pause"
-    version: "3.9"
+    version: "3.10"
 
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
     version: "v2.2.3"
 
+  # Keep the version here aligned with the NYDUS_SNAPSHOTTER_VERSION
+  # on tools/packaging/kata-deploy/Dockerfile
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.15.2"
+    version: "v0.15.10"
 
   opa:
     description: "Open Policy Agent"
     url: "https://github.com/open-policy-agent/opa"
-    version: "v1.5.1"
+    version: "v1.9.0"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
     url: "https://github.com/tianocore/edk2"
     x86_64:
       description: "Vanilla firmware build"
-      version: "edk2-stable202411"
+      version: "edk2-stable202508"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
     sev:
+      # Used by AMD SEV-SNP for measured direct boot
       description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202411"
+      version: "edk2-stable202508"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
+    tdx:
+      description: "UEFI for Intel TDX virtual machines."
+      version: "edk2-stable202511"
+      package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
+      package_output_dir: "IntelTdx"
     arm64:
       description: "UEFI for arm64 virtual machines."
-      version: "edk2-stable202411"
+      version: "edk2-stable202508"
       package: "ArmVirtPkg/ArmVirtQemu.dsc"
       package_output_dir: "ArmVirtQemu-AARCH64"
+    cca:
+      description: "UEFI for arm64 CCA virtual machines."
+      version: "cca/2025-02-06"
+      url: "https://git.codelinaro.org/linaro/dcap/edk2"
+      package: "ArmVirtPkg/ArmVirtQemu.dsc"
+      package_output_dir: "ArmVirtQemu-AARCH64"
+
+  protoc:
+    description: "Protobuf compiler"
+    url: "https://github.com/protocolbuffers/protobuf/releases"
+    version: "v21.12"
+
+  protoc-gen-go:
+    description: "Protobuf Go compiler"
+    url: "https://github.com/protocolbuffers/protobuf-go/releases"
+    version: "v1.28.1"
+
+  ttrpc:
+    description: "ttRPC libary and code generation utilities"
+    url: "https://github.com/containerd/ttrpc/releases"
+    version: "v1.2.7"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.13.1"
+    version: "v1.13.3"
     toolchain: "1.85.1"
     meta:
       # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.13.1,
@@ -397,23 +437,24 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.23.10"
+    # When updating this, also update in go.mod files.
+    version: "1.24.11"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.23.10"
+      newest-version: "1.24.11"
 
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
     # Keep in sync with rust-toolchain.toml
-    version: "1.85.1"
+    version: "1.89"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.85.1"
+      newest-version: "1.89"
 
   golangci-lint:
     description: "golangci-lint"
@@ -439,9 +480,10 @@ plugins:
     version: "b7f6d3e0679796e907ecca88cfab0e32e326850d"
 
 docker_images:
-  description: "Docker hub images used for testing"
+  description: "Docker images used for testing"
 
   nginx:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
-    url: "https://hub.docker.com/_/nginx/"
-    version: "1.15-alpine"
+    registry: "quay.io/kata-containers/nginx"
+    # yamllint disable-line rule:line-length
+    digest: "sha256:a905609e0f9adc2607f06da2f76893c6da07caa396c41f2806fee162064cfb4b"  # 1.15-alpine

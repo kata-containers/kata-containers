@@ -6,22 +6,24 @@
 
 use std::{collections::HashMap, sync::Arc, thread};
 
-use agent::{types::Device, Agent, OnlineCPUMemRequest, Storage};
+use agent::{types::Device, ARPNeighbor, Agent, OnlineCPUMemRequest, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         util::{get_host_path, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
-    BlockConfig, Hypervisor, VfioConfig,
+    utils::uses_native_ccw_bus,
+    BlockConfig, BlockDeviceAio, Hypervisor, VfioConfig,
 };
-use kata_types::mount::Mount;
+use kata_types::mount::{kata_guest_sandbox_dir, Mount, KATA_EPHEMERAL_VOLUME_TYPE, SHM_DIR};
 use kata_types::{
     config::{hypervisor::TopologyConfigInfo, TomlConfig},
     mount::{adjust_rootfs_mounts, KATA_IMAGE_FORCE_GUEST_PULL},
 };
+use libc::NUD_PERMANENT;
 use oci::{Linux, LinuxCpu, LinuxResources};
 use oci_spec::runtime::{self as oci, LinuxDeviceType};
 use persist::sandbox_persist::Persist;
@@ -260,7 +262,14 @@ impl ResourceManagerInner {
     }
 
     async fn handle_neighbours(&self, network: &dyn Network) -> Result<()> {
-        let neighbors = network.neighs().await.context("neighs")?;
+        let all_neighbors = network.neighs().await.context("neighs")?;
+
+        // We add only static ARP entries
+        let neighbors: Vec<ARPNeighbor> = all_neighbors
+            .iter()
+            .filter(|n| n.state == NUD_PERMANENT as i32)
+            .cloned()
+            .collect();
         if !neighbors.is_empty() {
             info!(sl!(), "update neighbors {:?}", neighbors);
             self.agent
@@ -288,6 +297,11 @@ impl ResourceManagerInner {
     }
 
     pub async fn setup_after_start_vm(&mut self) -> Result<()> {
+        self.cgroups_resource
+            .setup_after_start_vm(self.hypervisor.as_ref())
+            .await
+            .context("setup cgroups after start vm")?;
+
         if let Some(share_fs) = self.share_fs.as_ref() {
             share_fs
                 .setup_device_after_start_vm(self.hypervisor.as_ref(), &self.device_manager)
@@ -313,12 +327,33 @@ impl ResourceManagerInner {
         Ok(())
     }
 
-    pub async fn get_storage_for_sandbox(&self) -> Result<Vec<Storage>> {
+    pub async fn get_storage_for_sandbox(&self, shm_size: u64) -> Result<Vec<Storage>> {
         let mut storages = vec![];
         if let Some(d) = self.share_fs.as_ref() {
             let mut s = d.get_storages().await.context("get storage")?;
             storages.append(&mut s);
         }
+
+        let shm_size_option = format!("size={shm_size}");
+        let mount_point = format!("{}/{}", kata_guest_sandbox_dir(), SHM_DIR);
+
+        let shm_storage = Storage {
+            driver: KATA_EPHEMERAL_VOLUME_TYPE.to_string(),
+            mount_point,
+            source: "shm".to_string(),
+            fs_type: "tmpfs".to_string(),
+            options: vec![
+                "noexec".to_string(),
+                "nosuid".to_string(),
+                "nodev".to_string(),
+                "mode=1777".to_string(),
+                shm_size_option,
+            ],
+            ..Default::default()
+        };
+
+        storages.push(shm_storage);
+
         Ok(storages)
     }
 
@@ -379,11 +414,14 @@ impl ResourceManagerInner {
         for d in linux_devices.iter() {
             match d.typ() {
                 LinuxDeviceType::B => {
-                    let block_driver = get_block_driver(&self.device_manager).await;
+                    let blkdev_info = get_block_device_info(&self.device_manager).await;
                     let dev_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major(),
                         minor: d.minor(),
-                        driver_option: block_driver,
+                        driver_option: blkdev_info.block_device_driver,
+                        blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
+                        num_queues: blkdev_info.num_queues,
+                        queue_size: blkdev_info.queue_size,
                         ..Default::default()
                     });
 
@@ -394,10 +432,11 @@ impl ResourceManagerInner {
                     // create block device for kata agent,
                     // if driver is virtio-blk-pci, the id will be pci address.
                     if let DeviceType::Block(device) = device_info {
-                        // The following would work for drivers virtio-blk-pci and mmio.
-                        // Once scsi support is added, need to handle scsi identifiers.
+                        // The following would work for drivers virtio-blk-pci and virtio-mmio and virtio-scsi.
                         let id = if let Some(pci_path) = device.config.pci_path {
                             pci_path.to_string()
+                        } else if let Some(scsi_address) = device.config.scsi_addr {
+                            scsi_address
                         } else {
                             device.config.virt_path.clone()
                         };
@@ -423,9 +462,15 @@ impl ResourceManagerInner {
                         continue;
                     }
 
+                    let bus_type = if uses_native_ccw_bus() {
+                        "ccw".to_string()
+                    } else {
+                        "pci".to_string()
+                    };
                     let dev_info = DeviceConfig::VfioCfg(VfioConfig {
                         host_path,
                         dev_type: "c".to_string(),
+                        bus_type: bus_type.clone(),
                         hostdev_prefix: "vfio_device".to_owned(),
                         ..Default::default()
                     });
@@ -437,8 +482,15 @@ impl ResourceManagerInner {
                     // vfio mode: vfio-pci and vfio-pci-gk for x86_64
                     // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
                     // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
+                    // - vfio-ap, devices appear as VFIO character devices under /dev/vfio in container for ccw devices.
                     let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
-                        "vfio" => "vfio-pci".to_string(),
+                        "vfio" => {
+                            if bus_type == "ccw" {
+                                "vfio-ap".to_string()
+                            } else {
+                                "vfio-pci".to_string()
+                            }
+                        }
                         _ => "vfio-pci-gk".to_string(),
                     };
 
@@ -453,20 +505,20 @@ impl ResourceManagerInner {
                             ..Default::default()
                         };
 
-                        let vendor_class = device
-                            .devices
-                            .first()
-                            .unwrap()
-                            .device_vendor_class
-                            .as_ref()
-                            .unwrap()
-                            .get_vendor_class_id()
-                            .context("get vendor class failed")?;
-                        let device_info = Some(DeviceInfo {
-                            vendor_id: vendor_class.0.to_owned(),
-                            class_id: vendor_class.1.to_owned(),
-                            host_path: d.path().clone(),
-                        });
+                        let device_info = if let Some(device_vendor_class) =
+                            &device.devices.first().unwrap().device_vendor_class
+                        {
+                            let vendor_class = device_vendor_class
+                                .get_vendor_class_id()
+                                .context("get vendor class failed")?;
+                            Some(DeviceInfo {
+                                vendor_id: vendor_class.0.to_owned(),
+                                class_id: vendor_class.1.to_owned(),
+                                host_path: d.path().clone(),
+                            })
+                        } else {
+                            None
+                        };
                         devices.push(ContainerDevice {
                             device_info,
                             device: agent_device,
@@ -554,7 +606,7 @@ impl ResourceManagerInner {
             self.agent
                 .online_cpu_mem(OnlineCPUMemRequest {
                     wait: false,
-                    nb_cpus: self.cpu_resource.current_vcpu().await,
+                    nb_cpus: self.cpu_resource.current_vcpu().await.ceil() as u32,
                     cpu_only: false,
                 })
                 .await
@@ -563,7 +615,7 @@ impl ResourceManagerInner {
 
         // we should firstly update the vcpus and mems, and then update the host cgroups
         self.cgroups_resource
-            .update_cgroups(cid, linux_resources, op, self.hypervisor.as_ref())
+            .update(cid, linux_resources, op, self.hypervisor.as_ref())
             .await?;
 
         if let Some(swap) = self.swap_resource.as_ref() {

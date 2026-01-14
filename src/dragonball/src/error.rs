@@ -77,6 +77,10 @@ pub enum Error {
     /// Cannot open the VM file descriptor.
     #[error(transparent)]
     Vm(vm::VmError),
+
+    /// Fail to create device manager system
+    #[error("failed to create device manager system: {0}")]
+    DeviceMgrError(#[source] device_manager::DeviceMgrError),
 }
 
 /// Errors associated with starting the instance.
@@ -215,6 +219,10 @@ pub enum StartMicroVmError {
     /// Failed to register DMA memory address range.
     #[error("failure while registering DMA address range: {0:?}")]
     RegisterDMAAddress(#[source] VfioDeviceError),
+
+    /// Cannot build seccomp filters.
+    #[error("failure while configuring seccomp filters: {0}")]
+    SeccompFilters(#[source] seccompiler::Error),
 }
 
 /// Errors associated with starting the instance.

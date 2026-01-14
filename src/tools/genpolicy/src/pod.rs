@@ -602,9 +602,11 @@ struct TopologySpreadConstraint {
 }
 
 impl Container {
-    pub async fn init(&mut self, config: &Config) {
+    pub async fn init(&mut self, config: &Config, is_pause_container: bool) {
         // Load container image properties from the registry.
-        self.registry = registry::get_container(config, &self.image).await.unwrap();
+        self.registry = registry::get_container(config, &self.image, is_pause_container)
+            .await
+            .unwrap();
     }
 
     pub fn get_env_variables(
@@ -857,11 +859,7 @@ impl yaml::K8sResource for Pod {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        let name = self.metadata.get_name();
-        if !name.is_empty() {
-            return Some(name);
-        }
-        panic!("No pod name.");
+        yaml::name_regex_from_meta(&self.metadata)
     }
 
     fn get_namespace(&self) -> Option<String> {
@@ -880,12 +878,12 @@ impl yaml::K8sResource for Pod {
             storages,
             container,
             settings,
-            &self.spec.volumes,
+            &self.spec,
         );
     }
 
-    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
-        agent_policy.generate_policy(self)
+    fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {
+        agent_policy.generate_initdata_anno(self)
     }
 
     fn serialize(&mut self, policy: &str) -> String {
@@ -922,8 +920,18 @@ impl yaml::K8sResource for Pod {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
-        yaml::get_process_fields(process, &self.spec.securityContext, must_check_passwd);
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        must_check_passwd: &mut bool,
+        is_pause_container: bool,
+    ) {
+        yaml::get_process_fields(
+            process,
+            must_check_passwd,
+            is_pause_container,
+            &self.spec.securityContext,
+        );
     }
 
     fn get_sysctls(&self) -> Vec<Sysctl> {
@@ -978,9 +986,19 @@ impl Container {
     }
 
     pub fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        debug!(
+            "get_process_fields: container image = {:?}",
+            self.registry.image
+        );
+
         if let Some(context) = &self.securityContext {
+            debug!("get_process_fields: securityContext = {:?}", context);
+
             if let Some(uid) = context.runAsUser {
-                process.User.UID = uid.try_into().unwrap();
+                debug!("get_process_fields: runAsUser uid = {uid}");
+
+                let new_uid = uid.try_into().unwrap();
+                process.User.UID = new_uid;
                 // Changing the UID can break the GID mapping
                 // if a /etc/passwd file is present.
                 // The proper GID is determined, in order of preference:
@@ -990,14 +1008,37 @@ impl Container {
                 //
                 // This behavior comes from the containerd runtime implementation:
                 // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
-                process.User.GID = self
-                    .registry
-                    .get_gid_from_passwd_uid(process.User.UID)
-                    .unwrap_or(process.User.GID);
+                let new_gid = match self.registry.get_gid_from_passwd_uid(new_uid) {
+                    Ok(gid) => gid,
+                    Err(e) => {
+                        debug!("get_process_fields: no GID for UID = {new_uid} in container image, error {e}");
+                        process.User.GID
+                    }
+                };
+                process.User.GID = new_gid;
+                debug!(
+                    "get_process_fields: set GID = {new_gid}, User = {:?}",
+                    &process.User
+                );
+
+                process.User.AdditionalGids.insert(new_gid);
+                debug!(
+                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
+                    &process.User
+                );
             }
 
             if let Some(gid) = context.runAsGroup {
-                process.User.GID = gid.try_into().unwrap();
+                debug!("get_process_fields: runAsGroup = {:?}", gid);
+
+                let new_gid = gid.try_into().unwrap();
+                process.User.GID = new_gid;
+
+                process.User.AdditionalGids.insert(new_gid);
+                debug!(
+                    "get_process_fields: inserted GID = {new_gid} into AdditionalGids, User = {:?}",
+                    &process.User
+                );
             }
 
             if let Some(allow) = context.allowPrivilegeEscalation {
@@ -1011,8 +1052,22 @@ impl Container {
             .get_additional_groups_from_uid(process.User.UID)
             .unwrap_or_default()
         {
+            debug!(
+                "get_process_fields: adding additional group = {gid} for UID = {}",
+                process.User.UID
+            );
             process.User.AdditionalGids.insert(gid);
         }
+    }
+
+    // Get the number of NVIDIA passthrough GPUs requested in resource limits.
+    // Returns the count from "nvidia.com/pgpu" if present.
+    pub fn get_nvidia_pgpu_count(&self) -> Option<usize> {
+        self.resources
+            .as_ref()
+            .and_then(|r| r.limits.as_ref())
+            .and_then(|l| l.get("nvidia.com/pgpu"))
+            .and_then(|v| v.parse::<usize>().ok())
     }
 }
 
@@ -1060,7 +1115,8 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
         }),
         ..Default::default()
     };
-    pause_container.init(config).await;
+    let is_pause_container = true;
+    pause_container.init(config, is_pause_container).await;
     containers.insert(0, pause_container);
     debug!("pause container added.");
 }

@@ -28,7 +28,7 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
-export branch="${target_branch:-main}"
+export branch="${target_branch:-"$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')"}"
 
 function die() {
 	local msg="$*"
@@ -89,11 +89,23 @@ function handle_error() {
 trap 'handle_error $LINENO' ERR
 
 # A wrapper function for kubectl with retry logic
-# runs the command up to 5 times with a 15-second interval
+# runs the command up to 5 times with a 15-second interval by default
 # to ensure successful execution
+# Usage:
+#   kubectl_retry [max_tries] [interval] kubectl_args...
+#   kubectl_retry kubectl_args...  (uses defaults: 5 retries, 15s interval)
+#   kubectl_retry 10 30 kubectl_args...  (uses 10 retries, 30s interval)
 function kubectl_retry() {
 	local max_tries=5
 	local interval=15
+
+	# Check if first two arguments are numbers (for max_tries and interval)
+	if [[ "${1}" =~ ^[0-9]+$ ]] && [[ "${2}" =~ ^[0-9]+$ ]]; then
+		max_tries="${1}"
+		interval="${2}"
+		shift 2
+	fi
+
 	local i=0
 	while true; do
 		kubectl "$@" && return 0 || true
@@ -111,6 +123,24 @@ function waitForProcess() {
 	while [ "$wait_time" -gt 0 ]; do
 		if eval "$cmd"; then
 			return 0
+		else
+			sleep "$sleep_time"
+			wait_time=$((wait_time-sleep_time))
+		fi
+	done
+	return 1
+}
+
+function waitForCmdWithAbortCmd() {
+	wait_time="$1"
+	sleep_time="$2"
+	cmd="$3"
+	abort_cmd="$4"
+	while [ "$wait_time" -gt 0 ]; do
+		if eval "$cmd"; then
+			return 0
+		elif eval "$abort_cmd"; then
+			return 1
 		else
 			sleep "$sleep_time"
 			wait_time=$((wait_time-sleep_time))
@@ -427,31 +457,42 @@ log_level = "debug"
 EOF
 }
 
-function install_kata_core() {
-	declare -r katadir="$1"
+function install_tarball() {
+	declare -r installed_dir="${1}"
+	declare -r tarball_dir="${2}"
+	declare -r tarball="${3}"
+	declare -r remove_tarball_dir="${4}"
 	declare -r destdir="/"
-	declare -r kata_tarball="kata-static.tar.xz"
 
-	# Removing previous kata installation
-	sudo rm -rf "${katadir}"
+	if [[ "${remove_tarball_dir}" == "true" ]]; then
+		# Removing previous tarball installation
+		sudo rm -rf "${installed_dir}"
+	fi
 
-	pushd "${kata_tarball_dir}"
-	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
+	pushd "${tarball_dir}"
+	sudo tar --zstd -xvf "${tarball}" -C "${destdir}"
 	popd
 }
 
 function install_kata_tools() {
 	declare -r katadir="/opt/kata"
+	declare -r tarballdir="${1:-kata-tools-artifacts}"
+	declare -r local_bin_dir="/usr/local/bin/"
 
-	# TODO: implement a better way to install the tools - see issue #8864.
-	install_kata_core "${katadir}"
+	install_tarball "${katadir}" "${tarballdir}" "kata-tools-static.tar.zst" false
+
+	# create symbolic links to kata-tools components
+	for b in "${katadir}"/bin/* ; do
+		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
+	done
 }
 
 function install_kata() {
 	declare -r katadir="/opt/kata"
+	declare -r tarballdir="kata-artifacts"
 	declare -r local_bin_dir="/usr/local/bin/"
 
-	install_kata_core "${katadir}"
+	install_tarball "${katadir}" "${tarballdir}" "kata-static.tar.zst" true
 
 	# create symbolic links to kata components
 	for b in "${katadir}"/bin/* ; do
@@ -563,11 +604,25 @@ function get_from_kata_deps() {
 
 # project: org/repo format
 # base_version: ${major}.${minor}
+# allow_unstable: Whether alpha / beta releases should be considered (default: false)
 function get_latest_patch_release_from_a_github_project() {
-       project="${1}"
-       base_version="${2}"
+        project="${1}"
+        base_version="${2}"
+        allow_unstable="${3:-false}"
 
-       curl --silent https://api.github.com/repos/${project}/releases | jq -r .[].tag_name | grep "^${base_version}.[0-9]*$" -m1
+        regex="^${base_version}.[0-9]*$"
+        if [[ "${allow_unstable}" == "true" ]]; then
+                regex="^${base_version}.[0-9]*"
+        fi
+
+        curl \
+          ${GH_TOKEN:+--header "Authorization: Bearer ${GH_TOKEN:-}"} \
+          --fail-with-body \
+          --show-error \
+          --silent \
+          "https://api.github.com/repos/${project}/releases" \
+          | jq -r .[].tag_name \
+          | grep "${regex}" -m1
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format
@@ -589,7 +644,8 @@ function download_github_project_tarball() {
 	version="${2}"
 	tarball_name="${3}"
 
-	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
+	wget ${GH_TOKEN:+--header="Authorization: Bearer ${GH_TOKEN}"} \
+		"https://github.com/${project}/releases/download/${version}/${tarball_name}"
 }
 
 # version: The version to be intalled
@@ -667,7 +723,7 @@ function install_cri_containerd() {
 	base_version="${1}"
 
 	project="containerd/containerd"
-	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}" "true")
 
 	tarball_name="containerd-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
 
@@ -815,10 +871,10 @@ function install_docker() {
 
 # Convert architecture to the name used by golang
 function arch_to_golang() {
-	local arch="$(uname -m)"
+	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "arm64";;
+		aarch64|arm64) echo "arm64";;
 		ppc64le) echo "${arch}";;
 		riscv64) echo "${arch}";;
 		x86_64) echo "amd64";;
@@ -832,7 +888,7 @@ function arch_to_rust() {
 	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "${arch}";;
+		aarch64|arm64) echo "aarch64";;
 		ppc64le) echo "powerpc64le";;
 		riscv64) echo "riscv64gc";;
 		x86_64) echo "${arch}";;
@@ -846,7 +902,7 @@ function arch_to_kernel() {
 	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "arm64";;
+		aarch64|arm64) echo "arm64";;
 		ppc64le) echo "powerpc";;
 		x86_64) echo "${arch}";;
 		s390x) echo "s390x";;

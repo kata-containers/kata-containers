@@ -215,13 +215,13 @@ mod tests {
     use std::os::unix::io::{AsRawFd, FromRawFd};
 
     use kvm_ioctls::Kvm;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
 
     #[test]
     fn test_create_kvm_context() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let c = KvmContext::new(None).unwrap();
 
@@ -239,7 +239,7 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_get_supported_cpu_id() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let c = KvmContext::new(None).unwrap();
 
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_create_vm() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let c = KvmContext::new(None).unwrap();
 

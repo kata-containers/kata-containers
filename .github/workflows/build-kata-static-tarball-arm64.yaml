@@ -23,13 +23,15 @@ on:
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: false
+      KBUILD_SIGN_PIN:
+        required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-asset:
-    runs-on: ubuntu-22.04-arm
+    name: build-asset
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -45,10 +47,10 @@ jobs:
           - kernel
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
+          - kernel-cca-confidential
           - nydus
           - ovmf
           - qemu
-          - stratovirt
           - virtiofsd
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
@@ -88,16 +90,19 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
         run: |
-          oci_image="$(<"build/${{ matrix.asset }}-oci-image")"
+          oci_image="$(<"build/${KATA_ASSET}-oci-image")"
           echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
-      - uses: oras-project/setup-oras@5c0b487ce3fe0ce3ab0d034e63669e426e294e4d # v1.2.2
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           version: "1.2.0"
@@ -121,7 +126,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
 
@@ -130,12 +135,13 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-arm64-${{ matrix.asset }}-headers${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}-headers.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}-headers.tar.zst
           retention-days: 15
           if-no-files-found: error
 
   build-asset-rootfs:
-    runs-on: ubuntu-22.04-arm
+    name: build-asset-rootfs
+    runs-on: ubuntu-24.04-arm
     needs: build-asset
     permissions:
       contents: read
@@ -144,8 +150,9 @@ jobs:
       matrix:
         asset:
           - rootfs-image
+          - rootfs-image-nvidia-gpu
           - rootfs-initrd
-          - rootfs-nvidia-gpu-initrd
+          - rootfs-initrd-nvidia-gpu
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -190,18 +197,20 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          KBUILD_SIGN_PIN: ${{ contains(matrix.asset, 'nvidia') && secrets.KBUILD_SIGN_PIN || '' }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
           retention-days: 15
           if-no-files-found: error
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
-    runs-on: ubuntu-22.04-arm
+    name: remove-rootfs-binary-artifacts
+    runs-on: ubuntu-24.04-arm
     needs: build-asset-rootfs
     strategy:
       matrix:
@@ -215,7 +224,8 @@ jobs:
 
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts-for-release:
-    runs-on: ubuntu-22.04-arm
+    name: remove-rootfs-binary-artifacts-for-release
+    runs-on: ubuntu-24.04-arm
     needs: build-asset-rootfs
     strategy:
       matrix:
@@ -228,7 +238,8 @@ jobs:
           name: kata-artifacts-arm64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
-    runs-on: ubuntu-22.04-arm
+    name: build-asset-shim-v2
+    runs-on: ubuntu-24.04-arm
     needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts, remove-rootfs-binary-artifacts-for-release]
     permissions:
       contents: read
@@ -282,12 +293,13 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-arm64-shim-v2${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-shim-v2.tar.xz
+          path: kata-build/kata-static-shim-v2.tar.zst
           retention-days: 15
           if-no-files-found: error
 
   create-kata-tarball:
-    runs-on: ubuntu-22.04-arm
+    name: create-kata-tarball
+    runs-on: ubuntu-24.04-arm
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:
       contents: read
@@ -297,6 +309,7 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - name: Rebase atop of the latest target branch
         run: |
@@ -312,10 +325,12 @@ jobs:
       - name: merge-artifacts
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
+        env:
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
       - name: store-artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-static-tarball-arm64${{ inputs.tarball-suffix }}
-          path: kata-static.tar.xz
+          path: kata-static.tar.zst
           retention-days: 15
           if-no-files-found: error

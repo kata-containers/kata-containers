@@ -38,9 +38,10 @@ var (
 )
 
 const (
-	typeVirtioFSCacheModeNever  = "never"
-	typeVirtioFSCacheModeAlways = "always"
-	typeVirtioFSCacheModeAuto   = "auto"
+	typeVirtioFSCacheModeNever    = "never"
+	typeVirtioFSCacheModeMetadata = "metadata"
+	typeVirtioFSCacheModeAlways   = "always"
+	typeVirtioFSCacheModeAuto     = "auto"
 )
 
 type VirtiofsDaemon interface {
@@ -216,9 +217,16 @@ func (v *virtiofsd) valid() error {
 		return errVirtiofsdSourceNotAvailable
 	}
 
-	if v.cache == "" {
+	switch v.cache {
+	case "":
 		v.cache = typeVirtioFSCacheModeAuto
-	} else if v.cache != typeVirtioFSCacheModeAuto && v.cache != typeVirtioFSCacheModeAlways && v.cache != typeVirtioFSCacheModeNever {
+	case
+		typeVirtioFSCacheModeAuto,
+		typeVirtioFSCacheModeAlways,
+		typeVirtioFSCacheModeMetadata,
+		typeVirtioFSCacheModeNever:
+		// No-op, accepted
+	default:
 		return errVirtiofsdInvalidVirtiofsCacheMode(v.cache)
 	}
 

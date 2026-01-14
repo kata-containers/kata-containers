@@ -30,15 +30,20 @@ on:
         description: The arch of the tarball.
         required: true
         type: string
+      build-type:
+        description: The build type for kata-deploy. Use 'rust' for Rust-based build, empty or omit for script-based (default).
+        required: false
+        type: string
+        default: ""
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   kata-payload:
+    name: kata-payload
     permissions:
       contents: read
       packages: write
@@ -49,6 +54,24 @@ jobs:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
 
       - name: Rebase atop of the latest target branch
         run: |
@@ -83,8 +106,10 @@ jobs:
           REGISTRY: ${{ inputs.registry }}
           REPO: ${{ inputs.repo }}
           TAG: ${{ inputs.tag }}
+          BUILD_TYPE: ${{ inputs.build-type }}
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          "$(pwd)/kata-static.tar.xz" \
+          "$(pwd)/kata-static.tar.zst" \
           "${REGISTRY}/${REPO}" \
-          "${TAG}"
+          "${TAG}" \
+          "${BUILD_TYPE}"

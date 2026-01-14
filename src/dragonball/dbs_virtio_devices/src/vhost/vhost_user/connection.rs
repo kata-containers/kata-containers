@@ -40,7 +40,7 @@ pub(super) struct Listener {
 
 impl Listener {
     pub fn new(name: String, path: String, force: bool, slot: u32) -> VirtioResult<Self> {
-        info!("vhost-user: create listener at {} for {}", path, name);
+        info!("vhost-user: create listener at {path} for {name}");
         Ok(Listener {
             listener: VhostUserListener::new(&path, force)?,
             slot,
@@ -222,7 +222,7 @@ impl Endpoint {
             let userspace_addr = region
                 .get_host_address(MemoryRegionAddress(0))
                 .map_err(|e| {
-                    error!("get_host_address error! {:?}", e);
+                    error!("get_host_address error! {e:?}");
                     VirtioError::InvalidGuestAddress(guest_phys_addr)
                 })?;
 
@@ -352,12 +352,8 @@ impl Endpoint {
         // base is not zero any more. So don't set queue base on reconnection.
         // N.B. it's really TDD, we just found it works in this way. Any spec about this?
         for queue_index in 0..queue_num {
-            let base = if old.is_some() {
-                let conn = old.as_mut().unwrap();
-                match conn.get_vring_base(queue_index) {
-                    Ok(val) => Some(val),
-                    Err(_) => None,
-                }
+            let base = if let Some(conn) = &mut old {
+                conn.get_vring_base(queue_index).ok()
             } else if !config.reconnect {
                 Some(0)
             } else {

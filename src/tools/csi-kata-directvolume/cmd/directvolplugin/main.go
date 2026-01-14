@@ -10,8 +10,10 @@ package main
 import (
 	"flag"
 	"kata-containers/csi-kata-directvolume/pkg/directvolume"
+	"kata-containers/csi-kata-directvolume/pkg/spdkrpc"
 	"os"
 	"path"
+	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -40,6 +42,10 @@ func main() {
 	flag.Var(&cfg.Capacity, "capacity", "Simulate storage capacity. The parameter is <kind>=<quantity> where <kind> is the value of a 'kind' storage class parameter and <quantity> is the total amount of bytes for that kind. The flag may be used multiple times to configure different kinds.")
 	flag.Int64Var(&cfg.MaxVolumeSize, "max-volume-size", 1024*1024*1024*1024, "maximum size of volumes in bytes (inclusive)")
 	flag.BoolVar(&cfg.EnableTopology, "enable-topology", true, "Enables PluginCapability_Service_VOLUME_ACCESSIBILITY_CONSTRAINTS capability.")
+	flag.DurationVar(&cfg.SpdkRPCTimeout, "spdk-rpc-timeout", 10*time.Second,
+		"timeout for SPDK JSON-RPC requests")
+	flag.StringVar(&cfg.SpdkRawPath, "spdk-rawpath", "", "path for spdk rawdisk backing files")
+	flag.StringVar(&cfg.SpdkVhostPath, "spdk-vhostpath", "", "path for spdk vhost controller sockets")
 
 	showVersion := flag.Bool("version", false, "Show version.")
 
@@ -50,6 +56,8 @@ func main() {
 		klog.Infof(baseName, version)
 		return
 	}
+
+	spdkrpc.Init(cfg.SpdkRPCTimeout)
 
 	driver, err := directvolume.NewDirectVolumeDriver(cfg)
 	if err != nil {

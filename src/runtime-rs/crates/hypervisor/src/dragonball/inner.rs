@@ -18,6 +18,7 @@ use dragonball::{
     vm::VmConfigInfo,
 };
 
+use crate::DEFAULT_HOTPLUG_TIMEOUT;
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -37,8 +38,6 @@ const DRAGONBALL_INITRD: &str = "initrd";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 const BALLOON_DEVICE_ID: &str = "balloon0";
 const MEM_DEVICE_ID: &str = "memmr0";
-/// default hotplug timeout
-const DEFAULT_HOTPLUG_TIMEOUT: u64 = 250;
 
 #[derive(Debug)]
 pub struct DragonballInner {
@@ -159,8 +158,7 @@ impl DragonballInner {
         ));
         if let Some(passfd_listener_port) = self.passfd_listener_port {
             kernel_params.append(&mut KernelParams::from_string(&format!(
-                "{}={}",
-                PASSFD_LISTENER_PORT, passfd_listener_port
+                "{PASSFD_LISTENER_PORT}={passfd_listener_port}"
             )));
         }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
@@ -234,7 +232,7 @@ impl DragonballInner {
         let vm_config = VmConfigInfo {
             serial_path: Some(serial_path),
             mem_size_mib: self.config.memory_info.default_memory as usize,
-            vcpu_count: self.config.cpu_info.default_vcpus as u8,
+            vcpu_count: self.config.cpu_info.default_vcpus.ceil() as u8,
             max_vcpu_count: self.config.cpu_info.default_maxvcpus as u8,
             mem_type,
             mem_file_path,
@@ -399,8 +397,7 @@ impl DragonballInner {
                 Some(Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT)),
             )
             .context(format!(
-                "failed to do_resize_vcpus on new_vcpus={:?}",
-                new_vcpus
+                "failed to do_resize_vcpus on new_vcpus={new_vcpus:?}"
             ))?;
         Ok((old_vcpus, new_vcpus))
     }

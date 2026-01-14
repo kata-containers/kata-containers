@@ -242,7 +242,7 @@ impl DeviceIo for PciRootDevice {
                     } else {
                         data[0] = io_addr as u8;
                     }
-                    debug!("=>read offset {}, and io_addr: 0x{:x}", offset, io_addr);
+                    debug!("=>read offset {offset}, and io_addr: 0x{io_addr:x}");
                     return;
                 }
                 // Configuration data register

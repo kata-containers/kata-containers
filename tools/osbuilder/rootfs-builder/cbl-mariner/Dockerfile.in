@@ -11,6 +11,7 @@ RUN tdnf -y install \
     dnf \
     git \
     tar \
-    xz
+    xz \
+    zstd
 
 @INSTALL_RUST@

@@ -19,6 +19,7 @@ pub struct Settings {
     pub pause_container: policy::KataSpec,
     pub other_container: policy::KataSpec,
     pub volumes: Volumes,
+    pub device_annotations: policy::DeviceAnnotations,
     pub kata_config: KataConfig,
     pub cluster_config: policy::ClusterConfig,
     pub request_defaults: policy::RequestDefaults,
@@ -31,10 +32,8 @@ pub struct Settings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Volumes {
     pub emptyDir: EmptyDirVolume,
-    pub confidential_emptyDir: EmptyDirVolume,
     pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
-    pub confidential_configMap: ConfigMapVolume,
     pub image_volume: ImageVolume,
 }
 
@@ -76,8 +75,8 @@ pub struct ImageVolume {
 /// genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KataConfig {
-    pub confidential_guest: bool,
     pub oci_version: String,
+    pub enable_configmap_secret_storages: bool,
 }
 
 impl Settings {
@@ -89,8 +88,7 @@ impl Settings {
             Self::validate_settings(&settings);
             settings
         } else {
-            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -j parameter.",
-                json_settings_path);
+            panic!("Cannot open file {json_settings_path}. Please copy it to the current directory or specify the path to it using the -j parameter.");
         }
     }
 

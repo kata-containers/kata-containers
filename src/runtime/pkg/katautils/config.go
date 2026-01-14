@@ -109,6 +109,8 @@ type hypervisor struct {
 	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
 	SnpIdBlock                     string                    `toml:"snp_id_block"`
 	SnpIdAuth                      string                    `toml:"snp_id_auth"`
+	SnpGuestPolicy                 *uint64                   `toml:"snp_guest_policy"`
+	MeasurementAlgo                string                    `toml:"measurement_algo"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
@@ -155,6 +157,7 @@ type hypervisor struct {
 	Debug                          bool                      `toml:"enable_debug"`
 	DisableNestingChecks           bool                      `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool                      `toml:"enable_iothreads"`
+	IndepIOThreads                 uint32                    `toml:"indep_iothreads"`
 	DisableImageNvdimm             bool                      `toml:"disable_image_nvdimm"`
 	HotPlugVFIO                    config.PCIePort           `toml:"hot_plug_vfio"`
 	ColdPlugVFIO                   config.PCIePort           `toml:"cold_plug_vfio"`
@@ -194,6 +197,7 @@ type runtime struct {
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
+	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
 }
 
 type agent struct {
@@ -392,10 +396,8 @@ func (h hypervisor) machineType() string {
 }
 
 func (h hypervisor) qgsPort() uint32 {
-	if h.QgsPort == 0 {
-		return defaultQgsPort
-	}
-
+	// TOML parser guarantees that only integers >= 0 are accepted. Any
+	// value from the parser is OK, including 0.
 	return h.QgsPort
 }
 
@@ -405,6 +407,14 @@ func (h hypervisor) GetEntropySource() string {
 	}
 
 	return h.EntropySource
+}
+
+func (h hypervisor) GetMeasurementAlgo() string {
+	if h.MeasurementAlgo == "" {
+		return defaultMeasurementAlgo
+	}
+
+	return h.MeasurementAlgo
 }
 
 var procCPUInfo = "/proc/cpuinfo"
@@ -614,6 +624,14 @@ func (h hypervisor) msize9p() uint32 {
 	return h.Msize9p
 }
 
+func (h hypervisor) indepiothreads() uint32 {
+	if h.IndepIOThreads == 0 {
+		return defaultIndepIOThreads
+	}
+
+	return h.IndepIOThreads
+}
+
 func (h hypervisor) guestHookPath() string {
 	if h.GuestHookPath == "" {
 		return defaultGuestHookPath
@@ -810,6 +828,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
+		IndepIOThreads:        h.indepiothreads(),
 		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
 		GuestHookPath:         h.guestHookPath(),
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
@@ -951,6 +970,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSQueueSize:        h.VirtioFSQueueSize,
 		VirtioFSExtraArgs:        h.VirtioFSExtraArgs,
 		MemPrealloc:              h.MemPrealloc,
+		ReclaimGuestFreedMemory:  h.ReclaimGuestFreedMemory,
 		HugePages:                h.HugePages,
 		IOMMU:                    h.IOMMU,
 		IOMMUPlatform:            h.getIOMMUPlatform(),
@@ -964,6 +984,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheDirect:   h.BlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush:  h.BlockDeviceCacheNoflush,
 		EnableIOThreads:          h.EnableIOThreads,
+		IndepIOThreads:           h.indepiothreads(),
 		Msize9p:                  h.msize9p(),
 		DisableImageNvdimm:       h.DisableImageNvdimm,
 		HotPlugVFIO:              h.hotPlugVFIO(),
@@ -992,6 +1013,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ExtraMonitorSocket:       extraMonitorSocket,
 		SnpIdBlock:               h.SnpIdBlock,
 		SnpIdAuth:                h.SnpIdAuth,
+		SnpGuestPolicy:           h.SnpGuestPolicy,
+		MeasurementAlgo:          h.GetMeasurementAlgo(),
 	}, nil
 }
 
@@ -1094,6 +1117,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheSet:            h.BlockDeviceCacheSet,
 		BlockDeviceCacheDirect:         h.BlockDeviceCacheDirect,
 		EnableIOThreads:                h.EnableIOThreads,
+		IndepIOThreads:                 h.indepiothreads(),
 		Msize9p:                        h.msize9p(),
 		DisableImageNvdimm:             h.DisableImageNvdimm,
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
@@ -1118,6 +1142,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DiskRateLimiterBwOneTimeBurst:  h.getDiskRateLimiterBwOneTimeBurst(),
 		DiskRateLimiterOpsMaxRate:      h.getDiskRateLimiterOpsMaxRate(),
 		DiskRateLimiterOpsOneTimeBurst: h.getDiskRateLimiterOpsOneTimeBurst(),
+		MeasurementAlgo:                h.GetMeasurementAlgo(),
 	}, nil
 }
 
@@ -1452,6 +1477,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		BlockDeviceCacheDirect:   defaultBlockDeviceCacheDirect,
 		BlockDeviceCacheNoflush:  defaultBlockDeviceCacheNoflush,
 		EnableIOThreads:          defaultEnableIOThreads,
+		IndepIOThreads:           defaultIndepIOThreads,
 		Msize9p:                  defaultMsize9p,
 		ColdPlugVFIO:             defaultColdPlugVFIO,
 		HotPlugVFIO:              defaultHotPlugVFIO,
@@ -1590,6 +1616,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	config.ForceGuestPull = tomlConf.Runtime.ForceGuestPull
+	config.PodResourceAPISock = tomlConf.Runtime.PodResourceAPISock
 
 	return resolved, config, nil
 }

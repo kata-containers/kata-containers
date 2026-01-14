@@ -202,7 +202,7 @@ mod tests {
         let result = fs::create_dir_all(&origin_dir);
         assert!(result.is_ok());
         for n in 0..limit {
-            let tmp_file = origin_dir.join(format!("file{}", n));
+            let tmp_file = origin_dir.join(format!("file{n}"));
             let res = fs::File::create(tmp_file);
             assert!(res.is_ok());
         }
@@ -211,7 +211,7 @@ mod tests {
         let result = std::os::unix::fs::symlink(&origin_dir, &symlink_origin_dir);
         assert!(result.is_ok());
         for n in 0..2 {
-            let tmp_file = work_path.join(format!("file{}", n));
+            let tmp_file = work_path.join(format!("file{n}"));
             let res = fs::File::create(tmp_file);
             assert!(res.is_ok());
         }
@@ -269,7 +269,7 @@ mod tests {
         assert!(!result);
 
         for i in 0..8 {
-            let configmap_file = &configmap_path.join(format!("c{}", i));
+            let configmap_file = &configmap_path.join(format!("c{i}"));
             let result = fs::File::create(configmap_file);
             assert!(result.is_ok());
 

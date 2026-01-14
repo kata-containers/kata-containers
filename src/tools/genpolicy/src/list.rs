@@ -58,12 +58,12 @@ impl yaml::K8sResource for List {
     ) {
     }
 
-    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
-        let mut policies: Vec<String> = Vec::new();
+    fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {
+        let mut annotations: Vec<String> = Vec::new();
         for resource in &self.resources {
-            policies.push(resource.generate_policy(agent_policy));
+            annotations.push(resource.generate_initdata_anno(agent_policy));
         }
-        policies.join(":")
+        annotations.join(":")
     }
 
     fn serialize(&mut self, policy: &str) -> String {

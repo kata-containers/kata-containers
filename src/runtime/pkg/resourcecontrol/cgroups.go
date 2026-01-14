@@ -31,7 +31,7 @@ const (
 )
 
 func RenameCgroupPath(path string) (string, error) {
-	if path == "" {
+	if path == "" || path == "." {
 		path = DefaultResourceControllerID
 	}
 

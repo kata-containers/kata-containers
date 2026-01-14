@@ -34,7 +34,7 @@ install_yq() {
 }
 
 get_from_kata_deps() {
-  local dependency="$1 | explode(.)"
+	local dependency="$1"
 	versions_file="${this_script_dir}/../../../versions.yaml"
 
 	command -v yq &>/dev/null || die 'yq command is not in your $PATH'
@@ -50,6 +50,10 @@ die() {
 
 info() {
 	echo >&2 "INFO: $*"
+}
+
+warn() {
+	echo >&2 "WARN: $*"
 }
 
 get_repo_hash() {
@@ -167,7 +171,8 @@ sha256sum_from_files() {
 calc_qemu_files_sha256sum() {
 	local files="${repo_root_dir}/tools/packaging/qemu \
 		${repo_root_dir}/tools/packaging/static-build/qemu.blacklist \
-		${repo_root_dir}/tools/packaging/static-build/scripts"
+		${repo_root_dir}/tools/packaging/static-build/scripts \
+		${repo_root_dir}/tools/packaging/static-build/qemu"
 
 	sha256sum_from_files "$files"
 }

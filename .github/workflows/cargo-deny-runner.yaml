@@ -11,11 +11,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   cargo-deny-runner:
+    name: cargo-deny-runner
     runs-on: ubuntu-22.04
 
     steps:

@@ -59,6 +59,45 @@ macro_rules! skip_loop_if_not_root {
     };
 }
 
+#[macro_export]
+macro_rules! skip_if_kvm_unaccessable {
+    // Use double curly braces to make use statements stay in the macro
+    () => {{
+        use std::os::unix::fs::OpenOptionsExt;
+
+        let kvm_path = "/dev/kvm";
+
+        // Check if KVM device exists
+        if !std::path::Path::new(kvm_path).exists() {
+            println!(
+                "INFO: skipping {} - KVM device does not exist",
+                module_path!()
+            );
+            return;
+        }
+
+        // Try to open KVM device to check accessibility
+        match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_CLOEXEC)
+            .open(kvm_path)
+        {
+            Ok(_) => {
+                // KVM is accessible, execute test
+            }
+            Err(e) => {
+                println!(
+                    "INFO: skipping {} - KVM device exists but is not accessible: {}",
+                    module_path!(),
+                    e
+                );
+                return;
+            }
+        }
+    }};
+}
+
 // Parameters:
 //
 // 1: expected Result
@@ -97,7 +136,7 @@ macro_rules! skip_loop_by_user {
 
 #[cfg(test)]
 mod tests {
-    use super::{skip_if_not_root, skip_if_root};
+    use super::{skip_if_kvm_unaccessable, skip_if_not_root, skip_if_root};
 
     #[test]
     fn test_skip_if_not_root() {
@@ -115,5 +154,27 @@ mod tests {
             !nix::unistd::Uid::effective().is_root(),
             "root user should be skipped"
         )
+    }
+
+    #[test]
+    fn test_skip_if_kvm_unaccessable() {
+        use std::os::unix::fs::OpenOptionsExt;
+        skip_if_kvm_unaccessable!();
+        // Try if KVM device exists
+        assert!(
+            std::path::Path::new("/dev/kvm").exists(),
+            "KVM device should exist"
+        );
+
+        // Try if we have access to it
+        assert!(
+            std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(libc::O_CLOEXEC)
+                .open("/dev/kvm")
+                .is_ok(),
+            "KVM device should be accessible"
+        );
     }
 }

@@ -43,7 +43,7 @@ impl<E> Drop for LocalFile<E> {
             // Close the raw fd directly.
             let fd = self.file.as_raw_fd();
             if let Err(e) = nix::unistd::close(fd) {
-                warn!("LocalFile: failed to close disk file: {:?}", e);
+                warn!("LocalFile: failed to close disk file: {e:?}");
             }
         }
     }

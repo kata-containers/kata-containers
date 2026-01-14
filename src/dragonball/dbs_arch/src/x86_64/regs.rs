@@ -271,6 +271,7 @@ mod tests {
     use super::*;
     use crate::x86_64::gdt::gdt_entry;
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::{Bytes, GuestAddress, GuestMemoryMmap};
 
     const BOOT_GDT_OFFSET: u64 = 0x500;
@@ -334,6 +335,7 @@ mod tests {
 
     #[test]
     fn test_setup_fpu() {
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();
@@ -356,6 +358,7 @@ mod tests {
     #[test]
     #[allow(clippy::cast_ptr_alignment)]
     fn test_setup_msrs() {
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();
@@ -384,6 +387,7 @@ mod tests {
 
     #[test]
     fn test_setup_regs() {
+        skip_if_kvm_unaccessable!();
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
         let vcpu = vm.create_vcpu(0).unwrap();

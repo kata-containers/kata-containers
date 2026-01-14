@@ -48,7 +48,7 @@ then
 		exit 1
 	fi
 
-	veritysetup open "${root_device}" root "${hash_device}" "${rootfs_hash}"
+	veritysetup open --panic-on-corruption "${root_device}" root "${hash_device}" "${rootfs_hash}"
 	mount /dev/mapper/root /mnt
 else
 	echo "No LUKS device found"

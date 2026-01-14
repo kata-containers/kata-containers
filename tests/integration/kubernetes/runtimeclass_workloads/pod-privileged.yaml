@@ -1,0 +1,19 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+  - image: quay.io/prometheus/busybox:latest 
+    name: container
+    securityContext:
+      privileged: true

@@ -198,7 +198,7 @@ pub struct HypervisorInfo {
     #[serde(default)]
     enable_iommu_platform: bool,
     #[serde(default)]
-    default_vcpus: i32,
+    default_vcpus: f32,
     #[serde(default)]
     cpu_features: String,
     #[serde(default)]
@@ -474,7 +474,7 @@ pub fn get_env_info(toml_config: &TomlConfig) -> Result<EnvInfo> {
 pub fn handle_env(env_args: EnvArgument) -> Result<()> {
     let mut file: Box<dyn Write> = if let Some(path) = env_args.file {
         Box::new(
-            File::create(path.as_str()).with_context(|| format!("Error creating file {}", path))?,
+            File::create(path.as_str()).with_context(|| format!("Error creating file {path}"))?,
         )
     } else {
         Box::new(io::stdout())
@@ -486,10 +486,10 @@ pub fn handle_env(env_args: EnvArgument) -> Result<()> {
 
     if env_args.json {
         let serialized_json = serde_json::to_string_pretty(&env_info)?;
-        write!(file, "{}", serialized_json)?;
+        write!(file, "{serialized_json}")?;
     } else {
         let toml = toml::to_string(&env_info)?;
-        write!(file, "{}", toml)?;
+        write!(file, "{toml}")?;
     }
 
     Ok(())

@@ -24,7 +24,6 @@ setup() {
 	fi
 
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 
 	export K8S_TEST_ENV_YAML="${pod_config_dir}/pod-sealed-secret.yaml"
 	export K8S_TEST_FILE_YAML="${pod_config_dir}/pod-sealed-secret-as-file.yaml"

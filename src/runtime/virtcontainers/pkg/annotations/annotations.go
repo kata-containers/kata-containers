@@ -218,8 +218,12 @@ const (
 	DisableBlockDeviceUse = kataAnnotHypervisorPrefix + "disable_block_device_use"
 
 	// EnableIOThreads is a sandbox annotation to enable IO to be processed in a separate thread.
-	// Supported currently for virtio-scsi driver.
+	// Supported currently for virtio-scsi and virtio-blk(based on IndepIOThreads) driver.
 	EnableIOThreads = kataAnnotHypervisorPrefix + "enable_iothreads"
+
+	// Independent IOThreads enables IO to be processed in a separate thread, it is
+	// for QEMU hotplug device attach to iothread, like virtio-blk.
+	IndepIOThreads = kataAnnotHypervisorPrefix + "indep_iothreads"
 
 	// BlockDeviceCacheSet is a sandbox annotation that specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet = kataAnnotHypervisorPrefix + "block_device_cache_set"
@@ -245,7 +249,7 @@ const (
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
 
 	// Initdata is the initdata passed in when CreateVM
-	Initdata = kataConfAnnotationsPrefix + "runtime.cc_init_data"
+	Initdata = kataConfAnnotationsPrefix + "hypervisor.cc_init_data"
 )
 
 // Runtime related annotations

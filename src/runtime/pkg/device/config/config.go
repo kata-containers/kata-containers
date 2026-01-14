@@ -15,6 +15,7 @@ import (
 
 	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/go-ini/ini"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/sys/unix"
@@ -431,12 +432,30 @@ type VFIODev struct {
 	HostPath string
 }
 
+// IOMMUFDID returns the IOMMUFD ID if the VFIO device is backed by IOMMUFD
+// otherwise returns an empty string.
+func (t VFIODev) IOMMUFDID() string {
+	if !strings.HasPrefix(t.DevfsDev, device.IommufdDevPath) {
+		return ""
+	}
+	basename := filepath.Base(t.DevfsDev)
+	return strings.TrimPrefix(basename, "vfio")
+}
+
 // RNGDev represents a random number generator device
 type RNGDev struct {
 	// ID is used to identify the device in the hypervisor options.
 	ID string
 	// Filename is the file to use as entropy source.
 	Filename string
+}
+
+// BalloonDev represents a balloon device
+type BalloonDev struct {
+	ID                string
+	DeflateOnOOM      bool
+	DisableModern     bool
+	FreePageReporting bool
 }
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
@@ -676,6 +695,25 @@ func WithCDI(annotations map[string]string, cdiSpecDirs []string, spec *specs.Sp
 		return spec, nil
 	}
 
+	if err = injectDevices(cdiSpecDirs, spec, devsFromAnnotations); err != nil {
+		return nil, err
+	}
+
+	// One crucial thing to keep in mind is that CDI device injection
+	// might add OCI Spec environment variables, hooks, and mounts as
+	// well. Therefore it is important that none of the corresponding
+	// OCI Spec fields are reset up in the call stack once we return.
+	return spec, nil
+}
+
+// InjectCDIDevices injects the specified devices into the oci spec.
+// Devices must be a slice of strings of the form
+// vendor.com/class=unique_name
+func InjectCDIDevices(spec *specs.Spec, devices []string) error {
+	return injectDevices(nil, spec, devices)
+}
+
+func injectDevices(cdiSpecDirs []string, spec *specs.Spec, devices []string) error {
 	var registry cdi.Registry
 	if len(cdiSpecDirs) > 0 {
 		// We can override the directories where to search for CDI specs
@@ -685,29 +723,13 @@ func WithCDI(annotations map[string]string, cdiSpecDirs []string, spec *specs.Sp
 		registry = cdi.GetRegistry()
 	}
 
-	if err = registry.Refresh(); err != nil {
-		// We don't consider registry refresh failure a fatal error.
-		// For instance, a dynamically generated invalid CDI Spec file for
-		// any particular vendor shouldn't prevent injection of devices of
-		// different vendors. CDI itself knows better and it will fail the
-		// injection if necessary.
-		return nil, fmt.Errorf("CDI registry refresh failed: %w", err)
+	if err := registry.Refresh(); err != nil {
+		return fmt.Errorf("CDI registry refresh failed: %w", err)
 	}
 
-	if _, err := registry.InjectDevices(spec, devsFromAnnotations...); err != nil {
-		return nil, fmt.Errorf("CDI device injection failed: %w", err)
+	if _, err := registry.InjectDevices(spec, devices...); err != nil {
+		return fmt.Errorf("CDI device injection failed: %w", err)
 	}
-	// Once we injected the device into the ociSpec we do not need to CDI
-	// device annotation from the outer runtime. The runtime will create the
-	// appropriate inner runtime CDI annotation dependent on the device.
-	for key := range spec.Annotations {
-		if strings.HasPrefix(key, cdi.AnnotationPrefix) {
-			delete(spec.Annotations, key)
-		}
-	}
-	// One crucial thing to keep in mind is that CDI device injection
-	// might add OCI Spec environment variables, hooks, and mounts as
-	// well. Therefore it is important that none of the corresponding
-	// OCI Spec fields are reset up in the call stack once we return.
-	return spec, nil
+
+	return nil
 }

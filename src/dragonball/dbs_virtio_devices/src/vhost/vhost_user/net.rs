@@ -66,10 +66,7 @@ impl VhostUserNetDevice {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
-        info!(
-            "{}: slave support features 0x{:x}",
-            NET_DRIVER_NAME, avail_features
-        );
+        info!("{NET_DRIVER_NAME}: slave support features 0x{avail_features:x}");
 
         avail_features |= (1 << VIRTIO_NET_F_MTU) as u64;
         // All these features depends on availability of control channel
@@ -117,10 +114,7 @@ impl VhostUserNetDevice {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
-        info!(
-            "{}: creating Unix Domain Socket listener...",
-            NET_DRIVER_NAME
-        );
+        info!("{NET_DRIVER_NAME}: creating Unix Domain Socket listener...");
 
         let listener = Listener::new(
             NET_DRIVER_NAME.to_string(),
@@ -129,12 +123,9 @@ impl VhostUserNetDevice {
             LISTENER_SLOT,
         )?;
 
-        info!(
-            "{}: waiting for incoming connection from the slave...",
-            NET_DRIVER_NAME
-        );
+        info!("{NET_DRIVER_NAME}: waiting for incoming connection from the slave...");
         let (master, avail_features) = listener.accept()?;
-        info!("{}: connection to slave is ready.", NET_DRIVER_NAME);
+        info!("{NET_DRIVER_NAME}: connection to slave is ready.");
 
         Self::new(
             master,
@@ -198,7 +189,7 @@ impl VhostUserNetDevice {
             // recreate it again.
             let (master, avail_features) = self.listener.accept()?;
             if !avail_features & self.device_info.acked_features() != 0 {
-                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.", 
+                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.",
                     self.id, avail_features, self.device_info.acked_features());
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
             }
@@ -304,7 +295,7 @@ impl VhostUserNetDevice {
             // recreate it again.
             let (master, avail_features) = self.listener.accept()?;
             if !avail_features & self.device_info.acked_features() != 0 {
-                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.", 
+                error!("{}: Virtio features changed when reconnecting, avail features: 0x{:X}, acked features: 0x{:X}.",
                     self.id, avail_features, self.device_info.acked_features());
                 return Err(VhostError::VhostUserProtocol(VhostUserError::FeatureMismatch).into());
             }
@@ -360,7 +351,7 @@ where
         })
     }
 
-    fn device(&self) -> MutexGuard<VhostUserNetDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserNetDevice> {
         // Do not expect poisoned lock.
         self.device.lock().unwrap()
     }
@@ -466,7 +457,7 @@ where
     Q: QueueT + Send + 'static,
     R: GuestMemoryRegion + Sync + Send + 'static,
 {
-    fn device(&self) -> MutexGuard<VhostUserNetDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserNetDevice> {
         // Do not expect poisoned lock here
         self.device.lock().unwrap()
     }
@@ -604,6 +595,7 @@ mod tests {
     use dbs_interrupt::{InterruptManager, InterruptSourceType, MsiNotifier, NoopNotifier};
     use dbs_utils::epoll_manager::EpollManager;
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_kvm_unaccessable;
     use vhost_rs::vhost_user::message::VhostUserU64;
     use vhost_rs::vhost_user::{VhostUserProtocolFeatures, VhostUserVirtioFeatures};
     use virtio_queue::QueueSync;
@@ -647,7 +639,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_virtio_device_normal() {
-        let device_socket = "/tmp/vhost.1";
+        let device_socket = concat!("vhost.", line!());
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {
@@ -660,7 +652,7 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_NET
         );
-        let queue_size = vec![128];
+        let queue_size = [128];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev
@@ -684,11 +676,11 @@ mod tests {
         );
         assert_eq!(VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2), 0);
         let config: [u8; 8] = [0; 8];
-        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
+        let _ = VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
             &mut dev, 0, &config,
         );
         let mut data: [u8; 8] = [1; 8];
-        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
+        let _ = VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
             &mut dev, 0, &mut data,
         );
         assert_eq!(config, data);
@@ -697,7 +689,8 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_virtio_device_activate() {
-        let device_socket = "/tmp/vhost.1";
+        skip_if_kvm_unaccessable!();
+        let device_socket = concat!("vhost.", line!());
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {

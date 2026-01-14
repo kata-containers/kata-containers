@@ -13,7 +13,7 @@ TEST_INITRD="${TEST_INITRD:-no}"
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
-
+	setup_common || die "setup_common failed"
 	pod_name="test-file-volume"
 	container_name="busybox-file-volume-container"
 	node="$(get_one_kata_node)"
@@ -21,7 +21,6 @@ setup() {
 	exec_host "$node" touch $tmp_file
 	mount_path="/tmp/foo.txt"
 	file_body="test"
-	get_pod_config_dir
 
 	# Write test body to temp file
 	exec_host "$node" "echo "$file_body" > $tmp_file"
@@ -67,4 +66,5 @@ teardown() {
 	exec_host "$node" rm -f $tmp_file
 	rm -f "${test_yaml}"
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

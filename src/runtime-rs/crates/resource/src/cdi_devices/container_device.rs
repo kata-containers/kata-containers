@@ -92,7 +92,7 @@ pub fn annotate_container_devices(
                                 .and_then(|name| name.to_str())
                         {
                             spec.annotations_mut().as_mut().unwrap().insert(
-                                format!("{}/vfio{}.{}", CDI_PREFIX, iommu_grpid, index), // cdi.k8s.io/vfioX.y
+                                format!("{CDI_PREFIX}/vfio{iommu_grpid}.{index}"), // cdi.k8s.io/vfioX.y
                                 format!("{}={}", vendor_class, base + *offset), // vendor/class=name
                             );
                         }

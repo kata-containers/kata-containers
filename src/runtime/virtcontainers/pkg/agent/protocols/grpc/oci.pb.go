@@ -817,10 +817,14 @@ type Hook struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Path    string   `protobuf:"bytes,1,opt,name=Path,proto3" json:"Path,omitempty"`
-	Args    []string `protobuf:"bytes,2,rep,name=Args,proto3" json:"Args,omitempty"`
-	Env     []string `protobuf:"bytes,3,rep,name=Env,proto3" json:"Env,omitempty"`
-	Timeout int64    `protobuf:"varint,4,opt,name=Timeout,proto3" json:"Timeout,omitempty"`
+	// Path is the absolute path to the container's root filesystem.
+	Path string `protobuf:"bytes,1,opt,name=Path,proto3" json:"Path,omitempty"`
+	// Arguments used for the binary, including the binary name itself.
+	Args []string `protobuf:"bytes,2,rep,name=Args,proto3" json:"Args,omitempty"`
+	// Additional `key=value` environment variables.
+	Env []string `protobuf:"bytes,3,rep,name=Env,proto3" json:"Env,omitempty"`
+	// Timeout is the number of seconds before aborting the hook. If set, timeout MUST be greater than zero.
+	Timeout int64 `protobuf:"varint,4,opt,name=Timeout,proto3" json:"Timeout,omitempty"`
 }
 
 func (x *Hook) Reset() {

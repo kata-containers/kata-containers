@@ -219,7 +219,7 @@ github_get_release_file_url()
 
 	case "$url" in
 		*kata*)
-			regex="kata-static-${version}-${arch_regex}.tar.xz" ;;
+			regex="kata-static-${version}-${arch_regex}.tar.(xz|zst)" ;;
 		*nerdctl*)
 			# Keep this *always* before the containerd check, as it comes from
 			# the very same containerd organisation on GitHub.
@@ -823,7 +823,11 @@ install_kata()
 		info "Installing $project release $version from $file"
 	fi
 
-	sudo tar -C / -xvf "${file}"
+	if [[ "${file}" == *.tar.zst ]]; then
+		sudo tar --zstd -xvf "${file}"
+	else
+		sudo tar -C / -xvf "${file}"
+	fi
 
 	[ -d "$from_dir" ] || die "$project does not exist in expected directory $from_dir"
 

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	deviceUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
@@ -27,6 +29,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
+	"github.com/moby/sys/mountinfo"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -469,8 +472,15 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 
 		// Ignore /dev, directories and all other device files. We handle
 		// only regular files in /dev. It does not make sense to pass the host
-		// device nodes to the guest.
-		if isHostDevice(m.Destination) {
+		// device nodes to the guest. We also ignore inaccessible host
+		// devices in case we're mounting a device that is only
+		// accessible in the guest.
+		//
+		// Note: K8s/containerd seems to create the source path as a
+		// directory on the host if it does not already exist.
+		// isHostDevice() will still return true in that case, so the
+		// above contract holds.
+		if isDevice, err := isHostDevice(m.Source); isDevice || err != nil {
 			continue
 		}
 
@@ -757,7 +767,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 	}
 
 	// Add container's devices to sandbox's device-manager
-	if err := c.createDevices(contConfig); err != nil {
+	if err := c.createDevices(ctx, contConfig); err != nil {
 		return nil, err
 	}
 
@@ -821,34 +831,34 @@ func (c *Container) createMounts(ctx context.Context) error {
 	return c.createBlockDevices(ctx)
 }
 
-func findMountSource(mnt string) (string, error) {
-	output, err := os.ReadFile("/proc/mounts")
-	if err != nil {
-		return "", err
-	}
-
-	// /proc/mounts has 6 fields per line, one mount per line, e.g.
-	// /dev/loop0 /var/lib/containerd/io.containerd.snapshotter.v1.erofs/snapshots/1/fs erofs ro,relatime,user_xattr,acl,cache_strategy=readaround 0 0
-	for _, line := range strings.Split(string(output), "\n") {
-		parts := strings.Split(line, " ")
-		if len(parts) == 6 {
-			switch parts[2] {
-			case "erofs":
-				if parts[1] == mnt {
-					return parts[0], nil
-				}
-			}
+func findErofsMountSource(mounts []*mountinfo.Info, mnt string) (string, error) {
+	for _, m := range mounts {
+		if m.FSType == "erofs" && m.Mountpoint == mnt {
+			return m.Source, nil
 		}
 	}
 	return "", fmt.Errorf("erofs mount not found for %s", mnt)
 }
 
-func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
+func parseOverlayUpperFs(mounts []*mountinfo.Info, path string) (*mountinfo.Info, error) {
+	for _, m := range mounts {
+		if strings.HasPrefix(m.Mountpoint, filepath.Dir(path)) {
+			return m, nil
+		}
+	}
+	return nil, fmt.Errorf("upper mount not found for %s", path)
+}
+
+func (c *Container) createErofsDevices(ctx context.Context) ([]config.DeviceInfo, error) {
 	var deviceInfos []config.DeviceInfo
 	if IsErofsRootFS(c.rootFs) {
-		lowerdirs := parseErofsRootFsOptions(c.rootFs.Options)
+		mounts, err := mountinfo.GetMounts(nil)
+		if err != nil {
+			return nil, err
+		}
+		lowerdirs, upperdir := parseErofsRootFsOptions(c.rootFs.Options)
 		for _, path := range lowerdirs {
-			s, err := findMountSource(path)
+			s, err := findErofsMountSource(mounts, path)
 			if err != nil {
 				return nil, err
 			}
@@ -868,11 +878,40 @@ func (c *Container) createErofsDevices() ([]config.DeviceInfo, error) {
 			}
 			deviceInfos = append(deviceInfos, *di)
 		}
+
+		if upperdir != "" {
+			// check if upperdir is really backed by a filesystem
+			if m, err := parseOverlayUpperFs(mounts, upperdir); err == nil {
+				s := m.Source
+				if strings.HasPrefix(s, "/dev/loop") {
+					b, err := os.ReadFile(fmt.Sprintf("/sys/block/loop%s/loop/backing_file", strings.TrimPrefix(s, "/dev/loop")))
+					if err != nil {
+						return nil, err
+					}
+					s = strings.TrimSuffix(string(b), "\n")
+				}
+				if filepath.Base(s) != "rwlayer.img" {
+					return nil, fmt.Errorf("unsupported upper blockfile %s for %s", s, upperdir)
+				}
+				// XXX: we cannot umount here because it's in another mntns,
+				//      therefore remountRo for safety; should adapt containerd
+				//      custom mount type instead.
+				if err := remount(ctx, syscall.MS_RDONLY, m.Mountpoint); err != nil {
+					return nil, fmt.Errorf("failed to unmount rwlayer %s", m.Mountpoint)
+				}
+
+				di, err := c.createDeviceInfo(s, s, false, true)
+				if err != nil {
+					return nil, err
+				}
+				deviceInfos = append(deviceInfos, *di)
+			}
+		}
 	}
 	return deviceInfos, nil
 }
 
-func (c *Container) createDevices(contConfig *ContainerConfig) error {
+func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
@@ -882,7 +921,7 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	}
 	deviceInfos := append(virtualVolumesDeviceInfos, contConfig.DeviceInfos...)
 
-	erofsDeviceInfos, err := c.createErofsDevices()
+	erofsDeviceInfos, err := c.createErofsDevices(ctx)
 	if err != nil {
 		return err
 	}
@@ -1028,13 +1067,19 @@ type DeviceRelation struct {
 	Bus   string
 	Path  string
 	Index int
+	BDF   string
 }
 
 // Depending on the HW we might need to inject metadata into the container
 // In this case for the NV GPU we need to provide the correct mapping from
 // VFIO-<NUM> to GPU index inside of the VM when vfio_mode="guest-kernel",
 // otherwise we do not know which GPU is which.
-func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
+func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error {
+
+	if ContainerType(c.config.Annotations[vcAnnotations.ContainerTypeKey]).IsCriSandbox() {
+		c.Logger().Info("Skipping VFIO metadata annotation for sandbox container")
+		return nil
+	}
 
 	modeIsGK := (c.sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 
@@ -1049,13 +1094,13 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
 			// For the NV GPU we need special handling let's use only those
 			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF})
 			}
 		}
 		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
 			// For the NV GPU we need special handling let's use only those
 			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF})
 			}
 		}
 		// We need to sort the VFIO devices by bus to get the correct
@@ -1072,32 +1117,112 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
 		// to the correct index
 		if devices, ok := devices.([]ContainerDevice); ok {
 			for _, dev := range devices {
-				c.siblingAnnotation(dev.ContainerPath, siblings)
+				if dev.ContainerPath == "/dev/vfio/vfio" {
+					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
+					continue
+				}
+				err := c.siblingAnnotation(dev.ContainerPath, siblings)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
 		if devices, ok := devices.([]config.DeviceInfo); ok {
 			for _, dev := range devices {
-				c.siblingAnnotation(dev.ContainerPath, siblings)
+				if dev.ContainerPath == "/dev/vfio/vfio" {
+					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
+					continue
+				}
+				err := c.siblingAnnotation(dev.ContainerPath, siblings)
+				if err != nil {
+					return err
+				}
 			}
 
 		}
 
 	}
+	return nil
 }
-func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) {
+
+// createCDIAnnotation adds a container annotation mapping a VFIO device to a GPU index.
+//
+// devPath is the path to the VFIO device, which can be in the format
+// "/dev/vfio/<num>" or "/dev/vfio/devices/vfio<num>". The function extracts
+// the device number from the path and creates an annotation with the key
+// "cdi.k8s.io/vfio<num>" and the value "nvidia.com/gpu=<index>", where
+// <num> is the device number and <index> is the provided GPU index.
+// The annotation is stored in c.config.CustomSpec.Annotations.
+func (c *Container) createCDIAnnotation(devPath string, index int) {
+	// We have here either /dev/vfio/<num> or /dev/vfio/devices/vfio<num>
+	baseName := filepath.Base(devPath)
+	vfioNum := baseName
+	// For IOMMUFD format /dev/vfio/devices/vfio<num>, strip "vfio" prefix
+	if strings.HasPrefix(baseName, "vfio") {
+		vfioNum = strings.TrimPrefix(baseName, "vfio")
+	}
+	annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
+	annoValue := fmt.Sprintf("nvidia.com/gpu=%d", index)
+	if c.config.CustomSpec.Annotations == nil {
+		c.config.CustomSpec.Annotations = make(map[string]string)
+	}
+	c.config.CustomSpec.Annotations[annoKey] = annoValue
+	c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
+}
+
+func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) error {
 	for _, sibling := range siblings {
 		if sibling.Path == devPath {
-			vfioNum := filepath.Base(devPath)
-			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
-			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
-			if c.config.CustomSpec.Annotations == nil {
-				c.config.CustomSpec.Annotations = make(map[string]string)
+			c.createCDIAnnotation(devPath, sibling.Index)
+			return nil
+		}
+		// If the sandbox has cold-plugged an IOMMUFD device and if the
+		// device-plugins sends us a /dev/vfio/<NUM> device we need to
+		// check if the IOMMUFD device and the VFIO device are the same
+		// We have the sibling.BDF we now need to extract the BDF of the
+		// devPath that is either /dev/vfio/<NUM> or
+		// /dev/vfio/devices/vfio<NUM>
+		if strings.HasPrefix(filepath.Base(devPath), "vfio") {
+			// IOMMUFD device format (/dev/vfio/devices/vfio<NUM>), extract BDF from sysfs
+			major, minor, err := deviceUtils.GetMajorMinorFromDevPath(devPath)
+			if err != nil {
+				return err
 			}
-			c.config.CustomSpec.Annotations[annoKey] = annoValue
-			c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
+			iommufdBDF, err := deviceUtils.GetBDFFromVFIODev(major, minor)
+			if err != nil {
+				return err
+			}
+			if sibling.BDF == iommufdBDF {
+				c.createCDIAnnotation(devPath, sibling.Index)
+				// exit handling IOMMUFD device
+				return nil
+			}
+		}
+		// Legacy VFIO group device (/dev/vfio/<GROUP_NUM>), extract BDF from sysfs
+		vfioGroup := filepath.Base(devPath)
+		iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
+
+		deviceFiles, err := os.ReadDir(iommuDevicesPath)
+		if err != nil {
+			return err
+		}
+		vfioBDFs := make([]string, 0)
+		for _, deviceFile := range deviceFiles {
+			// Get bdf of device eg 0000:00:1c.0
+			deviceBDF, _, _, err := deviceUtils.GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
+			if err != nil {
+				return err
+			}
+			vfioBDFs = append(vfioBDFs, deviceBDF)
+		}
+		if slices.Contains(vfioBDFs, sibling.BDF) {
+			c.createCDIAnnotation(devPath, sibling.Index)
+			// exit handling legacy VFIO device
+			return nil
 		}
 	}
+	return fmt.Errorf("failed to match device %s with any cold-plugged GPU device by path or BDF; no suitable sibling found", devPath)
 }
 
 // create creates and starts a container inside a Sandbox. It has to be

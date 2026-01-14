@@ -1328,7 +1328,7 @@ func TestKataAgentCreateContainerVFIODevices(t *testing.T) {
 			}
 
 			// Call createDevices which should trigger the full flow
-			err = container.createDevices(contConfig)
+			err = container.createDevices(context.Background(), contConfig)
 			assert.NoError(err)
 
 			// Find the device in device manager using the original device info

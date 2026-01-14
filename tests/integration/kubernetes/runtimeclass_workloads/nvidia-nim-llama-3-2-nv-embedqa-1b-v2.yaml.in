@@ -1,0 +1,104 @@
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_EMBEDQA}
+  labels:
+    app: ${POD_NAME_EMBEDQA}
+spec:
+  restartPolicy: Always
+  runtimeClassName: kata
+  serviceAccountName: default
+  imagePullSecrets:
+    - name: ngc-secret-embedqa
+  securityContext:
+    fsGroup: 0
+    runAsGroup: 0
+    runAsUser: 0
+  containers:
+  - name: ${POD_NAME_EMBEDQA}
+    image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.10.1
+    imagePullPolicy: IfNotPresent
+    env:
+      - name: NIM_CACHE_PATH
+        value: "/opt/nim/.cache"
+      - name: NGC_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: ngc-api-key-embedqa
+            key: api-key
+      - name: NIM_HTTP_API_PORT
+        value: "8000"
+      - name: NIM_JSONL_LOGGING
+        value: "1"
+      - name: NIM_LOG_LEVEL
+        value: "INFO"
+    ports:
+      - containerPort: 8000
+        name: http
+
+    livenessProbe:
+      httpGet:
+        path: /v1/health/live
+        port: 8000
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+
+    readinessProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: 8000
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 3
+
+    startupProbe:
+      httpGet:
+        path: /v1/health/ready
+        port: 8000
+      initialDelaySeconds: 40
+      periodSeconds: 10
+      timeoutSeconds: 1
+      successThreshold: 1
+      failureThreshold: 180
+
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
+        cpu: "16"
+        memory: "32Gi"
+
+    volumeMounts:
+      - name: nim-cache
+        mountPath: /opt/nim/.cache
+
+  volumes:
+  - name: nim-cache
+    hostPath:
+      path: "${LOCAL_NIM_CACHE}"
+      type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret-embedqa
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-api-key-embedqa
+type: Opaque
+data:
+  api-key: "${NGC_API_KEY_BASE64}"

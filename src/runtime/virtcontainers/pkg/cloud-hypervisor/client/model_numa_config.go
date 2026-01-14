@@ -16,12 +16,11 @@ import (
 
 // NumaConfig struct for NumaConfig
 type NumaConfig struct {
-	GuestNumaId    int32           `json:"guest_numa_id"`
-	Cpus           *[]int32        `json:"cpus,omitempty"`
-	Distances      *[]NumaDistance `json:"distances,omitempty"`
-	MemoryZones    *[]string       `json:"memory_zones,omitempty"`
-	SgxEpcSections *[]string       `json:"sgx_epc_sections,omitempty"`
-	PciSegments    *[]int32        `json:"pci_segments,omitempty"`
+	GuestNumaId int32           `json:"guest_numa_id"`
+	Cpus        *[]int32        `json:"cpus,omitempty"`
+	Distances   *[]NumaDistance `json:"distances,omitempty"`
+	MemoryZones *[]string       `json:"memory_zones,omitempty"`
+	PciSegments *[]int32        `json:"pci_segments,omitempty"`
 }
 
 // NewNumaConfig instantiates a new NumaConfig object
@@ -162,38 +161,6 @@ func (o *NumaConfig) SetMemoryZones(v []string) {
 	o.MemoryZones = &v
 }
 
-// GetSgxEpcSections returns the SgxEpcSections field value if set, zero value otherwise.
-func (o *NumaConfig) GetSgxEpcSections() []string {
-	if o == nil || o.SgxEpcSections == nil {
-		var ret []string
-		return ret
-	}
-	return *o.SgxEpcSections
-}
-
-// GetSgxEpcSectionsOk returns a tuple with the SgxEpcSections field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *NumaConfig) GetSgxEpcSectionsOk() (*[]string, bool) {
-	if o == nil || o.SgxEpcSections == nil {
-		return nil, false
-	}
-	return o.SgxEpcSections, true
-}
-
-// HasSgxEpcSections returns a boolean if a field has been set.
-func (o *NumaConfig) HasSgxEpcSections() bool {
-	if o != nil && o.SgxEpcSections != nil {
-		return true
-	}
-
-	return false
-}
-
-// SetSgxEpcSections gets a reference to the given []string and assigns it to the SgxEpcSections field.
-func (o *NumaConfig) SetSgxEpcSections(v []string) {
-	o.SgxEpcSections = &v
-}
-
 // GetPciSegments returns the PciSegments field value if set, zero value otherwise.
 func (o *NumaConfig) GetPciSegments() []int32 {
 	if o == nil || o.PciSegments == nil {
@@ -239,9 +206,6 @@ func (o NumaConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.MemoryZones != nil {
 		toSerialize["memory_zones"] = o.MemoryZones
-	}
-	if o.SgxEpcSections != nil {
-		toSerialize["sgx_epc_sections"] = o.SgxEpcSections
 	}
 	if o.PciSegments != nil {
 		toSerialize["pci_segments"] = o.PciSegments

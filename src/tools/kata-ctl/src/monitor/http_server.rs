@@ -36,7 +36,7 @@ async fn handler_mux(req: Request<Body>) -> Result<Response<Body>> {
         |e| {
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from(format!("{:?}\n", e)))
+                .body(Body::from(format!("{e:?}\n")))
                 .map_err(|e| anyhow!("Failed to Build Response {:?}", e))
         },
         Ok,
@@ -76,7 +76,7 @@ async fn metrics_uri_handler(req: Request<Body>) -> Result<Response<Body>> {
         if let Ok(sandbox_id) = parse_sandbox_id(uri_query) {
             response_body += &get_runtime_metrics(sandbox_id)
                 .await
-                .context(format!("{}\nFailed to Get Runtime Metrics", response_body))?;
+                .context(format!("{response_body}\nFailed to Get Runtime Metrics"))?;
         }
     }
 

@@ -53,10 +53,7 @@ extern "C" fn sigsys_handler(num: c_int, info: *mut siginfo_t, _unused: *mut c_v
     // SIGSYS is triggered when bad syscalls are detected. num_faults is only added when SIGSYS is detected
     // so it actually only collects the count for bad syscalls.
     METRICS.read().unwrap().seccomp.num_faults.inc();
-    error!(
-        "Shutting down VM after intercepting a bad syscall ({}).",
-        syscall
-    );
+    error!("Shutting down VM after intercepting a bad syscall ({syscall}).");
 
     // Safe because we're terminating the process anyway. We don't actually do anything when
     // running unit tests.
@@ -88,10 +85,7 @@ extern "C" fn sigbus_sigsegv_handler(num: c_int, info: *mut siginfo_t, _unused: 
         _ => (),
     }
 
-    error!(
-        "Shutting down VM after intercepting signal {}, code {}.",
-        si_signo, si_code
-    );
+    error!("Shutting down VM after intercepting signal {si_signo}, code {si_code}.");
 
     // Safe because we're terminating the process anyway. We don't actually do anything when
     // running unit tests.

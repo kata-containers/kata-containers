@@ -399,6 +399,7 @@ mod tests {
     use device_tree::DeviceTree;
     use kvm_bindings::{kvm_vcpu_init, KVM_ARM_VCPU_PMU_V3, KVM_ARM_VCPU_PSCI_0_2};
     use kvm_ioctls::{Kvm, VcpuFd, VmFd};
+    use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::GuestMemoryMmap;
 
     use super::super::tests::MMIODeviceInfo;
@@ -460,6 +461,7 @@ mod tests {
 
     #[test]
     fn test_create_fdt_with_devices() {
+        skip_if_kvm_unaccessable!();
         let regions = arch_memory_regions(FDT_MAX_SIZE + 0x1000);
         let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
         let dev_info: HashMap<(DeviceType, String), MMIODeviceInfo> = [
@@ -498,6 +500,7 @@ mod tests {
 
     #[test]
     fn test_create_fdt() {
+        skip_if_kvm_unaccessable!();
         let regions = arch_memory_regions(FDT_MAX_SIZE + 0x1000);
         let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
         let kvm = Kvm::new().unwrap();
@@ -532,6 +535,7 @@ mod tests {
 
     #[test]
     fn test_create_fdt_with_initrd() {
+        skip_if_kvm_unaccessable!();
         let regions = arch_memory_regions(FDT_MAX_SIZE + 0x1000);
         let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
         let kvm = Kvm::new().unwrap();
@@ -570,6 +574,7 @@ mod tests {
 
     #[test]
     fn test_create_fdt_with_pmu() {
+        skip_if_kvm_unaccessable!();
         let regions = arch_memory_regions(FDT_MAX_SIZE + 0x1000);
         let mem = GuestMemoryMmap::<()>::from_ranges(&regions).expect("Cannot initialize memory");
         let kvm = Kvm::new().unwrap();

@@ -348,7 +348,7 @@ impl Vcpu {
         // _before_ running this, then there is nothing we can do.
         Self::TLS_VCPU_PTR.with(|cell: &VcpuCell| {
             if let Some(vcpu_ptr) = cell.get() {
-                if vcpu_ptr == self as *const Vcpu {
+                if std::ptr::eq(vcpu_ptr, self) {
                     Self::TLS_VCPU_PTR.with(|cell: &VcpuCell| cell.take());
                     return Ok(());
                 }
@@ -493,16 +493,14 @@ impl Vcpu {
                     VcpuExit::SystemEvent(event_type, event_flags) => match event_type {
                         KVM_SYSTEM_EVENT_RESET | KVM_SYSTEM_EVENT_SHUTDOWN => {
                             info!(
-                                "Received KVM_SYSTEM_EVENT: type: {}, event: {}",
-                                event_type, event_flags
+                                "Received KVM_SYSTEM_EVENT: type: {event_type}, event: {event_flags}"
                             );
                             Ok(VcpuEmulation::Stopped)
                         }
                         _ => {
                             self.metrics.failures.inc();
                             error!(
-                                "Received KVM_SYSTEM_EVENT signal type: {}, flag: {}",
-                                event_type, event_flags
+                                "Received KVM_SYSTEM_EVENT signal type: {event_type}, flag: {event_flags}"
                             );
                             Err(VcpuError::VcpuUnhandledKvmExit)
                         }
@@ -511,7 +509,7 @@ impl Vcpu {
                         self.metrics.failures.inc();
                         // TODO: Are we sure we want to finish running a vcpu upon
                         // receiving a vm exit that is not necessarily an error?
-                        error!("Unexpected exit reason on vcpu run: {:?}", r);
+                        error!("Unexpected exit reason on vcpu run: {r:?}");
                         Err(VcpuError::VcpuUnhandledKvmExit)
                     }
                 }
@@ -528,7 +526,7 @@ impl Vcpu {
                     }
                     _ => {
                         self.metrics.failures.inc();
-                        error!("Failure during vcpu run: {}", e);
+                        error!("Failure during vcpu run: {e}");
                         #[cfg(target_arch = "x86_64")]
                         {
                             error!(
@@ -552,7 +550,7 @@ impl Vcpu {
         // debug info signal
         if addr == MAGIC_IOPORT_DEBUG_INFO && data.len() == 4 {
             let data = unsafe { std::ptr::read(data.as_ptr() as *const u32) };
-            log::warn!("KDBG: guest kernel debug info: 0x{:x}", data);
+            log::warn!("KDBG: guest kernel debug info: 0x{data:x}");
             checked = true;
         };
 
@@ -736,7 +734,7 @@ impl Vcpu {
         // trigger vmm to stop machine
         if let Err(e) = self.exit_evt.write(1) {
             self.metrics.failures.inc();
-            error!("Failed signaling vcpu exit event: {}", e);
+            error!("Failed signaling vcpu exit event: {e}");
         }
 
         let mut state = StateMachine::next(Self::waiting_exit);
@@ -791,7 +789,7 @@ pub mod tests {
     use arc_swap::ArcSwap;
     use dbs_device::device_manager::IoManager;
     use lazy_static::lazy_static;
-    use test_utils::skip_if_not_root;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
     use crate::kvm_context::KvmContext;
@@ -901,7 +899,7 @@ pub mod tests {
 
     #[test]
     fn test_vcpu_run_emulation() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let (mut vcpu, _) = create_vcpu();
 
@@ -987,7 +985,7 @@ pub mod tests {
     #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_vcpu_check_io_port_info() {
-        skip_if_not_root!();
+        skip_if_kvm_unaccessable!();
 
         let (vcpu, _receiver) = create_vcpu();
 

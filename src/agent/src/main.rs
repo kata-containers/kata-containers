@@ -19,7 +19,6 @@ extern crate scopeguard;
 extern crate slog;
 
 use anyhow::{anyhow, bail, Context, Result};
-use base64::Engine;
 use cfg_if::cfg_if;
 use clap::Parser;
 use const_format::concatcp;
@@ -31,6 +30,7 @@ use nix::unistd::{self, dup, sync, Pid};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
+use std::io::ErrorKind;
 use std::os::unix::fs::{self as unixfs, FileTypeExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -301,12 +301,12 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         tracer::end_tracing();
     }
 
-    eprintln!("{} shutdown complete", NAME);
+    eprintln!("{NAME} shutdown complete");
 
     let mut wait_errors: Vec<tokio::task::JoinError> = vec![];
     for result in results {
         if let Err(e) = result {
-            eprintln!("wait task error: {:#?}", e);
+            eprintln!("wait task error: {e:#?}");
             wait_errors.push(e);
         }
     }
@@ -466,8 +466,17 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
         _ => vec![],
     };
     for binary in binaries.iter() {
-        if !Path::new(binary).exists() {
-            warn!(logger, "{} not found", binary);
+        let exists = Path::new(binary)
+            .try_exists()
+            .unwrap_or_else(|error| match error.kind() {
+                ErrorKind::NotFound => {
+                    warn!(logger, "{} not found", binary);
+                    false
+                }
+                _ => panic!("Path existence check failed for '{}': {}", binary, error),
+            });
+
+        if !exists {
             return false;
         }
     }
@@ -485,12 +494,9 @@ async fn launch_guest_component_procs(
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
     let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
-    let initdata_parameter;
-    if let Some(initdata_return_value) = initdata_return_value {
-        initdata_parameter =
-            base64::engine::general_purpose::STANDARD.encode(&initdata_return_value.digest);
-        aa_args.push("--initdata");
-        aa_args.push(&initdata_parameter);
+    if initdata_return_value.is_some() {
+        aa_args.push("--initdata-toml");
+        aa_args.push(initdata::INITDATA_TOML_PATH);
     }
 
     launch_process(
@@ -740,7 +746,7 @@ mod tests {
                 skip_if_root!();
             }
 
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
             defer!({
                 // XXX: Never try to close rfd, because it will be closed by PipeStream in
@@ -753,7 +759,7 @@ mod tests {
             shutdown_tx.send(true).unwrap();
             let result = create_logger_task(rfd, d.vsock_port, shutdown_rx).await;
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
             assert_result!(d.result, result, msg);
         }
     }

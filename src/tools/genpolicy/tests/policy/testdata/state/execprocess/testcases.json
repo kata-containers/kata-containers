@@ -1,13 +1,14 @@
 [
   {
-    "description": "create container request for first container",
     "allowed": true,
+    "description": "create container request for first container",
+    "kind": "CreateContainerRequest",
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "first-test-container",
           "io.kubernetes.cri.container-type": "container",
           "io.kubernetes.cri.sandbox-cpu-period": "100000",
           "io.kubernetes.cri.sandbox-cpu-quota": "0",
@@ -16,8 +17,7 @@
           "io.kubernetes.cri.sandbox-memory": "0",
           "io.kubernetes.cri.sandbox-name": "busybox",
           "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd",
-          "io.kubernetes.cri.container-name": "first-test-container"
+          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd"
         },
         "Hooks": null,
         "Hostname": "busybox",
@@ -85,29 +85,27 @@
         "Mounts": [
           {
             "destination": "/proc",
-            "source": "proc",
-            "type_": "proc",
             "options": [
               "nosuid",
               "noexec",
               "nodev"
-            ]
+            ],
+            "source": "proc",
+            "type_": "proc"
           },
           {
             "destination": "/dev",
-            "source": "tmpfs",
-            "type_": "tmpfs",
             "options": [
               "nosuid",
               "strictatime",
               "mode=755",
               "size=65536k"
-            ]
+            ],
+            "source": "tmpfs",
+            "type_": "tmpfs"
           },
           {
             "destination": "/dev/pts",
-            "source": "devpts",
-            "type_": "devpts",
             "options": [
               "nosuid",
               "noexec",
@@ -115,98 +113,100 @@
               "ptmxmode=0666",
               "mode=0620",
               "gid=5"
-            ]
+            ],
+            "source": "devpts",
+            "type_": "devpts"
           },
           {
             "destination": "/dev/mqueue",
-            "source": "mqueue",
-            "type_": "mqueue",
             "options": [
               "nosuid",
               "noexec",
               "nodev"
-            ]
+            ],
+            "source": "mqueue",
+            "type_": "mqueue"
           },
           {
             "destination": "/sys",
-            "source": "sysfs",
-            "type_": "sysfs",
             "options": [
               "nosuid",
               "noexec",
               "nodev",
               "ro"
-            ]
+            ],
+            "source": "sysfs",
+            "type_": "sysfs"
           },
           {
             "destination": "/sys/fs/cgroup",
-            "source": "cgroup",
-            "type_": "cgroup",
             "options": [
               "nosuid",
               "noexec",
               "nodev",
               "relatime",
               "ro"
-            ]
+            ],
+            "source": "cgroup",
+            "type_": "cgroup"
           },
           {
             "destination": "/etc/hosts",
-            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-e9bb691ee0df3258-hosts",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-e9bb691ee0df3258-hosts",
+            "type_": "bind"
           },
           {
             "destination": "/dev/termination-log",
-            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-c57801af2d60a6e8-termination-log",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-c57801af2d60a6e8-termination-log",
+            "type_": "bind"
           },
           {
             "destination": "/etc/hostname",
-            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-ca728aaeede4bb80-hostname",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-ca728aaeede4bb80-hostname",
+            "type_": "bind"
           },
           {
             "destination": "/etc/resolv.conf",
-            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-cfc6eca9fd2d0cce-resolv.conf",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-cfc6eca9fd2d0cce-resolv.conf",
+            "type_": "bind"
           },
           {
             "destination": "/dev/shm",
-            "source": "/run/kata-containers/sandbox/shm",
-            "type_": "bind",
             "options": [
               "rbind"
-            ]
+            ],
+            "source": "/run/kata-containers/sandbox/shm",
+            "type_": "bind"
           },
           {
             "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
-            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-bbb1a5bd88623ac4-serviceaccount",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "ro"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-bbb1a5bd88623ac4-serviceaccount",
+            "type_": "bind"
           }
         ],
         "Process": {
@@ -278,8 +278,7 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0,
-              10
+              0
             ],
             "GID": 0,
             "UID": 0,
@@ -287,7 +286,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/shared/containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
+          "Path": "/run/kata-containers/88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
           "Readonly": false
         },
         "Solaris": null,
@@ -295,8 +294,8 @@
         "Windows": null
       },
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-      "exec_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "devices": [],
+      "exec_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "sandbox_pidns": false,
       "shared_mounts": [],
       "storages": [],
@@ -304,14 +303,15 @@
     }
   },
   {
-    "description": "create container request for second container",
     "allowed": true,
+    "description": "create container request for second container",
+    "kind": "CreateContainerRequest",
     "request": {
-      "type": "CreateContainer",
       "OCI": {
         "Annotations": {
           "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "second-test-container",
           "io.kubernetes.cri.container-type": "container",
           "io.kubernetes.cri.sandbox-cpu-period": "100000",
           "io.kubernetes.cri.sandbox-cpu-quota": "0",
@@ -320,8 +320,7 @@
           "io.kubernetes.cri.sandbox-memory": "0",
           "io.kubernetes.cri.sandbox-name": "busybox",
           "io.kubernetes.cri.sandbox-namespace": "default",
-          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd",
-          "io.kubernetes.cri.container-name": "second-test-container"
+          "io.kubernetes.cri.sandbox-uid": "eb1495ed-331a-44ff-ad6d-fce1a69280cd"
         },
         "Hooks": null,
         "Hostname": "busybox",
@@ -389,29 +388,27 @@
         "Mounts": [
           {
             "destination": "/proc",
-            "source": "proc",
-            "type_": "proc",
             "options": [
               "nosuid",
               "noexec",
               "nodev"
-            ]
+            ],
+            "source": "proc",
+            "type_": "proc"
           },
           {
             "destination": "/dev",
-            "source": "tmpfs",
-            "type_": "tmpfs",
             "options": [
               "nosuid",
               "strictatime",
               "mode=755",
               "size=65536k"
-            ]
+            ],
+            "source": "tmpfs",
+            "type_": "tmpfs"
           },
           {
             "destination": "/dev/pts",
-            "source": "devpts",
-            "type_": "devpts",
             "options": [
               "nosuid",
               "noexec",
@@ -419,98 +416,100 @@
               "ptmxmode=0666",
               "mode=0620",
               "gid=5"
-            ]
+            ],
+            "source": "devpts",
+            "type_": "devpts"
           },
           {
             "destination": "/dev/mqueue",
-            "source": "mqueue",
-            "type_": "mqueue",
             "options": [
               "nosuid",
               "noexec",
               "nodev"
-            ]
+            ],
+            "source": "mqueue",
+            "type_": "mqueue"
           },
           {
             "destination": "/sys",
-            "source": "sysfs",
-            "type_": "sysfs",
             "options": [
               "nosuid",
               "noexec",
               "nodev",
               "ro"
-            ]
+            ],
+            "source": "sysfs",
+            "type_": "sysfs"
           },
           {
             "destination": "/sys/fs/cgroup",
-            "source": "cgroup",
-            "type_": "cgroup",
             "options": [
               "nosuid",
               "noexec",
               "nodev",
               "relatime",
               "ro"
-            ]
+            ],
+            "source": "cgroup",
+            "type_": "cgroup"
           },
           {
             "destination": "/etc/hosts",
-            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-e9bb691ee0df3258-hosts",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-e9bb691ee0df3258-hosts",
+            "type_": "bind"
           },
           {
             "destination": "/dev/termination-log",
-            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-c57801af2d60a6e8-termination-log",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-c57801af2d60a6e8-termination-log",
+            "type_": "bind"
           },
           {
             "destination": "/etc/hostname",
-            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-ca728aaeede4bb80-hostname",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-ca728aaeede4bb80-hostname",
+            "type_": "bind"
           },
           {
             "destination": "/etc/resolv.conf",
-            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-cfc6eca9fd2d0cce-resolv.conf",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "rw"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-cfc6eca9fd2d0cce-resolv.conf",
+            "type_": "bind"
           },
           {
             "destination": "/dev/shm",
-            "source": "/run/kata-containers/sandbox/shm",
-            "type_": "bind",
             "options": [
               "rbind"
-            ]
+            ],
+            "source": "/run/kata-containers/sandbox/shm",
+            "type_": "bind"
           },
           {
             "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
-            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-bbb1a5bd88623ac4-serviceaccount",
-            "type_": "bind",
             "options": [
               "rbind",
               "rprivate",
               "ro"
-            ]
+            ],
+            "source": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9-bbb1a5bd88623ac4-serviceaccount",
+            "type_": "bind"
           }
         ],
         "Process": {
@@ -582,8 +581,7 @@
           "Terminal": false,
           "User": {
             "AdditionalGids": [
-              0,
-              10
+              0
             ],
             "GID": 0,
             "UID": 0,
@@ -591,7 +589,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/shared/containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
+          "Path": "/run/kata-containers/22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9/rootfs",
           "Readonly": false
         },
         "Solaris": null,
@@ -599,8 +597,8 @@
         "Windows": null
       },
       "container_id": "22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-      "exec_id": "22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "devices": [],
+      "exec_id": "22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "sandbox_pidns": false,
       "shared_mounts": [],
       "storages": [],
@@ -608,141 +606,121 @@
     }
   },
   {
-    "description": "test exec process in first container with correct args",
     "allowed": true,
+    "description": "test exec process in first container with correct args",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with incorrect args",
     "allowed": false,
+    "description": "test exec process in first container with incorrect args",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "foo"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with Terminal=true",
     "allowed": false,
+    "description": "test exec process in first container with Terminal=true",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b300",
-      "string_user": null,
       "process": {
-        "Terminal": true,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": true,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with non-empty capabilities",
     "allowed": false,
+    "description": "test exec process in first container with non-empty capabilities",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b302",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
-        "Env": [
-          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-          "HOSTNAME=busybox-cc"
-        ],
-        "Cwd": "/",
         "Capabilities": {
           "Ambient": [],
           "Bounding": [
@@ -752,387 +730,404 @@
           "Inheritable": [],
           "Permitted": []
         },
-        "Rlimits": [],
+        "ConsoleSize": null,
+        "Cwd": "/",
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with different Cwd",
     "allowed": false,
+    "description": "test exec process in first container with different Cwd",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b303",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/tmp",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/tmp",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with NoNewPrivileges=true",
     "allowed": false,
+    "description": "test exec process in first container with NoNewPrivileges=true",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b304",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": true,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with non-null/different User",
     "allowed": false,
+    "description": "test exec process in first container with non-null/different User",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b305",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 1000,
-          "GID": 1000,
-          "AdditionalGids": [],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [],
+          "GID": 1000,
+          "UID": 1000,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with additional environment variables",
     "allowed": false,
+    "description": "test exec process in first container with additional environment variables",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b306",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc",
           "TERM=xterm",
           "PROBE_TYPE=liveness"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process in first container with multi-arg command",
     "allowed": false,
+    "description": "test exec process in first container with multi-arg command",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b308",
-      "string_user": null,
       "process": {
-        "Terminal": false,
+        "Args": [
+          "test1",
+          "--flag"
+        ],
+        "Capabilities": null,
         "ConsoleSize": null,
+        "Cwd": "/",
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
         "User": {
-          "UID": 0,
+          "AdditionalGids": [
+            0
+          ],
           "GID": 0,
-          "AdditionalGids": [0, 10],
+          "UID": 0,
           "Username": ""
-        },
-        "Args": ["test1", "--flag"],
-        "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
-        "NoNewPrivileges": false,
-        "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
-    }
-  },
-  {
-    "description": "test exec process in first container with non-null selinuxLabel",
-    "allowed": false,
-    "request": {
-      "type": "ExecProcess",
-      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": null,
-      "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "Args": [
-          "test1"
-        ],
-        "Env": [
-          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-          "HOSTNAME=busybox-cc"
-        ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
-        "NoNewPrivileges": false,
-        "OOMScoreAdj": 0,
-        "SelinuxLabel": "system_u:system_r:container_t",
-        "ApparmorProfile": ""
-      }
-    }
-  },
-  {
-    "description": "test exec process in first container with random ApparmorProfile",
-    "allowed": false,
-    "request": {
-      "type": "ExecProcess",
-      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": null,
-      "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "Args": [
-          "test1"
-        ],
-        "Env": [
-          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-          "HOSTNAME=busybox-cc"
-        ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
-        "NoNewPrivileges": false,
-        "OOMScoreAdj": 0,
-        "SelinuxLabel": "",
-        "ApparmorProfile": "localhost/root-user"
-      }
-    }
-  },
-  {
-    "description": "test exec process in first container with random string_user",
-    "allowed": false,
-    "request": {
-      "type": "ExecProcess",
-      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
-      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": {
-        "uid": "0",
-        "gid": "12",
-        "additional_gids": []
+        }
       },
+      "string_user": null
+    }
+  },
+  {
+    "allowed": false,
+    "description": "test exec process in first container with non-null selinuxLabel",
+    "kind": "ExecProcessRequest",
+    "request": {
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
+        "ApparmorProfile": "",
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
+        "Rlimits": [],
+        "SelinuxLabel": "system_u:system_r:container_t",
+        "Terminal": false
+      },
+      "string_user": null
+    }
+  },
+  {
+    "allowed": false,
+    "description": "test exec process in first container with random ApparmorProfile",
+    "kind": "ExecProcessRequest",
+    "request": {
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "process": {
+        "ApparmorProfile": "localhost/root-user",
+        "Args": [
+          "test1"
+        ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "Rlimits": [],
         "SelinuxLabel": "",
-        "ApparmorProfile": ""
+        "Terminal": false
+      },
+      "string_user": null
+    }
+  },
+  {
+    "allowed": false,
+    "description": "test exec process in first container with random string_user",
+    "kind": "ExecProcessRequest",
+    "request": {
+      "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
+      "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
+      "process": {
+        "ApparmorProfile": "",
+        "Args": [
+          "test1"
+        ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "HOSTNAME=busybox-cc"
+        ],
+        "NoNewPrivileges": false,
+        "OOMScoreAdj": 0,
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false
+      },
+      "string_user": {
+        "additional_gids": [],
+        "gid": "12",
+        "uid": "0"
       }
     }
   },
   {
-    "description": "test exec process in second container with first container args",
     "allowed": false,
+    "description": "test exec process in second container with first container args",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "22941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "test exec process with invalid container_id",
     "allowed": false,
+    "description": "test exec process with invalid container_id",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "1070be4405d02db09ddaa02b73c0670f5fe5511d5efb45608da2366074dc4e08",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b24f",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "bar"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   },
   {
-    "description": "remove first container",
     "allowed": true,
+    "description": "remove first container",
+    "kind": "RemoveContainerRequest",
     "request": {
-      "type": "RemoveContainer",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "timeout": 0
     }
   },
   {
-    "description": "test exec process fail for first container",
     "allowed": false,
+    "description": "test exec process fail for first container",
+    "kind": "ExecProcessRequest",
     "request": {
-      "type": "ExecProcess",
       "container_id": "88941c1e6546ae2aef276f738b162fc379e61467120544e13e5ca5bd204862b9",
       "exec_id": "05e07bbb-d06c-402d-b9b7-e6386935b200",
-      "string_user": null,
       "process": {
-        "Terminal": false,
-        "ConsoleSize": null,
-        "User": {
-          "UID": 0,
-          "GID": 0,
-          "AdditionalGids": [
-            0,
-            10
-          ],
-          "Username": ""
-        },
         "Args": [
           "test1"
         ],
+        "Capabilities": null,
+        "ConsoleSize": null,
+        "Cwd": "/",
         "Env": [
           "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "HOSTNAME=busybox-cc"
         ],
-        "Cwd": "/",
-        "Capabilities": null,
-        "Rlimits": [],
         "NoNewPrivileges": false,
         "OOMScoreAdj": 0,
-        "SelinuxLabel": ""
-      }
+        "Rlimits": [],
+        "SelinuxLabel": "",
+        "Terminal": false,
+        "User": {
+          "AdditionalGids": [
+            0
+          ],
+          "GID": 0,
+          "UID": 0,
+          "Username": ""
+        }
+      },
+      "string_user": null
     }
   }
 ]

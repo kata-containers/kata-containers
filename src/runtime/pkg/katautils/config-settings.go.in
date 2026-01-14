@@ -57,7 +57,6 @@ var systemdUnitName = "kata-containers.target"
 
 const defaultKernelParams = ""
 const defaultMachineType = "q35"
-const defaultQgsPort = 4050
 
 const defaultVCPUCount uint32 = 1
 const defaultMaxVCPUCount uint32 = 0
@@ -75,6 +74,7 @@ const defaultBlockDeviceCacheSet bool = false
 const defaultBlockDeviceCacheDirect bool = false
 const defaultBlockDeviceCacheNoflush bool = false
 const defaultEnableIOThreads bool = false
+const defaultIndepIOThreads uint32 = 0
 const defaultEnableMemPrealloc bool = false
 const defaultEnableReclaimGuestFreedMemory bool = false
 const defaultEnableHugePages bool = false
@@ -101,6 +101,7 @@ const defaultDisableSeccomp = false
 const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
+const defaultMeasurementAlgo = "sha512"
 
 var defaultSGXEPCSize = int64(0)
 

@@ -20,6 +20,8 @@ The driver can provision volumes based on direct block devices, eliminating the 
 
 [Deployment for K8S 1.20+](docs/deploy-csi-kata-directvol.md)
 
+[SPDK Usage Guide](docs/spdk-usage.md)
+
 ## Building the Binary
 
 If you want to build the driver yourself, you can do so with the following command from `csi-kata-directvolume` path:

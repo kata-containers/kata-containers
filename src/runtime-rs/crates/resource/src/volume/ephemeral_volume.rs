@@ -7,12 +7,11 @@
 use std::path::{Path, PathBuf};
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{get_mount_path, get_mount_type};
-use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
+use kata_types::mount::{kata_guest_sandbox_dir, KATA_EPHEMERAL_VOLUME_TYPE};
 use nix::sys::stat::stat;
 use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
@@ -37,7 +36,7 @@ impl EphemeralVolume {
 
         let source = &get_mount_path(m.source());
         let file_stat =
-            stat(Path::new(source)).with_context(|| format!("mount source {}", source))?;
+            stat(Path::new(source)).with_context(|| format!("mount source {source}"))?;
 
         // if volume's gid isn't root group(default group), this means there's
         // an specific fsGroup is set on this local volume, then it should pass
@@ -51,7 +50,7 @@ impl EphemeralVolume {
         let file_name = Path::new(source)
             .file_name()
             .context(format!("get file name from {:?}", &m.source()))?;
-        let source = Path::new(DEFAULT_KATA_GUEST_SANDBOX_DIR)
+        let source = Path::new(kata_guest_sandbox_dir().as_str())
             .join(KATA_EPHEMERAL_VOLUME_TYPE)
             .join(file_name)
             .into_os_string()
@@ -74,7 +73,7 @@ impl EphemeralVolume {
         mount.set_destination(m.destination().clone());
         mount.set_typ(Some("bind".to_string()));
         mount.set_source(Some(PathBuf::from(&source)));
-        mount.set_options(Some(vec!["rbind".to_string()]));
+        mount.set_options(m.options().clone());
 
         Ok(Self {
             mount,

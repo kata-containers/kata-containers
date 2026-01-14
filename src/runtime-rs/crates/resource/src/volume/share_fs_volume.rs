@@ -5,7 +5,7 @@
 //
 
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     fs::File,
     io::Read,
     os::unix::fs::MetadataExt,
@@ -22,6 +22,7 @@ use hypervisor::device::device_manager::DeviceManager;
 use inotify::{EventMask, Inotify, WatchMask};
 use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use nix::sys::stat::SFlag;
+use rand::{thread_rng, RngCore};
 use tokio::{
     io::AsyncReadExt,
     sync::{Mutex, RwLock},
@@ -31,8 +32,7 @@ use tokio::{
 use walkdir::WalkDir;
 
 use super::Volume;
-use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
-use crate::share_fs::PASSTHROUGH_FS_DIR;
+use crate::share_fs::kata_guest_share_dir;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::{
     k8s::{is_configmap, is_downward_api, is_projected, is_secret},
@@ -44,6 +44,11 @@ const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 const MONITOR_INTERVAL: Duration = Duration::from_millis(100);
 const DEBOUNCE_TIME: Duration = Duration::from_millis(500);
 
+// Corresponds to os.FileMode(0750) | os.ModeDir in Go
+// So, it's (permission bits 0o750) ORed with (file type bit S_IFDIR).
+// We use u32 here because `file_mode` in CopyFileRequest is u32
+const DIR_MODE_PERMS: u32 = SFlag::S_IFDIR.bits() | 0o750;
+
 // copy file to container's rootfs if filesystem sharing is not supported, otherwise
 // bind mount it in the shared directory.
 // Ignore /dev, directories and all other device files. We handle
@@ -54,7 +59,13 @@ pub(crate) struct ShareFsVolume {
     share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
-    monitor_task: Option<JoinHandle<()>>,
+
+    // Add volume manager reference
+    volume_manager: Option<Arc<VolumeManager>>,
+    // Record the source path for cleanup
+    source_path: Option<String>,
+    // Record the container ID
+    container_id: String,
 }
 
 /// Directory Monitor Config
@@ -160,9 +171,27 @@ impl FsWatcher {
         let inotify = self.inotify.clone();
         let monitor_config = self.config.clone();
 
+        // Perform a full sync before starting monitoring to ensure that files which exist before monitoring starts are also synced.
+        let agent_sync = agent.clone();
+        let src_sync = src.clone();
+        let dst_sync = dst.clone();
+
         tokio::spawn(async move {
             let mut buffer = [0u8; 4096];
             let mut last_event_time = None;
+
+            // Initial sync: ensure existing contents in the directory are synchronized
+            {
+                info!(
+                    sl!(),
+                    "Initial sync from {:?} to {:?}", &src_sync, &dst_sync
+                );
+                if let Err(e) =
+                    copy_dir_recursively(&src_sync, &dst_sync.to_string_lossy(), &agent_sync).await
+                {
+                    error!(sl!(), "Initial sync failed: {:?}", e);
+                }
+            }
 
             loop {
                 // use cloned inotify instance
@@ -174,7 +203,8 @@ impl FsWatcher {
                                     | EventMask::MODIFY
                                     | EventMask::DELETE
                                     | EventMask::MOVED_FROM
-                                    | EventMask::MOVED_TO,
+                                    | EventMask::MOVED_TO
+                                    | EventMask::CLOSE_WRITE,
                             ) {
                                 continue;
                             }
@@ -206,7 +236,7 @@ impl FsWatcher {
                             }
                         }
                     }
-                    Err(e) => eprintln!("inotify error: {}", e),
+                    Err(e) => eprintln!("inotify error: {e}"),
                 }
 
                 // handle events to be synchronized
@@ -226,7 +256,7 @@ impl FsWatcher {
                     if Instant::now().duration_since(t) > DEBOUNCE_TIME && *need_sync.lock().await {
                         info!(sl!(), "debounce handle copyfile {:?} -> {:?}", &src, &dst);
                         if let Err(e) =
-                            copy_dir_recursively(&src, &dst.display().to_string(), &agent).await
+                            copy_dir_recursively(&src, &dst.to_string_lossy(), &agent).await
                         {
                             error!(
                                 sl!(),
@@ -235,7 +265,7 @@ impl FsWatcher {
                                 &dst,
                                 e
                             );
-                            eprintln!("sync host/guest files failed: {}", e);
+                            eprintln!("sync host/guest files failed: {e}");
                         }
                         *need_sync.lock().await = false;
                         last_event_time = None;
@@ -248,6 +278,138 @@ impl FsWatcher {
     }
 }
 
+//==========volume manager==============
+/// Sandbox-level volume state manager
+/// Tracks which paths have been copied to the guest on the runtime side
+#[derive(Clone, Default)]
+pub struct VolumeManager {
+    // Mapping of source path -> volume state
+    volume_states: Arc<RwLock<HashMap<String, VolumeState>>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct VolumeState {
+    // Source path (on the host)
+    source_path: String,
+    // Guest path
+    guest_path: String,
+    // Reference count (how many containers are using it)
+    ref_count: usize,
+    // List of container IDs using this volume
+    containers: HashSet<String>,
+    // Monitor task handle (if any)
+    monitor_task: Option<Arc<JoinHandle<()>>>,
+}
+
+#[allow(dead_code)]
+impl VolumeManager {
+    pub fn new() -> Self {
+        Self {
+            volume_states: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Gets or creates the volume's guest path
+    pub async fn get_or_create_volume(
+        &self,
+        canonical_source: &str,
+        container_id: &str,
+        mount_destination: &Path,
+    ) -> Result<String> {
+        let mut states = self.volume_states.write().await;
+
+        if let Some(state) = states.get_mut(canonical_source) {
+            // Existing volume and update reference
+            state.ref_count += 1;
+            state.containers.insert(container_id.to_string());
+
+            info!(
+                sl!(),
+                "Existing volume: source={:?}, guest={:?}, ref_count={}",
+                canonical_source,
+                state.guest_path,
+                state.ref_count,
+            );
+        }
+
+        // Create a new volume state
+        let guest_path =
+            generate_guest_path(container_id, mount_destination).context("generate path failed")?;
+
+        let mut containers = HashSet::new();
+        containers.insert(container_id.to_string());
+
+        let state = VolumeState {
+            source_path: canonical_source.to_string(),
+            guest_path: guest_path.clone(),
+            ref_count: 1,
+            containers,
+            monitor_task: None,
+        };
+
+        states.insert(state.source_path.clone(), state.clone());
+
+        info!(
+            sl!(),
+            "Created new volume state: source={:?}, guest={:?}",
+            state.source_path,
+            state.guest_path,
+        );
+
+        // Return guest path
+        Ok(guest_path)
+    }
+
+    /// Register monitor task into the volume manager
+    pub async fn register_monitor(
+        &self,
+        canonical_source: &str,
+        monitor_task: Option<JoinHandle<()>>,
+    ) -> Result<()> {
+        let mut states = self.volume_states.write().await;
+
+        if let Some(state) = states.get_mut(canonical_source) {
+            if let Some(handle) = monitor_task {
+                state.monitor_task = Some(Arc::new(handle));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Releases a volume reference
+    pub async fn release_volume(&self, source_path: &str, container_id: &str) -> Result<bool> {
+        let mut states = self.volume_states.write().await;
+
+        let canonical_source = std::fs::canonicalize(source_path)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| source_path.to_string());
+
+        if let Some(state) = states.get_mut(&canonical_source) {
+            state.containers.remove(container_id);
+            state.ref_count = state.ref_count.saturating_sub(1);
+
+            if state.ref_count == 0 {
+                // Abort the monitor task
+                if let Some(handle) = &state.monitor_task {
+                    handle.abort();
+                }
+
+                info!(
+                    sl!(),
+                    "Volume has no more references, source={:?}, guest={:?}",
+                    canonical_source,
+                    state.guest_path
+                );
+
+                return Ok(true); // Can be cleaned up
+            }
+        }
+
+        Ok(false)
+    }
+}
+
 impl ShareFsVolume {
     pub(crate) async fn new(
         share_fs: &Option<Arc<dyn ShareFs>>,
@@ -255,6 +417,7 @@ impl ShareFsVolume {
         cid: &str,
         readonly: bool,
         agent: Arc<dyn Agent>,
+        volume_manager: Arc<VolumeManager>,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let source_path = get_mount_path(m.source());
@@ -269,8 +432,11 @@ impl ShareFsVolume {
             share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
-            monitor_task: None,
+            volume_manager: Some(volume_manager.clone()),
+            source_path: Some(source_path.clone()),
+            container_id: cid.to_string(),
         };
+
         match share_fs {
             None => {
                 let src = match std::fs::canonicalize(&source_path) {
@@ -283,139 +449,57 @@ impl ShareFsVolume {
                     Ok(src) => src,
                 };
 
+                // append oci::Mount structure to volume mounts
+                let mut oci_mount = oci::Mount::default();
+                oci_mount.set_destination(m.destination().clone());
+                oci_mount.set_typ(Some("bind".to_string()));
+                oci_mount.set_options(m.options().clone());
+
                 // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
-                    // This is where we set the value for the guest path
-                    let dest = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                        PASSTHROUGH_FS_DIR,
-                        file_name.clone().as_str(),
-                    ]
-                    .join("/");
+                    // Generate guest path
+                    let guest_path = generate_guest_path(cid, m.destination())
+                        .context("generate path failed")?;
+                    // Copy a single file
+                    Self::copy_file_to_guest(&src, &guest_path, &agent)
+                        .await
+                        .context("copy file to guest")?;
 
-                    debug!(
-                        sl!(),
-                        "copy local file {:?} to guest {:?}",
-                        &source_path,
-                        dest.clone()
-                    );
-
-                    // Read file metadata
-                    let file_metadata = std::fs::metadata(src.clone())
-                        .with_context(|| format!("Failed to read metadata from file: {:?}", src))?;
-
-                    // Open file
-                    let mut file = File::open(&src)
-                        .with_context(|| format!("Failed to open file: {:?}", src))?;
-
-                    // Open read file contents to buffer
-                    let mut buffer = Vec::new();
-                    file.read_to_end(&mut buffer)
-                        .with_context(|| format!("Failed to read file: {:?}", src))?;
-
-                    // Create gRPC request
-                    let r = agent::CopyFileRequest {
-                        path: dest.clone(),
-                        file_size: file_metadata.len() as i64,
-                        uid: file_metadata.uid() as i32,
-                        gid: file_metadata.gid() as i32,
-                        file_mode: file_metadata.mode(),
-                        data: buffer,
-                        ..Default::default()
-                    };
-
-                    debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, dest.clone());
-
-                    // Issue gRPC request to agent
-                    agent.copy_file(r).await.with_context(|| {
-                        format!(
-                            "copy file request failed: src: {:?}, dest: {:?}",
-                            file_name, dest
-                        )
-                    })?;
-
-                    // append oci::Mount structure to volume mounts
-                    let mut oci_mount = oci::Mount::default();
-                    oci_mount.set_destination(m.destination().clone());
-                    oci_mount.set_typ(Some("bind".to_string()));
-                    oci_mount.set_source(Some(PathBuf::from(&dest)));
-                    oci_mount.set_options(m.options().clone());
+                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
                     volume.mounts.push(oci_mount);
-                } else if is_allowlisted_copy_volume(&src) {
-                    // For security reasons, we have restricted directory copying. Currently, only directories under
-                    // the path `/var/lib/kubelet/pods/<uid>/volumes/{kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api, kubernetes.io~projected}`
-                    // are allowed to be copied into the guest. Copying of other directories will be prohibited.
+                } else if src.is_dir() {
+                    // We allow directory copying wildly
+                    // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
+                    info!(sl!(), "copying directory {:?} to guest", &src);
 
-                    // source_path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
-                    info!(sl!(), "copying directory {:?} to guest", &source_path);
-
-                    // create target path in guest
-                    let dest_dir = [
-                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
-                        PASSTHROUGH_FS_DIR,
-                        file_name.clone().as_str(),
-                    ]
-                    .join("/");
-
-                    // create directory
-                    let dir_metadata = std::fs::metadata(src.clone())
-                        .context(format!("read metadata from directory: {:?}", src))?;
-
-                    // ttRPC request for creating directory
-                    let dir_request = agent::CopyFileRequest {
-                        path: dest_dir.clone(),
-                        file_size: 0, // useless for dir
-                        uid: dir_metadata.uid() as i32,
-                        gid: dir_metadata.gid() as i32,
-                        dir_mode: dir_metadata.mode(),
-                        file_mode: SFlag::S_IFDIR.bits(),
-                        data: vec![], // no files
-                        ..Default::default()
-                    };
-
-                    // dest_dir: "/run/kata-containers/sandbox/passthrough/sandbox-b2790ec0-kube-api-access-8s2nl"
-                    info!(
-                        sl!(),
-                        "creating directory: {:?} in sandbox with file_mode: {:?}",
-                        dest_dir,
-                        dir_request.file_mode
-                    );
-
-                    // send request for creating directory
-                    agent
-                        .copy_file(dir_request)
+                    // Get or create the guest path
+                    let guest_path = volume_manager
+                        .get_or_create_volume(&src.to_string_lossy(), cid, m.destination())
                         .await
-                        .context(format!("create directory in sandbox: {:?}", dest_dir))?;
+                        .context("get or create volume")?;
 
-                    // recursively copy files from this directory
-                    // similar to `scp -r $source_dir $target_dir`
-                    copy_dir_recursively(src.clone(), &dest_dir, &agent)
+                    // Create directory
+                    Self::copy_directory_to_guest(&src, &guest_path, &agent)
                         .await
-                        .context(format!("failed to copy directory contents: {:?}", src))?;
+                        .context("copy directory to guest")?;
 
-                    // handle special mount options
-                    let mut options = m.options().clone().unwrap_or_default();
-                    if !options.iter().any(|x| x == "rbind") {
-                        options.push("rbind".into());
-                    }
-                    if !options.iter().any(|x| x == "rprivate") {
-                        options.push("rprivate".into());
-                    }
-
-                    // add OCI Mount
-                    let mut oci_mount = oci::Mount::default();
-                    oci_mount.set_destination(m.destination().clone());
-                    oci_mount.set_typ(Some("bind".to_string()));
-                    oci_mount.set_source(Some(PathBuf::from(&dest_dir)));
-                    oci_mount.set_options(Some(options));
+                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
                     volume.mounts.push(oci_mount);
 
-                    // start monitoring
-                    let watcher = FsWatcher::new(Path::new(&source_path)).await?;
-                    let monitor_task = watcher
-                        .start_monitor(agent.clone(), src.clone(), dest_dir.into())
-                        .await;
-                    volume.monitor_task = Some(monitor_task);
+                    // Start monitoring (only for watchable volumes)
+                    let mut monitor_task = None;
+                    if is_watchable_volume(&src) {
+                        let watcher = FsWatcher::new(&src).await?;
+                        let handle = watcher
+                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&guest_path))
+                            .await;
+                        monitor_task = Some(handle);
+                    }
+
+                    // Register monitor into Volume Manager
+                    volume_manager
+                        .register_monitor(&src.to_string_lossy(), monitor_task)
+                        .await?;
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
@@ -503,6 +587,86 @@ impl ShareFsVolume {
         }
         Ok(volume)
     }
+
+    async fn copy_file_to_guest(
+        src: &Path,
+        guest_path: &str,
+        agent: &Arc<dyn Agent>,
+    ) -> Result<()> {
+        // Read file metadata
+        let file_metadata = std::fs::metadata(src)
+            .with_context(|| format!("Failed to read metadata from file: {src:?}"))?;
+
+        // Open file
+        let mut file = File::open(src).with_context(|| format!("Failed to open file: {src:?}"))?;
+
+        // Open read file contents to buffer
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)
+            .with_context(|| format!("Failed to read file: {src:?}"))?;
+
+        // Create gRPC request
+        let r = agent::CopyFileRequest {
+            path: guest_path.to_owned(),
+            file_size: file_metadata.len() as i64,
+            uid: file_metadata.uid() as i32,
+            gid: file_metadata.gid() as i32,
+            file_mode: file_metadata.mode(),
+            data: buffer,
+            ..Default::default()
+        };
+
+        debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, guest_path);
+
+        // Issue gRPC request to agent
+        agent.copy_file(r).await.with_context(|| {
+            format!("copy file request failed: src: {src:?}, dest: {guest_path:?}")
+        })?;
+        Ok(())
+    }
+
+    async fn copy_directory_to_guest(
+        src: &Path,
+        guest_path: &str,
+        agent: &Arc<dyn Agent>,
+    ) -> Result<()> {
+        // create directory
+        let dir_metadata =
+            std::fs::metadata(src).context(format!("read metadata from directory: {src:?}"))?;
+
+        // ttRPC request for creating directory
+        let dir_request = agent::CopyFileRequest {
+            path: guest_path.to_owned(),
+            file_size: 0, // useless for dir
+            uid: dir_metadata.uid() as i32,
+            gid: dir_metadata.gid() as i32,
+            dir_mode: DIR_MODE_PERMS,
+            file_mode: dir_metadata.mode(),
+            data: vec![], // no files
+            ..Default::default()
+        };
+
+        info!(
+            sl!(),
+            "creating directory: {:?} in sandbox with file_mode: {:?}",
+            guest_path,
+            dir_request.file_mode
+        );
+
+        // send request for creating directory
+        agent
+            .copy_file(dir_request)
+            .await
+            .context(format!("create directory in sandbox: {guest_path:?}"))?;
+
+        // recursively copy files from this directory
+        // similar to `scp -r $source_dir $target_dir`
+        copy_dir_recursively(src, guest_path, agent)
+            .await
+            .context(format!("failed to copy directory contents: {src:?}"))?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -518,7 +682,26 @@ impl Volume for ShareFsVolume {
     async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
-            None => return Ok(()),
+            None => {
+                return {
+                    // Release volume reference
+                    if let (Some(manager), Some(source)) = (&self.volume_manager, &self.source_path)
+                    {
+                        let should_cleanup =
+                            manager.release_volume(source, &self.container_id).await?;
+
+                        if should_cleanup {
+                            info!(
+                                sl!(),
+                                "Volume {:?} has no more references, can be cleaned up", source
+                            );
+                            // NOTE: We cannot delete files from the guest because there is no corresponding API
+                            // Files will be cleaned up automatically when the sandbox is destroyed
+                        }
+                    }
+                    Ok(())
+                };
+            }
         };
 
         let mounted_info_set = share_fs.mounted_info_set();
@@ -602,12 +785,12 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
     while let Some((current_src, current_dest)) = queue.pop_front() {
         let mut entries = tokio::fs::read_dir(&current_src)
             .await
-            .context(format!("read directory: {:?}", current_src))?;
+            .context(format!("read directory: {current_src:?}"))?;
 
         while let Some(entry) = entries
             .next_entry()
             .await
-            .context(format!("read directory entry in {:?}", current_src))?
+            .context(format!("read directory entry in {current_src:?}"))?
         {
             let entry_path = entry.path();
             let file_name = entry_path
@@ -616,12 +799,12 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 .to_string_lossy()
                 .to_string();
 
-            let dest_path = format!("{}/{}", current_dest, file_name);
+            let dest_path = format!("{current_dest}/{file_name}");
 
             let metadata = entry
                 .metadata()
                 .await
-                .context(format!("read metadata for {:?}", entry_path))?;
+                .context(format!("read metadata for {entry_path:?}"))?;
 
             if metadata.is_symlink() {
                 // handle symlinks
@@ -631,8 +814,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                     tokio::task::spawn_blocking(move || std::fs::read_link(&entry_path_clone))
                         .await
                         .context(format!(
-                            "failed to spawn blocking task for symlink: {:?}",
-                            entry_path_err
+                            "failed to spawn blocking task for symlink: {entry_path_err:?}"
                         ))??;
 
                 let link_target_str = link_target.to_string_lossy().into_owned();
@@ -653,8 +835,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 );
 
                 agent.copy_file(symlink_request).await.context(format!(
-                    "failed to create symlink: {:?} -> {:?}",
-                    dest_path, link_target_str
+                    "failed to create symlink: {dest_path:?} -> {link_target_str:?}"
                 ))?;
             } else if metadata.is_dir() {
                 // handle directory
@@ -677,7 +858,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 agent
                     .copy_file(dir_request)
                     .await
-                    .context(format!("Failed to create subdirectory: {:?}", dest_path))?;
+                    .context(format!("Failed to create subdirectory: {dest_path:?}"))?;
 
                 // push back the sub-dir into queue to handle it in time
                 queue.push_back((entry_path, dest_path));
@@ -685,12 +866,12 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 // async read file
                 let mut file = tokio::fs::File::open(&entry_path)
                     .await
-                    .context(format!("open file: {:?}", entry_path))?;
+                    .context(format!("open file: {entry_path:?}"))?;
 
                 let mut buffer = Vec::new();
                 file.read_to_end(&mut buffer)
                     .await
-                    .context(format!("read file: {:?}", entry_path))?;
+                    .context(format!("read file: {entry_path:?}"))?;
 
                 let file_request = agent::CopyFileRequest {
                     path: dest_path.clone(),
@@ -706,7 +887,7 @@ async fn copy_dir_recursively<P: AsRef<Path>>(
                 agent
                     .copy_file(file_request)
                     .await
-                    .context(format!("copy file: {:?} -> {:?}", entry_path, dest_path))?;
+                    .context(format!("copy file: {entry_path:?} -> {dest_path:?}"))?;
             }
         }
     }
@@ -748,7 +929,7 @@ fn is_host_device(dest: &str) -> bool {
 // Agent will support this kind of bind mount.
 fn is_system_mount(src: &str) -> bool {
     for p in SYS_MOUNT_PREFIX {
-        let sub_dir_p = format!("{}/", p);
+        let sub_dir_p = format!("{p}/");
         if src == p || src.contains(sub_dir_p.as_str()) {
             return true;
         }
@@ -767,21 +948,42 @@ pub fn generate_mount_path(id: &str, file_name: &str) -> String {
     let uid_vec: Vec<&str> = uid.splitn(2, '-').collect();
     uid = String::from(uid_vec[0]);
 
-    format!("{}-{}-{}", nid, uid, file_name)
+    format!("{nid}-{uid}-{file_name}")
 }
 
-/// This function is used to check whether a given volume is in the allowed copy allowlist.
-/// More specifically, it determines whether the volume's path is located under a predefined
-/// list of allowed copy directories.
-pub(crate) fn is_allowlisted_copy_volume(source_path: &PathBuf) -> bool {
+/// This function is used to check whether a given volume is a watchable volume.
+/// More specifically, it determines whether the volume's path is located under
+/// a predefined list of allowed copy directories.
+pub(crate) fn is_watchable_volume(source_path: &PathBuf) -> bool {
     if !source_path.is_dir() {
         return false;
     }
-    // allowlist: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
+    // watchable list: { kubernetes.io~projected, kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~downward-api }
     is_projected(source_path)
         || is_downward_api(source_path)
         || is_secret(source_path)
         || is_configmap(source_path)
+}
+
+/// Generates a guest path related to mount dest
+fn generate_guest_path(cid: &str, mount_destination: &Path) -> Result<String> {
+    let mut data = vec![0u8; 8];
+    let mut rng = thread_rng(); // Get a thread-local RNG
+    rng.fill_bytes(&mut data);
+
+    let hex_str = hex::encode(data);
+    let dest_base = mount_destination
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("get mount destination failed"))?;
+
+    Ok(format!(
+        "{}{}-{}-{}",
+        kata_guest_share_dir(),
+        cid,
+        hex_str,
+        dest_base
+    ))
 }
 
 #[cfg(test)]
@@ -804,7 +1006,7 @@ mod test {
     }
 
     #[test]
-    fn test_is_allowlisted_copy_volume() {
+    fn test_is_watchable_volume() {
         // The configmap is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~configmap/kube-configmap-0s2no/{..data, key1, key2,...}
         // The secret is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~secret/kube-secret-2s2np/{..data, key1, key2,...}
         // The projected is /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~projected/kube-api-access-8s2nl/{..data, key1, key2,...}
@@ -827,9 +1029,9 @@ mod test {
         let downward_api_path = temp_dir.path().join(downward_api);
         std::fs::create_dir_all(&downward_api_path).unwrap();
 
-        assert!(is_allowlisted_copy_volume(&cm_path));
-        assert!(is_allowlisted_copy_volume(&secret_path));
-        assert!(is_allowlisted_copy_volume(&projected_path));
-        assert!(is_allowlisted_copy_volume(&downward_api_path));
+        assert!(is_watchable_volume(&cm_path));
+        assert!(is_watchable_volume(&secret_path));
+        assert!(is_watchable_volume(&projected_path));
+        assert!(is_watchable_volume(&downward_api_path));
     }
 }

@@ -313,8 +313,8 @@ mod tests {
     pub struct TestContext {
         pub cid: u64,
         pub mem: GuestMemoryMmap,
-        pub mem_size: usize,
-        pub epoll_manager: EpollManager,
+        pub _mem_size: usize,
+        pub _epoll_manager: EpollManager,
         pub device: Vsock<Arc<GuestMemoryMmap>, TestMuxer>,
     }
 
@@ -327,8 +327,8 @@ mod tests {
             Self {
                 cid: CID,
                 mem,
-                mem_size: MEM_SIZE,
-                epoll_manager: epoll_manager.clone(),
+                _mem_size: MEM_SIZE,
+                _epoll_manager: epoll_manager.clone(),
                 device: Vsock::new_with_muxer(
                     CID,
                     Arc::new(defs::QUEUE_SIZES.to_vec()),
@@ -394,7 +394,7 @@ mod tests {
             EventHandlerContext {
                 guest_rxvq,
                 guest_txvq,
-                guest_evvq,
+                _guest_evvq: guest_evvq,
                 queues,
                 epoll_handler: None,
                 device: Vsock::new_with_muxer(
@@ -422,7 +422,7 @@ mod tests {
         pub queues: Vec<VirtioQueueConfig<QueueSync>>,
         pub guest_rxvq: GuestQ<'a>,
         pub guest_txvq: GuestQ<'a>,
-        pub guest_evvq: GuestQ<'a>,
+        pub _guest_evvq: GuestQ<'a>,
         pub mem: Arc<GuestMemoryMmap>,
     }
 

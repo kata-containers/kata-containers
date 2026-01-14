@@ -9,11 +9,10 @@ use std::path::PathBuf;
 pub mod ch_api;
 pub mod convert;
 pub mod net_util;
-mod virtio_devices;
 
-use crate::virtio_devices::RateLimiterConfig;
 use kata_sys_util::protection::GuestProtection;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
+use kata_types::config::hypervisor::RateLimiterConfig;
 pub use net_util::MacAddr;
 
 pub const MAX_NUM_PCI_SEGMENTS: u16 = 16;
@@ -491,6 +490,7 @@ pub struct NamedHypervisorConfig {
 
     pub shared_fs_devices: Option<Vec<FsConfig>>,
     pub network_devices: Option<Vec<NetConfig>>,
+    pub host_devices: Option<Vec<DeviceConfig>>,
 
     // Set to the available guest protection *iff* BOTH of the following
     // conditions are true:
@@ -538,7 +538,10 @@ mod tests {
 
     #[test]
     fn test_guest_protection_is_tdx() {
-        let sev_snp_details = SevSnpDetails { cbitpos: 42 };
+        let sev_snp_details = SevSnpDetails {
+            cbitpos: 42,
+            phys_addr_reduction: 42,
+        };
 
         #[derive(Debug)]
         struct TestData {

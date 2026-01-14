@@ -1,0 +1,49 @@
+From a11d1847d5ef8a7db58e6d4e44f36fec708f0981 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Alex=20Benn=C3=A9e?= <alex.bennee@linaro.org>
+Date: Mon, 8 Sep 2025 15:19:11 +0100
+Subject: [PATCH] .gitmodules: move u-boot mirrors to qemu-project-mirrors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+To continue our GitLab Open Source Program license we need to pass an
+automated license check for all repos under qemu-project. While U-Boot
+is clearly GPLv2 rather than fight with the automated validation
+script just move the mirror across to a separate project.
+
+Signed-off-by: Alex Bennée <alex.bennee@linaro.org>
+Suggested-by: Daniel P. Berrangé <berrange@redhat.com>
+Cc: qemu-stable@nongnu.org
+Reviewed-by: Daniel P. Berrangé <berrange@redhat.com>
+Signed-off-by: Richard Henderson <richard.henderson@linaro.org>
+Message-ID: <20250908141911.2546063-1-alex.bennee@linaro.org>
+Signed-off-by: Richard Henderson <richard.henderson@linaro.org>
+---
+ .gitmodules | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.gitmodules b/.gitmodules
+index 73cae4cd4da..e27dfe8c2c1 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -15,7 +15,7 @@
+ 	url = https://gitlab.com/qemu-project/qemu-palcode.git
+ [submodule "roms/u-boot"]
+ 	path = roms/u-boot
+-	url = https://gitlab.com/qemu-project/u-boot.git
++	url = https://gitlab.com/qemu-project-mirrors/u-boot.git
+ [submodule "roms/skiboot"]
+ 	path = roms/skiboot
+ 	url = https://gitlab.com/qemu-project/skiboot.git
+@@ -27,7 +27,7 @@
+ 	url = https://gitlab.com/qemu-project/seabios-hppa.git
+ [submodule "roms/u-boot-sam460ex"]
+ 	path = roms/u-boot-sam460ex
+-	url = https://gitlab.com/qemu-project/u-boot-sam460ex.git
++	url = https://gitlab.com/qemu-project-mirrors/u-boot-sam460ex.git
+ [submodule "roms/edk2"]
+ 	path = roms/edk2
+ 	url = https://gitlab.com/qemu-project/edk2.git
+-- 
+GitLab
+

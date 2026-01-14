@@ -72,7 +72,7 @@ impl PciBusContent {
                         .ok_or_else(|| Error::InvalidResource(res.clone()))?;
                     self.iomem_resources.insert(Range::new(*base, end), None);
                 }
-                _ => debug!("unknown resource assigned to PCI bus {}", id),
+                _ => debug!("unknown resource assigned to PCI bus {id}"),
             }
         }
 
@@ -158,7 +158,7 @@ impl PciBus {
         let device_id = device.id();
         let mut devices = self.devices.write().expect("poisoned lock for PCI bus");
 
-        debug!("add device id {} to bus", device_id);
+        debug!("add device id {device_id} to bus");
         let old = devices.update(&Range::new(device_id, device_id), device.clone());
         assert!(old.is_none());
 

@@ -2,11 +2,11 @@ name: Release Kata Containers
 on:
   workflow_dispatch
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   release:
+    name: release
     runs-on: ubuntu-22.04
     permissions:
       contents: write # needed for the `gh release create` command
@@ -35,6 +35,7 @@ jobs:
       target-arch: amd64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-and-push-assets-arm64:
     needs: release
@@ -48,6 +49,7 @@ jobs:
       target-arch: arm64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-and-push-assets-s390x:
     needs: release
@@ -77,6 +79,7 @@ jobs:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   publish-multi-arch-images:
+    name: publish-multi-arch-images
     runs-on: ubuntu-22.04
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
@@ -114,6 +117,7 @@ jobs:
           KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy ghcr.io/kata-containers/kata-deploy"
 
   upload-multi-arch-static-tarball:
+    name: upload-multi-arch-static-tarball
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     permissions:
       contents: write # needed for the `gh release` commands
@@ -126,7 +130,7 @@ jobs:
 
       - name: Set KATA_STATIC_TARBALL env var
         run: |
-          tarball=$(pwd)/kata-static.tar.xz
+          tarball=$(pwd)/kata-static.tar.zst
           echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
 
       - name: Download amd64 artifacts
@@ -177,7 +181,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: ppc64le
 
+      - name: Set KATA_TOOLS_STATIC_TARBALL env var
+        run: |
+          tarball=$(pwd)/kata-tools-static.tar.zst
+          echo "KATA_TOOLS_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
+
+      - name: Download amd64 tools artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64
+
+      - name: Upload amd64 static tarball tools to GitHub
+        run: |
+          ./tools/packaging/release/release.sh upload-kata-tools-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: amd64
+
   upload-versions-yaml:
+    name: upload-versions-yaml
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -195,6 +217,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   upload-cargo-vendored-tarball:
+    name: upload-cargo-vendored-tarball
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -212,6 +235,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   upload-libseccomp-tarball:
+    name: upload-libseccomp-tarball
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -229,6 +253,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
   upload-helm-chart-tarball:
+    name: upload-helm-chart-tarball
     needs: release
     runs-on: ubuntu-22.04
     permissions:
@@ -253,10 +278,11 @@ jobs:
       - name: Login to the OCI registries
         env:
           QUAY_DEPLOYER_USERNAME: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          GITHUB_ACTOR: ${{ github.actor }}
+          QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo "${{ secrets.QUAY_DEPLOYER_PASSWORD }}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
-          echo "${{ github.token }}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          echo "${QUAY_DEPLOYER_PASSWORD}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
+          echo "${GITHUB_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
       - name: Push helm chart to the OCI registries
         run: |
@@ -265,6 +291,7 @@ jobs:
           helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
 
   publish-release:
+    name: publish-release
     needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
     runs-on: ubuntu-22.04
     permissions:

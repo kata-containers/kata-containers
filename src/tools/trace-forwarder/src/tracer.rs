@@ -13,15 +13,15 @@ pub fn create_jaeger_trace_exporter(
 ) -> Result<opentelemetry_jaeger::Exporter, std::io::Error> {
     let exporter_type = "jaeger";
 
-    let jaeger_addr = format!("{}:{}", jaeger_host, jaeger_port);
+    let jaeger_addr = format!("{jaeger_host}:{jaeger_port}");
 
     let socket_addr: SocketAddr = match jaeger_addr.parse() {
         Ok(a) => a,
         Err(e) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("failed to parse Jaeger address: {:?}", e.to_string()),
-            ))
+            return Err(std::io::Error::other(format!(
+                "failed to parse Jaeger address: {:?}",
+                e.to_string()
+            )))
         }
     };
 
@@ -33,10 +33,10 @@ pub fn create_jaeger_trace_exporter(
     {
         Ok(x) => x,
         Err(e) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("failed to create exporter: {:?}", e.to_string()),
-            ))
+            return Err(std::io::Error::other(format!(
+                "failed to create exporter: {:?}",
+                e.to_string()
+            )))
         }
     };
 

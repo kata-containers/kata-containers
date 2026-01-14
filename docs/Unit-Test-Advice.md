@@ -198,7 +198,7 @@ fn join_params_with_dash(str: &str, num: i32) -> Result<String> {
         return Err("number must be positive");
     }
 
-    let result = format!("{}-{}", str, num);
+    let result = format!("{str}-{num}");
 
     Ok(result)
 }
@@ -253,13 +253,13 @@ mod tests {
         // Run the tests
         for (i, d) in tests.iter().enumerate() {
             // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             // Call the function under test
             let result = join_params_with_dash(d.str, d.num);
 
             // Update the test details string with the results of the call
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             // Perform the checks
             if d.result.is_ok() {
@@ -267,8 +267,8 @@ mod tests {
                 continue;
             }
 
-            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
-            let actual_error = format!("{}", result.unwrap_err());
+            let expected_error = format!("{d.result.as_ref().unwrap_err()}");
+            let actual_error = format!("{result.unwrap_err()}");
             assert!(actual_error == expected_error, msg);
         }
     }

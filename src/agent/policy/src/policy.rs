@@ -10,7 +10,7 @@ use anyhow::{bail, Result};
 use slog::{debug, error, info, warn};
 use tokio::io::AsyncWriteExt;
 
-static POLICY_LOG_FILE: &str = "/tmp/policy.txt";
+static POLICY_LOG_FILE: &str = "/tmp/policy.jsonl";
 static POLICY_DEFAULT_FILE: &str = "/etc/kata-opa/default-policy.rego";
 
 /// Convenience macro to obtain the scope logger
@@ -26,7 +26,7 @@ pub struct AgentPolicy {
     /// When true policy errors are ignored, for debug purposes.
     allow_failures: bool,
 
-    /// "/tmp/policy.txt" log file for policy activity.
+    /// "/tmp/policy.jsonl" log file for policy activity.
     log_file: Option<tokio::fs::File>,
 
     /// Regorus engine
@@ -213,7 +213,7 @@ impl AgentPolicy {
                     //   The Policy text can be obtained directly from the pod YAML.
                 }
                 _ => {
-                    let log_entry = format!("[\"ep\":\"{ep}\",{input}],\n\n");
+                    let log_entry = format!("{{\"kind\":\"{ep}\",\"request\":{input}}}\n");
 
                     if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
                         warn!(sl!(), "policy: log_eval_input: write_all failed: {}", e);

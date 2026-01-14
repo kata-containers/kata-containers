@@ -220,7 +220,7 @@ impl std::fmt::Display for PCIePortBusPrefix {
             PCIePortBusPrefix::SwitchUpstreamPort => "swup",
             PCIePortBusPrefix::SwitchDownstreamPort => "swdp",
         };
-        write!(f, "{}", prefix)
+        write!(f, "{prefix}")
     }
 }
 
@@ -245,7 +245,7 @@ impl std::fmt::Display for PCIePort {
             PCIePort::RootPort => "root-port",
             PCIePort::SwitchPort => "switch-port",
         };
-        write!(f, "{}", port)
+        write!(f, "{port}")
     }
 }
 

@@ -8,11 +8,13 @@ mod block_volume;
 mod default_volume;
 mod ephemeral_volume;
 pub mod hugepage;
+mod local_volume;
 mod share_fs_volume;
+mod shm_volume;
 pub mod utils;
 
 pub mod direct_volume;
-use crate::volume::direct_volume::is_direct_volume;
+use crate::volume::{direct_volume::is_direct_volume, share_fs_volume::VolumeManager};
 pub mod direct_volumes;
 
 use std::{sync::Arc, vec::Vec};
@@ -45,11 +47,19 @@ pub struct VolumeResourceInner {
 #[derive(Default)]
 pub struct VolumeResource {
     inner: Arc<RwLock<VolumeResourceInner>>,
+    // The core purpose of introducing `volume_manager` to `VolumeResource` is to centralize the management of shared file system volumes.
+    // By creating a single VolumeManager instance within VolumeResource, all shared file volumes are managed by one central entity.
+    // This single volume_manager can accurately track the references of all ShareFsVolume instances to the shared volumes,
+    // ensuring correct reference counting, proper volume lifecycle management, and preventing issues like volumes being overwritten.
+    volume_manager: Arc<VolumeManager>,
 }
 
 impl VolumeResource {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            inner: Arc::new(RwLock::new(VolumeResourceInner::default())),
+            volume_manager: Arc::new(VolumeManager::new()),
+        }
     }
 
     pub async fn handler_volumes(
@@ -67,17 +77,27 @@ impl VolumeResource {
         // handle mounts
         for m in oci_mounts {
             let read_only = get_mount_options(m.options()).iter().any(|opt| opt == "ro");
-            let volume: Arc<dyn Volume> = if ephemeral_volume::is_ephemeral_volume(m) {
+            let volume: Arc<dyn Volume> = if shm_volume::is_shm_volume(m) {
+                Arc::new(
+                    shm_volume::ShmVolume::new(m)
+                        .with_context(|| format!("new shm volume {m:?}"))?,
+                )
+            } else if local_volume::is_local_volume(m) {
+                Arc::new(
+                    local_volume::LocalStorage::new(m, sid, cid)
+                        .with_context(|| format!("new local volume {m:?}"))?,
+                )
+            } else if ephemeral_volume::is_ephemeral_volume(m) {
                 Arc::new(
                     ephemeral_volume::EphemeralVolume::new(m)
-                        .with_context(|| format!("new shm volume {:?}", m))?,
+                        .with_context(|| format!("new ephemeral volume {m:?}"))?,
                 )
             } else if is_block_volume(m) {
                 // handle block volume
                 Arc::new(
                     block_volume::BlockVolume::new(d, m, read_only, sid)
                         .await
-                        .with_context(|| format!("new block volume {:?}", m))?,
+                        .with_context(|| format!("new block volume {m:?}"))?,
                 )
             } else if is_direct_volume(m)? {
                 // handle direct volumes
@@ -97,13 +117,20 @@ impl VolumeResource {
                 // handle container hugepage
                 Arc::new(
                     hugepage::Hugepage::new(m, hugepage_limits, options)
-                        .with_context(|| format!("handle hugepages {:?}", m))?,
+                        .with_context(|| format!("handle hugepages {m:?}"))?,
                 )
             } else if share_fs_volume::is_share_fs_volume(m) {
                 Arc::new(
-                    share_fs_volume::ShareFsVolume::new(share_fs, m, cid, read_only, agent.clone())
-                        .await
-                        .with_context(|| format!("new share fs volume {:?}", m))?,
+                    share_fs_volume::ShareFsVolume::new(
+                        share_fs,
+                        m,
+                        cid,
+                        read_only,
+                        agent.clone(),
+                        self.volume_manager.clone(),
+                    )
+                    .await
+                    .with_context(|| format!("new share fs volume {m:?}"))?,
                 )
             } else if is_skip_volume(m) {
                 info!(sl!(), "skip volume {:?}", m);
@@ -111,7 +138,7 @@ impl VolumeResource {
             } else {
                 Arc::new(
                     default_volume::DefaultVolume::new(m)
-                        .with_context(|| format!("new default volume {:?}", m))?,
+                        .with_context(|| format!("new default volume {m:?}"))?,
                 )
             };
 

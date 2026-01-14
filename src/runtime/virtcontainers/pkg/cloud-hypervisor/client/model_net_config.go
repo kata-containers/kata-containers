@@ -16,8 +16,10 @@ import (
 
 // NetConfig struct for NetConfig
 type NetConfig struct {
-	Tap               *string            `json:"tap,omitempty"`
-	Ip                *string            `json:"ip,omitempty"`
+	Tap *string `json:"tap,omitempty"`
+	// IPv4 or IPv6 address
+	Ip *string `json:"ip,omitempty"`
+	// Must be a valid IPv4 netmask if ip is an IPv4 address or a valid IPv6 netmask if ip is an IPv6 address.
 	Mask              *string            `json:"mask,omitempty"`
 	Mac               *string            `json:"mac,omitempty"`
 	HostMac           *string            `json:"host_mac,omitempty"`

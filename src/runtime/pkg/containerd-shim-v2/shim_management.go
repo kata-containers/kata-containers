@@ -81,7 +81,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// encode the metrics
-	encoder := expfmt.NewEncoder(w, expfmt.FmtText)
+	encoder := expfmt.NewEncoder(w, expfmt.NewFormat(expfmt.TypeTextPlain))
 	for _, mf := range mfs {
 		encoder.Encode(mf)
 	}
@@ -120,7 +120,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 func decodeAgentMetrics(body string) []*dto.MetricFamily {
 	// decode agent metrics
 	reader := strings.NewReader(body)
-	decoder := expfmt.NewDecoder(reader, expfmt.FmtText)
+	decoder := expfmt.NewDecoder(reader, expfmt.NewFormat(expfmt.TypeTextPlain))
 	list := make([]*dto.MetricFamily, 0)
 
 	for {

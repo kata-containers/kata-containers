@@ -132,7 +132,7 @@ impl VhostUserNetDeviceMgr {
         config: VhostUserNetDeviceConfigInfo,
     ) -> Result<(), VhostUserNetDeviceError> {
         // Validate device configuration first.
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VhostUserNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
@@ -219,9 +219,11 @@ impl Default for VhostUserNetDeviceMgr {
 mod tests {
     use super::*;
     use crate::test_utils::tests::create_vm_for_test;
+    use test_utils::skip_if_kvm_unaccessable;
 
     #[test]
     fn test_create_vhost_user_net_device() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mgr = DeviceManager::new_test_mgr();
         let sock_1 = String::from("id_1");
@@ -249,6 +251,7 @@ mod tests {
 
     #[test]
     fn test_insert_vhost_user_net_device() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
         let sock_1 = String::from("id_1");
@@ -277,6 +280,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_insert_error_cases() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
         let sock_1 = String::from("id_1");
@@ -310,16 +314,16 @@ mod tests {
     #[test]
     fn test_vhost_user_net_error_display() {
         let err = VhostUserNetDeviceError::InvalidVmId;
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::InvalidQueueNum(0);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::DeviceManager(DeviceMgrError::GetDeviceResource);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::DuplicatedUdsPath(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::Virtio(VirtioError::DescriptorChainTooShort);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
         let err = VhostUserNetDeviceError::UpdateNotAllowedPostBoot;
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
     }
 }

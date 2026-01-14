@@ -81,6 +81,11 @@ pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::Asyn
     (logger, guard)
 }
 
+pub enum LogDestination {
+    File(Box<dyn Write + Send + Sync>),
+    Journal,
+}
+
 // Creates a logger which prints output as JSON
 // XXX: 'writer' param used to make testing possible.
 pub fn create_logger<W>(
@@ -92,13 +97,43 @@ pub fn create_logger<W>(
 where
     W: Write + Send + Sync + 'static,
 {
-    let json_drain = slog_json::Json::new(writer)
-        .add_default_keys()
-        .build()
-        .fuse();
+    create_logger_with_destination(name, source, level, LogDestination::File(Box::new(writer)))
+}
+
+// Creates a logger which prints output as JSON or to systemd journal
+pub fn create_logger_with_destination(
+    name: &str,
+    source: &str,
+    level: slog::Level,
+    destination: LogDestination,
+) -> (slog::Logger, slog_async::AsyncGuard) {
+    // Check the destination type before consuming it.
+    // The `matches` macro performs a non-consuming check (it borrows).
+    let is_journal_destination = matches!(destination, LogDestination::Journal);
+
+    // The target type for boxed drain. Note that Err = slog::Never.
+    // Both `.fuse()` and `.ignore_res()` convert potential errors into a non-returning path
+    //  (panic or ignore), so they never return an Err.
+    let drain: Box<dyn Drain<Ok = (), Err = slog::Never> + Send> = match destination {
+        LogDestination::File(writer) => {
+            // `destination` is `File`.
+            let json_drain = slog_json::Json::new(writer)
+                .add_default_keys()
+                .build()
+                .fuse();
+
+            Box::new(json_drain)
+        }
+        LogDestination::Journal => {
+            // `destination` is `Journal`.
+            let journal_drain = slog_journald::JournaldDrain.ignore_res();
+
+            Box::new(journal_drain)
+        }
+    };
 
     // Ensure only a unique set of key/value fields is logged
-    let unique_drain = UniqueDrain::new(json_drain).fuse();
+    let unique_drain = UniqueDrain::new(drain).fuse();
 
     // Adjust the level which will be applied to the log-system
     // Info is the default level, but if Debug flag is set, the overall log level will be changed to Debug here
@@ -119,15 +154,27 @@ where
         .thread_name("slog-async-logger".into())
         .build_with_guard();
 
-    // Add some "standard" fields
-    let logger = slog::Logger::root(
+    // Create a base logger with common fields.
+    let base_logger = slog::Logger::root(
         async_drain.fuse(),
-        o!("version" => env!("CARGO_PKG_VERSION"),
+        o!(
+            "version" => env!("CARGO_PKG_VERSION"),
             "subsystem" => DEFAULT_SUBSYSTEM,
             "pid" => process::id().to_string(),
             "name" => name.to_string(),
-            "source" => source.to_string()),
+            "source" => source.to_string()
+        ),
     );
+
+    // If not journal destination, the logger remains the base_logger.
+    let logger = if is_journal_destination {
+        // Use the .new() method to build a child logger which inherits all existing
+        // key-value pairs from its parent and supplements them with additional ones.
+        // This is the idiomatic way.
+        base_logger.new(o!("SYSLOG_IDENTIFIER" => "kata"))
+    } else {
+        base_logger
+    };
 
     (logger, guard)
 }
@@ -226,7 +273,7 @@ impl KV for HashSerializer {
 
 impl slog::Serializer for HashSerializer {
     fn emit_arguments(&mut self, key: Key, value: &std::fmt::Arguments) -> slog::Result {
-        self.add_field(format!("{}", key), format!("{}", value));
+        self.add_field(format!("{key}"), format!("{value}"));
         Ok(())
     }
 }
@@ -271,10 +318,7 @@ where
 
         match result {
             Ok(_) => Ok(()),
-            Err(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "failed to drain log".to_string(),
-            )),
+            Err(_) => Err(io::Error::other("failed to drain log")),
         }
     }
 }
@@ -409,11 +453,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = level_name_to_slog_level(d.name);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert!(result.is_ok());
@@ -469,11 +513,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = slog_level_to_level_name(d.level);
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert!(result == d.result, "{}", msg);
@@ -502,7 +546,12 @@ mod tests {
         let record_key = "record-key-1";
         let record_value = "record-key-2";
 
-        let (logger, guard) = create_logger(name, source, level, writer);
+        let (logger, guard) = create_logger_with_destination(
+            name,
+            source,
+            level,
+            LogDestination::File(Box::new(writer)),
+        );
 
         let msg = "foo, bar, baz";
 
@@ -650,7 +699,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]", i);
+            let msg = format!("test[{i}]");
 
             // Create a writer for the logger drain to use
             let writer = NamedTempFile::new()
@@ -661,7 +710,12 @@ mod tests {
                 .reopen()
                 .unwrap_or_else(|_| panic!("{:?}: failed to clone tempfile", msg));
 
-            let (logger, logger_guard) = create_logger(name, source, d.slog_level, writer);
+            let (logger, logger_guard) = create_logger_with_destination(
+                name,
+                source,
+                d.slog_level,
+                LogDestination::File(Box::new(writer)),
+            );
 
             // Call the logger (which calls the drain)
             (d.closure)(&logger, d.msg.to_owned());
@@ -684,44 +738,44 @@ mod tests {
             let field_ts = fields
                 .get("ts")
                 .unwrap_or_else(|| panic!("{:?}: failed to find timestamp field", msg));
-            assert_ne!(field_ts, "", "{}", msg);
+            assert_ne!(field_ts, "", "{msg}");
 
             let field_version = fields
                 .get("version")
                 .unwrap_or_else(|| panic!("{:?}: failed to find version field", msg));
-            assert_eq!(field_version, env!("CARGO_PKG_VERSION"), "{}", msg);
+            assert_eq!(field_version, env!("CARGO_PKG_VERSION"), "{msg}");
 
             let field_pid = fields
                 .get("pid")
                 .unwrap_or_else(|| panic!("{:?}: failed to find pid field", msg));
-            assert_ne!(field_pid, "", "{}", msg);
+            assert_ne!(field_pid, "", "{msg}");
 
             let field_level = fields
                 .get("level")
                 .unwrap_or_else(|| panic!("{:?}: failed to find level field", msg));
-            assert_eq!(field_level, d.slog_level_tag, "{}", msg);
+            assert_eq!(field_level, d.slog_level_tag, "{msg}");
 
             let field_msg = fields
                 .get("msg")
                 .unwrap_or_else(|| panic!("{:?}: failed to find msg field", msg));
-            assert_eq!(field_msg, &json!(d.msg), "{}", msg);
+            assert_eq!(field_msg, &json!(d.msg), "{msg}");
 
             let field_name = fields
                 .get("name")
                 .unwrap_or_else(|| panic!("{:?}: failed to find name field", msg));
-            assert_eq!(field_name, name, "{}", msg);
+            assert_eq!(field_name, name, "{msg}");
 
             let field_source = fields
                 .get("source")
                 .unwrap_or_else(|| panic!("{:?}: failed to find source field", msg));
-            assert_eq!(field_source, source, "{}", msg);
+            assert_eq!(field_source, source, "{msg}");
 
             let field_subsystem = fields
                 .get("subsystem")
                 .unwrap_or_else(|| panic!("{:?}: failed to find subsystem field", msg));
 
             // No explicit subsystem, so should be the default
-            assert_eq!(field_subsystem, &json!(DEFAULT_SUBSYSTEM), "{}", msg);
+            assert_eq!(field_subsystem, &json!(DEFAULT_SUBSYSTEM), "{msg}");
         }
     }
 }

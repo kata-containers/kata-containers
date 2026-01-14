@@ -588,7 +588,7 @@ fn mount_at<P: AsRef<Path>>(
                 }
             }
         })?;
-    child.join().map_err(|e| Error::Join(format!("{:?}", e)))?;
+    child.join().map_err(|e| Error::Join(format!("{e:?}")))?;
 
     if !rx.load(Ordering::Acquire) {
         Err(Error::Mount(
@@ -823,11 +823,11 @@ mod tests {
 
     #[test]
     fn test_get_linux_mount_info() {
-        let info = get_linux_mount_info("/sys/fs/cgroup").unwrap();
+        let info = get_linux_mount_info("/dev/shm").unwrap();
 
         assert_eq!(&info.device, "tmpfs");
         assert_eq!(&info.fs_type, "tmpfs");
-        assert_eq!(&info.path, "/sys/fs/cgroup");
+        assert_eq!(&info.path, "/dev/shm");
 
         assert!(matches!(
             get_linux_mount_info(""),
@@ -1088,7 +1088,7 @@ mod tests {
         assert!(parse_mount_options(&options).is_err());
 
         let idx = options.len() - 1;
-        options[idx] = " ".repeat(4097);
+        options[idx] = " ".repeat(*MAX_MOUNT_PARAM_SIZE + 1);
         assert!(parse_mount_options(&options).is_err());
     }
 

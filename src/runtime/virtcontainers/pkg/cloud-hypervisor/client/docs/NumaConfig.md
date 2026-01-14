@@ -8,7 +8,6 @@ Name | Type | Description | Notes
 **Cpus** | Pointer to **[]int32** |  | [optional] 
 **Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional] 
 **MemoryZones** | Pointer to **[]string** |  | [optional] 
-**SgxEpcSections** | Pointer to **[]string** |  | [optional] 
 **PciSegments** | Pointer to **[]int32** |  | [optional] 
 
 ## Methods
@@ -124,31 +123,6 @@ SetMemoryZones sets MemoryZones field to given value.
 `func (o *NumaConfig) HasMemoryZones() bool`
 
 HasMemoryZones returns a boolean if a field has been set.
-
-### GetSgxEpcSections
-
-`func (o *NumaConfig) GetSgxEpcSections() []string`
-
-GetSgxEpcSections returns the SgxEpcSections field if non-nil, zero value otherwise.
-
-### GetSgxEpcSectionsOk
-
-`func (o *NumaConfig) GetSgxEpcSectionsOk() (*[]string, bool)`
-
-GetSgxEpcSectionsOk returns a tuple with the SgxEpcSections field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetSgxEpcSections
-
-`func (o *NumaConfig) SetSgxEpcSections(v []string)`
-
-SetSgxEpcSections sets SgxEpcSections field to given value.
-
-### HasSgxEpcSections
-
-`func (o *NumaConfig) HasSgxEpcSections() bool`
-
-HasSgxEpcSections returns a boolean if a field has been set.
 
 ### GetPciSegments
 

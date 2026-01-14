@@ -88,7 +88,7 @@ pub fn baremount(
 
     let destination_str = destination.to_string_lossy();
     if let Ok(m) = get_linux_mount_info(destination_str.deref()) {
-        if m.fs_type == fs_type {
+        if m.fs_type == fs_type && !flags.contains(MsFlags::MS_REMOUNT) {
             slog_info!(logger, "{source:?} is already mounted at {destination:?}");
             return Ok(());
         }
@@ -177,7 +177,7 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
     let content = fs::read_to_string(mount_file)
         .map_err(|e| anyhow!("read mount file {}: {}", mount_file, e))?;
 
-    let re = Regex::new(format!("device .+ mounted on {} with fstype (.+)", mount_point).as_str())?;
+    let re = Regex::new(format!("device .+ mounted on {mount_point} with fstype (.+)").as_str())?;
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
     for line in content.lines() {
@@ -336,11 +336,17 @@ mod tests {
         let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
         let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
 
+        // Detect actual filesystem types mounted in this environment
+        // Z runners mount /dev as tmpfs, while normal systems use devtmpfs
+        let dev_fs_type = get_mount_fs_type("/dev").unwrap_or_else(|_| String::from("devtmpfs"));
+        let proc_fs_type = get_mount_fs_type("/proc").unwrap_or_else(|_| String::from("proc"));
+        let sys_fs_type = get_mount_fs_type("/sys").unwrap_or_else(|_| String::from("sysfs"));
+
         let test_cases = [
-            ("dev", "/dev", "devtmpfs"),
-            ("udev", "/dev", "devtmpfs"),
-            ("proc", "/proc", "proc"),
-            ("sysfs", "/sys", "sysfs"),
+            ("dev", "/dev", dev_fs_type.as_str()),
+            ("udev", "/dev", dev_fs_type.as_str()),
+            ("proc", "/proc", proc_fs_type.as_str()),
+            ("sysfs", "/sys", sys_fs_type.as_str()),
         ];
 
         for &(source, destination, fs_type) in &test_cases {
@@ -349,8 +355,7 @@ mod tests {
             let flags = MsFlags::MS_RDONLY;
             let options = "mode=755";
             println!(
-                "testing if already mounted baremount({:?} {:?} {:?})",
-                source, destination, fs_type
+                "testing if already mounted baremount({source:?} {destination:?} {fs_type:?})"
             );
             assert!(baremount(source, destination, fs_type, flags, options, &logger).is_ok());
         }
@@ -380,6 +385,22 @@ mod tests {
         let dir = tempdir().expect("failed to create tmpdir");
         let drain = slog::Discard;
         let logger = slog::Logger::root(drain, o!());
+
+        // Detect filesystem type of root directory
+        let tmp_fs_type = get_mount_fs_type("/").unwrap_or_else(|_| String::from("unknown"));
+
+        // Error messages that vary based on filesystem type
+        const DEFAULT_ERROR_EPERM: &str = "Operation not permitted";
+        const BTRFS_ERROR_ENODEV: &str = "No such device";
+
+        // Helper to select error message based on filesystem type (e.g. btrfs for s390x runners)
+        let get_error_msg = |default: &'static str, btrfs_specific: &'static str| -> &'static str {
+            if tmp_fs_type == "btrfs" && !btrfs_specific.is_empty() {
+                btrfs_specific
+            } else {
+                default
+            }
+        };
 
         let tests = &[
             TestData {
@@ -416,7 +437,7 @@ mod tests {
                 fs_type: "bind",
                 flags: MsFlags::empty(),
                 options: "bind",
-                error_contains: "Operation not permitted",
+                error_contains: get_error_msg(DEFAULT_ERROR_EPERM, BTRFS_ERROR_ENODEV),
             },
             TestData {
                 test_user: TestUserType::NonRootOnly,
@@ -439,7 +460,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             skip_loop_by_user!(msg, d.test_user);
 
@@ -483,7 +504,7 @@ mod tests {
 
             let result = baremount(src, dest, d.fs_type, d.flags, d.options, &logger);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             if d.error_contains.is_empty() {
                 assert!(result.is_ok(), "{}", msg);
@@ -495,8 +516,15 @@ mod tests {
             }
 
             let err = result.unwrap_err();
-            let error_msg = format!("{}", err);
-            assert!(error_msg.contains(d.error_contains), "{}", msg);
+            let error_msg = format!("{err}");
+
+            assert!(
+                error_msg.contains(d.error_contains),
+                "{}: expected error containing '{}', got '{}'",
+                msg,
+                d.error_contains,
+                error_msg
+            );
         }
     }
 
@@ -590,11 +618,11 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = remove_mounts(&d.mounts);
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             if d.error_contains.is_empty() {
                 assert!(result.is_ok(), "{}", msg);
@@ -670,15 +698,15 @@ mod tests {
             .iter()
             .enumerate()
         {
-            let msg = format!("missing mount file test[{}] with mountpoint: {}", i, mp);
+            let msg = format!("missing mount file test[{i}] with mountpoint: {mp}");
 
             let result = get_mount_fs_type_from_file("", mp);
             let err = result.unwrap_err();
 
-            let msg = format!("{}: error: {}", msg, err);
+            let msg = format!("{msg}: error: {err}");
 
             assert!(
-                format!("{}", err).contains("No such file or directory"),
+                format!("{err}").contains("No such file or directory"),
                 "{}",
                 msg
             );
@@ -686,7 +714,7 @@ mod tests {
 
         // Now, test various combinations of file contents
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let file_path = dir.path().join("mount_stats");
 
@@ -703,7 +731,7 @@ mod tests {
             let result = get_mount_fs_type_from_file(filename, d.mount_point);
 
             // add more details if an assertion fails
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             if d.error_contains.is_empty() {
                 let fs_type = result.unwrap();
@@ -846,7 +874,7 @@ mod tests {
         );
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let file_path = dir.path().join("cgroups");
             let filename = file_path
@@ -860,7 +888,7 @@ mod tests {
                 .unwrap_or_else(|_| panic!("{}: failed to write file contents", msg));
 
             let result = get_cgroup_mounts(&logger, filename, false);
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             if !d.error_contains.is_empty() {
                 assert!(result.is_err(), "{}", msg);
@@ -945,7 +973,7 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             skip_loop_by_user!(msg, d.test_user);
 
             let drain = slog::Discard;
@@ -982,7 +1010,7 @@ mod tests {
                 nix::mount::umount(&dest).unwrap();
             }
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
             if d.error_contains.is_empty() {
                 assert!(result.is_ok(), "{}", msg);
             } else {
@@ -1033,14 +1061,14 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let result = parse_mount_options(&d.options_vec).unwrap();
 
-            let msg = format!("{}: result: {:?}", msg, result);
+            let msg = format!("{msg}: result: {result:?}");
 
             let expected_result = (d.result.0, d.result.1.to_owned());
-            assert_eq!(expected_result, result, "{}", msg);
+            assert_eq!(expected_result, result, "{msg}");
         }
     }
 }

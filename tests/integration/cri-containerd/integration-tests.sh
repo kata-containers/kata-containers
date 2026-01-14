@@ -54,14 +54,16 @@ function ci_config() {
 	if [ "$ID" == ubuntu ]; then
 		# https://github.com/kata-containers/tests/issues/352
 		if [ -n "${FACTORY_TEST}" ]; then
-			sudo sed -i -e 's/^#enable_template.*$/enable_template = true/g' "${kata_config}"
+			# Handle both commented and uncommented enable_template
+			sudo sed -i -e 's/^#\?enable_template.*$/enable_template = true/g' "${kata_config}"
 			echo "init vm template"
 			sudo -E PATH=$PATH "$RUNTIME" factory init
 		fi
 	fi
 
 	echo "enable debug for kata-runtime"
-	sudo sed -i 's/^#enable_debug =/enable_debug =/g' ${kata_config}
+	# Handle both commented and uncommented enable_debug
+	sudo sed -i 's/^#\?enable_debug = .*$/enable_debug = true/g' ${kata_config}
 }
 
 function ci_cleanup() {
@@ -211,7 +213,7 @@ EOF
 	restart_containerd_service
 
 	sudo crictl pull $image
-	podid=$(sudo crictl runp $pod_yaml)
+	podid=$(sudo crictl --timeout=5s runp $pod_yaml)
 	cid=$(sudo crictl create $podid $container_yaml $pod_yaml)
 	sudo crictl start $cid
 }
@@ -285,11 +287,13 @@ function PrepareContainerMemoryUpdate() {
 		fi
 		info "Test container memory update with virtio-mem"
 
-		sudo sed -i -e 's/^#enable_virtio_mem.*$/enable_virtio_mem = true/g' "${kata_config}"
+		# Handle both commented and uncommented enable_virtio_mem
+		sudo sed -i -e 's/^#\?enable_virtio_mem.*$/enable_virtio_mem = true/g' "${kata_config}"
 	else
 		info "Test container memory update without virtio-mem"
 
-		sudo sed -i -e 's/^enable_virtio_mem.*$/#enable_virtio_mem = true/g' "${kata_config}"
+		# Set to false instead of commenting out
+		sudo sed -i -e 's/^#\?enable_virtio_mem.*$/enable_virtio_mem = false/g' "${kata_config}"
 	fi
 }
 
@@ -347,7 +351,8 @@ function TestContainerSwap() {
 	info "Test container with guest swap"
 
 	create_containerd_config "kata-${KATA_HYPERVISOR}" 1
-	sudo sed -i -e 's/^#enable_guest_swap.*$/enable_guest_swap = true/g' "${kata_config}"
+	# Handle both commented and uncommented enable_guest_swap
+	sudo sed -i -e 's/^#\?enable_guest_swap.*$/enable_guest_swap = true/g' "${kata_config}"
 
 	# Test without swap device
 	testContainerStart
@@ -537,7 +542,7 @@ EOF
 	restart_containerd_service
 
 	sudo crictl pull $image
-	podid=$(sudo crictl runp $pod_yaml)
+	podid=$(sudo crictl --timeout=5s runp $pod_yaml)
 	cid1=$(sudo crictl create $podid $container1_yaml $pod_yaml)
 	cid2=$(sudo crictl create $podid $container2_yaml $pod_yaml)
 	sudo crictl start $cid1

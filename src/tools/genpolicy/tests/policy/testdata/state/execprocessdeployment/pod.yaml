@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execprocessnamed
+spec:
+  selector:
+    matchLabels:
+      app: execprocessnamed
+  template:
+    metadata:
+      labels:
+        app: execprocessnamed
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: execprocessnamed
+        image: "quay.io/prometheus/busybox:latest"
+        command:
+          - sleep
+          - "3600"
+        readinessProbe:
+          exec:
+            command:
+              - /bin/true
+

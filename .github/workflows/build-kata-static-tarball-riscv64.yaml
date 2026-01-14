@@ -20,15 +20,12 @@ on:
         required: false
         type: string
         default: ""
-    secrets:
-      QUAY_DEPLOYER_PASSWORD:
-        required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-asset:
+    name: build-asset
     runs-on: riscv-builder
     permissions:
       contents: read
@@ -41,14 +38,6 @@ jobs:
           - kernel
           - virtiofsd
     steps:
-      - name: Login to Kata Containers quay.io
-        if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          registry: quay.io
-          username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
-          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.commit-hash }}
@@ -81,6 +70,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-riscv64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
-          retention-days: 15
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
+          retention-days: 3
           if-no-files-found: error

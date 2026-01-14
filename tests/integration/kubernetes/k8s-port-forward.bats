@@ -4,6 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 source "/etc/os-release" || source "/usr/lib/os-release"
@@ -12,7 +13,7 @@ issue="https://github.com/kata-containers/runtime/issues/1834"
 
 setup() {
 	skip "test not working see: ${issue}"
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
 }
 
 @test "Port forwarding" {
@@ -68,4 +69,5 @@ teardown() {
 	skip "test not working see: ${issue}"
 	kubectl delete -f "${pod_config_dir}/redis-master-deployment.yaml"
 	kubectl delete -f "${pod_config_dir}/redis-master-service.yaml"
+	teardown_common "${node}" "${node_start_time:-}"
 }

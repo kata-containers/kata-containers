@@ -31,11 +31,11 @@ on:
       skip_static:
         value: ${{ jobs.skipper.outputs.skip_static }}
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   skipper:
+    name: skipper
     runs-on: ubuntu-22.04
     outputs:
       skip_build: ${{ steps.skipper.outputs.skip_build }}

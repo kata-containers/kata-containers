@@ -11,8 +11,7 @@ on:
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-kata-static-tarball-s390x:
@@ -31,11 +30,12 @@ jobs:
 
 
   kata-deploy:
+    name: kata-deploy
     needs: build-kata-static-tarball-s390x
     permissions:
       contents: read
       packages: write
-    runs-on: s390x
+    runs-on: ubuntu-24.04-s390x
     steps:
       - name: Login to Kata Containers ghcr.io
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
@@ -75,9 +75,9 @@ jobs:
           fi
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.xz "ghcr.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.zst "ghcr.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.zst "quay.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
           done

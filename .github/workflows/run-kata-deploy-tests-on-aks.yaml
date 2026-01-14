@@ -29,12 +29,11 @@ on:
       AZ_SUBSCRIPTION_ID:
         required: true
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 jobs:
   run-kata-deploy-tests:
+    name: run-kata-deploy-tests
     strategy:
       fail-fast: false
       matrix:
@@ -50,6 +49,8 @@ jobs:
             vmm: clh
     runs-on: ubuntu-22.04
     environment: ci
+    permissions:
+      id-token: write # Used for OIDC access to log into Azure
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -58,7 +59,6 @@ jobs:
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "vanilla"
-      USING_NFD: "false"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -71,9 +71,6 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: Download Azure CLI
-        run: bash tests/functional/kata-deploy/gha-run.sh install-azure-cli
 
       - name: Log into the Azure account
         uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
@@ -95,13 +92,27 @@ jobs:
         run: bash tests/functional/kata-deploy/gha-run.sh install-bats
 
       - name: Install `kubectl`
-        run: bash tests/functional/kata-deploy/gha-run.sh install-kubectl
+        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1
+        with:
+          version: 'latest'
 
       - name: Download credentials for the Kubernetes CLI to use them
         run: bash tests/functional/kata-deploy/gha-run.sh get-cluster-credentials
 
       - name: Run tests
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
+      - name: Refresh OIDC token in case access token expired
+        if: always()
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ secrets.AZ_APPID }}
+          tenant-id: ${{ secrets.AZ_TENANT_ID }}
+          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
       - name: Delete AKS cluster
         if: always()

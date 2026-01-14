@@ -1,76 +1,31 @@
-[workspace]
-members = [
-    "crates/agent",
-    "crates/hypervisor",
-    "crates/persist",
-    "crates/resource",
-    "crates/runtimes",
-    "crates/service",
-    "crates/shim",
-    "crates/shim-ctl",
+[package]
+name = "runtime-rs"
+version = "0.1.0"
+authors = { workspace = true }
+description = "Containerd shim runtime for Kata Containers"
+keywords = ["kata-containers", "shim"]
+repository = "https://github.com/kata-containers/kata-containers.git"
+license = { workspace = true }
+edition = { workspace = true }
 
-    "tests/utils",
-]
+[[bin]]
+name = "containerd-shim-kata-v2"
+path = "crates/shim/src/bin/main.rs"
 
-[workspace.package]
-authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
-edition = "2018"
-license = "Apache-2.0"
+[[bin]]
+name = "shim-ctl"
+path = "crates/shim-ctl/src/main.rs"
 
-[workspace.dependencies]
-agent = { path = "crates/agent" }
-hypervisor = { path = "crates/hypervisor" }
-persist = { path = "crates/persist" }
-resource = { path = "crates/resource" }
-runtimes = { path = "crates/runtimes" }
-service = { path = "crates/service" }
-tests_utils = { path = "tests/utils" }
+[features]
+dragonball = ["runtimes/dragonball"]
+cloud-hypervisor = ["runtimes/cloud-hypervisor"]
 
-ch-config = { path = "crates/hypervisor/ch-config" }
-common = { path = "crates/runtimes/common" }
-linux_container = { path = "crates/runtimes/linux_container" }
-virt_container = { path = "crates/runtimes/virt_container" }
-wasm_container = { path = "crates/runtimes/wasm_container" }
-
-# Local dependencies from `src/libs`
-kata-sys-util = { path = "../libs/kata-sys-util" }
-kata-types = { path = "../libs/kata-types" }
-logging = { path = "../libs/logging" }
-protocols = { path = "../libs/protocols", features = ["async"] }
-runtime-spec = { path = "../libs/runtime-spec" }
-safe-path = { path = "../libs/safe-path" }
-shim-interface = { path = "../libs/shim-interface" }
-test-utils = { path = "../libs/test-utils" }
-
-# Local dependencies from `src/dragonball`
-dragonball = { path = "../dragonball" }
-dbs-utils = { path = "../dragonball/dbs_utils" }
-
-actix-rt = "2.7.0"
-anyhow = "1.0"
-async-trait = "0.1.48"
-containerd-shim = { version = "0.6.0", features = ["async"] }
-containerd-shim-protos = { version = "0.6.0", features = ["async"] }
-go-flag = "0.1.0"
-hyper = "0.14.20"
-hyperlocal = "0.8.0"
-lazy_static = "1.4"
-libc = "0.2"
-log = "0.4.14"
-netns-rs = "0.1.0"
-nix = "0.24.2"
-oci-spec = { version = "0.6.8", features = ["runtime"] }
-protobuf = "3.7.2"
-rand = "0.8.4"
-serde = { version = "1.0.145", features = ["derive"] }
-serde_json = "1.0.91"
-slog = "2.5.2"
-slog-scope = "4.4.0"
-strum = { version = "0.24.0", features = ["derive"] }
-tempfile = "3.19.1"
-thiserror = "1.0"
-tokio = "1.38.2"
-tracing = "0.1.41"
-tracing-opentelemetry = "0.18.0"
-ttrpc = "0.8.4"
-url = "2.3.1"
+[dependencies]
+anyhow = { workspace = true }
+go-flag = { workspace = true }
+nix = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+shim = { path = "crates/shim" }
+common = { workspace = true }
+logging = { workspace = true }
+runtimes = { workspace = true }

@@ -464,7 +464,7 @@ impl TryFrom<String> for KernelModule {
             } else if flag {
                 // a former param's string contains \"
                 if let Some(former_param) = parameters.pop() {
-                    let cur_param = format!("{} {}", former_param, info);
+                    let cur_param = format!("{former_param} {info}");
                     parameters.push(cur_param);
                 }
             } else {
@@ -613,6 +613,11 @@ pub struct AddSwapRequest {
 #[derive(PartialEq, Clone, Default, Debug)]
 pub struct AddSwapPathRequest {
     pub path: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct SetPolicyRequest {
+    pub policy: String,
 }
 
 #[cfg(test)]

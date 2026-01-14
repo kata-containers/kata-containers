@@ -145,6 +145,8 @@ pub enum ActivateError {
     #[cfg(feature = "vhost")]
     #[error("Vhost activate error")]
     VhostActivate(vhost_rs::Error),
+    #[error("VirtioPci error")]
+    VirtioPci,
 }
 
 impl std::convert::From<Error> for ActivateError {

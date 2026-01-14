@@ -5,22 +5,23 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	hard_coded_policy_tests_enabled || skip "Policy tests are disabled."
+	setup_common || die "setup_common failed"
 
-	get_pod_config_dir
 	pod_name="hard-coded-policy-pod"
 	pod_yaml="${pod_config_dir}/k8s-policy-hard-coded.yaml"
 }
 
 @test "Kubectl exec rejected by policy" {
 	# Add to the YAML file a policy that rejects ExecProcessRequest.
-	allow_all_except_exec_policy=$(base64 -w 0 "${pod_config_dir}/allow-all-except-exec-process.rego")
+	allow_all_except_exec_policy=$(encode_policy_in_init_data "${pod_config_dir}/allow-all-except-exec-process.rego")
 	yq -i \
-		".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${allow_all_except_exec_policy}\"" \
+		".metadata.annotations.\"io.katacontainers.config.hypervisor.cc_init_data\" = \"${allow_all_except_exec_policy}\"" \
 		"${pod_yaml}"
 
 	# Create the pod
@@ -45,10 +46,9 @@ setup() {
 	# Warning: this is an insecure policy that shouldn't be used when protecting the confidentiality
 	#          of a pod is important. However, this policy could be useful while debugging a pod.
 	policy_text=$(printf "package agent_policy\ndefault AllowRequestsFailingPolicy := true")
-	policy_base64=$(echo "${policy_text}" | base64 -w 0 -)
-
+	policy_base64=$(encode_policy_in_init_data "$policy_text")
 	yq -i \
-		".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${policy_base64}\"" \
+		".metadata.annotations.\"io.katacontainers.config.hypervisor.cc_init_data\" = \"${policy_base64}\"" \
 		"${pod_yaml}"
 
 	# Create the pod
@@ -66,4 +66,5 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+	teardown_common "${node}" "${node_start_time:-}"
 }

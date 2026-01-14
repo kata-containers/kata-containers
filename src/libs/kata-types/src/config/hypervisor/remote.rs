@@ -15,7 +15,7 @@ use crate::{
         ConfigPlugin,
     },
     device::DRIVER_NVDIMM_TYPE,
-    eother, resolve_path,
+    resolve_path,
 };
 
 use super::register_hypervisor_plugin;
@@ -65,6 +65,11 @@ impl ConfigPlugin for RemoteConfig {
             if remote.memory_info.memory_slots == 0 {
                 remote.memory_info.memory_slots = default::DEFAULT_REMOTE_MEMORY_SLOTS
             }
+
+            // Apply factory defaults
+            if remote.factory.template_path.is_empty() {
+                remote.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
+            }
         }
 
         Ok(())
@@ -78,30 +83,35 @@ impl ConfigPlugin for RemoteConfig {
                 .get_adjusted_unit(Unit::MiB)
                 .get_value() as u32;
             if remote.memory_info.default_maxmemory != total_memory {
-                return Err(eother!(
+                return Err(std::io::Error::other(
                     "Remote hypervisor does not support memory hotplug, default_maxmemory must be equal to the total system memory",
                 ));
             }
             let cpus = num_cpus::get() as u32;
             if remote.cpu_info.default_maxvcpus != cpus {
-                return Err(eother!(
+                return Err(std::io::Error::other(
                     "Remote hypervisor does not support CPU hotplug, default_maxvcpus must be equal to the total system CPUs",
                 ));
             }
             if !remote.boot_info.initrd.is_empty() {
-                return Err(eother!("Remote hypervisor does not support initrd"));
+                return Err(std::io::Error::other(
+                    "Remote hypervisor does not support initrd",
+                ));
             }
             if !remote.boot_info.rootfs_type.is_empty() {
-                return Err(eother!("Remote hypervisor does not support rootfs_type"));
+                return Err(std::io::Error::other(
+                    "Remote hypervisor does not support rootfs_type",
+                ));
             }
             if remote.blockdev_info.block_device_driver.as_str() == DRIVER_NVDIMM_TYPE {
-                return Err(eother!("Remote hypervisor does not support nvdimm"));
+                return Err(std::io::Error::other(
+                    "Remote hypervisor does not support nvdimm",
+                ));
             }
             if remote.memory_info.default_memory < MIN_REMOTE_MEMORY_SIZE_MB {
-                return Err(eother!(
-                    "Remote hypervisor has minimal memory limitation {}",
-                    MIN_REMOTE_MEMORY_SIZE_MB
-                ));
+                return Err(std::io::Error::other(format!(
+                    "Remote hypervisor has minimal memory limitation {MIN_REMOTE_MEMORY_SIZE_MB}",
+                )));
             }
         }
 

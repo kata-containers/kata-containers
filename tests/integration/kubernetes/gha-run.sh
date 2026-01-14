@@ -33,9 +33,9 @@ export ITA_KEY="${ITA_KEY:-}"
 export HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export PULL_TYPE="${PULL_TYPE:-default}"
-export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
+export TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -175,7 +175,7 @@ function deploy_kata() {
 
 	ANNOTATIONS="default_vcpus"
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		ANNOTATIONS="image kernel default_vcpus disable_image_nvdimm"
+		ANNOTATIONS="image kernel default_vcpus disable_image_nvdimm cc_init_data"
 	fi
 	if [[ "${KATA_HYPERVISOR}" = "qemu" ]]; then
 		ANNOTATIONS="image initrd kernel default_vcpus"
@@ -196,6 +196,30 @@ function deploy_kata() {
 		HOST_OS="${KATA_HOST_OS}"
 	fi
 
+	EXPERIMENTAL_SETUP_SNAPSHOTTER=""
+	if [[ "${USE_EXPERIMENTAL_SETUP_SNAPSHOTTER:-false}" == "true" ]]; then
+		case "${SNAPSHOTTER}" in
+			nydus|erofs)
+				ARCH="$(uname -m)"
+				# We only want to tests this for the qemu-coco-dev and
+				# qemu-coco-dev-runtime-rs runtime classes
+				# as they are running on a GitHub runner (and not on a BM machine),
+				# and there the snapshotter is deployed on every run (rather than
+				# deployed when the machine is configured, as on the BM machines).
+				if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [[ ${ARCH} == "x86_64" ]]; then
+					EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}"
+				fi
+				;;
+			*) ;;
+		esac
+	fi
+
+	EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
+	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-"* ]]; then
+		EXPERIMENTAL_FORCE_GUEST_PULL="${KATA_HYPERVISOR}"
+	fi
+	export EXPERIMENTAL_FORCE_GUEST_PULL
+
 	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
 	export HELM_IMAGE_REFERENCE="${DOCKER_REGISTRY}/${DOCKER_REPO}"
 	export HELM_IMAGE_TAG="${DOCKER_TAG}"
@@ -208,6 +232,8 @@ function deploy_kata() {
 	export HELM_AGENT_HTTPS_PROXY="${HTTPS_PROXY}"
 	export HELM_AGENT_NO_PROXY="${NO_PROXY}"
 	export HELM_PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING}"
+	export HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+	export HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL}"
 	export HELM_HOST_OS="${HOST_OS}"
 	helm_helper
 }
@@ -289,7 +315,7 @@ function run_tests() {
 	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		echo "Skipping tests for ${KATA_HYPERVISOR} using devmapper"
 	else
-		bash run_kubernetes_tests.sh
+		bash "${K8STESTS}"
 	fi
 	popd
 }
@@ -443,7 +469,7 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -457,7 +483,7 @@ function deploy_snapshotter() {
 }
 
 function cleanup_snapshotter() {
-	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" || "${KATA_HYPERVISOR}" == "qemu-sev" ]]; then
+	if [[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-snp" ]]; then
 	       echo "[Skip] ${SNAPSHOTTER} is pre-installed in the TEE machine"
 	       return
 	fi
@@ -563,42 +589,58 @@ function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
 
+	AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
+
+	# Auto-generate policy on some Host types, if the caller didn't specify an AUTO_GENERATE_POLICY value.
+	if [[ -z "${AUTO_GENERATE_POLICY}" ]]; then
+		if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+			AUTO_GENERATE_POLICY="yes"
+		elif [[ "${KATA_HYPERVISOR}" = qemu-coco-dev* && \
+		        "${TARGET_ARCH}" = "x86_64" && \
+		        "${PULL_TYPE}" != "experimental-force-guest-pull" ]]; then
+			AUTO_GENERATE_POLICY="yes"
+		elif [[ "${KATA_HYPERVISOR}" = qemu-nvidia-gpu-* ]]; then
+			AUTO_GENERATE_POLICY="yes"
+		fi
+	fi
+
+	info "Exporting AUTO_GENERATE_POLICY=${AUTO_GENERATE_POLICY}"
+	export AUTO_GENERATE_POLICY
+
 	action="${1:-}"
 
 	case "${action}" in
-		install-azure-cli) install_azure_cli ;;
 		create-cluster) create_cluster "" ;;
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
-		setup-crio) setup_crio ;;
 		deploy-coco-kbs) deploy_coco_kbs ;;
-		deploy-k8s) deploy_k8s ;;
+		deploy-k8s) deploy_k8s ${CONTAINER_ENGINE:-} ${CONTAINER_ENGINE_VERSION:-};;
 		install-bats) install_bats ;;
-		install-kata-tools) install_kata_tools ;;
+		install-kata-tools) install_kata_tools "${2:-}" ;;
 		install-kbs-client) install_kbs_client ;;
-		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials "" ;;
 		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
 		deploy-kata-kubeadm) deploy_kata "kubeadm" ;;
-		deploy-kata-sev) deploy_kata "sev" ;;
-		deploy-kata-snp) deploy_kata "snp" ;;
-		deploy-kata-tdx) deploy_kata "tdx" ;;
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
 		deploy-snapshotter) deploy_snapshotter ;;
 		report-tests) report_tests ;;
-		run-tests) run_tests ;;
+		run-tests)
+			K8STESTS=run_kubernetes_tests.sh
+			run_tests
+			;;
+		run-nv-tests)
+			K8STESTS=run_kubernetes_nv_tests.sh
+			run_tests
+			;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
 		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
 		cleanup-kubeadm) cleanup "kubeadm" ;;
-		cleanup-sev) cleanup "sev" ;;
-		cleanup-snp) cleanup "snp" ;;
-		cleanup-tdx) cleanup "tdx" ;;
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;

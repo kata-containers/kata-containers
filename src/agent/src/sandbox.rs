@@ -32,6 +32,7 @@ use rustjail::container::BaseContainer;
 use rustjail::container::LinuxContainer;
 use rustjail::process::Process;
 use slog::Logger;
+use thiserror::Error;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::sync::Mutex;
@@ -47,7 +48,16 @@ use crate::storage::StorageDeviceGeneric;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 
-pub const ERR_INVALID_CONTAINER_ID: &str = "Invalid container id";
+/// Errors that can occur when looking up processes in the sandbox.
+#[derive(Debug, Error)]
+pub enum SandboxError {
+    #[error("Invalid container id")]
+    InvalidContainerId,
+    #[error("Process not found: init process missing")]
+    InitProcessNotFound,
+    #[error("Process not found: invalid exec id")]
+    InvalidExecId,
+}
 
 type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 
@@ -248,7 +258,7 @@ impl Sandbox {
             }
 
             let mut pid_ns = Namespace::new(&self.logger).get_pid();
-            pid_ns.path = format!("/proc/{}/ns/pid", init_pid);
+            pid_ns.path = format!("/proc/{init_pid}/ns/pid");
 
             self.sandbox_pidns = Some(pid_ns);
         }
@@ -272,27 +282,36 @@ impl Sandbox {
 
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
-            if let Some(p) = c.processes.get_mut(&pid) {
-                return Some(p);
+            for p in c.processes.values_mut() {
+                if p.pid == pid {
+                    return Some(p);
+                }
             }
         }
 
         None
     }
 
-    pub fn find_container_process(&mut self, cid: &str, eid: &str) -> Result<&mut Process> {
+    pub fn find_container_process(
+        &mut self,
+        cid: &str,
+        eid: &str,
+    ) -> Result<&mut Process, SandboxError> {
         let ctr = self
             .get_container(cid)
-            .ok_or_else(|| anyhow!(ERR_INVALID_CONTAINER_ID))?;
+            .ok_or(SandboxError::InvalidContainerId)?;
 
         if eid.is_empty() {
+            let init_pid = ctr.init_process_pid;
             return ctr
                 .processes
-                .get_mut(&ctr.init_process_pid)
-                .ok_or_else(|| anyhow!("cannot find init process!"));
+                .values_mut()
+                .find(|p| p.pid == init_pid)
+                .ok_or(SandboxError::InitProcessNotFound);
         }
 
-        ctr.get_process(eid).map_err(|_| anyhow!("Invalid exec id"))
+        ctr.get_process(eid)
+            .map_err(|_| SandboxError::InvalidExecId)
     }
 
     #[instrument]
@@ -707,8 +726,7 @@ mod tests {
         let ref_count = new_storage.ref_count().await;
         assert_eq!(
             ref_count, 1,
-            "Invalid refcount, got {} expected 1.",
-            ref_count
+            "Invalid refcount, got {ref_count} expected 1."
         );
 
         // Use the existing sandbox storage
@@ -719,8 +737,7 @@ mod tests {
         let ref_count = new_storage.ref_count().await;
         assert_eq!(
             ref_count, 2,
-            "Invalid refcount, got {} expected 2.",
-            ref_count
+            "Invalid refcount, got {ref_count} expected 2."
         );
     }
 
@@ -807,11 +824,7 @@ mod tests {
         // Reference counter should decrement to 1.
         let storage = &s.storages[storage_path];
         let refcount = storage.ref_count().await;
-        assert_eq!(
-            refcount, 1,
-            "Invalid refcount, got {} expected 1.",
-            refcount
-        );
+        assert_eq!(refcount, 1, "Invalid refcount, got {refcount} expected 1.");
 
         assert!(
             s.remove_sandbox_storage(storage_path).await.unwrap(),
@@ -854,7 +867,7 @@ mod tests {
         let cgroups_path = format!(
             "/{}/dummycontainer{}",
             CGROUP_PARENT,
-            since_the_epoch.as_millis()
+            since_the_epoch.as_micros()
         );
 
         let spec = SpecBuilder::default()
@@ -955,7 +968,7 @@ mod tests {
 
         assert!(s.sandbox_pidns.is_some());
 
-        let ns_path = format!("/proc/{}/ns/pid", test_pid);
+        let ns_path = format!("/proc/{test_pid}/ns/pid");
         assert_eq!(s.sandbox_pidns.unwrap().path, ns_path);
     }
 
@@ -1014,23 +1027,26 @@ mod tests {
         linux_container.init_process_pid = 1;
         linux_container.id = cid.to_string();
         // add init process
-        linux_container.processes.insert(
-            1,
-            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap(),
-        );
+        let mut init_process =
+            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap();
+        init_process.pid = 1;
+        linux_container
+            .processes
+            .insert("1".to_string(), init_process);
         // add exec process
-        linux_container.processes.insert(
-            123,
-            Process::new(
-                &logger,
-                &oci::Process::default(),
-                "exec-123",
-                false,
-                1,
-                None,
-            )
-            .unwrap(),
-        );
+        let mut exec_process = Process::new(
+            &logger,
+            &oci::Process::default(),
+            "exec-123",
+            false,
+            1,
+            None,
+        )
+        .unwrap();
+        exec_process.pid = 123;
+        linux_container
+            .processes
+            .insert("exec-123".to_string(), exec_process);
 
         s.add_container(linux_container);
 
@@ -1081,8 +1097,8 @@ mod tests {
             .unwrap();
             // processes interally only have pids when manually set
             test_process.pid = test_pid;
-
-            linux_container.processes.insert(test_pid, test_process);
+            let test_exec_id = test_process.exec_id.clone();
+            linux_container.processes.insert(test_exec_id, test_process);
 
             s.add_container(linux_container);
 
@@ -1264,7 +1280,7 @@ mod tests {
         let tmpdir_path = tmpdir.path().to_str().unwrap();
 
         for (i, d) in tests.iter().enumerate() {
-            let current_test_dir_path = format!("{}/test_{}", tmpdir_path, i);
+            let current_test_dir_path = format!("{tmpdir_path}/test_{i}");
             fs::create_dir(&current_test_dir_path).unwrap();
 
             // create numbered directories and fill using root name
@@ -1273,7 +1289,7 @@ mod tests {
                     "{}/{}{}",
                     current_test_dir_path, d.directory_autogen_name, j
                 );
-                let subfile_path = format!("{}/{}", subdir_path, SYSFS_ONLINE_FILE);
+                let subfile_path = format!("{subdir_path}/{SYSFS_ONLINE_FILE}");
                 fs::create_dir(&subdir_path).unwrap();
                 let mut subfile = File::create(subfile_path).unwrap();
                 subfile.write_all(b"0").unwrap();
@@ -1300,18 +1316,15 @@ mod tests {
                 result.is_ok()
             );
 
-            assert_eq!(result.is_ok(), d.result.is_ok(), "{}", msg);
+            assert_eq!(result.is_ok(), d.result.is_ok(), "{msg}");
 
             if d.result.is_ok() {
                 let test_result_val = *d.result.as_ref().ok().unwrap();
                 let result_val = result.ok().unwrap();
 
-                msg = format!(
-                    "test[{}]: {:?}, expected {}, actual {}",
-                    i, d, test_result_val, result_val
-                );
+                msg = format!("test[{i}]: {d:?}, expected {test_result_val}, actual {result_val}");
 
-                assert_eq!(test_result_val, result_val, "{}", msg);
+                assert_eq!(test_result_val, result_val, "{msg}");
             }
         }
     }

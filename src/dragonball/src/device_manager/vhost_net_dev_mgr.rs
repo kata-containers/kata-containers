@@ -170,7 +170,7 @@ impl VhostNetDeviceMgr {
         mut ctx: DeviceOpContext,
         config: VhostNetDeviceConfigInfo,
     ) -> Result<(), VhostNetDeviceError> {
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VhostNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
@@ -256,7 +256,7 @@ impl VhostNetDeviceMgr {
                 info.config.iface_id
             );
             if let Some(device) = info.device.take() {
-                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                DeviceManager::destroy_mmio_device(device, ctx)?;
             }
         }
 
@@ -277,6 +277,7 @@ impl Default for VhostNetDeviceMgr {
 mod tests {
     use dbs_utils::net::MacAddr;
     use dbs_virtio_devices::Error as VirtioError;
+    use test_utils::skip_if_kvm_unaccessable;
 
     use crate::{
         device_manager::{
@@ -289,6 +290,7 @@ mod tests {
 
     #[test]
     fn test_create_vhost_net_device() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mgr = DeviceManager::new_test_mgr();
         let id_1 = String::from("id_1");
@@ -321,6 +323,7 @@ mod tests {
 
     #[test]
     fn test_attach_vhost_net_device() {
+        skip_if_kvm_unaccessable!();
         // Init vm for test.
         let mut vm = create_vm_for_test();
         let device_op_ctx = DeviceOpContext::new(
@@ -373,6 +376,7 @@ mod tests {
 
     #[test]
     fn test_insert_vhost_net_device() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
 
@@ -437,6 +441,7 @@ mod tests {
 
     #[test]
     fn test_vhost_net_insert_error_cases() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let mut mgr = DeviceManager::new_test_mgr();
 
@@ -615,24 +620,24 @@ mod tests {
     #[test]
     fn test_vhost_net_error_display() {
         let err = VhostNetDeviceError::InvalidQueueNum(0);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::DeviceManager(DeviceMgrError::GetDeviceResource);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::DeviceIdAlreadyExist(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::GuestMacAddressInUse(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::HostDeviceNameInUse(String::from("1"));
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::Virtio(VirtioError::DescriptorChainTooShort);
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
 
         let err = VhostNetDeviceError::UpdateNotAllowedPostBoot;
-        let _ = format!("{}{:?}", err, err);
+        let _ = format!("{err}{err:?}");
     }
 }

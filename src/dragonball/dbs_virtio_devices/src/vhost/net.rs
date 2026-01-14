@@ -17,7 +17,7 @@ pub(crate) trait FromNetCtrl<T> {
         match mem.read_slice(&mut buf, desc.addr()) {
             Ok(_) => unsafe { Ok(std::ptr::read_volatile(&buf[..] as *const _ as *const T)) },
             Err(err) => {
-                error!("Failed to read from memory, {}", err);
+                error!("Failed to read from memory, {err}");
                 Err(VirtioError::InternalError)
             }
         }
@@ -63,10 +63,10 @@ where
         if next.is_write_only() {
             match mem.write_slice(&buf, next.addr()) {
                 Ok(_) => {
-                    debug!("{}: succeed to update virtio ctrl status!", driver_name);
+                    debug!("{driver_name}: succeed to update virtio ctrl status!");
                     total += 1;
                 }
-                Err(_) => warn!("{}: failed to update ctrl status!", driver_name),
+                Err(_) => warn!("{driver_name}: failed to update ctrl status!"),
             }
         }
     }

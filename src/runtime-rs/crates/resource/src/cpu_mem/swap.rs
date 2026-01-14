@@ -7,7 +7,7 @@ use agent::Agent;
 use anyhow::{anyhow, Context, Error, Result};
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
     BlockConfig,
@@ -156,7 +156,9 @@ impl SwapTask {
         let swap_path = swap_path.to_string_lossy().to_string();
 
         // Add swap file to sandbox
-        let block_driver = get_block_driver(&self.device_manager).await;
+        let block_driver = get_block_device_info(&self.device_manager)
+            .await
+            .block_device_driver;
         let dev_info = DeviceConfig::BlockCfg(BlockConfig {
             path_on_host: swap_path.clone(),
             driver_option: block_driver,
@@ -259,10 +261,10 @@ impl SwapTask {
         );
         let mut file = File::create(swap_path)
             .await
-            .context(format!("swap: File::create {:?}", swap_path))?;
+            .context(format!("swap: File::create {swap_path:?}"))?;
         fs::set_permissions(swap_path, Permissions::from_mode(0o700))
             .await
-            .context(format!("swap: File::set_permissions {:?}", swap_path))?;
+            .context(format!("swap: File::set_permissions {swap_path:?}"))?;
 
         let buffer = vec![0; CHUNK_SIZE];
         let mut total_written = 0;
@@ -347,7 +349,7 @@ impl SwapTask {
 
     async fn get_swap_path(&self) -> PathBuf {
         let id = self.core.lock().await.next_swap_id;
-        self.path.join(format!("swap{}", id))
+        self.path.join(format!("swap{id}"))
     }
 }
 

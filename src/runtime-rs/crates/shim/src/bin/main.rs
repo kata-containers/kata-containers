@@ -13,6 +13,7 @@ use anyhow::{anyhow, Context, Result};
 use nix::{
     mount::{mount, MsFlags},
     sched::{self, CloneFlags},
+    sys::signal::{signal, SigHandler, Signal},
 };
 use shim::{config, Args, Error, ShimExecutor};
 
@@ -46,7 +47,7 @@ fn parse_args(args: &[OsString]) -> Result<Action> {
         flags.add_flag("help", &mut help);
         flags.add_flag("version", &mut version);
     })
-    .context(Error::ParseArgument(format!("{:?}", args)))?;
+    .context(Error::ParseArgument(format!("{args:?}")))?;
 
     if help {
         Ok(Action::Help)
@@ -73,7 +74,7 @@ fn show_help(cmd: &OsStr) {
     let name = name.unwrap_or(config::RUNTIME_NAME);
 
     println!(
-        r#"Usage of {}:
+        r#"Usage of {name}:
   -address string
         grpc address back to main containerd
   -bundle string
@@ -88,8 +89,7 @@ fn show_help(cmd: &OsStr) {
         path to publish binary (used for publishing events) (default "containerd")
   --version
         show the runtime version detail and exit
-"#,
-        name
+"#
     );
 }
 
@@ -110,7 +110,7 @@ fn show_version(err: Option<anyhow::Error>) {
             err
         );
     } else {
-        println!("{}", data)
+        println!("{data}")
     }
 }
 
@@ -159,6 +159,17 @@ fn real_main() -> Result<()> {
     Ok(())
 }
 fn main() {
+    // When enabling systemd cgroup driver and sandbox cgroup only, the
+    // shim is under a systemd unit. When the unit is stopping, systemd
+    // sends SIGTERM to the shim. The shim can't exit immediately, as there
+    // are some cleanups to do. Therefore, ignoring SIGTERM is required
+    // here. The shim should complete the work within a period (Kata sets
+    // it to 300s by default). Once a timeout occurs, systemd will send
+    // SIGKILL.
+    unsafe {
+        signal(Signal::SIGTERM, SigHandler::SigIgn).unwrap();
+    }
+
     if let Err(err) = real_main() {
         show_version(Some(err));
     }

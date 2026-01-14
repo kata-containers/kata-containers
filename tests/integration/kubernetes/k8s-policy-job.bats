@@ -6,17 +6,17 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
-    get_pod_config_dir
+    setup_common || die "setup_common failed"
 
     job_name="policy-job"
     correct_yaml="${pod_config_dir}/k8s-policy-job.yaml"
     incorrect_yaml="${pod_config_dir}/k8s-policy-job-incorrect.yaml"
-
+    set_node "${correct_yaml}" "${node}"
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
         # Add an appropriate policy to the correct YAML file.
@@ -38,13 +38,14 @@ setup() {
 
     # Wait for the job to be created
     cmd="kubectl describe job ${job_name} | grep SuccessfulCreate"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    abort_cmd="kubectl describe pod ${job_name} | grep \"CreateContainerRequest is blocked by policy\""
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 
     # Wait for the job to complete
     cmd="kubectl get pods -o jsonpath='{.items[*].status.phase}' | grep Succeeded"
-    info "Waiting for: ${cmd}"
-    waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
 # Common function for all test cases that expect CreateContainer to be blocked by policy.
@@ -163,4 +164,6 @@ teardown() {
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
         delete_tmp_policy_settings_dir "${policy_settings_dir}"
     fi
+
+    teardown_common "${node}" "${node_start_time:-}"
 }

@@ -31,6 +31,11 @@ docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env LIBSECCOMP_URL=${LIBSECCOMP_URL} \
 	--env GPERF_VERSION=${GPERF_VERSION} \
 	--env GPERF_URL=${GPERF_URL} \
+	--env ORAS_CACHE_HELPER="${repo_root_dir}/tools/packaging/scripts/download-with-oras-cache.sh" \
+	--env USE_ORAS_CACHE="${USE_ORAS_CACHE:-yes}" \
+	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-no}" \
+	--env GH_TOKEN="${GH_TOKEN:-}" \
+	--env GITHUB_ACTOR="${GITHUB_ACTOR:-}" \
 	-w "${repo_root_dir}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \

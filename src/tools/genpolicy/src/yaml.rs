@@ -14,6 +14,7 @@ use crate::job;
 use crate::list;
 use crate::mount_and_storage;
 use crate::no_policy;
+use crate::obj_meta::ObjectMeta;
 use crate::pod;
 use crate::policy;
 use crate::replica_set;
@@ -22,10 +23,10 @@ use crate::secret;
 use crate::settings;
 use crate::stateful_set;
 use crate::utils::Config;
-use crate::volume;
 
 use async_trait::async_trait;
 use core::fmt::Debug;
+use kata_types::annotations::KATA_ANNO_CFG_HYPERVISOR_INIT_DATA;
 use log::debug;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
@@ -50,7 +51,7 @@ pub trait K8sResource {
         silent_unsupported_fields: bool,
     );
 
-    fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
+    fn generate_initdata_anno(&self, _agent_policy: &policy::AgentPolicy) -> String {
         panic!("Unsupported");
     }
 
@@ -100,6 +101,7 @@ pub trait K8sResource {
         &self,
         _process: &mut policy::KataProcess,
         _must_check_passwd: &mut bool,
+        _is_pause_container: bool,
     ) {
         // No need to implement support for securityContext or similar fields
         // for some of the K8s resource types.
@@ -268,7 +270,8 @@ pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
 
 pub async fn k8s_resource_init(spec: &mut pod::PodSpec, config: &Config) {
     for container in &mut spec.containers {
-        container.init(config).await;
+        let is_pause_container = false;
+        container.init(config, is_pause_container).await;
     }
 
     pod::add_pause_container(&mut spec.containers, config).await;
@@ -276,7 +279,8 @@ pub async fn k8s_resource_init(spec: &mut pod::PodSpec, config: &Config) {
     if let Some(init_containers) = &spec.initContainers {
         for container in init_containers {
             let mut new_container = container.clone();
-            new_container.init(config).await;
+            let is_pause_container = false;
+            new_container.init(config, is_pause_container).await;
             spec.containers.insert(1, new_container);
         }
     }
@@ -287,9 +291,9 @@ pub fn get_container_mounts_and_storages(
     storages: &mut Vec<agent::Storage>,
     container: &pod::Container,
     settings: &settings::Settings,
-    volumes_option: &Option<Vec<volume::Volume>>,
+    podSpec: &pod::PodSpec,
 ) {
-    if let Some(volumes) = volumes_option {
+    if let Some(volumes) = &podSpec.volumes {
         if let Some(volume_mounts) = &container.volumeMounts {
             for volume in volumes {
                 for volume_mount in volume_mounts {
@@ -300,6 +304,7 @@ pub fn get_container_mounts_and_storages(
                             storages,
                             volume,
                             volume_mount,
+                            &podSpec.securityContext,
                         );
                     }
                 }
@@ -318,7 +323,7 @@ pub fn get_container_mounts_and_storages(
     }
 }
 
-/// Add the "io.katacontainers.config.agent.policy" annotation into
+/// Add the [`KATA_ANNO_CFG_HYPERVISOR_INIT_DATA`] into
 /// a serde representation of a K8s resource YAML.
 pub fn add_policy_annotation(
     mut ancestor: &mut serde_yaml::Value,
@@ -326,7 +331,7 @@ pub fn add_policy_annotation(
     policy: &str,
 ) {
     let annotations_key = serde_yaml::Value::String("annotations".to_string());
-    let policy_key = serde_yaml::Value::String("io.katacontainers.config.agent.policy".to_string());
+    let policy_key = serde_yaml::Value::String(KATA_ANNO_CFG_HYPERVISOR_INIT_DATA.to_string());
     let policy_value = serde_yaml::Value::String(policy.to_string());
 
     if !metadata_path.is_empty() {
@@ -367,8 +372,9 @@ pub fn add_policy_annotation(
     }
 }
 
+/// Remove [`KATA_ANNO_CFG_HYPERVISOR_INIT_DATA`] annotation
 pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
-    annotations.remove("io.katacontainers.config.agent.policy");
+    annotations.remove(KATA_ANNO_CFG_HYPERVISOR_INIT_DATA);
 }
 
 /// Report a fatal error if this app encounters an unsupported input YAML field,
@@ -378,25 +384,36 @@ pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
 /// with hard to predict outcomes.
 fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     if !silent_unsupported_fields {
-        panic!("Unsupported field: {}", path);
+        panic!("Unsupported field: {path}");
     }
 }
 
 pub fn get_process_fields(
     process: &mut policy::KataProcess,
-    security_context: &Option<pod::PodSecurityContext>,
     must_check_passwd: &mut bool,
+    is_pause_container: bool,
+    security_context: &Option<pod::PodSecurityContext>,
 ) {
+    debug!(
+        "get_process_fields: is_pause_container = {is_pause_container}, security_context = {:?}",
+        security_context
+    );
+
     if let Some(context) = security_context {
         if let Some(uid) = context.runAsUser {
             process.User.UID = uid.try_into().unwrap();
+            debug!(
+                "get_process_fields: set UID from runAsUser = {}, User = {:?}",
+                process.User.UID, &process.User
+            );
+
             // Changing the UID can break the GID mapping
             // if a /etc/passwd file is present.
             // The proper GID is determined, in order of preference:
-            // 1. the securityContext runAsGroup field (applied last in code)
-            // 2. lacking an explicit runAsGroup, /etc/passwd
-            //      (parsed in policy::get_container_process())
-            // 3. lacking an /etc/passwd, 0 (unwrap_or)
+            // 1. The securityContext runAsGroup field - applied below.
+            // 2. /etc/passwd - parsed in policy::get_container_process().
+            // 3. From the container image configuration - read from registry::get_process().
+            // 4. From genpolicy-settings.json.
             //
             // This behavior comes from the containerd runtime implementation:
             // WithUser https://github.com/containerd/containerd/blob/main/pkg/oci/spec_opts.go#L592
@@ -410,25 +427,52 @@ pub fn get_process_fields(
 
         if let Some(gid) = context.runAsGroup {
             process.User.GID = gid.try_into().unwrap();
+            debug!(
+                "get_process_fields: set GID from runAsGroup = {}, User = {:?}",
+                process.User.GID, &process.User
+            );
+
+            process.User.AdditionalGids.clear();
+            debug!(
+                "get_process_fields: cleared AdditionalGids due to runAsGroup = {}, User = {:?}",
+                process.User.GID, &process.User
+            );
+
+            process.User.AdditionalGids.insert(process.User.GID);
+            debug!(
+                "get_process_fields: inserted GID = {} into AdditionalGids, User = {:?}",
+                process.User.GID, &process.User
+            );
+
             *must_check_passwd = false;
         }
 
-        if let Some(fs_group) = context.fsGroup {
-            process
-                .User
-                .AdditionalGids
-                .insert(fs_group.try_into().unwrap());
-        }
+        if !is_pause_container {
+            if let Some(fs_group) = context.fsGroup {
+                let gid = fs_group.try_into().unwrap();
+                process.User.AdditionalGids.insert(gid);
+                debug!(
+                    "get_process_fields: inserted fs_group = {gid} into AdditionalGids, User = {:?}",
+                    &process.User
+                );
+            }
 
-        if let Some(supplemental_groups) = &context.supplementalGroups {
-            supplemental_groups.iter().for_each(|g| {
-                process.User.AdditionalGids.insert(*g);
-            });
+            if let Some(supplemental_groups) = &context.supplementalGroups {
+                supplemental_groups.iter().for_each(|g| {
+                    process.User.AdditionalGids.insert(*g);
+                });
+                debug!(
+                    "get_process_fields: inserted supplementalGroups = {:?} into AdditionalGids, User = {:?}",
+                    &supplemental_groups, &process.User
+                );
+            }
         }
 
         if let Some(allow) = context.allowPrivilegeEscalation {
             process.NoNewPrivileges = !allow
         }
+
+        debug!("get_process_fields: returning User = {:?}", &process.User);
     }
 }
 
@@ -440,3 +484,18 @@ pub fn get_sysctls(security_context: &Option<pod::PodSecurityContext>) -> Vec<po
     }
     vec![]
 }
+
+/// Constructs a non-anchored regex for an object according to k8s naming conventions:
+/// 1. If the name field is set, return that literally.
+/// 2. If name is unset but generateName is set, return regex that matches generateName and a random suffix.
+/// 3. Otherwise, return None. This object is not considered valid by the k8s API server!
+pub fn name_regex_from_meta(meta: &ObjectMeta) -> Option<String> {
+    meta.name.clone().or_else(|| {
+        meta.generateName
+            .as_ref()
+            .map(|p| format!("{}{}", regex::escape(p), GENERATE_NAME_SUFFIX_REGEX))
+    })
+}
+
+// https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/staging/src/k8s.io/apimachinery/pkg/util/rand/rand.go#L81-L83
+pub const GENERATE_NAME_SUFFIX_REGEX: &str = "[bcdfghjklmnpqrstvwxz2456789]+";

@@ -13,8 +13,8 @@ use std::time::Duration;
 use oci_spec::runtime as oci;
 use subprocess::{ExitStatus, Popen, PopenConfig, PopenError, Redirection};
 
+use crate::sl;
 use crate::validate::valid_env;
-use crate::{eother, sl};
 
 const DEFAULT_HOOK_TIMEOUT_SEC: i32 = 10;
 
@@ -124,7 +124,7 @@ impl HookStates {
         }
 
         fail::fail_point!("execute_hook", |_| {
-            Err(eother!("execute hook fail point injection"))
+            Err(std::io::Error::other("execute hook fail point injection"))
         });
         info!(sl!(), "execute hook {:?}", hook);
 
@@ -148,7 +148,11 @@ impl HookStates {
                 ..Default::default()
             },
         )
-        .map_err(|e| eother!("failed to create subprocess for hook {:?}: {}", hook, e))?;
+        .map_err(|e| {
+            std::io::Error::other(format!(
+                "failed to create subprocess for hook {hook:?}: {e}"
+            ))
+        })?;
 
         if let Some(state) = state {
             executor.execute_with_input(&mut popen, state)?;
@@ -197,11 +201,15 @@ impl<'a> HookExecutor<'a> {
     fn new(hook: &'a oci::Hook) -> Result<Self> {
         // Ensure Hook.path is present and is an absolute path.
         let executable = if !hook.path().exists() {
-            return Err(eother!("path of hook {:?} is empty", hook));
+            return Err(std::io::Error::other(format!(
+                "path of hook {hook:?} is empty"
+            )));
         } else {
             let path = hook.path();
             if !path.is_absolute() {
-                return Err(eother!("path of hook {:?} is not absolute", hook));
+                return Err(std::io::Error::other(format!(
+                    "path of hook {hook:?} is not absolute"
+                )));
             }
             Some(path.as_os_str().to_os_string())
         };
@@ -292,7 +300,10 @@ impl<'a> HookExecutor<'a> {
                         Ok(())
                     } else {
                         warn!(sl!(), "hook {:?} exit status with {}", self.hook, code,);
-                        Err(eother!("hook {:?} exit status with {}", self.hook, code))
+                        Err(std::io::Error::other(format!(
+                            "hook {:?} exit status with {}",
+                            self.hook, code,
+                        )))
                     }
                 }
                 _ => {
@@ -300,11 +311,10 @@ impl<'a> HookExecutor<'a> {
                         sl!(),
                         "no exit code for hook {:?}: {:?}", self.hook, exit_status
                     );
-                    Err(eother!(
+                    Err(std::io::Error::other(format!(
                         "no exit code for hook {:?}: {:?}",
-                        self.hook,
-                        exit_status
-                    ))
+                        self.hook, exit_status,
+                    )))
                 }
             }
         } else {
@@ -321,11 +331,10 @@ impl<'a> HookExecutor<'a> {
     fn handle_popen_wait_error(&mut self, e: PopenError, popen: &mut Popen) -> Result<()> {
         self.print_result(popen);
         error!(sl!(), "wait_timeout for hook {:?} failed: {}", self.hook, e);
-        Err(eother!(
+        Err(std::io::Error::other(format!(
             "wait_timeout for hook {:?} failed: {}",
-            self.hook,
-            e
-        ))
+            self.hook, e,
+        )))
     }
 
     fn print_result(&mut self, popen: &mut Popen) {
@@ -375,7 +384,11 @@ mod tests {
         fn build_oci_hook(self) -> oci::Hook {
             let mut hook = oci::Hook::default();
             hook.set_path(PathBuf::from(self.path));
-            hook.set_args(Some(self.args));
+            if self.args.is_empty() {
+                hook.set_args(None);
+            } else {
+                hook.set_args(Some(self.args));
+            }
             hook.set_env(Some(self.env));
             hook.set_timeout(self.timeout);
 
@@ -532,9 +545,8 @@ mod tests {
         let create_shell = |shell_path: &str, data_path: &str| -> Result<()> {
             let shell = format!(
                 r#"#!/bin/sh
-echo -n "K1=${{K1}}" > {}
-"#,
-                data_path
+echo -n "K1=${{K1}}" > {data_path}
+"#
             );
             let mut output = File::create(shell_path)?;
             output.write_all(shell.as_bytes())?;

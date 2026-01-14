@@ -119,7 +119,7 @@ func TestEncodeMetricFamily(t *testing.T) {
 
 	// create encoder
 	buf := bytes.NewBufferString("")
-	encoder := expfmt.NewEncoder(buf, expfmt.FmtText)
+	encoder := expfmt.NewEncoder(buf, expfmt.NewFormat(expfmt.TypeTextPlain))
 
 	// encode metrics to text format
 	err := encodeMetricFamily(mfs, encoder)

@@ -5,15 +5,17 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ] && skip "test not working https://github.com/kata-containers/kata-containers/issues/9039"
-	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "${KATA_HYPERVISOR}" = "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
+	setup_common || die "setup_common failed"
 	pod_name="cpu-test"
 	container_name="c1"
-	get_pod_config_dir
+
 	yaml_file="${pod_config_dir}/pod-number-cpu.yaml"
 
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -28,19 +30,19 @@ setup() {
 
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
+	local -r retries="10"
+	local -r max_number_cpus="3"
+	local number_cpus=""
+
 	# Create pod
 	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
-	retries="10"
-	max_number_cpus="3"
-
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
-		number_cpus=$(kubectl exec pod/"$pod_name" -c "$container_name" \
-			-- "${exec_command[@]}")
+		number_cpus=$(container_exec_with_retries "$pod_name" "$container_name" "${exec_command[@]}")
 		if [[ "$number_cpus" =~ ^[0-9]+$ ]]; then
 			# Verify number of cpus
 			[ "$number_cpus" -le "$max_number_cpus" ]
@@ -51,12 +53,14 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ] && skip "test not working https://github.com/kata-containers/kata-containers/issues/9039"
-	[ "${KATA_HYPERVISOR}" = "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "${KATA_HYPERVISOR}" = "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

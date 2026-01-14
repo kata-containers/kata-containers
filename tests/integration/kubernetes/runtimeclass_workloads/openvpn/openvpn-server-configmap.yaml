@@ -1,0 +1,31 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+# Copyright (c) 2025 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvpn-server-config
+  labels:
+    app: openvpn-server
+data:
+  server.conf: |
+    port 1194
+    proto udp
+    dev tap
+    ca /etc/openvpn/keys/ca.crt
+    cert /etc/openvpn/keys/server.crt
+    key /etc/openvpn/keys/server.key
+    server-bridge 10.8.0.1 255.255.255.0 10.8.0.100 10.8.0.200
+    persist-key
+    persist-tun
+    keepalive 10 120
+    cipher AES-256-GCM
+    tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384
+    dh none
+    user nobody
+    group nogroup
+    status /var/log/openvpn-status.log
+    verb 3

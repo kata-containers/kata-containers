@@ -33,34 +33,133 @@ info() {
 	echo "INFO: $msg" >&2
 }
 
+# Get existing values from a TOML array field and return them as a comma-separated string
+# * get_field_array_values "${config}" "enable_annotations" "${shim}"
+get_field_array_values() {
+	local config_file="$1"
+	local field="$2"
+	local shim="${3:-}"
+	
+	# Determine hypervisor name if shim is provided
+	local hypervisor_name=""
+	if [[ -n "${shim}" ]]; then
+		hypervisor_name=$(get_hypervisor_name "${shim}")
+	fi
+	
+	# Get array values using tomlq - output each element on a new line, then convert to comma-separated
+	local array_values=""
+	if [[ -n "${hypervisor_name}" ]]; then
+		array_values=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.'"${field}"' // [] | .[]' "${config_file}" 2>/dev/null || echo "")
+	fi
+	
+	# Fallback: try without hypervisor prefix (for top-level fields)
+	if [[ -z "${array_values}" ]] || [[ "${array_values}" == "null" ]]; then
+		array_values=$(tomlq -r '."'"${field}"'" // [] | .[]' "${config_file}" 2>/dev/null || echo "")
+	fi
+	
+	# Convert newline-separated values to comma-separated string
+	if [[ -n "${array_values}" ]]; then
+		echo "${array_values}" | tr '\n' ',' | sed 's/,$//'
+	else
+		echo ""
+	fi
+}
+
 DEBUG="${DEBUG:-"false"}"
 
-SHIMS="${SHIMS:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
-IFS=' ' read -a shims <<< "$SHIMS"
-DEFAULT_SHIM="${DEFAULT_SHIM:-"qemu"}"
-default_shim="$DEFAULT_SHIM"
+ARCH=$(uname -m)
 
-CREATE_RUNTIMECLASSES="${CREATE_RUNTIMECLASSES:-"false"}"
-CREATE_DEFAULT_RUNTIMECLASS="${CREATE_DEFAULT_RUNTIMECLASS:-"false"}"
+SHIMS_X86_64="${SHIMS_X86_64:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-snp qemu-tdx qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
+SHIMS_AARCH64="${SHIMS_AARCH64:-"clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-cca"}"
+SHIMS_S390X="${SHIMS_S390X:-"qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs"}"
+SHIMS_PPC64LE="${SHIMS_PPC64LE:-"qemu"}"
 
-ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
+DEFAULT_SHIM_X86_64="${DEFAULT_SHIM_X86_64:-"qemu"}"
+DEFAULT_SHIM_AARCH64="${DEFAULT_SHIM_AARCH64:-"qemu"}"
+DEFAULT_SHIM_S390X="${DEFAULT_SHIM_S390X:-"qemu"}"
+DEFAULT_SHIM_PPC64LE="${DEFAULT_SHIM_PPC64LE:-"qemu"}"
 
-IFS=' ' read -a non_formatted_allowed_hypervisor_annotations <<< "$ALLOWED_HYPERVISOR_ANNOTATIONS"
-allowed_hypervisor_annotations=""
-for allowed_hypervisor_annotation in "${non_formatted_allowed_hypervisor_annotations[@]}"; do
-	allowed_hypervisor_annotations+="\"$allowed_hypervisor_annotation\", "
-done
-allowed_hypervisor_annotations=$(echo $allowed_hypervisor_annotations | sed 's/,$//')
+SNAPSHOTTER_HANDLER_MAPPING_X86_64="${SNAPSHOTTER_HANDLER_MAPPING_X86_64:-}"
+SNAPSHOTTER_HANDLER_MAPPING_AARCH64="${SNAPSHOTTER_HANDLER_MAPPING_AARCH64:-}"
+SNAPSHOTTER_HANDLER_MAPPING_S390X="${SNAPSHOTTER_HANDLER_MAPPING_S390X:-}"
+SNAPSHOTTER_HANDLER_MAPPING_PPC64LE="${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE:-}"
 
-SNAPSHOTTER_HANDLER_MAPPING="${SNAPSHOTTER_HANDLER_MAPPING:-}"
-IFS=',' read -a snapshotters <<< "$SNAPSHOTTER_HANDLER_MAPPING"
+ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64="${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64="${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_S390X="${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X:-}"
+ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE="${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE:-}"
+
+PULL_TYPE_MAPPING_X86_64="${PULL_TYPE_MAPPING_X86_64:-}"
+PULL_TYPE_MAPPING_AARCH64="${PULL_TYPE_MAPPING_AARCH64:-}"
+PULL_TYPE_MAPPING_S390X="${PULL_TYPE_MAPPING_S390X:-}"
+PULL_TYPE_MAPPING_PPC64LE="${PULL_TYPE_MAPPING_PPC64LE:-}"
+
+EXPERIMENTAL_FORCE_GUEST_PULL_X86_64="${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64:-}"
+EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64="${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64:-}"
+EXPERIMENTAL_FORCE_GUEST_PULL_S390X="${EXPERIMENTAL_FORCE_GUEST_PULL_S390X:-}"
+EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE:-}"
+
+SHIMS_FOR_ARCH=""
+DEFAULT_SHIM_FOR_ARCH=""
+SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH=""
+ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH=""
+PULL_TYPE_MAPPING_FOR_ARCH=""
+EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH=""
+case ${ARCH} in
+	x86_64)
+		SHIMS_FOR_ARCH="${SHIMS_X86_64}"
+		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_X86_64}"
+		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
+		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_X86_64}"
+		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64}"
+		;;
+	aarch64)
+		SHIMS_FOR_ARCH="${SHIMS_AARCH64}"
+		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_AARCH64}"
+		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
+		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_AARCH64}"
+		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64}"
+		;;
+	s390x)
+		SHIMS_FOR_ARCH="${SHIMS_S390X}"
+		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_S390X}"
+		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_S390X}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
+		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_S390X}"
+		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_S390X}"
+		;;
+	ppc64le)
+		SHIMS_FOR_ARCH="${SHIMS_PPC64LE}"
+		DEFAULT_SHIM_FOR_ARCH="${DEFAULT_SHIM_PPC64LE}"
+		SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH="${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE}"
+		ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH="${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
+		PULL_TYPE_MAPPING_FOR_ARCH="${PULL_TYPE_MAPPING_PPC64LE}"
+		EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH="${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE}"
+		;;
+	*)
+		die "Unsupported architecture: ${ARCH}"
+		;;
+esac
+
+IFS=' ' read -a shims <<< "${SHIMS_FOR_ARCH}"
+default_shim="${DEFAULT_SHIM_FOR_ARCH}"
+
+IFS=',' read -a snapshotters <<< "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}"
 snapshotters_delimiter=':'
+
+IFS=' ' read -a hypervisor_annotations <<< "${ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH}"
+
+IFS=',' read -a pull_types <<< "${PULL_TYPE_MAPPING_FOR_ARCH}"
+
+IFS="," read -a experimental_force_guest_pull <<< "${EXPERIMENTAL_FORCE_GUEST_PULL_FOR_ARCH}"
 
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 
-PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
-IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
+EXPERIMENTAL_SETUP_SNAPSHOTTER="${EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
+IFS=',' read -a experimental_setup_snapshotter <<< "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
 
 INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
 default_dest_dir="/opt/kata"
@@ -99,67 +198,39 @@ function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
 
-function create_runtimeclasses() {
-	echo "Creating the runtime classes"
+function patch_runtimeclasses_for_nfd() {
+	info "Patching existing runtime classes for NFD"
 
 	for shim in "${shims[@]}"; do
-		echo "Creating the kata-${shim} runtime class"
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-		fi
-		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			# Move the file back to its original state, as the deletion is done
-			# differently in the helm and in the kata-deploy daemonset case, meaning
-			# that we should assume those files are always as they were during the
-			# time the image was built
-			sed -i -e "s|kata-${shim}-${MULTI_INSTALL_SUFFIX}|kata-${shim}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+		local runtime_class_name="kata-${shim}"
+		if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+			runtime_class_name="kata-${shim}-${MULTI_INSTALL_SUFFIX}"
 		fi
 
+		# Check if runtime class exists
+		if ! kubectl get runtimeclass "${runtime_class_name}" &>/dev/null; then
+			continue
+		fi
+
+		case "${shim}" in
+			*tdx*)
+				info "Patching runtime class ${runtime_class_name} for TDX NFD support"
+				# Use merge patch strategy to add/update tdx.intel.com/keys in overhead.podFixed
+				# This preserves existing overhead.podFixed values and creates structure if needed
+				kubectl patch runtimeclass "${runtime_class_name}" --type=merge \
+					-p='{"overhead":{"podFixed":{"tdx.intel.com/keys":1}}}'
+				;;
+			*snp*)
+				info "Patching runtime class ${runtime_class_name} for SNP NFD support"
+				# Use merge patch strategy to add/update sev-snp.amd.com/esids in overhead.podFixed
+				# This preserves existing overhead.podFixed values and creates structure if needed
+				kubectl patch runtimeclass "${runtime_class_name}" --type=merge \
+					-p='{"overhead":{"podFixed":{"sev-snp.amd.com/esids":1}}}'
+				;;
+			*)
+				;;
+		esac
 	done
-
-	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			warn "CREATE_DEFAULT_RUNTIMECLASS is being ignored!"
-			warn "multi installation does not support creating a default runtime class"
-
-			return
-		fi
-
-		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
-		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
-		kubectl apply -f /tmp/kata.yaml
-		rm -f /tmp/kata.yaml
-	fi
-}
-
-function delete_runtimeclasses() {
-	echo "Deleting the runtime classes"
-
-	for shim in "${shims[@]}"; do
-		echo "Deleting the kata-${shim} runtime class"
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-		fi
-		kubectl delete -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
-	done
-
-
-	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
-		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
-			# There's nothing to be done here, as a default runtime class is never created
-			# for multi installations
-			return
-		fi
-
-		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
-		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
-		kubectl delete -f /tmp/kata.yaml
-		rm -f /tmp/kata.yaml
-	fi
 }
 
 function get_container_runtime() {
@@ -216,9 +287,9 @@ function is_containerd_capable_of_using_drop_in_files() {
 		echo "false"
 		return
 	fi
- 
-	local version_major=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | cut -d'.' -f1)
-	if [ $version_major -lt 2 ]; then
+
+	local major_version=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | head -n1 | cut -d'.' -f1)
+	if [ $major_version -lt 2 ]; then
 		# Only containerd 2.0 does the merge of the plugins section from different snippets,
 		# instead of overwritting the whole section, which makes things considerably more
 		# complicated for us to deal with.
@@ -261,7 +332,7 @@ function get_kata_containers_config_path() {
 	# Map the runtime shim name to the appropriate configuration
 	# file directory.
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs) config_path="$rust_config_path" ;;
 		*) config_path="$golang_config_path" ;;
 	esac
 
@@ -273,7 +344,7 @@ function get_kata_containers_runtime_path() {
 
 	local runtime_path
 	case "$shim" in
-		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-se-runtime-rs)
+		cloud-hypervisor | dragonball | qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs)
 			runtime_path="${dest_dir}/runtime-rs/bin/containerd-shim-kata-v2"
 			;;
 		*)
@@ -296,8 +367,11 @@ function tdx_supported() {
 	version="${2}"
 	config="${3}"
 
-	sed -i -e "s|PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT|$(get_tdx_qemu_path_from_distro ${distro})|g" ${config}
-	sed -i -e "s|PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT|$(get_tdx_ovmf_path_from_distro ${distro})|g" ${config}
+	local qemu_path=$(get_tdx_qemu_path_from_distro ${distro})
+	local ovmf_path=$(get_tdx_ovmf_path_from_distro ${distro})
+
+	tomlq -i -t '.hypervisor.qemu.path = "'"${qemu_path}"'"' "${config}" 2>/dev/null || true
+	tomlq -i -t '.hypervisor.qemu.firmware = "'"${ovmf_path}"'"' "${config}" 2>/dev/null || true
 
 	info "In order to use the tdx related runtime classes, ensure TDX is properly configured for ${distro} ${version} by following the instructions provided at: $(get_tdx_distro_instructions ${distro})"
 }
@@ -349,11 +423,14 @@ function adjust_qemu_cmdline() {
 	# The paths on the kata-containers tarball side look like:
 	# ${dest_dir}/opt/kata/share/kata-qemu/qemu
 	# ${dest_dir}/opt/kata/share/kata-qemu-snp-experimnental/qemu
-	[[ "${shim}" =~ ^(qemu-snp|qemu-nvidia-snp)$ ]] && qemu_share=${shim}-experimental
+	# ${dest_dir}/opt/kata/share/kata-qemu-cca-experimental/qemu
+	[[ "${shim}" == "qemu-nvidia-gpu-snp" ]] && qemu_share=qemu-snp-experimental
+	[[ "${shim}" == "qemu-nvidia-gpu-tdx" ]] && qemu_share=qemu-tdx-experimental
+	[[ "${shim}" == "qemu-cca" ]] && qemu_share=qemu-cca-experimental
 
 	# Both qemu and qemu-coco-dev use exactly the same QEMU, so we can adjust
 	# the shim on the qemu-coco-dev case to qemu
-	[[ "${shim}" =~ ^(qemu|qemu-coco-dev)$ ]] && qemu_share="qemu"
+	[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-nvidia-gpu)$ ]] && qemu_share="qemu"
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
 	qemu_binary_script="${qemu_binary}-installation-prefix"
@@ -379,7 +456,38 @@ EOF
 		chmod +x ${qemu_binary_script_host_path}
 	fi
 
-	sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
+	tomlq -i -t '.hypervisor.qemu.path = "'"${qemu_binary_script}"'"' "${config_path}" 2>/dev/null || true
+}
+
+function get_hypervisor_name() {
+	local shim="${1}"
+	case "${shim}" in
+		qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs | qemu | qemu-tdx | qemu-snp | qemu-se | qemu-coco-dev | qemu-cca | qemu-nvidia-gpu | qemu-nvidia-gpu-tdx | qemu-nvidia-gpu-snp)
+			echo "qemu"
+			;;
+		clh)
+			echo "clh"
+			;;
+		cloud-hypervisor)
+			echo "cloud-hypervisor"
+			;;
+		dragonball)
+			echo "dragonball"
+			;;
+		fc | firecracker)
+			echo "firecracker"
+			;;
+		stratovirt)
+			echo "stratovirt"
+			;;
+		remote)
+			echo "remote"
+			;;
+		*)
+			# Default to the shim name itself if no specific mapping
+			echo "${shim}"
+			;;
+	esac
 }
 
 function install_artifacts() {
@@ -398,24 +506,199 @@ function install_artifacts() {
 		mkdir -p "$config_path"
 
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
-		# Properly set https_proxy and no_proxy for Kata Containers
+
+		# Till deprecation period is over, we need to support:
+		# * "http://proxy:8080" (applies to all shims)
+		# * per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
 		if [ -n "${AGENT_HTTPS_PROXY}" ]; then
-			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+			local https_proxy_value=""
+
+			# Parse AGENT_HTTPS_PROXY - check if it contains "=" for per-shim format
+			if [[ "${AGENT_HTTPS_PROXY}" == *=* ]]; then
+				# Per-shim format: parse semicolon-separated "shim=proxy" mappings
+				IFS=';' read -ra proxy_mappings <<< "${AGENT_HTTPS_PROXY}"
+				for mapping in "${proxy_mappings[@]}"; do
+					local key="${mapping%%=*}"
+					local value="${mapping#*=}"
+					if [[ "${key}" == "${shim}" ]]; then
+						https_proxy_value="${value}"
+						break
+					fi
+				done
+			else
+				# Simple format: apply to all shims
+				https_proxy_value="${AGENT_HTTPS_PROXY}"
+			fi
+
+			if [[ -n "${https_proxy_value}" ]]; then
+				local hypervisor_name=$(get_hypervisor_name "${shim}")
+				local current_params=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.kernel_params // ""' "${kata_config_file}" 2>/dev/null || echo "")
+				# Only add if not already present
+				if [[ "${current_params}" != *"agent.https_proxy"* ]]; then
+					local new_params="${current_params}"
+					[[ -n "${new_params}" ]] && new_params+=" "
+					new_params+="agent.https_proxy=${https_proxy_value}"
+					tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.kernel_params = "'"${new_params}"'"' "${kata_config_file}" 2>/dev/null || true
+				fi
+			fi
 		fi
 
+		# Till deprecation period is over, need to support:
+		# * "localhost,127.0.0.1" (applies to all shims)
+		# * per-shim format: "qemu-tdx=localhost,127.0.0.1;qemu-snp=192.168.0.0/16"
 		if [ -n "${AGENT_NO_PROXY}" ]; then
-			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+			local no_proxy_value=""
+
+			# Parse AGENT_NO_PROXY - check if it contains "=" for per-shim format
+			if [[ "${AGENT_NO_PROXY}" == *=* ]]; then
+				# Per-shim format: parse semicolon-separated "shim=no_proxy" mappings
+				IFS=';' read -ra noproxy_mappings <<< "${AGENT_NO_PROXY}"
+				for mapping in "${noproxy_mappings[@]}"; do
+					local key="${mapping%%=*}"
+					local value="${mapping#*=}"
+					if [[ "${key}" == "${shim}" ]]; then
+						no_proxy_value="${value}"
+						break
+					fi
+				done
+			else
+				# Simple format: apply to all shims
+				no_proxy_value="${AGENT_NO_PROXY}"
+			fi
+
+			if [[ -n "${no_proxy_value}" ]]; then
+				local hypervisor_name=$(get_hypervisor_name "${shim}")
+				local current_params=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.kernel_params // ""' "${kata_config_file}" 2>/dev/null || echo "")
+				# Only add if not already present
+				if [[ "${current_params}" != *"agent.no_proxy"* ]]; then
+					local new_params="${current_params}"
+					[[ -n "${new_params}" ]] && new_params+=" "
+					new_params+="agent.no_proxy=${no_proxy_value}"
+					tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.kernel_params = "'"${new_params}"'"' "${kata_config_file}" 2>/dev/null || true
+				fi
+			fi
 		fi
 
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
-			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
-			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
-			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${kata_config_file}"
+			local hypervisor_name=$(get_hypervisor_name "${shim}")
+
+			# Only set these boolean flags if not already set to true
+			local current_enable_debug=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.enable_debug // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_enable_debug}" != "true" ]]; then
+				tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.enable_debug = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			local current_runtime_debug=$(tomlq -r '.runtime.enable_debug // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_runtime_debug}" != "true" ]]; then
+				tomlq -i -t '.runtime.enable_debug = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			local current_debug_console=$(tomlq -r '.agent.kata.debug_console_enabled // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_debug_console}" != "true" ]]; then
+				tomlq -i -t '.agent.kata.debug_console_enabled = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			local current_agent_debug=$(tomlq -r '.agent.kata.enable_debug // false' "${kata_config_file}" 2>/dev/null || echo "false")
+			if [[ "${current_agent_debug}" != "true" ]]; then
+				tomlq -i -t '.agent.kata.enable_debug = true' "${kata_config_file}" 2>/dev/null || true
+			fi
+
+			# Add debug kernel params if not already present
+			local current_params=$(tomlq -r '.hypervisor.'"${hypervisor_name}"'.kernel_params // ""' "${kata_config_file}" 2>/dev/null || echo "")
+			local debug_params=""
+			if [[ "${current_params}" != *"agent.log=debug"* ]]; then
+				debug_params+=" agent.log=debug"
+			fi
+			if [[ "${current_params}" != *"initcall_debug"* ]]; then
+				debug_params+=" initcall_debug"
+			fi
+			if [[ -n "${debug_params}" ]]; then
+				local new_params="${current_params}${debug_params}"
+				tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.kernel_params = "'"${new_params}"'"' "${kata_config_file}" 2>/dev/null || true
+			fi
 		fi
 
-		if [ -n "${allowed_hypervisor_annotations}" ]; then
-			sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, $allowed_hypervisor_annotations]/" "${kata_config_file}"
+		# Apply allowed_hypervisor_annotations:
+		#   Here we need to support both cases of:
+		#   * A list of annotations, which will be blindly applied to all shims
+		#   * A per-shim list of annotations, which will only be applied to the specific shim
+		if [[ ${#hypervisor_annotations[@]} -gt 0 ]]; then
+			local shim_specific_annotations=""
+			local global_annotations=""
+
+			for m in "${hypervisor_annotations[@]}"; do
+				# Check if this mapping has a colon (shim-specific) or not
+				if [[ "${m}" == *:* ]]; then
+					# Shim-specific mapping like "qemu:foo,bar"
+					local key="${m%:*}"
+					local value="${m#*:}"
+
+					if [[ "${key}" != "${shim}" ]]; then
+						continue
+					fi
+
+					if [[ -n "${shim_specific_annotations}" ]]; then
+						shim_specific_annotations+=","
+					fi
+					shim_specific_annotations+="${value}"
+				else
+					# All shims annotations like "foo bar"
+					if [[ -n "${global_annotations}" ]]; then
+						global_annotations+=","
+					fi
+					global_annotations+="$(echo "${m}" | sed 's/ /,/g')"
+				fi
+			done
+
+			# Combine shim-specific and non-shim-specific annotations
+			local all_annotations="${global_annotations}"
+			if [[ -n "${shim_specific_annotations}" ]]; then
+				if [[ -n "${all_annotations}" ]]; then
+					all_annotations+=","
+				fi
+				all_annotations+="${shim_specific_annotations}"
+			fi
+
+			if [[ -n "${all_annotations}" ]]; then
+				local hypervisor_name=$(get_hypervisor_name "${shim}")
+				local existing_annotations=$(get_field_array_values "${kata_config_file}" "enable_annotations" "${shim}")
+
+				# Combine existing and new annotations
+				local combined_annotations="${existing_annotations}"
+				if [[ -n "${combined_annotations}" ]] && [[ -n "${all_annotations}" ]]; then
+					combined_annotations+=",${all_annotations}"
+				elif [[ -n "${all_annotations}" ]]; then
+					combined_annotations="${all_annotations}"
+				fi
+
+				# Deduplicate all annotations
+				IFS=',' read -a annotations <<< "${combined_annotations}"
+				local -A seen_annotations
+				local unique_annotations=()
+
+				for annotation in "${annotations[@]}"; do
+					# Trim whitespace
+					annotation=$(echo "${annotation}" | sed 's/^[[:space:]]//;s/[[:space:]]$//')
+					if [[ -n "${annotation}" ]] && [[ -z "${seen_annotations[${annotation}]+_}" ]]; then
+						seen_annotations["${annotation}"]=1
+						unique_annotations+=("${annotation}")
+					fi
+				done
+
+				if [[ ${#unique_annotations[@]} -gt 0 ]]; then
+					local formatted_annotations=()
+					for ann in "${unique_annotations[@]}"; do
+						formatted_annotations+=("\"${ann}\"")
+					done
+					local final_annotations=$(IFS=','; echo "${formatted_annotations[*]}")
+					tomlq -i -t '.hypervisor.'"${hypervisor_name}"'.enable_annotations = ['"${final_annotations}"']' "${kata_config_file}" 2>/dev/null || true
+				fi
+			fi
+		fi
+
+		if printf '%s\n' "${experimental_force_guest_pull[@]}" | grep -Fxq "${shim}"; then
+			tomlq -i -t '.runtime.experimental_force_guest_pull = true' "${kata_config_file}" 2>/dev/null || true
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
@@ -424,7 +707,7 @@ function install_artifacts() {
 			case ${ID} in
 				ubuntu)
 					case ${VERSION_ID} in
-						24.04|25.04)
+						24.04|25.04|25.10)
 							tdx_supported ${ID} ${VERSION_ID} ${kata_config_file}
 							;;
 						*)
@@ -449,7 +732,10 @@ function install_artifacts() {
 		fi
 
 		if [ "${dest_dir}" != "${default_dest_dir}" ]; then
-			kernel_path=$(tomlq ".hypervisor.${shim}.path" ${kata_config_file} | tr -d \")
+			hypervisor="${shim}"
+			[[ "${shim}" == "qemu"* ]] && hypervisor="qemu"
+
+			kernel_path=$(tomlq ".hypervisor.${hypervisor}.path" ${kata_config_file} | tr -d \")
 			if echo $kernel_path | grep -q "${dest_dir}"; then
 				# If we got to this point here, it means that we're dealing with
 				# a kata containers configuration file that has already been changed
@@ -463,7 +749,7 @@ function install_artifacts() {
 				sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
 				# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-				[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-sev|qemu-se|qemu-coco-dev)$ ]] && \
+				[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-cca)$ ]] && \
 					adjust_qemu_cmdline "${shim}" "${kata_config_file}"
 			fi
 		fi
@@ -472,16 +758,52 @@ function install_artifacts() {
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
-		sed -i -E "s|(static_sandbox_resource_mgmt)=false|\1=true|" "${config_path}"
-
 		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
-		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
-		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+		local mariner_hypervisor_name="clh"
+
+		tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.static_sandbox_resource_mgmt = true' "${config_path}" 2>/dev/null || true
+
+		# Append to valid_hypervisor_paths if not already present
+		local existing_paths=$(tomlq -r '.hypervisor.'"${mariner_hypervisor_name}"'.valid_hypervisor_paths // [] | .[]' "${config_path}" 2>/dev/null || echo "")
+		local path_exists=false
+		if [[ -n "${existing_paths}" ]]; then
+			while IFS= read -r path; do
+				path=$(echo "${path}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+				if [[ "${path}" == "${clh_path}" ]]; then
+					path_exists=true
+					break
+				fi
+			done <<< "${existing_paths}"
+		fi
+
+		if [[ "${path_exists}" == "false" ]]; then
+			local formatted_paths=()
+			if [[ -n "${existing_paths}" ]]; then
+				while IFS= read -r path; do
+					path=$(echo "${path}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+					formatted_paths+=("\"${path}\"")
+				done <<< "${existing_paths}"
+			fi
+			formatted_paths+=("\"${clh_path}\"")
+			local final_paths=$(IFS=','; echo "${formatted_paths[*]}")
+			tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.valid_hypervisor_paths = ['"${final_paths}"']' "${config_path}" 2>/dev/null || true
+		fi
+
+		tomlq -i -t '.hypervisor.'"${mariner_hypervisor_name}"'.path = "'"${clh_path}"'"' "${config_path}" 2>/dev/null || true
 	fi
 
+	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io &>/dev/null; then
+		arch="$(uname -m)"
+		if [[ ${arch} == "x86_64" ]]; then
+			node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
 
-	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
-		create_runtimeclasses
+			kubectl apply -f "${node_feature_rule_file}"
+
+			info "As NFD is deployed on the node, rules for ${arch} TEEs have been created"
+
+			# Patch existing runtime classes for TDX/SNP when NFD is detected
+			patch_runtimeclasses_for_nfd
+		fi
 	fi
 }
 
@@ -494,26 +816,33 @@ function wait_till_node_is_ready() {
 	done
 }
 
+function restart_runtime() {
+	local runtime="${1}"
+
+	if [ "${runtime}" == "k0s-worker" ] || [ "${runtime}" == "k0s-controller" ]; then
+		# do nothing, k0s will automatically load the config on the fly
+		:
+	elif [ "${runtime}" == "microk8s" ]; then
+		host_systemctl restart snap.microk8s.daemon-containerd.service
+	else
+		host_systemctl daemon-reload
+		host_systemctl restart "${runtime}"
+	fi
+
+	wait_till_node_is_ready
+}
+
 function configure_cri_runtime() {
-	case $1 in
+	local runtime="${1}"
+
+	case "${runtime}" in
 	crio)
 		configure_crio
 		;;
 	containerd | k3s | k3s-agent | rke2-agent | rke2-server | k0s-controller | k0s-worker | microk8s)
-		configure_containerd "$1"
+		configure_containerd "${runtime}"
 		;;
 	esac
-	if [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
-		# do nothing, k0s will automatically load the config on the fly
-		:
-	elif [ "$1" == "microk8s" ]; then
-		host_systemctl restart snap.microk8s.daemon-containerd.service
-	else
-		host_systemctl daemon-reload
-		host_systemctl restart "$1"
-	fi
-
-	wait_till_node_is_ready
 }
 
 function configure_crio_runtime() {
@@ -543,7 +872,7 @@ EOF
 
 	local key
 	local value
-	if [ -n "${PULL_TYPE_MAPPING}" ]; then
+	if [[ -n "${PULL_TYPE_MAPPING_FOR_ARCH}" ]]; then
 		for m in "${pull_types[@]}"; do
 			key="${m%"$snapshotters_delimiter"*}"
 			value="${m#*"$snapshotters_delimiter"}"
@@ -554,9 +883,9 @@ EOF
 
 			if [ "${value}" == "guest-pull" ]; then
 				echo -e "\truntime_pull_image = true" | \
-					tee -a "$crio_drop_in_conf_file"
+					tee -a "${crio_drop_in_conf_file}"
 			else
-				die "Unsupported pull type '$value' for ${shim}"
+				die "Unsupported pull type '${value}' for ${shim}"
 			fi
 			break
 		done
@@ -635,14 +964,19 @@ function configure_containerd_runtime() {
 	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${configuration_file}
 	tomlq -i -t $(printf '%s.runtime_path=%s' ${runtime_table} ${runtime_path}) ${configuration_file}
 	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${configuration_file}
-	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+	if [[ "${shim}" == *"nvidia-gpu-"* ]]; then
+		tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*","cdi.k8s.io/*"]' ${runtime_table}) ${configuration_file}
+	else
+		tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+	fi
+
 	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${configuration_file}
 
 	if [ "${DEBUG}" == "true" ]; then
 		tomlq -i -t '.debug.level = "debug"' ${configuration_file}
 	fi
 
-	if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+	if [[ -n "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" ]]; then
 		for m in "${snapshotters[@]}"; do
 			key="${m%$snapshotters_delimiter*}"
 
@@ -651,6 +985,10 @@ function configure_containerd_runtime() {
 			fi
 
 			value="${m#*$snapshotters_delimiter}"
+			if [[ "${value}" == "nydus" ]] && [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+				value="${value}-${MULTI_INSTALL_SUFFIX}"
+			fi
+
 			tomlq -i -t $(printf '%s.snapshotter="%s"' ${runtime_table} ${value}) ${configuration_file}
 			break
 		done
@@ -670,7 +1008,9 @@ function configure_containerd() {
 	fi
 
 	if [ $use_containerd_drop_in_conf_file = "true" ]; then
-		tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
+		if ! grep -q "${containerd_drop_in_conf_file}" ${containerd_conf_file}; then
+			tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
+		fi
 	fi
 
 	for shim in "${shims[@]}"; do
@@ -683,8 +1023,15 @@ function remove_artifacts() {
 
 	rm -rf ${host_install_dir}
 
-	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
-		delete_runtimeclasses
+	if kubectl get crds nodefeaturerules.nfd.k8s-sigs.io &>/dev/null; then
+		arch="$(uname -m)"
+		if [[ ${arch} == "x86_64" ]]; then
+			node_feature_rule_file="/opt/kata-artifacts/node-feature-rules/${arch}-tee-keys.yaml"
+
+			kubectl delete  --ignore-not-found -f "${node_feature_rule_file}"
+
+			info "As NFD is deployed on the node, rules for ${arch} TEEs have been deleted"
+		fi
 	fi
 }
 
@@ -757,16 +1104,33 @@ function containerd_snapshotter_version_check() {
 	local containerd_version_to_avoid="1.6"
 	local containerd_version=${container_runtime_version#$containerd_prefix}
 
-	if grep -q ^$containerd_version_to_avoid <<< $containerd_version; then
-		if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+	if grep -q ^${containerd_version_to_avoid} <<< ${containerd_version}; then
+		if [[ -n "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" ]]; then
 			die "kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"
 		fi
 	fi
 }
 
+function containerd_erofs_snapshotter_version_check() {
+	local container_runtime_version=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}')
+	local containerd_prefix="containerd://"
+	local containerd_version=${container_runtime_version#$containerd_prefix}
+	local min_version_major="2"
+	local min_version_minor="2"
+
+	# Extract major.minor (strip patch and prerelease stuff)
+	local major=${containerd_version%%.*}
+	local rest=${containerd_version#*.}
+	local minor=${rest%%[^0-9]*}
+
+	if [ "${min_version_major}" -gt "${major}" ] || { [ "${min_version_major}" -eq "${major}" ] && [ "${min_version_minor}" -gt "${minor}" ]; }; then
+		die "In order to use erofs-snapshotter containerd must be 2.2.0 or newer"
+	fi
+}
+
 function snapshotter_handler_mapping_validation_check() {
-	echo "Validating the snapshotter-handler mapping: \"${SNAPSHOTTER_HANDLER_MAPPING}\""
-	if [ -z "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+	echo "Validating the snapshotter-handler mapping: \"${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}\""
+	if [[ -z "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" ]]; then
 		echo "No snapshotter has been requested, using the default value from containerd"
 		return
 	fi
@@ -775,23 +1139,160 @@ function snapshotter_handler_mapping_validation_check() {
 		shim="${m%$snapshotters_delimiter*}"
 		snapshotter="${m#*$snapshotters_delimiter}"
 
-		if [ -z "$shim" ]; then
+		if [ -z "${shim}" ]; then
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one shim is empty"
 		fi
 
-		if [ -z "$snapshotter" ]; then
+		if [ -z "${snapshotter}" ]; then
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one snapshotter is empty"
 		fi
 
-		if ! grep -q " $shim " <<< " $SHIMS "; then
-			die "\"$shim\" is not part of \"$SHIMS\""
+		if ! grep -q " ${shim} " <<< " ${SHIMS_FOR_ARCH} "; then
+			die "\"${shim}\" is not part of \"${SHIMS_FOR_ARCH}\""
 		fi
 
-		matches=$(grep -o "$shim$snapshotters_delimiter" <<< "${SNAPSHOTTER_HANDLER_MAPPING}" | wc -l)
-		if [ $matches -ne 1 ]; then
+		matches=$(grep -o "${shim}${snapshotters_delimiter}" <<< "${SNAPSHOTTER_HANDLER_MAPPING_FOR_ARCH}" | wc -l)
+		if [[ ${matches} -ne 1 ]]; then
 			die "One, and only one, entry per shim is required"
 		fi
 	done
+}
+
+function configure_erofs_snapshotter() {
+	info "Configuring erofs-snapshotter"
+
+	# As it's only supported with containerd 2.2.0 or newer
+	# we don't even care about the config file format, as
+	# it'll always be 3 (at least till version 4 is out).
+	#
+	# Also, drop-in is always supported on containerd 2.x
+	configuration_file="${1}"
+
+	tomlq -i -t $(printf '.plugins."io.containerd.cri.v1.images".discard_unpacked_layers=false') ${configuration_file}
+
+	tomlq -i -t $(printf '.plugins."io.containerd.service.v1.diff-service".default=["erofs","walking"]') ${configuration_file}
+
+	tomlq -i -t $(printf '.plugins."io.containerd.snapshotter.v1.erofs".enable_fsverity=true') ${configuration_file}
+	tomlq -i -t $(printf '.plugins."io.containerd.snapshotter.v1.erofs".set_immutable=true') ${configuration_file}
+}
+
+function configure_nydus_snapshotter() {
+	info "Configuring nydus-snapshotter"
+
+	local nydus="nydus"
+	local containerd_nydus="nydus-snapshotter"
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+		nydus="${nydus}-${MULTI_INSTALL_SUFFIX}"
+		containerd_nydus="${containerd_nydus}-${MULTI_INSTALL_SUFFIX}"
+	fi
+
+	configuration_file="${1}"
+	pluginid="${2}"
+
+	tomlq -i -t $(printf '.plugins.%s.disable_snapshot_annotations=false' ${pluginid}) ${configuration_file}
+
+	tomlq -i -t $(printf '.proxy_plugins."%s".type="snapshot"' ${nydus} ) ${configuration_file}
+	tomlq -i -t $(printf '.proxy_plugins."%s".address="/run/%s/containerd-nydus-grpc.sock"' ${nydus} ${containerd_nydus}) ${configuration_file}
+}
+
+function configure_snapshotter() {
+	snapshotter="${1}"
+
+	local runtime="$(get_container_runtime)"
+	local pluginid="\"io.containerd.grpc.v1.cri\".containerd" # version = 2
+	local configuration_file="${containerd_conf_file}"
+
+	# Properly set the configuration file in case drop-in files are supported
+	if [[ ${use_containerd_drop_in_conf_file} == "true" ]]; then
+		configuration_file="/host${containerd_drop_in_conf_file}"
+	fi
+
+	local containerd_root_conf_file="${containerd_conf_file}"
+	if [[ "${runtime}" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+		containerd_root_conf_file="/etc/containerd/containerd.toml"
+	fi
+
+	if grep -q "version = 3\>" ${containerd_root_conf_file}; then
+		pluginid=\"io.containerd.cri.v1.images\"
+	fi
+
+	case "${snapshotter}" in
+		nydus)
+			configure_nydus_snapshotter "${configuration_file}" "${pluginid}"
+
+			nydus_snapshotter="nydus-snapshotter"
+			if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+				nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
+			fi
+			host_systemctl restart "${nydus_snapshotter}"
+			;;
+		erofs)
+			configure_erofs_snapshotter "${configuration_file}"
+			;;
+	esac
+}
+
+function install_nydus_snapshotter() {
+	info "Deploying nydus-snapshotter"
+
+	local nydus_snapshotter="nydus-snapshotter"
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+		nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
+	fi
+
+	local config_guest_pulling="/opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml"
+	local nydus_snapshotter_service="/opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service"
+
+	# Adjust the paths for the config-guest-pulling.toml and nydus-snapshotter.service
+	sed -i -e "s|@SNAPSHOTTER_ROOT_DIR@|/var/lib/${nydus_snapshotter}|g" "${config_guest_pulling}"
+	sed -i -e "s|@SNAPSHOTTER_GRPC_SOCKET_ADDRESS@|/run/${nydus_snapshotter}/containerd-nydus-grpc.sock|g" "${config_guest_pulling}"
+	sed -i -e "s|@NYDUS_OVERLAYFS_PATH@|${host_install_dir#/host}/nydus-snapshotter/nydus-overlayfs|g" "${config_guest_pulling}"
+
+	sed -i -e "s|@CONTAINERD_NYDUS_GRPC_BINARY@|${host_install_dir#/host}/nydus-snapshotter/containerd-nydus-grpc|g" "${nydus_snapshotter_service}"
+	sed -i -e "s|@CONFIG_GUEST_PULLING@|${host_install_dir#/host}/nydus-snapshotter/config-guest-pulling.toml|g" "${nydus_snapshotter_service}"
+
+	mkdir -p "${host_install_dir}/nydus-snapshotter"
+	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc "${host_install_dir}/nydus-snapshotter/containerd-nydus-grpc"
+	install -D -m 775 /opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs "${host_install_dir}/nydus-snapshotter/nydus-overlayfs"
+
+	install -D -m 644 "${config_guest_pulling}" "${host_install_dir}/nydus-snapshotter/config-guest-pulling.toml"
+	install -D -m 644 "${nydus_snapshotter_service}" "/host/etc/systemd/system/${nydus_snapshotter}.service"
+
+	host_systemctl daemon-reload
+	host_systemctl enable "${nydus_snapshotter}.service"
+}
+
+function uninstall_nydus_snapshotter() {
+	info "Removing deployed nydus-snapshotter"
+
+	local nydus_snapshotter="nydus-snapshotter"
+	if [[ -n "${MULTI_INSTALL_SUFFIX}" ]]; then
+		nydus_snapshotter="${nydus_snapshotter}-${MULTI_INSTALL_SUFFIX}"
+	fi
+
+	host_systemctl disable --now "${nydus_snapshotter}.service"
+
+	rm -f "/host/etc/systemd/system/${nydus_snapshotter}.service"
+	rm -rf "${host_install_dir}/nydus-snapshotter"
+
+	host_systemctl daemon-reload
+}
+
+function install_snapshotter() {
+	snapshotter="${1}"
+
+	case "${snapshotter}" in
+		erofs) ;; # it's a containerd's built-in snapshotter
+		nydus) install_nydus_snapshotter ;;
+	esac
+}
+
+function uninstall_snapshotter() {
+	snapshotter="${1}"
+
+	case "${snapshotter}" in
+		nydus) uninstall_nydus_snapshotter ;;
+	esac
 }
 
 function main() {
@@ -807,18 +1308,36 @@ function main() {
 	echo "Environment variables passed to this script"
 	echo "* NODE_NAME: ${NODE_NAME}"
 	echo "* DEBUG: ${DEBUG}"
-	echo "* SHIMS: ${SHIMS}"
-	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
-	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
-	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
-	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS}"
-	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
+	echo "* SHIMS_X86_64: ${SHIMS_X86_64}"
+	echo "* SHIMS_AARCH64: ${SHIMS_AARCH64}"
+	echo "* SHIMS_S390X: ${SHIMS_S390X}"
+	echo "* SHIMS_PPC64LE: ${SHIMS_PPC64LE}"
+	echo "* DEFAULT_SHIM_X86_64: ${DEFAULT_SHIM_X86_64}"
+	echo "* DEFAULT_SHIM_AARCH64: ${DEFAULT_SHIM_AARCH64}"
+	echo "* DEFAULT_SHIM_S390X: ${DEFAULT_SHIM_S390X}"
+	echo "* DEFAULT_SHIM_PPC64LE: ${DEFAULT_SHIM_PPC64LE}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64: ${ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_S390X: ${ALLOWED_HYPERVISOR_ANNOTATIONS_S390X}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE: ${ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_X86_64: ${SNAPSHOTTER_HANDLER_MAPPING_X86_64}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_AARCH64: ${SNAPSHOTTER_HANDLER_MAPPING_AARCH64}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_S390X: ${SNAPSHOTTER_HANDLER_MAPPING_S390X}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING_PPC64LE: ${SNAPSHOTTER_HANDLER_MAPPING_PPC64LE}"
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
-	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
+	echo "* PULL_TYPE_MAPPING_X86_64: ${PULL_TYPE_MAPPING_X86_64}"
+	echo "* PULL_TYPE_MAPPING_AARCH64: ${PULL_TYPE_MAPPING_AARCH64}"
+	echo "* PULL_TYPE_MAPPING_S390X: ${PULL_TYPE_MAPPING_S390X}"
+	echo "* PULL_TYPE_MAPPING_PPC64LE: ${PULL_TYPE_MAPPING_PPC64LE}"
 	echo "* INSTALLATION_PREFIX: ${INSTALLATION_PREFIX}"
 	echo "* MULTI_INSTALL_SUFFIX: ${MULTI_INSTALL_SUFFIX}"
 	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
+	echo "* EXPERIMENTAL_SETUP_SNAPSHOTTER: ${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_X86_64: ${EXPERIMENTAL_FORCE_GUEST_PULL_X86_64}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64: ${EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_S390X: ${EXPERIMENTAL_FORCE_GUEST_PULL_S390X}"
+	echo "* EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE: ${EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE}"
 
 	# script requires that user is root
 	euid=$(id -u)
@@ -848,7 +1367,6 @@ function main() {
 		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 	fi
 
-
 	# only install / remove / update if we are dealing with CRIO or containerd
 	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server|k0s-worker|k0s-controller|microk8s)$ ]]; then
 		if [ "$runtime" != "crio" ]; then
@@ -868,6 +1386,28 @@ function main() {
 
 		case "$action" in
 		install)
+			# Let's fail early on this, so we don't need to do a rollback
+			# in case we reach this situation.
+			if [[ -n "${EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
+				if [[ "${runtime}" == "cri-o" ]]; then
+					warn "EXPERIMENTAL_SETUP_SNAPSHOTTER is being ignored!"
+					warn "Snapshotter is a containerd specific option."
+				else
+					for snapshotter in "${experimental_setup_snapshotter[@]}"; do
+						case "${snapshotter}" in
+							erofs)
+								containerd_erofs_snapshotter_version_check
+								;;
+							nydus)
+								;;
+							*)
+								die "${EXPERIMENTAL_SETUP_SNAPSHOTTER} is not a supported snapshotter by kata-deploy"
+								;;
+						esac
+					done
+				fi
+			fi
+
 			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 			       if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
 				       cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
@@ -892,6 +1432,12 @@ function main() {
 
 			install_artifacts
 			configure_cri_runtime "$runtime"
+
+			for snapshotter in "${experimental_setup_snapshotter[@]}"; do
+				install_snapshotter "${snapshotter}"
+				configure_snapshotter "${snapshotter}"
+			done
+			restart_runtime "${runtime}"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
@@ -912,6 +1458,13 @@ function main() {
 					kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 				fi
 			fi
+
+			for snapshotter in "${experimental_setup_snapshotter[@]}"; do
+				# Here we don't need to do any cleanup on the config, as kata-deploy
+				# will revert the configuration to the state it was before the deployment,
+				# which is also before the snapshotter configuration. :-)
+				uninstall_snapshotter "${EXPERIMENTAL_SETUP_SNAPSHOTTER}"
+			done
 
 			cleanup_cri_runtime "$runtime"
 			if [ "${HELM_POST_DELETE_HOOK}" == "false" ]; then

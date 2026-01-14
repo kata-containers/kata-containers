@@ -228,7 +228,7 @@ impl VirtioNetDeviceMgr {
         mut ctx: DeviceOpContext,
         config: VirtioNetDeviceConfigInfo,
     ) -> std::result::Result<(), VirtioNetDeviceError> {
-        if config.num_queues % 2 != 0 {
+        if !config.num_queues.is_multiple_of(2) {
             return Err(VirtioNetDeviceError::InvalidQueueNum(config.num_queues));
         }
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
@@ -382,7 +382,7 @@ impl VirtioNetDeviceMgr {
                 info.config.iface_id
             );
             if let Some(device) = info.device.take() {
-                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                DeviceManager::destroy_mmio_device(device, ctx)?;
             }
         }
         Ok(())

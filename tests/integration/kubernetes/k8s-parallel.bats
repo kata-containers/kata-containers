@@ -5,11 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
+
 	job_name="jobtest"
 	names=( "test1" "test2" "test3" )
 
@@ -21,6 +24,7 @@ setup() {
 	for i in "${names[@]}"; do
 		yaml_file="${pod_config_dir}/job-$i.yaml"
 		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > ${yaml_file}
+		set_node "$yaml_file" "$node"
 		auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 	done
 }
@@ -35,7 +39,7 @@ setup() {
 	kubectl get jobs -l jobgroup=${job_name}
 
 	# Check the pods
-	kubectl wait --for=condition=Ready --timeout=$timeout pod -l jobgroup=${job_name}
+	kubectl wait --for=condition=Ready --timeout=120s pod -l jobgroup=${job_name}
 
 	# Check output of the jobs
 	for i in $(kubectl get pods -l jobgroup=${job_name} -o name); do
@@ -44,13 +48,15 @@ setup() {
 }
 
 teardown() {
-	# Delete jobs
-	kubectl delete jobs -l jobgroup=${job_name}
-
 	# Remove generated yaml files
 	for i in "${names[@]}"; do
 		rm -f ${pod_config_dir}/job-$i.yaml
 	done
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+
+	teardown_common "${node}" "${node_start_time:-}"
+
+	# Delete jobs
+	kubectl delete jobs -l jobgroup=${job_name}
 }

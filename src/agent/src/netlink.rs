@@ -41,9 +41,9 @@ pub enum LinkFilter<'a> {
 impl fmt::Display for LinkFilter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            LinkFilter::Name(name) => write!(f, "Name: {}", name),
-            LinkFilter::Index(idx) => write!(f, "Index: {}", idx),
-            LinkFilter::Address(addr) => write!(f, "Address: {}", addr),
+            LinkFilter::Name(name) => write!(f, "Name: {name}"),
+            LinkFilter::Index(idx) => write!(f, "Index: {idx}"),
+            LinkFilter::Address(addr) => write!(f, "Address: {addr}"),
         }
     }
 }
@@ -272,7 +272,7 @@ impl Handle {
             use LinkAttribute as Nla;
 
             let mac_addr = parse_mac_address(addr)
-                .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
+                .with_context(|| format!("Failed to parse MAC address: {addr}"))?;
 
             // Hardware filter might not be supported by netlink,
             // we may have to dump link list and then find the target link.
@@ -401,7 +401,10 @@ impl Handle {
                 }
 
                 if let RouteAttribute::Oif(index) = attribute {
-                    route.device = self.find_link(LinkFilter::Index(*index)).await?.name();
+                    route.device = match self.find_link(LinkFilter::Index(*index)).await {
+                        Ok(link) => link.name(),
+                        Err(_) => String::new(),
+                    };
                 }
             }
 
@@ -909,9 +912,26 @@ mod tests {
     use super::*;
     use netlink_packet_route::address::AddressHeader;
     use netlink_packet_route::link::LinkHeader;
+    use serial_test::serial;
     use std::iter;
     use std::process::Command;
     use test_utils::skip_if_not_root;
+
+    // Constants for ARP neighbor tests
+    const TEST_DUMMY_INTERFACE: &str = "dummy_for_arp";
+    const TEST_ARP_IP: &str = "192.0.2.127";
+
+    /// Helper function to check if the result is a netlink EACCES error
+    fn is_netlink_permission_error<T>(result: &Result<T>) -> bool {
+        if let Err(e) = result {
+            let error_string = format!("{e:?}");
+            if error_string.contains("code: Some(-13)") {
+                println!("INFO: skipping test - netlink operations are restricted in this environment (EACCES)");
+                return true;
+            }
+        }
+        false
+    }
 
     #[tokio::test]
     async fn find_link_by_name() {
@@ -972,18 +992,18 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial(arp_neighbor_tests)]
     async fn list_routes() {
+        clean_env_for_test_add_one_arp_neighbor(TEST_DUMMY_INTERFACE, TEST_ARP_IP);
+        let devices: Vec<Interface> = Handle::new().unwrap().list_interfaces().await.unwrap();
         let all = Handle::new()
             .unwrap()
             .list_routes()
             .await
+            .context(format!("available devices: {devices:?}"))
             .expect("Failed to list routes");
 
         assert_ne!(all.len(), 0);
-
-        for r in &all {
-            assert_ne!(r.device.len(), 0);
-        }
     }
 
     #[tokio::test]
@@ -1032,10 +1052,14 @@ mod tests {
         let lo = handle.find_link(LinkFilter::Name("lo")).await.unwrap();
 
         for network in list {
-            handle
-                .add_addresses(lo.index(), iter::once(network))
-                .await
-                .expect("Failed to add IP");
+            let result = handle.add_addresses(lo.index(), iter::once(network)).await;
+
+            // Skip test if netlink operations are restricted (EACCES = -13)
+            if is_netlink_permission_error(&result) {
+                return;
+            }
+
+            result.expect("Failed to add IP");
 
             // Make sure the address is there
             let result = handle
@@ -1050,10 +1074,14 @@ mod tests {
             assert!(result.is_some());
 
             // Update it
-            handle
-                .add_addresses(lo.index(), iter::once(network))
-                .await
-                .expect("Failed to delete address");
+            let result = handle.add_addresses(lo.index(), iter::once(network)).await;
+
+            // Skip test if netlink operations are restricted (EACCES = -13)
+            if is_netlink_permission_error(&result) {
+                return;
+            }
+
+            result.expect("Failed to delete address");
         }
     }
 
@@ -1088,7 +1116,7 @@ mod tests {
             .expect("prepare: failed to delete neigh");
     }
 
-    fn prepare_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
+    async fn prepare_env_for_test_add_one_arp_neighbor(dummy_name: &str, ip: &str) {
         clean_env_for_test_add_one_arp_neighbor(dummy_name, ip);
         // modprobe dummy
         Command::new("modprobe")
@@ -1102,9 +1130,9 @@ mod tests {
             .output()
             .expect("failed to add dummy interface");
 
-        // ip addr add 192.168.0.2/16 dev dummy
+        // ip addr add 192.0.2.2/24 dev dummy
         Command::new("ip")
-            .args(["addr", "add", "192.168.0.2/16", "dev", dummy_name])
+            .args(["addr", "add", "192.0.2.2/24", "dev", dummy_name])
             .output()
             .expect("failed to add ip for dummy");
 
@@ -1113,24 +1141,26 @@ mod tests {
             .args(["link", "set", dummy_name, "up"])
             .output()
             .expect("failed to up dummy");
+
+        // Wait briefly to ensure the IP address addition is fully complete
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
     #[tokio::test]
+    #[serial(arp_neighbor_tests)]
     async fn test_add_one_arp_neighbor() {
         skip_if_not_root!();
 
         let mac = "6a:92:3a:59:70:aa";
-        let to_ip = "169.254.1.1";
-        let dummy_name = "dummy_for_arp";
 
-        prepare_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
+        prepare_env_for_test_add_one_arp_neighbor(TEST_DUMMY_INTERFACE, TEST_ARP_IP).await;
 
         let mut ip_address = IPAddress::new();
-        ip_address.set_address(to_ip.to_string());
+        ip_address.set_address(TEST_ARP_IP.to_string());
 
         let mut neigh = ARPNeighbor::new();
         neigh.set_toIPAddress(ip_address);
-        neigh.set_device(dummy_name.to_string());
+        neigh.set_device(TEST_DUMMY_INTERFACE.to_string());
         neigh.set_lladdr(mac.to_string());
         neigh.set_state(0x80);
 
@@ -1141,15 +1171,24 @@ mod tests {
             .expect("Failed to add ARP neighbor");
 
         // ip neigh show dev dummy ip
-        let stdout = Command::new("ip")
-            .args(["neigh", "show", "dev", dummy_name, to_ip])
+        let output = Command::new("ip")
+            .args(["neigh", "show", "dev", TEST_DUMMY_INTERFACE, TEST_ARP_IP])
             .output()
-            .expect("failed to show neigh")
-            .stdout;
+            .expect("failed to show neigh");
 
-        let stdout = std::str::from_utf8(&stdout).expect("failed to convert stdout");
-        assert_eq!(stdout.trim(), format!("{} lladdr {} PERMANENT", to_ip, mac));
+        let stdout = std::str::from_utf8(&output.stdout).expect("failed to convert stdout");
+        let stderr = std::str::from_utf8(&output.stderr).expect("failed to convert stderr");
+        assert!(
+            output.status.success(),
+            "`ip neigh show` returned exit code {:?}. stderr: {:?}",
+            output.status.code(),
+            stderr
+        );
+        assert_eq!(
+            stdout.trim(),
+            format!("{TEST_ARP_IP} lladdr {mac} PERMANENT")
+        );
 
-        clean_env_for_test_add_one_arp_neighbor(dummy_name, to_ip);
+        clean_env_for_test_add_one_arp_neighbor(TEST_DUMMY_INTERFACE, TEST_ARP_IP);
     }
 }

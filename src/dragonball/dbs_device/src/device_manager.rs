@@ -18,7 +18,7 @@
 //!
 //! # Examples
 //!
-//! Creating a dummy deivce which implement DeviceIo trait, and register it to [IoManager] with
+//! Creating a dummy device which implement DeviceIo trait, and register it to [IoManager] with
 //! trapped MMIO/PIO address ranges:
 //!
 //! ```
@@ -102,7 +102,7 @@ use crate::resources::Resource;
 use crate::{DeviceIo, IoAddress, IoSize, PioAddress};
 
 /// Error types for `IoManager` related operations.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum Error {
     /// The inserting device overlaps with a current device.
     #[error("device address conflicts with existing devices")]
@@ -182,8 +182,8 @@ impl IoManager {
     ///
     /// * `device`: device object to handle trapped IO access requests
     /// * `resources`: resources representing trapped MMIO/PIO address ranges. Only MMIO/PIO address
-    ///    ranges will be handled, and other types of resource will be ignored. So the caller does
-    ///    not need to filter out non-MMIO/PIO resources.
+    ///   ranges will be handled, and other types of resource will be ignored. So the caller does
+    ///   not need to filter out non-MMIO/PIO resources.
     pub fn register_device_io(
         &mut self,
         device: Arc<dyn DeviceIo>,
@@ -364,8 +364,8 @@ pub trait IoManagerContext {
     /// * `ctx`: context object returned by begin_tx().
     /// * `device`: device instance object to be registered
     /// * `resources`: resources representing trapped MMIO/PIO address ranges. Only MMIO/PIO address
-    ///    ranges will be handled, and other types of resource will be ignored. So the caller does
-    ///    not need to filter out non-MMIO/PIO resources.
+    ///   ranges will be handled, and other types of resource will be ignored. So the caller does
+    ///   not need to filter out non-MMIO/PIO resources.
     fn register_device_io(
         &self,
         ctx: &mut Self::Context,

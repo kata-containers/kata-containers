@@ -14,8 +14,8 @@ use common::{
     error::Error,
     types::{
         ContainerConfig, ContainerID, ContainerProcess, ExecProcessRequest, KillRequest,
-        ProcessExitStatus, ProcessStateInfo, ProcessType, ResizePTYRequest, ShutdownRequest,
-        StatsInfo, UpdateRequest, PID,
+        ProcessExitStatus, ProcessStateInfo, ProcessStatus, ProcessType, ResizePTYRequest,
+        ShutdownRequest, StatsInfo, UpdateRequest, PID,
     },
     ContainerManager,
 };
@@ -28,6 +28,8 @@ use tokio::sync::RwLock;
 use tracing::instrument;
 
 use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
+
+use crate::container_manager::is_termination_signal;
 
 use super::{logger_with_process, Container};
 
@@ -192,8 +194,11 @@ impl ContainerManager for VirtContainerManager {
         if req.spec_type_url.is_empty() {
             return Err(anyhow!("invalid type url"));
         }
-        let oci_process: OCIProcess =
+        let mut oci_process: OCIProcess =
             serde_json::from_slice(&req.spec_value).context("serde from slice")?;
+
+        oci_process.set_apparmor_profile(None);
+        oci_process.set_capabilities(None);
 
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
@@ -209,28 +214,73 @@ impl ContainerManager for VirtContainerManager {
             oci_process,
         )
         .await
-        .context("exec")?;
-        Ok(())
+        .context("container exec")
     }
 
     #[instrument]
     async fn kill_process(&self, req: &KillRequest) -> Result<()> {
         let containers = self.containers.read().await;
         let container_id = &req.process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
+
+        // According to CRI specs, kubelet will call StopPodSandbox()
+        // at least once before calling RemovePodSandbox and this call
+        // is idempotent. It must not return an error if all relevant
+        // resources have already been reclaimed
+        let c = match containers.get(container_id) {
+            Some(c) => c,
+            None => {
+                // Container already removed - this is OK for SIGKILL/SIGTERM
+                if is_termination_signal(req.signal) {
+                    warn!(
+                        sl!(),
+                        "Signal {} ignored due to container not existing", req.signal;
+                        "container" => container_id,
+                        "signal" => req.signal
+                    );
+                    return Ok(());
+                }
+                return Err(Error::ContainerNotFound(container_id.clone()).into());
+            }
+        };
+
+        // According to CRI specs, kubelet will call StopPodSandbox()
+        // at least once before calling RemovePodSandbox, and this call
+        // is idempotent, and must not return an error if all relevant
+        // resources have already been reclaimed. And in that call it will
+        // send a SIGKILL signal first to try to stop the container, thus
+        // once the container has terminated, here should ignore this signal
+        // and return directly.
+        //
+        // When the VM/agent is dead (e.g., QEMU killed externally), the ttrpc
+        // connection will fail with AgentConnectionClosed error.
+        // Additionally, if the container's init process is already gone, the
+        // agent returns ProcessAlreadyTerminated error.
+        // For SIGKILL/SIGTERM, we should treat these as success since the
+        // container is effectively terminated.
         c.kill_process(&req.process, req.signal, req.all)
             .await
-            .map_err(|err| {
-                warn!(
-                    sl!(),
-                    "failed to signal process {:?} {:?}", &req.process, err
+            .or_else(|err| {
+                let is_term_signal = is_termination_signal(req.signal);
+
+                // Check for typed errors using downcast_ref
+                let is_expected_error = matches!(
+                    err.downcast_ref::<Error>(),
+                    Some(Error::AgentConnectionClosed) | Some(Error::ProcessAlreadyTerminated)
                 );
-                err
+
+                if is_term_signal && is_expected_error {
+                    warn!(
+                        sl!(),
+                        "Signal encounters expected error, VM/process already terminated";
+                        "container" => container_id,
+                        "process" => ?&req.process,
+                        "signal" => req.signal,
+                    );
+                    Ok(())
+                } else {
+                    Err(err)
+                }
             })
-            .ok();
-        Ok(())
     }
 
     #[instrument]
@@ -300,11 +350,29 @@ impl ContainerManager for VirtContainerManager {
     async fn state_process(&self, process: &ContainerProcess) -> Result<ProcessStateInfo> {
         let containers = self.containers.read().await;
         let container_id = &process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
-        let state = c.state_process(process).await.context("state process")?;
-        Ok(state)
+
+        // When using Sandbox API, the sandbox container (container_id == sandbox_id)
+        // is not stored in the containers map. Return a synthetic state for it.
+        if let Some(c) = containers.get(container_id) {
+            c.state_process(process).await.context("state process")
+        } else if container_id == &self.sid {
+            // Sandbox container state - return synthetic state
+            Ok(ProcessStateInfo {
+                container_id: self.sid.clone(),
+                exec_id: String::new(),
+                pid: PID { pid: self.pid },
+                bundle: String::new(),
+                stdin: None,
+                stdout: None,
+                stderr: None,
+                terminal: false,
+                status: ProcessStatus::Running,
+                exit_status: 0,
+                exited_at: None,
+            })
+        } else {
+            Err(Error::ContainerNotFound(container_id.clone()).into())
+        }
     }
 
     #[instrument]

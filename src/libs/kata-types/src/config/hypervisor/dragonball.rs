@@ -6,7 +6,6 @@
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
-use std::u32;
 
 use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DRAGONBALL_VCPUS;
@@ -15,7 +14,7 @@ use crate::config::hypervisor::{
     VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
 use crate::config::{ConfigPlugin, TomlConfig};
-use crate::{eother, resolve_path, validate_path};
+use crate::{resolve_path, validate_path};
 
 /// Hypervisor name for dragonball, used to index `TomlConfig::hypervisor`.
 pub const HYPERVISOR_NAME_DRAGONBALL: &str = "dragonball";
@@ -66,7 +65,7 @@ impl ConfigPlugin for DragonballConfig {
             }
 
             if db.cpu_info.default_vcpus as u32 > db.cpu_info.default_maxvcpus {
-                db.cpu_info.default_vcpus = db.cpu_info.default_maxvcpus as i32;
+                db.cpu_info.default_vcpus = db.cpu_info.default_maxvcpus as f32;
             }
 
             if db.machine_info.entropy_source.is_empty() {
@@ -88,22 +87,30 @@ impl ConfigPlugin for DragonballConfig {
     fn validate(&self, conf: &TomlConfig) -> Result<()> {
         if let Some(db) = conf.hypervisor.get(HYPERVISOR_NAME_DRAGONBALL) {
             if !db.path.is_empty() {
-                return Err(eother!("Path for dragonball hypervisor should be empty"));
+                return Err(std::io::Error::other(
+                    "Path for dragonball hypervisor should be empty",
+                ));
             }
             if !db.valid_hypervisor_paths.is_empty() {
-                return Err(eother!(
-                    "Valid hypervisor path for dragonball hypervisor should be empty"
+                return Err(std::io::Error::other(
+                    "Valid hypervisor path for dragonball hypervisor should be empty",
                 ));
             }
             if !db.ctlpath.is_empty() {
-                return Err(eother!("CtlPath for dragonball hypervisor should be empty"));
+                return Err(std::io::Error::other(
+                    "CtlPath for dragonball hypervisor should be empty",
+                ));
             }
             if !db.valid_ctlpaths.is_empty() {
-                return Err(eother!("CtlPath for dragonball hypervisor should be empty"));
+                return Err(std::io::Error::other(
+                    "CtlPath for dragonball hypervisor should be empty",
+                ));
             }
             validate_path!(db.jailer_path, "dragonball jailer path {} is invalid: {}")?;
             if db.enable_iothreads {
-                return Err(eother!("dragonball hypervisor doesn't support IO threads."));
+                return Err(std::io::Error::other(
+                    "dragonball hypervisor doesn't support IO threads.",
+                ));
             }
 
             if !db.blockdev_info.disable_block_device_use
@@ -111,79 +118,84 @@ impl ConfigPlugin for DragonballConfig {
                 && db.blockdev_info.block_device_driver != VIRTIO_BLK_MMIO
                 && db.blockdev_info.block_device_driver != VIRTIO_PMEM
             {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "{} is unsupported block device type.",
-                    db.blockdev_info.block_device_driver
-                ));
+                    db.blockdev_info.block_device_driver,
+                )));
             }
 
             if db.boot_info.kernel.is_empty() {
-                return Err(eother!(
-                    "Guest kernel image for dragonball hypervisor is empty"
+                return Err(std::io::Error::other(
+                    "Guest kernel image for dragonball hypervisor is empty",
                 ));
             }
 
             if db.boot_info.image.is_empty() && db.boot_info.initrd.is_empty() {
-                return Err(eother!(
-                    "Both of guest boot image and initrd for dragonball hypervisor is empty"
+                return Err(std::io::Error::other(
+                    "Both of guest boot image and initrd for dragonball hypervisor is empty",
                 ));
             }
 
             if !db.boot_info.firmware.is_empty() {
-                return Err(eother!(
-                    "Firmware for dragonball hypervisor should be empty"
+                return Err(std::io::Error::other(
+                    "Firmware for dragonball hypervisor should be empty",
                 ));
             }
 
-            if (db.cpu_info.default_vcpus > 0
+            if (db.cpu_info.default_vcpus > 0.0
                 && db.cpu_info.default_vcpus as u32 > default::MAX_DRAGONBALL_VCPUS)
                 || db.cpu_info.default_maxvcpus > default::MAX_DRAGONBALL_VCPUS
             {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "dragonball hypervisor can not support {} vCPUs",
-                    db.cpu_info.default_maxvcpus
-                ));
+                    db.cpu_info.default_maxvcpus,
+                )));
             }
 
             if db.device_info.enable_iommu || db.device_info.enable_iommu_platform {
-                return Err(eother!("dragonball hypervisor does not support vIOMMU"));
+                return Err(std::io::Error::other(
+                    "dragonball hypervisor does not support vIOMMU",
+                ));
             }
             if db.device_info.hotplug_vfio_on_root_bus
                 || db.device_info.default_bridges > 0
                 || db.device_info.pcie_root_port > 0
                 || db.device_info.pcie_switch_port > 0
             {
-                return Err(eother!(
-                    "dragonball hypervisor does not support PCI hotplug options"
+                return Err(std::io::Error::other(
+                    "dragonball hypervisor does not support PCI hotplug options",
                 ));
             }
 
             if !db.machine_info.machine_type.is_empty() {
-                return Err(eother!(
-                    "dragonball hypervisor does not support machine_type"
+                return Err(std::io::Error::other(
+                    "dragonball hypervisor does not support machine_type",
                 ));
             }
             if !db.machine_info.pflashes.is_empty() {
-                return Err(eother!("dragonball hypervisor does not support pflashes"));
+                return Err(std::io::Error::other(
+                    "dragonball hypervisor does not support pflashes",
+                ));
             }
 
             if db.security_info.rootless {
-                return Err(eother!(
-                    "dragonball hypervisor does not support rootless mode"
+                return Err(std::io::Error::other(
+                    "dragonball hypervisor does not support rootless mode",
                 ));
             }
 
             if let Some(v) = db.shared_fs.shared_fs.as_ref() {
                 if v != VIRTIO_FS && v != VIRTIO_FS_INLINE {
-                    return Err(eother!("dragonball hypervisor doesn't support {}", v));
+                    return Err(std::io::Error::other(format!(
+                        "dragonball hypervisor doesn't support {v}",
+                    )));
                 }
             }
 
             if db.memory_info.default_memory < MIN_DRAGONBALL_MEMORY_SIZE_MB {
-                return Err(eother!(
-                    "dragonball hypervisor has minimal memory limitation {}",
-                    MIN_DRAGONBALL_MEMORY_SIZE_MB
-                ));
+                return Err(std::io::Error::other(format!(
+                    "dragonball hypervisor has minimal memory limitation {MIN_DRAGONBALL_MEMORY_SIZE_MB}",
+                )));
             }
         }
 

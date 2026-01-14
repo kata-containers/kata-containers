@@ -94,7 +94,7 @@ impl MgmtClient {
                 Err(_) => Err(anyhow!("{:?} timeout after {:?}", msg, self.timeout)),
             },
             // if client timeout is not set, request waits with no deadline
-            None => resp.await.context(format!("{:?} failed", msg)),
+            None => resp.await.context(format!("{msg:?} failed")),
         }
     }
 }

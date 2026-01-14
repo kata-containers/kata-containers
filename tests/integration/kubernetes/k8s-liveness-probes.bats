@@ -15,7 +15,6 @@ setup() {
 	agnhost_version="${container_images_agnhost_version}"
 
 	setup_common || die "setup_common failed"
-	get_pod_config_dir
 }
 
 @test "Liveness probe" {
@@ -24,7 +23,7 @@ setup() {
 	yaml_file="${pod_config_dir}/probe-pod-liveness.yaml"
 	cp "${pod_config_dir}/pod-liveness.yaml" "${yaml_file}"
 	set_node "${yaml_file}" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -49,7 +48,7 @@ setup() {
 	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-http-liveness.yaml" > "${yaml_file}"
 	set_node "${yaml_file}" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -62,7 +61,9 @@ setup() {
 
 	# Sleep necessary to check liveness probe returns a failure code
 	sleep "$sleep_liveness"
-	kubectl describe pod "$pod_name" | grep "Started container"
+	# For k8s up to 1.34 we need to check for "Started container"
+	# For k8s 1.35 and onwards we need to check for "Container started"
+	kubectl describe pod "$pod_name" | grep -E "Started container|Container started" 
 }
 
 
@@ -75,7 +76,7 @@ setup() {
 	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-tcp-liveness.yaml" > "${yaml_file}"
 	set_node "${yaml_file}" "$node"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -88,7 +89,9 @@ setup() {
 
 	# Sleep necessary to check liveness probe returns a failure code
 	sleep "$sleep_liveness"
-	kubectl describe pod "$pod_name" | grep "Started container"
+	# For k8s up to 1.34 we need to check for "Started container"
+	# For k8s 1.35 and onwards we need to check for "Container started"
+	kubectl describe pod "$pod_name" | grep -E "Started container|Container started" 
 }
 
 teardown() {

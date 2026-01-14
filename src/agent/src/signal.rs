@@ -44,7 +44,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
 
         if let Some(pid) = wait_status.pid() {
             let raw_pid = pid.as_raw();
-            let child_pid = format!("{}", raw_pid);
+            let child_pid = format!("{raw_pid}");
 
             let logger = logger.new(o!("child-pid" => child_pid));
 

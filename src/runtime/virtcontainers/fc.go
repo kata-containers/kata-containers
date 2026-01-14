@@ -38,7 +38,7 @@ import (
 	"github.com/containerd/fifo"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-	"github.com/opencontainers/selinux/go-selinux/label"
+	selinux "github.com/opencontainers/selinux/go-selinux"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -788,10 +788,10 @@ func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
 	// them under confinement.
 	if !fc.config.DisableSeLinux {
 
-		if err := label.SetProcessLabel(fc.config.SELinuxProcessLabel); err != nil {
+		if err := selinux.SetExecLabel(fc.config.SELinuxProcessLabel); err != nil {
 			return err
 		}
-		defer label.SetProcessLabel("")
+		defer selinux.SetExecLabel("")
 	}
 
 	err = fc.fcInit(ctx, fcTimeout)

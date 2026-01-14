@@ -19,7 +19,7 @@ impl ShimExecutor {
         self.args.validate(true).context("validate")?;
         let rsp = self.do_cleanup().await.context("shim do cleanup")?;
         rsp.write_to_writer(&mut std::io::stdout())
-            .context(Error::FileWrite(format!("write {:?} to stdout", rsp)))?;
+            .context(Error::FileWrite(format!("write {rsp:?} to stdout")))?;
         Ok(())
     }
 

@@ -173,8 +173,9 @@ function init() {
 	fi
 
 	versions_file="${cidir}/../../versions.yaml"
-	nginx_version=$("${GOPATH}/bin/yq" ".docker_images.nginx.version" "$versions_file")
-	nginx_image="docker.io/library/nginx:$nginx_version"
+	nginx_registry=$("${GOPATH}/bin/yq" ".docker_images.nginx.registry" "${versions_file}")
+	nginx_digest=$("${GOPATH}/bin/yq" ".docker_images.nginx.digest" "${versions_file}")
+	nginx_image="${nginx_registry}@${nginx_digest}"
 
 	# Pull nginx image
 	sudo "${CTR_EXE}" image pull "${nginx_image}"

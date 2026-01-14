@@ -15,9 +15,10 @@ setup() {
 	pushd "${repo_root_dir}"
 
 	# We expect 2 runtime classes because:
-	# * `kata` is the default runtimeclass created, basically an alias for `kata-${KATA_HYPERVISOR}`.
+	# * `kata` is the default runtimeclass created by Helm, basically an alias for `kata-${KATA_HYPERVISOR}`.
 	# * `kata-${KATA_HYPERVISOR}` is the other one
-	#    * As part of the tests we're only deploying the specific runtimeclass that will be used, instead of all of them.
+	#    * As part of the tests we're only deploying the specific runtimeclass that will be used (via HELM_SHIMS), instead of all of them.
+	#    * RuntimeClasses are now created by the Helm chart (runtimeClasses.enabled=true by default)
 	expected_runtime_classes=2
 
 	# We expect both runtime classes to have the same handler: kata-${KATA_HYPERVISOR}
@@ -40,7 +41,7 @@ setup() {
 	# Set the tested hypervisor as the default `kata` shim
 	export HELM_DEFAULT_SHIM="${KATA_HYPERVISOR}"
 
-	# Let the `kata-deploy` create the default `kata` runtime class
+	# Let the Helm chart create the default `kata` runtime class
 	export HELM_CREATE_DEFAULT_RUNTIME_CLASS="true"
 
 	HOST_OS=""
@@ -64,7 +65,7 @@ setup() {
 	popd
 }
 
-@test "Test runtimeclasses are being properly created and container runtime not broken" {
+@test "Test runtimeclasses are being properly created and container runtime is not broken" {
 	# We filter `kata-mshv-vm-isolation` out as that's present on AKS clusters, but that's not coming from kata-deploy
 	current_runtime_classes=$(kubectl get runtimeclasses | grep -v "kata-mshv-vm-isolation" | grep "kata" | wc -l)
 	[[ ${current_runtime_classes} -eq ${expected_runtime_classes} ]]
@@ -90,9 +91,6 @@ setup() {
 
 teardown() {
 	pushd "${repo_root_dir}"
-
-	helm uninstall --namespace=kube-system kata-deploy --wait
-	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
 	popd
 }

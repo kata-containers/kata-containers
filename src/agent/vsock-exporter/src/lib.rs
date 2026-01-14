@@ -70,7 +70,7 @@ impl ExportError for Error {
 }
 
 fn make_io_error(desc: String) -> std::io::Error {
-    std::io::Error::new(ErrorKind::Other, desc)
+    std::io::Error::other(desc)
 }
 
 // Send a trace span to the forwarder running on the host.

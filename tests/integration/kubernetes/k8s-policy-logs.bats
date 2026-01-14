@@ -10,8 +10,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled"
 
-    setup_common
-    get_pod_config_dir
+    setup_common || die "setup_common failed"
 
     pod_name="test-pod-hostname"
     yaml_file="${pod_config_dir}/pod-hostname.yaml"
@@ -25,7 +24,11 @@ setup() {
 
 @test "Logs empty when ReadStreamRequest is blocked" {
     kubectl apply -f "${yaml_file}"
-    kubectl wait --for jsonpath=status.phase=Succeeded --timeout=$timeout pod "$pod_name"
+
+    cmd="kubectl wait --for jsonpath=status.phase=Succeeded --timeout=0s pod ${pod_name}"
+    abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+    info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+    waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 
     # Verify that (1) the logs are empty and (2) the container does not deadlock.
     [[ "$(kubectl logs "${pod_name}")" == "" ]]

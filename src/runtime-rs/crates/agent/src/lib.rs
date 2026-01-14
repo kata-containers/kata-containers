@@ -33,12 +33,15 @@ use async_trait::async_trait;
 
 use kata_types::config::Agent as AgentConfig;
 
+use crate::types::SetPolicyRequest;
+
 pub const AGENT_KATA: &str = "kata";
 
 #[async_trait]
 pub trait AgentManager: Send + Sync {
     async fn start(&self, address: &str) -> Result<()>;
     async fn stop(&self);
+    async fn disconnect(&self) -> Result<()>;
 
     async fn agent_sock(&self) -> Result<String>;
     async fn agent_config(&self) -> AgentConfig;
@@ -96,4 +99,5 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn get_guest_details(&self, req: GetGuestDetailsRequest) -> Result<GuestDetailsResponse>;
     async fn add_swap(&self, req: AddSwapRequest) -> Result<Empty>;
     async fn add_swap_path(&self, req: AddSwapPathRequest) -> Result<Empty>;
+    async fn set_policy(&self, req: SetPolicyRequest) -> Result<Empty>;
 }

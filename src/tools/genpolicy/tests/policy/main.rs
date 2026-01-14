@@ -6,15 +6,14 @@
 #[cfg(test)]
 mod tests {
     use anyhow::Context;
-    use base64::prelude::*;
     use std::fmt::{self, Display};
     use std::fs::{self, File};
     use std::path;
     use std::str;
 
     use protocols::agent::{
-        CopyFileRequest, CreateContainerRequest, CreateSandboxRequest, ExecProcessRequest,
-        RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
+        AddARPNeighborsRequest, CopyFileRequest, CreateContainerRequest, CreateSandboxRequest,
+        ExecProcessRequest, RemoveContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
     };
     use serde::{Deserialize, Serialize};
 
@@ -23,35 +22,50 @@ mod tests {
     // Translate each test case in testcases.json
     // to one request type.
     #[derive(Clone, Debug, Deserialize, Serialize)]
-    #[serde(tag = "type")]
+    #[serde(tag = "kind", content = "request")]
+    #[allow(clippy::enum_variant_names)] // The tags need to match the entrypoint logged by the agent.
     enum TestRequest {
-        CopyFile(CopyFileRequest),
-        CreateContainer(CreateContainerRequest),
-        CreateSandbox(CreateSandboxRequest),
-        ExecProcess(ExecProcessRequest),
-        RemoveContainer(RemoveContainerRequest),
-        UpdateInterface(UpdateInterfaceRequest),
-        UpdateRoutes(UpdateRoutesRequest),
+        CopyFileRequest(CopyFileRequest),
+        CreateContainerRequest(CreateContainerRequest),
+        CreateSandboxRequest(CreateSandboxRequest),
+        ExecProcessRequest(ExecProcessRequest),
+        RemoveContainerRequest(RemoveContainerRequest),
+        UpdateInterfaceRequest(UpdateInterfaceRequest),
+        UpdateRoutesRequest(UpdateRoutesRequest),
+        AddARPNeighborsRequest(AddARPNeighborsRequest),
     }
 
     impl Display for TestRequest {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                TestRequest::CopyFile(_) => write!(f, "CopyFileRequest"),
-                TestRequest::CreateContainer(_) => write!(f, "CreateContainerRequest"),
-                TestRequest::CreateSandbox(_) => write!(f, "CreateSandboxRequest"),
-                TestRequest::ExecProcess(_) => write!(f, "ExecProcessRequest"),
-                TestRequest::RemoveContainer(_) => write!(f, "RemoveContainerRequest"),
-                TestRequest::UpdateInterface(_) => write!(f, "UpdateInterfaceRequest"),
-                TestRequest::UpdateRoutes(_) => write!(f, "UpdateRoutesRequest"),
+                TestRequest::CopyFileRequest(_) => write!(f, "CopyFileRequest"),
+                TestRequest::CreateContainerRequest(_) => write!(f, "CreateContainerRequest"),
+                TestRequest::CreateSandboxRequest(_) => write!(f, "CreateSandboxRequest"),
+                TestRequest::ExecProcessRequest(_) => write!(f, "ExecProcessRequest"),
+                TestRequest::RemoveContainerRequest(_) => write!(f, "RemoveContainerRequest"),
+                TestRequest::UpdateInterfaceRequest(_) => write!(f, "UpdateInterfaceRequest"),
+                TestRequest::UpdateRoutesRequest(_) => write!(f, "UpdateRoutesRequest"),
+                TestRequest::AddARPNeighborsRequest(_) => write!(f, "AddARPNeighborsRequest"),
             }
         }
+    }
+
+    fn serialize_request_only(value: &TestRequest) -> serde_json::Result<serde_json::Value> {
+        if let serde_json::Value::Object(map) = serde_json::to_value(value)? {
+            for (k, v) in map {
+                if k == "request" {
+                    return Ok(v);
+                }
+            }
+        }
+        Ok(serde_json::Value::Null)
     }
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
     struct TestCase {
         description: String,
         allowed: bool,
+        #[serde(flatten)]
         request: TestRequest,
     }
 
@@ -106,22 +120,23 @@ mod tests {
             use_cache: false,
             version: false,
             yaml_file: workdir.join("pod.yaml").to_str().map(|s| s.to_string()),
+            initdata: kata_types::initdata::InitData::new("sha256", "0.1.0"),
         };
 
         // The container repos/network calls can be unreliable, so retry
         // a few times before giving up.
-        let mut policy = String::new();
+        let mut initdata_anno = String::new();
         for i in 0..6 {
-            policy = match genpolicy::policy::AgentPolicy::from_files(&config).await {
+            initdata_anno = match genpolicy::policy::AgentPolicy::from_files(&config).await {
                 Ok(policy) => {
                     assert_eq!(policy.resources.len(), 1);
-                    policy.resources[0].generate_policy(&policy)
+                    policy.resources[0].generate_initdata_anno(&policy)
                 }
                 Err(e) => {
                     if i == 5 {
                         panic!("Failed to generate policy after 6 attempts");
                     } else {
-                        println!("Retrying to generate policy: {}", e);
+                        println!("Retrying to generate policy: {e}");
                         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
                         continue;
                     }
@@ -129,7 +144,7 @@ mod tests {
             };
             break;
         }
-        let policy = BASE64_STANDARD.decode(&policy).unwrap();
+        let policy = decode_policy(&initdata_anno);
 
         // write policy to a file
         fs::write(workdir.join("policy.rego"), &policy).unwrap();
@@ -156,7 +171,7 @@ mod tests {
         for test_case in test_cases {
             println!("\n== case: {} ==\n", test_case.description);
 
-            let v = serde_json::to_value(&test_case.request).unwrap();
+            let v = serialize_request_only(&test_case.request).unwrap();
 
             let results = pol
                 .allow_request(
@@ -168,12 +183,22 @@ mod tests {
             let logs = fs::read_to_string(workdir.join("policy.log")).unwrap();
             let results = results.unwrap();
 
+            // TODO(burgerdev): better description of failure (left != right)
             assert_eq!(
                 test_case.allowed, results.0,
                 "logs: {}\npolicy: {}",
                 logs, results.1
             );
         }
+    }
+
+    fn decode_policy(initdata_anno: &str) -> String {
+        let initdata = kata_types::initdata::decode_initdata(initdata_anno)
+            .expect("should decode initdata anno");
+        initdata
+            .get_coco_data("policy.rego")
+            .expect("should read policy from initdata")
+            .to_string()
     }
 
     fn prepare_workdir(
@@ -241,6 +266,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_add_arp_neighbors() {
+        runtests("addarpneighbors").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_network_namespace() {
         runtests("createcontainer/network_namespace").await;
     }
@@ -271,6 +301,11 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_state_exec_process_deployment() {
+        runtests("state/execprocessdeployment").await;
+    }
+
+    #[tokio::test]
     async fn test_create_container_security_context() {
         runtests("createcontainer/security_context/runas").await;
     }
@@ -278,6 +313,11 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_security_context_supplemental_groups() {
         runtests("createcontainer/security_context/supplemental_groups").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_security_context_fsgroup() {
+        runtests("createcontainer/security_context/fsgroup").await;
     }
 
     #[tokio::test]
@@ -293,5 +333,10 @@ mod tests {
     #[tokio::test]
     async fn test_create_container_volumes_container_image() {
         runtests("createcontainer/volumes/container_image").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_container_gpu_vfio_cdi() {
+        runtests("createcontainer/gpu_vfio_cdi").await;
     }
 }

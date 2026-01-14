@@ -176,7 +176,7 @@ async fn get_nydus_prefetch_files(nydus_prefetch_path: String) -> Option<String>
     }
 
     // Ensure the string ends with "/prefetch_files.list"
-    if !nydus_prefetch_path.ends_with(format!("/{}", NYDUS_PREFETCH_FILE_LIST).as_str()) {
+    if !nydus_prefetch_path.ends_with(format!("/{NYDUS_PREFETCH_FILE_LIST}").as_str()) {
         info!(
             sl!(),
             "nydus prefetch file path no {:?} file exist.", NYDUS_PREFETCH_FILE_LIST

@@ -119,10 +119,6 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_factory() -> Result<()> {
-    Ok(())
-}
-
 pub fn handle_iptables(_args: IptablesCommand) -> Result<()> {
     Ok(())
 }

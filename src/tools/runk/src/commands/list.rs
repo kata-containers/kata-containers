@@ -13,7 +13,7 @@ use std::fmt::Write as _;
 use std::{fs, os::unix::prelude::MetadataExt, path::Path};
 use std::{io, io::Write};
 use tabwriter::TabWriter;
-use users::get_user_by_uid;
+use uzers::get_user_by_uid;
 
 pub fn run(_: List, root: &Path, logger: &Logger) -> Result<()> {
     let mut content = String::new();

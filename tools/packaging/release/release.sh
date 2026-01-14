@@ -164,8 +164,22 @@ function _upload_kata_static_tarball()
 
 	RELEASE_VERSION="$(_release_version)"
 
-	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.xz"
+	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.zst"
 	mv ${KATA_STATIC_TARBALL} "${new_tarball_name}"
+	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
+	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
+}
+
+function _upload_kata_tools_static_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+	_check_required_env_var "ARCHITECTURE"
+	_check_required_env_var "KATA_TOOLS_STATIC_TARBALL"
+
+	RELEASE_VERSION="$(_release_version)"
+
+	new_tarball_name="kata-tools-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.zst"
+	mv ${KATA_TOOLS_STATIC_TARBALL} "${new_tarball_name}"
 	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
 	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
 }
@@ -216,6 +230,7 @@ function _upload_helm_chart_tarball()
 
 	RELEASE_VERSION="$(_release_version)"
 
+	helm dependencies update ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
 	helm package ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
 	gh release upload "${RELEASE_VERSION}" "kata-deploy-${RELEASE_VERSION}.tgz"
 }
@@ -229,6 +244,7 @@ function main()
 		release-version) _release_version;;
 		create-new-release) _create_new_release ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
+		upload-kata-tools-static-tarball) _upload_kata_tools_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
 		upload-libseccomp-tarball) _upload_libseccomp_tarball ;;

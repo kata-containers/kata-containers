@@ -35,7 +35,19 @@ pub struct Deployment {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DeploymentSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
+    minReadySeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    paused: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    progressDeadlineSeconds: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    revisionHistoryLimit: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     selector: Option<yaml::LabelSelector>,
@@ -44,7 +56,6 @@ pub struct DeploymentSpec {
     strategy: Option<DeploymentStrategy>,
 
     template: pod_template::PodTemplateSpec,
-    // TODO: additional fields.
 }
 
 /// Reference / Kubernetes API / Workload Resources / Deployment.
@@ -80,7 +91,11 @@ impl yaml::K8sResource for Deployment {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        // Deployment name - pod template hash - suffix
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/deployment/sync.go#L201
+        let suffix = yaml::GENERATE_NAME_SUFFIX_REGEX;
+        yaml::name_regex_from_meta(&self.metadata)
+            .map(|prefix| format!("{prefix}-{suffix}-{suffix}"))
     }
 
     fn get_namespace(&self) -> Option<String> {
@@ -99,12 +114,12 @@ impl yaml::K8sResource for Deployment {
             storages,
             container,
             settings,
-            &self.spec.template.spec.volumes,
+            &self.spec.template.spec,
         );
     }
 
-    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
-        agent_policy.generate_policy(self)
+    fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {
+        agent_policy.generate_initdata_anno(self)
     }
 
     fn serialize(&mut self, policy: &str) -> String {
@@ -146,11 +161,17 @@ impl yaml::K8sResource for Deployment {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        must_check_passwd: &mut bool,
+        all_additional_gids: bool,
+    ) {
         yaml::get_process_fields(
             process,
-            &self.spec.template.spec.securityContext,
             must_check_passwd,
+            all_additional_gids,
+            &self.spec.template.spec.securityContext,
         );
     }
 

@@ -8,9 +8,10 @@ on:
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: true
+      KBUILD_SIGN_PIN:
+        required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -20,6 +21,7 @@ jobs:
       stage: release
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
     permissions:
       contents: read
       packages: write
@@ -27,6 +29,7 @@ jobs:
       attestations: write
 
   kata-deploy:
+    name: kata-deploy
     needs: build-kata-static-tarball-amd64
     permissions:
       contents: read
@@ -71,9 +74,9 @@ jobs:
           fi
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.xz "ghcr.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.zst "ghcr.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  "$(pwd)"/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.zst "quay.io/kata-containers/kata-deploy" \
                   "${tag}-${TARGET_ARCH}"
           done

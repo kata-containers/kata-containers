@@ -125,27 +125,328 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `image.reference` | Fully qualified image reference | `quay.io/kata-containers/kata-deploy` |
 | `image.tag` | Tag of the image reference | `""` |
 | `k8sDistribution` | Set the k8s distribution to use: `k8s`, `k0s`, `k3s`, `rke2`, `microk8s` | `k8s` |
+| `nodeSelector` | Node labels for pod assignment. Allows restricting deployment to specific nodes | `{}` |
+| `runtimeClasses.enabled` | Enable Helm-managed `runtimeClass` creation (recommended) | `true` |
+| `runtimeClasses.createDefault` | Create a default `runtimeClass` alias for the default shim | `false` |
+| `runtimeClasses.defaultName` | Name for the default `runtimeClass` | `kata` |
 | `env.debug` | Enable debugging in the `configuration.toml` | `false` |
-| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx` |
+| `env.shims` | List of shims to deploy | `clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-se-runtime-rs qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-cca` |
+| `env.shims_x86_64` | List of shims to deploy for x86_64 (if set, overrides `shims`) | `""` |
+| `env.shims_aarch64` | List of shims to deploy for aarch64 (if set, overrides `shims`) | `""` |
+| `env.shims_s390x` | List of shims to deploy for s390x (if set, overrides `shims`) | `""` |
+| `env.shims_ppc64le` | List of shims to deploy for ppc64le (if set, overrides `shims`) | `""` |
 | `env.defaultShim` | The default shim to use if none specified | `qemu` |
-| `env.createRuntimeClasses` | Create the k8s `runtimeClasses` | `true` |
-| `env.createDefaultRuntimeClass` | Create the default k8s `runtimeClass` | `false` |
+| `env.defaultShim_x86_64` | The default shim to use if none specified for x86_64 (if set, overrides `defaultShim`) | `""` |
+| `env.defaultShim_aarch64` | The default shim to use if none specified for aarch64 (if set, overrides `defaultShim`) | `""` |
+| `env.defaultShim_s390x` | The default shim to use if none specified for s390x (if set, overrides `defaultShim`) | `""` |
+| `env.defaultShim_ppc64le` | The default shim to use if none specified for ppc64le (if set, overrides `defaultShim`) | `""` |
+| `env.createRuntimeClasses` | **DEPRECATED** - Use `runtimeClasses.enabled` instead. Script-based `runtimeClass` creation | `false` |
+| `env.createDefaultRuntimeClass` | **DEPRECATED** - Use `runtimeClasses.createDefault` instead | `false` |
 | `env.allowedHypervisorAnnotations` | Enable the provided annotations to be enabled when launching a Container or Pod, per default the annotations are disabled | `""` |
 | `env.snapshotterHandlerMapping` | Provide the snapshotter handler for each shim | `""` |
+| `env.snapshotterHandlerMapping_x86_64` | Provide the snapshotter handler for each shim for x86_64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
+| `env.snapshotterHandlerMapping_aarch64` | Provide the snapshotter handler for each shim for aarch64 (if set, overrides `snapshotterHandlerMapping`) | `""` |
+| `env.snapshotterHandlerMapping_s390x` | Provide the snapshotter handler for each shim for s390x (if set, overrides `snapshotterHandlerMapping`) | `""` |
+| `env.snapshotterHandlerMapping_ppc64le` | Provide the snapshotter handler for each shim for ppc64le (if set, overrides `snapshotterHandlerMapping`) | `""` |
 | `evn.agentHttpsProxy` | HTTPS_PROXY=... | `""` |
 | `env.agentHttpProxy` |  specifies a list of addresses that should bypass a configured proxy server | `""` |
 | `env.pullTypeMapping` | Type of container image pulling, examples are guest-pull or default | `""` |
+| `env.pullTypeMapping_x86_64` | Type of container image pulling for x86_64 (if set, overrides `pullTypeMapping`) | `""` |
+| `env.pullTypeMapping_aarch64` | Type of container image pulling for aarch64 (if set, overrides `pullTypeMapping`) | `""` |
+| `env.pullTypeMapping_s390x` | Type of container image pulling for s390x (if set, overrides `pullTypeMapping`) | `""` |
+| `env.pullTypeMapping_ppc64le` | Type of container image pulling for ppc64le (if set, overrides `pullTypeMapping`) | `""` |
 | `env.installationPrefix` | Prefix where to install the Kata artifacts | `/opt/kata` |
 | `env.hostOS` | Provide host-OS setting, e.g. `cbl-mariner` to do additional configurations | `""` |
 | `env.multiInstallSuffix` | Enable multiple Kata installation on the same node with suffix e.g. `/opt/kata-PR12232` | `""` |
+| `env._experimentalSetupSnapshotter` | Deploys (nydus) and/or sets up (erofs, nydus) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
+| `env._experimentalForceGuestPull` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value (supports multiple shims, separated by commas; e.g., `qemu-tdx,qemu-snp`) | `""` |
+| `env._experimentalForceGuestPull_x86_64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for x86_64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
+| `env._experimentalForceGuestPull_aarch64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for aarch64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
+| `env._experimentalForceGuestPull_s390x` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for s390x (if set, overrides `_experimentalForceGuestPull`) | `""` |
+| `env._experimentalForceGuestPull_ppc64le` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for ppc64le (if set, overrides `_experimentalForceGuestPull`) | `""` |
+
+## Structured Configuration
+
+**NEW**: Starting with Kata Containers v3.23.0, a new structured configuration format is available for configuring shims. This provides better type safety, clearer organization, and per-shim configuration options.
+
+### Migration from Legacy Format
+
+The legacy `env.*` configuration format is **deprecated** and will be removed in 2 releases. Users are encouraged to migrate to the new structured format.
+
+**Deprecated fields** (will be removed in 2 releases):
+- `env.shims`, `env.shims_x86_64`, `env.shims_aarch64`, `env.shims_s390x`, `env.shims_ppc64le`
+- `env.defaultShim`, `env.defaultShim_x86_64`, `env.defaultShim_aarch64`, `env.defaultShim_s390x`, `env.defaultShim_ppc64le`
+- `env.allowedHypervisorAnnotations`
+- `env.snapshotterHandlerMapping`, `env.snapshotterHandlerMapping_x86_64`, etc.
+- `env.pullTypeMapping`, `env.pullTypeMapping_x86_64`, etc.
+- `env.agentHttpsProxy`, `env.agentNoProxy`
+- `env._experimentalSetupSnapshotter`
+- `env._experimentalForceGuestPull`, `env._experimentalForceGuestPull_x86_64`, etc.
+- `env.debug`
+
+### New Structured Format
+
+The new format uses a `shims` section where each shim can be configured individually:
+
+```yaml
+# Enable debug mode globally
+debug: false
+
+# Configure snapshotter setup
+snapshotter:
+  setup: []  # ["nydus", "erofs"] or []
+
+# Configure shims
+shims:
+  qemu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+  qemu-snp:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+# Default shim per architecture
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+  s390x: qemu
+  ppc64le: qemu
+```
+
+### Key Benefits
+
+1. **Per-shim configuration**: Each shim can have its own settings for snapshotter, guest pull, agent proxy, etc.
+2. **Architecture-aware**: Shims declare which architectures they support
+3. **Type safety**: Structured format reduces configuration errors
+4. **Easy to use**: All shims are enabled by default in `values.yaml`, so you can use the chart directly without modification
+
+### Example: Enable `qemu` shim with new format
+
+```yaml
+shims:
+  qemu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+```
+
+### Backward Compatibility
+
+The chart maintains full backward compatibility with the legacy `env.*` format. If legacy values are set, they take precedence over the new structured format. This allows for gradual migration.
+
+### Default Configuration
+
+The default `values.yaml` file has **all shims enabled by default**, making it easy to use the chart directly without modification:
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION
+```
+
+This includes all available Kata Containers shims:
+- Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
+- TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
+- NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
+- Remote shims: `remote` (for `peer-pods`/`cloud-api-adaptor`, disabled by default)
+
+To enable only specific shims, you can override the configuration:
+
+```yaml
+# Custom values file - enable only qemu shim
+shims:
+  qemu:
+    enabled: true
+  clh:
+    enabled: false
+  cloud-hypervisor:
+    enabled: false
+  # ... disable other shims as needed
+```
+
+### Example Values Files
+
+For convenience, we also provide example values files that demonstrate specific use cases:
+
+#### `try-kata-tee.values.yaml` - Trusted Execution Environment Shims
+
+This file enables only the TEE (Trusted Execution Environment) shims for confidential computing:
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f try-kata-tee.values.yaml
+```
+
+Includes:
+- `qemu-snp` - AMD SEV-SNP (amd64)
+- `qemu-tdx` - Intel TDX (amd64)
+- `qemu-se` - IBM Secure Execution (s390x)
+- `qemu-se-runtime-rs` - IBM Secure Execution Rust runtime (s390x)
+- `qemu-cca` - Arm Confidential Compute Architecture (arm64)
+- `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
+- `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, s390x)
+
+#### `try-kata-nvidia-gpu.values.yaml` - NVIDIA GPU Shims
+
+This file enables only the NVIDIA GPU-enabled shims:
+
+```sh
+helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy \
+  --version VERSION \
+  -f try-kata-nvidia-gpu.values.yaml
+```
+
+Includes:
+- `qemu-nvidia-gpu` - Standard NVIDIA GPU support (amd64, arm64)
+- `qemu-nvidia-gpu-snp` - NVIDIA GPU with AMD SEV-SNP (amd64)
+- `qemu-nvidia-gpu-tdx` - NVIDIA GPU with Intel TDX (amd64)
+
+**Note**: These example files are located in the chart directory. When installing from the OCI registry, you'll need to download them separately or clone the repository to access them.
+
+## `RuntimeClass` Management
+
+**NEW**: Starting with Kata Containers v3.23.0, `runtimeClasses` are managed by
+         Helm by default, providing better lifecycle management and integration.
+
+### Features:
+- **Automatic Creation**: `runtimeClasses` are automatically created for all configured shims
+- **Lifecycle Management**: Helm manages creation, updates, and deletion of `runtimeClasses`
+
+### Configuration:
+```yaml
+runtimeClasses:
+  enabled: true                  # Enable Helm-managed `runtimeClasses` (default)
+  createDefault: false           # Create a default "kata" `runtimeClass`
+  defaultName: "kata"            # Name for the default `runtimeClass`
+```
+
+When `runtimeClasses.enabled: true` (default), the Helm chart creates
+`runtimeClass` resources for all enabled shims (either from the new structured
+`shims` configuration or from the legacy `env.shims` format).
+
+The kata-deploy script will no longer create `runtimeClasses`
+(`env.createRuntimeClasses` defaults to `"false"`).
 
 ## Example: only `qemu` shim and debug enabled
 
+Since all shims are enabled by default, you need to disable the ones you don't want:
+
+```sh
+# Using --set flags (disable all except qemu)
+$ helm install kata-deploy \
+  --set shims.clh.enabled=false \
+  --set shims.cloud-hypervisor.enabled=false \
+  --set shims.dragonball.enabled=false \
+  --set shims.fc.enabled=false \
+  --set shims.qemu-runtime-rs.enabled=false \
+  --set shims.qemu-nvidia-gpu.enabled=false \
+  --set shims.qemu-nvidia-gpu-snp.enabled=false \
+  --set shims.qemu-nvidia-gpu-tdx.enabled=false \
+  --set shims.qemu-snp.enabled=false \
+  --set shims.qemu-tdx.enabled=false \
+  --set shims.qemu-se.enabled=false \
+  --set shims.qemu-se-runtime-rs.enabled=false \
+  --set shims.qemu-cca.enabled=false \
+  --set shims.qemu-coco-dev.enabled=false \
+  --set shims.qemu-coco-dev-runtime-rs.enabled=false \
+  --set debug=true \
+  "${CHART}" --version  "${VERSION}"
+```
+
+Or use a custom values file:
+
+```yaml
+# custom-values.yaml
+debug: true
+shims:
+  qemu:
+    enabled: true
+  clh:
+    enabled: false
+  cloud-hypervisor:
+    enabled: false
+  dragonball:
+    enabled: false
+  fc:
+    enabled: false
+  qemu-runtime-rs:
+    enabled: false
+  qemu-nvidia-gpu:
+    enabled: false
+  qemu-nvidia-gpu-snp:
+    enabled: false
+  qemu-nvidia-gpu-tdx:
+    enabled: false
+  qemu-snp:
+    enabled: false
+  qemu-tdx:
+    enabled: false
+  qemu-se:
+    enabled: false
+  qemu-se-runtime-rs:
+    enabled: false
+  qemu-cca:
+    enabled: false
+  qemu-coco-dev:
+    enabled: false
+  qemu-coco-dev-runtime-rs:
+    enabled: false
+  remote:
+    enabled: false
+```
+
 ```sh
 $ helm install kata-deploy \
-  --set env.shims="qemu" \
-  --set env.debug=true \
+  -f custom-values.yaml \
   "${CHART}" --version  "${VERSION}"
+```
+
+## Example: Deploy only to specific nodes using `nodeSelector`
+
+```sh
+# First, label the nodes where you want kata-containers to be installed
+$ kubectl label nodes worker-node-1 kata-containers=enabled
+$ kubectl label nodes worker-node-2 kata-containers=enabled
+
+# Then install the chart with `nodeSelector`
+$ helm install kata-deploy \
+  --set nodeSelector.kata-containers="enabled" \
+  "${CHART}" --version  "${VERSION}"
+```
+
+You can also use a values file:
+
+```yaml
+# values.yaml
+nodeSelector:
+  kata-containers: "enabled"
+  node-type: "worker"
+```
+
+```sh
+$ helm install kata-deploy -f values.yaml "${CHART}" --version "${VERSION}"
 ```
 
 ## Example: Multiple Kata installations on the same node
@@ -161,9 +462,11 @@ $ helm install kata-deploy-cicd       \
   -n kata-deploy-cicd                 \
   --set env.multiInstallSuffix=cicd   \
   --set env.debug=true                \
-  --set env.createRuntimeClasses=true \
   "${CHART}" --version  "${VERSION}"
 ```
+
+Note: `runtimeClasses` are automatically created by Helm (via
+      `runtimeClasses.enabled=true`, which is the default).
 
 Now verify the installation by examining the `runtimeClasses`:
 
@@ -181,7 +484,6 @@ kata-qemu-nvidia-gpu-snp-cicd   kata-qemu-nvidia-gpu-snp-cicd   77s
 kata-qemu-nvidia-gpu-tdx-cicd   kata-qemu-nvidia-gpu-tdx-cicd   76s
 kata-qemu-runtime-rs-cicd       kata-qemu-runtime-rs-cicd       77s
 kata-qemu-se-runtime-rs-cicd    kata-qemu-se-runtime-rs-cicd    77s
-kata-qemu-sev-cicd              kata-qemu-sev-cicd              77s
 kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s

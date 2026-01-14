@@ -202,7 +202,7 @@ macro_rules! config_override {
         }
     };
 
-    ($builder:ident, $config:ident, $field:ident, $func: ident) => {
+    ($builder:ident, $config:ident, $field:ident, $func:ident) => {
         if let Some(v) = $builder.$field {
             $config.$field = $func(&v)?;
         }
@@ -260,7 +260,7 @@ impl Default for AgentConfig {
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
-            server_addr: format!("{}:{}", VSOCK_ADDR, DEFAULT_AGENT_VSOCK_PORT),
+            server_addr: format!("{VSOCK_ADDR}:{DEFAULT_AGENT_VSOCK_PORT}"),
             passfd_listener_port: 0,
             cgroup_no_v1: String::from(""),
             unified_cgroup_hierarchy: false,
@@ -269,7 +269,7 @@ impl Default for AgentConfig {
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
             guest_components_procs: GuestComponentsProcs::default(),
-            secure_storage_integrity: false,
+            secure_storage_integrity: true,
             #[cfg(feature = "agent-policy")]
             policy_file: String::from(""),
             mem_agent: None,
@@ -323,31 +323,31 @@ impl FromStr for AgentConfig {
 
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_disable,
-                mac.memcg_config.disabled
+                mac.memcg_config.default.disabled
             );
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_swap,
-                mac.memcg_config.swap
+                mac.memcg_config.default.swap
             );
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_swappiness_max,
-                mac.memcg_config.swappiness_max
+                mac.memcg_config.default.swappiness_max
             );
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_period_secs,
-                mac.memcg_config.period_secs
+                mac.memcg_config.default.period_secs
             );
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_period_psi_percent_limit,
-                mac.memcg_config.period_psi_percent_limit
+                mac.memcg_config.default.period_psi_percent_limit
             );
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_eviction_psi_percent_limit,
-                mac.memcg_config.eviction_psi_percent_limit
+                mac.memcg_config.default.eviction_psi_percent_limit
             );
             mem_agent_config_override!(
                 agent_config_builder.mem_agent_memcg_eviction_run_aging_count_min,
-                mac.memcg_config.eviction_run_aging_count_min
+                mac.memcg_config.default.eviction_run_aging_count_min
             );
 
             mem_agent_config_override!(
@@ -417,7 +417,7 @@ impl AgentConfig {
             // generate our config from it.
             // The agent will fail to start if the configuration file is not present,
             // or if it can't be parsed properly.
-            if param.starts_with(format!("{}=", CONFIG_FILE).as_str()) {
+            if param.starts_with(format!("{CONFIG_FILE}=").as_str()) {
                 let config_file = get_string_value(param)?;
                 return AgentConfig::from_config_file(&config_file)
                     .context("AgentConfig from kernel cmdline");
@@ -549,43 +549,43 @@ impl AgentConfig {
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_DISABLE,
-                    mac.memcg_config.disabled,
+                    mac.memcg_config.default.disabled,
                     get_number_value
                 );
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_SWAP,
-                    mac.memcg_config.swap,
+                    mac.memcg_config.default.swap,
                     get_number_value
                 );
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_SWAPPINESS_MAX,
-                    mac.memcg_config.swappiness_max,
+                    mac.memcg_config.default.swappiness_max,
                     get_number_value
                 );
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_PERIOD_SECS,
-                    mac.memcg_config.period_secs,
+                    mac.memcg_config.default.period_secs,
                     get_number_value
                 );
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_PERIOD_PSI_PERCENT_LIMIT,
-                    mac.memcg_config.period_psi_percent_limit,
+                    mac.memcg_config.default.period_psi_percent_limit,
                     get_number_value
                 );
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_EVICTION_PSI_PERCENT_LIMIT,
-                    mac.memcg_config.eviction_psi_percent_limit,
+                    mac.memcg_config.default.eviction_psi_percent_limit,
                     get_number_value
                 );
                 parse_cmdline_param!(
                     param,
                     MEM_AGENT_MEMCG_EVICTION_RUN_AGING_COUNT_MIN,
-                    mac.memcg_config.eviction_run_aging_count_min,
+                    mac.memcg_config.default.eviction_run_aging_count_min,
                     get_number_value
                 );
                 parse_cmdline_param!(
@@ -651,7 +651,7 @@ impl AgentConfig {
     #[instrument]
     pub fn from_config_file(file: &str) -> Result<AgentConfig> {
         let config = fs::read_to_string(file)
-            .with_context(|| format!("Failed to read config file {}", file))?;
+            .with_context(|| format!("Failed to read config file {file}"))?;
         AgentConfig::from_str(&config)
     }
 
@@ -661,14 +661,14 @@ impl AgentConfig {
             self.server_addr = addr;
         }
 
-        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
-            if let Ok(level) = logrus_to_slog_level(&addr) {
+        if let Ok(level) = env::var(LOG_LEVEL_ENV_VAR) {
+            if let Ok(level) = logrus_to_slog_level(&level) {
                 self.log_level = level;
             }
         }
 
         if let Ok(value) = env::var(TRACING_ENV_VAR) {
-            let name_value = format!("{}={}", TRACING_ENV_VAR, value);
+            let name_value = format!("{TRACING_ENV_VAR}={value}");
 
             self.tracing = get_bool_value(&name_value).unwrap_or(false);
         }
@@ -911,7 +911,7 @@ mod tests {
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
                     guest_components_procs: GuestComponentsProcs::default(),
-                    secure_storage_integrity: false,
+                    secure_storage_integrity: true,
                     #[cfg(feature = "agent-policy")]
                     policy_file: "",
                     mem_agent: None,
@@ -1364,7 +1364,7 @@ mod tests {
             },
             TestData {
                 contents: "",
-                secure_storage_integrity: false,
+                secure_storage_integrity: true,
                 ..Default::default()
             },
             TestData {
@@ -1408,7 +1408,10 @@ mod tests {
                 contents: "agent.mem_agent_enable=1\nagent.mem_agent_memcg_period_secs=300",
                 mem_agent: Some(MemAgentConfig {
                     memcg_config: mem_agent::memcg::Config {
-                        period_secs: 300,
+                        default: mem_agent::memcg::SingleConfig {
+                            period_secs: 300,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     ..Default::default()
@@ -1419,7 +1422,10 @@ mod tests {
                 contents: "agent.mem_agent_enable=1\nagent.mem_agent_memcg_period_secs=300\nagent.mem_agent_compact_order=6",
                 mem_agent: Some(MemAgentConfig {
                     memcg_config: mem_agent::memcg::Config {
-                        period_secs: 300,
+                        default: mem_agent::memcg::SingleConfig {
+                            period_secs: 300,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     },
                     compact_config: mem_agent::compact::Config {
@@ -1436,7 +1442,7 @@ mod tests {
         // Now, test various combinations of file contents and environment
         // variables.
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let file_path = dir.path().join("cmdline");
 
@@ -1464,40 +1470,36 @@ mod tests {
             let config =
                 AgentConfig::from_cmdline(filename, vec![]).expect("Failed to parse command line");
 
-            assert_eq!(d.debug_console, config.debug_console, "{}", msg);
-            assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
-            assert_eq!(d.cgroup_no_v1, config.cgroup_no_v1, "{}", msg);
+            assert_eq!(d.debug_console, config.debug_console, "{msg}");
+            assert_eq!(d.dev_mode, config.dev_mode, "{msg}");
+            assert_eq!(d.cgroup_no_v1, config.cgroup_no_v1, "{msg}");
             assert_eq!(
                 d.unified_cgroup_hierarchy, config.unified_cgroup_hierarchy,
-                "{}",
-                msg
+                "{msg}"
             );
-            assert_eq!(d.log_level, config.log_level, "{}", msg);
-            assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
-            assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
-            assert_eq!(d.server_addr, config.server_addr, "{}", msg);
-            assert_eq!(d.tracing, config.tracing, "{}", msg);
-            assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
-            assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
+            assert_eq!(d.log_level, config.log_level, "{msg}");
+            assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{msg}");
+            assert_eq!(d.container_pipe_size, config.container_pipe_size, "{msg}");
+            assert_eq!(d.server_addr, config.server_addr, "{msg}");
+            assert_eq!(d.tracing, config.tracing, "{msg}");
+            assert_eq!(d.https_proxy, config.https_proxy, "{msg}");
+            assert_eq!(d.no_proxy, config.no_proxy, "{msg}");
             assert_eq!(
                 d.guest_components_rest_api, config.guest_components_rest_api,
-                "{}",
-                msg
+                "{msg}"
             );
             assert_eq!(
                 d.guest_components_procs, config.guest_components_procs,
-                "{}",
-                msg
+                "{msg}"
             );
             assert_eq!(
                 d.secure_storage_integrity, config.secure_storage_integrity,
-                "{}",
-                msg
+                "{msg}"
             );
             #[cfg(feature = "agent-policy")]
-            assert_eq!(d.policy_file, config.policy_file, "{}", msg);
+            assert_eq!(d.policy_file, config.policy_file, "{msg}");
 
-            assert_eq!(d.mem_agent, config.mem_agent, "{}", msg);
+            assert_eq!(d.mem_agent, config.mem_agent, "{msg}");
 
             for v in vars_to_unset {
                 env::remove_var(v);
@@ -1562,7 +1564,7 @@ mod tests {
     #[case("panic", Ok(slog::Level::Critical))]
     fn test_logrus_to_slog_level(#[case] input: &str, #[case] expected: Result<slog::Level>) {
         let result = logrus_to_slog_level(input);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 
@@ -1587,7 +1589,7 @@ mod tests {
     #[case("agent.log=panic", Ok(slog::Level::Critical))]
     fn test_get_log_level(#[case] input: &str, #[case] expected: Result<slog::Level>) {
         let result = get_log_level(input);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 
@@ -1630,7 +1632,7 @@ Caused by:
     #[case("agent.cdi_timeout=320", Ok(time::Duration::from_secs(320)))]
     fn test_timeout(#[case] param: &str, #[case] expected: Result<time::Duration>) {
         let result = get_timeout(param);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 
@@ -1670,7 +1672,7 @@ Caused by:
     )))]
     fn test_get_container_pipe_size(#[case] param: &str, #[case] expected: Result<i32>) {
         let result = get_container_pipe_size(param);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 
@@ -1691,7 +1693,7 @@ Caused by:
     #[case("x= = ", Ok(" = ".into()))]
     fn test_get_string_value(#[case] param: &str, #[case] expected: Result<String>) {
         let result = get_string_value(param);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 
@@ -1710,7 +1712,7 @@ Caused by:
         #[case] expected: Result<GuestComponentsFeatures>,
     ) {
         let result = get_guest_components_features_value(input);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 
@@ -1733,7 +1735,7 @@ Caused by:
         #[case] expected: Result<GuestComponentsProcs>,
     ) {
         let result = get_guest_components_procs_value(param);
-        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        let msg = format!("expected: {expected:?}, result: {result:?}");
         assert_result!(expected, result, msg);
     }
 

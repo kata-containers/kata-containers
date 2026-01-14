@@ -44,7 +44,7 @@ pub struct VsockTcpBackend {
 
 impl VsockTcpBackend {
     pub fn new(tcp_sock_addr: String) -> Result<Self> {
-        info!("open vsock tcp: {}", tcp_sock_addr);
+        info!("open vsock tcp: {tcp_sock_addr}");
         // Open/bind/listen on the host Unix socket, so we can accept
         // host-initiated connections.
         let tcp_sock = TcpListener::bind(&tcp_sock_addr)

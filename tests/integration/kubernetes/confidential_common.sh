@@ -10,8 +10,9 @@ source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
-SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
-SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
+SUPPORTED_GPU_TEE_HYPERVISORS=("qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
+SUPPORTED_TEE_HYPERVISORS=("qemu-snp" "qemu-tdx" "qemu-se" "qemu-se-runtime-rs" "${SUPPORTED_GPU_TEE_HYPERVISORS[@]}")
+SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev" "qemu-coco-dev-runtime-rs")
 
 function setup_unencrypted_confidential_pod() {
 	get_pod_config_dir
@@ -31,13 +32,20 @@ function setup_unencrypted_confidential_pod() {
 # and returns the remote command to be executed to that specific hypervisor
 # in order to identify whether the workload is running on a TEE environment
 function get_remote_command_per_hypervisor() {
-	declare -A REMOTE_COMMAND_PER_HYPERVISOR
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-sev]="dmesg | grep \"Memory Encryption Features active:.*\(SEV$\|SEV \)\""
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-tdx]="cpuid | grep TDX_GUEST"
-	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
-
-	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
+	case "${KATA_HYPERVISOR}" in
+		qemu-se*)
+			echo "cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
+			;;
+		qemu-snp)
+			echo "dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
+			;;
+		qemu-tdx)
+			echo "cpuid | grep TDX_GUEST"
+			;;
+		*)
+			echo ""
+			;;
+	esac
 }
 
 # This function verifies whether the input hypervisor supports confidential tests and
@@ -60,7 +68,21 @@ function check_hypervisor_for_confidential_tests_tee_only() {
 	local kata_hypervisor="${1}"
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
+	# shellcheck disable=SC2076 # intentionally use literal string matching
 	if [[ " ${SUPPORTED_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
+		return 0
+	fi
+
+	return 1
+}
+
+# This function verifies whether the input hypervisor supports confidential GPU tests
+function check_hypervisor_for_confidential_gpu_tests() {
+	local kata_hypervisor="${1}"
+	# This check must be done with "<SPACE>${kata_hypervisor}<SPACE>" to avoid
+	# having substrings being matched incorrectly.
+	# shellcheck disable=SC2076 # intentionally use literal string matching
+	if [[ " ${SUPPORTED_GPU_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
 		return 0
 	fi
 
@@ -79,6 +101,15 @@ function is_confidential_runtime_class() {
 # Common check for confidential hardware tests.
 function is_confidential_hardware() {
 	if check_hypervisor_for_confidential_tests_tee_only "${KATA_HYPERVISOR}"; then
+		return 0
+	fi
+
+	return 1
+}
+
+# Common check for confidential GPU hardware tests.
+function is_confidential_gpu_hardware() {
+	if check_hypervisor_for_confidential_gpu_tests "${KATA_HYPERVISOR}"; then
 		return 0
 	fi
 
@@ -175,7 +206,7 @@ function create_coco_pod_yaml() {
 # This function creates pod yaml. Parameters
 # - $1: image reference
 # - $2: annotation `io.katacontainers.config.hypervisor.kernel_params`
-# - $3: anootation `io.katacontainers.config.runtime.cc_init_data`
+# - $3: annotation `io.katacontainers.config.hypervisor.cc_init_data`
 # - $4: node
 function create_coco_pod_yaml_with_annotations() {
 	image=$1
@@ -184,7 +215,7 @@ function create_coco_pod_yaml_with_annotations() {
 	node=${4:-}
 
 	kernel_params_annotation_key="io.katacontainers.config.hypervisor.kernel_params"
-	cc_initdata_annotation_key="io.katacontainers.config.runtime.cc_init_data"
+	cc_initdata_annotation_key="io.katacontainers.config.hypervisor.cc_init_data"
 
 	# Note: this is not local as we use it in the caller test
 	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
@@ -201,11 +232,82 @@ function create_coco_pod_yaml_with_annotations() {
 		"${cc_initdata_annotation_key}" \
 		"${cc_initdata_annotation_value}"
 
-	add_allow_all_policy_to_yaml "${kata_pod}"
-
 	if [ -n "$node" ]; then
 		set_node "${kata_pod}" "$node"
 	fi
+}
+
+function get_initdata_with_cdh_image_section() {
+	CDH_IMAGE_SECTION=${1:-""}
+
+	CC_KBS_ADDRESS=$(kbs_k8s_svc_http_addr)
+
+	 initdata_annotation=$(gzip -c << EOF | base64 -w0
+version = "0.1.0"
+algorithm = "sha256"
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.kbs]
+url = "${CC_KBS_ADDRESS}"
+'''
+
+"cdh.toml" = '''
+[kbc]
+name = "cc_kbc"
+url = "${CC_KBS_ADDRESS}"
+
+${CDH_IMAGE_SECTION}
+'''
+
+"policy.rego" = '''
+# Copyright (c) 2023 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+package agent_policy
+
+default AddARPNeighborsRequest := true
+default AddSwapRequest := true
+default CloseStdinRequest := true
+default CopyFileRequest := true
+default CreateContainerRequest := true
+default CreateSandboxRequest := true
+default DestroySandboxRequest := true
+default ExecProcessRequest := true
+default GetMetricsRequest := true
+default GetOOMEventRequest := true
+default GuestDetailsRequest := true
+default ListInterfacesRequest := true
+default ListRoutesRequest := true
+default MemHotplugByProbeRequest := true
+default OnlineCPUMemRequest := true
+default PauseContainerRequest := true
+default PullImageRequest := true
+default ReadStreamRequest := true
+default RemoveContainerRequest := true
+default RemoveStaleVirtiofsShareMountsRequest := true
+default ReseedRandomDevRequest := true
+default ResumeContainerRequest := true
+default SetGuestDateTimeRequest := true
+default SetPolicyRequest := true
+default SignalProcessRequest := true
+default StartContainerRequest := true
+default StartTracingRequest := true
+default StatsContainerRequest := true
+default StopTracingRequest := true
+default TtyWinResizeRequest := true
+default UpdateContainerRequest := true
+default UpdateEphemeralMountsRequest := true
+default UpdateInterfaceRequest := true
+default UpdateRoutesRequest := true
+default WaitProcessRequest := true
+default WriteStreamRequest := true
+'''
+EOF
+    )
+    echo "${initdata_annotation}"
 }
 
 confidential_teardown_common() {

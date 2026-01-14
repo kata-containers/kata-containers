@@ -27,7 +27,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
+	pkgDevice "github.com/kata-containers/kata-containers/src/runtime/pkg/device"
 )
 
 // Machine describes the machine type qemu will emulate.
@@ -270,6 +270,9 @@ const (
 
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
 	PEFGuest ObjectType = "pef-guest"
+
+	// CCAGuest represent Arm64 CCA RME(Realm Management Extension) object.
+	CCAGuest ObjectType = "rme-guest"
 )
 
 // Object is a qemu object representation.
@@ -330,8 +333,15 @@ type Object struct {
 	// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (default: all-zero)
 	SnpIdAuth string
 
+	// SnpGuestPolicy is the integer representation of the SEV-SNP guest policy.
+	SnpGuestPolicy *uint64
+
 	// Raw byte slice of initdata digest
 	InitdataDigest []byte
+
+	// MeasurementAlgo is the algorithm for measurement
+	// This is only relevant for cca-guest objects
+	MeasurementAlgo string
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -351,6 +361,8 @@ func (object Object) Valid() bool {
 		return object.ID != ""
 	case PEFGuest:
 		return object.ID != "" && object.File != ""
+	case CCAGuest:
+		return object.ID != "" && object.MeasurementAlgo != ""
 
 	default:
 		return false
@@ -415,6 +427,9 @@ func (object Object) QemuParams(config *Config) []string {
 		if object.SnpIdAuth != "" {
 			objectParams = append(objectParams, fmt.Sprintf("id-auth=%s", object.SnpIdAuth))
 		}
+		if object.SnpGuestPolicy != nil {
+			objectParams = append(objectParams, fmt.Sprintf("policy=%d", *object.SnpGuestPolicy))
+		}
 		if len(object.InitdataDigest) > 0 {
 			// due to https://github.com/confidential-containers/qemu/blob/amd-snp-202402240000/qapi/qom.json#L926-L929
 			// hostdata in SEV-SNP should be exactly 32 bytes
@@ -433,6 +448,17 @@ func (object Object) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, string(object.Driver))
 		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("host-path=%s", object.File))
+	case CCAGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("measurement-algorithm=%s", object.MeasurementAlgo))
+		if len(object.InitdataDigest) > 0 {
+			// PersonalizationValue in Arm-CCA should be exactly 64 bytes
+			personalizationValueSlice := adjustProperLength(object.InitdataDigest, 64)
+			personalizationValue := base64.StdEncoding.EncodeToString(personalizationValueSlice)
+			objectParams = append(objectParams, fmt.Sprintf("personalization-value=%s", personalizationValue))
+		}
+		config.Bios = object.File
 	}
 
 	if len(deviceParams) > 0 {
@@ -1997,7 +2023,7 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", vfioDev.DevNo))
 	}
 
-	if strings.HasPrefix(vfioDev.DevfsDev, drivers.IommufdDevPath) {
+	if strings.HasPrefix(vfioDev.DevfsDev, pkgDevice.IommufdDevPath) {
 		qemuParams = append(qemuParams, "-object")
 		qemuParams = append(qemuParams, fmt.Sprintf("iommufd,id=iommufd%s", vfioDev.ID))
 		deviceParams = append(deviceParams, fmt.Sprintf("iommufd=iommufd%s", vfioDev.ID))
@@ -2403,9 +2429,10 @@ func (v RngDevice) deviceName(config *Config) string {
 // BalloonDevice represents a memory balloon device.
 // nolint: govet
 type BalloonDevice struct {
-	DeflateOnOOM  bool
-	DisableModern bool
-	ID            string
+	DeflateOnOOM      bool
+	DisableModern     bool
+	FreePageReporting bool
+	ID                string
 
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
@@ -2451,6 +2478,11 @@ func (b BalloonDevice) QemuParams(config *Config) []string {
 	}
 	if s := b.Transport.disableModern(config, b.DisableModern); s != "" {
 		deviceParams = append(deviceParams, s)
+	}
+	if b.FreePageReporting {
+		deviceParams = append(deviceParams, "free-page-reporting=on")
+	} else {
+		deviceParams = append(deviceParams, "free-page-reporting=off")
 	}
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))

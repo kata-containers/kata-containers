@@ -14,7 +14,7 @@ use crate::config::default::MAX_FIRECRACKER_VCPUS;
 use crate::config::default::MIN_FIRECRACKER_MEMORY_SIZE_MB;
 
 use crate::config::{ConfigPlugin, TomlConfig};
-use crate::{eother, validate_path};
+use crate::validate_path;
 
 /// Hypervisor name for firecracker, used to index `TomlConfig::hypervisor`.
 pub const HYPERVISOR_NAME_FIRECRACKER: &str = "firecracker";
@@ -78,36 +78,37 @@ impl ConfigPlugin for FirecrackerConfig {
     fn validate(&self, conf: &TomlConfig) -> Result<()> {
         if let Some(firecracker) = conf.hypervisor.get(HYPERVISOR_NAME_FIRECRACKER) {
             if firecracker.path.is_empty() {
-                return Err(eother!("Firecracker path is empty"));
+                return Err(std::io::Error::other("Firecracker path is empty"));
             }
             validate_path!(
                 firecracker.path,
                 "FIRECRACKER binary path `{}` is invalid: {}"
             )?;
             if firecracker.boot_info.kernel.is_empty() {
-                return Err(eother!("Guest kernel image for firecracker is empty"));
+                return Err(std::io::Error::other(
+                    "Guest kernel image for firecracker is empty",
+                ));
             }
             if firecracker.boot_info.image.is_empty() {
-                return Err(eother!(
-                    "Both guest boot image and initrd for firecracker are empty"
+                return Err(std::io::Error::other(
+                    "Both guest boot image and initrd for firecracker are empty",
                 ));
             }
 
-            if (firecracker.cpu_info.default_vcpus > 0
+            if (firecracker.cpu_info.default_vcpus > 0.0
                 && firecracker.cpu_info.default_vcpus as u32 > default::MAX_FIRECRACKER_VCPUS)
                 || firecracker.cpu_info.default_maxvcpus > default::MAX_FIRECRACKER_VCPUS
             {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "Firecracker hypervisor can not support {} vCPUs",
-                    firecracker.cpu_info.default_maxvcpus
-                ));
+                    firecracker.cpu_info.default_maxvcpus,
+                )));
             }
 
             if firecracker.memory_info.default_memory < MIN_FIRECRACKER_MEMORY_SIZE_MB {
-                return Err(eother!(
-                    "Firecracker hypervisor has minimal memory limitation {}",
-                    MIN_FIRECRACKER_MEMORY_SIZE_MB
-                ));
+                return Err(std::io::Error::other(format!(
+                    "Firecracker hypervisor has minimal memory limitation {MIN_FIRECRACKER_MEMORY_SIZE_MB}",
+                )));
             }
         }
 

@@ -9,6 +9,7 @@
 use crate::config::agent::AGENT_NAME_KATA;
 use crate::config::hypervisor::HYPERVISOR_NAME_DRAGONBALL;
 use crate::config::runtime::RUNTIME_NAME_VIRTCONTAINER;
+use crate::machine_type::MACHINE_TYPE_Q35_TYPE;
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -37,11 +38,16 @@ pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 pub const DEFAULT_BLOCK_DEVICE_TYPE: &str = "virtio-blk-pci";
 pub const DEFAULT_VHOST_USER_STORE_PATH: &str = "/var/run/vhost-user";
 pub const DEFAULT_BLOCK_NVDIMM_MEM_OFFSET: u64 = 0;
+pub const DEFAULT_BLOCK_DEVICE_AIO_THREADS: &str = "threads";
+pub const DEFAULT_BLOCK_DEVICE_AIO_NATIVE: &str = "native";
+pub const DEFAULT_BLOCK_DEVICE_AIO: &str = "io_uring";
+pub const DEFAULT_BLOCK_DEVICE_NUM_QUEUES: u32 = 1;
+pub const DEFAULT_BLOCK_DEVICE_QUEUE_SIZE: u32 = 128;
 
 pub const DEFAULT_SHARED_FS_TYPE: &str = "virtio-fs";
 pub const DEFAULT_VIRTIO_FS_CACHE_MODE: &str = "never";
 pub const DEFAULT_VIRTIO_FS_DAX_SIZE_MB: u32 = 1024;
-pub const DEFAULT_SHARED_9PFS_SIZE_MB: u32 = 128 * 1024;
+pub const DEFAULT_SHARED_9PFS_SIZE_MB: u32 = 8 * 1024;
 pub const MIN_SHARED_9PFS_SIZE_MB: u32 = 4 * 1024;
 pub const MAX_SHARED_9PFS_SIZE_MB: u32 = 8 * 1024 * 1024;
 
@@ -62,7 +68,7 @@ pub const MIN_DRAGONBALL_MEMORY_SIZE_MB: u32 = 64;
 pub const DEFAULT_QEMU_BINARY_PATH: &str = "/usr/bin/qemu-system-x86_64";
 pub const DEFAULT_QEMU_ROOTFS_TYPE: &str = "ext4";
 pub const DEFAULT_QEMU_CONTROL_PATH: &str = "";
-pub const DEFAULT_QEMU_MACHINE_TYPE: &str = "q35";
+pub const DEFAULT_QEMU_MACHINE_TYPE: &str = MACHINE_TYPE_Q35_TYPE;
 pub const DEFAULT_QEMU_ENTROPY_SOURCE: &str = "/dev/urandom";
 pub const DEFAULT_QEMU_GUEST_KERNEL_IMAGE: &str = "vmlinuz";
 pub const DEFAULT_QEMU_GUEST_KERNEL_PARAMS: &str = "";
@@ -106,3 +112,6 @@ pub const MAX_REMOTE_VCPUS: u32 = 32;
 pub const MIN_REMOTE_MEMORY_SIZE_MB: u32 = 64;
 pub const DEFAULT_REMOTE_MEMORY_SIZE_MB: u32 = 128;
 pub const DEFAULT_REMOTE_MEMORY_SLOTS: u32 = 128;
+
+// Default configuration for factory/templating
+pub const DEFAULT_TEMPLATE_PATH: &str = "/run/vc/vm/template";

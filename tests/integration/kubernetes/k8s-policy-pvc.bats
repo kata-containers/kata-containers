@@ -5,17 +5,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] ) && skip "https://github.com/kata-containers/kata-containers/issues/9846"
-
+	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] ) && skip "https://github.com/kata-containers/kata-containers/issues/9846"
+	setup_common || die "setup_common failed"
 	pod_name="policy-pod-pvc"
 	pvc_name="policy-dev"
-
-	get_pod_config_dir
 
 	correct_pod_yaml="${pod_config_dir}/k8s-policy-pod-pvc.yaml"
 	incorrect_pod_yaml="${pod_config_dir}/k8s-policy-pod-pvc-incorrect.yaml"
@@ -34,7 +33,11 @@ setup() {
 @test "Successful pod with auto-generated policy" {
 	kubectl create -f "${correct_pod_yaml}"
 	kubectl create -f "${pvc_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+
+	cmd="kubectl wait --for=condition=Ready --timeout=0s pod ${pod_name}"
+	abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+	info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+	waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
 }
 
 # Common function for several test cases from this bats script.
@@ -55,11 +58,11 @@ test_pod_policy_error() {
 
 teardown() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] ) && skip "https://github.com/kata-containers/kata-containers/issues/9846"
+	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] ) && skip "https://github.com/kata-containers/kata-containers/issues/9846"
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"
-
+	teardown_common "${node}" "${node_start_time:-}"
 	# Clean-up
 	kubectl delete -f "${correct_pod_yaml}"
 	kubectl delete -f "${pvc_yaml}"

@@ -48,7 +48,7 @@ $ make test
 - Run a test in the current package in verbose mode:
 
   ```bash
-  # Example 
+  # Example
   $ test="config::tests::test_get_log_level"
 
   $ cargo test "$test" -vv -- --exact --nocapture
@@ -223,7 +223,7 @@ What's wrong with this function?
 
 ```rust
 fn foo(config: &Config, path_prefix: String, container_id: String, pid: String) -> Result<()> {
-    let mut full_path = format!("{}/{}", path_prefix, container_id);
+    let mut full_path = format!("{path_prefix}/{container_id}");
 
     let _ = remove_recursively(&mut full_path);
 

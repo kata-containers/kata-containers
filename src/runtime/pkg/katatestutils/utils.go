@@ -207,41 +207,42 @@ const (
 )
 
 type RuntimeConfigOptions struct {
-	Hypervisor           string
-	HypervisorPath       string
-	DefaultGuestHookPath string
-	KernelPath           string
-	ImagePath            string
-	RootfsType           string
-	KernelParams         string
-	MachineType          string
-	LogPath              string
-	BlockDeviceDriver    string
-	BlockDeviceAIO       string
-	SharedFS             string
-	VirtioFSDaemon       string
-	JaegerEndpoint       string
-	JaegerUser           string
-	JaegerPassword       string
-	PFlash               []string
-	HotPlugVFIO          config.PCIePort
-	ColdPlugVFIO         config.PCIePort
-	PCIeRootPort         uint32
-	PCIeSwitchPort       uint32
-	DefaultVCPUCount     uint32
-	DefaultMaxVCPUCount  uint32
-	DefaultMemSize       uint32
-	DefaultMaxMemorySize uint64
-	DefaultMsize9p       uint32
-	DisableBlock         bool
-	EnableIOThreads      bool
-	DisableNewNetNs      bool
-	HypervisorDebug      bool
-	RuntimeDebug         bool
-	RuntimeTrace         bool
-	AgentDebug           bool
-	AgentTrace           bool
-	EnablePprof          bool
+	Hypervisor            string
+	HypervisorPath        string
+	DefaultGuestHookPath  string
+	KernelPath            string
+	ImagePath             string
+	RootfsType            string
+	KernelParams          string
+	MachineType           string
+	LogPath               string
+	BlockDeviceDriver     string
+	BlockDeviceAIO        string
+	SharedFS              string
+	VirtioFSDaemon        string
+	JaegerEndpoint        string
+	JaegerUser            string
+	JaegerPassword        string
+	PFlash                []string
+	HotPlugVFIO           config.PCIePort
+	ColdPlugVFIO          config.PCIePort
+	PCIeRootPort          uint32
+	PCIeSwitchPort        uint32
+	DefaultVCPUCount      uint32
+	DefaultMaxVCPUCount   uint32
+	DefaultMemSize        uint32
+	DefaultMaxMemorySize  uint64
+	DefaultMsize9p        uint32
+	DefaultIndepIOThreads uint32
+	DisableBlock          bool
+	EnableIOThreads       bool
+	DisableNewNetNs       bool
+	HypervisorDebug       bool
+	RuntimeDebug          bool
+	RuntimeTrace          bool
+	AgentDebug            bool
+	AgentTrace            bool
+	EnablePprof           bool
 }
 
 // ContainerIDTestDataType is a type used to test Container and Sandbox ID's.
@@ -318,6 +319,7 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	default_memory = ` + strconv.FormatUint(uint64(config.DefaultMemSize), 10) + `
 	disable_block_device_use =  ` + strconv.FormatBool(config.DisableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(config.EnableIOThreads) + `
+	indep_iothreads = ` + strconv.FormatUint(uint64(config.DefaultIndepIOThreads), 10) + `
 	cold_plug_vfio =  "` + config.ColdPlugVFIO.String() + `"
 	hot_plug_vfio =   "` + config.HotPlugVFIO.String() + `"
 	pcie_root_port = ` + strconv.FormatUint(uint64(config.PCIeRootPort), 10) + `

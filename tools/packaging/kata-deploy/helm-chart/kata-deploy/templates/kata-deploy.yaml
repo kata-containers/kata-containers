@@ -1,3 +1,23 @@
+{{- if index .Values "node-feature-discovery" "enabled" -}}
+{{- $existingNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
+{{- if $existingNFDNamespace -}}
+{{- /* Check if NFD is part of the current release (deployed by us previously) */ -}}
+{{- $nfdInCurrentRelease := false -}}
+{{- $nfdWorkerDS := lookup "apps/v1" "DaemonSet" .Release.Namespace "node-feature-discovery-worker" -}}
+{{- if $nfdWorkerDS -}}
+{{- if $nfdWorkerDS.metadata.labels -}}
+{{- $releaseLabel := index $nfdWorkerDS.metadata.labels "app.kubernetes.io/instance" | default (index $nfdWorkerDS.metadata.labels "helm.sh/release") | default "" -}}
+{{- if eq $releaseLabel .Release.Name -}}
+{{- $nfdInCurrentRelease = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- /* Only fail if NFD exists externally (not part of our release) */ -}}
+{{- if not $nfdInCurrentRelease -}}
+{{- fail (printf "\n\nERROR: Cannot deploy kata-deploy with node-feature-discovery.enabled=true\n\nnode-feature-discovery is already installed in namespace '%s'.\n\nTo fix this, deploy with node-feature-discovery disabled:\n  helm upgrade --install %s ... --set node-feature-discovery.enabled=false\n\nThe existing node-feature-discovery installation will work with kata-deploy.\n" $existingNFDNamespace .Release.Name) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -33,41 +53,237 @@ spec:
 {{- else }}
       serviceAccountName: {{ .Chart.Name }}-sa
 {{- end }}
+{{- with .Values.nodeSelector }}
+      nodeSelector:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- with .Values.tolerations }}
+      tolerations:
+{{- toYaml . | nindent 8 }}
+{{- end }}
+{{- if index .Values "node-feature-discovery" "enabled" }}
+      # When node-feature-discovery is managed by this chart (enabled: true), enforce virtualization requirements.
+      # Kata Containers requires hardware virtualization support to function.
+      #
+      # Note: Virtualization checks are ONLY enforced when node-feature-discovery is
+      #       managed by kata-deploy
+      #
+      #       If node-feature-discovery is installed independently (enabled: false),
+      #       no checks are applied because we cannot guarantee the external
+      #       node-feature-discovery configuration and labels.
+      #
+      # NOTE: For kata-remote/peer-pods support in the future, add a condition here:
+      #       if and (index .Values "node-feature-discovery" "enabled") (not .Values.cloud-api-adaptor.enabled)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            # x86_64: Intel VT-x (VMX) support
+            - matchExpressions:
+              - key: feature.node.kubernetes.io/cpu-cpuid.VMX
+                operator: In
+                values:
+                - "true"
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "amd64"
+            # x86_64: AMD-V (SVM) support
+            - matchExpressions:
+              - key: feature.node.kubernetes.io/cpu-cpuid.SVM
+                operator: In
+                values:
+                - "true"
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "amd64"
+            # aarch64: Allow all ARM64 nodes (virtualization check not yet implemented)
+            # TODO: Implement proper virtualization detection for aarch64
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "arm64"
+                - "aarch64"
+            # s390x: Allow all s390x nodes (virtualization check not yet implemented)
+            # TODO: Implement proper virtualization detection for s390x
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "s390x"
+            # ppc64le: Allow all ppc64le nodes (virtualization check not yet implemented)
+            # TODO: Implement proper virtualization detection for ppc64le
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "ppc64le"
+            # riscv64: Allow all RISC-V nodes (virtualization support not yet available)
+            # TODO: Implement virtualization detection when RISC-V virt support is available
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - "riscv64"
+{{- end }}
       hostPID: true
       containers:
       - name: kube-kata
         image: {{ .Values.image.reference }}:{{ default .Chart.AppVersion .Values.image.tag }}
         imagePullPolicy: {{ .Values.imagePullPolicy }}
-        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install"]
+{{- if eq (include "kata-deploy.isRustBuild" .) "true" }}
+        command: ["/usr/bin/kata-deploy", "install"]
+{{- else }}
+        command: ["/opt/kata-artifacts/scripts/kata-deploy.sh", "install"]
+{{- end }}
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
         - name: DEBUG
-          value: {{ .Values.env.debug | quote }}
-        - name: SHIMS
-          value: {{ .Values.env.shims | quote }}
-        - name: DEFAULT_SHIM
-          value: {{ .Values.env.defaultShim | quote }}
-        - name: CREATE_RUNTIMECLASSES
-          value: {{ .Values.env.createRuntimeClasses | quote }}
-        - name: CREATE_DEFAULT_RUNTIMECLASS
-          value: {{ .Values.env.createDefaultRuntimeClass | quote }}
-        - name: ALLOWED_HYPERVISOR_ANNOTATIONS
-          value: {{ .Values.env.allowedHypervisorAnnotations | quote }}
-        - name: SNAPSHOTTER_HANDLER_MAPPING
-          value: {{ .Values.env.snapshotterHandlerMapping | quote }}
+          value: {{ include "kata-deploy.getDebug" . | quote }}
+        {{- $shimsAmd64 := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "amd64") | trim -}}
+        {{- if $shimsAmd64 }}
+        - name: SHIMS_X86_64
+          value: {{ $shimsAmd64 | quote }}
+        {{- end }}
+        {{- $shimsArm64 := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "arm64") | trim -}}
+        {{- if $shimsArm64 }}
+        - name: SHIMS_AARCH64
+          value: {{ $shimsArm64 | quote }}
+        {{- end }}
+        {{- $shimsS390x := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "s390x") | trim -}}
+        {{- if $shimsS390x }}
+        - name: SHIMS_S390X
+          value: {{ $shimsS390x | quote }}
+        {{- end }}
+        {{- $shimsPpc64le := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+        {{- if $shimsPpc64le }}
+        - name: SHIMS_PPC64LE
+          value: {{ $shimsPpc64le | quote }}
+        {{- end }}
+        {{- $defaultShimAmd64 := include "kata-deploy.getDefaultShimForArch" (dict "root" . "arch" "amd64") | trim -}}
+        {{- if $defaultShimAmd64 }}
+        - name: DEFAULT_SHIM_X86_64
+          value: {{ $defaultShimAmd64 | quote }}
+        {{- end }}
+        {{- $defaultShimArm64 := include "kata-deploy.getDefaultShimForArch" (dict "root" . "arch" "arm64") | trim -}}
+        {{- if $defaultShimArm64 }}
+        - name: DEFAULT_SHIM_AARCH64
+          value: {{ $defaultShimArm64 | quote }}
+        {{- end }}
+        {{- $defaultShimS390x := include "kata-deploy.getDefaultShimForArch" (dict "root" . "arch" "s390x") | trim -}}
+        {{- if $defaultShimS390x }}
+        - name: DEFAULT_SHIM_S390X
+          value: {{ $defaultShimS390x | quote }}
+        {{- end }}
+        {{- $defaultShimPpc64le := include "kata-deploy.getDefaultShimForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+        {{- if $defaultShimPpc64le }}
+        - name: DEFAULT_SHIM_PPC64LE
+          value: {{ $defaultShimPpc64le | quote }}
+        {{- end }}
+        {{- $allowedHypervisorAnnotationsAmd64 := include "kata-deploy.getAllowedHypervisorAnnotationsForArch" (dict "root" . "arch" "amd64") | trim -}}
+        {{- if $allowedHypervisorAnnotationsAmd64 }}
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS_X86_64
+          value: {{ $allowedHypervisorAnnotationsAmd64 | quote }}
+        {{- end }}
+        {{- $allowedHypervisorAnnotationsArm64 := include "kata-deploy.getAllowedHypervisorAnnotationsForArch" (dict "root" . "arch" "arm64") | trim -}}
+        {{- if $allowedHypervisorAnnotationsArm64 }}
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS_AARCH64
+          value: {{ $allowedHypervisorAnnotationsArm64 | quote }}
+        {{- end }}
+        {{- $allowedHypervisorAnnotationsS390x := include "kata-deploy.getAllowedHypervisorAnnotationsForArch" (dict "root" . "arch" "s390x") | trim -}}
+        {{- if $allowedHypervisorAnnotationsS390x }}
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS_S390X
+          value: {{ $allowedHypervisorAnnotationsS390x | quote }}
+        {{- end }}
+        {{- $allowedHypervisorAnnotationsPpc64le := include "kata-deploy.getAllowedHypervisorAnnotationsForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+        {{- if $allowedHypervisorAnnotationsPpc64le }}
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS_PPC64LE
+          value: {{ $allowedHypervisorAnnotationsPpc64le | quote }}
+        {{- end }}
+        {{- $snapshotterHandlerMappingAmd64 := include "kata-deploy.getSnapshotterHandlerMappingForArch" (dict "root" . "arch" "amd64") | trim -}}
+        {{- if $snapshotterHandlerMappingAmd64 }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_X86_64
+          value: {{ $snapshotterHandlerMappingAmd64 | quote }}
+        {{- end }}
+        {{- $snapshotterHandlerMappingArm64 := include "kata-deploy.getSnapshotterHandlerMappingForArch" (dict "root" . "arch" "arm64") | trim -}}
+        {{- if $snapshotterHandlerMappingArm64 }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_AARCH64
+          value: {{ $snapshotterHandlerMappingArm64 | quote }}
+        {{- end }}
+        {{- $snapshotterHandlerMappingS390x := include "kata-deploy.getSnapshotterHandlerMappingForArch" (dict "root" . "arch" "s390x") | trim -}}
+        {{- if $snapshotterHandlerMappingS390x }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_S390X
+          value: {{ $snapshotterHandlerMappingS390x | quote }}
+        {{- end }}
+        {{- $snapshotterHandlerMappingPpc64le := include "kata-deploy.getSnapshotterHandlerMappingForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+        {{- if $snapshotterHandlerMappingPpc64le }}
+        - name: SNAPSHOTTER_HANDLER_MAPPING_PPC64LE
+          value: {{ $snapshotterHandlerMappingPpc64le | quote }}
+        {{- end }}
+        {{- $agentHttpsProxy := include "kata-deploy.getAgentHttpsProxy" . | trim -}}
+        {{- if $agentHttpsProxy }}
         - name: AGENT_HTTPS_PROXY
-          value: {{ .Values.env.agentHttpsProxy | quote }}
+          value: {{ $agentHttpsProxy | quote }}
+        {{- end }}
+        {{- $agentNoProxy := include "kata-deploy.getAgentNoProxy" . | trim -}}
+        {{- if $agentNoProxy }}
         - name: AGENT_NO_PROXY
-          value: {{ .Values.env.agentNoProxy | quote }}
-        - name: PULL_TYPE_MAPPING
-          value: {{ .Values.env.pullTypeMapping | quote }}
+          value: {{ $agentNoProxy | quote }}
+        {{- end }}
+        {{- $pullTypeMappingAmd64 := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "amd64") | trim -}}
+        {{- if $pullTypeMappingAmd64 }}
+        - name: PULL_TYPE_MAPPING_X86_64
+          value: {{ $pullTypeMappingAmd64 | quote }}
+        {{- end }}
+        {{- $pullTypeMappingArm64 := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "arm64") | trim -}}
+        {{- if $pullTypeMappingArm64 }}
+        - name: PULL_TYPE_MAPPING_AARCH64
+          value: {{ $pullTypeMappingArm64 | quote }}
+        {{- end }}
+        {{- $pullTypeMappingS390x := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "s390x") | trim -}}
+        {{- if $pullTypeMappingS390x }}
+        - name: PULL_TYPE_MAPPING_S390X
+          value: {{ $pullTypeMappingS390x | quote }}
+        {{- end }}
+        {{- $pullTypeMappingPpc64le := include "kata-deploy.getPullTypeMappingForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+        {{- if $pullTypeMappingPpc64le }}
+        - name: PULL_TYPE_MAPPING_PPC64LE
+          value: {{ $pullTypeMappingPpc64le | quote }}
+        {{- end }}
         - name: INSTALLATION_PREFIX
           value: {{ .Values.env.installationPrefix | quote }}
         - name: MULTI_INSTALL_SUFFIX
           value: {{ .Values.env.multiInstallSuffix | quote }}
+        {{- $snapshotterSetup := include "kata-deploy.getSnapshotterSetup" . | trim -}}
+        {{- if $snapshotterSetup }}
+        - name: EXPERIMENTAL_SETUP_SNAPSHOTTER
+          value: {{ $snapshotterSetup | quote }}
+        {{- end }}
+        {{- $forceGuestPullAmd64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "amd64") | trim -}}
+        {{- if $forceGuestPullAmd64 }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_X86_64
+          value: {{ $forceGuestPullAmd64 | quote }}
+        {{- end }}
+        {{- $forceGuestPullArm64 := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "arm64") | trim -}}
+        {{- if $forceGuestPullArm64 }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64
+          value: {{ $forceGuestPullArm64 | quote }}
+        {{- end }}
+        {{- $forceGuestPullS390x := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "s390x") | trim -}}
+        {{- if $forceGuestPullS390x }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_S390X
+          value: {{ $forceGuestPullS390x | quote }}
+        {{- end }}
+        {{- $forceGuestPullPpc64le := include "kata-deploy.getForceGuestPullForArch" (dict "root" . "arch" "ppc64le") | trim -}}
+        {{- if $forceGuestPullPpc64le }}
+        - name: EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE
+          value: {{ $forceGuestPullPpc64le | quote }}
+        {{- end }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}

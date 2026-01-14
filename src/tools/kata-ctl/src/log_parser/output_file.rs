@@ -48,7 +48,7 @@ fn choose_formatting<O: AnyLogMessage>(
 fn serialize_text<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserError> {
     Ok(input
         .iter()
-        .map(|r| Ok(format!("{:?}", r)))
+        .map(|r| Ok(format!("{r:?}")))
         .collect::<Result<Vec<String>, LogParserError>>()?
         .join("\n"))
 }
@@ -58,7 +58,7 @@ fn serialize_json<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserEr
         .iter()
         .map(|r| {
             serde_json::to_string(r)
-                .map_err(|e| LogParserError::SerializationError(format!("{:?}", r), Box::new(e)))
+                .map_err(|e| LogParserError::SerializationError(format!("{r:?}"), Box::new(e)))
         })
         .collect::<Result<Vec<String>, LogParserError>>()?
         .join("\n"))
@@ -69,7 +69,7 @@ fn serialize_toml<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserEr
         .iter()
         .map(|r| {
             toml::to_string(r)
-                .map_err(|e| LogParserError::SerializationError(format!("{:?}", r), Box::new(e)))
+                .map_err(|e| LogParserError::SerializationError(format!("{r:?}"), Box::new(e)))
         })
         .collect::<Result<Vec<String>, LogParserError>>()?
         .join("\n"))
@@ -80,7 +80,7 @@ fn serialize_yaml<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserEr
         .iter()
         .map(|r| {
             serde_yaml::to_string(r)
-                .map_err(|e| LogParserError::SerializationError(format!("{:?}", r), Box::new(e)))
+                .map_err(|e| LogParserError::SerializationError(format!("{r:?}"), Box::new(e)))
         })
         .collect::<Result<Vec<String>, LogParserError>>()?
         .join("\n"))
@@ -91,7 +91,7 @@ fn serialize_xml<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserErr
         .iter()
         .map(|r| {
             quick_xml::se::to_string(r)
-                .map_err(|e| LogParserError::SerializationError(format!("{:?}", r), Box::new(e)))
+                .map_err(|e| LogParserError::SerializationError(format!("{r:?}"), Box::new(e)))
         })
         .collect::<Result<Vec<String>, LogParserError>>()?
         .join("\n"))
@@ -102,7 +102,7 @@ fn serialize_ron<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserErr
         .iter()
         .map(|r| {
             ron::to_string(r)
-                .map_err(|e| LogParserError::SerializationError(format!("{:?}", r), Box::new(e)))
+                .map_err(|e| LogParserError::SerializationError(format!("{r:?}"), Box::new(e)))
         })
         .collect::<Result<Vec<String>, LogParserError>>()?
         .join("\n"))
@@ -111,9 +111,9 @@ fn serialize_ron<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserErr
 fn serialize_csv<O: AnyLogMessage>(input: Vec<O>) -> Result<String, LogParserError> {
     let mut csv_writer = csv::Writer::from_writer(vec![]);
     for record in input {
-        csv_writer.serialize(&record).map_err(|e| {
-            LogParserError::SerializationError(format!("{:?}", record), Box::new(e))
-        })?;
+        csv_writer
+            .serialize(&record)
+            .map_err(|e| LogParserError::SerializationError(format!("{record:?}"), Box::new(e)))?;
     }
     String::from_utf8(
         csv_writer

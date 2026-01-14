@@ -13,11 +13,11 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   run-containerd-sandboxapi:
+    name: run-containerd-sandboxapi
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -49,6 +49,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -64,11 +66,12 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
+    name: run-containerd-stability
     strategy:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
-        vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'stratovirt']
+        vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'qemu-runtime-rs']
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -89,6 +92,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/stability/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -104,6 +109,7 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-nydus:
+    name: run-nydus
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -111,7 +117,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
-        vmm: ['clh', 'qemu', 'dragonball', 'stratovirt']
+        vmm: ['clh', 'qemu', 'dragonball', 'qemu-runtime-rs']
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -132,6 +138,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/integration/nydus/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -139,14 +147,24 @@ jobs:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
       - name: Install kata
         run: bash tests/integration/nydus/gha-run.sh install-kata kata-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/nydus/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Run nydus tests
         timeout-minutes: 10
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
+    name: run-runk
     # Skip runk tests as we have no maintainers. TODO: Decide when to remove altogether
     if: false
     runs-on: ubuntu-22.04
@@ -182,6 +200,7 @@ jobs:
         run: bash tests/integration/runk/gha-run.sh run
 
   run-tracing:
+    name: run-tracing
     strategy:
       fail-fast: false
       matrix:
@@ -209,6 +228,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/functional/tracing/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -224,6 +245,7 @@ jobs:
         run: bash tests/functional/tracing/gha-run.sh run
 
   run-vfio:
+    name: run-vfio
     strategy:
       fail-fast: false
       matrix:
@@ -253,6 +275,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/functional/vfio/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -264,51 +288,8 @@ jobs:
         timeout-minutes: 15
         run: bash tests/functional/vfio/gha-run.sh run
 
-  run-docker-tests:
-    strategy:
-      # We can set this to true whenever we're 100% sure that
-      # all the tests are not flaky, otherwise we'll fail them
-      # all due to a single flaky instance.
-      fail-fast: false
-      matrix:
-        vmm:
-          - clh
-          - qemu
-          - dragonball
-          - cloud-hypervisor
-    runs-on: ubuntu-22.04
-    env:
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: Install dependencies
-        run: bash tests/integration/docker/gha-run.sh install-dependencies
-
-      - name: get-kata-tarball
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
-
-      - name: Install kata
-        run: bash tests/integration/docker/gha-run.sh install-kata kata-artifacts
-
-      - name: Run docker smoke test
-        timeout-minutes: 5
-        run: bash tests/integration/docker/gha-run.sh run
-
   run-nerdctl-tests:
+    name: run-nerdctl-tests
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them
@@ -320,6 +301,7 @@ jobs:
           - dragonball
           - qemu
           - cloud-hypervisor
+          - qemu-runtime-rs
     runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
@@ -339,6 +321,7 @@ jobs:
       - name: Install dependencies
         env:
           GITHUB_API_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: bash tests/integration/nerdctl/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
@@ -367,6 +350,7 @@ jobs:
           retention-days: 1
 
   run-kata-agent-apis:
+    name: run-kata-agent-apis
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -383,6 +367,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/functional/kata-agent-apis/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -390,8 +376,16 @@ jobs:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
-      - name: Install kata
-        run: bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata & kata-tools
+        run: | 
+          bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
+          bash tests/functional/kata-agent-apis/gha-run.sh install-kata-tools kata-tools-artifacts
 
       - name: Run kata agent api tests with agent-ctl
         run: bash tests/functional/kata-agent-apis/gha-run.sh run

@@ -1,0 +1,39 @@
+#
+# Copyright (c) 2025 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-istio
+spec:
+  restartPolicy: Never
+  containers:
+    - name: test-container
+      image: quay.io/kata-containers/istio/proxyv2:1.26.3
+      args:
+        - istio-iptables
+        - -p
+        - "15001"
+        - -z
+        - "15006"
+        - -u
+        - "1337"
+        - -m
+        - REDIRECT
+        - -i
+        - "*"
+        - -x
+        - ""
+        - -b
+        - "*"
+        - -d
+        - "15090,15021,15020"
+        - --log_output_level=default:info
+      securityContext:
+        capabilities:
+          add: ["NET_ADMIN", "NET_RAW"]
+          drop: ["ALL"]
+  runtimeClassName: kata
+

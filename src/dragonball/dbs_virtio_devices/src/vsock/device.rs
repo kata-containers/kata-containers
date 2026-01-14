@@ -194,8 +194,8 @@ where
         let subscriber_id = self.subscriber_id.take();
         if let Some(subscriber_id) = subscriber_id {
             match self.device_info.remove_event_handler(subscriber_id) {
-                Ok(_) => debug!("virtio-vsock: removed subscriber_id {:?}", subscriber_id),
-                Err(err) => warn!("virtio-vsock: failed to remove event handler: {:?}", err),
+                Ok(_) => debug!("virtio-vsock: removed subscriber_id {subscriber_id:?}"),
+                Err(err) => warn!("virtio-vsock: failed to remove event handler: {err:?}"),
             };
         } else {
             self.muxer.take();
@@ -208,6 +208,7 @@ mod tests {
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::NoopNotifier;
     use kvm_ioctls::Kvm;
+    use test_utils::skip_if_kvm_unaccessable;
     use virtio_queue::QueueSync;
     use vm_memory::{GuestAddress, GuestMemoryMmap, GuestRegionMmap};
 
@@ -243,6 +244,7 @@ mod tests {
 
     #[test]
     fn test_virtio_device() {
+        skip_if_kvm_unaccessable!();
         let mut ctx = TestContext::new();
         let device_features = VSOCK_AVAIL_FEATURES;
         let driver_features: u64 = VSOCK_AVAIL_FEATURES | 1 | (1 << 32);

@@ -186,7 +186,7 @@ mod tests {
                 "./test_hypervisor_hook_path"
             );
             assert!(!hv.memory_info.enable_mem_prealloc);
-            assert_eq!(hv.cpu_info.default_vcpus, 12);
+            assert_eq!(hv.cpu_info.default_vcpus, 12.0);
             assert!(!hv.memory_info.enable_guest_swap);
             assert_eq!(hv.memory_info.default_memory, 100);
             assert!(!hv.enable_iothreads);

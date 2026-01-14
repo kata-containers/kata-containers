@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::io::{Error, ErrorKind, Result};
+use std::io::{Error, Result};
 use std::path::{Component, Path, PathBuf};
 
 // Follow the same configuration as
@@ -26,10 +26,10 @@ fn do_scoped_resolve<R: AsRef<Path>, U: AsRef<Path>>(
             match comp {
                 // Linux paths don't have prefixes.
                 Component::Prefix(_) => {
-                    return Err(Error::new(
-                        ErrorKind::Other,
-                        format!("Invalid path prefix in: {}", unsafe_path.as_ref().display()),
-                    ));
+                    return Err(Error::other(format!(
+                        "Invalid path prefix in: {}",
+                        unsafe_path.as_ref().display()
+                    )));
                 }
                 // `RootDir` should always be the first component, and Path::components() ensures
                 // that.
@@ -44,13 +44,10 @@ fn do_scoped_resolve<R: AsRef<Path>, U: AsRef<Path>>(
                     if let Ok(v) = path.read_link() {
                         nlinks += 1;
                         if nlinks > MAX_SYMLINK_DEPTH {
-                            return Err(Error::new(
-                                ErrorKind::Other,
-                                format!(
-                                    "Too many levels of symlinks: {}",
-                                    unsafe_path.as_ref().display()
-                                ),
-                            ));
+                            return Err(Error::other(format!(
+                                "Too many levels of symlinks: {}",
+                                unsafe_path.as_ref().display()
+                            )));
                         }
                         curr_path = if v.is_absolute() {
                             v.join(iter.as_path())
@@ -114,7 +111,7 @@ pub fn scoped_resolve<R: AsRef<Path>, U: AsRef<Path>>(root: R, unsafe_path: U) -
 ///   components (they will all get expanded).
 /// - When expanding symlinks, all symlink path components must be resolved relative to the provided
 ///   `root`. In particular, this can be considered a userspace implementation of how chroot(2)
-///    operates on file paths.
+///   operates on file paths.
 /// - Non-existent path components are unaffected.
 ///
 /// Note that the guarantees provided by this function only apply if the path components in the
@@ -144,12 +141,12 @@ mod tests {
     fn exec_tests(tests: &[TestData]) {
         for (i, t) in tests.iter().enumerate() {
             // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, t);
+            let msg = format!("test[{i}]: {t:?}");
             let result = scoped_resolve(t.rootfs, t.unsafe_path).unwrap();
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             // Perform the checks
-            assert_eq!(&result, Path::new(t.result), "{}", msg);
+            assert_eq!(&result, Path::new(t.result), "{msg}");
         }
     }
 

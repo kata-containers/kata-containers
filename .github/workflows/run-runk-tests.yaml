@@ -13,11 +13,11 @@ on:
         type: string
         default: ""
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   run-runk:
+    name: run-runk
     # Skip runk tests as we have no maintainers. TODO: Decide when to remove altogether
     if: false
     runs-on: ubuntu-22.04
@@ -38,6 +38,8 @@ jobs:
 
       - name: Install dependencies
         run: bash tests/integration/runk/gha-run.sh install-dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

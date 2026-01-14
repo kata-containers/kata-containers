@@ -166,19 +166,65 @@ moment.
 See [this issue](https://github.com/kata-containers/runtime/issues/2812) for more details.
 [Another issue](https://github.com/kata-containers/kata-containers/issues/1728) focuses on the case of `emptyDir`.
 
-## Host resource sharing
+### Kubernetes [hostPath][k8s-hostpath] volumes
 
-### Privileged containers
+In Kata, Kubernetes hostPath volumes can mount host directories and
+regular files into the guest VM via filesystem sharing, if it is enabled
+through the `shared_fs` [configuration][runtime-config] flag.
+
+By default:
+
+ - Non-TEE environment: Filesystem sharing is used to mount host files.
+ - TEE environment: Filesystem sharing is disabled. Instead, host files
+   are copied into the guest VM when the container starts, and file
+   changes are *not* synchronized between the host and the guest.
+
+In some cases, the behavior of hostPath volumes in Kata is further
+different compared to `runc` containers:
+
+**Mounting host block devices**: When a hostPath volume is of type
+[`BlockDevice`][k8s-blockdevice], Kata hotplugs the host block device
+into the guest and exposes it directly to the container.
+
+**Mounting guest devices**: When the source path of a hostPath volume is
+under `/dev`, and the path either corresponds to a host device or is not
+accessible by the Kata shim, the Kata agent bind mounts the source path
+directly from the *guest* filesystem into the container.
+
+[runtime-config]: /src/runtime/README.md#configuration
+[k8s-hostpath]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
+[k8s-blockdevice]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath-volume-types
+
+### Mounting `procfs` and `sysfs`
+
+For security reasons, the following mounts are disallowed:
+
+| Type              | Source    | Destination                      | Rationale      |
+|-------------------|-----------|----------------------------------|----------------|
+| `bind`            | `!= proc` | `/proc`                          | CVE-2019-16884 |
+| `bind`            | `*`       | `/proc/*` (see exceptions below) | CVE-2019-16884 |
+| `proc \|\| sysfs` | `*`       | not a directory (e.g. symlink)   | CVE-2019-19921 |
+
+For bind mounts under /proc, these destinations are allowed:
+	
+ * `/proc/cpuinfo`
+ * `/proc/diskstats`
+ * `/proc/meminfo`
+ * `/proc/stat`
+ * `/proc/swaps`
+ * `/proc/uptime`
+ * `/proc/loadavg`
+ * `/proc/net/dev`
+
+## Privileged containers
 
 Privileged support in Kata is essentially different from `runc` containers.
-The container runs with elevated capabilities within the guest and is granted
-access to guest devices instead of the host devices.
+The container runs with elevated capabilities within the guest.
 This is also true with using `securityContext privileged=true` with Kubernetes.
 
-The container may also be granted full access to a subset of host devices
-(https://github.com/kata-containers/runtime/issues/1568).
-
-See [Privileged Kata Containers](how-to/privileged.md) for how to configure some of this behavior.
+Importantly, the default behavior to pass the host devices to a
+privileged container is not supported in Kata Containers and needs to be
+disabled, see [Privileged Kata Containers](how-to/privileged.md).
 
 # Appendices
 

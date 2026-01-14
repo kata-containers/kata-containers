@@ -261,8 +261,7 @@ pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), St
         }
         Err(_e) => {
             let msg = format!(
-                "Command {:} not found, verify that `kmod` package is already installed.",
-                MODINFO_PATH,
+                "Command {MODINFO_PATH:} not found, verify that `kmod` package is already installed.",
             );
             return Err(msg);
         }
@@ -292,8 +291,7 @@ pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), St
 
         Err(_e) => {
             let msg = format!(
-                "Command {:} not found, verify that `kmod` package is already installed.",
-                MODPROBE_PATH,
+                "Command {MODPROBE_PATH:} not found, verify that `kmod` package is already installed.",
             );
             return Err(msg);
         }
@@ -323,7 +321,7 @@ mod tests {
         let path_full = file_path_full.clone();
         let mut file_full = fs::File::create(file_path_full).unwrap();
         let contents = "processor : 0\nvendor_id : VendorExample\nflags : flag_1 flag_2 flag_3 flag_4\nprocessor : 1\n".to_string();
-        writeln!(file_full, "{}", contents).unwrap();
+        writeln!(file_full, "{contents}").unwrap();
 
         // Empty cpuinfo example
         let file_path_empty = dir.path().join("cpuinfo_empty");
@@ -360,16 +358,15 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let result = get_single_cpu_info(d.cpuinfo_path, d.processor_delimiter_str);
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert_eq!(
                     result.as_ref().unwrap(),
                     d.result.as_ref().unwrap(),
-                    "{}",
-                    msg
+                    "{msg}"
                 );
                 continue;
             }
@@ -421,16 +418,15 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let result = get_cpu_flags(d.cpu_info_str, d.cpu_flags_tag);
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert_eq!(
                     result.as_ref().unwrap(),
                     d.result.as_ref().unwrap(),
-                    "{}",
-                    msg
+                    "{msg}"
                 );
                 continue;
             }
@@ -470,18 +466,18 @@ mod tests {
             },
             TestData {
                 test_url: "http://localhost :80",
-                expected: "builder error: invalid domain character",
+                expected: "builder error: invalid international domain name",
             },
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
             let actual = get_kata_all_releases_by_url(d.test_url)
                 .err()
                 .unwrap()
                 .to_string();
-            let msg = format!("{}, result: {:?}", msg, actual);
-            assert_eq!(d.expected, actual, "{}", msg);
+            let msg = format!("{msg}, result: {actual:?}");
+            assert_eq!(d.expected, actual, "{msg}");
         }
     }
 
@@ -566,9 +562,9 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]", i);
+            let msg = format!("test[{i}]");
             let result = check_kernel_module_loaded(d.kernel_module);
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
             if d.result.is_ok() {
                 assert_eq!(result, Ok(()));

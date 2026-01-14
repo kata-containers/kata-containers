@@ -5,11 +5,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
+
 	job_name="job-pi-test"
 	yaml_file="${pod_config_dir}/job.yaml"
 
@@ -19,6 +21,10 @@ setup() {
 }
 
 @test "Run a job to completion" {
+	local cmd
+	local logs
+	local pi_number
+
 	# Create job
 	kubectl apply -f "${yaml_file}"
 
@@ -33,8 +39,12 @@ setup() {
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Verify the output of the pod
+	bats_unbuffered_info "Getting logs for $pod_name"
+	logs=$(kubectl logs "$pod_name")
+	bats_unbuffered_info "Logs: $logs"
+
 	pi_number="3.14"
-	kubectl logs "$pod_name" | grep "$pi_number"
+	echo "$logs" | grep "$pi_number"
 }
 
 teardown() {
@@ -56,4 +66,5 @@ teardown() {
 	[[ "$output" =~ "No resources found" ]]
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

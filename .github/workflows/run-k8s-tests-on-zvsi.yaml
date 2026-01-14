@@ -25,11 +25,11 @@ on:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   run-k8s-tests:
+    name: run-k8s-tests
     strategy:
       fail-fast: false
       matrix:
@@ -46,11 +46,9 @@ jobs:
         include:
           - snapshotter: devmapper
             pull-type: default
-            using-nfd: true
             deploy-cmd: configure-snapshotter
           - snapshotter: nydus
             pull-type: guest-pull
-            using-nfd: false
             deploy-cmd: deploy-snapshotter
         exclude:
           - snapshotter: overlayfs
@@ -76,7 +74,6 @@ jobs:
       KUBERNETES: ${{ matrix.k8s }}
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
-      USING_NFD: ${{ matrix.using-nfd }}
       TARGET_ARCH: "s390x"
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
@@ -106,11 +103,13 @@ jobs:
       # qemu-runtime-rs only works with overlayfs
       # See: https://github.com/kata-containers/kata-containers/issues/10066
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
-        run: bash tests/integration/kubernetes/gha-run.sh ${{ matrix.deploy-cmd }}
+        env:
+          DEPLOY_CMD: ${{ matrix.deploy-cmd }}
+        run: bash tests/integration/kubernetes/gha-run.sh "${DEPLOY_CMD}"
         if: ${{ matrix.snapshotter != 'overlayfs' }}
 
       - name: Deploy Kata
-        timeout-minutes: 10
+        timeout-minutes: 20
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-zvsi
 
       - name: Uninstall previous `kbs-client`
@@ -131,6 +130,10 @@ jobs:
       - name: Run tests
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
       - name: Delete kata-deploy
         if: always()

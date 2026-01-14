@@ -1,21 +1,275 @@
 imagePullPolicy: Always
+
 imagePullSecrets: []
+
 image:
   reference: quay.io/kata-containers/kata-deploy
   tag: ""
-# k8s-dist can be k8s, k3s, rke2, k0s, microk8s
-k8sDistribution: "k8s"
+
+k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
+
+# Node selector and tolerations to control which nodes the kata-deploy daemonset runs on
+# Examples:
+# nodeSelector:
+#   kata-containers: "enabled"
+#   node-type: "worker"
+# tolerations:
+#   - key: "reservedFor"
+#     operator: "Exists"
+#     effect: "NoSchedule"
+nodeSelector: {}
+tolerations: []
+
+debug: false
+
+snapshotter:
+  setup: []  # ["nydus", "erofs"] or []
+
+# Enable all available shims
+shims:
+  clh:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  cloud-hypervisor:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  dragonball:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  fc:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "devmapper" # requires pre-configuration on the user side
+
+  qemu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+      - s390x
+      - ppc64le
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  qemu-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  qemu-nvidia-gpu:
+    enabled: true
+    supportedArches:
+      - amd64
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+
+  qemu-nvidia-gpu-snp:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+      forceGuestPull: true
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-nvidia-gpu-tdx:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: ""
+      forceGuestPull: true
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-snp:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-tdx:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-se:
+    enabled: true
+    supportedArches:
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-se-runtime-rs:
+    enabled: true
+    supportedArches:
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-cca:
+    enabled: true
+    supportedArches:
+      - arm64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-coco-dev:
+    enabled: true
+    supportedArches:
+      - amd64
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-coco-dev-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  remote:
+    enabled: false
+    supportedArches:
+      - amd64
+      - s390x
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: "nydus"
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+# Default shim per architecture
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+  s390x: qemu
+  ppc64le: qemu
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+  defaultName: "kata"
+
 env:
-  debug: "false"
-  shims: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-se-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
-  defaultShim: "qemu"
-  createRuntimeClasses: "true"
-  createDefaultRuntimeClass: "false"
-  allowedHypervisorAnnotations: ""
-  snapshotterHandlerMapping: ""
-  agentHttpsProxy: ""
-  agentNoProxy: ""
-  pullTypeMapping: ""
   installationPrefix: ""
   hostOS: ""
+  # Suffix for multi-install deployments to avoid conflicts between multiple Kata installations
+  # NOTE: When set, the default RuntimeClass (runtimeClasses.createDefault) will NOT be created
+  #       to avoid naming conflicts. Use fully qualified RuntimeClass names (e.g., kata-qemu-suffix1).
   multiInstallSuffix: ""
+
+# Node Feature Discovery (NFD) configuration
+# node-feature-discovery is used to detect hardware features, including virtualization support
+#
+# When enabled, kata-deploy will manage NFD as a subchart and enforce virtualization checks:
+#   - x86_64: Requires Intel VT-x (VMX) or AMD-V (SVM) CPU features
+#   - aarch64, s390x, ppc64le, riscv64: Always allowed (specific virt detection not yet implemented)
+#
+# NFD will use its default configuration which includes detecting CPU features like VMX and SVM
+#
+# IMPORTANT: If you already have node-feature-discovery installed independently in your
+#            cluster, keep this disabled.
+#
+#            When disabled, NO virtualization checks will be enforced (we **DO NOT**
+#            control any external node-feature-discovery configuration).
+#
+#            If you want virtualization checks with an external node-feature-discovery
+#            deployment, use nodeSelector manually.
+node-feature-discovery:
+  enabled: false

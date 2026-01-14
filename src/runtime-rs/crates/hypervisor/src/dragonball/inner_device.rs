@@ -6,13 +6,15 @@
 
 use std::convert::TryFrom;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::{build_dragonball_network_config, DragonballInner};
-use crate::device::pci_path::PciPath;
 use crate::VhostUserConfig;
+use crate::{device::pci_path::PciPath, KATA_BLK_DEV_TYPE};
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
-    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, JAILER_ROOT,
+    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, DEFAULT_HOTPLUG_TIMEOUT,
+    JAILER_ROOT,
 };
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
@@ -21,10 +23,12 @@ use dragonball::api::v1::{
     BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, NetworkInterfaceConfig,
     VsockDeviceConfigInfo,
 };
+use dragonball::config_manager::{RateLimiterConfigInfo, TokenBucketConfigInfo};
 use dragonball::device_manager::{
     blk_dev_mgr::BlockDeviceType,
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
 };
+use kata_types::config::hypervisor::DEFAULT_RATE_LIMITER_REFILL_TIME;
 
 const MB_TO_B: u32 = 1024 * 1024;
 const DEFAULT_VIRTIO_FS_NUM_QUEUES: i32 = 1;
@@ -32,10 +36,6 @@ const DEFAULT_VIRTIO_FS_QUEUE_SIZE: i32 = 1024;
 
 const VIRTIO_FS: &str = "virtio-fs";
 const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
-
-pub(crate) fn drive_index_to_id(index: u64) -> String {
-    format!("drive_{}", index)
-}
 
 impl DragonballInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
@@ -62,15 +62,30 @@ impl DragonballInner {
 
                 Ok(DeviceType::Vfio(hostdev))
             }
-            DeviceType::Block(block) => {
-                self.add_block_device(
-                    block.config.path_on_host.as_str(),
-                    block.device_id.as_str(),
-                    block.config.is_readonly,
-                    block.config.no_drop,
-                    block.config.is_direct,
-                )
-                .context("add block device")?;
+            DeviceType::Block(mut block) => {
+                let use_pci_bus = if block.config.driver_option == KATA_BLK_DEV_TYPE {
+                    Some(true)
+                } else {
+                    None
+                };
+
+                let guest_device_id = self
+                    .add_block_device(
+                        block.config.path_on_host.as_str(),
+                        block.device_id.as_str(),
+                        block.config.is_readonly,
+                        block.config.no_drop,
+                        block.config.is_direct,
+                        use_pci_bus,
+                    )
+                    .context("add block device")?;
+
+                if let Some(slot) = guest_device_id {
+                    if slot > 0 {
+                        block.config.pci_path = Some(PciPath::try_from(slot as u32)?);
+                    }
+                }
+
                 Ok(DeviceType::Block(block))
             }
             DeviceType::VhostUserBlk(block) => {
@@ -79,6 +94,7 @@ impl DragonballInner {
                     block.device_id.as_str(),
                     block.is_readonly,
                     block.no_drop,
+                    None,
                     None,
                 )
                 .context("add vhost user based block device")?;
@@ -115,11 +131,9 @@ impl DragonballInner {
 
                 Ok(())
             }
-            DeviceType::Block(block) => {
-                let drive_id = drive_index_to_id(block.config.index);
-                self.remove_block_drive(drive_id.as_str())
-                    .context("remove block drive")
-            }
+            DeviceType::Block(block) => self
+                .remove_block_drive(block.device_id.as_str())
+                .context("remove block drive"),
             DeviceType::Vfio(hostdev) => {
                 let primary_device = hostdev.devices.first().unwrap().clone();
                 let hostdev_id = primary_device.hostdev_id;
@@ -208,9 +222,31 @@ impl DragonballInner {
         read_only: bool,
         no_drop: bool,
         is_direct: Option<bool>,
-    ) -> Result<()> {
+        use_pci_bus: Option<bool>,
+    ) -> Result<Option<i32>> {
         let jailed_drive = self.get_resource(path, id).context("get resource")?;
         self.cached_block_devices.insert(id.to_string());
+
+        let bandwidth = TokenBucketConfigInfo {
+            size: self.config.blockdev_info.disk_rate_limiter_bw_max_rate,
+            one_time_burst: self
+                .config
+                .blockdev_info
+                .disk_rate_limiter_bw_one_time_burst
+                .unwrap_or(0),
+            refill_time: DEFAULT_RATE_LIMITER_REFILL_TIME,
+        };
+
+        let ops = TokenBucketConfigInfo {
+            size: self.config.blockdev_info.disk_rate_limiter_ops_max_rate,
+            one_time_burst: self
+                .config
+                .blockdev_info
+                .disk_rate_limiter_ops_one_time_burst
+                .unwrap_or(0),
+            refill_time: DEFAULT_RATE_LIMITER_REFILL_TIME,
+        };
+        let block_rate_limit = RateLimiterConfigInfo { bandwidth, ops };
 
         let blk_cfg = BlockDeviceConfigInfo {
             drive_id: id.to_string(),
@@ -219,16 +255,18 @@ impl DragonballInner {
             is_direct: is_direct.unwrap_or(self.config.blockdev_info.block_device_cache_direct),
             no_drop,
             is_read_only: read_only,
+            use_pci_bus,
+            rate_limiter: Some(block_rate_limit),
             ..Default::default()
         };
         self.vmm_instance
-            .insert_block_device(blk_cfg)
+            .insert_block_device(blk_cfg, Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT))
             .context("insert block device")
     }
 
     fn remove_block_drive(&mut self, id: &str) -> Result<()> {
         self.vmm_instance
-            .remove_block_device(id)
+            .remove_block_device(id, Duration::from_millis(DEFAULT_HOTPLUG_TIMEOUT))
             .context("remove block device")?;
 
         if self.cached_block_devices.contains(id) && self.jailed {
@@ -246,7 +284,7 @@ impl DragonballInner {
             .context("insert network device")
     }
 
-    /// Add vhost-user-net deivce to Dragonball
+    /// Add vhost-user-net device to Dragonball
     fn add_vhost_user_net_device(&mut self, config: &VhostUserConfig) -> Result<()> {
         let guest_mac = MacAddr::parse_str(&config.mac_address).ok();
         let net_cfg = NetworkInterfaceConfig {
@@ -302,7 +340,7 @@ impl DragonballInner {
             flags.add_flag("drop-sys-resource", &mut fs_cfg.drop_sys_resource);
             flags.add_flag("o", &mut opt_list);
         })
-        .with_context(|| format!("parse args: {:?}", args))?;
+        .with_context(|| format!("parse args: {args:?}"))?;
 
         // more options parsed for inline virtio-fs' custom config
         args.append(options);

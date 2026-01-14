@@ -5,6 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::uid_t;
+use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 #[cfg(not(test))]
 use nix::mount;
@@ -336,25 +337,19 @@ fn check_proc_mount(m: &Mount) -> Result<()> {
 
     if mount_dest == PROC_PATH {
         // only allow a mount on-top of proc if it's source is "proc"
-        unsafe {
-            let mut stats = MaybeUninit::<libc::statfs>::uninit();
-            let mount_source = m.source().as_ref().unwrap().display().to_string();
-            if mount_source
-                .with_nix_path(|path| libc::statfs(path.as_ptr(), stats.as_mut_ptr()))
-                .is_ok()
-            {
-                if stats.assume_init().f_type == PROC_SUPER_MAGIC {
-                    return Ok(());
-                }
-            } else {
-                return Ok(());
-            }
+        let mount_source = m.source().as_ref().unwrap().display().to_string();
 
-            return Err(anyhow!(format!(
+        let mut stats = MaybeUninit::<libc::statfs>::uninit();
+        let statfs_ret = mount_source
+            .with_nix_path(|path| unsafe { libc::statfs(path.as_ptr(), stats.as_mut_ptr()) })?;
+
+        return match Errno::result(statfs_ret) {
+            Ok(_) if unsafe { stats.assume_init().f_type } == PROC_SUPER_MAGIC => Ok(()),
+            Ok(_) | Err(_) => Err(anyhow!(format!(
                 "{} cannot be mounted to {} because it is not of type proc",
                 &mount_source, &mount_dest
-            )));
-        }
+            ))),
+        };
     }
 
     if mount_dest.starts_with(PROC_PATH) {
@@ -533,7 +528,7 @@ pub fn pivot_rootfs<P: ?Sized + NixPath + std::fmt::Debug>(path: &P) -> Result<(
 
     // Change to the new root so that the pivot_root actually acts on it.
     unistd::fchdir(newroot)?;
-    pivot_root(".", ".").context(format!("failed to pivot_root on {:?}", path))?;
+    pivot_root(".", ".").context(format!("failed to pivot_root on {path:?}"))?;
 
     // Currently our "." is oldroot (according to the current kernel code).
     // However, purely for safety, we will fchdir(oldroot) since there isn't
@@ -934,7 +929,7 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
     for dev in DEFAULT_DEVICES.iter() {
         let dev_path = dev.path().display().to_string();
         let path = Path::new(&dev_path[1..]);
-        op(dev, path).context(format!("Creating container device {:?}", dev))?;
+        op(dev, path).context(format!("Creating container device {dev:?}"))?;
     }
     for dev in devices {
         let dev_path = &dev.path();
@@ -946,9 +941,9 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
             anyhow!(msg)
         })?;
         if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir).context(format!("Creating container device {:?}", dev))?;
+            fs::create_dir_all(dir).context(format!("Creating container device {dev:?}"))?;
         }
-        op(dev, path).context(format!("Creating container device {:?}", dev))?;
+        op(dev, path).context(format!("Creating container device {dev:?}"))?;
     }
     stat::umask(old);
     Ok(())

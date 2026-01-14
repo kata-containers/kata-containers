@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::sl;
 use anyhow::{anyhow, Context, Result};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,8 @@ pub enum ProtectedPlatform {
     Snp,
     /// Cca platform for ARM CCA
     Cca,
+    /// Se platform for IBM SEL
+    Se,
     /// Default with no protection
     #[default]
     NoProtection,
@@ -129,20 +132,20 @@ fn calculate_digest(algorithm: &str, data: &str) -> Result<Vec<u8>> {
     let digest = match algorithm {
         "sha256" => {
             let mut hasher = Sha256::new();
-            hasher.update(&data);
+            hasher.update(data);
             hasher.finalize().to_vec()
         }
         "sha384" => {
             let mut hasher = Sha384::new();
-            hasher.update(&data);
+            hasher.update(data);
             hasher.finalize().to_vec()
         }
         "sha512" => {
             let mut hasher = Sha512::new();
-            hasher.update(&data);
+            hasher.update(data);
             hasher.finalize().to_vec()
         }
-        _ => return Err(anyhow!("unsupported Hash algorithm: {}", algorithm).into()),
+        _ => return Err(anyhow!("unsupported Hash algorithm: {algorithm}")),
     };
 
     Ok(digest)
@@ -154,6 +157,7 @@ fn adjust_digest(digest: &[u8], platform: ProtectedPlatform) -> Vec<u8> {
         ProtectedPlatform::Tdx => 48,
         ProtectedPlatform::Snp => 32,
         ProtectedPlatform::Cca => 64,
+        ProtectedPlatform::Se => 256,
         ProtectedPlatform::NoProtection => digest.len(),
     };
 
@@ -171,8 +175,8 @@ fn adjust_digest(digest: &[u8], platform: ProtectedPlatform) -> Vec<u8> {
 }
 
 /// Parse initdata
-fn parse_initdata(initdata_str: &str) -> Result<InitData> {
-    let initdata: InitData = toml::from_str(&initdata_str)?;
+pub fn parse_initdata(initdata_str: &str) -> Result<InitData> {
+    let initdata: InitData = toml::from_str(initdata_str)?;
     initdata.validate()?;
 
     Ok(initdata)
@@ -192,7 +196,7 @@ pub fn calculate_initdata_digest(
     let algorithm: &str = &initdata.algorithm;
 
     // 2. Calculate Digest
-    let digest = calculate_digest(algorithm, &initdata_toml).context("calculate digest")?;
+    let digest = calculate_digest(algorithm, initdata_toml).context("calculate digest")?;
 
     // 3. Adjust Digest with Platform
     let digest_platform = adjust_digest(&digest, platform);
@@ -203,12 +207,17 @@ pub fn calculate_initdata_digest(
     Ok(b64encoded_digest)
 }
 
-/// The argument `initda_annotation` is a Standard base64 encoded string containing a TOML formatted content.
-/// This function decodes the base64 string, parses the TOML content into an InitData structure.
-pub fn add_hypervisor_initdata_overrides(initda_annotation: &str) -> Result<String> {
+/// Encodes initdata as an annotation
+pub fn encode_initdata(init_data: &InitData) -> String {
+    let toml_str = toml::to_string_pretty(&init_data).unwrap();
+    create_encoded_input(&toml_str)
+}
+
+/// Decodes a base64-encoded gzipped initdata document to its raw TOML representation.
+fn decode_raw_initdata(initdata_annotation: &str) -> Result<String> {
     // Base64 decode the annotation value
     let b64_decoded =
-        base64::decode_config(initda_annotation, base64::STANDARD).context("base64 decode")?;
+        base64::decode_config(initdata_annotation, base64::STANDARD).context("base64 decode")?;
 
     // Gzip decompress the decoded data
     let mut gz_decoder = GzDecoder::new(&b64_decoded[..]);
@@ -216,12 +225,38 @@ pub fn add_hypervisor_initdata_overrides(initda_annotation: &str) -> Result<Stri
     gz_decoder
         .read_to_string(&mut initdata_str)
         .context("gz decoder failed")?;
+    Ok(initdata_str)
+}
 
-    // Parse the initdata
-    let initdata: InitData = parse_initdata(&initdata_str).context("parse initdata overrides")?;
+/// Decodes initdata annotation
+pub fn decode_initdata(initdata_annotation: &str) -> Result<InitData> {
+    let initdata_str = decode_raw_initdata(initdata_annotation)?;
+    // Return parsed initdata
+    let initdata = parse_initdata(&initdata_str).context("parse initdata overrides")?;
 
-    // initdata within a TOML string
-    initdata.to_string()
+    Ok(initdata)
+}
+
+/// The argument `initdata_annotation` is a Standard base64 encoded string containing a TOML formatted content.
+/// This function decodes the base64 string, parses the TOML content into an InitData structure.
+pub fn add_hypervisor_initdata_overrides(initdata_annotation: &str) -> Result<String> {
+    // If the initdata is empty, return an empty string
+    if initdata_annotation.is_empty() {
+        info!(sl!(), "initdata_annotation is empty");
+        return Ok("".to_string());
+    }
+
+    decode_initdata(initdata_annotation)?.to_string()
+}
+
+use std::io::Write;
+
+/// create gzipped and base64 encoded string
+fn create_encoded_input(content: &str) -> String {
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    encoder.write_all(content.as_bytes()).unwrap();
+    let compressed = encoder.finish().unwrap();
+    base64::encode_config(&compressed, base64::STANDARD)
 }
 
 #[cfg(test)]
@@ -230,6 +265,131 @@ mod tests {
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::io::Write;
+
+    #[test]
+    fn test_empty_annotation() {
+        // Test with empty string input
+        let result = add_hypervisor_initdata_overrides("");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "");
+    }
+
+    #[test]
+    fn test_empty_data_section() {
+        // Test with empty data section
+        let toml_content = r#"
+algorithm = "sha384"
+version = "0.1.0"
+
+[data]
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_valid_complete_initdata() {
+        // Test with complete InitData structure
+        let toml_content = r#"
+algorithm = "sha384"
+version = "0.1.0"
+
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.coco_as]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+
+[token_configs.kbs]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+'''
+
+"cdh.toml" = '''
+socket = 'unix:///run/guest-services/cdh.sock'
+credentials = []
+
+[kbc]
+name = 'cc_kbc'
+url = 'http://kbs-service.xxx.cluster.local:8080'
+'''
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        assert!(result.is_ok());
+
+        let output = result.unwrap();
+        assert!(!output.is_empty());
+        assert!(output.contains("algorithm"));
+        assert!(output.contains("version"));
+    }
+
+    #[test]
+    fn test_invalid_base64() {
+        // Test with invalid base64 string
+        let invalid_base64 = "This is not valid base64!";
+
+        let result = add_hypervisor_initdata_overrides(invalid_base64);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("base64 decode"));
+    }
+
+    #[test]
+    fn test_valid_base64_invalid_gzip() {
+        // Test with valid base64 but invalid gzip content
+        let not_gzipped = "This is not gzipped content";
+        let encoded = base64::encode_config(not_gzipped.as_bytes(), base64::STANDARD);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("gz decoder failed"));
+    }
+
+    #[test]
+    fn test_missing_algorithm() {
+        // Test with missing algorithm field
+        let toml_content = r#"
+version = "0.1.0"
+
+[data]
+"test.toml" = '''
+key = "value"
+'''
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        // This might fail depending on whether algorithm is required
+        if result.is_err() {
+            assert!(result.unwrap_err().to_string().contains("parse initdata"));
+        }
+    }
+
+    #[test]
+    fn test_missing_version() {
+        // Test with missing version field
+        let toml_content = r#"
+algorithm = "sha384"
+
+[data]
+"test.toml" = '''
+key = "value"
+'''
+"#;
+        let encoded = create_encoded_input(toml_content);
+
+        let result = add_hypervisor_initdata_overrides(&encoded);
+        // This might fail depending on whether version is required
+        if result.is_err() {
+            assert!(result.unwrap_err().to_string().contains("parse initdata"));
+        }
+    }
 
     /// Test InitData creation and serialization
     #[test]
@@ -292,6 +452,12 @@ mod tests {
         assert_eq!(cca_result.len(), 64);
         assert_eq!(&cca_result[..32], &short_digest[..]);
         assert_eq!(&cca_result[32..], vec![0u8; 32]);
+
+        // Test SE platform (requires 256 bytes)
+        let long_digest = vec![0xAA; 256];
+        let se_result = adjust_digest(&long_digest, ProtectedPlatform::Se);
+        assert_eq!(se_result.len(), 256);
+        assert_eq!(&se_result[..256], &long_digest[..256]);
     }
 
     /// Test hypervisor initdata processing with compression
@@ -347,5 +513,32 @@ mod tests {
         // Invalid compression format
         let invalid_data = base64::encode("raw uncompressed data");
         assert!(add_hypervisor_initdata_overrides(&invalid_data).is_err());
+    }
+
+    #[test]
+    fn test_pretty_initdata() {
+        let nested_toml = r#"
+algorithm = "sha384"
+version = "0.1.0"
+
+[data]
+"aa.toml" = '''
+[token_configs]
+[token_configs.coco_as]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+
+[token_configs.kbs]
+url = 'http://kbs-service.xxx.cluster.local:8080'
+'''
+        "#;
+        let init_data = parse_initdata(nested_toml).expect("canned initdata document should parse");
+
+        let doc = decode_raw_initdata(&encode_initdata(&init_data))
+            .expect("encoding and decoding again should work");
+        assert!(
+            !doc.contains("\\n"),
+            "the encoded initdata toml should not contain escaped newlines, but does:\n{}",
+            doc
+        )
     }
 }

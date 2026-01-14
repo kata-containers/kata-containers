@@ -10,8 +10,7 @@ on:
       - reopened
       - synchronize
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -19,6 +18,7 @@ concurrency:
 
 jobs:
   shellcheck:
+    name: shellcheck
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout the code
@@ -27,6 +27,6 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Run ShellCheck
-        uses: ludeeus/action-shellcheck@00b27aa7cb85167568cb48a3838b75f4265f2bca # master (2024-06-20)
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
         with:
           ignore_paths: "**/vendor/**"

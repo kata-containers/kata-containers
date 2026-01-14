@@ -6,10 +6,12 @@ use crate::{
     DeviceConfig, DiskConfig, FsConfig, NetConfig, VmConfig, VmInfo, VmResize, VsockConfig,
 };
 use anyhow::{anyhow, Context, Result};
-use api_client::simple_api_full_command_and_response;
+use api_client::{
+    simple_api_full_command_and_response, simple_api_full_command_with_fds_and_response,
+};
 
 use serde::{Deserialize, Serialize};
-use std::os::unix::net::UnixStream;
+use std::os::{fd::RawFd, unix::net::UnixStream};
 use tokio::task;
 
 pub async fn cloud_hypervisor_vmm_ping(mut socket: UnixStream) -> Result<Option<String>> {
@@ -120,6 +122,28 @@ pub async fn cloud_hypervisor_vm_netdev_add(
     .await?
 }
 
+pub async fn cloud_hypervisor_vm_netdev_add_with_fds(
+    mut socket: UnixStream,
+    net_config: NetConfig,
+    request_fds: Vec<RawFd>,
+) -> Result<Option<String>> {
+    let serialised = serde_json::to_string(&net_config)?;
+
+    task::spawn_blocking(move || -> Result<Option<String>> {
+        let response = simple_api_full_command_with_fds_and_response(
+            &mut socket,
+            "PUT",
+            "vm.add-net",
+            Some(&serialised),
+            request_fds,
+        )
+        .map_err(|e| anyhow!(e))?;
+
+        Ok(response)
+    })
+    .await?
+}
+
 pub async fn cloud_hypervisor_vm_device_add(
     mut socket: UnixStream,
     device_config: DeviceConfig,
@@ -203,7 +227,7 @@ pub async fn cloud_hypervisor_vm_info(mut socket: UnixStream) -> Result<VmInfo> 
     .await??;
 
     let vm_info = vm_info.ok_or(anyhow!("failed to get vminfo"))?;
-    serde_json::from_str(&vm_info).with_context(|| format!("failed to serde {}", vm_info))
+    serde_json::from_str(&vm_info).with_context(|| format!("failed to serde {vm_info}"))
 }
 
 pub async fn cloud_hypervisor_vm_resize(

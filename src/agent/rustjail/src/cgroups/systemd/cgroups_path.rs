@@ -57,8 +57,8 @@ fn parse_parent(slice: String) -> Result<String> {
         if subslice.is_empty() {
             return Err(anyhow!("invalid slice name: {}", slice));
         }
-        slice_path = format!("{}/{}{}{}", slice_path, prefix, subslice, SLICE_SUFFIX);
-        prefix = format!("{}{}-", prefix, subslice);
+        slice_path = format!("{slice_path}/{prefix}{subslice}{SLICE_SUFFIX}");
+        prefix = format!("{prefix}{subslice}-");
     }
     slice_path.remove(0);
     Ok(slice_path)
@@ -68,9 +68,9 @@ fn get_unit_name(prefix: String, name: String) -> String {
     if name.ends_with(SLICE_SUFFIX) {
         name
     } else if prefix.is_empty() {
-        format!("{}{}", name, SCOPE_SUFFIX)
+        format!("{name}{SCOPE_SUFFIX}")
     } else {
-        format!("{}-{}{}", prefix, name, SCOPE_SUFFIX)
+        format!("{prefix}-{name}{SCOPE_SUFFIX}")
     }
 }
 

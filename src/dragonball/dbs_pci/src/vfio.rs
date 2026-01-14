@@ -268,7 +268,7 @@ impl Interrupt {
         if let Some(msix) = &self.msix {
             if let Some(offset) = msix.with_in_range(offset) {
                 if let Err(e) = self.update_msix_capability(offset, data) {
-                    error!("Could not update MSI-X capability: {}", e);
+                    error!("Could not update MSI-X capability: {e}");
                 }
                 return true;
             }
@@ -277,7 +277,7 @@ impl Interrupt {
         if let Some(msi) = self.msi.as_mut() {
             if let Some(offset) = msi.with_in_range(offset) {
                 if let Err(e) = self.update_msi_capability(offset, data) {
-                    error!("Could not update MSI capability: {}", e);
+                    error!("Could not update MSI capability: {e}");
                 }
             }
         }
@@ -491,7 +491,7 @@ impl Interrupt {
                 if let Some(fd) = group.notifier(idx) {
                     irqfds.push(fd)
                 } else {
-                    warn!("pci_vfio: failed to get irqfd 0x{:x} for vfio device", idx);
+                    warn!("pci_vfio: failed to get irqfd 0x{idx:x} for vfio device");
                     return Err(VfioPciError::InternalError);
                 }
             }
@@ -529,7 +529,7 @@ impl Interrupt {
             let intr_mgr = self.irq_manager.as_mut().unwrap();
             let offset = offset - u64::from(msix.cap.table_offset());
             if let Err(e) = msix.state.write_table(offset, data, intr_mgr) {
-                debug!("failed to update PCI MSI-x table entry, {}", e);
+                debug!("failed to update PCI MSI-x table entry, {e}");
             }
         }
     }
@@ -685,7 +685,7 @@ impl Region {
                     match self.set_user_memory_region(j, false, vm) {
                         Ok(_) => {}
                         Err(err) => {
-                            error!("Could not delete kvm memory slot, error:{}", err);
+                            error!("Could not delete kvm memory slot, error:{err}");
                         }
                     }
 
@@ -711,10 +711,7 @@ impl Region {
                 self.mmaps[i].mmap_size,
                 host_addr as u64,
             ) {
-                error!(
-                    "vfio dma map failed, pci p2p dma may not work, due to {:?}",
-                    e
-                );
+                error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
             }
         }
 
@@ -749,10 +746,7 @@ impl Region {
                 self.start.raw_value() + self.mmaps[i].mmap_offset,
                 self.mmaps[i].mmap_size,
             ) {
-                error!(
-                    "vfio dma unmap failed, pci p2p dma may not work, due to {:?}",
-                    e
-                );
+                error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
             }
         }
 
@@ -779,10 +773,7 @@ impl Region {
                     self.start.raw_value() + self.mmaps[i].mmap_offset,
                     self.mmaps[i].mmap_size,
                 ) {
-                    error!(
-                        "vfio dma unmap failed, pci p2p dma may not work, due to {:?}",
-                        e
-                    );
+                    error!("vfio dma unmap failed, pci p2p dma may not work, due to {e:?}");
                 }
                 self.start = GuestAddress(params.new_base);
                 self.set_user_memory_region(i, true, vm)?;
@@ -793,10 +784,7 @@ impl Region {
                     self.mmaps[i].mmap_size,
                     self.mmaps[i].mmap_host_addr,
                 ) {
-                    error!(
-                        "vfio dma map failed, pci p2p dma may not work, due to {:?}",
-                        e
-                    );
+                    error!("vfio dma map failed, pci p2p dma may not work, due to {e:?}");
                 }
             }
         }
@@ -888,7 +876,7 @@ pub struct VfioPciDeviceState<C: PciSystemContext> {
     vfio_path: String,
     interrupt: Interrupt,
     vfio_dev: Arc<VfioDevice>,
-    context: Weak<C>,
+    context: Arc<Mutex<C>>,
     configuration: PciConfiguration,
     device: Option<Weak<dyn DeviceIo>>,
     regions: Vec<Region>,
@@ -904,7 +892,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         vfio_path: String,
         vfio_dev: Arc<VfioDevice>,
         bus: Weak<PciBus>,
-        context: Weak<C>,
+        context: Arc<Mutex<C>>,
         vendor_device_id: u32,
         clique_id: Option<u8>,
         vfio_container: Arc<VfioContainer>,
@@ -1159,7 +1147,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 mappable
             );
 
-            log::info!("mmap_size {}, mmap_offset {} ", mmap_size, mmap_offset);
+            log::info!("mmap_size {mmap_size}, mmap_offset {mmap_offset} ");
 
             self.regions.push(Region {
                 bar_index: bar_id,
@@ -1277,11 +1265,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
     }
 
     fn register_regions(&mut self, vm: &Arc<VmFd>) -> Result<()> {
-        let ctx = self
-            .context
-            .upgrade()
-            .ok_or(VfioPciError::BusIsDropped)?
-            .get_device_manager_context();
+        let ctx = self.context.lock().unwrap().get_device_manager_context();
         let mut tx = ctx.begin_tx();
 
         for region in self.regions.iter_mut() {
@@ -1336,22 +1320,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
     }
 
     fn unregister_regions(&mut self, vm: &Arc<VmFd>) -> Result<()> {
-        // This routine handle VfioPciDevice dropped but not unmap memory
-        if self.context.upgrade().is_none() {
-            for region in self.regions.iter_mut() {
-                if region.mappable() {
-                    region.unmap(vm, &self.vfio_container)?;
-                }
-            }
-
-            return Ok(());
-        }
-
-        let ctx = self
-            .context
-            .upgrade()
-            .ok_or(VfioPciError::BusIsDropped)?
-            .get_device_manager_context();
+        let ctx = self.context.lock().unwrap().get_device_manager_context();
         let mut tx = ctx.begin_tx();
 
         for region in self.regions.iter_mut() {
@@ -1380,11 +1349,8 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
                 } else {
                     // Safe to unwrap because activate() has set self.device to a valid value.
                     let device = self.device.as_ref().unwrap().clone();
-                    let ctx: <C as PciSystemContext>::D = self
-                        .context
-                        .upgrade()
-                        .ok_or(VfioPciError::BusIsDropped)?
-                        .get_device_manager_context();
+                    let ctx: <C as PciSystemContext>::D =
+                        self.context.lock().unwrap().get_device_manager_context();
                     let mut tx = ctx.begin_tx();
 
                     if let Err(e) = region.retrap(
@@ -1501,7 +1467,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         let table_size: u64 = u64::from(msix_cap.table_size()) * (MSIX_TABLE_ENTRY_SIZE as u64);
         let pba_bir: u32 = msix_cap.pba_bir();
         let pba_offset: u64 = u64::from(msix_cap.pba_offset());
-        let pba_size: u64 = (u64::from(msix_cap.table_size()) + 7) / 8;
+        let pba_size: u64 = u64::from(msix_cap.table_size()).div_ceil(8);
 
         self.interrupt.msix = Some(VfioMsix {
             state: msix_config,
@@ -1561,7 +1527,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
         path: String,
         bus: Weak<PciBus>,
         device: VfioDevice,
-        context: Weak<C>,
+        context: Arc<Mutex<C>>,
         vm_fd: Arc<VmFd>,
         vendor_device_id: u32,
         clique_id: Option<u8>,
@@ -1617,7 +1583,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
     pub fn activate(&self, device: Weak<dyn DeviceIo>, resources: DeviceResources) -> Result<()> {
         let mut state = self.state();
 
-        if resources.len() == 0 {
+        if resources.is_empty() {
             return Err(VfioPciError::InvalidResources);
         }
 
@@ -1649,11 +1615,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
             state.interrupt.add_msi_irq_resource(base, size);
         }
 
-        let irq_manager = state
-            .context
-            .upgrade()
-            .ok_or(VfioPciError::BusIsDropped)?
-            .get_interrupt_manager();
+        let irq_manager = state.context.lock().unwrap().get_interrupt_manager();
         state.interrupt.initialize(irq_manager)?;
         #[cfg(target_arch = "aarch64")]
         self.set_device_id(&mut state);
@@ -1666,7 +1628,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
             );
             let _ = state.unregister_regions(&self.vm_fd).map_err(|e| {
                 // If unregistering regions goes wrong, the memory region in Dragonball will be in a mess,
-                // so we panic here to avoid more serious problem. 
+                // so we panic here to avoid more serious problem.
                 panic!("failed to rollback changes of VfioPciDevice::register_regions() because error {:?}", e);
             });
         }
@@ -1682,7 +1644,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
         Ok(())
     }
 
-    pub fn state(&self) -> MutexGuard<VfioPciDeviceState<C>> {
+    pub fn state(&self) -> MutexGuard<'_, VfioPciDeviceState<C>> {
         // Don't expect poisoned lock
         self.state
             .lock()
@@ -1844,7 +1806,7 @@ impl<C: 'static + PciSystemContext> PciDevice for VfioPciDevice<C> {
             state.configuration.write_config(offset as usize, data);
             if let Some(params) = state.configuration.get_bar_programming_params() {
                 if let Err(e) = state.program_bar(reg_idx, params, &self.vm_fd) {
-                    debug!("failed to program VFIO PCI BAR, {}", e);
+                    debug!("failed to program VFIO PCI BAR, {e}");
                 }
             }
             // For device like nvidia vGPU the config space must also be updated.

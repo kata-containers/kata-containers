@@ -18,6 +18,11 @@ use super::container::Container;
 use super::io::{ContainerIo, PassfdIo, ShimIo};
 use super::logger_with_process;
 
+/// Exit status returned when containerd/shim is unable to determine
+/// the actual exit status of a process. This matches containerd's
+/// UnknownExitStatus constant.
+const UNKNOWN_EXIT_STATUS: i32 = 255;
+
 pub type ProcessWatcher = (
     Option<watch::Receiver<bool>>,
     Arc<RwLock<ProcessExitStatus>>,
@@ -291,7 +296,7 @@ impl Process {
         mut reader: Box<dyn AsyncRead + Send + Unpin>,
         mut writer: Box<dyn AsyncWrite + Send + Unpin>,
     ) -> Result<()> {
-        let io_name = format!("{:?}", io_type);
+        let io_name = format!("{io_type:?}");
 
         info!(self.logger, "run_io_copy[{}] starts", io_name);
         let logger = self.logger.new(o!("io_name" => io_name.clone()));
@@ -361,38 +366,39 @@ impl Process {
             };
 
             info!(logger, "begin wait process");
-            let resp = match agent.wait_process(req).await {
-                Ok(ret) => ret,
+            // If wait_process fails (e.g., VM died), we still set status to Stopped
+            // This ensures that subsequent Kill() calls see the process as already stopped and return success.
+            let exit_code = match agent.wait_process(req).await {
+                Ok(ret) => {
+                    info!(logger, "end wait process exit code {}", ret.status);
+                    ret.status
+                }
                 Err(e) => {
+                    // Don't return early - continue to set status to Stopped.
+                    // Use UNKNOWN_EXIT_STATUS (255) to match containerd's convention.
                     error!(logger, "failed to wait process {:?}", e);
-                    return;
+                    UNKNOWN_EXIT_STATUS
                 }
             };
-
-            info!(logger, "end wait process exit code {}", resp.status);
 
             let containers = containers.read().await;
             let container_id = &process.container_id.container_id;
-            let c = match containers.get(container_id) {
-                Some(c) => c,
-                None => {
+            if let Some(c) = containers.get(container_id) {
+                if let Err(err) = c.stop_process(&process).await {
                     error!(
                         logger,
-                        "Failed to stop process, since container {} not found", container_id
+                        "Failed to stop process, process = {:?}, err = {:?}", process, err
                     );
-                    return;
                 }
-            };
-
-            if let Err(err) = c.stop_process(&process).await {
+            } else {
                 error!(
                     logger,
-                    "Failed to stop process, process = {:?}, err = {:?}", process, err
+                    "Failed to stop process, since container {} not found", container_id
                 );
             }
 
             let mut exit_status = exit_status.write().await;
-            exit_status.update_exit_code(resp.status);
+            exit_status.update_exit_code(exit_code);
             drop(exit_status);
 
             let mut status = status.write().await;

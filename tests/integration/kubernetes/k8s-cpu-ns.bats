@@ -5,19 +5,19 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "test not working see: ${dragonball_limitations}"
-	[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && skip "https://github.com/kata-containers/kata-containers/issues/9039"
-	[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "$(uname -m)" == "s390x" ] && [ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/12155"
+	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
+		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
-
 
 	pod_name="constraints-cpu-test"
 	container_name="first-cpu-container"
@@ -32,7 +32,8 @@ setup() {
 	total_requests=20
 	total_cpu_container=1
 
-	get_pod_config_dir
+	setup_common || die "setup_common failed"
+
 	yaml_file="${pod_config_dir}/pod-cpu.yaml"
 
 	# Add policy to the yaml file
@@ -118,17 +119,17 @@ setup() {
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "test not working see: ${dragonball_limitations}"
-	[ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
-	[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && skip "https://github.com/kata-containers/kata-containers/issues/9039"
+	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ] && skip "Requires CPU hotplug which isn't supported on ${KATA_HYPERVISOR} yet"
+	[ "$(uname -m)" == "s390x" ] && [ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/12155"
+	[[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && skip "Requires CPU hotplug which disabled by static_sandbox_resource_mgmt"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
+		[ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
-
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	teardown_common "${node}" "${node_start_time:-}"
 }

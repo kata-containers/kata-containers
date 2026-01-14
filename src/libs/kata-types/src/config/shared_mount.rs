@@ -1,8 +1,11 @@
+// Copyright (c) 2023
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use std::io::Result;
 
 use regex::Regex;
-
-use crate::eother;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct SharedMount {
@@ -37,47 +40,61 @@ pub struct SharedMount {
 impl SharedMount {
     pub fn validate(&self) -> Result<()> {
         if self.name.is_empty() {
-            return Err(eother!("shared_mount: field 'name' couldn't be empty."));
+            return Err(std::io::Error::other(
+                "shared_mount: field 'name' couldn't be empty.",
+            ));
         }
         if self.src_ctr.is_empty() {
-            return Err(eother!("shared_mount: field 'src_ctr' couldn't be empty."));
+            return Err(std::io::Error::other(
+                "shared_mount: field 'src_ctr' couldn't be empty.",
+            ));
         }
         if self.dst_ctr.is_empty() {
-            return Err(eother!("shared_mount: field 'dst_ctr' couldn't be empty."));
+            return Err(std::io::Error::other(
+                "shared_mount: field 'dst_ctr' couldn't be empty.",
+            ));
         }
         if self.src_path.is_empty() {
-            return Err(eother!("shared_mount: field 'src_path' couldn't be empty."));
+            return Err(std::io::Error::other(
+                "shared_mount: field 'src_path' couldn't be empty.",
+            ));
         }
         if self.dst_path.is_empty() {
-            return Err(eother!("shared_mount: field 'dst_path' couldn't be empty."));
+            return Err(std::io::Error::other(
+                "shared_mount: field 'dst_path' couldn't be empty.",
+            ));
         }
 
         let re = match Regex::new(r"^(/[-\w.]+)+/?$") {
             Ok(re) => re,
-            Err(e) => return Err(eother!("Compiling the regular expression failed: {}.", e)),
+            Err(e) => {
+                return Err(std::io::Error::other(format!(
+                    "Compiling the regular expression failed: {e}.",
+                )))
+            }
         };
         if !re.is_match(&self.src_path) {
-            return Err(eother!("shared_mount '{}': src_path is invalid. It must be an absolute path and can only contain letters, numbers, hyphens(-), underscores(_) and dots(.).", self.name));
+            return Err(std::io::Error::other(format!("shared_mount '{}': src_path is invalid. It must be an absolute path and can only contain letters, numbers, hyphens(-), underscores(_) and dots(.).", self.name)));
         }
         let dirs: Vec<&str> = self.src_path.split('/').collect();
         for dir in dirs {
             if dir == ".." {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "shared_mount '{}': src_path couldn't contain '..' directory.",
-                    self.name
-                ));
+                    self.name,
+                )));
             }
         }
         if !re.is_match(&self.dst_path) {
-            return Err(eother!("shared_mount '{}': dst_path is invalid. It must be an absolute path and can only contain letters, numbers, hyphens(-), underscores(_) and dots(.).", self.name));
+            return Err(std::io::Error::other(format!("shared_mount '{}': dst_path is invalid. It must be an absolute path and can only contain letters, numbers, hyphens(-), underscores(_) and dots(.).", self.name)));
         }
         let dirs: Vec<&str> = self.dst_path.split('/').collect();
         for dir in dirs {
             if dir == ".." {
-                return Err(eother!(
+                return Err(std::io::Error::other(format!(
                     "shared_mount '{}': dst_path couldn't contain '..' directory.",
-                    self.name
-                ));
+                    self.name,
+                )));
             }
         }
 
@@ -233,17 +250,17 @@ mod tests {
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
+            let msg = format!("test[{i}]: {d:?}");
 
             let m: SharedMount = serde_json::from_str(d.shared_mount_annotation).unwrap();
             let result = m.validate();
 
-            let msg = format!("{}, result: {:?}", msg, result);
+            let msg = format!("{msg}, result: {result:?}");
 
-            assert_eq!(result.is_ok(), d.result, "{}", msg);
+            assert_eq!(result.is_ok(), d.result, "{msg}");
 
             if !d.result {
-                assert_eq!(result.unwrap_err().to_string(), d.message, "{}", msg);
+                assert_eq!(result.unwrap_err().to_string(), d.message, "{msg}");
             }
         }
     }

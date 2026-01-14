@@ -35,10 +35,17 @@ func TestAppendVirtioBalloon(t *testing.T) {
 
 	var OnDeflateOnOMM = ",deflate-on-oom=on"
 	var OffDeflateOnOMM = ",deflate-on-oom=off"
-	testAppend(balloonDevice, deviceString+devnoOptios+OffDeflateOnOMM, t)
+
+	var OnFreePageReporting = ",free-page-reporting=on"
+	var OffFreePageReporting = ",free-page-reporting=off"
+
+	testAppend(balloonDevice, deviceString+devnoOptios+OffDeflateOnOMM+OffFreePageReporting, t)
 
 	balloonDevice.DeflateOnOOM = true
-	testAppend(balloonDevice, deviceString+devnoOptios+OnDeflateOnOMM, t)
+	testAppend(balloonDevice, deviceString+devnoOptios+OnDeflateOnOMM+OffFreePageReporting, t)
+
+	balloonDevice.FreePageReporting = true
+	testAppend(balloonDevice, deviceString+devnoOptios+OnDeflateOnOMM+OnFreePageReporting, t)
 }
 
 func TestAppendDeviceFSCCW(t *testing.T) {

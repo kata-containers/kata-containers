@@ -30,7 +30,7 @@ pub const PROC_VERSION_FILE: &str = "/proc/version";
 
 pub fn get_kernel_version(proc_version_file: &str) -> Result<String> {
     let contents = fs::read_to_string(proc_version_file)
-        .context(format!("Failed to read file {}", proc_version_file))?;
+        .context(format!("Failed to read file {proc_version_file}"))?;
 
     let fields: Vec<&str> = contents.split_whitespace().collect();
 
@@ -268,7 +268,7 @@ mod tests {
             arch_specific::ARCH_CPU_MODEL_FIELD,
             expected_model_name
         );
-        writeln!(file, "{}", contents).unwrap();
+        writeln!(file, "{contents}").unwrap();
         let res = get_generic_cpu_details(path.to_str().unwrap());
         assert_eq!(res.as_ref().unwrap().0, expected_vendor_id);
         assert_eq!(res.as_ref().unwrap().1, expected_model_name);

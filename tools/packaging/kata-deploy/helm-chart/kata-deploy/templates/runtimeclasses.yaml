@@ -1,0 +1,95 @@
+{{- if .Values.runtimeClasses.enabled }}
+{{- $multiInstallSuffix := .Values.env.multiInstallSuffix }}
+{{- $createDefaultRC := .Values.runtimeClasses.createDefault }}
+{{- $defaultRCName := .Values.runtimeClasses.defaultName }}
+
+{{- /* Get enabled shims from structured config */ -}}
+{{- $enabledShims := list -}}
+{{- range $shimName, $shimConfig := .Values.shims -}}
+{{- if $shimConfig.enabled -}}
+{{- $enabledShims = append $enabledShims $shimName -}}
+{{- end -}}
+{{- end -}}
+
+{{- /* Define runtime class configurations with their overhead settings */ -}}
+{{- $runtimeClassConfigs := dict
+  "clh" (dict "memory" "130Mi" "cpu" "250m")
+  "cloud-hypervisor" (dict "memory" "130Mi" "cpu" "250m")
+  "dragonball" (dict "memory" "130Mi" "cpu" "250m")
+  "fc" (dict "memory" "130Mi" "cpu" "250m")
+  "qemu" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-coco-dev" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-coco-dev-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-runtime-rs" (dict "memory" "160Mi" "cpu" "250m")
+  "qemu-se-runtime-rs" (dict "memory" "1024Mi" "cpu" "1.0")
+  "qemu-se" (dict "memory" "1024Mi" "cpu" "1.0")
+  "qemu-snp" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-tdx" (dict "memory" "2048Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu" (dict "memory" "4096Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-snp" (dict "memory" "20480Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx" (dict "memory" "20480Mi" "cpu" "1.0")
+  "qemu-cca" (dict "memory" "2048Mi" "cpu" "1.0")
+  "stratovirt" (dict "memory" "130Mi" "cpu" "250m")
+  "remote" (dict "memory" "120Mi" "cpu" "250m")
+}}
+
+{{- /* Create RuntimeClass for each enabled shim */ -}}
+{{- range $shim := $enabledShims }}
+{{- $config := index $runtimeClassConfigs $shim }}
+{{- if $config }}
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+{{- if $multiInstallSuffix }}
+  name: kata-{{ $shim }}-{{ $multiInstallSuffix }}
+{{- else }}
+  name: kata-{{ $shim }}
+{{- end }}
+  labels:
+    app.kubernetes.io/managed-by: kata-deploy
+{{- if $multiInstallSuffix }}
+    kata-deploy/instance: {{ $multiInstallSuffix | quote }}
+{{- else }}
+    kata-deploy/instance: "default"
+{{- end }}
+{{- if $multiInstallSuffix }}
+handler: kata-{{ $shim }}-{{ $multiInstallSuffix }}
+{{- else }}
+handler: kata-{{ $shim }}
+{{- end }}
+overhead:
+  podFixed:
+    memory: {{ $config.memory | quote }}
+    cpu: {{ $config.cpu | quote }}
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+{{- end }}
+{{- end }}
+
+{{- /* Create default RuntimeClass if requested */ -}}
+{{- if and $createDefaultRC (not $multiInstallSuffix) }}
+{{- /* Get default shim from structured config - use amd64 as the primary reference */ -}}
+{{- $defaultShim := index .Values.defaultShim "amd64" | default (index .Values.defaultShim "arm64") | default (index .Values.defaultShim "s390x") | default (index .Values.defaultShim "ppc64le") }}
+{{- $defaultConfig := index $runtimeClassConfigs $defaultShim }}
+{{- if and $defaultShim $defaultConfig }}
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+  name: {{ $defaultRCName }}
+  labels:
+    app.kubernetes.io/managed-by: kata-deploy
+    kata-deploy/instance: "default"
+handler: kata-{{ $defaultShim }}
+overhead:
+  podFixed:
+    memory: {{ $defaultConfig.memory | quote }}
+    cpu: {{ $defaultConfig.cpu | quote }}
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+{{- end }}
+{{- end }}
+{{- end }}

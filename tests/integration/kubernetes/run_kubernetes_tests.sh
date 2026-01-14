@@ -38,7 +38,6 @@ else
 		"k8s-guest-pull-image-encrypted.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
-		"k8s-initdata.bats" \
 		"k8s-confidential-attestation.bats" \
 	)
 
@@ -60,7 +59,9 @@ else
 		"k8s-exec.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-hostname.bats" \
+		"k8s-hostpath-volume.bats" \
 		"k8s-inotify.bats" \
+		"k8s-ip6tables.bats" \
 		"k8s-job.bats" \
 		"k8s-kill-all-process-in-container.bats" \
 		"k8s-limit-range.bats" \
@@ -69,6 +70,7 @@ else
 		"k8s-memory.bats" \
 		"k8s-nested-configmap-secret.bats" \
 		"k8s-oom.bats" \
+		"k8s-openvpn.bats" \
 		"k8s-optional-empty-configmap.bats" \
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
@@ -82,8 +84,8 @@ else
 		"k8s-policy-pvc.bats" \
 		"k8s-policy-rc.bats" \
 		"k8s-port-forward.bats" \
+		"k8s-privileged.bats" \
 		"k8s-projected-volume.bats" \
-		"k8s-qos-pods.bats" \
 		"k8s-replication.bats" \
 		"k8s-seccomp.bats" \
 		"k8s-sysctls.bats" \
@@ -96,6 +98,7 @@ else
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \
+		"k8s-qos-pods.bats" \
 		"k8s-sandbox-vcpus-allocation.bats" \
 		"k8s-scale-nginx.bats" \
 	)
@@ -141,11 +144,11 @@ tests_fail=()
 for K8S_TEST_ENTRY in "${K8S_TEST_UNION[@]}"
 do
 	K8S_TEST_ENTRY=$(echo "$K8S_TEST_ENTRY" | tr -d '[:space:][:cntrl:]')
-	info "$(kubectl get pods --all-namespaces 2>&1)"
+	time info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
 	# Output file will be prefixed with "ok" or "not_ok" based on the result
 	out_file="${report_dir}/${K8S_TEST_ENTRY}.out"
-	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "${out_file}"; then
+	if ! bats --timing --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "${out_file}"; then
 		tests_fail+=("${K8S_TEST_ENTRY}")
 		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
 		[ "${K8S_TEST_FAIL_FAST}" = "yes" ] && break

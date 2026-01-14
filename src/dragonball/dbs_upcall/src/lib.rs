@@ -321,20 +321,20 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
         match info.state {
             UpcallClientState::WaitingServer => {
                 if let Err(e) = info.server_connection_check() {
-                    debug!("upcall connect server check failed, {}", e);
+                    debug!("upcall connect server check failed, {e}");
                     info.set_state(UpcallClientState::WaitingServer);
                     if let Err(e) = self.set_reconnect() {
-                        error!("set reconnect error: {}", e);
+                        error!("set reconnect error: {e}");
                         info.set_state(UpcallClientState::ReconnectError);
                     }
                 } else {
                     info!("upcall connect server success");
                     // It's time to connect to service when server is connected.
                     if let Err(e) = info.service_connection_start() {
-                        warn!("upcall connect service start failed {}", e);
+                        warn!("upcall connect service start failed {e}");
                         info.set_state(UpcallClientState::WaitingServer);
                         if let Err(e) = self.set_reconnect() {
-                            error!("set reconnect error: {}", e);
+                            error!("set reconnect error: {e}");
                             info.set_state(UpcallClientState::ReconnectError);
                         }
                     } else {
@@ -345,10 +345,10 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
             }
             UpcallClientState::WaitingService => {
                 if let Err(e) = info.service_connection_check() {
-                    warn!("upcall connect service check failed, {}", e);
+                    warn!("upcall connect service check failed, {e}");
                     info.set_state(UpcallClientState::WaitingServer);
                     if let Err(e) = self.set_reconnect() {
-                        error!("set reconnect error: {}", e);
+                        error!("set reconnect error: {e}");
                         info.set_state(UpcallClientState::ReconnectError);
                     }
                 } else {
@@ -363,10 +363,10 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
                     info.consume_callback(response);
                 }
                 Err(e) => {
-                    warn!("upcall response failed {}", e);
+                    warn!("upcall response failed {e}");
                     info.set_state(UpcallClientState::WaitingServer);
                     if let Err(e) = self.set_reconnect() {
-                        error!("set reconnect error: {}", e);
+                        error!("set reconnect error: {e}");
                         info.set_state(UpcallClientState::ReconnectError);
                     }
                 }
@@ -399,9 +399,9 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
         let mut info = info.lock().unwrap();
         // reconnect to server
         if let Err(e) = info.server_connection_start() {
-            warn!("upcall reconnect server /failed: {}", e);
+            warn!("upcall reconnect server /failed: {e}");
             if let Err(e) = self.set_reconnect() {
-                error!("set reconnect error: {}", e);
+                error!("set reconnect error: {e}");
             }
         }
         debug!("upcall reconnect server...");

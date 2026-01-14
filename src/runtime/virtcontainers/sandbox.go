@@ -2546,10 +2546,8 @@ func (s *Sandbox) resourceControllerDelete() error {
 	}
 
 	resCtrlParent := sandboxController.Parent()
-	if resCtrlParent != "." {
-		if err := sandboxController.MoveTo(resCtrlParent); err != nil {
-			return err
-		}
+	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
+		return err
 	}
 
 	if err := sandboxController.Delete(); err != nil {

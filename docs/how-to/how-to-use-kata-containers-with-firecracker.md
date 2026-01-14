@@ -104,12 +104,20 @@ LOW_WATER_MARK=32768
 sudo dmsetup create "${POOL_NAME}" \
     --table "0 ${LENGTH_IN_SECTORS} thin-pool ${META_DEV} ${DATA_DEV} ${DATA_BLOCK_SIZE} ${LOW_WATER_MARK}"
 
+# Determine plugin name based on containerd config version
+CONFIG_VERSION=$(containerd config dump | awk '/^version/ {print $3}')
+if [ "$CONFIG_VERSION" -ge 2 ]; then
+    PLUGIN="io.containerd.snapshotter.v1.devmapper"
+else
+    PLUGIN="devmapper"
+fi
+
 cat << EOF
 #
 # Add this to your config.toml configuration file and restart containerd daemon
 #
 [plugins]
-  [plugins.devmapper]
+  [plugins."${PLUGIN}"]
     pool_name = "${POOL_NAME}"
     root_path = "${DATA_DIR}"
     base_image_size = "10GB"

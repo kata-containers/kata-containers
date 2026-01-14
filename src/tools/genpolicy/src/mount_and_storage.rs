@@ -105,6 +105,7 @@ pub fn get_mount_and_storage(
     storages: &mut Vec<agent::Storage>,
     yaml_volume: &volume::Volume,
     yaml_mount: &pod::VolumeMount,
+    pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
     debug!(
         "get_mount_and_storage: adding mount and storage for: {:?}",
@@ -122,14 +123,17 @@ pub fn get_mount_and_storage(
         }
 
         if volume.is_none() {
-            volume = if settings.kata_config.confidential_guest {
-                Some(&settings_volumes.confidential_emptyDir)
-            } else {
-                Some(&settings_volumes.emptyDir)
-            }
+            volume = Some(&settings_volumes.emptyDir);
         }
 
-        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
+        get_empty_dir_mount_and_storage(
+            settings,
+            p_mounts,
+            storages,
+            yaml_mount,
+            volume.unwrap(),
+            pod_security_context,
+        );
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
     } else if yaml_volume.hostPath.is_some() {
@@ -151,16 +155,25 @@ fn get_empty_dir_mount_and_storage(
     storages: &mut Vec<agent::Storage>,
     yaml_mount: &pod::VolumeMount,
     settings_empty_dir: &settings::EmptyDirVolume,
+    pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
     debug!("Settings emptyDir: {:?}", settings_empty_dir);
 
     if yaml_mount.subPathExpr.is_none() {
+        let mut options = settings_empty_dir.options.clone();
+        if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
+            // This matches the runtime behavior of only setting the fsgid if the mountpoint GID is not 0.
+            // https://github.com/kata-containers/kata-containers/blob/b69da5f3ba8385c5833b31db41a846a203812675/src/runtime/virtcontainers/kata_agent.go#L1602-L1607
+            if gid != 0 {
+                options.push(format!("fsgid={gid}"));
+            }
+        }
         storages.push(agent::Storage {
             driver: settings_empty_dir.driver.clone(),
             driver_options: Vec::new(),
             source: settings_empty_dir.source.clone(),
             fstype: settings_empty_dir.fstype.clone(),
-            options: settings_empty_dir.options.clone(),
+            options,
             mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
             fs_group: protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
@@ -270,21 +283,17 @@ fn get_config_map_mount_and_storage(
     yaml_mount: &pod::VolumeMount,
 ) {
     let settings_volumes = &settings.volumes;
-    let settings_config_map = if settings.kata_config.confidential_guest {
-        &settings_volumes.confidential_configMap
-    } else {
-        &settings_volumes.configMap
-    };
+    let settings_config_map = &settings_volumes.configMap;
     debug!("Settings configMap: {:?}", settings_config_map);
 
-    if !settings.kata_config.confidential_guest {
+    if settings.kata_config.enable_configmap_secret_storages {
         let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let mount_path_str = OsString::from(mount_path).into_string().unwrap();
 
         storages.push(agent::Storage {
             driver: settings_config_map.driver.clone(),
             driver_options: Vec::new(),
-            source: format!("{}{}$", &settings_config_map.mount_source, &yaml_mount.name),
+            source: format!("{}{}$", &settings_config_map.mount_source, &mount_path_str),
             fstype: settings_config_map.fstype.clone(),
             options: settings_config_map.options.clone(),
             mount_point: format!("{}{mount_path_str}$", &settings_config_map.mount_point),
@@ -309,11 +318,12 @@ fn get_shared_bind_mount(
     propagation: &str,
     access: &str,
 ) {
-    let mount_path = if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
-        str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..]).unwrap()
-    } else {
-        &yaml_mount.mountPath
-    };
+    // The Kata Shim filepath.Base() to extract the last element of this path, in
+    // https://github.com/kata-containers/kata-containers/blob/5e46f814dd79ab6b34588a83825260413839735a/src/runtime/virtcontainers/fs_share_linux.go#L305
+    // In Rust, Path::file_name() has a similar behavior.
+    let path = Path::new(&yaml_mount.mountPath);
+    let mount_path = path.file_name().unwrap().to_str().unwrap();
+
     let source = format!("$(sfprefix){mount_path}$");
 
     let dest = yaml_mount.mountPath.clone();

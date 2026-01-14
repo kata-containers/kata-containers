@@ -5,13 +5,19 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
+permissions: {}
+
 
 name: Build checks
 jobs:
   check:
-    runs-on: ${{ inputs.instance }}
+    name: check
+    runs-on: >-
+      ${{
+        ( contains(inputs.instance, 's390x') && matrix.component.name == 'runtime' ) && 's390x' ||
+        ( contains(inputs.instance, 'ppc64le') && (matrix.component.name == 'runtime' || matrix.component.name == 'agent') ) && 'ppc64le' ||
+        inputs.instance
+      }}
     strategy:
       fail-fast: false
       matrix:
@@ -42,6 +48,11 @@ jobs:
             path: src/runtime-rs
             needs:
               - rust
+          - name: libs
+            path: src/libs
+            needs:
+              - rust
+              - protobuf-compiler
           - name: agent-ctl
             path: src/tools/agent-ctl
             needs:
@@ -52,6 +63,7 @@ jobs:
             path: src/tools/kata-ctl
             needs:
               - rust
+              - protobuf-compiler
           - name: trace-forwarder
             path: src/tools/trace-forwarder
             needs:
@@ -61,6 +73,8 @@ jobs:
             needs:
               - rust
               - protobuf-compiler
+        instance:
+          - ${{ inputs.instance }} 
 
     steps:
       - name: Adjust a permission for repo
@@ -122,9 +136,11 @@ jobs:
           echo "GITHUB_RUNNER_CI_NON_VIRT=true" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component.name }}
         run: |
-          cd ${{ matrix.component.path }}
-          ${{ matrix.command }}
+          cd "${COMPONENT_PATH}"
+          eval "${COMMAND}"
         env:
+          COMMAND: ${{ matrix.command }}
+          COMPONENT_PATH: ${{ matrix.component.path }}
           RUST_BACKTRACE: "1"
           RUST_LIB_BACKTRACE: "0"
           SKIP_GO_VERSION_CHECK: "1"

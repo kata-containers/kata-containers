@@ -33,6 +33,8 @@ readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
 readonly KBS_SVC_NAME="kbs"
 # The kbs ingress name
 readonly KBS_INGRESS_NAME="kbs"
+# Workdir for installing snphost
+readonly SNPHOST_DIR="/tmp/snphost-workdir"
 
 # Set "allow all" policy to resources.
 #
@@ -53,6 +55,48 @@ kbs_set_deny_all_resources() {
 		"${COCO_KBS_DIR}/sample_policies/deny_all.rego"
 }
 
+# Set KBS resource policy requiring GPU0's EAR status to be non-contraindicated.
+#
+kbs_set_gpu0_resource_policy() {
+	local policy_file
+	policy_file=$(mktemp -t kbs-gpu-policy-XXXXX.rego)
+
+	cat > "${policy_file}" <<-'EOF'
+		package policy
+		import rego.v1
+		default allow = false
+		allow if {
+		    input["submods"]["gpu0"]["ear.status"] == "affirming"
+		}
+	EOF
+
+	kbs_set_resources_policy "${policy_file}"
+	local rc=$?
+	rm -f "${policy_file}"
+	return "${rc}"
+}
+
+# Set KBS resource policy requiring CPU0's EAR status to be affirming.
+#
+kbs_set_cpu0_resource_policy() {
+	local policy_file
+	policy_file=$(mktemp -t kbs-cpu-policy-XXXXX.rego)
+
+	cat > "${policy_file}" <<-'EOF'
+		package policy
+		import rego.v1
+		default allow = false
+		allow if {
+		    input["submods"]["cpu0"]["ear.status"] == "affirming"
+		}
+	EOF
+
+	kbs_set_resources_policy "${policy_file}"
+	local rc=$?
+	rm -f "${policy_file}"
+	return "${rc}"
+}
+
 # Set resources policy.
 #
 # Parameters:
@@ -69,6 +113,17 @@ kbs_set_resources_policy() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "${KBS_PRIVATE_KEY}" set-resource-policy \
 		--policy-file "${file}"
+}
+
+# Execute an admin command via the KBS client using the correct
+# URI and admin authentication key.
+#
+# Parameters:
+#	$1 - config command to run
+#
+kbs_config_command() {
+	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+                --auth-private-key "${KBS_PRIVATE_KEY}" "$@"
 }
 
 # Set resource data in base64 encoded.
@@ -226,6 +281,31 @@ kbs_uninstall_cli() {
 	fi
 }
 
+# Ensure the sev-snp-measure utility is installed.
+#
+ensure_sev_snp_measure() {
+	command -v sev-snp-measure >/dev/null && return
+
+	source "${HOME}"/.cicd/venv/bin/activate
+	pip install sev-snp-measure
+}
+
+# Ensure that snphost utility is installed
+#
+ensure_snphost() {
+	command -v snphost >/dev/null && return
+
+	git clone https://github.com/virtee/snphost.git "${SNPHOST_DIR}"
+	pushd "${SNPHOST_DIR}"
+
+	_ensure_rust "1.85.0"
+	cargo build --release
+	sudo install -m 755 target/release/snphost /usr/local/bin/
+
+	popd
+	rm -rf "${SNPHOST_DIR}"
+}
+
 # Delete the kbs on Kubernetes
 #
 # Note: assume the kbs sources were cloned to $COCO_TRUSTEE_DIR
@@ -234,7 +314,7 @@ function kbs_k8s_delete() {
 	pushd "${COCO_KBS_DIR}"
 	if [[ "${KATA_HYPERVISOR}" = "qemu-tdx" ]]; then
 		kubectl delete -k config/kubernetes/ita
-	elif [[ "${KATA_HYPERVISOR}" = "qemu-se" ]]; then
+	elif [[ "${KATA_HYPERVISOR}" = qemu-se* ]]; then
 		kubectl delete -k config/kubernetes/overlays/ibm-se
 	else
 		kubectl delete -k config/kubernetes/overlays/
@@ -304,8 +384,8 @@ function kbs_k8s_deploy() {
 	# expects at least one secret served at install time.
 	echo "somesecret" > overlays/key.bin
 
-	# For qemu-se runtime, prepare the necessary resources
-	if [[ "${KATA_HYPERVISOR}" == "qemu-se" ]]; then
+	# For qemu-se* runtime, prepare the necessary resources
+	if [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
 		mv overlays/key.bin overlays/ibm-se/key.bin
 		prepare_credentials_for_qemu_se
 		# SE_SKIP_CERTS_VERIFICATION should be set to true
@@ -370,6 +450,9 @@ function kbs_k8s_deploy() {
 		echo "::group::DEBUG - describe kbs pod"
 		kubectl -n "${KBS_NS}" describe pod -l app=kbs || true
 		echo "::endgroup::"
+		echo "::group::DEBUG - kbs logs"
+		kubectl -n "${KBS_NS}" logs -l app=kbs || true
+		echo "::endgroup::"
 		return 1
 	fi
 	echo "::endgroup::"
@@ -390,7 +473,7 @@ function kbs_k8s_deploy() {
 
 	local pod=kbs-checker-$$
 	kubectl run "${pod}" --image=quay.io/prometheus/busybox --restart=Never -- \
-		sh -c "wget -O- --timeout=5 \"${kbs_ip}:${kbs_port}\" || true"
+		sh -c "wget -O- --timeout=60 \"${kbs_ip}:${kbs_port}\" || true"
 	if ! waitForProcess "60" "10" "kubectl logs \"${pod}\" 2>/dev/null | grep -q \"404 Not Found\""; then
 		echo "ERROR: KBS service is not responding to requests"
 		echo "::group::DEBUG - kbs logs"

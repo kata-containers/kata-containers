@@ -174,6 +174,25 @@ type RuntimeConfig struct {
 
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
+
+	// PodResourceAPISock specifies the unix socket for the Kubelet's
+	// PodResource API endpoint. If empty, kubernetes based cold plug
+	// will not be attempted. In order for this feature to work, the
+	// KubeletPodResourcesGet featureGate must be enabled in Kubelet,
+	// if using Kubelet older than 1.34.
+	//
+	// The pod resource API's socket is relative to the Kubelet's root-dir,
+	// which is defined by the cluster admin, and its location is:
+	// ${KubeletRootDir}/pod-resources/kubelet.sock
+	//
+	// HypervisorConfig.ColdPlugVFIO acts as a feature gate:
+	// 	ColdPlugVFIO = NoPort => no cold plug
+	//	ColdPlugVFIO != NoPort AND PodResourceAPISock = "" => need
+	//		explicit CDI annotation for cold plug (applies mainly
+	//		to non-k8s cases)
+	//	ColdPlugVFIO != NoPort AND PodResourceAPISock != "" => kubelet
+	//		based cold plug.
+	PodResourceAPISock string
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -596,7 +615,20 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
 		if value != "" {
 			params := vc.DeserializeParams(strings.Fields(value))
+
+			// Annotation parameters should replace existing parameters with the same key
+			// rather than append, to allow overriding default values
 			for _, param := range params {
+				// Remove any existing parameter with the same key
+				var newParams []vc.Param
+				for _, existingParam := range config.HypervisorConfig.KernelParams {
+					if existingParam.Key != param.Key {
+						newParams = append(newParams, existingParam)
+					}
+				}
+				config.HypervisorConfig.KernelParams = newParams
+
+				// Now add the annotation parameter
 				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
 					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
 				}
@@ -836,6 +868,17 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.EnableIOThreads).setBool(func(enableIOThreads bool) {
 		sbConfig.HypervisorConfig.EnableIOThreads = enableIOThreads
+	}); err != nil {
+		return err
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IndepIOThreads).setUintWithCheck(func(indepiothreads uint64) error {
+		// Default indepiothreads limit is less than 50.
+		if indepiothreads == 0 || indepiothreads > 50 {
+			return fmt.Errorf("Error parsing annotation for indepiothreads, please specify numeric value less than 50")
+		}
+		sbConfig.HypervisorConfig.IndepIOThreads = uint32(indepiothreads)
+		return nil
 	}); err != nil {
 		return err
 	}

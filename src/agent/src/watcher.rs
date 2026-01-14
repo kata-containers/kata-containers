@@ -556,9 +556,9 @@ mod tests {
     use test_utils::skip_if_not_root;
 
     async fn create_test_storage(dir: &Path, id: &str) -> Result<(protos::Storage, PathBuf)> {
-        let src_path = dir.join(format!("src{}", id));
+        let src_path = dir.join(format!("src{id}"));
         let src_filename = src_path.to_str().expect("failed to create src filename");
-        let dest_path = dir.join(format!("dest{}", id));
+        let dest_path = dir.join(format!("dest{id}"));
         let dest_filename = dest_path.to_str().expect("failed to create dest filename");
 
         std::fs::create_dir_all(src_filename).expect("failed to create path");
@@ -682,7 +682,7 @@ mod tests {
 
         // setup storage0: too many files
         for i in 1..21 {
-            fs::write(src0_path.join(format!("{}.txt", i)), "original").unwrap();
+            fs::write(src0_path.join(format!("{i}.txt")), "original").unwrap();
         }
 
         // setup storage1: two small files
@@ -700,7 +700,7 @@ mod tests {
 
         // setup storage3: many files, but still watchable
         for i in 1..MAX_ENTRIES_PER_STORAGE {
-            fs::write(src3_path.join(format!("{}.txt", i)), "original").unwrap();
+            fs::write(src3_path.join(format!("{i}.txt")), "original").unwrap();
         }
 
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -919,7 +919,7 @@ mod tests {
 
         // Up to 15 files should be okay (can watch 15 files + 1 directory)
         for i in 1..MAX_ENTRIES_PER_STORAGE {
-            fs::write(source_dir.path().join(format!("{}.txt", i)), "original").unwrap();
+            fs::write(source_dir.path().join(format!("{i}.txt")), "original").unwrap();
         }
 
         assert_eq!(
@@ -1387,7 +1387,7 @@ mod tests {
         assert!(!dest_dir.path().exists());
 
         for i in 1..21 {
-            fs::write(source_dir.path().join(format!("{}.txt", i)), "fluff").unwrap();
+            fs::write(source_dir.path().join(format!("{i}.txt")), "fluff").unwrap();
         }
 
         // verify non-watched storage is cleaned up correctly

@@ -72,7 +72,7 @@ pub(crate) async fn setup_inline_virtiofs(d: &RwLock<DeviceManager>, id: &str) -
     // - source is the absolute path of PASSTHROUGH_FS_DIR on host, e.g.
     //   /run/kata-containers/shared/sandboxes/<sid>/passthrough
     // - mount point is the path relative to KATA_GUEST_SHARE_DIR in guest
-    let mnt = format!("/{}", PASSTHROUGH_FS_DIR);
+    let mnt = format!("/{PASSTHROUGH_FS_DIR}");
 
     let rw_source = utils::get_host_rw_shared_path(id).join(PASSTHROUGH_FS_DIR);
     utils::ensure_dir_exist(&rw_source).context("ensure directory exist")?;
@@ -140,7 +140,7 @@ pub async fn rafs_mount(
     // update virtio-fs device with ShareFsMountConfig
     do_update_device(d, &DeviceConfig::ShareFsCfg(sharefs_config))
         .await
-        .with_context(|| format!("fail to attach rafs {:?}", rafs_meta))?;
+        .with_context(|| format!("fail to attach rafs {rafs_meta:?}"))?;
 
     Ok(())
 }

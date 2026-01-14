@@ -12,14 +12,13 @@ use dbs_interrupt::KvmIrqManager;
 use dbs_pci::ECAM_SPACE_LENGTH;
 use dbs_pci::{create_pci_root_bus, PciBus, PciDevice, PciRootDevice, PciSystemContext};
 
-use super::{Result, VfioDeviceError};
+use super::DeviceMgrError;
 #[cfg(target_arch = "aarch64")]
 use crate::device_manager::vfio_dev_mgr::USE_SHARED_IRQ;
 use crate::device_manager::DeviceManagerContext;
 use crate::resource_manager::ResourceManager;
+use dbs_pci::PCI_BUS_DEFAULT;
 
-/// we only support one pci bus
-pub const PCI_BUS_DEFAULT: u8 = 0;
 /// The default mmio size for pci root bus.
 const PCI_MMIO_DEFAULT_SIZE: u64 = 2048u64 << 30;
 
@@ -38,13 +37,13 @@ impl PciSystemManager {
         irq_manager: Arc<KvmIrqManager>,
         io_context: DeviceManagerContext,
         res_manager: Arc<ResourceManager>,
-    ) -> std::result::Result<Self, VfioDeviceError> {
+    ) -> std::result::Result<Self, DeviceMgrError> {
         let resources = PciSystemManager::allocate_root_device_resources(res_manager)?;
         let pci_root = Arc::new(
-            PciRootDevice::create(PCI_BUS_DEFAULT, resources).map_err(VfioDeviceError::PciError)?,
+            PciRootDevice::create(PCI_BUS_DEFAULT, resources).map_err(DeviceMgrError::PciError)?,
         );
         let pci_root_bus =
-            create_pci_root_bus(PCI_BUS_DEFAULT).map_err(VfioDeviceError::PciError)?;
+            create_pci_root_bus(PCI_BUS_DEFAULT).map_err(DeviceMgrError::PciError)?;
 
         Ok(PciSystemManager {
             irq_manager,
@@ -58,7 +57,7 @@ impl PciSystemManager {
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     fn allocate_root_device_resources(
         _res_manager: Arc<ResourceManager>,
-    ) -> Result<DeviceResources> {
+    ) -> std::result::Result<DeviceResources, DeviceMgrError> {
         let mut resources = DeviceResources::new();
         resources.append(Resource::PioAddressRange {
             // PCI CONFIG_ADDRESS port address 0xcf8 and uses 32 bits
@@ -76,7 +75,7 @@ impl PciSystemManager {
     #[cfg(target_arch = "aarch64")]
     fn allocate_root_device_resources(
         res_manager: Arc<ResourceManager>,
-    ) -> Result<DeviceResources> {
+    ) -> std::result::Result<DeviceResources, DeviceMgrError> {
         let requests = vec![ResourceConstraint::MmioAddress {
             range: Some((0x0, 0xffff_ffff)),
             align: 4096,
@@ -84,23 +83,26 @@ impl PciSystemManager {
         }];
         let resources = res_manager
             .allocate_device_resources(&requests, USE_SHARED_IRQ)
-            .map_err(VfioDeviceError::AllocateDeviceResource)?;
+            .map_err(DeviceMgrError::ResourceError)?;
         Ok(resources)
     }
 
     /// Activate the PCI subsystem.
-    pub fn activate(&mut self, resources: DeviceResources) -> Result<()> {
+    pub fn activate(
+        &mut self,
+        resources: DeviceResources,
+    ) -> std::result::Result<(), DeviceMgrError> {
         let bus_id = self.pci_root_bus.bus_id();
 
         self.pci_root
             .add_bus(self.pci_root_bus.clone(), bus_id)
-            .map_err(VfioDeviceError::PciError)?;
+            .map_err(DeviceMgrError::PciError)?;
         PciRootDevice::activate(self.pci_root.clone(), &mut self.io_context)
-            .map_err(VfioDeviceError::PciError)?;
+            .map_err(DeviceMgrError::PciError)?;
 
         self.pci_root_bus
             .assign_resources(resources)
-            .map_err(VfioDeviceError::PciError)?;
+            .map_err(DeviceMgrError::PciError)?;
 
         Ok(())
     }

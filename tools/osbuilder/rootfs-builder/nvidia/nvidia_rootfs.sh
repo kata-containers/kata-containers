@@ -7,13 +7,20 @@
 set -euo pipefail
 [[ -n "${DEBUG}" ]] && set -x
 
+# Error helpers
+trap 'echo "rootfs: ERROR at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
+die() {
+  local msg="${*:-fatal error}"
+  echo "rootfs: ${msg}" >&2
+  exit 1
+}
+
+
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 # catch errors and then assign
 script_dir="$(dirname "$(readlink -f "$0")")"
 readonly SCRIPT_DIR="${script_dir}/nvidia"
 
-# This will control how much output the inird/image will produce
-DEBUG=""
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 AGENT_POLICY="${AGENT_POLICY:-no}"
 
@@ -31,127 +38,64 @@ else
     die "Unsupported architecture: ${machine_arch}"
 fi
 
+readonly stage_one="${BUILD_DIR:?}/rootfs-${VARIANT:?}-stage-one"
+
 setup_nvidia-nvrc() {
-	local TARGET="nvidia-nvrc"
-	local TARGET_VERSION="main"
-	local PROJECT="nvrc"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
+	local rootfs_type=${1:-""}
 
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/bin"
+	BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	TARGET=${machine_arch}-unknown-linux-musl
+	URL=$(get_package_version_from_kata_yaml "externals.nvrc.url")
+	VER=$(get_package_version_from_kata_yaml "externals.nvrc.version")
 
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
+	local DL="${URL}/${VER}"
+	curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" "${DL}/${BIN}-${TARGET}.tar.xz"
+	curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig" "${DL}/${BIN}-${TARGET}.tar.xz.sig"
+	curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" "${DL}/${BIN}-${TARGET}.tar.xz.cert"
 
-	rm -rf "${PROJECT}"
-	git clone https://github.com/NVIDIA/"${PROJECT}".git
+	ID="^https://github.com/NVIDIA/nvrc/.github/workflows/.+@refs/heads/main$"
+	OIDC="https://token.actions.githubusercontent.com"
 
-	pushd "${PROJECT}" > /dev/null || exit 1
-
-	cargo build --release --target="${machine_arch}"-unknown-linux-gnu
-	cp target/"${machine_arch}"-unknown-linux-gnu/release/NVRC ../../destdir/bin/.
-
-	popd > /dev/null || exit 1
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
-}
-
-setup_nvidia-gpu-admin-tools() {
-	local TARGET="nvidia-gpu-admin-tools"
-	local TARGET_VERSION="v2024.12.06"
-	local TARGET_GIT="https://github.com/NVIDIA/gpu-admin-tools"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
-
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/sbin"
-
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
-
-	rm -rf "$(basename "${TARGET_GIT}")"
-	git clone "${TARGET_GIT}"
-
-	rm -rf dist
-	# Installed via pipx local python environment
-	/usr/local/bin/pyinstaller -s -F gpu-admin-tools/nvidia_gpu_tools.py
-
-	cp dist/nvidia_gpu_tools ../destdir/sbin/.
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
-}
-
-setup_nvidia-dcgm-exporter() {
-	local TARGET="nvidia-dcgm-exporter"
-	local TARGET_VERSION="3.3.9-3.6.1"
-	local TARGET_BUILD_DIR="${BUILD_DIR}/${TARGET}/builddir"
-	local TARGET_DEST_DIR="${BUILD_DIR}/${TARGET}/destdir"
-	local TARBALL="${BUILD_DIR}/kata-static-${TARGET}.tar.zst"
-
-	mkdir -p "${TARGET_BUILD_DIR}"
-	mkdir -p "${TARGET_DEST_DIR}/bin"
-	mkdir -p "${TARGET_DEST_DIR}/etc"
-
-	pushd "${TARGET_BUILD_DIR}" > /dev/null || exit 1
-
-	local dex="dcgm-exporter"
-
-	rm -rf "${dex}"
-	git clone --branch "${TARGET_VERSION}" https://github.com/NVIDIA/"${dex}"
-	make -C "${dex}" binary
-
-	mkdir -p ../destdir/bin
-	mkdir -p ../destdir/etc/"${dex}"
-
-	cp "${dex}"/cmd/"${dex}"/"${dex}" ../destdir/bin/.
-	cp "${dex}"/etc/*.csv ../destdir/etc/"${dex}"/.
-
-	tar cvfa "${TARBALL}" -C ../destdir .
-	tar tvf  "${TARBALL}"
-
-	popd > /dev/null || exit 1
+	# Only allow releases from the NVIDIA/nvrc main branch and build by github actions
+	cosign verify-blob                                          \
+	  --rekor-url https://rekor.sigstore.dev                    \
+	  --certificate "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" \
+	  --signature   "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig"  \
+	  --certificate-identity-regexp "${ID}"                     \
+	  --certificate-oidc-issuer "${OIDC}"                       \
+	  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz"
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
-	if [[ -e "${BUILD_DIR}/kata-static-nvidia-gpu-rootfs-stage-one.tar.zst" ]]; then
+	local rootfs_type=${1:-""}
+
+	if [[ -e "${stage_one}.tar.zst" ]]; then
 		info "nvidia: GPU rootfs stage one already exists"
 		return
 	fi
 
 	pushd "${ROOTFS_DIR:?}" >> /dev/null
 
-	local rootfs_type=${1:-""}
-
 	info "nvidia: Setup GPU rootfs type=${rootfs_type}"
-
-	for component in "nvidia-gpu-admin-tools" "nvidia-dcgm-exporter" "nvidia-nvrc"; do
-		if [[ ! -e "${BUILD_DIR}/kata-static-${component}.tar.zst" ]]; then
-			setup_"${component}"
-		fi
-	done
-
 	cp "${SCRIPT_DIR}/nvidia_chroot.sh" ./nvidia_chroot.sh
 
 	chmod +x ./nvidia_chroot.sh
 
-	local appendix=""
-	if [[ "${rootfs_type}" == "confidential" ]]; then
-		appendix="-${rootfs_type}"
+	local BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	local TARGET=${machine_arch}-unknown-linux-musl
+	if [[ ! -e  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" ]]; then
+		setup_nvidia-nvrc "${rootfs_type}"
 	fi
+	tar -xvf "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" -C ./bin/
+
+	local appendix="${rootfs_type:+"-${rootfs_type}"}"
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
     		appendix="-dragonball-experimental"
 	fi
 
 	# We need the kernel packages for building the drivers cleanly will be
 	# deinstalled and removed from the roofs once the build finishes.
-	tar -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-headers.tar.xz -C .
+	tar --zstd -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-headers.tar.zst -C .
 
 	# If we find a local downloaded run file build the kernel modules
 	# with it, otherwise use the distribution packages. Run files may have
@@ -179,7 +123,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	rm ./nvidia_chroot.sh
 	rm ./*.deb
 
-	tar cfa "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst --remove-files -- *
+	tar cfa "${stage_one}.tar.zst" --remove-files -- *
 
 	popd  >> /dev/null
 
@@ -204,10 +148,24 @@ chisseled_iptables() {
 	cp -a "${stage_one}/${libdir}"/libxtables.so.12* lib/.
 }
 
+# <= NVLINK4 nv-fabrimanager
+# >= NVLINK5 nv-fabricmanager + nvlsm (TODO)
 chisseled_nvswitch() {
 	echo "nvidia: chisseling NVSwitch"
-	echo "nvidia: not implemented yet"
-	exit 1
+
+	mkdir -p usr/share/nvidia/nvswitch
+
+	cp -a "${stage_one}"/usr/bin/nv-fabricmanager 	bin/.
+	cp -a "${stage_one}"/usr/share/nvidia/nvswitch usr/share/nvidia/.
+
+	libdir=usr/lib/"${machine_arch}"-linux-gnu
+
+	cp -a "${stage_one}/${libdir}"/libnvidia-nscq.so.* lib/"${machine_arch}"-linux-gnu/.
+
+	# Logs will be redirected to console(stderr)
+	# if the specified log file can't be opened or the path is empty.
+	# LOG_FILE_NAME=/var/log/fabricmanager.log -> setting to empty for stderr -> kmsg
+	sed -i 's|^LOG_FILE_NAME=.*|LOG_FILE_NAME=|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 }
 
 chisseled_dcgm() {
@@ -219,8 +177,6 @@ chisseled_dcgm() {
 	cp -a "${stage_one}"/usr/"${libdir}"/libdcgm.*     "${libdir}"/.
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 	cp -a "${stage_one}"/usr/bin/nv-hostengine   bin/.
-
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-dcgm-exporter.tar.zst -C .
 }
 
 # copute always includes utility per default
@@ -228,19 +184,18 @@ chisseled_compute() {
 	echo "nvidia: chisseling GPU"
 
 	cp -a "${stage_one}"/nvidia_driver_version .
-
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-gpu-admin-tools.tar.zst -C .
-
 	cp -a "${stage_one}"/lib/modules/* lib/modules/.
 
 	libdir="lib/${machine_arch}-linux-gnu"
-	cp -a "${stage_one}/${libdir}"/libdl.so.2*        "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libz.so.1*         "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libpthread.so.0*   "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libresolv.so.2*    "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libc.so.6*         "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/libm.so.6*         "${libdir}"/.
-	cp -a "${stage_one}/${libdir}"/librt.so.1*        "${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libdl.so.2*        	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libz.so.1*         	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libpthread.so.0*   	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libresolv.so.2*    	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libc.so.6*         	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/libm.so.6*         	"${libdir}"/.
+	cp -a "${stage_one}/${libdir}"/librt.so.1*        	"${libdir}"/.
+
+	[[ "${type}" == "confidential" ]] && cp -a "${stage_one}/${libdir}"/libnvidia-pkcs11* 	"${libdir}"/.
 
 	[[ ${machine_arch} == "aarch64" ]] && libdir="lib"
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
@@ -252,7 +207,7 @@ chisseled_compute() {
 	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
 	cp -a "${stage_one}/${libdir}"/libnvidia-cfg.so.* lib/"${machine_arch}"-linux-gnu/.
 
-	# basich GPU admin tools
+	# basic GPU admin tools
 	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.
 	cp -a "${stage_one}"/usr/bin/nvidia-smi           bin/.
 	cp -a "${stage_one}"/usr/bin/nvidia-ctk           bin/.
@@ -266,20 +221,41 @@ chisseled_gpudirect() {
 	exit 1
 }
 
+setup_nvrc_init_symlinks() {
+	local rootfs_type=${1:-""}
+
+	local bin="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	local target=${machine_arch}-unknown-linux-musl
+
+	# make sure NVRC is the init process for the initrd and image case
+	ln -sf /bin/"${bin}-${target}" init
+	ln -sf /bin/"${bin}-${target}" sbin/init
+}
+
 chisseled_init() {
+	local rootfs_type=${1:-""}
+
 	echo "nvidia: chisseling init"
-	tar xvf "${BUILD_DIR}"/kata-static-busybox.tar.xz -C .
+	tar --zstd -xvf "${BUILD_DIR}"/kata-static-busybox.tar.zst -C .
 
 	mkdir -p dev etc proc run/cdi sys tmp usr var lib/modules lib/firmware \
 		 usr/share/nvidia lib/"${machine_arch}"-linux-gnu lib64        \
-		 usr/bin etc/modprobe.d
+		 usr/bin etc/modprobe.d etc/ssl/certs
 
 	ln -sf ../run var/run
 
-	tar xvf "${BUILD_DIR}"/kata-static-nvidia-nvrc.tar.zst -C .
-	# make sure NVRC is the init process for the initrd and image case
-	ln -sf  /bin/NVRC init
-	ln -sf  /bin/NVRC sbin/init
+	# Needed for various RUST static builds with LIBC=gnu
+	libdir=lib/"${machine_arch}"-linux-gnu
+	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
+
+	bin="NVRC${rootfs_type:+"-${rootfs_type}"}"
+	target=${machine_arch}-unknown-linux-musl
+
+	cp -a "${stage_one}/bin/${bin}-${target}"      bin/.
+	cp -a "${stage_one}/bin/${bin}-${target}".cert bin/.
+	cp -a "${stage_one}/bin/${bin}-${target}".sig  bin/.
+
+	setup_nvrc_init_symlinks "${rootfs_type}"
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
@@ -291,6 +267,8 @@ chisseled_init() {
 	cp -a "${stage_one}"/lib/firmware/nvidia  lib/firmware/.
 	cp -a "${stage_one}"/sbin/ldconfig.real   sbin/ldconfig
 
+	cp -a "${stage_one}"/etc/ssl/certs/ca-certificates.crt etc/ssl/certs/.
+
 	local conf_file="etc/modprobe.d/0000-nvidia.conf"
 	echo 'options nvidia NVreg_DeviceFileMode=0660' > "${conf_file}"
 }
@@ -301,11 +279,24 @@ compress_rootfs() {
 	# For some unobvious reason libc has executable bit set
 	# clean this up otherwise the find -executable will not work correctly
 	find . -type f -name "*.so.*" | while IFS= read -r file; do
+		if ! file "${file}" | grep -q ELF; then
+			echo "nvidia: skip stripping file: ${file} ($(file -b "${file}"))"
+			continue
+		fi
 		chmod -x "${file}"
 		strip "${file}"
 	done
 
 	find . -type f -executable | while IFS= read -r file; do
+		# Skip files with setuid/setgid bits (UPX refuses to pack them)
+		if [ -u "${file}" ] || [ -g "${file}" ]; then
+			echo "nvidia: skip compressing executable (special permissions): ${file} ($(file -b "${file}"))"
+			continue
+		fi
+		if ! file "${file}" | grep -q ELF; then
+			echo "nvidia: skip compressing executable (not ELF): ${file} ($(file -b "${file}"))"
+			continue
+		fi
 		strip "${file}"
 		"${BUILD_DIR}"/upx-4.2.4-"${distro_arch}"_linux/upx --best --lzma "${file}"
 	done
@@ -318,56 +309,84 @@ compress_rootfs() {
 	[[ ${machine_arch} == "x86_64" ]]  && libdir="lib64"
 
 	chmod +x "${libdir}"/ld-linux-*
-
 }
 
-toggle_debug() {
-	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<debug\>'; then
-		export DEBUG="true"
+coco_guest_components() {
+	if [[ "${type}" != "confidential" ]]; then
+		return
 	fi
+
+	info "nvidia: installing the confidential containers guest components tarball"
+
+	local -r coco_bin_dir="usr/local/bin"
+	local -r etc_dir="etc"
+	local -r pause_dir="pause_bundle"
+
+	mkdir -p "${coco_bin_dir}"
+	cp -a "${stage_one}/${coco_bin_dir}"/attestation-agent     "${coco_bin_dir}/."
+	cp -a "${stage_one}/${coco_bin_dir}"/api-server-rest       "${coco_bin_dir}/."
+	cp -a "${stage_one}/${coco_bin_dir}"/confidential-data-hub "${coco_bin_dir}/."
+
+	cp -a "${stage_one}/${etc_dir}"/ocicrypt_config.json "${etc_dir}/."
+
+	mkdir -p "${pause_dir}/rootfs"
+	cp -a "${stage_one}/${pause_dir}"/config.json  "${pause_dir}/."
+	cp -a "${stage_one}/${pause_dir}"/rootfs/pause "${pause_dir}/rootfs/."
+
+	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
 }
 
 setup_nvidia_gpu_rootfs_stage_two() {
-	readonly stage_one="${BUILD_DIR:?}/rootfs-${VARIANT}-stage-one"
 	readonly stage_two="${ROOTFS_DIR:?}"
 	readonly stack="${NVIDIA_GPU_STACK:?}"
+	readonly type=${1:-""}
 
-	echo "nvidia: chisseling the following stack components: ${stack}"
+	# If devkit flag is set, skip chisseling, use stage_one
+	if echo "${stack}" | grep -q '\<devkit\>'; then
+		echo "nvidia: devkit mode enabled - skip chisseling"
 
+		tar -C "${stage_two}" -xf "${stage_one}".tar.zst
 
-	[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
-	[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
+		pushd "${stage_two}" >> /dev/null
 
-	tar -C "${stage_one}" -xf "${BUILD_DIR}"/kata-static-rootfs-nvidia-gpu-stage-one.tar.zst
+		# Only step needed from stage_two (see chisseled_init)
+		setup_nvrc_init_symlinks "${type}"
+	else
+		echo "nvidia: chisseling the following stack components: ${stack}"
 
+		[[ -e "${stage_one}" ]] && rm -rf "${stage_one}"
+		[[ ! -e "${stage_one}" ]] && mkdir -p "${stage_one}"
 
-	pushd "${stage_two}" >> /dev/null
+		tar -C "${stage_one}" -xf "${stage_one}".tar.zst
 
-	toggle_debug
-	chisseled_init
-	chisseled_iptables
+		pushd "${stage_two}" >> /dev/null
 
-	IFS=',' read -r -a stack_components <<< "${NVIDIA_GPU_STACK}"
+		chisseled_init "${type}"
+		chisseled_iptables
 
-	for component in "${stack_components[@]}"; do
-		if [[ "${component}" = "compute" ]]; then
-			echo "nvidia: processing \"compute\" component"
-			chisseled_compute
-		elif [[ "${component}" = "dcgm" ]]; then
-			echo "nvidia: processing DCGM component"
-			chisseled_dcgm
-		elif [[ "${component}" = "nvswitch" ]]; then
-			echo "nvidia: processing NVSwitch component"
-			chisseled_nvswitch
-		elif [[ "${component}" = "gpudirect" ]]; then
-			echo "nvidia: processing GPUDirect component"
-			chisseled_gpudirect
-		fi
-	done
+		IFS=',' read -r -a stack_components <<< "${NVIDIA_GPU_STACK}"
+
+		for component in "${stack_components[@]}"; do
+			if [[ "${component}" = "compute" ]]; then
+				echo "nvidia: processing \"compute\" component"
+				chisseled_compute
+			elif [[ "${component}" = "dcgm" ]]; then
+				echo "nvidia: processing DCGM component"
+				chisseled_dcgm
+			elif [[ "${component}" = "nvswitch" ]]; then
+				echo "nvidia: processing NVSwitch component"
+				chisseled_nvswitch
+			elif [[ "${component}" = "gpudirect" ]]; then
+				echo "nvidia: processing GPUDirect component"
+				chisseled_gpudirect
+			fi
+		done
+
+		coco_guest_components
+	fi
 
 	compress_rootfs
-
 	chroot . ldconfig
 
-	popd  >> /dev/null
+	popd >> /dev/null
 }

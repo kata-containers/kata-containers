@@ -5,26 +5,21 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${CONTAINER_RUNTIME}" == "crio" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/10414"
-
-	nginx_version="${docker_images_nginx_version}"
-	nginx_image="nginx:$nginx_version"
+	setup_common || die "setup_common failed"
 	busybox_image="quay.io/prometheus/busybox:latest"
 	deployment="nginx-deployment"
 
-	get_pod_config_dir
-
 	# Create test .yaml
 	yaml_file="${pod_config_dir}/test-${deployment}.yaml"
+	set_nginx_image "${pod_config_dir}/${deployment}.yaml" "${yaml_file}"
 
-	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/${deployment}.yaml" > "${yaml_file}"
-	
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	auto_generate_policy "${pod_config_dir}" "${yaml_file}"
 }
 
 @test "Verify nginx connectivity between pods" {
@@ -58,4 +53,5 @@ teardown() {
 	kubectl delete deployment "$deployment"
 	kubectl delete service "$deployment"
 	kubectl delete pod "$busybox_pod"
+	teardown_common "${node}" "${node_start_time:-}"
 }

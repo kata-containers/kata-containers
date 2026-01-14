@@ -451,6 +451,7 @@ pub(crate) mod tests {
 
     use dbs_device::resources::{DeviceResources, MsiIrqType, Resource};
     use kvm_ioctls::{Kvm, VmFd};
+    use test_utils::skip_if_kvm_unaccessable;
 
     use super::*;
     use crate::KvmIrqManager;
@@ -502,6 +503,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_create_device_interrupt_manager() {
+        skip_if_kvm_unaccessable!();
         let mut mgr = create_interrupt_manager();
 
         assert_eq!(mgr.mode, DeviceInterruptMode::Disabled);
@@ -537,6 +539,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_device_interrupt_manager_switch_mode() {
+        skip_if_kvm_unaccessable!();
         let mut mgr = create_interrupt_manager();
 
         // Can't switch working mode in enabled state.
@@ -621,6 +624,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_msi_config() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
 
         assert!(interrupt_manager.set_msi_data(512, 0).is_err());
@@ -638,6 +642,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_set_working_mode_after_activated() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
         interrupt_manager.activated = true;
         assert!(interrupt_manager
@@ -659,6 +664,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_disable2legacy() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
         interrupt_manager.activated = false;
         interrupt_manager.mode = DeviceInterruptMode::Disabled;
@@ -669,6 +675,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_disable2nonlegacy() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
         interrupt_manager.activated = false;
         interrupt_manager.mode = DeviceInterruptMode::Disabled;
@@ -679,6 +686,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_legacy2nonlegacy() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
         interrupt_manager.activated = false;
         interrupt_manager.mode = DeviceInterruptMode::Disabled;
@@ -692,6 +700,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_nonlegacy2legacy() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
         interrupt_manager.activated = false;
         interrupt_manager.mode = DeviceInterruptMode::Disabled;
@@ -705,6 +714,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_update() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
         interrupt_manager
             .set_working_mode(DeviceInterruptMode::GenericMsiIrq)
@@ -721,6 +731,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_get_configs() {
+        skip_if_kvm_unaccessable!();
         // legacy irq config
         {
             let interrupt_manager = create_interrupt_manager();
@@ -762,6 +773,7 @@ pub(crate) mod tests {
 
     #[test]
     fn test_reset_configs() {
+        skip_if_kvm_unaccessable!();
         let mut interrupt_manager = create_interrupt_manager();
 
         interrupt_manager.reset_configs(DeviceInterruptMode::LegacyIrq);

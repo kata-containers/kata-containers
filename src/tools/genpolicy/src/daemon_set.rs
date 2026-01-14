@@ -82,7 +82,9 @@ impl yaml::K8sResource for DaemonSet {
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        None
+        // https://github.com/kubernetes/kubernetes/blob/b35c5c0a301d326fdfa353943fca077778544ac6/pkg/controller/daemon/daemon_controller.go#L1045
+        let suffix = yaml::GENERATE_NAME_SUFFIX_REGEX;
+        yaml::name_regex_from_meta(&self.metadata).map(|prefix| format!("{prefix}-{suffix}"))
     }
 
     fn get_namespace(&self) -> Option<String> {
@@ -101,12 +103,12 @@ impl yaml::K8sResource for DaemonSet {
             storages,
             container,
             settings,
-            &self.spec.template.spec.volumes,
+            &self.spec.template.spec,
         );
     }
 
-    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
-        agent_policy.generate_policy(self)
+    fn generate_initdata_anno(&self, agent_policy: &policy::AgentPolicy) -> String {
+        agent_policy.generate_initdata_anno(self)
     }
 
     fn serialize(&mut self, policy: &str) -> String {
@@ -148,11 +150,17 @@ impl yaml::K8sResource for DaemonSet {
             .or_else(|| Some(String::new()))
     }
 
-    fn get_process_fields(&self, process: &mut policy::KataProcess, must_check_passwd: &mut bool) {
+    fn get_process_fields(
+        &self,
+        process: &mut policy::KataProcess,
+        must_check_passwd: &mut bool,
+        is_pause_container: bool,
+    ) {
         yaml::get_process_fields(
             process,
-            &self.spec.template.spec.securityContext,
             must_check_passwd,
+            is_pause_container,
+            &self.spec.template.spec.securityContext,
         );
     }
 

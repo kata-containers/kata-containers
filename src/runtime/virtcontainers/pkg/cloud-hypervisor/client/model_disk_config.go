@@ -16,7 +16,7 @@ import (
 
 // DiskConfig struct for DiskConfig
 type DiskConfig struct {
-	Path              string               `json:"path"`
+	Path              *string              `json:"path,omitempty"`
 	Readonly          *bool                `json:"readonly,omitempty"`
 	Direct            *bool                `json:"direct,omitempty"`
 	Iommu             *bool                `json:"iommu,omitempty"`
@@ -36,9 +36,8 @@ type DiskConfig struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDiskConfig(path string) *DiskConfig {
+func NewDiskConfig() *DiskConfig {
 	this := DiskConfig{}
-	this.Path = path
 	var readonly bool = false
 	this.Readonly = &readonly
 	var direct bool = false
@@ -74,28 +73,36 @@ func NewDiskConfigWithDefaults() *DiskConfig {
 	return &this
 }
 
-// GetPath returns the Path field value
+// GetPath returns the Path field value if set, zero value otherwise.
 func (o *DiskConfig) GetPath() string {
-	if o == nil {
+	if o == nil || o.Path == nil {
 		var ret string
 		return ret
 	}
-
-	return o.Path
+	return *o.Path
 }
 
-// GetPathOk returns a tuple with the Path field value
+// GetPathOk returns a tuple with the Path field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DiskConfig) GetPathOk() (*string, bool) {
-	if o == nil {
+	if o == nil || o.Path == nil {
 		return nil, false
 	}
-	return &o.Path, true
+	return o.Path, true
 }
 
-// SetPath sets field value
+// HasPath returns a boolean if a field has been set.
+func (o *DiskConfig) HasPath() bool {
+	if o != nil && o.Path != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPath gets a reference to the given string and assigns it to the Path field.
 func (o *DiskConfig) SetPath(v string) {
-	o.Path = v
+	o.Path = &v
 }
 
 // GetReadonly returns the Readonly field value if set, zero value otherwise.
@@ -516,7 +523,7 @@ func (o *DiskConfig) SetQueueAffinity(v []VirtQueueAffinity) {
 
 func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
-	if true {
+	if o.Path != nil {
 		toSerialize["path"] = o.Path
 	}
 	if o.Readonly != nil {

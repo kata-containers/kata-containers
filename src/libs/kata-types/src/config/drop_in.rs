@@ -235,8 +235,7 @@ mod drop_in_directory_handling {
 
     fn update_from_dropin(base_config: &mut toml::Value, dropin_file: &fs::DirEntry) -> Result<()> {
         if !dropin_file.file_type()?.is_file() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(std::io::Error::other(
                 "drop-in cfg file can only be a regular file or a symlink",
             ));
         }
@@ -369,7 +368,7 @@ mod drop_in_directory_handling {
                 config.hypervisor["qemu"].path,
                 "/usr/bin/qemu-kvm".to_string()
             );
-            assert_eq!(config.hypervisor["qemu"].cpu_info.default_vcpus, 2);
+            assert_eq!(config.hypervisor["qemu"].cpu_info.default_vcpus, 2.0);
             assert_eq!(config.hypervisor["qemu"].device_info.default_bridges, 4);
             assert_eq!(
                 config.hypervisor["qemu"].shared_fs.shared_fs.as_deref(),

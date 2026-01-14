@@ -26,7 +26,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 const HEADER_SIZE_BYTES: u64 = std::mem::size_of::<u64>() as u64;
 
 fn mk_io_err(msg: &str) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, msg.to_string())
+    std::io::Error::other(msg.to_string())
 }
 
 async fn handle_async_connection<'a>(
@@ -41,7 +41,7 @@ async fn handle_async_connection<'a>(
 
     handle_trace_data(logger.clone(), &mut conn, exporter, dump_only)
         .await
-        .map_err(|e| mk_io_err(&format!("failed to handle data: {:}", e)))?;
+        .map_err(|e| mk_io_err(&format!("failed to handle data: {e:}")))?;
 
     debug!(&logger, "handled connection");
 

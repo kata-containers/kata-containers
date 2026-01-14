@@ -11,14 +11,15 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, get_block_driver, DeviceManager},
+        device_manager::{do_handle_device, get_block_device_info, DeviceManager},
         DeviceConfig, DeviceType,
     },
-    BlockConfig,
+    BlockConfig, BlockDeviceAio,
 };
 use kata_types::config::hypervisor::{
     VIRTIO_BLK_CCW, VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_PMEM, VIRTIO_SCSI,
 };
+use kata_types::fs::VM_ROOTFS_FILESYSTEM_XFS;
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
 use oci_spec::runtime as oci;
@@ -49,13 +50,14 @@ impl BlockRootfs {
         fs::create_dir_all(&host_path)
             .map_err(|e| anyhow!("failed to create rootfs dir {}: {:?}", host_path, e))?;
 
-        let block_driver = get_block_driver(d).await;
-
+        let blkdev_info = get_block_device_info(d).await;
+        let block_driver = blkdev_info.block_device_driver.clone();
         let block_device_config = &mut BlockConfig {
             major: stat::major(dev_id) as i64,
             minor: stat::minor(dev_id) as i64,
             driver_option: block_driver.clone(),
             path_on_host: rootfs.source.clone(),
+            blkdev_aio: BlockDeviceAio::new(&blkdev_info.block_device_aio),
             ..Default::default()
         };
 
@@ -70,6 +72,16 @@ impl BlockRootfs {
             options: rootfs.options.clone(),
             ..Default::default()
         };
+
+        // XFS rootfs: add 'nouuid' to avoid UUID conflicts when the same
+        // disk image is mounted across multiple VMs/containers.
+        // This allows mounting XFS volumes that share the same UUID.
+        if rootfs.fs_type == VM_ROOTFS_FILESYSTEM_XFS {
+            // Add nouuid to existing options if not already present
+            if !storage.options.iter().any(|opt| opt == "nouuid") {
+                storage.options.push("nouuid".to_string());
+            }
+        }
 
         let mut device_id: String = "".to_owned();
         if let DeviceType::Block(device) = device_info {

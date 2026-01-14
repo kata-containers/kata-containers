@@ -5,15 +5,16 @@ name: Gatekeeper
 # reporting the status.
 
 on:
-  pull_request_target:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] See #11332.
     types:
       - opened
       - synchronize
       - reopened
+      - edited
       - labeled
+      - unlabeled
 
-permissions:
-  contents: read
+permissions: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -21,6 +22,7 @@ concurrency:
 
 jobs:
   gatekeeper:
+    name: gatekeeper
     runs-on: ubuntu-22.04
     permissions:
       actions: read

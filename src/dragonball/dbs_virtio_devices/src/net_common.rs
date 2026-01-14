@@ -70,8 +70,7 @@ pub fn setup_config_space(
         .copy_from_slice(&mtu.to_le_bytes());
 
     debug!(
-        "{}: config space is set to {:X?}, guest_mac: {:?}, avail_feature: 0x{:X}, vq_pairs: {}, mtu: {}",
-        device_name, config_space, guest_mac, avail_features, vq_pairs, mtu
+        "{device_name}: config space is set to {config_space:X?}, guest_mac: {guest_mac:?}, avail_feature: 0x{avail_features:X}, vq_pairs: {vq_pairs}, mtu: {mtu}"
     );
 
     Ok(config_space)

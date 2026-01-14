@@ -9,6 +9,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[cfg(feature = "init-data")]
 use std::{os::unix::fs::FileTypeExt, path::Path};
 
 use anyhow::{bail, Context, Result};
@@ -27,6 +28,9 @@ const AA_CONFIG_KEY: &str = "aa.toml";
 const CDH_CONFIG_KEY: &str = "cdh.toml";
 const POLICY_KEY: &str = "policy.rego";
 
+/// The path of initdata toml
+pub const INITDATA_TOML_PATH: &str = concatcp!(INITDATA_PATH, "/initdata.toml");
+
 /// The path of AA's config file
 pub const AA_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/aa.toml");
 
@@ -34,8 +38,24 @@ pub const AA_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/aa.toml");
 pub const CDH_CONFIG_PATH: &str = concatcp!(INITDATA_PATH, "/cdh.toml");
 
 /// Magic number of initdata device
+#[cfg(feature = "init-data")]
 pub const INITDATA_MAGIC_NUMBER: &[u8] = b"initdata";
 
+/// initdata device with disk type 'vd*'
+#[cfg(feature = "init-data")]
+const INITDATA_PREFIX_DISK_VDX: &str = "vd";
+
+/// initdata device with disk type 'sd*'
+#[cfg(feature = "init-data")]
+const INITDATA_PREFIX_DISK_SDX: &str = "sd";
+
+#[cfg(not(feature = "init-data"))]
+async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
+    debug!(logger, "Initdata is disabled");
+    Ok(None)
+}
+
+#[cfg(feature = "init-data")]
 async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
     let dev_dir = Path::new("/dev");
     let mut read_dir = tokio::fs::read_dir(dev_dir).await?;
@@ -43,9 +63,15 @@ async fn detect_initdata_device(logger: &Logger) -> Result<Option<String>> {
         let filename = entry.file_name();
         let filename = filename.to_string_lossy();
         debug!(logger, "Initdata check device `{filename}`");
-        if !filename.starts_with("vd") {
+
+        // Currently there're two disk types supported:
+        // virtio-blk (vd*) and virtio-scsi (sd*)
+        if !filename.starts_with(INITDATA_PREFIX_DISK_VDX)
+            && !filename.starts_with(INITDATA_PREFIX_DISK_SDX)
+        {
             continue;
         }
+
         let path = entry.path();
 
         debug!(logger, "Initdata find potential device: `{path:?}`");
@@ -95,7 +121,7 @@ pub async fn read_initdata(device_path: &str) -> Result<Vec<u8>> {
 }
 
 pub struct InitdataReturnValue {
-    pub digest: Vec<u8>,
+    pub _digest: Vec<u8>,
     pub _policy: Option<String>,
 }
 
@@ -122,7 +148,11 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
     info!(logger, "Initdata version: {}", initdata.version());
     initdata.validate()?;
 
-    let digest = match initdata.algorithm() {
+    tokio::fs::write(INITDATA_TOML_PATH, &initdata_content)
+        .await
+        .context("write initdata toml failed")?;
+
+    let _digest = match initdata.algorithm() {
         "sha256" => Sha256::digest(&initdata_content).to_vec(),
         "sha384" => Sha384::digest(&initdata_content).to_vec(),
         "sha512" => Sha512::digest(&initdata_content).to_vec(),
@@ -143,10 +173,10 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
         info!(logger, "write CDH config from initdata");
     }
 
-    debug!(logger, "Initdata digest: {}", STANDARD.encode(&digest));
+    debug!(logger, "Initdata digest: {}", STANDARD.encode(&_digest));
 
     let res = InitdataReturnValue {
-        digest,
+        _digest,
         _policy: initdata.get_coco_data(POLICY_KEY).cloned(),
     };
 

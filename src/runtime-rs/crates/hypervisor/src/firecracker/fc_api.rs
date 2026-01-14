@@ -16,6 +16,7 @@ use dbs_utils::net::MacAddr;
 use hyper::{Body, Method, Request, Response};
 use hyperlocal::Uri;
 use kata_sys_util::mount;
+use kata_types::config::hypervisor::RateLimiterConfig;
 use nix::mount::MsFlags;
 use serde_json::json;
 use tokio::{fs, fs::File};
@@ -144,7 +145,7 @@ impl FcInner {
         // We create some placeholder drives to be used for patching block devices while the vmm is
         // running, as firecracker does not support device hotplug.
         for i in 1..DISK_POOL_SIZE {
-            let full_path_name = format!("{}/drive{}", abs_path, i);
+            let full_path_name = format!("{abs_path}/drive{i}");
 
             let _ = File::create(&full_path_name)
                 .await
@@ -162,7 +163,7 @@ impl FcInner {
             })
             .to_string();
 
-            self.request_with_retry(Method::PUT, &format!("/drives/drive{}", i), body)
+            self.request_with_retry(Method::PUT, &format!("/drives/drive{i}"), body)
                 .await?;
         }
 
@@ -177,9 +178,25 @@ impl FcInner {
         let new_drive_path = self
             .get_resource(drive_path, new_drive_id)
             .context("get resource CONTAINER ROOTFS")?;
+
+        let block_rate_limit = RateLimiterConfig::new(
+            self.config.blockdev_info.disk_rate_limiter_bw_max_rate,
+            self.config.blockdev_info.disk_rate_limiter_ops_max_rate,
+            self.config
+                .blockdev_info
+                .disk_rate_limiter_bw_one_time_burst,
+            self.config
+                .blockdev_info
+                .disk_rate_limiter_ops_one_time_burst,
+        );
+
+        let rate_limiter = serde_json::to_string(&block_rate_limit)
+            .with_context(|| format!("serde {block_rate_limit:?} to json"))?;
+
         let body: String = json!({
             "drive_id": format!("drive{drive_id}"),
-            "path_on_host": new_drive_path
+            "path_on_host": new_drive_path,
+            "rate_limiter": rate_limiter,
         })
         .to_string();
         self.request_with_retry(

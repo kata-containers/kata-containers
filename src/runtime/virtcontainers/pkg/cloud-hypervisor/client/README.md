@@ -139,7 +139,6 @@ Class | Method | HTTP request | Description
  - [RestoreConfig](docs/RestoreConfig.md)
  - [RngConfig](docs/RngConfig.md)
  - [SendMigrationData](docs/SendMigrationData.md)
- - [SgxEpcConfig](docs/SgxEpcConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
  - [TpmConfig](docs/TpmConfig.md)
  - [VdpaConfig](docs/VdpaConfig.md)

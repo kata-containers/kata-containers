@@ -423,11 +423,11 @@ impl VhostUserFsDevice {
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
         // Connect to the vhost-user socket.
-        info!("{}: try to connect to {:?}", VHOST_USER_FS_NAME, path);
+        info!("{VHOST_USER_FS_NAME}: try to connect to {path:?}");
         let num_queues = NUM_QUEUE_OFFSET + req_num_queues;
         let master = Master::connect(path, num_queues as u64).map_err(VirtioError::VhostError)?;
 
-        info!("{}: get features", VHOST_USER_FS_NAME);
+        info!("{VHOST_USER_FS_NAME}: get features");
         let avail_features = master.get_features().map_err(VirtioError::VhostError)?;
 
         // Create virtio device config space.
@@ -560,7 +560,7 @@ impl<AS: GuestAddressSpace> VhostUserFs<AS> {
         self.device.clone()
     }
 
-    fn device(&self) -> MutexGuard<VhostUserFsDevice> {
+    fn device(&self) -> MutexGuard<'_, VhostUserFsDevice> {
         // Do not expect poisoned lock.
         self.device.lock().unwrap()
     }
@@ -810,7 +810,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_fs_virtio_device_normal() {
-        let device_socket = "/tmp/vhost.1";
+        let device_socket = concat!("vhost.", line!());
         let tag = "test_fs";
 
         let handler = thread::spawn(move || {
@@ -838,7 +838,7 @@ mod tests {
             TYPE_VIRTIO_FS
         );
 
-        let queue_size = vec![2, 2, 2];
+        let queue_size = [2, 2, 2];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_fs_virtio_device_activate() {
-        let device_socket = "/tmp/vhost.1";
+        let device_socket = concat!("vhost.", line!());
         let tag = "test_fs";
 
         let handler = thread::spawn(move || {

@@ -310,7 +310,7 @@ impl MemDeviceMgr {
     pub fn remove_devices(&self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
         for info in self.info_list.iter() {
             if let Some(device) = &info.device {
-                DeviceManager::destroy_mmio_virtio_device(device.clone(), ctx)?;
+                DeviceManager::destroy_mmio_device(device.clone(), ctx)?;
             }
         }
 
@@ -507,13 +507,10 @@ impl MemRegionFactory for MemoryRegionFactory {
                 error!(self.logger, "failed to insert address space region: {}", e);
                 // dbs-virtio-devices should not depend on dbs-address-space.
                 // So here io::Error is used instead of AddressSpaceError directly.
-                VirtioError::IOError(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "invalid address space region ({0:#x}, {1:#x})",
-                        guest_addr.0, region_len
-                    ),
-                ))
+                VirtioError::IOError(io::Error::other(format!(
+                    "invalid address space region ({0:#x}, {1:#x})",
+                    guest_addr.0, region_len
+                )))
             })?,
         );
         info!(
@@ -574,13 +571,10 @@ impl MemRegionFactory for MemoryRegionFactory {
             error!(self.logger, "failed to insert address space region: {}", e);
             // dbs-virtio-devices should not depend on dbs-address-space.
             // So here io::Error is used instead of AddressSpaceError directly.
-            VirtioError::IOError(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "invalid address space region ({0:#x}, {1:#x})",
-                    guest_addr.0, region_len
-                ),
-            ))
+            VirtioError::IOError(io::Error::other(format!(
+                "invalid address space region ({0:#x}, {1:#x})",
+                guest_addr.0, region_len
+            )))
         })?;
 
         Ok(memory_region)
@@ -618,6 +612,7 @@ impl MemRegionFactory for MemoryRegionFactory {
 
 #[cfg(test)]
 mod tests {
+    use test_utils::skip_if_kvm_unaccessable;
     use vm_memory::GuestMemoryRegion;
 
     use super::*;
@@ -656,6 +651,7 @@ mod tests {
 
     #[test]
     fn test_mem_insert_or_update_device() {
+        skip_if_kvm_unaccessable!();
         // Init vm for test.
         let mut vm = create_vm_for_test();
 
@@ -681,6 +677,7 @@ mod tests {
 
     #[test]
     fn test_mem_attach_device() {
+        skip_if_kvm_unaccessable!();
         // Init vm and insert mem config for test.
         let mut vm = create_vm_for_test();
         let dummy_mem_device = MemDeviceConfigInfo::default();
@@ -710,6 +707,7 @@ mod tests {
 
     #[test]
     fn test_mem_create_region() {
+        skip_if_kvm_unaccessable!();
         let vm = create_vm_for_test();
         let ctx = DeviceOpContext::new(
             Some(vm.epoll_manager().clone()),

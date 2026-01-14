@@ -32,6 +32,7 @@ use crate::cgroups::{DevicesCgroupInfo, Manager};
 use crate::console;
 use crate::log_child;
 use crate::process::Process;
+use crate::process::ProcessOperations;
 #[cfg(feature = "seccomp")]
 use crate::seccomp;
 use crate::selinux;
@@ -261,7 +262,7 @@ pub struct LinuxContainer {
     pub init_process_start_time: u64,
     pub uid_map_path: String,
     pub gid_map_path: String,
-    pub processes: HashMap<pid_t, Process>,
+    pub processes: HashMap<String, Process>,
     pub status: ContainerStatus,
     pub created: SystemTime,
     pub logger: Logger,
@@ -345,7 +346,7 @@ pub fn init_child() {
         Ok(_) => log_child!(cfd_log, "temporary parent process exit successfully"),
         Err(e) => {
             log_child!(cfd_log, "temporary parent process exit:child exit: {:?}", e);
-            let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+            let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
         }
     }
 }
@@ -543,13 +544,13 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         sched::setns(fd, s).or_else(|e| {
             if s == CloneFlags::CLONE_NEWUSER {
                 if e != Errno::EINVAL {
-                    let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                    let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
                     return Err(e);
                 }
 
                 Ok(())
             } else {
-                let _ = write_sync(cwfd, SYNC_FAILED, format!("{:?}", e).as_str());
+                let _ = write_sync(cwfd, SYNC_FAILED, format!("{e:?}").as_str());
                 Err(e)
             }
         })?;
@@ -684,7 +685,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             let _ = write_sync(
                 cwfd,
                 SYNC_FAILED,
-                format!("setgroups failed: {:?}", e).as_str(),
+                format!("setgroups failed: {e:?}").as_str(),
             );
         })?;
     }
@@ -807,7 +808,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     if init {
         let fd = fcntl::open(
-            format!("/proc/self/fd/{}", fifofd).as_str(),
+            format!("/proc/self/fd/{fifofd}").as_str(),
             OFlag::O_RDONLY | OFlag::O_CLOEXEC,
             Mode::from_bits_truncate(0),
         )?;
@@ -933,17 +934,13 @@ impl BaseContainer for LinuxContainer {
     }
 
     fn processes(&self) -> Result<Vec<i32>> {
-        Ok(self.processes.keys().cloned().collect())
+        Ok(self.processes.values().map(|p| p.pid).collect())
     }
 
     fn get_process(&mut self, eid: &str) -> Result<&mut Process> {
-        for (_, v) in self.processes.iter_mut() {
-            if eid == v.exec_id.as_str() {
-                return Ok(v);
-            }
-        }
-
-        Err(anyhow!("invalid eid {}", eid))
+        self.processes
+            .get_mut(eid)
+            .ok_or_else(|| anyhow!("invalid eid {}", eid))
     }
 
     fn stats(&self) -> Result<StatsContainerResponse> {
@@ -967,6 +964,12 @@ impl BaseContainer for LinuxContainer {
 
     async fn start(&mut self, mut p: Process) -> Result<()> {
         let logger = self.logger.new(o!("eid" => p.exec_id.clone()));
+
+        // Check if exec_id is already in use to prevent collisions
+        if self.processes.contains_key(p.exec_id.as_str()) {
+            return Err(anyhow!("exec_id '{}' already exists", p.exec_id));
+        }
+
         let tty = p.tty;
         let fifo_file = format!("{}/{}", &self.root, EXEC_FIFO_FILENAME);
         info!(logger, "enter container.start!");
@@ -1034,6 +1037,12 @@ impl BaseContainer for LinuxContainer {
         let child_stderr: std::process::Stdio;
 
         if tty {
+            // NOTE(#11842): This code will require changes if we upgrade to nix 0.27+:
+            // - `pseudo` will contain OwnedFds instead of RawFds.
+            // - We'll have to use `OwnedFd::into_raw_fd()` which will
+            //   transfer the ownership to the caller.
+            // - The duplication strategy will not change.
+
             let pseudo = pty::openpty(None, None)?;
             p.term_master = Some(pseudo.master);
             let _ = fcntl::fcntl(pseudo.master, FcntlArg::F_SETFD(FdFlag::FD_CLOEXEC))
@@ -1042,8 +1051,8 @@ impl BaseContainer for LinuxContainer {
                 .map_err(|e| warn!(logger, "fcntl pseudo.slave {:?}", e));
 
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+            child_stdout = unsafe { std::process::Stdio::from_raw_fd(unistd::dup(pseudo.slave)?) };
+            child_stderr = unsafe { std::process::Stdio::from_raw_fd(unistd::dup(pseudo.slave)?) };
 
             if let Some(proc_io) = &mut p.proc_io {
                 // A reference count used to clean up the term master fd.
@@ -1162,14 +1171,14 @@ impl BaseContainer for LinuxContainer {
             .stderr(child_stderr)
             .env(INIT, format!("{}", p.init))
             .env(NO_PIVOT, format!("{}", self.config.no_pivot_root))
-            .env(CRFD_FD, format!("{}", crfd))
-            .env(CWFD_FD, format!("{}", cwfd))
-            .env(CLOG_FD, format!("{}", cfd_log))
+            .env(CRFD_FD, format!("{crfd}"))
+            .env(CWFD_FD, format!("{cwfd}"))
+            .env(CLOG_FD, format!("{cfd_log}"))
             .env(CONSOLE_SOCKET_FD, console_name)
             .env(PIDNS_ENABLED, format!("{}", pidns.enabled));
 
         if p.init {
-            child = child.env(FIFO_FD, format!("{}", fifofd));
+            child = child.env(FIFO_FD, format!("{fifofd}"));
         }
 
         if pidns.fd.is_some() {
@@ -1235,7 +1244,7 @@ impl BaseContainer for LinuxContainer {
             let spec = self.config.spec.as_mut().unwrap();
             update_namespaces(&self.logger, spec, p.pid)?;
         }
-        self.processes.insert(p.pid, p);
+        self.processes.insert(p.exec_id.clone(), p);
 
         info!(logger, "wait on child log handler");
         let _ = log_handler
@@ -1261,13 +1270,13 @@ impl BaseContainer for LinuxContainer {
         let spec = self.config.spec.as_ref().unwrap();
         let st = self.oci_state()?;
 
-        for pid in self.processes.keys() {
-            match signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL)) {
+        for process in self.processes.values() {
+            match signal::kill(process.pid(), Some(Signal::SIGKILL)) {
                 Err(Errno::ESRCH) => {
                     info!(
                         self.logger,
                         "kill encounters ESRCH, pid: {}, container: {}",
-                        pid,
+                        process.pid(),
                         self.id.clone()
                     );
                     continue;
@@ -1678,7 +1687,7 @@ impl LinuxContainer {
                 return anyhow!(e).context(format!("container {} already exists", id.as_str()));
             }
 
-            anyhow!(e).context(format!("fail to create container directory {}", root))
+            anyhow!(e).context(format!("fail to create container directory {root}"))
         })?;
 
         unistd::chown(
@@ -1686,7 +1695,7 @@ impl LinuxContainer {
             Some(unistd::getuid()),
             Some(unistd::getgid()),
         )
-        .context(format!("Cannot change owner of container {} root", id))?;
+        .context(format!("Cannot change owner of container {id} root"))?;
 
         let spec = config.spec.as_ref().unwrap();
         let linux_cgroups_path = spec
@@ -1911,7 +1920,7 @@ mod tests {
         let cgroups_path = format!(
             "/{}/dummycontainer{}",
             CGROUP_PARENT,
-            since_the_epoch.as_millis()
+            since_the_epoch.as_micros()
         );
 
         let mut spec = SpecBuilder::default()
@@ -2081,13 +2090,14 @@ mod tests {
         });
     }
 
-    #[test]
-    fn test_linuxcontainer_get_process() {
+    #[tokio::test]
+    async fn test_linuxcontainer_get_process() {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.processes.insert(
-                1,
-                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap(),
-            );
+            let process =
+                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap();
+            let exec_id = process.exec_id.clone();
+            c.processes.insert(exec_id, process);
+
             let p = c.get_process("123");
             assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
             Ok(())

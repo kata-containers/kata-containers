@@ -16,7 +16,6 @@ setup() {
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
     setup_common || die "setup_common failed"
-    get_pod_config_dir
     unencrypted_image="quay.io/prometheus/busybox:latest"
     image_pulled_time_less_than_default_time="ghcr.io/confidential-containers/test-container:rust-1.79.0" # unpacked size: 1.41GB
     large_image="quay.io/confidential-containers/test-images:largeimage" # unpacked size: 2.15GB
@@ -84,7 +83,7 @@ setup() {
 
     # The pod should be failed because the unpacked image size is larger than the memory size in the guest.
     assert_pod_fail "$pod_config"
-    assert_logs_contain "$node" kata "$node_start_time" "failed to pull image"
+    assert_logs_contain "$node" kata "$node_start_time" "Failed to pull image"
 }
 
 @test "Test we can pull an image inside the guest using trusted storage" {
@@ -110,17 +109,12 @@ setup() {
 
 
     # Set CreateContainerRequest timeout for qemu-coco-dev
-    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+    if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]]; then
         create_container_timeout=300
         set_metadata_annotation "$pod_config" \
             "io.katacontainers.config.runtime.create_container_timeout" \
             "${create_container_timeout}"
     fi
-
-    # Enable dm-integrity in guest
-    set_metadata_annotation "${pod_config}" \
-        "io.katacontainers.config.hypervisor.kernel_params" \
-        "agent.secure_storage_integrity=true"
 
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
@@ -133,7 +127,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$pod_config"
     local wait_time=120
-    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && wait_time=300
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && wait_time=300
     k8s_create_pod "$pod_config" "$wait_time"
 }
 
@@ -162,11 +156,6 @@ setup() {
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
 
-    # Enable dm-integrity in guest
-    set_metadata_annotation "${pod_config}" \
-        "io.katacontainers.config.hypervisor.kernel_params" \
-        "agent.secure_storage_integrity=true"
-
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
         "io.containerd.cri.runtime-handler" \
@@ -178,6 +167,15 @@ setup() {
 
     # The pod should be failed because the image is too large to be pulled in the timeout
     assert_pod_fail "$pod_config"
+
+    # runtime-rs has its dedicated error message, we need handle it separately.
+    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev-runtime-rs" ]; then
+        pod_name="large-image-pod"
+        kubectl describe "pod/$pod_name" | grep "agent create container"
+        kubectl describe "pod/$pod_name" | grep "timeout"
+        return
+	fi
+
     assert_logs_contain "$node" kata "$node_start_time" 'createContainer failed'
     assert_logs_contain "$node" kata "$node_start_time" 'timeout'
 }
@@ -187,7 +185,7 @@ setup() {
     [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
 
-    if [ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] && [ "${KBS_INGRESS}" = "aks" ]; then
+    if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [ "${KBS_INGRESS}" = "aks" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10299"
     fi
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
@@ -206,15 +204,10 @@ setup() {
 
     # Set CreateContainerRequest timeout in the annotation to pull large image in guest
     create_container_timeout=120
-    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && create_container_timeout=600
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && create_container_timeout=600
     set_metadata_annotation "$pod_config" \
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
-
-    # Enable dm-integrity in guest
-    set_metadata_annotation "${pod_config}" \
-        "io.katacontainers.config.hypervisor.kernel_params" \
-        "agent.secure_storage_integrity=true"
 
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
@@ -227,7 +220,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$pod_config"
     local wait_time=120
-    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && wait_time=600
+    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && wait_time=600
     k8s_create_pod "$pod_config" "$wait_time"
 }
 

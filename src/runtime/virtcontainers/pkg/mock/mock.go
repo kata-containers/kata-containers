@@ -260,3 +260,15 @@ func (p *HybridVSockTTRPCMockImp) SetIPTables(ctx context.Context, req *pb.SetIP
 func (p *HybridVSockTTRPCMockImp) SetPolicy(ctx context.Context, req *pb.SetPolicyRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }
+
+func (p *HybridVSockTTRPCMockImp) AddSwapPath(ctx context.Context, req *pb.AddSwapPathRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) MemAgentCompactSet(ctx context.Context, req *pb.MemAgentCompactConfig) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) MemAgentMemcgSet(ctx context.Context, req *pb.MemAgentMemcgConfig) (*gpb.Empty, error) {
+	return emptyResp, nil
+}

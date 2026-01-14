@@ -32,7 +32,7 @@ architectures:
 
 ### Kata Deploy Installation
 
-Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
+Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/helm-chart/README.md).
 ### Official packages
 `ToDo`
 ### Automatic Installation

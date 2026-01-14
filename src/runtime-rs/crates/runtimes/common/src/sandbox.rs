@@ -13,7 +13,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SandboxNetworkEnv {
     pub netns: Option<String>,
     pub network_created: bool,
@@ -31,6 +31,7 @@ impl std::fmt::Debug for SandboxNetworkEnv {
 #[async_trait]
 pub trait Sandbox: Send + Sync {
     async fn start(&self) -> Result<()>;
+    async fn start_template(&self) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;
@@ -53,4 +54,7 @@ pub trait Sandbox: Send + Sync {
     // metrics function
     async fn agent_metrics(&self) -> Result<String>;
     async fn hypervisor_metrics(&self) -> Result<String>;
+
+    // set agent policy
+    async fn set_policy(&self, policy: &str) -> Result<()>;
 }

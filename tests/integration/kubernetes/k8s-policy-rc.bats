@@ -5,16 +5,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+    setup_common || die "setup_common failed"
     replication_name="policy-rc-test"
     app_name="policy-nginx-rc"
-
-    get_pod_config_dir
 
     correct_yaml="${pod_config_dir}/test-k8s-policy-rc.yaml"
     incorrect_yaml="${pod_config_dir}/test-k8s-policy-rc-incorrect.yaml"
@@ -22,11 +21,7 @@ setup() {
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
         # Create the correct yaml file
-        nginx_version="${docker_images_nginx_version}"
-        nginx_image="nginx:$nginx_version"
-
-        sed -e "s/\${nginx_version}/${nginx_image}/" \
-            "${pod_config_dir}/k8s-policy-rc.yaml" > "${correct_yaml}"
+        set_nginx_image "${pod_config_dir}/k8s-policy-rc.yaml" "${correct_yaml}"
 
         # Add policy to the correct yaml file
         policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -91,8 +86,9 @@ test_rc_policy() {
             wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
         else
             cmd="kubectl wait --for=condition=Ready --timeout=0s pod ${pod_name}"
-            bats_unbuffered_info "Waiting for: ${cmd}"
-            waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+            abort_cmd="kubectl describe pod ${pod_name} | grep \"CreateContainerRequest is blocked by policy\""
+            info "Waiting ${wait_time}s with sleep ${sleep_time}s for: ${cmd}. Abort if: ${abort_cmd}."
+            waitForCmdWithAbortCmd "${wait_time}" "${sleep_time}" "${cmd}" "${abort_cmd}"
         fi
     done
 
@@ -146,7 +142,7 @@ test_rc_policy() {
 @test "Policy failure: unexpected capability" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
     yq -i \
-      '.spec.template.spec.containers[0].securityContext.capabilities.add += ["CAP_SYS_CHROOT"]' \
+      '.spec.template.spec.containers[0].securityContext.capabilities.add += ["SYS_NICE"]' \
       "${incorrect_yaml}"
 
     test_rc_policy true
@@ -176,7 +172,7 @@ teardown() {
 
     # Clean-up
     kubectl delete rc "${replication_name}"
-
+    teardown_common "${node}" "${node_start_time:-}"
     info "Deleting ${incorrect_yaml}"
     rm -f "${incorrect_yaml}"
 

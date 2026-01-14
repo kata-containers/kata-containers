@@ -9,20 +9,28 @@ use common::{
     message::Message,
     types::{
         ContainerProcess, PlatformInfo, SandboxConfig, SandboxRequest, SandboxResponse,
-        SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse,
+        SandboxStatusInfo, StartSandboxInfo, TaskRequest, TaskResponse, DEFAULT_SHM_SIZE,
     },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 
-use hypervisor::Param;
+use hypervisor::{
+    utils::{create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user},
+    Param,
+};
 use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
-    annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
+    annotations::Annotation,
+    build_path,
+    config::{default::DEFAULT_GUEST_DNS_FILE, hypervisor::RootlessUser, Hypervisor, TomlConfig},
+    mount::SHM_DEVICE,
+    rootless::{is_rootless, rootless_dir, set_rootless},
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
-use netns_rs::NetNs;
+use netns_rs::{Env, NetNs};
+use nix::{sys::statfs, unistd::User};
 use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use resource::{
@@ -33,9 +41,11 @@ use runtime_spec as spec;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use std::{
     collections::HashMap,
+    env,
     ops::Deref,
+    os::unix::fs::{chown, MetadataExt},
     path::{Path, PathBuf},
-    str::from_utf8,
+    str::{from_utf8, FromStr},
     sync::Arc,
     time::SystemTime,
 };
@@ -160,6 +170,32 @@ impl RuntimeHandlerManagerInner {
 
         let mut config =
             load_config(&sandbox_config.annotations, options).context("load config")?;
+
+        let hypervisor_name = &config.runtime.hypervisor_name;
+        let hypervisor = config
+            .hypervisor
+            .get_mut(hypervisor_name)
+            .ok_or_else(|| anyhow!("hypervisor {} not found in config", hypervisor_name))?;
+
+        set_rootless(hypervisor.security_info.rootless);
+        if is_rootless() {
+            configure_non_root_hypervisor(hypervisor).context("configure non-root hypervisor")?;
+
+            // When kata-runtime is invoked as rootless by podman with net=none,
+            // the initially created netns (bind-mounted under /var/run/netns) requires root privileges.
+            // This makes it inaccessible to non-root users. We need to create a non-root accessible
+            // netns and replace the original network namespace path in the config.
+            if sandbox_config.network_env.network_created {
+                let ns_name = generate_netns_name();
+                let rootless_raw_netns = NetNs::new_with_env(ns_name, RootlessEnv)?;
+                let path = Some(
+                    PathBuf::from(rootless_raw_netns.path())
+                        .display()
+                        .to_string(),
+                );
+                sandbox_config.network_env.netns = path;
+            }
+        }
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -304,7 +340,7 @@ impl RuntimeHandlerManager {
     #[instrument]
     async fn task_init_runtime_instance(
         &self,
-        spec: &oci::Spec,
+        spec: &mut oci::Spec,
         state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
@@ -350,10 +386,23 @@ impl RuntimeHandlerManager {
             }
         }
 
+        // A nerdctl network namespace to let nerdctl know which namespace to use when calling the
+        // selected CNI plugin.
+        if let Some(netns_path) = &netns {
+            if spec.annotations_mut().is_none() {
+                spec.set_annotations(Some(HashMap::new()));
+            }
+            if let Some(annotations) = spec.annotations_mut().as_mut() {
+                annotations.insert("nerdctl/network-namespace".to_string(), netns_path.clone());
+            }
+        }
+
         let network_env = SandboxNetworkEnv {
             netns,
             network_created,
         };
+
+        let shm_size = get_shm_size(spec)?;
 
         let sandbox_config = SandboxConfig {
             sandbox_id: inner.id.clone(),
@@ -363,6 +412,7 @@ impl RuntimeHandlerManager {
             annotations: spec.annotations().clone().unwrap_or_default(),
             hooks: spec.hooks().clone(),
             state: state.clone(),
+            shm_size,
         };
 
         inner.try_init(sandbox_config, Some(spec), options).await
@@ -405,7 +455,7 @@ impl RuntimeHandlerManager {
                 container_config.bundle,
                 spec::OCI_SPEC_CONFIG_FILE_NAME
             );
-            let spec = oci::Spec::load(&bundler_path).context("load spec")?;
+            let mut spec = oci::Spec::load(&bundler_path).context("load spec")?;
             let state = spec::State {
                 version: spec.version().clone(),
                 id: container_config.container_id.to_string(),
@@ -415,7 +465,7 @@ impl RuntimeHandlerManager {
                 annotations: spec.annotations().clone().unwrap_or_default(),
             };
 
-            self.task_init_runtime_instance(&spec, &state, &container_config.options)
+            self.task_init_runtime_instance(&mut spec, &state, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self
@@ -616,6 +666,24 @@ impl RuntimeHandlerManager {
     }
 }
 
+// RootlessEnv implements netns_rs::Env trait to provide the rootless directory path
+// for creating network namespace in rootless mode.
+#[derive(Copy, Clone, Default, Debug)]
+pub struct RootlessEnv;
+
+impl Env for RootlessEnv {
+    fn persist_dir(&self) -> PathBuf {
+        PathBuf::from(rootless_dir()).join("netns")
+    }
+
+    fn init(&self) -> netns_rs::Result<()> {
+        let persist_dir = self.persist_dir();
+        create_dir_all_with_inherit_owner(&persist_dir, 0o750)
+            .map_err(netns_rs::Error::CreateNsDirError)?;
+        Ok(())
+    }
+}
+
 /// Config override ordering(high to low):
 /// 1. podsandbox annotation
 /// 2. environment variable
@@ -713,4 +781,84 @@ fn update_component_log_level(config: &TomlConfig) {
         );
         updated_inner
     });
+}
+
+fn get_shm_size(spec: &oci::Spec) -> Result<u64> {
+    let mut shm_size = DEFAULT_SHM_SIZE;
+
+    if let Some(mounts) = spec.mounts() {
+        for m in mounts {
+            if m.destination().as_path() != Path::new(SHM_DEVICE) {
+                continue;
+            }
+
+            if m.typ().eq(&Some("bind".to_string()))
+                && !m.source().eq(&Some(PathBuf::from(SHM_DEVICE)))
+            {
+                if let Some(src) = m.source() {
+                    let statfs = statfs::statfs(src)?;
+                    shm_size = statfs.blocks() * statfs.block_size() as u64;
+                }
+            }
+        }
+    }
+
+    Ok(shm_size)
+}
+
+fn configure_non_root_hypervisor(config: &mut Hypervisor) -> Result<()> {
+    let user_name = create_vmm_user().context("failed to create vmm user")?;
+    let user = User::from_name(&user_name)?
+        .ok_or_else(|| anyhow!("failed to get user by name {}, user not found", user_name))?;
+
+    let uid = user.uid.as_raw();
+    let gid = user.gid.as_raw();
+
+    let user_tmp_dir = PathBuf::from_str(&format!("/run/user/{uid}"))?;
+
+    match std::fs::create_dir_all(&user_tmp_dir) {
+        Ok(_) => match chown(&user_tmp_dir, Some(uid), Some(gid)) {
+            Ok(_) => info!(
+                sl!(),
+                "chown user tmp dir {} to uid {}, gid {}",
+                user_tmp_dir.display(),
+                uid,
+                gid
+            ),
+            Err(e) => {
+                remove_vmm_user(&user_name)?;
+                return Err(anyhow!(
+                    "failed to chown user tmp dir {}: {}",
+                    user_tmp_dir.display(),
+                    e
+                ));
+            }
+        },
+        Err(e) => {
+            remove_vmm_user(&user_name)?;
+            return Err(anyhow!(
+                "failed to create user tmp dir {}: {}",
+                user_tmp_dir.display(),
+                e
+            ));
+        }
+    }
+
+    env::set_var("XDG_RUNTIME_DIR", user_tmp_dir);
+
+    // Update the rootless dir prefix for guest_swap_path
+    config.memory_info.guest_swap_path = build_path("/run/kata-containers/swap");
+
+    let kvm_path = PathBuf::from("/dev/kvm");
+    let metadata = std::fs::metadata(&kvm_path)?;
+    let kvm_gid = metadata.gid();
+
+    config.security_info.rootless_user = Some(RootlessUser {
+        uid,
+        gid,
+        groups: vec![kvm_gid],
+        user_name,
+    });
+
+    Ok(())
 }

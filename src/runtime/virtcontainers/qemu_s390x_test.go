@@ -56,6 +56,12 @@ func TestQemuS390xMemoryTopology(t *testing.T) {
 
 	m := s390x.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
+
+	// test when hostMem is set to 0 (no hotplug memory)
+	hostMem = 0
+	expectedMemory.MaxMem = fmt.Sprintf("%dM", mem)
+	m = s390x.memoryTopology(mem, hostMem, slots)
+	assert.Equal(expectedMemory, m)
 }
 
 func TestQemuS390xAppendVhostUserDevice(t *testing.T) {
@@ -141,17 +147,24 @@ func TestQemuS390xAppendProtectionDevice(t *testing.T) {
 	assert.Error(err)
 	assert.Empty(bios)
 
+	// CCA protection
+	s390x.(*qemuS390x).protection = ccaProtection
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "", []byte(nil))
+	assert.Error(err)
+	assert.Empty(bios)
+
 	// Secure Execution protection
 	s390x.(*qemuS390x).protection = seProtection
 
-	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "", []byte(nil))
+	devices, bios, err = s390x.appendProtectionDevice(devices, firmware, "", []byte(""))
 	assert.NoError(err)
 	assert.Empty(bios)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
-			Type: govmmQemu.SecExecGuest,
-			ID:   secExecID,
+			Type:           govmmQemu.SecExecGuest,
+			ID:             secExecID,
+			InitdataDigest: []byte(""),
 		},
 	}
 	assert.Equal(expectedOut, devices)
