@@ -81,6 +81,7 @@ pub enum Commands {
 #[error("Argument is not valid")]
 pub struct CheckArgument {
     #[clap(subcommand)]
+    #[allow(unused_assignments)]
     pub command: CheckSubCommand,
 }
 
