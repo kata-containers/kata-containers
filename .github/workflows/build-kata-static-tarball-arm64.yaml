@@ -134,8 +134,8 @@ jobs:
         if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: kata-artifacts-arm64-${{ matrix.asset }}-headers${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-${{ matrix.asset }}-headers.tar.zst
+          name: kata-artifacts-arm64-${{ matrix.asset }}-modules${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}-modules.tar.zst
           retention-days: 15
           if-no-files-found: error
 
@@ -216,7 +216,7 @@ jobs:
       matrix:
         asset:
           - busybox
-          - kernel-nvidia-gpu-headers
+          - kernel-nvidia-gpu-modules
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
         with:
