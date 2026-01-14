@@ -486,11 +486,11 @@ mod tests {
         let releases = get_kata_all_releases_by_url(KATA_GITHUB_RELEASE_URL);
         // sometime in GitHub action accessing to github.com API may fail
         // we can skip this test to prevent the whole test fail.
-        if releases.is_err() {
+        if let Err(error) = releases {
             warn!(
                 sl!(),
                 "get kata version failed({:?}), this maybe a temporary error, just skip the test.",
-                releases.unwrap_err()
+                error
             );
             return;
         }
