@@ -203,7 +203,6 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:
 #   - virtio-fs (default)
-#   - virtio-9p
 #   - virtio-fs-nydus
 #   - none
 shared_fs = "none"
@@ -378,10 +377,6 @@ enable_debug = false
 # behaving as it would when running on bare metal.
 #
 disable_nesting_checks = true
-
-# This is the msize used for 9p shares. It is the number of bytes
-# used for 9p packet payload.
-msize_9p = @DEFMSIZE9P@
 
 # If false and nvdimm is supported, use nvdimm device to plug guest image.
 # Otherwise virtio-block device is used.
