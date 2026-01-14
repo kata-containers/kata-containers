@@ -52,6 +52,10 @@ setup() {
 
 	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
 
+	# Enable deployment verification (verifies Kata Containers
+	# VM kernel isolation by comparing node vs pod kernel)
+	export HELM_VERIFY_DEPLOYMENT="true"
+
 	helm_helper
 
 	echo "::group::kata-deploy logs"
