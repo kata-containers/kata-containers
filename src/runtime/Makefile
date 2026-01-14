@@ -234,7 +234,7 @@ DEFDISABLESELINUX := false
 DEFDISABLEGUESTSELINUX := true
 # Default is empty string "" to match the default golang (when commented out in config).
 # Most users will want to set this to "system_u:system_r:container_t" for SELinux support.
-DEFGUESTSELINUXLABEL := 
+DEFGUESTSELINUXLABEL :=
 
 #Default SeccomSandbox param
 #The same default policy is used by libvirt
@@ -291,6 +291,7 @@ DEFSTATICRESOURCEMGMT_TEE = true
 DEFSTATICRESOURCEMGMT_NV = true
 
 DEFDISABLEIMAGENVDIMM ?= false
+DEFDISABLEIMAGENVDIMM_NV = true
 
 DEFBINDMOUNTS := []
 
@@ -784,6 +785,7 @@ USER_VARS += DEFVFIOMODE
 USER_VARS += DEFVFIOMODE_SE
 USER_VARS += BUILDFLAGS
 USER_VARS += DEFDISABLEIMAGENVDIMM
+USER_VARS += DEFDISABLEIMAGENVDIMM_NV
 USER_VARS += DEFCCAMEASUREMENTALGO
 USER_VARS += DEFSHAREDFS_QEMU_CCA_VIRTIOFS
 USER_VARS += DEFPODRESOURCEAPISOCK

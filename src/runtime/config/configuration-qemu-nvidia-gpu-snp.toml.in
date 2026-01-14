@@ -379,7 +379,7 @@ msize_9p = @DEFMSIZE9P@
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM_NV@
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
