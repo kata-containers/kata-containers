@@ -266,6 +266,9 @@ externals:
           # yamllint disable-line rule:line-length
           url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/"
           pkg: "cuda-keyring_1.1-1_all.deb"
+    ctk:
+      version: "1.18.1-1"
+      url: "https://github.com/NVIDIA/nvidia-container-toolkit"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"

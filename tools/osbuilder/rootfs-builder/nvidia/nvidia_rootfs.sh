@@ -97,7 +97,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount --make-rslave ./dev
 	mount -t proc /proc ./proc
 
-	local cuda_repo_url cuda_repo_pkg gpu_base_os_version
+	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
 	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url")
 	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg")
 	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.x86_64.nvidia-gpu.version")
@@ -105,8 +105,10 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
 
+	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
-		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg}"
+		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version}"
 
 	umount -R ./dev
 	umount ./proc
