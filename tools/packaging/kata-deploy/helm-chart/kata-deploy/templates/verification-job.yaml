@@ -1,0 +1,161 @@
+{{- /*
+Copyright (c) 2026 The Kata Containers Authors
+SPDX-License-Identifier: Apache-2.0
+
+Verification Job - runs after kata-deploy installation to validate Kata is working.
+Only created when verification.pod is provided.
+*/ -}}
+{{- if .Values.verification.pod }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kata-deploy.fullname" . }}-verification-spec
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data:
+  pod-spec.yaml: |
+    {{- .Values.verification.pod | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "kata-deploy.fullname" . }}-verify
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: verification
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "kata-deploy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: verification
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "kata-deploy.fullname" . }}-verification
+      containers:
+        - name: verify
+          image: quay.io/kata-containers/kubectl:latest
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              
+              VERIFY_NS="{{ .Values.verification.namespace }}"
+              TIMEOUT="{{ .Values.verification.timeout }}"
+              
+              echo "=== Kata Deploy Verification ==="
+              echo "Namespace: ${VERIFY_NS}"
+              echo "Timeout: ${TIMEOUT}s"
+              echo ""
+              
+              # Wait for kata-deploy DaemonSet to be ready
+              echo "Waiting for kata-deploy DaemonSet to be ready..."
+              {{- if .Values.env.multiInstallSuffix }}
+              kubectl rollout status daemonset/{{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }} -n {{ .Release.Namespace }} --timeout=600s
+              {{- else }}
+              kubectl rollout status daemonset/{{ .Chart.Name }} -n {{ .Release.Namespace }} --timeout=600s
+              {{- end }}
+              
+              echo ""
+              echo "Creating verification pod..."
+              POD_RESOURCE=$(kubectl apply -n "${VERIFY_NS}" -f /config/pod-spec.yaml -o name)
+              POD_NAME="${POD_RESOURCE#pod/}"
+              echo "Created: ${POD_NAME}"
+              
+              # Ensure cleanup runs on any exit (success, failure, or signal)
+              cleanup() {
+                echo ""
+                echo "Cleaning up verification pod..."
+                kubectl delete pod "${POD_NAME}" -n "${VERIFY_NS}" --ignore-not-found --wait=false
+              }
+              trap cleanup EXIT
+              
+              echo ""
+              echo "Waiting for verification pod to complete..."
+              if kubectl wait pod "${POD_NAME}" -n "${VERIFY_NS}" --for=jsonpath='{.status.phase}'=Succeeded --timeout="${TIMEOUT}s"; then
+                echo ""
+                echo "=== Verification Pod Logs ==="
+                kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" || true
+                echo ""
+                echo "SUCCESS: Verification passed"
+                exit 0
+              else
+                echo ""
+                echo "=== Verification Failed ==="
+                echo "Pod status:"
+                kubectl describe pod "${POD_NAME}" -n "${VERIFY_NS}" || true
+                echo ""
+                echo "Pod logs:"
+                kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" || true
+                exit 1
+              fi
+          volumeMounts:
+            - name: pod-spec
+              mountPath: /config
+      volumes:
+        - name: pod-spec
+          configMap:
+            name: {{ include "kata-deploy.fullname" . }}-verification-spec
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "kata-deploy.fullname" . }}-verification
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kata-deploy.fullname" . }}-verification
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kata-deploy.fullname" . }}-verification
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kata-deploy.fullname" . }}-verification
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "kata-deploy.fullname" . }}-verification
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
