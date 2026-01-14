@@ -618,8 +618,9 @@ install_initrd_confidential() {
 install_image_nvidia_gpu() {
 	export AGENT_POLICY
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
+	local ctk_version=$(get_from_kata_deps .externals.nvidia.ctk.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},ctk=${ctk_version},compute,dcgm"}
 	install_image "nvidia-gpu"
 }
 
@@ -627,8 +628,9 @@ install_image_nvidia_gpu() {
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
+	local ctk_version=$(get_from_kata_deps .externals.nvidia.ctk.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},ctk=${ctk_version},compute,dcgm"}
 	install_initrd "nvidia-gpu"
 }
 
@@ -636,9 +638,10 @@ install_initrd_nvidia_gpu() {
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
+	local ctk_version=$(get_from_kata_deps .externals.nvidia.ctk.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},ctk=${ctk_version},compute,dcgm"}
 	install_image "nvidia-gpu-confidential"
 }
 
@@ -646,9 +649,10 @@ install_image_nvidia_gpu_confidential() {
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
+	local ctk_version=$(get_from_kata_deps .externals.nvidia.ctk.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},ctk=${ctk_version},compute,dcgm"}
 	install_initrd "nvidia-gpu-confidential"
 }
 

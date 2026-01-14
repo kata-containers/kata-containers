@@ -23,6 +23,7 @@ run_fm_file_name=$3
 arch_target=$4
 nvidia_gpu_stack="$5"
 driver_version=""
+ctk_version=""
 base_os="noble"
 
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
@@ -39,7 +40,12 @@ set_driver_version() {
 	if [[ "${nvidia_gpu_stack}" =~ driver=([^,]+) ]]; then
 		driver_version="${BASH_REMATCH[1]}"
 	fi
+	# Extract the ctk=XXX part first, then get the value
+	if [[ "${nvidia_gpu_stack}" =~ ctk=([^,]+) ]]; then
+		ctk_version="${BASH_REMATCH[1]}"
+	fi
 	echo "chroot: driver_version: ${driver_version}"
+	echo "chroot: ctk_version: ${ctk_version}"
 	echo "chroot:  TODO remove with new NVRC"
 	cat <<-CHROOT_EOF > "/supported-gpu.devids"
 		0x230E
@@ -62,7 +68,7 @@ set_driver_version() {
 install_nvidia_ctk() {
 	echo "chroot: Installing NVIDIA GPU container runtime"
 	# Base  gives a nvidia-ctk and the nvidia-container-runtime
-	eval "${APT_INSTALL}" nvidia-container-toolkit-base=1.17.6-1
+	eval "${APT_INSTALL}" nvidia-container-toolkit-base="${ctk_version}"
 }
 
 install_nvidia_fabricmanager() {
