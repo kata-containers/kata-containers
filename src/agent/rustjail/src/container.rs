@@ -1588,9 +1588,9 @@ async fn join_namespaces(
         cm.apply(p.pid)?;
     }
 
-    if p.init && res.is_some() {
+    if let (true, Some(resource)) = (p.init, res) {
         info!(logger, "set properties to cgroups!");
-        cm.set(res.unwrap(), false)?;
+        cm.set(resource, false)?;
     }
 
     info!(logger, "notify child to continue");
