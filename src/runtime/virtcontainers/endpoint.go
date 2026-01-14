@@ -50,6 +50,9 @@ const (
 	// VethEndpointType is the virtual network interface.
 	VethEndpointType EndpointType = "virtual"
 
+	// NetkitEndpointType is the netkit network interface.
+	NetkitEndpointType EndpointType = "netkit"
+
 	// VhostUserEndpointType is the vhostuser network interface.
 	VhostUserEndpointType EndpointType = "vhost-user"
 
@@ -85,6 +88,9 @@ func (endpointType *EndpointType) Set(value string) error {
 	case "virtual":
 		*endpointType = VethEndpointType
 		return nil
+	case "netkit":
+		*endpointType = NetkitEndpointType
+		return nil
 	case "vhost-user":
 		*endpointType = VhostUserEndpointType
 		return nil
@@ -118,6 +124,8 @@ func (endpointType *EndpointType) String() string {
 		return string(PhysicalEndpointType)
 	case VethEndpointType:
 		return string(VethEndpointType)
+	case NetkitEndpointType:
+		return string(NetkitEndpointType)
 	case VhostUserEndpointType:
 		return string(VhostUserEndpointType)
 	case MacvlanEndpointType:
