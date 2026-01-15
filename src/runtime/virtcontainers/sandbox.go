@@ -2545,9 +2545,18 @@ func (s *Sandbox) resourceControllerDelete() error {
 		return err
 	}
 
-	resCtrlParent := sandboxController.Parent()
-	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
-		return err
+	// When sandbox_cgroup_only is enabled, all Kata threads live in the
+	// sandbox controller and systemd can move tasks as part of unit deletion.
+	// In that mode, a systemd-formatted cgroup path is not a filesystem path,
+	// so MoveTo would fail with "invalid group path".
+	// Keep MoveTo for the case of using cgroupfs paths and for the
+	// non-sandbox_cgroup_only mode. In that mode, Kata may use an overhead
+	// cgroup in which case an explicit MoveTo is used to drain tasks.
+	if !(resCtrl.IsSystemdCgroup(s.state.SandboxCgroupPath) && s.config.SandboxCgroupOnly) {
+		resCtrlParent := sandboxController.Parent()
+		if err := sandboxController.MoveTo(resCtrlParent); err != nil {
+			return err
+		}
 	}
 
 	if err := sandboxController.Delete(); err != nil {
@@ -2560,9 +2569,12 @@ func (s *Sandbox) resourceControllerDelete() error {
 			return err
 		}
 
-		resCtrlParent := overheadController.Parent()
-		if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
-			return err
+		// See comment at above MoveTo: Avoid this action as systemd moves tasks on unit deletion.
+		if !(resCtrl.IsSystemdCgroup(s.state.OverheadCgroupPath) && s.config.SandboxCgroupOnly) {
+			resCtrlParent := overheadController.Parent()
+			if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
+				return err
+			}
 		}
 
 		if err := overheadController.Delete(); err != nil {
