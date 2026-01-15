@@ -14,7 +14,6 @@ and with different container managers.
    - [Docker](https://github.com/kata-containers/kata-containers/tree/main/tests/integration/docker)
    - [`Nerdctl`](https://github.com/kata-containers/kata-containers/tree/main/tests/integration/nerdctl)
    - [`Nydus`](https://github.com/kata-containers/kata-containers/tree/main/tests/integration/nydus)
-   - [`Runk`](https://github.com/kata-containers/kata-containers/tree/main/tests/integration/runk)
 2. [Stability tests](https://github.com/kata-containers/kata-containers/tree/main/tests/stability)
 3. [Metrics](https://github.com/kata-containers/kata-containers/tree/main/tests/metrics)
 4. [Functional](https://github.com/kata-containers/kata-containers/tree/main/tests/functional)
