@@ -353,7 +353,7 @@ msize_9p = @DEFMSIZE9P@
 # Otherwise virtio-block device is used.
 #
 # nvdimm is not supported when `confidential_guest = true`.
-disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM_NV@
 
 # Enable hot-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 

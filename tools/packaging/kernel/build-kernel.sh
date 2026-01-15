@@ -514,6 +514,18 @@ setup_kernel() {
 	cp "${kernel_config_path}" ./.config
 	ARCH=${arch_target}  make oldconfig ${CROSS_BUILD_ARG}
 	)
+
+	info "Fetching NVIDIA driver source code"
+	if [[ "${gpu_vendor}" == "${VENDOR_NVIDIA}" ]]; then
+		driver_version=$(get_from_kata_deps .externals.nvidia.driver.version)
+		driver_url=$(get_from_kata_deps .externals.nvidia.driver.url)
+		driver_src="open-gpu-kernel-modules-${driver_version}"
+
+		info "Downloading NVIDIA driver source code from: ${driver_url}${driver_version}.tar.gz"
+		[[ -d "${driver_src}" ]] && rm -rf "${driver_src}"
+		curl -L -o "${driver_version}.tar.gz" "${driver_url}${driver_version}.tar.gz"
+		tar -xvf "${driver_version}.tar.gz" --transform "s|open-gpu-kernel-modules-${driver_version}|open-gpu-kernel-modules|"
+	fi
 }
 
 build_kernel() {
@@ -531,6 +543,13 @@ build_kernel() {
 	[ -e "vmlinux" ]
 	([ "${hypervisor_target}" == "firecracker" ] || [ "${hypervisor_target}" == "cloud-hypervisor" ]) && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
 	popd >>/dev/null
+
+	if [[ "${gpu_vendor}" == "${VENDOR_NVIDIA}" ]]; then
+		pushd open-gpu-kernel-modules
+		make -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" > /dev/null
+		make INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" modules_install
+		make -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" clean > /dev/null
+	fi
 }
 
 build_kernel_headers() {

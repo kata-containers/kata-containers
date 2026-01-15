@@ -207,11 +207,19 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.47"
+    version: "v6.18.5"
     confidential:
       description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.16.7"
+      version: "v6.18.5"
+    nvidia:
+      description: "Linux kernel optimised for virtual machines"
+      url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+      version: "v6.18.5"
+    nvidia-confidential:
+      description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
+      url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+      version: "v6.18.5"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -237,6 +245,13 @@ externals:
     version: "v0.0.1"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
+  nvidia:
+    desc: "NVIDIA driver version"
+    driver:
+      version: "590.48.01"
+      # yamllint disable-line rule:line-length
+      url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
+
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
     version: "1.36.1"
@@ -255,18 +270,18 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "dea0fa37f35d05d10af1bf4e7a6ae6ccb2a7d982"
+    version: "026694d44d4ec483465d2fa5f80a0376166b174d"
     toolchain: "1.85.1"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "94c3958250837420aea266623fe24ac990c7e5bf"
+    version: "f342a12115c67ea3af769fcd57e450f569ff7377"
     # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "94c3958250837420aea266623fe24ac990c7e5bf"
+    image_tag: "f342a12115c67ea3af769fcd57e450f569ff7377"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "94c3958250837420aea266623fe24ac990c7e5bf-x86_64"
+    ita_image_tag: "f342a12115c67ea3af769fcd57e450f569ff7377-x86_64"
     toolchain: "1.85.1"
 
   containerd:

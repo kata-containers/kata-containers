@@ -56,7 +56,6 @@ REPO_COMPONENTS="${REPO_COMPONENTS:-}"
 AGENT_POLICY="${AGENT_POLICY:-yes}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
-KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 RELEASE="${RELEASE:-"no"}"
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 RUNTIME_CHOICE="${RUNTIME_CHOICE:-both}"
@@ -143,15 +142,6 @@ options:
 EOF
 
 	exit "${return_code}"
-}
-
-get_kernel_headers_dir() {
-	local kernel_name"=${1:-}"
-	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
-
-	local kernel_headers_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir"
-
-	echo "${kernel_headers_dir}"
 }
 
 get_kernel_modules_dir() {
@@ -367,6 +357,29 @@ get_latest_kernel_artefact_and_builder_image_version() {
 	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
 }
 
+get_latest_kernel_nvidia_confidential_artefact_and_builder_image_version() {
+		local kernel_version=$(get_from_kata_deps ".assets.kernel.nvidia-confidential.version")
+		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+		local latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
+		local latest_kernel_builder_image="$(get_kernel_image_name)"
+
+		echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
+}
+
+get_latest_kernel_nvidia_artefact_and_builder_image_version() {
+	local kernel_version
+	local kernel_kata_config_version
+	local latest_kernel_artefact
+	local latest_kernel_builder_image
+
+	kernel_version=$(get_from_kata_deps ".assets.kernel.nvidia.version")
+	kernel_kata_config_version="$(cat "${repo_root_dir}"/tools/packaging/kernel/kata_config_version)"
+	latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification "$(dirname "${kernel_builder}")")"
+	latest_kernel_builder_image="$(get_kernel_image_name)"
+
+	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -397,6 +410,12 @@ install_image() {
 	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
+		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
+			latest_artefact+="-$(get_latest_kernel_nvidia_confidential_artefact_and_builder_image_version)"
+		else
+			latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		fi
+
 		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
@@ -404,7 +423,7 @@ install_image() {
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the image
-		latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version "${variant}")"
+		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version "${variant}")"
 	fi
 
 	latest_builder_image=""
@@ -447,6 +466,12 @@ install_image() {
 
 	if [[ -n "${REPO_COMPONENTS}" ]]; then
 		export REPO_COMPONENTS
+	fi
+
+	# Disable DAX for ARM64 due to kernel panic in dax_disassociate_entry
+	# with virtio-pmem on kernel 6.18.x
+	if [ "${ARCH}" == "aarch64" ]; then
+		export DAX_DISABLE=yes
 	fi
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
@@ -497,14 +522,18 @@ install_initrd() {
 	if [[ "${variant}" == *confidential ]]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
+			latest_artefact+="-$(get_latest_kernel_nvidia_confidential_artefact_and_builder_image_version)"
+		else
+			latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		fi
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the initrd as well
-		latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version "${variant}")"
+		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version "${variant}")"
 	fi
 
 	latest_builder_image=""
@@ -568,10 +597,8 @@ install_initrd_confidential() {
 # For all nvidia_gpu targets we can customize the stack that is enbled
 # in the VM by setting the NVIDIA_GPU_STACK= environment variable
 #
-# latest | lts | version
-#              -> use the latest and greatest driver,
-#                 lts release or e.g. version=550.127.1
-# driver       -> enable open or closed drivers
+# driver       -> driver version is set via versions.yaml making sure kernel
+#                 and rootfs builds are using the same version
 # compute      -> enable the compute GPU stack, includes utility
 # graphics     -> enable the graphics GPU stack, includes compute
 # dcgm         -> enable the DCGM stack + DGCM exporter
@@ -585,39 +612,43 @@ install_initrd_confidential() {
 #
 # The full stack can be enabled by setting all the options like:
 #
-# NVIDIA_GPU_STACK="latest,compute,dcgm,nvswitch,gpudirect"
+# NVIDIA_GPU_STACK="compute,dcgm,nvswitch,gpudirect"
 #
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY
+	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
 	install_image "nvidia-gpu"
 }
 
 # Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY
+	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
 	install_initrd "nvidia-gpu"
 }
 
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
+	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
 	install_image "nvidia-gpu-confidential"
 }
 
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY
+	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	# TODO: export MEASURED_ROOTFS=yes
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
 	install_initrd "nvidia-gpu-confidential"
 }
 
@@ -646,10 +677,12 @@ install_cached_kernel_tarball_component() {
 
 	case ${kernel_name} in
 		"kernel-nvidia-gpu"*"")
-			local kernel_headers_dir=$(get_kernel_headers_dir "${kernel_name}")
-			mkdir -p ${kernel_headers_dir} || true
-			tar --zstd -xvf ${workdir}/${kernel_name}/builddir/kata-static-${kernel_name}-headers.tar.zst -C "${kernel_headers_dir}" || return 1
-			;;& # fallthrough in the confidential case we need the modules.tar.zst and for every kernel-nvidia-gpu we need the headers
+			local modules_dir
+			modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
+
+			mkdir -p "${modules_dir}" || true
+			tar --strip-components=1 --zstd -xvf "${workdir}/kata-static-${kernel_name}-modules.tar.zst" -C "${modules_dir}" || return 1
+			;;
 		"kernel"*"-confidential")
 			local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 			mkdir -p "${modules_dir}" || true
@@ -677,17 +710,23 @@ install_kernel_helper() {
 		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 	fi
 
-	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
-		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
-		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
-		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+	if [[ "${kernel_name}" == "kernel-nvidia-gpu" ]]; then
+		kernel_version="$(get_from_kata_deps .assets.kernel.nvidia.version)"
+		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia.url)"
 	fi
 
-	if [[ "${kernel_name}" == "kernel-nvidia-gpu*" ]]; then
-		local kernel_headers_tarball_name="kata-static-${kernel_name}-headers.tar.zst"
-		local kernel_headers_tarball_path="${workdir}/${kernel_headers_tarball_name}"
-		extra_tarballs+=" ${kernel_headers_tarball_name}:${kernel_headers_tarball_path}"
+	if [[ "${kernel_name}" == "kernel-nvidia-gpu-confidential" ]]; then
+		kernel_version="$(get_from_kata_deps .assets.kernel.nvidia-confidential.version)"
+		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia-confidential.url)"
 	fi
+
+	case ${kernel_name} in
+		kernel-nvidia-gpu*|kernel*-confidential)
+			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
+			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
+			extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+			;;
+	esac
 
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 
@@ -742,23 +781,23 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 	install_kernel_helper \
 		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
-		"-e -t dragonball -g nvidia -H deb"
+		"-e -t dragonball -g nvidia"
 }
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
 	install_kernel_helper \
-		"assets.kernel" \
+		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia -H deb"
+		"-g nvidia"
 }
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
 	install_kernel_helper \
-		"assets.kernel.confidential" \
+		"assets.kernel.nvidia-confidential" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -H deb"
+		"-x -g nvidia"
 }
 
 install_qemu_helper() {
@@ -1409,33 +1448,21 @@ handle_build() {
 
 	case ${build_target} in
 		kernel-nvidia-gpu*)
-			local kernel_headers_final_tarball_path="${workdir}/kata-static-${build_target}-headers.tar.zst"
-			if [ ! -f "${kernel_headers_final_tarball_path}" ]; then
-				local kernel_headers_dir
-				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
+			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
+			if [[ ! -f "${modules_final_tarball_path}" ]]; then
+				local modules_dir
+				modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
 
-				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar -rvf kernel-headers.tar {} +
-				if [ -n "${KBUILD_SIGN_PIN}" ]; then
-					# For those 2 we can simply do a `|| true` as the signing_key.{pem,x509} are either:
-					# * already in ., as we're using a cached tarball
-					# * will be moved here, in case we had built the kernel
-					mv kata-linux-*/certs/signing_key.pem . || true
-					mv kata-linux-*/certs/signing_key.x509 . || true
+				parent_dir=$(dirname "${modules_dir}")
+				parent_dir_basename=$(basename "${parent_dir}")
 
-					# Then we can check for the key on ., as it should always be here on both cases
-					# (cached or built kernel).
-					head -n1 "signing_key.pem" | grep -q "ENCRYPTED PRIVATE KEY" || die "signing_key.pem is not encrypted"
-
-					tar -rvf kernel-headers.tar signing_key.pem signing_key.x509 --remove-files
-				fi
-				zstd -T0 kernel-headers.tar -o kernel-headers.tar.zst
-				mv kernel-headers.tar.zst "${kernel_headers_final_tarball_path}"
+				pushd "${parent_dir}"
+				rm -f "${parent_dir_basename}"/build
+				tar --zstd -cvf "${modules_final_tarball_path}" "."
 				popd
 			fi
-			tar --zstd -tvf "${kernel_headers_final_tarball_path}"
-			;;& # fallthrough in the confidential case we need the modules.tar.zst and for every kernel-nvidia-gpu we need the headers
-
+			tar --zstd -tvf "${modules_final_tarball_path}"
+			;;
 		kernel*-confidential)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
@@ -1502,18 +1529,7 @@ handle_build() {
 		)
 		oci_image="${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${normalized_tags}"
 		case ${build_target} in
-			kernel-nvidia-gpu)
-				files_to_push+=(
-					"kata-static-${build_target}-headers.tar.zst"
-				)
-				;;
-			kernel-nvidia-gpu-confidential)
-				files_to_push+=(
-					"kata-static-${build_target}-modules.tar.zst"
-					"kata-static-${build_target}-headers.tar.zst"
-				)
-				;;
-			kernel*-confidential)
+			kernel-nvidia-gpu*|kernel*-confidential)
 				files_to_push+=(
 					"kata-static-${build_target}-modules.tar.zst"
 				)

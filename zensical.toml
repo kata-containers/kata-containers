@@ -23,6 +23,8 @@ repo_url = "https://github.com/kata-containers/kata-containers"
 # Read more: https://zensical.org/docs/setup/basics/#site_url
 site_url = "https://kata-containers.github.io/kata-containers"
 
+edit_uri = "edit/main/docs/"
+
 # The copyright notice appears in the page footer and can contain an HTML
 # fragment.
 #
@@ -87,7 +89,8 @@ Copyright &copy; 2026 Kata Containers
 # - https://zensical.org/docs/setup/logo-and-icons/#favicon
 # - https://developer.mozilla.org/en-US/docs/Glossary/Favicon
 #
-favicon = "images/favicon.svg"
+favicon = "assets/favicon.svg"
+logo = "assets/favicon.svg"
 
 # Zensical supports more than 60 different languages. This means that the
 # labels and tooltips that Zensical's templates produce are translated.
@@ -116,13 +119,13 @@ features = [
     # will generate an edit button for the page. This works for common
     # repository hosting services.
     # https://zensical.org/docs/setup/repository/#code-actions
-    #"content.action.edit",
+    "content.action.edit",
 
     # If you have a repository configured and turn feature this on, Zensical
     # will generate a button that allows the user to view the Markdown
     # code for the current page.
     # https://zensical.org/docs/setup/repository/#code-actions
-    #"content.action.view",
+    "content.action.view",
 
     # Code annotations allow you to add an icon with a tooltip to your
     # code blocks to provide explanations at crucial points.
@@ -208,12 +211,12 @@ features = [
     # When tabs are enabled, top-level sections are rendered in a menu layer
     # below the header for viewports above 1220px, but remain as-is on mobile.
     # https://zensical.org/docs/setup/navigation/#navigation-tabs
-    "navigation.tabs",
+    #"navigation.tabs",
 
     # When sticky tabs are enabled, navigation tabs will lock below the header
     # and always remain visible when scrolling down.
     # https://zensical.org/docs/setup/navigation/#sticky-navigation-tabs
-    "navigation.tabs.sticky",
+    #"navigation.tabs.sticky",
 
     # A back-to-top button can be shown when the user, after scrolling down,
     # starts to scroll up again.
@@ -263,7 +266,7 @@ scheme = "default"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 primary = "indigo"
-accent = "indigo"
+accent = "orange"
 
 # ----------------------------------------------------------------------------
 # In the "font" subsection you can configure the fonts used. By default, fonts
