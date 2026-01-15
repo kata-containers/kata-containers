@@ -30,11 +30,6 @@ on:
         description: The arch of the tarball.
         required: true
         type: string
-      build-type:
-        description: The build type for kata-deploy. Use 'rust' for Rust-based build, empty or omit for script-based (default).
-        required: false
-        type: string
-        default: ""
     secrets:
       QUAY_DEPLOYER_PASSWORD:
         required: true
@@ -106,10 +101,8 @@ jobs:
           REGISTRY: ${{ inputs.registry }}
           REPO: ${{ inputs.repo }}
           TAG: ${{ inputs.tag }}
-          BUILD_TYPE: ${{ inputs.build-type }}
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
           "$(pwd)/kata-static.tar.zst" \
           "${REGISTRY}/${REPO}" \
-          "${TAG}" \
-          "${BUILD_TYPE}"
+          "${TAG}"

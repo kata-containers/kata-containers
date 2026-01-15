@@ -82,7 +82,6 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-22.04
       arch: amd64
-      build-type: "" # Use script-based build (default)
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -100,7 +99,6 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-arm
       arch: arm64
-      build-type: "" # Use script-based build (default)
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -118,7 +116,6 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: s390x
       arch: s390x
-      build-type: "" # Use script-based build (default)
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -136,7 +133,6 @@ jobs:
       target-branch: ${{ github.ref_name }}
       runner: ubuntu-24.04-ppc64le
       arch: ppc64le
-      build-type: "" # Use script-based build (default)
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
