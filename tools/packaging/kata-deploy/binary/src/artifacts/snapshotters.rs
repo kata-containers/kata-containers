@@ -47,6 +47,7 @@ pub async fn configure_nydus_snapshotter(
     config: &Config,
     configuration_file: &Path,
     pluginid: &str,
+    main_conf_file: &Path,
 ) -> Result<()> {
     info!("Configuring nydus-snapshotter");
 
@@ -60,9 +61,19 @@ pub async fn configure_nydus_snapshotter(
         _ => "nydus-snapshotter".to_string(),
     };
 
+    // NOTE: Boolean settings like disable_snapshot_annotations and discard_unpacked_layers
+    // MUST be set in the main config file, not drop-in files. This is because containerd's
+    // mergo-based config merge doesn't override non-zero values with zero values.
+    // Setting 'false' (zero value) in a drop-in won't override 'true' in the main config.
+    // See: https://github.com/containerd/containerd/blob/main/cmd/containerd/server/config/config.go#L418
     toml_utils::set_toml_value(
-        configuration_file,
+        main_conf_file,
         &format!(".plugins.{pluginid}.disable_snapshot_annotations"),
+        "false",
+    )?;
+    toml_utils::set_toml_value(
+        main_conf_file,
+        &format!(".plugins.{pluginid}.discard_unpacked_layers"),
         "false",
     )?;
 
@@ -118,9 +129,12 @@ pub async fn configure_snapshotter(
         Path::new(&config.containerd_conf_file).to_path_buf()
     };
 
+    let main_conf_file = Path::new(&config.containerd_conf_file);
+
     match snapshotter {
         "nydus" => {
-            configure_nydus_snapshotter(config, &configuration_file, pluginid).await?;
+            configure_nydus_snapshotter(config, &configuration_file, pluginid, main_conf_file)
+                .await?;
 
             let nydus_snapshotter = match config.multi_install_suffix.as_ref() {
                 Some(suffix) if !suffix.is_empty() => format!("nydus-snapshotter-{suffix}"),
