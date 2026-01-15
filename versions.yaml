@@ -242,7 +242,7 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
-    version: "v0.0.1"
+    version: "v0.1.1"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
   nvidia:
