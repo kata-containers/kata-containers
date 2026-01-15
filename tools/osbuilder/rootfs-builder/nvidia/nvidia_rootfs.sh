@@ -41,29 +41,27 @@ fi
 readonly stage_one="${BUILD_DIR:?}/rootfs-${VARIANT:?}-stage-one"
 
 setup_nvidia-nvrc() {
-	local rootfs_type=${1:-""}
+	local url ver
+	local nvrc=NVRC-${machine_arch}-unknown-linux-musl
+	url=$(get_package_version_from_kata_yaml "externals.nvrc.url")
+	ver=$(get_package_version_from_kata_yaml "externals.nvrc.version")
 
-	BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
-	TARGET=${machine_arch}-unknown-linux-musl
-	URL=$(get_package_version_from_kata_yaml "externals.nvrc.url")
-	VER=$(get_package_version_from_kata_yaml "externals.nvrc.version")
+	local dl="${url}/${ver}"
+	curl -fsSL -o "${BUILD_DIR}/${nvrc}.tar.xz" "${dl}/${nvrc}.tar.xz"
+	curl -fsSL -o "${BUILD_DIR}/${nvrc}.tar.xz.sig" "${dl}/${nvrc}.tar.xz.sig"
+	curl -fsSL -o "${BUILD_DIR}/${nvrc}.tar.xz.cert" "${dl}/${nvrc}.tar.xz.cert"
 
-	local DL="${URL}/${VER}"
-	curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" "${DL}/${BIN}-${TARGET}.tar.xz"
-	curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig" "${DL}/${BIN}-${TARGET}.tar.xz.sig"
-	curl -fsSL -o "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" "${DL}/${BIN}-${TARGET}.tar.xz.cert"
-
-	ID="^https://github.com/NVIDIA/nvrc/.github/workflows/.+@refs/heads/main$"
-	OIDC="https://token.actions.githubusercontent.com"
+	local id="^https://github.com/NVIDIA/nvrc/.github/workflows/.+@refs/heads/main$"
+	local oidc="https://token.actions.githubusercontent.com"
 
 	# Only allow releases from the NVIDIA/nvrc main branch and build by github actions
-	cosign verify-blob                                          \
-	  --rekor-url https://rekor.sigstore.dev                    \
-	  --certificate "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.cert" \
-	  --signature   "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz.sig"  \
-	  --certificate-identity-regexp "${ID}"                     \
-	  --certificate-oidc-issuer "${OIDC}"                       \
-	  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz"
+	cosign verify-blob                                 \
+	  --rekor-url https://rekor.sigstore.dev           \
+	  --certificate "${BUILD_DIR}/${nvrc}.tar.xz.cert" \
+	  --signature   "${BUILD_DIR}/${nvrc}.tar.xz.sig"  \
+	  --certificate-identity-regexp "${id}"            \
+	  --certificate-oidc-issuer "${oidc}"              \
+	  "${BUILD_DIR}/${nvrc}.tar.xz"
 }
 
 setup_nvidia_gpu_rootfs_stage_one() {
@@ -81,12 +79,11 @@ setup_nvidia_gpu_rootfs_stage_one() {
 
 	chmod +x ./nvidia_chroot.sh
 
-	local BIN="NVRC${rootfs_type:+"-${rootfs_type}"}"
-	local TARGET=${machine_arch}-unknown-linux-musl
-	if [[ ! -e  "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" ]]; then
-		setup_nvidia-nvrc "${rootfs_type}"
+	local nvrc=NVRC-${machine_arch}-unknown-linux-musl
+	if [[ ! -e  "${BUILD_DIR}/${nvrc}.tar.xz" ]]; then
+		setup_nvidia-nvrc
 	fi
-	tar -xvf "${BUILD_DIR}/${BIN}-${TARGET}.tar.xz" -C ./bin/
+	tar -xvf "${BUILD_DIR}/${nvrc}.tar.xz" -C ./bin/
 
 	local appendix="${rootfs_type:+"-${rootfs_type}"}"
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
@@ -229,19 +226,13 @@ chisseled_gpudirect() {
 }
 
 setup_nvrc_init_symlinks() {
-	local rootfs_type=${1:-""}
-
-	local bin="NVRC${rootfs_type:+"-${rootfs_type}"}"
-	local target=${machine_arch}-unknown-linux-musl
-
+	local nvrc="NVRC-${machine_arch}-unknown-linux-musl"
 	# make sure NVRC is the init process for the initrd and image case
-	ln -sf /bin/"${bin}-${target}" init
-	ln -sf /bin/"${bin}-${target}" sbin/init
+	ln -sf /bin/"${nvrc}" init
+	ln -sf /bin/"${nvrc}" sbin/init
 }
 
 chisseled_init() {
-	local rootfs_type=${1:-""}
-
 	echo "nvidia: chisseling init"
 	tar --zstd -xvf "${BUILD_DIR}"/kata-static-busybox.tar.zst -C .
 
@@ -255,14 +246,13 @@ chisseled_init() {
 	libdir=lib/"${machine_arch}"-linux-gnu
 	cp -a "${stage_one}"/"${libdir}"/libgcc_s.so.1*    "${libdir}"/.
 
-	bin="NVRC${rootfs_type:+"-${rootfs_type}"}"
-	target=${machine_arch}-unknown-linux-musl
+	local nvrc="NVRC-${machine_arch}-unknown-linux-musl"
 
-	cp -a "${stage_one}/bin/${bin}-${target}"      bin/.
-	cp -a "${stage_one}/bin/${bin}-${target}".cert bin/.
-	cp -a "${stage_one}/bin/${bin}-${target}".sig  bin/.
+	cp -a "${stage_one}/bin/${nvrc}"      bin/.
+	cp -a "${stage_one}/bin/${nvrc}".cert bin/.
+	cp -a "${stage_one}/bin/${nvrc}".sig  bin/.
 
-	setup_nvrc_init_symlinks "${rootfs_type}"
+	setup_nvrc_init_symlinks
 
 	cp -a "${stage_one}"/usr/bin/kata-agent   usr/bin/.
 	if [[ "${AGENT_POLICY}" == "yes" ]]; then
@@ -357,7 +347,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 		pushd "${stage_two}" >> /dev/null
 
 		# Only step needed from stage_two (see chisseled_init)
-		setup_nvrc_init_symlinks "${type}"
+		setup_nvrc_init_symlinks
 	else
 		echo "nvidia: chisseling the following stack components: ${stack}"
 
@@ -368,7 +358,7 @@ setup_nvidia_gpu_rootfs_stage_two() {
 
 		pushd "${stage_two}" >> /dev/null
 
-		chisseled_init "${type}"
+		chisseled_init
 		chisseled_iptables
 
 		IFS=',' read -r -a stack_components <<< "${NVIDIA_GPU_STACK}"
