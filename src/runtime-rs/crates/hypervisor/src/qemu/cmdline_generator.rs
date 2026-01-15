@@ -2558,8 +2558,6 @@ impl<'a> QemuCmdLine<'a> {
         self.machine
             .set_confidential_guest_support("snp")
             .set_nvdimm(false);
-
-        self.cpu.set_type("EPYC-v4");
     }
 
     pub fn add_tdx_protection_device(
