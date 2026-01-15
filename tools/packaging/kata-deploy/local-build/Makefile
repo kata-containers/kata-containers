@@ -199,8 +199,6 @@ rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest
 rootfs-initrd-tarball: agent-tarball
 	${MAKE} $@-build
 
-runk-tarball: copy-scripts-for-the-tools-build
-	${MAKE} $@-build
 rootfs-image-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
