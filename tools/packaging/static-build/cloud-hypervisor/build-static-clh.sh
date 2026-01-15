@@ -79,7 +79,7 @@ build_clh_from_source() {
 	else
 		./scripts/dev_cli.sh build --release --libc "${libc}"
 	fi
-	rm -f cloud-hypervisor
+	rm -rf cloud-hypervisor
 	cp build/cargo_target/$(uname -m)-unknown-linux-${libc}/release/cloud-hypervisor .
 	popd
 }

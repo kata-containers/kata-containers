@@ -26,6 +26,7 @@ Method | HTTP request | Description
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 [**VmReceiveMigrationPut**](DefaultApi.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
 [**VmRemoveDevicePut**](DefaultApi.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
+[**VmResizeDiskPut**](DefaultApi.md#VmResizeDiskPut) | **Put** /vm.resize-disk | Resize a disk
 [**VmResizePut**](DefaultApi.md#VmResizePut) | **Put** /vm.resize | Resize the VM
 [**VmResizeZonePut**](DefaultApi.md#VmResizeZonePut) | **Put** /vm.resize-zone | Resize a memory zone
 [**VmRestorePut**](DefaultApi.md#VmRestorePut) | **Put** /vm.restore | Restore a VM from a snapshot.
@@ -1351,6 +1352,68 @@ Other parameters are passed through a pointer to a apiVmRemoveDevicePutRequest s
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md) | The identifier of the device | 
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmResizeDiskPut
+
+> VmResizeDiskPut(ctx).VmResizeDisk(vmResizeDisk).Execute()
+
+Resize a disk
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmResizeDisk := *openapiclient.NewVmResizeDisk() // VmResizeDisk | Resizes a disk attached to the VM
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmResizeDiskPut(context.Background()).VmResizeDisk(vmResizeDisk).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmResizeDiskPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmResizeDiskPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **vmResizeDisk** | [**VmResizeDisk**](VmResizeDisk.md) | Resizes a disk attached to the VM | 
 
 ### Return type
 
