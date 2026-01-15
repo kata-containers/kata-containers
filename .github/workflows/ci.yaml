@@ -19,11 +19,6 @@ on:
         required: false
         type: string
         default: no
-      build-type:
-        description: The build type for kata-deploy. Use 'rust' for Rust-based build, empty or omit for script-based (default).
-        required: false
-        type: string
-        default: ""
     secrets:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: true
@@ -77,7 +72,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-22.04
       arch: amd64
-      build-type: ${{ inputs.build-type }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -110,7 +104,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-24.04-arm
       arch: arm64
-      build-type: ${{ inputs.build-type }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -156,7 +149,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-24.04-s390x
       arch: s390x
-      build-type: ${{ inputs.build-type }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -175,7 +167,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       runner: ubuntu-24.04-ppc64le
       arch: ppc64le
-      build-type: ${{ inputs.build-type }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
@@ -297,7 +288,7 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
@@ -313,7 +304,7 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-arm64${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-arm64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
@@ -326,7 +317,7 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
@@ -348,7 +339,7 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
@@ -366,7 +357,7 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-s390x${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-s390x
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
@@ -380,7 +371,7 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-ppc64le${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-ppc64le
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
@@ -392,7 +383,7 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64${{ inputs.build-type == 'rust' && '-rust' || '' }}
+      tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
