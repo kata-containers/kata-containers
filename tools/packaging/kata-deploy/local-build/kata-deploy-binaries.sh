@@ -135,7 +135,6 @@ options:
 	rootfs-image-mariner
 	rootfs-initrd
 	rootfs-initrd-confidential
-	runk
 	shim-v2
 	trace-forwarder
 	virtiofsd
@@ -1283,10 +1282,6 @@ install_kata_manager() {
 	install_script_helper "kata-manager.sh"
 }
 
-install_runk() {
-	install_tools_helper "runk"
-}
-
 install_trace_forwarder() {
 	install_tools_helper "trace-forwarder"
 }
@@ -1335,7 +1330,6 @@ handle_build() {
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
 		install_stratovirt
-		install_runk
 		install_shimv2
 		install_trace_forwarder
 		install_virtiofsd
@@ -1422,8 +1416,6 @@ handle_build() {
 	rootfs-cca-confidential-image) install_image_confidential ;;
 
 	rootfs-cca-confidential-initrd) install_initrd_confidential ;;
-
-	runk) install_runk ;;
 
 	shim-v2) install_shimv2 ;;
 
@@ -1588,7 +1580,6 @@ main() {
 		rootfs-initrd
 		rootfs-initrd-confidential
 		rootfs-initrd-mariner
-		runk
 		shim-v2
 		trace-forwarder
 		virtiofsd
