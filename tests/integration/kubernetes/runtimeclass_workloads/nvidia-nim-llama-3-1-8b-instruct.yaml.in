@@ -20,7 +20,7 @@ spec:
     fsGroup: 0
   containers:
   - name: ${POD_NAME_INSTRUCT}
-    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
+    image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.15.4
     # Ports exposed by the container:
     ports:
       - containerPort: 8000
