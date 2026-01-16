@@ -22,9 +22,27 @@ both** and which **changes the behavior from the previous release** (incompatibl
 A major release will also likely require a change of the container manager version used,
 -for example Containerd or CRI-O. Please refer to the release notes for further details.
 
-**Important** : the Kata Containers project doesn't have stable branches (see
-[this issue](https://github.com/kata-containers/kata-containers/issues/9064) for details).
-Bug fixes are released as part of `MINOR` or `MAJOR` releases only. `PATCH` is always `0`.
+Kata Containers follows a rolling release model with monthly snapshots.
+New features, bug fixes, and improvements are continuously integrated into
+`main`. Each month, a snapshot is tagged as a new `MINOR` release.
+
+### Versioning
+
+Releases use the `MAJOR.MINOR.PATCH` scheme. Monthly snapshots increment
+`MINOR`; `PATCH` is typically `0`. Major releases are rare (years apart) and
+signal significant architectural changes that may require updates to container
+managers (Containerd, CRI-O) or other infrastructure. Breaking changes in
+`MINOR` releases are avoided where possible, but may occasionally occur as
+features are deprecated or removed.
+
+### No Stable Branches
+
+The Kata Containers project does not maintain stable branches (see
+[#9064](https://github.com/kata-containers/kata-containers/issues/9064)).
+Bug fixes land on `main` and ship in the next monthly snapshot rather than
+being backported. Downstream projects that need extended support or compliance
+certifications should select a monthly snapshot as their stable base and manage
+their own validation and patch backporting from there.
 
 ## Release Process
 
