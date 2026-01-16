@@ -330,6 +330,9 @@ func (clh *cloudHypervisor) getClhStopSandboxTimeout() time.Duration {
 }
 
 func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
+	// We don't support NVDIMM with Cloud Hypervisor.
+	config.DisableImageNvdimm = true
+
 	clh.config = *config
 
 	return nil
@@ -584,8 +587,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
-	disableNvdimm := (clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest)
-	enableDax := !disableNvdimm
+	disableNvdimm := true
+	enableDax := false
 
 	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
 	if err != nil {
@@ -607,7 +610,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 
 	if assetType == types.ImageAsset {
-		if clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest {
+		if clh.config.ConfidentialGuest {
 			disk := chclient.NewDiskConfig()
 			disk.Path = &assetPath
 			disk.SetReadonly(true)
