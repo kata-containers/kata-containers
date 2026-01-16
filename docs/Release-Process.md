@@ -26,6 +26,44 @@ A major release will also likely require a change of the container manager versi
 [this issue](https://github.com/kata-containers/kata-containers/issues/9064) for details).
 Bug fixes are released as part of `MINOR` or `MAJOR` releases only. `PATCH` is always `0`.
 
+## Release Model
+
+### Rolling Releases with Monthly Snapshots
+
+Kata follows a rolling release model using monthly snapshots. Rather than
+maintaining a long-term stable branch, Kata continuously integrates new features
+and improvements. Each month, a snapshot is taken, capturing the codebase at
+that point in time. This strategy promotes rapid innovation, allowing new
+capabilities to become available as soon as they are production-ready.
+
+### How Downstream Projects Benefit
+
+Because Kata does not have a dedicated stable branch, downstream projects
+needing predictable lifecycles—such as those requiring extended support or
+stringent compliance—can designate one of these monthly snapshots as their
+stable release. This ensures they lock in a tested, consistent codebase that
+meets their specific needs, including enhanced testing, proprietary
+integrations, or adherence to particular industry standards.
+
+### Incorporating Downstream Patches
+
+Downstream projects often create patches or enhancements to meet unique
+requirements. These changes can be upstreamed to the Kata community for review
+and inclusion in a future monthly snapshot, allowing improvements to be shared
+broadly and maintained more easily. When planning a new downstream release,
+teams choose the snapshot with their upstreamed patches, conduct any final
+validation, and then declare it as their stable version.
+
+### Balancing Innovation and Stability
+
+Although Kata's rolling model offers immediate access to the latest features,
+constantly aligning with upstream can be risky for organizations subject to
+strict certification, compliance, or stability requirements. Frequent updates
+may demand continuous retesting, disrupt established integrations, or invalidate
+critical certifications. Opting for a known snapshot as a stable downstream
+release provides predictability, ensuring controlled updates that align with
+each organization's operational and compliance objectives.
+
 ## Release Process
 
 ### Bump the `VERSION` and `Chart.yaml` file
