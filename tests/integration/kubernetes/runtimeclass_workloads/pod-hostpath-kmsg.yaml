@@ -9,7 +9,6 @@ kind: Pod
 metadata:
   name: hostpath-kmsg
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   restartPolicy: Never
   volumes:

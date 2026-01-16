@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: vfio
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: c1
