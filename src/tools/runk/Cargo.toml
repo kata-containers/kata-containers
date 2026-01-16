@@ -17,7 +17,7 @@ logging = { path = "../../libs/logging" }
 liboci-cli = "0.5.3"
 clap = { version = "4.5.40", features = ["derive", "cargo"] }
 libc = "0.2.108"
-nix = "0.23.0"
+nix = "0.26.4"
 anyhow = "1.0.52"
 slog = "2.7.0"
 chrono = { version = "0.4.19", features = ["serde"] }
