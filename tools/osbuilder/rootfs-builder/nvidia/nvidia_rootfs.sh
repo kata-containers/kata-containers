@@ -15,7 +15,6 @@ die() {
   exit 1
 }
 
-
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 # catch errors and then assign
 script_dir="$(dirname "$(readlink -f "$0")")"
@@ -98,7 +97,16 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount --make-rslave ./dev
 	mount -t proc /proc ./proc
 
-	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} noble"
+	local cuda_repo_url cuda_repo_pkg gpu_base_os_version
+	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url")
+	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg")
+	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.x86_64.nvidia-gpu.version")
+
+	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
+	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
+
+	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
+		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg}"
 
 	umount -R ./dev
 	umount ./proc
@@ -271,7 +279,7 @@ compress_rootfs() {
 
 	find . -type f -executable | while IFS= read -r file; do
 		# Skip files with setuid/setgid bits (UPX refuses to pack them)
-		if [ -u "${file}" ] || [ -g "${file}" ]; then
+		if [[ -u "${file}" ]] || [[ -g "${file}" ]]; then
 			echo "nvidia: skip compressing executable (special permissions): ${file} ($(file -b "${file}"))"
 			continue
 		fi

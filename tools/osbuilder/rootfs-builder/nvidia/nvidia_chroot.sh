@@ -17,11 +17,13 @@ die() {
   echo "chroot: ${msg}" >&2
   exit 1
 }
-
-arch_target=$1
-nvidia_gpu_stack="$2"
-base_os="$3"
-
+arch_target="${1:?arch_target not specified}"
+nvidia_gpu_stack="${2:?nvidia_gpu_stack not specified}"
+cuda_repo_osv="${3:?cuda_repo_osv not specified}"
+cuda_repo_url="${4:?cuda_repo_url not specified}"
+cuda_repo_pkg="${5:?cuda_repo_pkg not specified}"
+tools_repo_url="${6:?tools_repo_url not specified}"
+tools_repo_pkg="${7:?tools_repo_pkg not specified}"
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -91,36 +93,43 @@ setup_apt_repositories() {
 	key="/usr/share/keyrings/ubuntu-archive-keyring.gpg"
 	comp="main restricted universe multiverse"
 
-	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os} ${comp}
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-updates ${comp}
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-security ${comp}
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-backports ${comp}
+	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${cuda_repo_osv}".list
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv} ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv}-updates ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv}-security ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv}-backports ${comp}
 	CHROOT_EOF
 
-	local arch="${arch_target}"
-	[[ ${arch_target} == "aarch64" ]] && arch="sbsa"
-	# shellcheck disable=SC2015
-	[[ ${base_os} == "noble" ]] && osver="ubuntu2404" || die "Unknown base_os ${base_os} used"
+	# Tools repository is always needed for toolkit, DCGM and other helpers
+	curl -fsSL -O "${tools_repo_url}/${tools_repo_pkg}"
+	dpkg -i "${tools_repo_pkg}" && rm -f "${tools_repo_pkg}"
 
-	keyring="cuda-keyring_1.1-1_all.deb"
-	# Use consistent curl flags: -fsSL for download, -O for output
-	curl -fsSL -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
-	dpkg -i "${keyring}" && rm -f "${keyring}"
+	# Remote or local CUDA repository
+	curl -fsSL -O "${cuda_repo_url}/${cuda_repo_pkg}"
+	dpkg -i "${cuda_repo_pkg}" && rm -f "${cuda_repo_pkg}"
+
+	# Copy keyring if local repo was installed
+	keyring="/var/cuda-repo-*-local/cuda-*-keyring.gpg"
+	# shellcheck disable=SC2128 # Intentional: expect exactly one match
+	[[ -e "${keyring}" ]] && cp "${keyring}" /usr/share/keyrings/
 
 	# Set priorities: CUDA repos highest, Ubuntu non-driver next, Ubuntu blocked for driver packages
 	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-priority
 		Package: *
-		Pin: $(dirname "${mirror}")
+		Pin: origin $(dirname "${mirror}")
 		Pin-Priority: 400
 
 		Package: nvidia-* libnvidia-*
-		Pin: $(dirname "${mirror}")
+		Pin: origin $(dirname "${mirror}")
 		Pin-Priority: -1
 
 		Package: *
 		Pin: origin developer.download.nvidia.com
 		Pin-Priority: 800
+
+		Package: *
+		Pin: origin ""
+		Pin-Priority: 900
 	CHROOT_EOF
 
 	apt update
