@@ -92,10 +92,8 @@ impl KernelParams {
                                 "dax,data=ordered,errors=remount-ro ro",
                             ));
                         } else {
-                            params.push(Param::new(
-                                "rootflags",
-                                "data=ordered,errors=remount-ro ro",
-                            ));
+                            params
+                                .push(Param::new("rootflags", "data=ordered,errors=remount-ro ro"));
                         }
                     }
                     VM_ROOTFS_FILESYSTEM_XFS => {
