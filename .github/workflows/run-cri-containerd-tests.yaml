@@ -35,8 +35,6 @@ on:
 jobs:
   run-cri-containerd:
     name: run-cri-containerd-${{ inputs.arch }} (${{ inputs.containerd_version }}, ${{ inputs.vmm }})
-    strategy:
-      fail-fast: false
     runs-on: ${{ inputs.runner }}
     env:
       CONTAINERD_VERSION: ${{ inputs.containerd_version }}
