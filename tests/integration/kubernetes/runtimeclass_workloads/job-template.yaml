@@ -16,7 +16,6 @@ spec:
       labels:
         jobgroup: jobtest
     spec:
-      terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       containers:
       - name: test

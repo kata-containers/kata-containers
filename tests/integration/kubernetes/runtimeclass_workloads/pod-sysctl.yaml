@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: sysctl-test
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   securityContext:
     sysctls:

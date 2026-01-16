@@ -10,7 +10,6 @@ metadata:
     test: liveness-test
   name: liveness-http
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: liveness

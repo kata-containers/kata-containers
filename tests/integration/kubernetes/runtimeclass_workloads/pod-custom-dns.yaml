@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: custom-dns-test
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
     - name: test

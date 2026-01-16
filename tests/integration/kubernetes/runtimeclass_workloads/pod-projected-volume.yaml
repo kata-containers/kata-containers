@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: test-projected-volume
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: test-projected-volume

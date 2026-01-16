@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: test-sysbench
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: test-sysbench
