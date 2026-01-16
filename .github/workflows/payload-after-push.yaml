@@ -134,7 +134,7 @@ jobs:
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-latest-ppc64le
       target-branch: ${{ github.ref_name }}
-      runner: ppc64le-small
+      runner: ubuntu-24.04-ppc64le
       arch: ppc64le
       build-type: "" # Use script-based build (default)
     secrets:
