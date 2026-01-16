@@ -86,8 +86,9 @@ build_image() {
 	fi
 
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
-	if [ -e "root_hash.txt" ]; then
-	    cp root_hash.txt "${install_dir}/"
+	info "Copying root hash file for variant: ${image_initrd_suffix} $PWD"
+	if [ -e "root_hash_${image_initrd_suffix}.txt" ]; then
+		cp "root_hash_${image_initrd_suffix}.txt" "${install_dir}/"
 	fi
 	(
 		cd "${install_dir}"
