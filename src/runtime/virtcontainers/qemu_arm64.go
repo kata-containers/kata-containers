@@ -69,11 +69,9 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
 			disableNvdimm:        config.DisableImageNvdimm,
-			// DAX is disabled on aarch64 due to kernel panic in dax_disassociate_entry
-			// with virtio-pmem on kernel 6.18.x
-			dax:          false,
-			protection:   noneProtection,
-			legacySerial: config.LegacySerial,
+			dax:                  true,
+			protection:           noneProtection,
+			legacySerial:         config.LegacySerial,
 		},
 		measurementAlgo: config.MeasurementAlgo,
 	}

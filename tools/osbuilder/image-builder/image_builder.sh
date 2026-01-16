@@ -74,8 +74,6 @@ Extra environment variables:
 	AGENT_BIN:      Use it to change the expected agent binary name
 	AGENT_INIT:     Use kata agent as init process
 	BLOCK_SIZE:     Use to specify the size of blocks in bytes. DEFAULT: 4096
-	DAX_DISABLE:    If set to "yes", skip DAX metadata header (for kernels without FS_DAX support).
-	                DEFAULT: not set
 	IMAGE_REGISTRY: Hostname for the image registry used to pull down the rootfs build image.
 	NSDAX_BIN:      Use to specify path to pre-compiled 'nsdax' tool.
 	USE_DOCKER:     If set will build image in a Docker Container (requries docker)
@@ -171,7 +169,6 @@ build_with_container() {
 		   --env BLOCK_SIZE="${block_size}" \
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
-		   --env DAX_DISABLE="${DAX_DISABLE:-no}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
@@ -307,12 +304,8 @@ calculate_img_size() {
 	local fs_type="$3"
 	local block_size="$4"
 
-	# rootfs start + DAX header size (if enabled) + rootfs end
-	local dax_sz=0
-	if [ "${DAX_DISABLE:-no}" != "yes" ]; then
-		dax_sz="${dax_header_sz}"
-	fi
-	local reserved_size_mb=$((rootfs_start + dax_sz + rootfs_end))
+	# rootfs start + DAX header size + rootfs end
+	local reserved_size_mb=$((rootfs_start + dax_header_sz + rootfs_end))
 
 	disk_size="$(calculate_required_disk_size "${rootfs}" "${fs_type}" "${block_size}")"
 
@@ -631,35 +624,25 @@ main() {
 		die "Invalid rootfs"
 	fi
 
-	# Determine DAX header size based on DAX_DISABLE setting
-	local dax_sz=0
-	if [ "${DAX_DISABLE:-no}" != "yes" ]; then
-		dax_sz="${dax_header_sz}"
-	fi
-
 	if [ "${fs_type}" == 'erofs' ]; then
 		# mkfs.erofs accepts an src root dir directory as an input
 		# rather than some device, so no need to guess the device dest size first.
 		create_erofs_rootfs_image "${rootfs}" "${image}" \
 						"${block_size}" "${agent_bin}"
 		rootfs_img_size=$?
-		img_size=$((rootfs_img_size + dax_sz))
+		img_size=$((rootfs_img_size + dax_header_sz))
 	else
 		img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" \
 			"${fs_type}" "${block_size}")
 
 		# the first 2M are for the first MBR + NVDIMM metadata and were already
-		# consider in calculate_img_size (if DAX is enabled)
-		rootfs_img_size=$((img_size - dax_sz))
+		# consider in calculate_img_size
+		rootfs_img_size=$((img_size - dax_header_sz))
 		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}" "${agent_bin}"
 	fi
 	# insert at the beginning of the image the MBR + DAX header
-	if [ "${DAX_DISABLE:-no}" != "yes" ]; then
-		set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
-	else
-		info "Skipping DAX header (DAX_DISABLE=yes)"
-	fi
+	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
 
 	chown "${USER}:${GROUP}" "${image}"
 }
