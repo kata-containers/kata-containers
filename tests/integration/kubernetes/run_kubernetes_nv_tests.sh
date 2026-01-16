@@ -8,7 +8,7 @@
 set -e
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
-# shellcheck disable=SC1091 # import based on variable
+# shellcheck disable=1091 # import based on variable
 source "${kubernetes_dir}/../../common.bash"
 
 # Enable NVRC trace logging for NVIDIA GPU runtime
@@ -42,7 +42,7 @@ fi
 
 SUPPORTED_HYPERVISORS=("qemu-nvidia-gpu" "qemu-nvidia-gpu-snp" "qemu-nvidia-gpu-tdx")
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
-# shellcheck disable=SC2076 # intentionally use literal string matching
+# shellcheck disable=2076 # intentionally use literal string matching
 if [[ ! " ${SUPPORTED_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
 	die "Unsupported KATA_HYPERVISOR=${KATA_HYPERVISOR}. Must be one of: ${SUPPORTED_HYPERVISORS[*]}"
 fi

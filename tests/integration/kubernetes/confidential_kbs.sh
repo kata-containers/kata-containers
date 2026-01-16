@@ -286,6 +286,7 @@ kbs_uninstall_cli() {
 ensure_sev_snp_measure() {
 	command -v sev-snp-measure >/dev/null && return
 
+	# shellcheck disable=1091
 	source "${HOME}"/.cicd/venv/bin/activate
 	pip install sev-snp-measure
 }
