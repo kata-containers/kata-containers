@@ -23,7 +23,6 @@ spec:
         role: master
         tier: backend
     spec:
-      terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       securityContext:
         runAsUser: 65534

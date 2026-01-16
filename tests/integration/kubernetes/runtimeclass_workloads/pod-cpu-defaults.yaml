@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: default-cpu-test
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: default-cpu-demo-ctr

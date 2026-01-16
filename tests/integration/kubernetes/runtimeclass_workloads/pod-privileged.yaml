@@ -9,7 +9,6 @@ kind: Pod
 metadata:
   name: privileged
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   restartPolicy: Never
   containers:

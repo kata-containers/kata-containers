@@ -9,7 +9,6 @@ kind: Pod
 metadata:
   name: handlers
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: handlers-container

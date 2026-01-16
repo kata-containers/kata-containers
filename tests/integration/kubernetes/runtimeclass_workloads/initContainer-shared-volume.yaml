@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: initcontainer-shared-volume
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   initContainers:
   - name: first

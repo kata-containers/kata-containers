@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: test-file-volume
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   restartPolicy: Never
   nodeName: NODE

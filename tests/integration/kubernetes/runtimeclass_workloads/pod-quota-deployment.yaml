@@ -17,7 +17,6 @@ spec:
       labels:
         purpose: quota-demo
     spec:
-      terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       containers:
       - name: pod-quota-demo

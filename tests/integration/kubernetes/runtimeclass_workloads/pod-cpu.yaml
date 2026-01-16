@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: constraints-cpu-test
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: first-cpu-container
