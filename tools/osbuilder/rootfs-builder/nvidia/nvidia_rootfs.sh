@@ -94,25 +94,11 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mkdir -p ./lib/modules/
 	tar --zstd -xvf "${BUILD_DIR}"/kata-static-kernel-nvidia-gpu"${appendix}"-modules.tar.zst -C ./lib/modules/
 
-	# If we find a local downloaded run file build the kernel modules
-	# with it, otherwise use the distribution packages. Run files may have
-	# more recent drivers available then the distribution packages.
-	local run_file_name="nvidia-driver.run"
-	if [[ -f ${BUILD_DIR}/${run_file_name} ]]; then
-		cp -L "${BUILD_DIR}"/"${run_file_name}" ./"${run_file_name}"
-	fi
-
-	local run_fm_file_name="nvidia-fabricmanager.run"
-	if [[ -f ${BUILD_DIR}/${run_fm_file_name} ]]; then
-		cp -L "${BUILD_DIR}"/"${run_fm_file_name}" ./"${run_fm_file_name}"
-	fi
-
 	mount --rbind /dev ./dev
 	mount --make-rslave ./dev
 	mount -t proc /proc ./proc
 
-	chroot . /bin/bash -c "/nvidia_chroot.sh $(uname -r) ${run_file_name} \
-		${run_fm_file_name} ${machine_arch} ${NVIDIA_GPU_STACK}"
+	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} noble"
 
 	umount -R ./dev
 	umount ./proc
@@ -259,7 +245,6 @@ chisseled_init() {
 		cp -a "${stage_one}"/etc/kata-opa etc/.
 	fi
 	cp -a "${stage_one}"/etc/resolv.conf      etc/.
-	cp -a "${stage_one}"/supported-gpu.devids .
 
 	cp -a "${stage_one}"/lib/firmware/nvidia  lib/firmware/.
 	cp -a "${stage_one}"/sbin/ldconfig.real   sbin/ldconfig
