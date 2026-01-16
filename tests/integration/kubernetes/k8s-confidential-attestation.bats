@@ -151,25 +151,27 @@ setup() {
 	[[ -n "$qemu_cmd" ]] || { echo "Could not find QEMU command line"; return 1; }
 
 	kernel_path=$(echo "$qemu_cmd" | grep -oP -- '-kernel \K[^ ]+')
-	initrd_path=$(echo "$qemu_cmd" | grep -oP -- '-initrd \K[^ ]+')
+	initrd_path=$(echo "$qemu_cmd" | grep -oP -- '-initrd \K[^ ]+' || true)
 	firmware_path=$(echo "$qemu_cmd" | grep -oP -- '-bios \K[^ ]+')
 	vcpu_count=$(echo "$qemu_cmd" | grep -oP -- '-smp \K\d+')
 	append=$(echo "$qemu_cmd" | sed -n 's/.*-append \(.*\) -bios.*/\1/p')
 
-	launch_measurement=$(PATH="${PATH}:${HOME}/.local/bin" sev-snp-measure \
-		--mode=snp \
-		--vcpus="${vcpu_count}" \
-		--vcpu-type=EPYC-v4 \
-		--output-format=base64 \
-		--ovmf="${firmware_path}" \
-		--kernel="${kernel_path}" \
-		--initrd="${initrd_path}" \
-		--append="${append}" \
+	measure_args=(
+		--mode=snp
+		--vcpus="${vcpu_count}"
+		--vcpu-type=EPYC-v4
+		--output-format=base64
+		--ovmf="${firmware_path}"
+		--kernel="${kernel_path}"
+		--append="${append}"
 	)
+	if [[ -n "${initrd_path}" ]]; then
+		measure_args+=(--initrd="${initrd_path}")
+	fi
+	launch_measurement=$(PATH="${PATH}:${HOME}/.local/bin" sev-snp-measure "${measure_args[@]}")
 
-	# set launch measurement as reference value 
+	# set launch measurement as reference value
 	kbs_config_command set-sample-reference-value snp_launch_measurement "${launch_measurement}"
-
 
 	# Get the reported firmware version(s) for this machine
 	firmware=$(sudo snphost show tcb | grep -A 5 "Reported TCB")
@@ -204,7 +206,6 @@ setup() {
 	kbs_config_command set-sample-reference-value snp_launch_measurement abcd
 
 	[ "$result" -eq 0 ]
-
 }
 
 
