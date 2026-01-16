@@ -18,12 +18,9 @@ die() {
   exit 1
 }
 
-run_file_name=$2
-run_fm_file_name=$3
-arch_target=$4
-nvidia_gpu_stack="$5"
-driver_version=""
-base_os="noble"
+arch_target=$1
+nvidia_gpu_stack="$2"
+base_os="$3"
 
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
@@ -32,31 +29,6 @@ export DEBIAN_FRONTEND=noninteractive
 is_feature_enabled() {
 	local feature="$1"
 	[[ ",${nvidia_gpu_stack}," == *",${feature},"* ]]
-}
-
-set_driver_version() {
-	# Extract the driver=XXX part first, then get the value
-	if [[ "${nvidia_gpu_stack}" =~ driver=([^,]+) ]]; then
-		driver_version="${BASH_REMATCH[1]}"
-	fi
-	echo "chroot: driver_version: ${driver_version}"
-	echo "chroot:  TODO remove with new NVRC"
-	cat <<-CHROOT_EOF > "/supported-gpu.devids"
-		0x230E
-		0x2321
-		0x2322
-		0x2324
-		0x2329
-		0x232C
-		0x2330
-		0x2331
-		0x2335
-		0x2339
-		0x233A
-		0x233B
-		0x2342
-		0x2348
-	CHROOT_EOF
 }
 
 install_nvidia_ctk() {
@@ -76,13 +48,19 @@ install_nvidia_fabricmanager() {
 }
 
 install_userspace_components() {
+	# Extract the driver=XXX part first, then get the value
+	if [[ "${nvidia_gpu_stack}" =~ driver=([^,]+) ]]; then
+		driver_version="${BASH_REMATCH[1]}"
+	fi
+	echo "chroot: driver_version: ${driver_version}"
+
 	eval "${APT_INSTALL}" nvidia-driver-pinning-"${driver_version}"
-	eval "${APT_INSTALL}" nvidia-imex nvidia-firmware        \
+	eval "${APT_INSTALL}" nvidia-imex nvidia-firmware    \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
 		libnvidia-nscq
 
-	apt-mark hold nvidia-imex nvidia-firmware                \
+	apt-mark hold nvidia-imex nvidia-firmware            \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
 		libnvidia-nscq
@@ -111,12 +89,13 @@ setup_apt_repositories() {
 	rm -f /etc/apt/sources.list.d/*
 
 	key="/usr/share/keyrings/ubuntu-archive-keyring.gpg"
+	comp="main restricted universe multiverse"
 
 	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os} main restricted universe multiverse
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-updates main restricted universe multiverse
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-security main restricted universe multiverse
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-backports main restricted universe multiverse
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os} ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-updates ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-security ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-backports ${comp}
 	CHROOT_EOF
 
 	local arch="${arch_target}"
@@ -129,7 +108,7 @@ setup_apt_repositories() {
 	curl -fsSL -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
 	dpkg -i "${keyring}" && rm -f "${keyring}"
 
-	# Set priorities: Ubuntu repos highest, NVIDIA Container Toolkit next, CUDA repo blocked for driver packages
+	# Set priorities: CUDA repos highest, Ubuntu non-driver next, Ubuntu blocked for driver packages
 	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-priority
 		Package: *
 		Pin: $(dirname "${mirror}")
@@ -181,7 +160,6 @@ cleanup_rootfs() {
 # Start of script
 echo "chroot: Setup NVIDIA GPU rootfs stage one"
 
-set_driver_version
 setup_apt_repositories
 install_userspace_components
 install_nvidia_fabricmanager
