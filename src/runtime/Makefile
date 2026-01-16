@@ -153,6 +153,8 @@ FIRMWARETDVFVOLUMEPATH :=
 FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
 
 ROOTMEASURECONFIG ?= ""
+ROOTMEASURECONFIG_NV ?= ""
+
 KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
 KERNELQEMUCOCODEVPARAMS += $(ROOTMEASURECONFIG)
 
@@ -478,6 +480,7 @@ ifneq (,$(QEMUCMD))
     # using an image and /dev is already mounted.
     KERNELPARAMS_NV = "cgroup_no_v1=all"
     KERNELPARAMS_NV += "devtmpfs.mount=0"
+    KERNELPARAMS_NV += $(ROOTMEASURECONFIG_NV)
 
     # Setting this to false can lead to cgroup leakages in the host
     # Best practice for production is to set this to true
