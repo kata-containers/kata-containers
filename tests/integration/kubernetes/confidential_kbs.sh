@@ -9,11 +9,11 @@
 set -e
 
 kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=1091
+# shellcheck disable=SC1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
-# shellcheck disable=1091
+# shellcheck disable=SC1091
 source "${kubernetes_dir}/../../../tests/common.bash"
-# shellcheck disable=1091
+# shellcheck disable=SC1091
 source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 # For kata-runtime
 export PATH="${PATH}:/opt/kata/bin"
@@ -240,13 +240,13 @@ kbs_install_cli() {
 			local pkgs="build-essential pkg-config libssl-dev"
 
 			sudo apt-get update -y
-			# shellcheck disable=2086
+			# shellcheck disable=SC2086
 			sudo apt-get install -y ${pkgs}
 			;;
 		centos)
 			local pkgs="make"
 
-			# shellcheck disable=2086,2248
+			# shellcheck disable=SC2086,SC2248
 			sudo dnf install -y ${pkgs}
 			;;
 		*)
@@ -286,6 +286,7 @@ kbs_uninstall_cli() {
 ensure_sev_snp_measure() {
 	command -v sev-snp-measure >/dev/null && return
 
+	# shellcheck disable=SC1091
 	source "${HOME}"/.cicd/venv/bin/activate
 	pip install sev-snp-measure
 }
@@ -584,7 +585,7 @@ _ensure_rust() {
 	if ! command -v rustc >/dev/null; then
 		"${kubernetes_dir}/../../install_rust.sh" "${rust_version}"
 
-		# shellcheck disable=1091
+		# shellcheck disable=SC1091
 		source "${HOME}/.cargo/env"
 	else
 		[[ -z "${rust_version}" ]] && return

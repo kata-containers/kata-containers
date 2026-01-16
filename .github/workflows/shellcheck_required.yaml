@@ -28,8 +28,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run ShellCheck
+      - name: Run ShellCheck (errors only)
         uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
         with:
           severity: error
           ignore_paths: "**/vendor/**"
+
+      - name: Run ShellCheck (all severities on clean directories)
+        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38 # v2.0.0
+        with:
+          # Add any additional directories to be checked fully here
+          # to ensure that they remain clean.
+          scandir: "./tests/integration/kubernetes"
