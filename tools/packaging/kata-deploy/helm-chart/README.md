@@ -448,3 +448,7 @@ kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 ```
+
+## Related Charts
+
+- [kata-upgrade](kata-upgrade/README.md) - Argo Workflows-based upgrade orchestration for controlled, node-by-node upgrades with verification and automatic rollback

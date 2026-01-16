@@ -5,7 +5,11 @@
 # Helm image based on kata-containers/kubectl for multi-arch support
 # Used for kata-upgrade workflows and other helm operations
 
+# hadolint ignore=DL3007
 FROM quay.io/kata-containers/kubectl:latest
+
+# Use bash with pipefail for safer pipe handling
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Download and install helm
 # hadolint ignore=DL3018
@@ -21,8 +25,8 @@ RUN ARCH=$(uname -m) && \
     curl -fL --progress-bar -o /tmp/helm.tar.gz \
         "https://get.helm.sh/helm-${HELM_VERSION}-linux-${HELM_ARCH}.tar.gz" && \
     tar -xzf /tmp/helm.tar.gz -C /tmp && \
-    mv /tmp/linux-${HELM_ARCH}/helm /usr/local/bin/helm && \
-    rm -rf /tmp/helm.tar.gz /tmp/linux-${HELM_ARCH} && \
+    mv "/tmp/linux-${HELM_ARCH}/helm" /usr/local/bin/helm && \
+    rm -rf /tmp/helm.tar.gz "/tmp/linux-${HELM_ARCH}" && \
     chmod +x /usr/local/bin/helm && \
     helm version --short
 
