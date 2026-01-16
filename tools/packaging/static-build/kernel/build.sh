@@ -71,6 +71,8 @@ container_build+=" --build-arg ARCH=${ARCH:-}"
 		push_to_registry "${container_image}";
 	}
 
+tdx_reference_value_calculator_url=$(get_from_kata_deps ".assets.kernel.confidential.reference_value_calculator.tdx")
+
 "${container_engine}" run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env KERNEL_DEBUG_ENABLED="${KERNEL_DEBUG_ENABLED}" \
@@ -88,6 +90,7 @@ container_build+=" --build-arg ARCH=${ARCH:-}"
 "${container_engine}" run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	--env TDX_REFERENCE_VALUE_CALCULATOR_URL="${tdx_reference_value_calculator_url}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} install"
