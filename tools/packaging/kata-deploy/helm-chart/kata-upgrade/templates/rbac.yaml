@@ -1,0 +1,89 @@
+{{/*
+Copyright (c) 2026 The Kata Containers Authors
+SPDX-License-Identifier: Apache-2.0
+*/}}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "kata-upgrade.serviceAccountName" . }}
+  namespace: {{ .Values.argoNamespace }}
+  labels:
+    {{- include "kata-upgrade.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "kata-upgrade.fullname" . }}
+  labels:
+    {{- include "kata-upgrade.labels" . | nindent 4 }}
+rules:
+  # Node operations (cordon, drain, label)
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  # Pod operations (eviction for drain, verification pods, Argo output parameters)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
+  # DaemonSet operations (kata-deploy is a DaemonSet)
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # RuntimeClass operations (kata-deploy creates RuntimeClasses)
+  - apiGroups: ["node.k8s.io"]
+    resources: ["runtimeclasses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Helm needs these for release management
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # kata-deploy creates a ServiceAccount
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # kata-deploy creates RBAC resources
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["clusterroles", "clusterrolebindings", "roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Jobs (kata-deploy may have post-install/post-delete hooks)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Events for debugging
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create"]
+  # Argo Workflows task results (for output parameters)
+  - apiGroups: ["argoproj.io"]
+    resources: ["workflowtaskresults"]
+    verbs: ["create", "patch"]
+  # CRDs (kata-deploy may reference NFD CRDs)
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Node Feature Discovery resources (kata-deploy NFD integration)
+  - apiGroups: ["nfd.k8s-sigs.io"]
+    resources: ["nodefeaturerules"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "kata-upgrade.fullname" . }}
+  labels:
+    {{- include "kata-upgrade.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "kata-upgrade.serviceAccountName" . }}
+    namespace: {{ .Values.argoNamespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "kata-upgrade.fullname" . }}
+  apiGroup: rbac.authorization.k8s.io

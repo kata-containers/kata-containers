@@ -1,0 +1,775 @@
+{{/*
+Copyright (c) 2026 The Kata Containers Authors
+SPDX-License-Identifier: Apache-2.0
+
+Argo WorkflowTemplate for orchestrating kata-deploy upgrades.
+Uses native Argo resource templates where possible, and standard
+helm/kubectl images for operations requiring those tools.
+*/}}
+{{- if not .Values.defaults.verificationPod }}
+{{- fail "defaults.verificationPod is required. Provide a pod spec that validates your Kata deployment using --set-file defaults.verificationPod=./your-pod.yaml" }}
+{{- end }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: kata-upgrade
+  namespace: {{ .Values.argoNamespace }}
+  labels:
+    {{- include "kata-upgrade.labels" . | nindent 4 }}
+spec:
+  entrypoint: upgrade-all-nodes
+  serviceAccountName: {{ include "kata-upgrade.serviceAccountName" . }}
+
+  podGC:
+    strategy: OnWorkflowSuccess
+
+  arguments:
+    parameters:
+      - name: target-version
+        description: "Target Kata Containers version (e.g., 3.25.0)"
+      - name: helm-release
+        value: {{ .Values.defaults.helmRelease | quote }}
+        description: "Helm release name"
+      - name: helm-namespace
+        value: {{ .Values.defaults.helmNamespace | quote }}
+        description: "Namespace where kata-deploy is installed"
+      - name: node-selector
+        value: {{ .Values.defaults.nodeSelector | quote }}
+        description: "Label selector for nodes to upgrade (optional if using taint selection)"
+      - name: node-taint-key
+        value: {{ .Values.defaults.nodeTaintKey | quote }}
+        description: "Taint key for node selection (optional, alternative to label selector)"
+      - name: node-taint-value
+        value: {{ .Values.defaults.nodeTaintValue | quote }}
+        description: "Taint value filter (optional, only used with node-taint-key)"
+      - name: helm-image
+        value: {{ .Values.images.helm | quote }}
+        description: "Helm container image"
+      - name: kubectl-image
+        value: {{ .Values.images.kubectl | quote }}
+        description: "Kubectl container image"
+      - name: verification-namespace
+        value: {{ .Values.defaults.verificationNamespace | quote }}
+        description: "Namespace for verification pods"
+      - name: verification-pod
+        value: {{ .Values.defaults.verificationPod | b64enc | quote }}
+        description: "Base64-encoded pod YAML for verification (uses placeholders NODE, TEST_POD)"
+      - name: drain-enabled
+        value: {{ .Values.defaults.drainEnabled | quote }}
+        description: "Whether to drain nodes before upgrade"
+      - name: drain-timeout
+        value: {{ .Values.defaults.drainTimeout | quote }}
+        description: "Timeout for node drain"
+
+  templates:
+    # =========================================================================
+    # MAIN ENTRYPOINT
+    # =========================================================================
+    - name: upgrade-all-nodes
+      steps:
+        - - name: validate-prerequisites
+            template: check-prerequisites
+        - - name: get-nodes
+            template: get-target-nodes
+        - - name: show-upgrade-plan
+            template: print-upgrade-plan
+            arguments:
+              parameters:
+                - name: nodes-json
+                  value: "{{`{{steps.get-nodes.outputs.parameters.nodes}}`}}"
+                - name: node-count
+                  value: "{{`{{steps.get-nodes.outputs.parameters.node-count}}`}}"
+        - - name: upgrade-nodes-sequentially
+            template: upgrade-node-chain
+            arguments:
+              parameters:
+                - name: nodes-json
+                  value: "{{`{{steps.get-nodes.outputs.parameters.nodes}}`}}"
+                - name: current-index
+                  value: "0"
+        - - name: summary
+            template: print-summary
+
+    # =========================================================================
+    # CHECK PREREQUISITES (fail fast if verification pod not configured)
+    # =========================================================================
+    - name: check-prerequisites
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.helm-image}}`}}"
+        command: [sh]
+        source: |
+          set -e
+
+          RELEASE="{{`{{workflow.parameters.helm-release}}`}}"
+          NS="{{`{{workflow.parameters.helm-namespace}}`}}"
+          VERIFICATION_POD="{{`{{workflow.parameters.verification-pod}}`}}"
+
+          echo "=============================================="
+          echo "        VALIDATING PREREQUISITES"
+          echo "=============================================="
+          echo ""
+
+          # Check verification pod availability
+          echo "Checking verification pod configuration..."
+          
+          if [ -n "$VERIFICATION_POD" ]; then
+            echo "✓ Verification pod configured"
+          else
+            echo ""
+            echo "ERROR: No verification pod configured!"
+            echo ""
+            echo "The upgrade cannot proceed without a verification pod."
+            echo ""
+            echo "This should not happen if kata-upgrade was installed correctly."
+            echo "Reinstall with: helm upgrade kata-upgrade ... --set-file defaults.verificationPod=<path>"
+            echo ""
+            exit 1
+          fi
+
+          # Check kata-deploy release exists
+          echo "Checking kata-deploy Helm release..."
+          if helm status "$RELEASE" -n "$NS" &>/dev/null; then
+            CURRENT_VERSION=$(helm get metadata "$RELEASE" -n "$NS" -o json 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+            echo "✓ Found Helm release: $RELEASE (chart version: $CURRENT_VERSION)"
+          else
+            echo ""
+            echo "ERROR: Helm release '$RELEASE' not found in namespace '$NS'"
+            echo ""
+            echo "Make sure kata-deploy is installed via Helm before running upgrade."
+            exit 1
+          fi
+
+          echo ""
+          echo "=============================================="
+          echo "        ALL PREREQUISITES PASSED"
+          echo "=============================================="
+
+    # =========================================================================
+    # PRINT UPGRADE PLAN (shows all nodes before starting)
+    # =========================================================================
+    - name: print-upgrade-plan
+      inputs:
+        parameters:
+          - name: nodes-json
+          - name: node-count
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.kubectl-image}}`}}"
+        command: [sh]
+        source: |
+          apk add --no-cache -q jq 2>/dev/null || true
+
+          NODES_JSON='{{`{{inputs.parameters.nodes-json}}`}}'
+          NODE_COUNT={{`{{inputs.parameters.node-count}}`}}
+          VERSION="{{`{{workflow.parameters.target-version}}`}}"
+
+          echo "=============================================="
+          echo "        KATA CONTAINERS UPGRADE PLAN"
+          echo "=============================================="
+          echo ""
+          echo "Target Version: $VERSION"
+          echo "Total Nodes:    $NODE_COUNT"
+          echo "Mode:           Sequential (one at a time)"
+          echo ""
+          echo "Nodes to upgrade (in order):"
+          echo "----------------------------------------------"
+
+          INDEX=1
+          echo "$NODES_JSON" | jq -r '.[]' | while read NODE; do
+            echo "  $INDEX. $NODE"
+            INDEX=$((INDEX + 1))
+          done
+
+          echo ""
+          echo "----------------------------------------------"
+          echo "Upgrade will stop immediately on first failure"
+          echo "=============================================="
+
+    # =========================================================================
+    # SEQUENTIAL NODE CHAIN (recursive: upgrades one node, then next)
+    # Stops immediately on first failure - no mixed fleet possible
+    # =========================================================================
+    - name: upgrade-node-chain
+      inputs:
+        parameters:
+          - name: nodes-json
+          - name: current-index
+      steps:
+        # Extract current node info
+        - - name: node-info
+            template: get-node-at-index
+            arguments:
+              parameters:
+                - name: nodes-json
+                  value: "{{`{{inputs.parameters.nodes-json}}`}}"
+                - name: index
+                  value: "{{`{{inputs.parameters.current-index}}`}}"
+        # Upgrade current node (shows all sub-steps: prepare, cordon, upgrade, verify...)
+        - - name: upgrade
+            template: upgrade-single-node
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{steps.node-info.outputs.parameters.node-name}}`}}"
+        # Continue to next node only if this one succeeded and more nodes exist
+        - - name: next
+            template: upgrade-node-chain
+            when: "{{`{{steps.node-info.outputs.parameters.has-more}}`}} == true"
+            arguments:
+              parameters:
+                - name: nodes-json
+                  value: "{{`{{inputs.parameters.nodes-json}}`}}"
+                - name: current-index
+                  value: "{{`{{steps.node-info.outputs.parameters.next-index}}`}}"
+
+    # =========================================================================
+    # GET NODE AT INDEX (helper for sequential chain)
+    # =========================================================================
+    - name: get-node-at-index
+      inputs:
+        parameters:
+          - name: nodes-json
+          - name: index
+      outputs:
+        parameters:
+          - name: node-name
+            valueFrom:
+              path: /tmp/node-name.txt
+          - name: has-more
+            valueFrom:
+              path: /tmp/has-more.txt
+          - name: next-index
+            valueFrom:
+              path: /tmp/next-index.txt
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.kubectl-image}}`}}"
+        command: [sh]
+        source: |
+          set -e
+          apk add --no-cache -q jq 2>/dev/null || true
+          NODES_JSON='{{`{{inputs.parameters.nodes-json}}`}}'
+          INDEX={{`{{inputs.parameters.index}}`}}
+
+          NODE=$(echo "$NODES_JSON" | jq -r ".[$INDEX]")
+          TOTAL=$(echo "$NODES_JSON" | jq 'length')
+          NEXT=$((INDEX + 1))
+
+          echo "$NODE" > /tmp/node-name.txt
+          echo "$NEXT" > /tmp/next-index.txt
+
+          if [ "$NEXT" -lt "$TOTAL" ]; then
+            echo "true" > /tmp/has-more.txt
+          else
+            echo "false" > /tmp/has-more.txt
+          fi
+
+          echo "=== Node $((INDEX + 1)) of $TOTAL: $NODE ==="
+
+    # =========================================================================
+    # GET TARGET NODES (supports label selector, taint selector, or both)
+    # =========================================================================
+    - name: get-target-nodes
+      # Tolerate system taints so workflow pods can schedule during upgrades
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      outputs:
+        parameters:
+          - name: nodes
+            valueFrom:
+              path: /tmp/nodes.json
+          - name: node-count
+            valueFrom:
+              path: /tmp/count.txt
+      script:
+        image: "{{`{{workflow.parameters.kubectl-image}}`}}"
+        command: [bash]
+        source: |
+          set -e
+          LABEL_SELECTOR="{{`{{workflow.parameters.node-selector}}`}}"
+          TAINT_KEY="{{`{{workflow.parameters.node-taint-key}}`}}"
+          TAINT_VALUE="{{`{{workflow.parameters.node-taint-value}}`}}"
+
+          # Get nodes based on label selector (or all nodes if no selector)
+          if [[ -n "$LABEL_SELECTOR" ]]; then
+            NODE_NAMES=$(kubectl get nodes -l "$LABEL_SELECTOR" -o jsonpath='{.items[*].metadata.name}')
+          else
+            NODE_NAMES=$(kubectl get nodes -o jsonpath='{.items[*].metadata.name}')
+          fi
+
+          if [[ -z "$NODE_NAMES" ]]; then
+            echo "[]" > /tmp/nodes.json
+            echo "0" > /tmp/count.txt
+            echo "No nodes found matching label selector"
+            exit 0
+          fi
+
+          # If taint key specified, filter nodes by taint
+          if [[ -n "$TAINT_KEY" ]]; then
+            TAINT_FILTERED=""
+            for node in $NODE_NAMES; do
+              # Get taints for this node
+              if [[ -n "$TAINT_VALUE" ]]; then
+                # Check for specific taint key=value
+                HAS_TAINT=$(kubectl get node "$node" -o jsonpath="{.spec.taints[?(@.key=='$TAINT_KEY' && @.value=='$TAINT_VALUE')].key}" 2>/dev/null || echo "")
+              else
+                # Check for taint key only
+                HAS_TAINT=$(kubectl get node "$node" -o jsonpath="{.spec.taints[?(@.key=='$TAINT_KEY')].key}" 2>/dev/null || echo "")
+              fi
+              if [[ -n "$HAS_TAINT" ]]; then
+                TAINT_FILTERED="$TAINT_FILTERED $node"
+              fi
+            done
+            NODE_NAMES=$(echo "$TAINT_FILTERED" | xargs)
+          fi
+
+          if [[ -z "$NODE_NAMES" ]]; then
+            echo "[]" > /tmp/nodes.json
+            echo "0" > /tmp/count.txt
+            echo "No nodes found matching selection criteria"
+            exit 0
+          fi
+
+          # Convert space-separated names to sorted newline-separated
+          NODE_LIST=$(echo "$NODE_NAMES" | tr ' ' '\n' | sort)
+          NODE_COUNT=$(echo "$NODE_LIST" | wc -l)
+
+          # Output as JSON array (manually build it without jq)
+          JSON_ARRAY="["
+          FIRST=true
+          for node in $NODE_LIST; do
+            if [[ "$FIRST" == "true" ]]; then
+              JSON_ARRAY="${JSON_ARRAY}\"${node}\""
+              FIRST=false
+            else
+              JSON_ARRAY="${JSON_ARRAY},\"${node}\""
+            fi
+          done
+          JSON_ARRAY="${JSON_ARRAY}]"
+
+          echo "$JSON_ARRAY" > /tmp/nodes.json
+          echo "$NODE_COUNT" > /tmp/count.txt
+
+          echo "Found $NODE_COUNT nodes for upgrade:"
+          echo "$NODE_LIST"
+
+    # =========================================================================
+    # UPGRADE SINGLE NODE
+    # =========================================================================
+    - name: upgrade-single-node
+      inputs:
+        parameters:
+          - name: node-name
+      steps:
+        - - name: prepare
+            template: prepare-node
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{inputs.parameters.node-name}}`}}"
+        - - name: cordon
+            template: cordon-node
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{inputs.parameters.node-name}}`}}"
+        - - name: drain
+            template: drain-node
+            when: "{{`{{workflow.parameters.drain-enabled}}`}} == true"
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{inputs.parameters.node-name}}`}}"
+        - - name: upgrade
+            template: helm-upgrade
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{inputs.parameters.node-name}}`}}"
+        - - name: wait-ready
+            template: wait-kata-ready
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{inputs.parameters.node-name}}`}}"
+        - - name: verify-and-complete
+            template: verify-and-complete-node
+            arguments:
+              parameters:
+                - name: node-name
+                  value: "{{`{{inputs.parameters.node-name}}`}}"
+
+    # =========================================================================
+    # PREPARE NODE
+    # =========================================================================
+    - name: prepare-node
+      inputs:
+        parameters:
+          - name: node-name
+      resource:
+        action: patch
+        mergeStrategy: merge
+        manifest: |
+          apiVersion: v1
+          kind: Node
+          metadata:
+            name: "{{`{{inputs.parameters.node-name}}`}}"
+            annotations:
+              katacontainers.io/kata-upgrade-status: "preparing"
+
+    # =========================================================================
+    # CORDON NODE
+    # =========================================================================
+    - name: cordon-node
+      inputs:
+        parameters:
+          - name: node-name
+      resource:
+        action: patch
+        mergeStrategy: merge
+        manifest: |
+          apiVersion: v1
+          kind: Node
+          metadata:
+            name: "{{`{{inputs.parameters.node-name}}`}}"
+            annotations:
+              katacontainers.io/kata-upgrade-status: "cordoned"
+          spec:
+            unschedulable: true
+
+    # =========================================================================
+    # DRAIN NODE (optional, only runs if drain-enabled is true)
+    # =========================================================================
+    - name: drain-node
+      inputs:
+        parameters:
+          - name: node-name
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.kubectl-image}}`}}"
+        command: [bash]
+        source: |
+          set -e
+          NODE="{{`{{inputs.parameters.node-name}}`}}"
+          TIMEOUT="{{`{{workflow.parameters.drain-timeout}}`}}"
+
+          # On failure: mark node as failed and uncordon
+          cleanup_on_failure() {
+            echo "ERROR: Drain failed, cleaning up node $NODE"
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="failed" || true
+            kubectl uncordon "$NODE" || true
+          }
+          trap cleanup_on_failure EXIT
+
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="draining"
+          kubectl drain "$NODE" \
+            --ignore-daemonsets \
+            --delete-emptydir-data \
+            --force \
+            --timeout="$TIMEOUT"
+
+          # Success - remove the trap
+          trap - EXIT
+
+    # =========================================================================
+    # HELM UPGRADE
+    # =========================================================================
+    - name: helm-upgrade
+      inputs:
+        parameters:
+          - name: node-name
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.helm-image}}`}}"
+        command: [bash]
+        source: |
+          set -e
+          NODE="{{`{{inputs.parameters.node-name}}`}}"
+          VERSION="{{`{{workflow.parameters.target-version}}`}}"
+          RELEASE="{{`{{workflow.parameters.helm-release}}`}}"
+          NS="{{`{{workflow.parameters.helm-namespace}}`}}"
+          CHART="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
+
+          apk add --no-cache -q kubectl
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="upgrading"
+
+          # On failure: mark node as failed and uncordon
+          cleanup_on_failure() {
+            echo "ERROR: Helm upgrade failed, cleaning up node $NODE"
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="failed" || true
+            kubectl uncordon "$NODE" || true
+          }
+          trap cleanup_on_failure EXIT
+
+          # Disable kata-deploy's verification (--set verification.pod="") because:
+          # - kata-deploy verification is cluster-wide (runs once after helm upgrade)
+          # - kata-upgrade does per-node verification in verify-and-complete-node
+          # The per-node verification is more appropriate for rolling upgrades.
+          helm upgrade "$RELEASE" "$CHART" \
+            --namespace "$NS" \
+            --version "$VERSION" \
+            --reuse-values \
+            --set verification.pod="" \
+            --rollback-on-failure \
+            --timeout 10m \
+            --wait
+
+          # Success - remove the trap so we don't run cleanup
+          trap - EXIT
+
+    # =========================================================================
+    # WAIT FOR KATA-DEPLOY READY
+    # =========================================================================
+    - name: wait-kata-ready
+      inputs:
+        parameters:
+          - name: node-name
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.kubectl-image}}`}}"
+        command: [bash]
+        source: |
+          set -e
+          NODE="{{`{{inputs.parameters.node-name}}`}}"
+          NS="{{`{{workflow.parameters.helm-namespace}}`}}"
+
+          # On failure: mark node as failed and uncordon
+          cleanup_on_failure() {
+            echo "ERROR: Timed out waiting for kata-deploy, cleaning up node $NODE"
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="failed" || true
+            kubectl uncordon "$NODE" || true
+          }
+          trap cleanup_on_failure EXIT
+
+          for i in $(seq 1 60); do
+            POD=$(kubectl get pods -n "$NS" -l name=kata-deploy \
+              --field-selector spec.nodeName="$NODE" \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            if [[ -n "$POD" ]]; then
+              if kubectl wait pod "$POD" -n "$NS" --for=condition=Ready --timeout=10s 2>/dev/null; then
+                echo "kata-deploy pod $POD is ready"
+                trap - EXIT
+                exit 0
+              fi
+            fi
+            echo "Waiting... ($i/60)"
+            sleep 5
+          done
+          exit 1
+
+    # =========================================================================
+    # VERIFY AND COMPLETE NODE (with automatic rollback on failure)
+    # =========================================================================
+    - name: verify-and-complete-node
+      inputs:
+        parameters:
+          - name: node-name
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.helm-image}}`}}"
+        command: [bash]
+        source: |
+          # Don't use set -e - we need to reach rollback logic even on errors
+          NODE="{{`{{inputs.parameters.node-name}}`}}"
+          VERIFY_NS="{{`{{workflow.parameters.verification-namespace}}`}}"
+          RELEASE="{{`{{workflow.parameters.helm-release}}`}}"
+          NS="{{`{{workflow.parameters.helm-namespace}}`}}"
+          VERSION="{{`{{workflow.parameters.target-version}}`}}"
+          VERIFICATION_POD="{{`{{workflow.parameters.verification-pod}}`}}"
+          TEST_POD="kata-verify-${NODE}-$(date +%s)"
+
+          # Install kubectl (helm image is based on kubectl image but just in case)
+          apk add --no-cache -q kubectl 2>/dev/null || true
+
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="verifying"
+
+          # Decode verification pod spec (base64-encoded)
+          echo "Using verification pod from workflow parameters"
+          echo "$VERIFICATION_POD" | base64 -d > /tmp/verify-pod.yaml
+
+          # Apply verification pod with placeholder substitution
+          sed -i "s|\${NODE}|$NODE|g" /tmp/verify-pod.yaml
+          sed -i "s|\${TEST_POD}|$TEST_POD|g" /tmp/verify-pod.yaml
+          
+          if ! kubectl apply -n "$VERIFY_NS" -f /tmp/verify-pod.yaml; then
+            echo "ERROR: Failed to create verification pod"
+            VERIFY_SUCCESS=false
+          fi
+
+          # Cleanup function for verification pod
+          cleanup_pod() {
+            kubectl delete pod "$TEST_POD" -n "$VERIFY_NS" --ignore-not-found --wait=false
+          }
+          trap cleanup_pod EXIT
+
+          # Wait for verification pod to complete (only if pod was created)
+          # This catches all failure modes:
+          # - Pod stuck in Pending/ContainerCreating (runtime can't start VM)
+          # - Pod crashes immediately (containerd/CRI-O config issues)
+          # - Pod times out (resource issues, image pull failures)
+          # - Pod exits with non-zero code (verification logic failed)
+          if [ "${VERIFY_SUCCESS:-}" != "false" ]; then
+            VERIFY_SUCCESS=false
+            if kubectl wait pod "$TEST_POD" -n "$VERIFY_NS" --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s; then
+              echo "=== Verification Succeeded ==="
+              kubectl logs "$TEST_POD" -n "$VERIFY_NS" || true
+              VERIFY_SUCCESS=true
+            else
+              echo "=== Verification Failed ==="
+              echo ""
+              echo "Pod status:"
+              kubectl get pod "$TEST_POD" -n "$VERIFY_NS" -o wide || true
+              echo ""
+              echo "Pod events and details:"
+              kubectl describe pod "$TEST_POD" -n "$VERIFY_NS" || true
+              echo ""
+              echo "Pod logs (if available):"
+              kubectl logs "$TEST_POD" -n "$VERIFY_NS" || true
+            fi
+          fi
+
+          # Clean up verification pod
+          cleanup_pod
+          trap - EXIT
+
+          if [ "$VERIFY_SUCCESS" = "true" ]; then
+            # Success path: uncordon and mark complete
+            echo "Uncordoning node $NODE..."
+            kubectl uncordon "$NODE"
+            kubectl annotate node "$NODE" --overwrite \
+              katacontainers.io/kata-upgrade-status="completed" \
+              katacontainers.io/kata-current-version="$VERSION"
+            echo "Node $NODE upgrade completed successfully"
+            exit 0
+          else
+            # Failure path: automatic rollback
+            echo "Initiating automatic rollback for node $NODE..."
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolling-back"
+
+            helm rollback "$RELEASE" -n "$NS" --wait --timeout 10m
+
+            # Wait for kata-deploy to be ready after rollback
+            echo "Waiting for kata-deploy to be ready after rollback..."
+            for i in $(seq 1 60); do
+              POD=$(kubectl get pods -n "$NS" -l name=kata-deploy \
+                --field-selector spec.nodeName="$NODE" \
+                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+              if [[ -n "$POD" ]]; then
+                if kubectl wait pod "$POD" -n "$NS" --for=condition=Ready --timeout=10s 2>/dev/null; then
+                  echo "kata-deploy pod $POD is ready after rollback"
+                  break
+                fi
+              fi
+              echo "Waiting for rollback to complete... ($i/60)"
+              sleep 5
+            done
+
+            # Uncordon and mark as rolled back
+            kubectl uncordon "$NODE"
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolled-back"
+            echo "Node $NODE rolled back to previous version"
+
+            # Exit with error so workflow shows the failure
+            exit 1
+          fi
+
+    # =========================================================================
+    # PRINT SUMMARY
+    # =========================================================================
+    - name: print-summary
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.kubectl-image}}`}}"
+        command: [bash]
+        source: |
+          echo "=== KATA UPGRADE SUMMARY ==="
+          kubectl get nodes \
+            -L katacontainers.io/kata-runtime \
+            -L katacontainers.io/kata-upgrade-status \
+            -L katacontainers.io/kata-current-version
+
+    # =========================================================================
+    # ROLLBACK (can be called manually)
+    # =========================================================================
+    - name: rollback-node
+      inputs:
+        parameters:
+          - name: node-name
+      tolerations:
+        - key: node.kubernetes.io/unschedulable
+          operator: Exists
+        - key: node.kubernetes.io/disk-pressure
+          operator: Exists
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+      script:
+        image: "{{`{{workflow.parameters.helm-image}}`}}"
+        command: [sh]
+        source: |
+          set -e
+          NODE="{{`{{inputs.parameters.node-name}}`}}"
+          RELEASE="{{`{{workflow.parameters.helm-release}}`}}"
+          NS="{{`{{workflow.parameters.helm-namespace}}`}}"
+
+          apk add --no-cache -q kubectl
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolling-back"
+
+          helm rollback "$RELEASE" -n "$NS" --wait --timeout 10m
+
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolled-back"
+          kubectl uncordon "$NODE"
