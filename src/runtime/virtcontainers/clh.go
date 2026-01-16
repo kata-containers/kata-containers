@@ -332,6 +332,9 @@ func (clh *cloudHypervisor) getClhStopSandboxTimeout() time.Duration {
 func (clh *cloudHypervisor) setConfig(config *HypervisorConfig) error {
 	clh.config = *config
 
+	// We don't support NVDIMM with Cloud Hypervisor.
+	clh.config.DisableImageNvdimm = true
+
 	return nil
 }
 
@@ -584,8 +587,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
-	disableNvdimm := (clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest)
-	enableDax := !disableNvdimm
+	disableNvdimm := true
+	enableDax := false
 
 	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU, hypervisorConfig.KernelVerityParams)
 	if err != nil {
@@ -607,31 +610,19 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 
 	if assetType == types.ImageAsset {
-		if clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest {
-			disk := chclient.NewDiskConfig()
-			disk.Path = &assetPath
-			disk.SetReadonly(true)
+		disk := chclient.NewDiskConfig()
+		disk.Path = &assetPath
+		disk.SetReadonly(true)
 
-			diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
-			if diskRateLimiterConfig != nil {
-				disk.SetRateLimiterConfig(*diskRateLimiterConfig)
-			}
+		diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
+		if diskRateLimiterConfig != nil {
+			disk.SetRateLimiterConfig(*diskRateLimiterConfig)
+		}
 
-			if clh.vmconfig.Disks != nil {
-				*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, *disk)
-			} else {
-				clh.vmconfig.Disks = &[]chclient.DiskConfig{*disk}
-			}
+		if clh.vmconfig.Disks != nil {
+			*clh.vmconfig.Disks = append(*clh.vmconfig.Disks, *disk)
 		} else {
-			pmem := chclient.NewPmemConfig(assetPath)
-			*pmem.DiscardWrites = true
-			pmem.SetIommu(clh.config.IOMMU)
-
-			if clh.vmconfig.Pmem != nil {
-				*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
-			} else {
-				clh.vmconfig.Pmem = &[]chclient.PmemConfig{*pmem}
-			}
+			clh.vmconfig.Disks = &[]chclient.DiskConfig{*disk}
 		}
 	} else {
 		// assetType == types.InitrdAsset
