@@ -468,12 +468,6 @@ install_image() {
 		export REPO_COMPONENTS
 	fi
 
-	# Disable DAX for ARM64 due to kernel panic in dax_disassociate_entry
-	# with virtio-pmem on kernel 6.18.x
-	if [ "${ARCH}" == "aarch64" ]; then
-		export DAX_DISABLE=yes
-	fi
-
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 

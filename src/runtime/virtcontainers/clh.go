@@ -585,9 +585,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
 	disableNvdimm := (clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest)
-	// DAX is disabled on aarch64 due to kernel panic in dax_disassociate_entry
-	// with virtio-pmem on kernel 6.18.x
-	enableDax := !disableNvdimm && runtime.GOARCH != "arm64"
+	enableDax := !disableNvdimm
 
 	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
 	if err != nil {
