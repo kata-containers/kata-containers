@@ -222,8 +222,8 @@ hypervisor_loglevel = 1
 # If false and nvdimm is supported, use nvdimm device to plug guest image.
 # Otherwise virtio-block device is used.
 #
-# nvdimm is not supported when `confidential_guest = true`.
-disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM@
+# nvdimm is not supported with Cloud Hypervisor or when `confidential_guest = true`.
+disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM_CLH@
 
 # Enable hot-plugging of VFIO devices to a root-port.
 # The default setting is  "no-port"

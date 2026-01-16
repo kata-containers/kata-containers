@@ -22,6 +22,8 @@ rootfs_type = @DEFROOTFSTYPE@
 
 # Block storage driver to be used for the VM rootfs is backed
 # by a block device.
+#
+# virtio-pmem is not supported with Cloud Hypervisor.
 vm_rootfs_driver = "@VMROOTFSDRIVER_CLH@"
 
 # Path to the firmware.
