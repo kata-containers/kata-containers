@@ -820,6 +820,14 @@ function helm_helper() {
 		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
 	fi
 
+	# Merge extra values file if provided (e.g., for custom runtimes testing)
+	# HELM_EXTRA_VALUES_FILE should be a path to a YAML file that will be merged
+	# into the final values using yq's multiply-merge operator
+	if [[ -n "${HELM_EXTRA_VALUES_FILE}" ]] && [[ -f "${HELM_EXTRA_VALUES_FILE}" ]]; then
+		echo "Merging extra values from: ${HELM_EXTRA_VALUES_FILE}"
+		yq -i ". *= load(\"${HELM_EXTRA_VALUES_FILE}\")" "${values_yaml}"
+	fi
+
 	# Enable verification during deployment if HELM_VERIFY_DEPLOYMENT is set
 	# Creates a simple verification pod that runs with the Kata runtime
 	local helm_set_file_args=""

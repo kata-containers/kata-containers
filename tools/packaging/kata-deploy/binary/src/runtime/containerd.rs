@@ -10,42 +10,34 @@ use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub async fn configure_containerd_runtime(
+/// Parameters for configuring a containerd runtime
+struct ContainerdRuntimeConfig {
+    runtime_name: String,
+    runtime_path: String,
+    config_path: String,
+    pod_annotations: &'static str,
+    snapshotter: Option<String>,
+}
+
+/// Get the containerd configuration file path and plugin ID
+async fn get_containerd_config_context(
     config: &Config,
     runtime: &str,
-    shim: &str,
-) -> Result<()> {
-    log::info!("configure_containerd_runtime: Starting for shim={}", shim);
-    let adjusted_shim = match config.multi_install_suffix.as_ref() {
-        Some(suffix) if !suffix.is_empty() => format!("{shim}-{suffix}"),
-        _ => shim.to_string(),
-    };
-    let runtime_name = format!("kata-{adjusted_shim}");
-    let configuration = format!("configuration-{shim}");
-
-    log::info!("configure_containerd_runtime: Checking drop-in support");
+) -> Result<(PathBuf, String)> {
     let use_drop_in =
         super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
-    log::info!("configure_containerd_runtime: use_drop_in={}", use_drop_in);
 
-    let configuration_file: std::path::PathBuf = if use_drop_in {
-        // Ensure we have the absolute path with /host prefix
-        let base_path = if config.containerd_drop_in_conf_file.starts_with("/host") {
-            // Already has /host prefix
-            Path::new(&config.containerd_drop_in_conf_file).to_path_buf()
+    let configuration_file = if use_drop_in {
+        if config.containerd_drop_in_conf_file.starts_with("/host") {
+            PathBuf::from(&config.containerd_drop_in_conf_file)
         } else {
-            // Need to add /host prefix
             let drop_in_path = config.containerd_drop_in_conf_file.trim_start_matches('/');
             Path::new("/host").join(drop_in_path)
-        };
-
-        log::debug!("Using drop-in config file: {:?}", base_path);
-        base_path
+        }
     } else {
-        log::debug!("Using main config file: {}", config.containerd_conf_file);
-        Path::new(&config.containerd_conf_file).to_path_buf()
+        PathBuf::from(&config.containerd_conf_file)
     };
 
     let containerd_root_conf_file = if matches!(runtime, "k0s-worker" | "k0s-controller") {
@@ -54,108 +46,122 @@ pub async fn configure_containerd_runtime(
         &config.containerd_conf_file
     };
 
-    let pluginid = if fs::read_to_string(containerd_root_conf_file)
-        .unwrap_or_default()
-        .contains("version = 3")
-    {
+    let content = fs::read_to_string(containerd_root_conf_file).unwrap_or_default();
+    let pluginid = if content.contains("version = 3") {
         "\"io.containerd.cri.v1.runtime\""
-    } else if fs::read_to_string(containerd_root_conf_file)
-        .unwrap_or_default()
-        .contains("version = 2")
-    {
+    } else if content.contains("version = 2") {
         "\"io.containerd.grpc.v1.cri\""
     } else {
         "cri"
     };
 
-    let runtime_table = format!(".plugins.{pluginid}.containerd.runtimes.{runtime_name}");
-    let runtime_options_table = format!("{runtime_table}.options");
-    let runtime_type = format!("\"io.containerd.{runtime_name}.v2\"");
-    let runtime_config_path = format!(
-        "\"{}/{}.toml\"",
-        utils::get_kata_containers_config_path(shim, &config.dest_dir),
-        configuration
-    );
-    let runtime_path = format!(
-        "\"{}\"",
-        utils::get_kata_containers_runtime_path(shim, &config.dest_dir)
-    );
+    Ok((configuration_file, pluginid.to_string()))
+}
 
-    log::info!(
-        "configure_containerd_runtime: Writing to config file: {:?}",
-        configuration_file
-    );
-    log::info!("configure_containerd_runtime: Setting runtime_type");
+/// Format snapshotter value, handling nydus suffix
+fn format_snapshotter_value(snapshotter: &str, multi_install_suffix: &Option<String>) -> String {
+    if snapshotter == "nydus" {
+        match multi_install_suffix.as_ref() {
+            Some(suffix) if !suffix.is_empty() => format!("\"{snapshotter}-{suffix}\""),
+            _ => format!("\"{snapshotter}\""),
+        }
+    } else {
+        format!("\"{snapshotter}\"")
+    }
+}
+
+/// Write containerd runtime configuration to TOML file
+fn write_containerd_runtime_config(
+    config_file: &Path,
+    pluginid: &str,
+    runtime_config: &ContainerdRuntimeConfig,
+    debug: bool,
+) -> Result<()> {
+    let runtime_table =
+        format!(".plugins.{pluginid}.containerd.runtimes.{}", runtime_config.runtime_name);
+    let runtime_options_table = format!("{runtime_table}.options");
+    let runtime_type = format!("\"io.containerd.{}.v2\"", runtime_config.runtime_name);
+
+    toml_utils::set_toml_value(config_file, &format!("{runtime_table}.runtime_type"), &runtime_type)?;
     toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.runtime_type"),
-        &runtime_type,
-    )?;
-    toml_utils::set_toml_value(
-        &configuration_file,
+        config_file,
         &format!("{runtime_table}.runtime_path"),
-        &runtime_path,
+        &format!("\"{}\"", runtime_config.runtime_path),
     )?;
     toml_utils::set_toml_value(
-        &configuration_file,
+        config_file,
         &format!("{runtime_table}.privileged_without_host_devices"),
         "true",
     )?;
-
-    let pod_annotations = if shim.contains("nvidia-gpu-") {
-        "[\"io.katacontainers.*\",\"cdi.k8s.io/*\"]"
-    } else {
-        "[\"io.katacontainers.*\"]"
-    };
     toml_utils::set_toml_value(
-        &configuration_file,
+        config_file,
         &format!("{runtime_table}.pod_annotations"),
-        pod_annotations,
+        runtime_config.pod_annotations,
     )?;
-
     toml_utils::set_toml_value(
-        &configuration_file,
+        config_file,
         &format!("{runtime_options_table}.ConfigPath"),
-        &runtime_config_path,
+        &format!("\"{}\"", runtime_config.config_path),
     )?;
 
-    if config.debug {
-        toml_utils::set_toml_value(&configuration_file, ".debug.level", "\"debug\"")?;
+    if let Some(ref snapshotter) = runtime_config.snapshotter {
+        toml_utils::set_toml_value(
+            config_file,
+            &format!("{runtime_table}.snapshotter"),
+            snapshotter,
+        )?;
     }
 
-    match config.snapshotter_handler_mapping_for_arch.as_ref() {
-        Some(mapping) => {
-            let snapshotters: Vec<&str> = mapping.split(',').collect();
-            for m in snapshotters {
-                // Format is already validated in snapshotter_handler_mapping_validation_check
-                // and should be validated in Helm templates
-                let parts: Vec<&str> = m.split(':').collect();
-                let key = parts[0];
-                let value = parts[1];
+    if debug {
+        toml_utils::set_toml_value(config_file, ".debug.level", "\"debug\"")?;
+    }
 
-                if key != shim {
-                    continue;
-                }
+    Ok(())
+}
 
-                let snapshotter_value = if value == "nydus" {
-                    match config.multi_install_suffix.as_ref() {
-                        Some(suffix) if !suffix.is_empty() => format!("\"{value}-{suffix}\""),
-                        _ => format!("\"{value}\""),
-                    }
-                } else {
-                    format!("\"{value}\"")
-                };
+pub async fn configure_containerd_runtime(
+    config: &Config,
+    runtime: &str,
+    shim: &str,
+) -> Result<()> {
+    log::info!("configure_containerd_runtime: Starting for shim={}", shim);
 
-                toml_utils::set_toml_value(
-                    &configuration_file,
-                    &format!("{runtime_table}.snapshotter"),
-                    &snapshotter_value,
-                )?;
-                break;
+    let adjusted_shim = match config.multi_install_suffix.as_ref() {
+        Some(suffix) if !suffix.is_empty() => format!("{shim}-{suffix}"),
+        _ => shim.to_string(),
+    };
+
+    let (configuration_file, pluginid) = get_containerd_config_context(config, runtime).await?;
+
+    // Determine snapshotter from mapping
+    let snapshotter = config.snapshotter_handler_mapping_for_arch.as_ref().and_then(|mapping| {
+        mapping.split(',').find_map(|m| {
+            let parts: Vec<&str> = m.split(':').collect();
+            if parts.len() == 2 && parts[0] == shim {
+                Some(format_snapshotter_value(parts[1], &config.multi_install_suffix))
+            } else {
+                None
             }
-        }
-        _ => {}
-    }
+        })
+    });
+
+    let runtime_config = ContainerdRuntimeConfig {
+        runtime_name: format!("kata-{adjusted_shim}"),
+        runtime_path: utils::get_kata_containers_runtime_path(shim, &config.dest_dir),
+        config_path: format!(
+            "{}/configuration-{shim}.toml",
+            utils::get_kata_containers_config_path(shim, &config.dest_dir)
+        ),
+        pod_annotations: if shim.contains("nvidia-gpu-") {
+            "[\"io.katacontainers.*\",\"cdi.k8s.io/*\"]"
+        } else {
+            "[\"io.katacontainers.*\"]"
+        },
+        snapshotter,
+    };
+
+    log::info!("configure_containerd_runtime: Writing to {:?}", configuration_file);
+    write_containerd_runtime_config(&configuration_file, &pluginid, &runtime_config, config.debug)?;
 
     Ok(())
 }
@@ -223,7 +229,70 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         log::info!("Successfully configured runtime for shim: {}", shim);
     }
 
+    if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
+        log::info!(
+            "Configuring {} custom runtime(s)",
+            config.custom_runtimes.len()
+        );
+        for custom_runtime in &config.custom_runtimes {
+            log::info!(
+                "Configuring custom runtime: {}",
+                custom_runtime.handler
+            );
+            configure_custom_containerd_runtime(config, runtime, custom_runtime).await?;
+            log::info!(
+                "Successfully configured custom runtime: {}",
+                custom_runtime.handler
+            );
+        }
+    }
+
     log::info!("Successfully configured all containerd runtimes");
+    Ok(())
+}
+
+pub async fn configure_custom_containerd_runtime(
+    config: &Config,
+    runtime: &str,
+    custom_runtime: &crate::config::CustomRuntime,
+) -> Result<()> {
+    log::info!(
+        "configure_custom_containerd_runtime: Starting for handler={}",
+        custom_runtime.handler
+    );
+
+    let (configuration_file, pluginid) = get_containerd_config_context(config, runtime).await?;
+
+    let snapshotter = custom_runtime
+        .containerd_snapshotter
+        .as_ref()
+        .map(|s| format_snapshotter_value(s, &config.multi_install_suffix));
+
+    // Derive shim path from base_config (uses existing is_rust_shim logic)
+    let runtime_path = utils::get_kata_containers_runtime_path(&custom_runtime.base_config, &config.dest_dir);
+
+    // Config path points to the isolated custom runtime directory
+    let config_path = format!(
+        "{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml",
+        config.dest_dir,
+        custom_runtime.handler,
+        custom_runtime.base_config
+    );
+
+    let runtime_config = ContainerdRuntimeConfig {
+        runtime_name: custom_runtime.handler.clone(),
+        runtime_path,
+        config_path,
+        pod_annotations: "[\"io.katacontainers.*\"]",
+        snapshotter,
+    };
+
+    log::info!(
+        "configure_custom_containerd_runtime: Writing to {:?}",
+        configuration_file
+    );
+    write_containerd_runtime_config(&configuration_file, &pluginid, &runtime_config, config.debug)?;
+
     Ok(())
 }
 
@@ -518,5 +587,78 @@ mod tests {
                 expected_error
             );
         }
+    }
+
+    #[test]
+    fn test_custom_runtime_snapshotter_nydus_suffix() {
+        // Test that nydus snapshotter gets suffix appended when multi_install_suffix is set
+        let multi_install_suffix = Some("dev".to_string());
+        let snapshotter = "nydus";
+
+        let snapshotter_value = if snapshotter == "nydus" {
+            match multi_install_suffix.as_ref() {
+                Some(suffix) if !suffix.is_empty() => format!("\"{snapshotter}-{suffix}\""),
+                _ => format!("\"{snapshotter}\""),
+            }
+        } else {
+            format!("\"{snapshotter}\"")
+        };
+
+        assert_eq!(snapshotter_value, "\"nydus-dev\"");
+    }
+
+    #[test]
+    fn test_custom_runtime_snapshotter_nydus_no_suffix() {
+        // Test that nydus snapshotter works without suffix
+        let multi_install_suffix: Option<String> = None;
+        let snapshotter = "nydus";
+
+        let snapshotter_value = if snapshotter == "nydus" {
+            match multi_install_suffix.as_ref() {
+                Some(suffix) if !suffix.is_empty() => format!("\"{snapshotter}-{suffix}\""),
+                _ => format!("\"{snapshotter}\""),
+            }
+        } else {
+            format!("\"{snapshotter}\"")
+        };
+
+        assert_eq!(snapshotter_value, "\"nydus\"");
+    }
+
+    #[test]
+    fn test_custom_runtime_snapshotter_erofs_no_suffix() {
+        // Test that erofs snapshotter doesn't get suffix (only nydus gets suffix)
+        let multi_install_suffix = Some("dev".to_string());
+        let snapshotter = "erofs";
+
+        let snapshotter_value = if snapshotter == "nydus" {
+            match multi_install_suffix.as_ref() {
+                Some(suffix) if !suffix.is_empty() => format!("\"{snapshotter}-{suffix}\""),
+                _ => format!("\"{snapshotter}\""),
+            }
+        } else {
+            format!("\"{snapshotter}\"")
+        };
+
+        // erofs should NOT get suffix
+        assert_eq!(snapshotter_value, "\"erofs\"");
+    }
+
+    #[test]
+    fn test_custom_runtime_snapshotter_empty_suffix() {
+        // Test that empty suffix is treated as None
+        let multi_install_suffix = Some("".to_string());
+        let snapshotter = "nydus";
+
+        let snapshotter_value = if snapshotter == "nydus" {
+            match multi_install_suffix.as_ref() {
+                Some(suffix) if !suffix.is_empty() => format!("\"{snapshotter}-{suffix}\""),
+                _ => format!("\"{snapshotter}\""),
+            }
+        } else {
+            format!("\"{snapshotter}\"")
+        };
+
+        assert_eq!(snapshotter_value, "\"nydus\"");
     }
 }

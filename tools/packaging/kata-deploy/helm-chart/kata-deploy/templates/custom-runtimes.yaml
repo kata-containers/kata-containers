@@ -1,0 +1,78 @@
+{{- /*
+Copyright (c) 2026 The Kata Containers Authors
+SPDX-License-Identifier: Apache-2.0
+
+Custom Runtimes - creates RuntimeClasses and ConfigMap for user-provided custom runtimes.
+Uses base config + drop-in mechanism. Only created when customRuntimes.enabled is true.
+*/ -}}
+{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+{{- $multiInstallSuffix := .Values.env.multiInstallSuffix }}
+
+{{- /* Create RuntimeClasses for each custom runtime */ -}}
+{{- range $name, $runtime := .Values.customRuntimes.runtimes }}
+{{- if and $runtime.baseConfig $runtime.runtimeClass }}
+---
+{{ $runtime.runtimeClass }}
+{{- end }}
+{{- end }}
+
+---
+{{- /* Create ConfigMap containing drop-in files and metadata */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+{{- if $multiInstallSuffix }}
+  name: {{ $.Chart.Name }}-custom-configs-{{ $multiInstallSuffix }}
+{{- else }}
+  name: {{ $.Chart.Name }}-custom-configs
+{{- end }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: custom-configs
+data:
+  {{- range $name, $runtime := .Values.customRuntimes.runtimes }}
+  {{- if and $runtime.baseConfig $runtime.runtimeClass }}
+  {{- /* Extract handler name from runtimeClass YAML */ -}}
+  {{- $handlerName := "" }}
+  {{- $lines := splitList "\n" $runtime.runtimeClass }}
+  {{- range $lines }}
+  {{- if hasPrefix "handler:" . }}
+  {{- $handlerName = trim (trimPrefix "handler:" .) }}
+  {{- end }}
+  {{- end }}
+  {{- if $handlerName }}
+  {{- /* Include drop-in content if provided */ -}}
+  {{- if $runtime.dropIn }}
+  dropin-{{ $handlerName }}.toml: |
+    {{- $runtime.dropIn | nindent 4 }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  # Metadata file listing all custom handlers for kata-deploy to process
+  # Format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+  custom-runtimes.list: |
+    {{- range $name, $runtime := .Values.customRuntimes.runtimes }}
+    {{- if and $runtime.baseConfig $runtime.runtimeClass }}
+    {{- $handlerName := "" }}
+    {{- $lines := splitList "\n" $runtime.runtimeClass }}
+    {{- range $lines }}
+    {{- if hasPrefix "handler:" . }}
+    {{- $handlerName = trim (trimPrefix "handler:" .) }}
+    {{- end }}
+    {{- end }}
+    {{- if $handlerName }}
+    {{- $containerdSnapshotter := "" }}
+    {{- if and $runtime.containerd $runtime.containerd.snapshotter }}
+    {{- $containerdSnapshotter = $runtime.containerd.snapshotter }}
+    {{- end }}
+    {{- $crioPullType := "" }}
+    {{- if and $runtime.crio $runtime.crio.pullType }}
+    {{- $crioPullType = $runtime.crio.pullType }}
+    {{- end }}
+    {{ $handlerName }}:{{ $runtime.baseConfig }}:{{ $containerdSnapshotter }}:{{ $crioPullType }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+{{- end }}

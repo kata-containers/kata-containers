@@ -8,6 +8,15 @@ use log::info;
 use std::env;
 
 #[derive(Debug, Clone)]
+pub struct CustomRuntime {
+    pub handler: String,
+    pub base_config: String,
+    pub drop_in_file: Option<String>,
+    pub containerd_snapshotter: Option<String>,
+    pub crio_pull_type: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Config {
     pub node_name: String,
     pub debug: bool,
@@ -31,6 +40,8 @@ pub struct Config {
     pub containerd_conf_file: String,
     pub containerd_conf_file_backup: String,
     pub containerd_drop_in_conf_file: String,
+    pub custom_runtimes_enabled: bool,
+    pub custom_runtimes: Vec<CustomRuntime>,
 }
 
 impl Config {
@@ -136,6 +147,14 @@ impl Config {
         .map(|s| s.trim().to_string())
         .collect();
 
+        let custom_runtimes_enabled =
+            env::var("CUSTOM_RUNTIMES_ENABLED").unwrap_or_else(|_| "false".to_string()) == "true";
+        let custom_runtimes = if custom_runtimes_enabled {
+            parse_custom_runtimes()?
+        } else {
+            Vec::new()
+        };
+
         let config = Config {
             node_name,
             debug,
@@ -159,6 +178,8 @@ impl Config {
             containerd_conf_file,
             containerd_conf_file_backup,
             containerd_drop_in_conf_file,
+            custom_runtimes_enabled,
+            custom_runtimes,
         };
 
         // Validate the configuration
@@ -358,7 +379,104 @@ impl Config {
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
+        info!(
+            "* CUSTOM_RUNTIMES_ENABLED: {}",
+            self.custom_runtimes_enabled
+        );
+        if !self.custom_runtimes.is_empty() {
+            info!("* CUSTOM_RUNTIMES:");
+            for runtime in &self.custom_runtimes {
+                info!(
+                    "  - {}: base_config={}, drop_in={}, containerd_snapshotter={:?}, crio_pull_type={:?}",
+                    runtime.handler,
+                    runtime.base_config,
+                    runtime.drop_in_file.is_some(),
+                    runtime.containerd_snapshotter,
+                    runtime.crio_pull_type
+                );
+            }
+        }
     }
+}
+
+/// Parse custom runtimes from the mounted ConfigMap at /custom-configs/
+/// Reads the custom-runtimes.list file which contains entries in the format:
+/// handler:baseConfig:containerd_snapshotter:crio_pulltype
+/// Optionally reads drop-in files named dropin-{handler}.toml
+fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
+    let custom_configs_dir = "/custom-configs";
+    let list_file = format!("{}/custom-runtimes.list", custom_configs_dir);
+
+    let list_content = match std::fs::read_to_string(&list_file) {
+        Ok(content) => content,
+        Err(e) => {
+            log::warn!(
+                "Could not read custom runtimes list at {}: {}",
+                list_file,
+                e
+            );
+            return Ok(Vec::new());
+        }
+    };
+
+    let mut custom_runtimes = Vec::new();
+    for line in list_content.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+        let parts: Vec<&str> = line.split(':').collect();
+        let handler = parts.first().map(|s| s.trim()).unwrap_or("");
+        if handler.is_empty() {
+            continue;
+        }
+
+        let base_config = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        if base_config.is_empty() {
+            anyhow::bail!("Custom runtime '{}' missing required baseConfig field", handler);
+        }
+
+        let containerd_snapshotter = parts
+            .get(2)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let crio_pull_type = parts
+            .get(3)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        // Check for optional drop-in file
+        let drop_in_file = format!("{}/dropin-{}.toml", custom_configs_dir, handler);
+        let drop_in_file = if std::path::Path::new(&drop_in_file).exists() {
+            Some(drop_in_file)
+        } else {
+            None
+        };
+
+        log::info!(
+            "Found custom runtime: handler={}, base_config={}, drop_in={:?}, containerd_snapshotter={:?}, crio_pull_type={:?}",
+            handler,
+            base_config,
+            drop_in_file.is_some(),
+            containerd_snapshotter,
+            crio_pull_type
+        );
+
+        custom_runtimes.push(CustomRuntime {
+            handler: handler.to_string(),
+            base_config: base_config.to_string(),
+            drop_in_file,
+            containerd_snapshotter,
+            crio_pull_type,
+        });
+    }
+
+    Ok(custom_runtimes)
 }
 
 fn get_arch() -> Result<String> {
@@ -465,6 +583,7 @@ mod tests {
             "EXPERIMENTAL_FORCE_GUEST_PULL_AARCH64",
             "EXPERIMENTAL_FORCE_GUEST_PULL_S390X",
             "EXPERIMENTAL_FORCE_GUEST_PULL_PPC64LE",
+            "CUSTOM_RUNTIMES_ENABLED",
         ];
         for var in &vars {
             std::env::remove_var(var);
@@ -881,5 +1000,148 @@ mod tests {
 
             cleanup_env_vars();
         }
+    }
+
+    #[test]
+    fn test_custom_runtime_struct() {
+        let runtime = CustomRuntime {
+            handler: "kata-my-gpu-runtime".to_string(),
+            base_config: "qemu-nvidia-gpu".to_string(),
+            drop_in_file: Some("/custom-configs/dropin-kata-my-gpu-runtime.toml".to_string()),
+            containerd_snapshotter: Some("nydus".to_string()),
+            crio_pull_type: Some("guest-pull".to_string()),
+        };
+
+        assert_eq!(runtime.handler, "kata-my-gpu-runtime");
+        assert_eq!(runtime.base_config, "qemu-nvidia-gpu");
+        assert!(runtime.drop_in_file.is_some());
+        assert_eq!(runtime.containerd_snapshotter, Some("nydus".to_string()));
+        assert_eq!(runtime.crio_pull_type, Some("guest-pull".to_string()));
+    }
+
+    #[test]
+    fn test_custom_runtime_struct_no_dropin() {
+        let runtime = CustomRuntime {
+            handler: "kata-qemu-basic".to_string(),
+            base_config: "qemu".to_string(),
+            drop_in_file: None,
+            containerd_snapshotter: None,
+            crio_pull_type: None,
+        };
+
+        assert_eq!(runtime.handler, "kata-qemu-basic");
+        assert_eq!(runtime.base_config, "qemu");
+        assert!(runtime.drop_in_file.is_none());
+        assert!(runtime.containerd_snapshotter.is_none());
+    }
+
+    #[test]
+    fn test_custom_runtime_struct_rust_base() {
+        let runtime = CustomRuntime {
+            handler: "kata-clh-custom".to_string(),
+            base_config: "clh".to_string(),
+            drop_in_file: None,
+            containerd_snapshotter: None,
+            crio_pull_type: None,
+        };
+
+        // clh uses Rust runtime - shim path is derived from base_config
+        assert_eq!(runtime.base_config, "clh");
+    }
+
+    #[test]
+    fn test_parse_custom_runtimes_list_format() {
+        // Format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+        let line = "kata-my-runtime:qemu-nvidia-gpu:nydus:guest-pull";
+        let parts: Vec<&str> = line.split(':').collect();
+        let handler = parts.first().map(|s| s.trim()).unwrap_or("");
+        let base_config = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        let containerd_snapshotter = parts
+            .get(2)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let crio_pull_type = parts
+            .get(3)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        assert_eq!(handler, "kata-my-runtime");
+        assert_eq!(base_config, "qemu-nvidia-gpu");
+        assert_eq!(containerd_snapshotter, Some("nydus".to_string()));
+        assert_eq!(crio_pull_type, Some("guest-pull".to_string()));
+    }
+
+    #[test]
+    fn test_parse_custom_runtimes_list_format_empty_cri() {
+        // Format: handler:baseConfig:: (no CRI config)
+        let line = "kata-basic:qemu::";
+        let parts: Vec<&str> = line.split(':').collect();
+        let handler = parts.first().map(|s| s.trim()).unwrap_or("");
+        let base_config = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        let containerd_snapshotter = parts
+            .get(2)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let crio_pull_type = parts
+            .get(3)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        assert_eq!(handler, "kata-basic");
+        assert_eq!(base_config, "qemu");
+        assert!(containerd_snapshotter.is_none());
+        assert!(crio_pull_type.is_none());
+    }
+
+    #[test]
+    fn test_parse_custom_runtimes_list_format_partial_cri() {
+        // Format: handler:baseConfig:nydus: (only snapshotter)
+        let line = "kata-nydus:qemu-nvidia-gpu:nydus:";
+        let parts: Vec<&str> = line.split(':').collect();
+        let handler = parts.first().map(|s| s.trim()).unwrap_or("");
+        let base_config = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        let containerd_snapshotter = parts
+            .get(2)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let crio_pull_type = parts
+            .get(3)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        assert_eq!(handler, "kata-nydus");
+        assert_eq!(base_config, "qemu-nvidia-gpu");
+        assert_eq!(containerd_snapshotter, Some("nydus".to_string()));
+        assert!(crio_pull_type.is_none());
+    }
+
+    #[test]
+    fn test_parse_custom_runtimes_list_format_rust_base() {
+        // Test with Rust runtime base config (clh uses Rust)
+        let line = "kata-clh-custom:clh:erofs:guest-pull";
+        let parts: Vec<&str> = line.split(':').collect();
+        let handler = parts.first().map(|s| s.trim()).unwrap_or("");
+        let base_config = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        let containerd_snapshotter = parts
+            .get(2)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let crio_pull_type = parts
+            .get(3)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        assert_eq!(handler, "kata-clh-custom");
+        assert_eq!(base_config, "clh");
+        assert_eq!(containerd_snapshotter, Some("erofs".to_string()));
+        assert_eq!(crio_pull_type, Some("guest-pull".to_string()));
     }
 }

@@ -488,3 +488,168 @@ kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 ```
+
+## Custom Runtimes
+
+Starting with Kata Containers v3.26.0, you can bring your own `RuntimeClass`
+definitions with custom `podOverhead` values using a base config + drop-in approach.
+
+This is useful when you need:
+- Different memory/CPU overhead values for specific workloads
+- Custom VM configurations (different default memory, vCPUs, etc.)
+- Multiple runtime variants on the same cluster
+- Custom `CoCo`/guest-pull configurations
+
+### How Custom Runtimes Work
+
+Custom runtimes leverage Kata's existing `config.d` drop-in mechanism:
+
+1. You specify a **`baseConfig`** - an existing Kata configuration to use as the base
+2. You optionally provide a **`dropIn`** - TOML overrides that are applied on top
+3. You define a **`RuntimeClass`** - with your custom handler name and `podOverhead`
+
+The shim binary (Go vs Rust runtime) is automatically determined from the `baseConfig`.
+
+### Important: Configuration Inheritance
+
+The base config is copied **after** kata-deploy has applied its modifications based on
+Helm values (debug mode, proxy settings, hypervisor annotations). This means your custom
+runtime inherits these settings from the base config.
+
+If you need different settings, override them in your `dropIn` content.
+
+### Usage
+
+Create a values file with your custom runtimes:
+
+```yaml
+# custom-runtimes.values.yaml
+customRuntimes:
+  enabled: true
+  runtimes:
+    my-gpu-runtime:
+      baseConfig: "qemu-nvidia-gpu"   # Required: existing config as base
+      dropIn: |                       # Optional: Override specific settings
+        [hypervisor.qemu]
+        default_memory = 1024
+        default_vcpus = 4
+      runtimeClass: |
+        kind: RuntimeClass
+        apiVersion: node.k8s.io/v1
+        metadata:
+          name: kata-my-gpu-runtime
+          labels:
+            app.kubernetes.io/managed-by: kata-deploy
+        handler: kata-my-gpu-runtime
+        overhead:
+          podFixed:
+            memory: "640Mi"
+            cpu: "500m"
+        scheduling:
+          nodeSelector:
+            katacontainers.io/kata-runtime: "true"
+```
+
+Deploy with:
+
+```sh
+helm install kata-deploy "${CHART}" --version "${VERSION}" \
+  -f custom-runtimes.values.yaml
+```
+
+### Available Base Configs
+
+Use any existing Kata configuration as your `baseConfig` value, for example:
+`qemu`, `qemu-nvidia-gpu`, `qemu-snp`, `qemu-tdx`, `cloud-hypervisor`, `fc`, etc.
+
+The correct shim binary is automatically selected based on the `baseConfig`.
+
+### CRI-Specific Configuration
+
+For `CoCo`/guest-pull scenarios, you can configure CRI-specific settings:
+
+```yaml
+customRuntimes:
+  enabled: true
+  runtimes:
+    my-coco-runtime:
+      baseConfig: "qemu-snp"
+      dropIn: |
+        [hypervisor.qemu]
+        default_memory = 2048
+      runtimeClass: |
+        kind: RuntimeClass
+        apiVersion: node.k8s.io/v1
+        metadata:
+          name: kata-my-coco-runtime
+          labels:
+            app.kubernetes.io/managed-by: kata-deploy
+        handler: kata-my-coco-runtime
+        overhead:
+          podFixed:
+            memory: "1Gi"
+            cpu: "500m"
+        scheduling:
+          nodeSelector:
+            katacontainers.io/kata-runtime: "true"
+      containerd:
+        snapshotter: "nydus"  # Configure nydus snapshotter
+      crio:
+        pullType: "guest-pull"  # Enable runtime_pull_image = true
+```
+
+| Field | Description | Values |
+|-------|-------------|--------|
+| `baseConfig` | Base configuration to use (required) | See "Available Base Configs" above |
+| `dropIn` | TOML overrides applied via `config.d` mechanism (optional) | Any valid TOML configuration |
+| `containerd.snapshotter` | Configure containerd snapshotter | `nydus`, `erofs`, or empty for default |
+| `crio.pullType` | Configure CRI-O image pulling | `guest-pull` or empty for default |
+
+### Using Custom Runtimes in Pods
+
+Reference the custom `RuntimeClass` in your pod spec:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-gpu-workload
+spec:
+  runtimeClassName: kata-my-gpu-runtime
+  containers:
+  - name: app
+    image: nvidia/cuda:12.0-base
+```
+
+### What Gets Created
+
+For each custom runtime, kata-deploy creates an isolated directory structure:
+
+```
+/opt/kata/share/defaults/kata-containers/custom-runtimes/
+└── kata-my-gpu-runtime/
+    ├── configuration-qemu-nvidia-gpu.toml  # Copy of modified base
+    └── config.d/
+        └── 50-overrides.toml               # Your drop-in (if provided)
+```
+
+| Resource | Description |
+|----------|-------------|
+| `RuntimeClass` | Kubernetes resource with your handler and `podOverhead` |
+| Handler | Registered in containerd/CRI-O pointing to the isolated config |
+| Base Config | Copy of the base config (with kata-deploy modifications applied) |
+| Drop-in | Your overrides in `config.d/` (Kata merges these automatically) |
+
+### Cleanup
+
+When you run `helm uninstall`:
+- `RuntimeClasses` are automatically deleted by Helm
+- Custom handlers are removed from containerd/CRI-O config
+- Custom runtime directories are deleted from host nodes
+
+### Tips
+
+1. **Start simple**: Use `baseConfig` without `dropIn` first, then add overrides as needed
+2. **Check inheritance**: Remember your custom runtime inherits debug/proxy/annotation settings from the base
+3. **Handler naming**: Use descriptive names like `kata-high-memory` or `kata-coco-custom`
+4. **Drop-in format**: Only include the sections you want to override in `dropIn`
