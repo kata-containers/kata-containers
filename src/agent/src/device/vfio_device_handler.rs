@@ -66,9 +66,10 @@ impl DeviceHandler for VfioPciDeviceHandler {
                 .ok_or_else(|| anyhow!("Malformed VFIO PCI option {:?}", opt))?;
             let host =
                 pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
-            let pcipath = pci::Path::from_str(pcipath)?;
 
-            let guestdev = wait_for_pci_device(ctx.sandbox, &pcipath).await?;
+            let (root_complex, pcipath) = pcipath_from_dev_tree_path(pcipath)?;
+
+            let guestdev = wait_for_pci_device(ctx.sandbox, root_complex, &pcipath).await?;
             if vfio_in_guest {
                 pci_driver_override(ctx.logger, SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
 
@@ -212,8 +213,8 @@ pub struct PciMatcher {
 }
 
 impl PciMatcher {
-    pub fn new(relpath: &str) -> Result<PciMatcher> {
-        let root_bus = create_pci_root_bus_path();
+    pub fn new(relpath: &str, root_complex: &str) -> Result<PciMatcher> {
+        let root_bus = create_pci_root_bus_path(root_complex);
         Ok(PciMatcher {
             devpath: format!("{root_bus}{relpath}"),
         })
@@ -302,11 +303,12 @@ async fn associate_ap_device(apqn: &Apqn, mkvp: &str) -> Result<()> {
 
 pub async fn wait_for_pci_device(
     sandbox: &Arc<Mutex<Sandbox>>,
+    root_complex: &str,
     pcipath: &pci::Path,
 ) -> Result<pci::Address> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = PciMatcher::new(&sysfs_rel_path)?;
+    let matcher = PciMatcher::new(&sysfs_rel_path, root_complex)?;
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
 
