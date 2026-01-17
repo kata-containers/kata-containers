@@ -12,6 +12,8 @@ pub const RUST_SHIMS: &[&str] = &[
     "qemu-runtime-rs",
     "qemu-coco-dev-runtime-rs",
     "qemu-se-runtime-rs",
+    "qemu-snp-runtime-rs",
+    "qemu-tdx-runtime-rs",
 ];
 
 pub fn is_rust_shim(shim: &str) -> bool {
