@@ -69,7 +69,7 @@ DEBUG="${DEBUG:-"false"}"
 
 ARCH=$(uname -m)
 
-SHIMS_X86_64="${SHIMS_X86_64:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-snp qemu-tdx qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
+SHIMS_X86_64="${SHIMS_X86_64:-"clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"}"
 SHIMS_AARCH64="${SHIMS_AARCH64:-"clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-cca"}"
 SHIMS_S390X="${SHIMS_S390X:-"qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs"}"
 SHIMS_PPC64LE="${SHIMS_PPC64LE:-"qemu"}"
@@ -430,7 +430,7 @@ function adjust_qemu_cmdline() {
 
 	# Both qemu and qemu-coco-dev use exactly the same QEMU, so we can adjust
 	# the shim on the qemu-coco-dev case to qemu
-	[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-nvidia-gpu)$ ]] && qemu_share="qemu"
+	[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-snp-runtime-rs|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-nvidia-gpu)$ ]] && qemu_share="qemu"
 
 	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
 	qemu_binary_script="${qemu_binary}-installation-prefix"
@@ -462,7 +462,7 @@ EOF
 function get_hypervisor_name() {
 	local shim="${1}"
 	case "${shim}" in
-		qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs | qemu | qemu-tdx | qemu-snp | qemu-se | qemu-coco-dev | qemu-cca | qemu-nvidia-gpu | qemu-nvidia-gpu-tdx | qemu-nvidia-gpu-snp)
+		qemu-runtime-rs | qemu-coco-dev-runtime-rs | qemu-se-runtime-rs | qemu | qemu-tdx | qemu-tdx-runtime-rs | qemu-snp | qemu-snp-runtime-rs |qemu-se | qemu-coco-dev | qemu-cca | qemu-nvidia-gpu | qemu-nvidia-gpu-tdx | qemu-nvidia-gpu-snp)
 			echo "qemu"
 			;;
 		clh)
@@ -749,7 +749,7 @@ function install_artifacts() {
 				sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
 
 				# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
-				[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-cca)$ ]] && \
+				[[ "${shim}" =~ ^(qemu|qemu-runtime-rs|qemu-snp|qemu-snp-runtime-rs|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx|qemu-se|qemu-se-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs|qemu-cca)$ ]] && \
 					adjust_qemu_cmdline "${shim}" "${kata_config_file}"
 			fi
 		fi

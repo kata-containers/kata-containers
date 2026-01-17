@@ -33,7 +33,7 @@ shims:
   qemu-nvidia-gpu-tdx:
     enabled: false
 
-  # Now enable TEE shims (qemu-snp, qemu-tdx, qemu-se, qemu-se-runtime-rs, qemu-cca, qemu-coco-dev, qemu-coco-dev-runtime-rs)
+  # Now enable TEE shims (qemu-snp, qemu-snp-runtime-rs, qemu-tdx, qemu-tdx-runtime-rs, qemu-se, qemu-se-runtime-rs, qemu-cca, qemu-coco-dev, qemu-coco-dev-runtime-rs)
   qemu-snp:
     enabled: true
     supportedArches:
@@ -48,7 +48,35 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
+  qemu-snp-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
   qemu-tdx:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-tdx-runtime-rs:
     enabled: true
     supportedArches:
       - amd64

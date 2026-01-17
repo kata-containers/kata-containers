@@ -134,7 +134,35 @@ shims:
       httpsProxy: ""
       noProxy: ""
 
+  qemu-snp-runtime-rs:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
   qemu-tdx:
+    enabled: true
+    supportedArches:
+      - amd64
+    allowedHypervisorAnnotations: []
+    containerd:
+      snapshotter: nydus
+      forceGuestPull: false
+    crio:
+      guestPull: true
+    agent:
+      httpsProxy: ""
+      noProxy: ""
+
+  qemu-tdx-runtime-rs:
     enabled: true
     supportedArches:
       - amd64

@@ -158,7 +158,7 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.installationPrefix` | Prefix where to install the Kata artifacts | `/opt/kata` |
 | `env.hostOS` | Provide host-OS setting, e.g. `cbl-mariner` to do additional configurations | `""` |
 | `env.multiInstallSuffix` | Enable multiple Kata installation on the same node with suffix e.g. `/opt/kata-PR12232` | `""` |
-| `env._experimentalSetupSnapshotter` | Deploys (nydus) and/or sets up (erofs, nydus) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
+| `env._experimentalSetupSnapshotter` | Deploys (`nydus`) and/or sets up (`erofs`, `nydus`) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
 | `env._experimentalForceGuestPull` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value (supports multiple shims, separated by commas; e.g., `qemu-tdx,qemu-snp`) | `""` |
 | `env._experimentalForceGuestPull_x86_64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for x86_64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
 | `env._experimentalForceGuestPull_aarch64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for aarch64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
@@ -267,7 +267,7 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 
 This includes all available Kata Containers shims:
 - Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
-- TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
+- TEE shims: `qemu-snp`, `qemu-snp-runtime-rs`, `qemu-tdx`, `qemu-tdx-runtime-rs`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
 - NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
 - Remote shims: `remote` (for `peer-pods`/`cloud-api-adaptor`, disabled by default)
 
@@ -401,7 +401,11 @@ shims:
     enabled: false
   qemu-snp:
     enabled: false
+  qemu-snp-runtime-rs:
+    enabled: false
   qemu-tdx:
+    enabled: false
+  qemu-tdx-runtime-rs:
     enabled: false
   qemu-se:
     enabled: false
