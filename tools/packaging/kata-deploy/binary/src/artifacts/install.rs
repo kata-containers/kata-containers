@@ -36,7 +36,9 @@ const ALL_SHIMS: &[&str] = &[
     "qemu-se",
     "qemu-se-runtime-rs",
     "qemu-snp",
+    "qemu-snp-runtime-rs",
     "qemu-tdx",
+    "qemu-tdx-runtime-rs",
 ];
 
 /// Check if a shim is a QEMU-based shim (all QEMU shims start with "qemu")
@@ -824,6 +826,8 @@ VERSION_ID="24.04"
             "qemu"
         );
         assert_eq!(get_hypervisor_name("qemu-se-runtime-rs").unwrap(), "qemu");
+        assert_eq!(get_hypervisor_name("qemu-snp-runtime-rs").unwrap(), "qemu");
+        assert_eq!(get_hypervisor_name("qemu-tdx-runtime-rs").unwrap(), "qemu");
     }
 
     #[test]

@@ -267,7 +267,7 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 
 This includes all available Kata Containers shims:
 - Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
-- TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
+- TEE shims: `qemu-snp`, `qemu-snp-runtime-rs`, `qemu-tdx`, `qemu-tdx-runtime-rs`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
 - NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
 - Remote shims: `remote` (for `peer-pods`/`cloud-api-adaptor`, disabled by default)
 
@@ -401,7 +401,11 @@ shims:
     enabled: false
   qemu-snp:
     enabled: false
+  qemu-snp-runtime-rs:
+    enabled: false
   qemu-tdx:
+    enabled: false
+  qemu-tdx-runtime-rs:
     enabled: false
   qemu-se:
     enabled: false
