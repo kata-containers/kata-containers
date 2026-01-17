@@ -6,6 +6,7 @@
 #
 
 set -e
+set -o pipefail
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 # shellcheck disable=SC1091 # import based on variable
@@ -53,17 +54,25 @@ if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
 	enable_nvrc_trace
 fi
 
-info "Running tests with bats version: $(bats --version)"
+report_dir="${kubernetes_dir}/reports/$(date +'%F-%T')"
+mkdir -p "${report_dir}"
+
+info "Running tests with bats version: $(bats --version). Save outputs to ${report_dir}"
 
 tests_fail=()
 for K8S_TEST_ENTRY in "${K8S_TEST_NV[@]}"
 do
 	K8S_TEST_ENTRY=$(echo "${K8S_TEST_ENTRY}" | tr -d '[:space:][:cntrl:]')
-	info "$(kubectl get pods --all-namespaces 2>&1)"
+	time info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
-	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"; then
+	# Output file will be prefixed with "ok" or "not_ok" based on the result
+	out_file="${report_dir}/${K8S_TEST_ENTRY}.out"
+	if ! bats --timing --show-output-of-passing-tests "${K8S_TEST_ENTRY}" | tee "${out_file}"; then
 		tests_fail+=("${K8S_TEST_ENTRY}")
+		mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
 		[[ "${K8S_TEST_FAIL_FAST}" = "yes" ]] && break
+	else
+		mv "${out_file}" "$(dirname "${out_file}")/ok-$(basename "${out_file}")"
 	fi
 done
 
