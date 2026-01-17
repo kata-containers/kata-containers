@@ -290,18 +290,3 @@ Note: EXPERIMENTAL_FORCE_GUEST_PULL only checks containerd.forceGuestPull, not c
 {{- end -}}
 {{- join "," $shimNames -}}
 {{- end -}}
-
-{{/*
-Detect if this is a Rust-based build by checking the image tag
-Returns "true" if the tag contains "-rust", otherwise returns "false"
-This is a temporary helper for dual script/rust support
-*/}}
-{{- define "kata-deploy.isRustBuild" -}}
-{{- $tag := default .Chart.AppVersion .Values.image.tag -}}
-{{- if or (contains "-rust" $tag) (contains "nightly-rust" $tag) -}}
-true
-{{- else -}}
-false
-{{- end -}}
-{{- end -}}
-
