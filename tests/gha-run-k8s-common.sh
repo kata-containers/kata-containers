@@ -600,7 +600,7 @@ function helm_helper() {
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
 						;;
-					qemu-snp|qemu-tdx|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
+					qemu-snp|qemu-snp-runtime-rs|qemu-tdx|qemu-tdx-runtime-rs|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 						;;
