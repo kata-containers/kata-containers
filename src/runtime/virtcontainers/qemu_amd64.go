@@ -186,18 +186,7 @@ func (q *qemuAmd64) bridges(number uint32) {
 }
 
 func (q *qemuAmd64) cpuModel() string {
-	var err error
-	cpuModel := defaultCPUModel
-
-	// Temporary until QEMU cpu model 'host' supports AMD SEV-SNP
-	protection, err := availableGuestProtection()
-	if err == nil {
-		if protection == snpProtection && q.snpGuest {
-			cpuModel = "EPYC-v4"
-		}
-	}
-
-	return cpuModel
+	return defaultCPUModel
 }
 
 func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {

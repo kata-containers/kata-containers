@@ -159,7 +159,7 @@ setup() {
 	launch_measurement=$(PATH="${PATH}:${HOME}/.local/bin" sev-snp-measure \
 		--mode=snp \
 		--vcpus="${vcpu_count}" \
-		--vcpu-type=EPYC-v4 \
+		--vcpu-type=host \
 		--output-format=base64 \
 		--ovmf="${firmware_path}" \
 		--kernel="${kernel_path}" \
