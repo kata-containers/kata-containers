@@ -6,6 +6,9 @@ root = "@SNAPSHOTTER_ROOT_DIR@"
 # The snapshotter's GRPC server socket, containerd will connect to plugin on this socket
 address = "@SNAPSHOTTER_GRPC_SOCKET_ADDRESS@"
 
+# No nydusd daemon needed for proxy mode
+daemon_mode = "none"
+
 [daemon]
 # Enable proxy mode
 fs_driver = "proxy"
