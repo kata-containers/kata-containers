@@ -32,7 +32,7 @@ kernel_builder_args="-a ${ARCH:-} $*"
 KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-	info "build initramfs for cc kernel"
+	info "build initramfs for kernel with measured rootfs support"
 	"${initramfs_builder}"
 	# Turn on the flag to build the kernel with support to
 	# measured rootfs.

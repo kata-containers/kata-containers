@@ -154,6 +154,7 @@ FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
 
 ROOTMEASURECONFIG ?= ""
 ROOTMEASURECONFIG_NV ?= ""
+ROOTMEASURECONFIG_CONFIDENTIAL_NV ?= ""
 
 KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
 KERNELQEMUCOCODEVPARAMS += $(ROOTMEASURECONFIG)
@@ -478,9 +479,14 @@ ifneq (,$(QEMUCMD))
     # Disable the devtmpfs mount in guest. NVRC does this, and later kata-agent
     # attempts this as well in a non-failing manner. Otherwise, NVRC fails when
     # using an image and /dev is already mounted.
-    KERNELPARAMS_NV = "cgroup_no_v1=all"
-    KERNELPARAMS_NV += "devtmpfs.mount=0"
+    KERNELPARAMS_NV_COMMON = "cgroup_no_v1=all"
+    KERNELPARAMS_NV_COMMON += "devtmpfs.mount=0"
+
+    KERNELPARAMS_NV = $(KERNELPARAMS_NV_COMMON)
     KERNELPARAMS_NV += $(ROOTMEASURECONFIG_NV)
+
+    KERNELPARAMS_CONFIDENTIAL_NV = $(KERNELPARAMS_NV_COMMON)
+    KERNELPARAMS_CONFIDENTIAL_NV += $(ROOTMEASURECONFIG_CONFIDENTIAL_NV)
 
     # Setting this to false can lead to cgroup leakages in the host
     # Best practice for production is to set this to true
@@ -658,6 +664,7 @@ USER_VARS += DEFAULTMEMORY_NV
 USER_VARS += DEFAULTVFIOPORT_NV
 USER_VARS += DEFAULTPCIEROOTPORT_NV
 USER_VARS += KERNELPARAMS_NV
+USER_VARS += KERNELPARAMS_CONFIDENTIAL_NV
 USER_VARS += DEFAULTTIMEOUT_NV
 USER_VARS += DEFSANDBOXCGROUPONLY_NV
 USER_VARS += DEFROOTFSTYPE
