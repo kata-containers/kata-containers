@@ -40,6 +40,7 @@ function _check_required_env_var()
 		KATA_STATIC_TARBALL) env_var="${KATA_STATIC_TARBALL}" ;;
 		KATA_DEPLOY_IMAGE_TAGS) env_var="${KATA_DEPLOY_IMAGE_TAGS}" ;;
 		KATA_DEPLOY_REGISTRIES) env_var="${KATA_DEPLOY_REGISTRIES}" ;;
+		KATA_TOOLS_STATIC_TARBALL) env_var="${KATA_TOOLS_STATIC_TARBALL}" ;;
 		*) >&2 _die "Invalid environment variable \"${1}\"" ;;
 	esac
 
