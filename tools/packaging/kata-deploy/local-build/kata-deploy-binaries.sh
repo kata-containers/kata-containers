@@ -185,7 +185,7 @@ get_kernel_modules_dir() {
 }
 
 cleanup_and_fail_shim_v2_specifics() {
-	for variant in confidential nvidia-gpu-confidential; do
+	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash_${variant}.txt"
 		[ -f "${root_hash_file}" ] && rm -f "${root_hash_file}"
 	done
@@ -220,7 +220,7 @@ install_cached_shim_v2_tarball_get_root_hash() {
 	local root_hash_basedir="./opt/kata/share/kata-containers/"
 	local found_any=""
 
-	for variant in confidential nvidia-gpu-confidential; do
+	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		local image_conf_tarball="kata-static-rootfs-image-${variant}.tar.zst"
 		local tarball_path="${tarball_dir}/${image_conf_tarball}"
 
@@ -245,7 +245,7 @@ install_cached_shim_v2_tarball_compare_root_hashes() {
 	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	for variant in confidential nvidia-gpu-confidential; do
+	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		# skip if one or the other does not exist
 		[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ] && continue
 
@@ -629,6 +629,7 @@ install_initrd_confidential() {
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY
+	export MEASURED_ROOTFS=yes
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -798,6 +799,7 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
+	export MEASURED_ROOTFS=yes
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
@@ -1041,7 +1043,7 @@ install_shimv2() {
 
 	if [ "${MEASURED_ROOTFS}" = "yes" ]; then
 		local found_any=""
-		for variant in confidential nvidia-gpu-confidential; do
+		for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 			local image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
 			# only one variant may be built at a time so we need to
 			# skip one or the other if not available
@@ -1488,7 +1490,7 @@ handle_build() {
 			;;
 		shim-v2)
 			if [ "${MEASURED_ROOTFS}" = "yes" ]; then
-				for variant in confidential nvidia-gpu-confidential; do
+				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 					[ -f "${workdir}/root_hash_${variant}.txt" ] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/shim-v2-root_hash_${variant}.txt"
 				done
 			fi
@@ -1550,7 +1552,7 @@ handle_build() {
 			shim-v2)
 				if [ "${MEASURED_ROOTFS}" = "yes" ]; then
 					local found_any=""
-					for variant in confidential nvidia-gpu-confidential; do
+					for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 						# The variants could be built independently we need to check if
 						# they exist and then push them to the registry
 						[ -f "${workdir}/shim-v2-root_hash_${variant}.txt" ] && files_to_push+=("shim-v2-root_hash_${variant}.txt")
