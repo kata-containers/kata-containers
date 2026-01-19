@@ -90,7 +90,7 @@ snp_guest_policy = 196608
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS_NV@"
+kernel_params = "@KERNELPARAMS_CONFIDENTIAL_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty

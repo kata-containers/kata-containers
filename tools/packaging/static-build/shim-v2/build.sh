@@ -39,12 +39,13 @@ esac
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	info "Enable rootfs measurement config"
 
-	# Two VARIANTS (targets) that build a measured rootfs as of now are:
+	# Variants (targets) that build a measured rootfs as of now are:
 	# - rootfs-image-confidential
+	# - rootfs-image-nvidia-gpu
 	# - rootfs-image-nvidia-gpu-confidential
 	#
 	found_any=""
-	for variant in confidential nvidia-gpu-confidential; do
+	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/root_hash_${variant}.txt"
 		[ -f "$root_hash_file" ] || \
 			die "Root hash file for measured rootfs ${variant} not found at ${root_hash_file}"
@@ -55,7 +56,8 @@ if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 		root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
 
 		[ "${variant}" == "confidential" ] && EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
-		[ "${variant}" == "nvidia-gpu-confidential" ] && EXTRA_OPTS+=" ROOTMEASURECONFIG_NV=\"${root_measure_config}\""
+		[ "${variant}" == "nvidia-gpu" ] && EXTRA_OPTS+=" ROOTMEASURECONFIG_NV=\"${root_measure_config}\""
+		[ "${variant}" == "nvidia-gpu-confidential" ] && EXTRA_OPTS+=" ROOTMEASURECONFIG_CONFIDENTIAL_NV=\"${root_measure_config}\""
 
 	done
 	[ -z "${found_any}" ] && die "No root hash files found for shim-v2 with MEASURED_ROOTFS support, needs a rootfs with MEASURED_ROOTFS support"
