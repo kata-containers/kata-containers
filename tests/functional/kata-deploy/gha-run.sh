@@ -20,6 +20,10 @@ function run_tests() {
 	popd
 }
 
+function report_tests() {
+	report_bats_tests "${kata_deploy_dir}"
+}
+
 function cleanup_runtimeclasses() {
 	# Cleanup any runtime class that was left behind in the cluster, in
 	# case of a test failure, apart from the default one that comes from
@@ -59,6 +63,7 @@ function main() {
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials "kata-deploy" ;;
         run-tests) run_tests ;;
+        report-tests) report_tests ;;
         delete-cluster) cleanup "aks" "kata-deploy" ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
