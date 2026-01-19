@@ -53,7 +53,7 @@ kernel_params = "@KERNELPARAMS_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWAREPATH@"
+firmware = "@FIRMWAREPATH_NV@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
@@ -355,16 +355,16 @@ msize_9p = @DEFMSIZE9P@
 # nvdimm is not supported when `confidential_guest = true`.
 disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM_NV@
 
-# Enable hot-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
+# Enable hot-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
 # The default setting is  "no-port"
 hot_plug_vfio = "no-port"
 
 # In a confidential compute environment hot-plugging can compromise
-# security. 
-# Enable cold-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
-# The default setting is  "no-port", which means disabled. 
+# security.
+# Enable cold-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
+# The default setting is  "no-port", which means disabled.
 cold_plug_vfio = "@DEFAULTVFIOPORT_NV@"
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
@@ -683,9 +683,9 @@ enable_pprof = false
 
 # Indicates the CreateContainer request timeout needed for the workload(s)
 # It using guest_pull this includes the time to pull the image inside the guest
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)  
-# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
+# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
+# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout.
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFAULTTIMEOUT_NV@
 
