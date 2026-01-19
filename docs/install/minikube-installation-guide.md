@@ -103,48 +103,8 @@ $ minikube ssh "grep -c -E 'vmx|svm' /proc/cpuinfo"
 
 ## Installing Kata Containers
 
-You can now install the Kata Containers runtime components. You will need a local copy of some Kata
-Containers components to help with this, and then use `kubectl` on the host (that Minikube has already
-configured for you) to deploy them:
-
-```sh
-$ git clone https://github.com/kata-containers/kata-containers.git
-$ cd kata-containers/tools/packaging/kata-deploy
-$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
-$ kubectl apply -f kata-deploy/base/kata-deploy.yaml
-```
-
-This installs the Kata Containers components into `/opt/kata` inside the Minikube node. It can take
-a few minutes for the operation to complete. You can check the installation has worked by checking
-the status of the `kata-deploy` pod, which will be executing
-[this script](../../tools/packaging/kata-deploy/scripts/kata-deploy.sh),
-and will be executing a `sleep infinity` once it has successfully completed its work.
-You can accomplish this by running the following:
-
-```sh
-$ podname=$(kubectl -n kube-system get pods -o=name | grep -F kata-deploy | sed 's?pod/??')
-$ kubectl -n kube-system exec ${podname} -- ps -ef | grep -F infinity
-```
-
-> *NOTE:* This check only works for single node clusters, which is the default for Minikube.
-> For multi-node clusters, the check would need to be adapted to check `kata-deploy` had
-> completed on all nodes.
-
-## Enabling Kata Containers
-
-Now you have installed the Kata Containers components in the Minikube node. Next, you need to configure
-Kubernetes `RuntimeClass` to know when to use Kata Containers to run a pod.
-
-### Register the runtime
-
-Now register the `kata qemu` runtime with that class. This should result in no errors:
-
-```sh
-$ cd kata-containers/tools/packaging/kata-deploy/runtimeclasses
-$ kubectl apply -f kata-runtimeClasses.yaml
-```
-
-The Kata Containers installation process should be complete and enabled in the Minikube cluster.
+You can now install the Kata Containers runtime components
+[following the official instructions](../../tools/packaging/kata-deploy/helm-chart).
 
 ## Testing Kata Containers
 
