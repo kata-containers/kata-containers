@@ -345,6 +345,15 @@ impl Config {
                     .replace("config.toml", "containerd-template.toml");
                 self.containerd_conf_file_backup = format!("{}.bak", self.containerd_conf_file);
             }
+            "k0s-worker" | "k0s-controller" => {
+                // k0s uses containerd.toml (not config.toml) and containerd.d/ for drop-ins
+                self.containerd_conf_file = self
+                    .containerd_conf_file
+                    .replace("config.toml", "containerd.toml");
+                self.containerd_conf_file_backup = format!("{}.bak", self.containerd_conf_file);
+                self.containerd_drop_in_conf_file =
+                    "/etc/containerd/containerd.d/kata-deploy.toml".to_string();
+            }
             _ => {}
         }
         self
@@ -1027,16 +1036,51 @@ mod tests {
     }
 
     #[test]
-    fn test_adjust_for_runtime_k0s_worker_unchanged() {
+    fn test_adjust_for_runtime_k0s_worker() {
         cleanup_env_vars();
         std::env::set_var("NODE_NAME", "test-node");
 
         let config = Config::from_env().unwrap();
-        let original_conf_file = config.containerd_conf_file.clone();
 
-        // k0s uses drop-in files, not template files
+        // k0s uses containerd.toml (not config.toml) and containerd.d/ for drop-ins
         let adjusted = config.adjust_for_runtime("k0s-worker");
-        assert_eq!(adjusted.containerd_conf_file, original_conf_file);
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/containerd.toml"
+        );
+        assert_eq!(
+            adjusted.containerd_conf_file_backup,
+            "/etc/containerd/containerd.toml.bak"
+        );
+        assert_eq!(
+            adjusted.containerd_drop_in_conf_file,
+            "/etc/containerd/containerd.d/kata-deploy.toml"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_k0s_controller() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+
+        // k0s uses containerd.toml (not config.toml) and containerd.d/ for drop-ins
+        let adjusted = config.adjust_for_runtime("k0s-controller");
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/containerd.toml"
+        );
+        assert_eq!(
+            adjusted.containerd_conf_file_backup,
+            "/etc/containerd/containerd.toml.bak"
+        );
+        assert_eq!(
+            adjusted.containerd_drop_in_conf_file,
+            "/etc/containerd/containerd.d/kata-deploy.toml"
+        );
 
         cleanup_env_vars();
     }

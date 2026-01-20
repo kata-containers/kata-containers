@@ -44,7 +44,7 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
     info!("restart_runtime: Starting restart for runtime={}", runtime);
     match runtime {
         "k0s-worker" | "k0s-controller" => {
-            // k0s automatically loads config on the fly
+            // k0s automatically reloads containerd config when drop-ins change
             info!("k0s runtime - no restart needed");
         }
         "microk8s" => {
@@ -73,7 +73,7 @@ pub async fn restart_runtime(config: &Config, runtime: &str) -> Result<()> {
 pub async fn restart_cri_runtime(_config: &Config, runtime: &str) -> Result<()> {
     match runtime {
         "k0s-worker" | "k0s-controller" => {
-            // k0s automatically unloads config on the fly
+            // k0s automatically reloads containerd config when drop-ins change
             info!("k0s runtime - no restart needed");
         }
         "microk8s" => {

@@ -12,6 +12,21 @@ use log::info;
 use std::fs;
 use std::path::Path;
 
+/// Detect the correct containerd plugin ID based on config file version
+/// - containerd 2.x uses config version 3 with plugin "io.containerd.cri.v1.runtime"
+/// - containerd 1.x uses config version 2 with plugin "io.containerd.grpc.v1.cri"
+fn detect_containerd_plugin_id(config: &Config) -> &'static str {
+    let config_content = fs::read_to_string(&config.containerd_conf_file).unwrap_or_default();
+
+    if config_content.contains("version = 3") {
+        "\"io.containerd.cri.v1.runtime\""
+    } else if config_content.contains("version = 2") {
+        "\"io.containerd.grpc.v1.cri\""
+    } else {
+        "cri"
+    }
+}
+
 pub async fn configure_containerd_runtime(
     config: &Config,
     runtime: &str,
@@ -45,25 +60,8 @@ pub async fn configure_containerd_runtime(
         Path::new(&config.containerd_conf_file).to_path_buf()
     };
 
-    let containerd_root_conf_file = if matches!(runtime, "k0s-worker" | "k0s-controller") {
-        "/etc/containerd/containerd.toml"
-    } else {
-        &config.containerd_conf_file
-    };
-
-    let pluginid = if fs::read_to_string(containerd_root_conf_file)
-        .unwrap_or_default()
-        .contains("version = 3")
-    {
-        "\"io.containerd.cri.v1.runtime\""
-    } else if fs::read_to_string(containerd_root_conf_file)
-        .unwrap_or_default()
-        .contains("version = 2")
-    {
-        "\"io.containerd.grpc.v1.cri\""
-    } else {
-        "cri"
-    };
+    // Detect the containerd plugin ID based on config file version
+    let pluginid = detect_containerd_plugin_id(config);
 
     let runtime_table = format!(".plugins.{pluginid}.containerd.runtimes.{runtime_name}");
     let runtime_options_table = format!("{runtime_table}.options");
@@ -203,20 +201,24 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
 
         // Add the drop-in file to the imports array in the main config
-        // The append_to_toml_array function is idempotent and will not add duplicates
-        log::info!(
-            "Adding drop-in to imports in: {}",
-            config.containerd_conf_file
-        );
-        let imports_path = ".imports";
-        let drop_in_path = format!("\"{}\"", config.containerd_drop_in_conf_file);
+        // k0s automatically loads from /etc/k0s/containerd.d/ without needing imports
+        if runtime != "k0s-worker" && runtime != "k0s-controller" {
+            log::info!(
+                "Adding drop-in to imports in: {}",
+                config.containerd_conf_file
+            );
+            let imports_path = ".imports";
+            let drop_in_path = format!("\"{}\"", config.containerd_drop_in_conf_file);
 
-        toml_utils::append_to_toml_array(
-            Path::new(&config.containerd_conf_file),
-            imports_path,
-            &drop_in_path,
-        )?;
-        log::info!("Successfully added drop-in to imports array");
+            toml_utils::append_to_toml_array(
+                Path::new(&config.containerd_conf_file),
+                imports_path,
+                &drop_in_path,
+            )?;
+            log::info!("Successfully added drop-in to imports array");
+        } else {
+            log::info!("k0s automatically loads drop-in files, skipping imports modification");
+        }
     }
 
     log::info!("Configuring {} shim(s)", config.shims_for_arch.len());
@@ -235,12 +237,29 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
         super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
 
     if use_drop_in {
-        let drop_in_path = config.containerd_drop_in_conf_file.clone();
-        toml_utils::remove_from_toml_array(
-            Path::new(&config.containerd_conf_file),
-            ".imports",
-            &format!("\"{drop_in_path}\""),
-        )?;
+        // Remove the drop-in file
+        // Paths under /etc/containerd/ are volume-mounted, use directly
+        // Other paths need /host prefix to access the host filesystem
+        let drop_in_file = if config.containerd_drop_in_conf_file.starts_with("/etc/containerd/") {
+            config.containerd_drop_in_conf_file.clone()
+        } else {
+            format!("/host{}", config.containerd_drop_in_conf_file)
+        };
+        if Path::new(&drop_in_file).exists() {
+            fs::remove_file(&drop_in_file)?;
+            log::info!("Removed drop-in file: {}", drop_in_file);
+        }
+
+        // k0s automatically loads from containerd.d/ without needing imports
+        // For other runtimes, remove the drop-in from the imports array
+        if runtime != "k0s-worker" && runtime != "k0s-controller" {
+            let drop_in_path = config.containerd_drop_in_conf_file.clone();
+            toml_utils::remove_from_toml_array(
+                Path::new(&config.containerd_conf_file),
+                ".imports",
+                &format!("\"{drop_in_path}\""),
+            )?;
+        }
         return Ok(());
     }
 
@@ -268,13 +287,6 @@ pub fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<(
             if !Path::new(tmpl_file).exists() && Path::new(original_file).exists() {
                 fs::copy(original_file, tmpl_file)?;
             }
-        }
-        "k0s-worker" | "k0s-controller" => {
-            let drop_in_file = format!("/host{}", config.containerd_drop_in_conf_file);
-            if let Some(parent) = Path::new(&drop_in_file).parent() {
-                fs::create_dir_all(parent)?;
-            }
-            fs::File::create(&drop_in_file)?;
         }
         "containerd" => {
             if !Path::new(&config.containerd_conf_file).exists() {
