@@ -46,10 +46,12 @@ async fn main() -> Result<()> {
         Action::Cleanup => "cleanup",
         Action::Reset => "reset",
     };
-    config.print_info(action_str);
 
     let runtime = runtime::get_container_runtime(&config).await?;
     info!("Detected container runtime: {runtime}");
+
+    let config = config.adjust_for_runtime(&runtime);
+    config.print_info(action_str);
 
     match args.action {
         Action::Install => {

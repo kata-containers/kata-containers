@@ -327,6 +327,29 @@ impl Config {
         Ok(())
     }
 
+    /// Adjust configuration based on the detected container runtime.
+    /// Some runtimes use different containerd config file names:
+    /// - k3s/rke2: uses config.toml.tmpl (template file)
+    /// - microk8s: uses containerd-template.toml
+    pub fn adjust_for_runtime(mut self, runtime: &str) -> Self {
+        match runtime {
+            "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
+                // k3s/rke2 uses config.toml.tmpl as the template file
+                self.containerd_conf_file = format!("{}.tmpl", self.containerd_conf_file);
+                self.containerd_conf_file_backup = format!("{}.bak", self.containerd_conf_file);
+            }
+            "microk8s" => {
+                // microk8s uses containerd-template.toml instead of config.toml
+                self.containerd_conf_file = self
+                    .containerd_conf_file
+                    .replace("config.toml", "containerd-template.toml");
+                self.containerd_conf_file_backup = format!("{}.bak", self.containerd_conf_file);
+            }
+            _ => {}
+        }
+        self
+    }
+
     pub fn print_info(&self, action: &str) {
         info!("Action:");
         info!("* {action}");
@@ -881,5 +904,140 @@ mod tests {
 
             cleanup_env_vars();
         }
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_k3s() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+
+        let adjusted = config.clone().adjust_for_runtime("k3s");
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/config.toml.tmpl"
+        );
+        assert_eq!(
+            adjusted.containerd_conf_file_backup,
+            "/etc/containerd/config.toml.tmpl.bak"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_k3s_agent() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+
+        let adjusted = config.adjust_for_runtime("k3s-agent");
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/config.toml.tmpl"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_rke2_agent() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+
+        let adjusted = config.adjust_for_runtime("rke2-agent");
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/config.toml.tmpl"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_rke2_server() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+
+        let adjusted = config.adjust_for_runtime("rke2-server");
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/config.toml.tmpl"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_microk8s() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+        assert_eq!(config.containerd_conf_file, "/etc/containerd/config.toml");
+
+        let adjusted = config.adjust_for_runtime("microk8s");
+        assert_eq!(
+            adjusted.containerd_conf_file,
+            "/etc/containerd/containerd-template.toml"
+        );
+        assert_eq!(
+            adjusted.containerd_conf_file_backup,
+            "/etc/containerd/containerd-template.toml.bak"
+        );
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_containerd_unchanged() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+        let original_conf_file = config.containerd_conf_file.clone();
+        let original_backup = config.containerd_conf_file_backup.clone();
+
+        let adjusted = config.adjust_for_runtime("containerd");
+        assert_eq!(adjusted.containerd_conf_file, original_conf_file);
+        assert_eq!(adjusted.containerd_conf_file_backup, original_backup);
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_crio_unchanged() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+        let original_conf_file = config.containerd_conf_file.clone();
+
+        let adjusted = config.adjust_for_runtime("crio");
+        assert_eq!(adjusted.containerd_conf_file, original_conf_file);
+
+        cleanup_env_vars();
+    }
+
+    #[test]
+    fn test_adjust_for_runtime_k0s_worker_unchanged() {
+        cleanup_env_vars();
+        std::env::set_var("NODE_NAME", "test-node");
+
+        let config = Config::from_env().unwrap();
+        let original_conf_file = config.containerd_conf_file.clone();
+
+        // k0s uses drop-in files, not template files
+        let adjusted = config.adjust_for_runtime("k0s-worker");
+        assert_eq!(adjusted.containerd_conf_file, original_conf_file);
+
+        cleanup_env_vars();
     }
 }

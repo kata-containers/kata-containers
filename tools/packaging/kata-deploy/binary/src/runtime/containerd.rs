@@ -261,9 +261,12 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
 pub fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<()> {
     match runtime {
         "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
-            let tmpl_file = format!("{}.tmpl", config.containerd_conf_file);
-            if !Path::new(&tmpl_file).exists() && Path::new(&config.containerd_conf_file).exists() {
-                fs::copy(&config.containerd_conf_file, &tmpl_file)?;
+            // config.containerd_conf_file is already set to the .tmpl path after adjust_for_runtime()
+            // We need to copy from the original config.toml to the .tmpl file if .tmpl doesn't exist
+            let tmpl_file = &config.containerd_conf_file;
+            let original_file = tmpl_file.trim_end_matches(".tmpl");
+            if !Path::new(tmpl_file).exists() && Path::new(original_file).exists() {
+                fs::copy(original_file, tmpl_file)?;
             }
         }
         "k0s-worker" | "k0s-controller" => {
