@@ -182,3 +182,36 @@ func TestShareRootFilesystem(t *testing.T) {
 		})
 	}
 }
+
+func TestShareFileName(t *testing.T) {
+	testCases := map[string]struct {
+		containerID    string
+		source         string
+		destination    string
+		randHex        string
+		sandboxScoped  bool
+		expectedResult string
+	}{
+		"container scoped": {
+			containerID:    "container-id-abc",
+			source:         "/var/lib/kubelet/pods/poduid/volumes/kubernetes.io~empty-dir/cache",
+			destination:    "/mnt/cache",
+			randHex:        "0011223344556677",
+			expectedResult: "container-id-abc-0011223344556677-cache",
+		},
+		"sandbox scoped source basename": {
+			containerID:    "container-id-abc",
+			source:         "/var/lib/kubelet/pods/poduid/volumes/kubernetes.io~empty-dir/cache/",
+			destination:    "/mnt/different-cache-name",
+			randHex:        "0011223344556677",
+			sandboxScoped:  true,
+			expectedResult: "sandbox-0011223344556677-cache",
+		},
+	}
+
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tc.expectedResult, shareFileName(tc.containerID, tc.source, tc.destination, tc.randHex, tc.sandboxScoped))
+		})
+	}
+}

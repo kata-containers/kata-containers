@@ -228,7 +228,7 @@ DEFBRIDGES := 1
 DEFENABLEANNOTATIONS := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\"]
 DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
-DEFDISABLEGUESTEMPTYDIR := false
+DEFDISABLEGUESTEMPTYDIR := true
 DEFEMPTYDIRMODE := shared-fs
 DEFEMPTYDIRMODE_COCO := block-encrypted
 #Default experimental features enabled
