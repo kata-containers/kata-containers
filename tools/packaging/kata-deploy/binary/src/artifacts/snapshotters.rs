@@ -97,19 +97,16 @@ pub async fn configure_snapshotter(
     let use_drop_in =
         crate::runtime::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
 
+    // Paths under /etc/containerd/ are volume-mounted, use directly
+    // Other paths need /host prefix to access the host filesystem
     let configuration_file: std::path::PathBuf = if use_drop_in {
-        // Ensure we have the absolute path with /host prefix
-        let base_path = if config.containerd_drop_in_conf_file.starts_with("/host") {
-            // Already has /host prefix
-            Path::new(&config.containerd_drop_in_conf_file).to_path_buf()
+        let path = if config.containerd_drop_in_conf_file.starts_with("/etc/containerd/") {
+            config.containerd_drop_in_conf_file.clone()
         } else {
-            // Need to add /host prefix
-            let drop_in_path = config.containerd_drop_in_conf_file.trim_start_matches('/');
-            Path::new("/host").join(drop_in_path)
+            format!("/host{}", config.containerd_drop_in_conf_file)
         };
-
-        log::debug!("Snapshotter using drop-in config file: {:?}", base_path);
-        base_path
+        log::debug!("Snapshotter using drop-in config file: {}", path);
+        Path::new(&path).to_path_buf()
     } else {
         log::debug!(
             "Snapshotter using main config file: {}",
