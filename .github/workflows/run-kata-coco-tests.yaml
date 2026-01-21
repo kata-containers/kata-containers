@@ -38,11 +38,15 @@ on:
       AZ_APPID:
         required: true
       AZ_TENANT_ID:
-       required: true
+        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
       ITA_KEY:
         required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-coco
+  cancel-in-progress: true
 
 permissions: {}
 
@@ -59,6 +63,9 @@ jobs:
             vmm: qemu-snp
           - runner: sev-snp
             vmm: qemu-snp-runtime-rs
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-k8s-tee-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -147,6 +154,9 @@ jobs:
           { vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
           { vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -274,6 +284,9 @@ jobs:
           { k8s: microk8s, vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: microk8s, vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -388,6 +401,9 @@ jobs:
           - erofs
         pull-type:
           - default
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     environment:
       name: ci

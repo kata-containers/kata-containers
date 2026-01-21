@@ -26,6 +26,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le
+  cancel-in-progress: true
+
 jobs:
   build-asset:
     name: build-asset
@@ -42,6 +46,9 @@ jobs:
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -100,6 +107,9 @@ jobs:
           - rootfs-initrd
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -162,6 +172,9 @@ jobs:
       matrix:
         asset:
           - agent
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - uses: geekyeggo/delete-artifact@176a747ab7e287e3ff4787bf8a148716375ca118 # v6.0.0
         if: ${{ inputs.stage == 'release' }}

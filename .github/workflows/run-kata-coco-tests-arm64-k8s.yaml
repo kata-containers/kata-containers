@@ -28,6 +28,10 @@ on:
       AUTHENTICATED_IMAGE_PASSWORD:
         required: false
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-coco-arm64
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -40,6 +44,9 @@ jobs:
           - qemu-coco-dev-runtime-rs
         k8s:
           - kubeadm
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-coco-k8s-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: arm64-k8s
     environment:
       name: ci

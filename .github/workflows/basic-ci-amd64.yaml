@@ -15,6 +15,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-basic-amd64
+  cancel-in-progress: true
+
 jobs:
   run-containerd-sandboxapi:
     name: run-containerd-sandboxapi
@@ -26,6 +30,9 @@ jobs:
       matrix:
         containerd_version: ['active']
         vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-sandboxapi-amd64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
     if: false
     runs-on: ubuntu-22.04
@@ -89,6 +96,9 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'qemu-runtime-rs']
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-containerd-stability-amd64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -135,6 +145,9 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu', 'dragonball', 'qemu-runtime-rs']
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-run-nydus-amd64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -238,6 +251,9 @@ jobs:
           - qemu
           - cloud-hypervisor
           - qemu-runtime-rs
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-nerdctl-amd64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
@@ -288,6 +304,9 @@ jobs:
   run-kata-agent-apis:
     name: run-kata-agent-apis
     runs-on: ubuntu-22.04
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-agent-api-amd64
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
