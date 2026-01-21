@@ -876,7 +876,7 @@ VERIFICATION_POD_EOF
 
 	max_tries=3
 	interval=10
-	i=10
+	i=0
 
 	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
 	set +e # Disable immediate exit on failure
@@ -890,15 +890,16 @@ VERIFICATION_POD_EOF
 		fi
 		i=$((i+1))
 		if [[ ${i} -lt ${max_tries} ]]; then
-			echo "Retrying after ${interval} seconds (Attempt ${i} of $((max_tries - 1)))"
+			echo "Retrying after ${interval} seconds (Attempt ${i} of ${max_tries})"
 		else
 			break
 		fi
 		sleep "${interval}"
 	done
 	set -e # Re-enable immediate exit on failure
-	if [[ ${i} -eq ${max_tries} ]]; then
-		die "Failed to deploy kata-deploy after ${max_tries} tries"
+	if [[ ${i} -ge ${max_tries} ]]; then
+		echo "ERROR: Failed to deploy kata-deploy after ${max_tries} tries"
+		return 1
 	fi
 
 	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
