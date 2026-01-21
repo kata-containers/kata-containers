@@ -7,7 +7,6 @@ on:
 
 permissions: {}
 
-
 name: Build checks
 jobs:
   check:
@@ -75,7 +74,9 @@ jobs:
               - protobuf-compiler
         instance:
           - ${{ inputs.instance }}
-
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.component.name }}-${{ matrix.command }}
+      cancel-in-progress: true
     steps:
       - name: Adjust a permission for repo
         run: |
