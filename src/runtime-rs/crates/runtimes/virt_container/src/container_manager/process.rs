@@ -239,13 +239,8 @@ impl Process {
         Ok(())
     }
 
-    pub async fn start_io_and_wait(
-        &mut self,
-        containers: Arc<RwLock<HashMap<String, Container>>>,
-        agent: Arc<dyn Agent>,
-        container_io: ContainerIo,
-    ) -> Result<()> {
-        info!(self.logger, "start io and wait");
+    pub async fn pre_start_io_and_wait(&mut self) -> Result<ShimIo> {
+        info!(self.logger, "prepare FIFOs and shim info");
 
         self.pre_fifos_open()?;
         // new shim io
@@ -253,6 +248,18 @@ impl Process {
             .await
             .context("new shim io")?;
         self.post_fifos_open()?;
+
+        Ok(shim_io)
+    }
+
+    pub async fn post_start_io_and_wait(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        agent: Arc<dyn Agent>,
+        container_io: ContainerIo,
+        shim_io: ShimIo,
+    ) -> Result<()> {
+        info!(self.logger, "start run_io_copy");
 
         // start io copy for stdin
         if let Some(stdin) = shim_io.stdin {
@@ -286,6 +293,27 @@ impl Process {
         self.run_io_wait(containers, agent, wg)
             .await
             .context("run io thread")?;
+
+        Ok(())
+    }
+
+    pub async fn start_io_and_wait(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        agent: Arc<dyn Agent>,
+        container_io: ContainerIo,
+    ) -> Result<()> {
+        info!(self.logger, "start io and wait");
+
+        let shim_io = self
+            .pre_start_io_and_wait()
+            .await
+            .context("prepare start io and wait")?;
+
+        self.post_start_io_and_wait(containers, agent, container_io, shim_io)
+            .await
+            .context("post start io and wait")?;
+
         Ok(())
     }
 
