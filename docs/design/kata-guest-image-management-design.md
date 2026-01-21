@@ -160,10 +160,13 @@ Next, the kata-agent's RPC module will handle the create container request which
 
 ## Using guest image pull with `nerdctl`
 
-When running a workload, add the `--label io.kubernetes.cri.image-name=<image>` option e.g.:
+When running a workload, add the `--annotation io.kubernetes.cri.image-name=<image>` option e.g.:
 ```sh
-nerdctl run --runtime io.containerd.kata.v2 --snapshotter nydus --label io.kubernetes.cri.image-name=docker.io/library/busybox:latest --rm docker.io/library/busybox:latest uname -r
+nerdctl run --runtime io.containerd.kata.v2 --snapshotter nydus --annotation io.kubernetes.cri.image-name=docker.io/library/busybox:latest --rm docker.io/library/busybox:latest uname -r
 ```
+
+> [!NOTE]
+> The command above is for `nerdctl` >= `2.0`. If `nerdctl` is older than `2.0`, use `--label io.containerd.kata.v2.image-name=<image>`.
 
 References:
 1. [[RFC] Image management proposal for hosting sharing and peer pods](https://github.com/confidential-containers/confidential-containers/issues/137)
