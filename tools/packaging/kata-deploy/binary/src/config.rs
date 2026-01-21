@@ -391,6 +391,14 @@ impl Config {
                 drop_in_file: "/etc/containerd/containerd.d/kata-deploy.toml".to_string(),
                 use_drop_in,
             },
+            "microk8s" => ContainerdPaths {
+                // microk8s uses containerd-template.toml instead of config.toml
+                config_file: "/etc/containerd/containerd-template.toml".to_string(),
+                backup_file: "/etc/containerd/containerd-template.toml.bak".to_string(),
+                imports_file: Some("/etc/containerd/containerd-template.toml".to_string()),
+                drop_in_file: self.containerd_drop_in_conf_file.clone(),
+                use_drop_in,
+            },
             "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => ContainerdPaths {
                 // k3s/rke2 generates config.toml from config.toml.tmpl on each restart
                 // We must modify the template file so our changes persist

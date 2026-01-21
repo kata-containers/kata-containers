@@ -30,7 +30,6 @@ const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &[
     "crio",
     "k0s-worker",
     "k0s-controller",
-    "microk8s",
 ];
 
 fn is_containerd_based(runtime: &str) -> bool {
