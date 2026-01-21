@@ -32,9 +32,9 @@ metadata:
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "0"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded,hook-failed
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  backoffLimit: 3
+  backoffLimit: 0
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -61,19 +61,132 @@ spec:
               echo "Timeout: ${TIMEOUT}s"
               echo ""
               
-              # Wait for kata-deploy DaemonSet to be ready
-              echo "Waiting for kata-deploy DaemonSet to be ready..."
+              # First, wait for kata-deploy DaemonSet to exist (it's created by Helm, not a hook)
+              echo "Waiting for kata-deploy DaemonSet to be created..."
               {{- if .Values.env.multiInstallSuffix }}
-              kubectl rollout status daemonset/{{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }} -n {{ .Release.Namespace }} --timeout=600s
+              DAEMONSET_NAME="{{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}"
               {{- else }}
-              kubectl rollout status daemonset/{{ .Chart.Name }} -n {{ .Release.Namespace }} --timeout=600s
+              DAEMONSET_NAME="{{ .Chart.Name }}"
               {{- end }}
               
+              max_wait=120
+              elapsed=0
+              while true; do
+                if kubectl get daemonset "${DAEMONSET_NAME}" -n {{ .Release.Namespace }} &>/dev/null; then
+                  echo "DaemonSet ${DAEMONSET_NAME} exists"
+                  break
+                fi
+                
+                if [[ ${elapsed} -ge ${max_wait} ]]; then
+                  echo "ERROR: Timeout waiting for DaemonSet to be created after ${max_wait}s"
+                  kubectl get daemonset -n {{ .Release.Namespace }} || true
+                  exit 1
+                fi
+                
+                echo "Waiting for DaemonSet to be created... (${elapsed}s/${max_wait}s)"
+                sleep 2
+                elapsed=$((elapsed + 2))
+              done
+              
+              # Now wait for kata-deploy DaemonSet pods to exist
               echo ""
-              echo "Creating verification pod..."
-              POD_RESOURCE=$(kubectl apply -n "${VERIFY_NS}" -f /config/pod-spec.yaml -o name)
-              POD_NAME="${POD_RESOURCE#pod/}"
-              echo "Created: ${POD_NAME}"
+              echo "Waiting for kata-deploy DaemonSet pods to be scheduled..."
+              max_wait=120
+              elapsed=0
+              while true; do
+                pod_count=$(kubectl get pods -n {{ .Release.Namespace }} -l name=kata-deploy --no-headers 2>/dev/null | wc -l)
+                if [[ ${pod_count} -gt 0 ]]; then
+                  echo "Found ${pod_count} kata-deploy pod(s)"
+                  break
+                fi
+                
+                if [[ ${elapsed} -ge ${max_wait} ]]; then
+                  echo "ERROR: Timeout waiting for kata-deploy pods after ${max_wait}s"
+                  kubectl get pods -n {{ .Release.Namespace }} -l name=kata-deploy || true
+                  exit 1
+                fi
+                
+                echo "Waiting for pods to be scheduled... (${elapsed}s/${max_wait}s)"
+                sleep 2
+                elapsed=$((elapsed + 2))
+              done
+              
+              # Wait for kata-deploy DaemonSet to be ready (all pods running)
+              # This includes waiting for the kata-deploy image to be pulled, which can take 20+ minutes
+              echo ""
+              echo "Waiting for kata-deploy DaemonSet to be ready..."
+              DAEMONSET_TIMEOUT="{{ .Values.verification.daemonsetTimeout }}"
+              echo "DaemonSet timeout: ${DAEMONSET_TIMEOUT}s"
+              kubectl rollout status daemonset/"${DAEMONSET_NAME}" -n {{ .Release.Namespace }} --timeout="${DAEMONSET_TIMEOUT}s"
+              
+              # Wait for nodes to be labeled with katacontainers.io/kata-runtime=true
+              # This label is set by kata-deploy when installation is complete
+              # This is a quick internal operation (copying artifacts), so use a fixed timeout
+              echo ""
+              echo "Waiting for nodes to be labeled with kata-runtime..."
+              max_wait=60
+              echo "Node label timeout: ${max_wait}s"
+              elapsed=0
+              while true; do
+                labeled_nodes=$(kubectl get nodes -l katacontainers.io/kata-runtime=true --no-headers 2>/dev/null | wc -l)
+                total_nodes=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+                
+                if [[ ${labeled_nodes} -gt 0 ]] && [[ ${labeled_nodes} -eq ${total_nodes} ]]; then
+                  echo "All ${total_nodes} node(s) labeled with kata-runtime=true"
+                  kubectl get nodes -L katacontainers.io/kata-runtime || true
+                  break
+                fi
+                
+                if [[ ${elapsed} -ge ${max_wait} ]]; then
+                  echo "ERROR: Timeout waiting for nodes to be labeled after ${max_wait}s"
+                  echo "Labeled nodes: ${labeled_nodes}/${total_nodes}"
+                  echo "Node labels:"
+                  kubectl get nodes -L katacontainers.io/kata-runtime || true
+                  exit 1
+                fi
+                
+                echo "Labeled nodes: ${labeled_nodes}/${total_nodes} (${elapsed}s/${max_wait}s)"
+                sleep 5
+                elapsed=$((elapsed + 5))
+              done
+              
+              # Give kubelet time to pick up the new runtime configuration after containerd restart
+              echo ""
+              echo "Waiting 15s for kubelet to refresh runtime information..."
+              sleep 15
+              
+              # Retry pod creation if it fails due to runtime not being ready yet
+              POD_NAME="kata-deploy-verify"
+              MAX_POD_RETRIES=3
+              POD_RETRY_DELAY=10
+              
+              for pod_attempt in $(seq 1 ${MAX_POD_RETRIES}); do
+                echo ""
+                echo "Creating verification pod (attempt ${pod_attempt}/${MAX_POD_RETRIES})..."
+                
+                # Clean up any existing pod first
+                kubectl delete pod "${POD_NAME}" -n "${VERIFY_NS}" --ignore-not-found --wait=true 2>/dev/null || true
+                
+                kubectl apply -n "${VERIFY_NS}" -f /config/pod-spec.yaml
+                echo "Created: ${POD_NAME}"
+                
+                # Wait a moment for pod to be scheduled and initial status
+                sleep 5
+                
+                # Check for immediate sandbox creation failure
+                sandbox_error=$(kubectl get events -n "${VERIFY_NS}" --field-selector involvedObject.name="${POD_NAME}",type=Warning 2>/dev/null | grep -c "FailedCreatePodSandBox" || echo 0)
+                
+                if [[ ${sandbox_error} -gt 0 ]] && [[ ${pod_attempt} -lt ${MAX_POD_RETRIES} ]]; then
+                  echo "Pod sandbox creation failed, runtime may not be ready yet"
+                  echo "Waiting ${POD_RETRY_DELAY}s before retry..."
+                  kubectl delete pod "${POD_NAME}" -n "${VERIFY_NS}" --ignore-not-found --wait=true 2>/dev/null || true
+                  sleep ${POD_RETRY_DELAY}
+                  continue
+                fi
+                
+                # Pod created successfully or we're on last attempt, proceed to wait for completion
+                break
+              done
               
               # Ensure cleanup runs on any exit (success, failure, or signal)
               cleanup() {
@@ -85,23 +198,70 @@ spec:
               
               echo ""
               echo "Waiting for verification pod to complete..."
-              if kubectl wait pod "${POD_NAME}" -n "${VERIFY_NS}" --for=jsonpath='{.status.phase}'=Succeeded --timeout="${TIMEOUT}s"; then
-                echo ""
-                echo "=== Verification Pod Logs ==="
-                kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" || true
-                echo ""
-                echo "SUCCESS: Verification passed"
-                exit 0
-              else
-                echo ""
-                echo "=== Verification Failed ==="
-                echo "Pod status:"
-                kubectl describe pod "${POD_NAME}" -n "${VERIFY_NS}" || true
-                echo ""
-                echo "Pod logs:"
-                kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" || true
-                exit 1
-              fi
+              
+              # Wait for pod to either succeed or fail, checking every few seconds
+              start_time=$(date +%s)
+              while true; do
+                phase=$(kubectl get pod "${POD_NAME}" -n "${VERIFY_NS}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+                
+                if [[ "${phase}" == "Succeeded" ]]; then
+                  echo ""
+                  echo "=== Verification Pod Logs ==="
+                  kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" || true
+                  echo ""
+                  echo "SUCCESS: Verification passed"
+                  exit 0
+                fi
+                
+                if [[ "${phase}" == "Failed" ]]; then
+                  echo ""
+                  echo "=== Verification Failed - Pod phase is Failed ==="
+                  echo "Pod status:"
+                  kubectl describe pod "${POD_NAME}" -n "${VERIFY_NS}" || true
+                  echo ""
+                  echo "Pod logs:"
+                  kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" || true
+                  exit 1
+                fi
+                
+                # Check if pod is stuck - look for events indicating it can't start
+                if [[ "${phase}" == "Pending" ]]; then
+                  # Look for FailedCreatePodSandBox or other error events
+                  error_count=$(kubectl get events -n "${VERIFY_NS}" --field-selector involvedObject.name="${POD_NAME}",type=Warning 2>/dev/null | grep -c "FailedCreatePodSandBox\|Failed\|Error" || echo 0)
+                  
+                  # Only fail on errors if we've waited at least 30s (give time for transient issues)
+                  current_time=$(date +%s)
+                  elapsed=$((current_time - start_time))
+                  if [[ ${error_count} -gt 0 ]] && [[ ${elapsed} -gt 30 ]]; then
+                    echo ""
+                    echo "=== Verification Failed - Pod stuck with ${error_count} error events ==="
+                    echo "Events:"
+                    kubectl get events -n "${VERIFY_NS}" --field-selector involvedObject.name="${POD_NAME}" || true
+                    echo ""
+                    echo "Pod status:"
+                    kubectl describe pod "${POD_NAME}" -n "${VERIFY_NS}" || true
+                    exit 1
+                  fi
+                fi
+                
+                # Check timeout
+                current_time=$(date +%s)
+                elapsed=$((current_time - start_time))
+                if [[ ${elapsed} -ge ${TIMEOUT} ]]; then
+                  echo ""
+                  echo "=== Verification Failed - Timeout after ${TIMEOUT}s ==="
+                  echo "Pod phase: ${phase}"
+                  echo "Pod status:"
+                  kubectl describe pod "${POD_NAME}" -n "${VERIFY_NS}" || true
+                  echo ""
+                  echo "Pod logs:"
+                  kubectl logs "${POD_NAME}" -n "${VERIFY_NS}" 2>/dev/null || echo "No logs available"
+                  exit 1
+                fi
+                
+                echo "Pod phase: ${phase}, elapsed: ${elapsed}s/${TIMEOUT}s"
+                sleep 5
+              done
           volumeMounts:
             - name: pod-spec
               mountPath: /config
