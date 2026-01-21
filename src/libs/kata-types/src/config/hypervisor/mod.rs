@@ -770,21 +770,16 @@ impl MachineInfo {
 }
 
 /// Huge page type for VM RAM backend
-#[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, PartialEq, Eq, Default)]
 pub enum HugePageType {
     /// Memory allocated using hugetlbfs backend
     #[serde(rename = "hugetlbfs")]
+    #[default]
     Hugetlbfs,
 
     /// Memory allocated using transparent huge pages
     #[serde(rename = "thp")]
     THP,
-}
-
-impl Default for HugePageType {
-    fn default() -> Self {
-        Self::Hugetlbfs
-    }
 }
 
 /// Virtual machine memory configuration information.

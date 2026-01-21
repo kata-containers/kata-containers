@@ -10,7 +10,7 @@ use std::fs::File;
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use std::sync::mpsc;
 use tracing::instrument;
 

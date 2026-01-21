@@ -136,8 +136,6 @@ macro_rules! skip_loop_by_user {
 
 #[cfg(test)]
 mod tests {
-    use super::{skip_if_kvm_unaccessable, skip_if_not_root, skip_if_root};
-
     #[test]
     fn test_skip_if_not_root() {
         skip_if_not_root!();
