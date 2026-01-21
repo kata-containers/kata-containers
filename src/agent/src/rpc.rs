@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration, Instant};
 
 use std::convert::TryFrom;
 use std::ffi::{CString, OsStr};
@@ -95,7 +96,6 @@ use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::fs;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
@@ -716,7 +716,49 @@ impl AgentService {
                 Ok(resp)
             }
             _ = term_exit_notifier.notified() => {
-                Err(anyhow!("eof"))
+                // This change can affect the response time of exec, but the impact is bounded and only applies to
+                // a small subset of requests where the process has already exited and no stdout/stderr data is immediately available.
+                // With the current `drain after exit` logic:
+                // The drain loop is entered only if term_exit_notifier.notified() fires first (i.e., the process exit notification arrives
+                // before a successful read returns data). The loop terminates under any of the following conditions:
+                // - Non-empty data is read: return immediately (virtually no additional latency).
+                // - Empty data (EOF) is read: return immediately (virtually no additional latency).
+                // - No result is obtained and timeouts keep occurring: wait up to the configured deadline (e.g., 100ms), then return empty data to signal EOF.
+
+                // In Summary:
+                // Typical case: there is negligible impact (microseconds to milliseconds).
+                // Worst case: the response may be delayed by at most approximately deadline (e.g., up to 100ms), plus normal RPC and scheduling overhead.
+                let deadline = Instant::now() + Duration::from_millis(100);
+                let data: Vec<u8> = loop {
+                    let remain = deadline.saturating_duration_since(Instant::now());
+                    if remain.is_zero() {
+                        break Vec::new();
+                    }
+
+                    match timeout(remain, read_stream(&reader, req.len as usize)).await {
+                        Ok(Ok(v)) if !v.is_empty() => {
+                            // got remaining buffered data
+                            break v;
+                        }
+                        Ok(Ok(_)) => {
+                            // empty vec means real EOF now
+                            break Vec::new();
+                        }
+                        Ok(Err(e)) => {
+                            warn!(sl(), "read_stream error after exit (treat as eof): {:?}", e);
+                            break Vec::new();
+                        }
+                        Err(_) => {
+                            // timed out this step, try again until deadline
+                            continue;
+                        }
+                    }
+                };
+
+                let mut resp = ReadStreamResponse::new();
+                resp.set_data(data);
+
+                Ok(resp)
             }
         }
     }
