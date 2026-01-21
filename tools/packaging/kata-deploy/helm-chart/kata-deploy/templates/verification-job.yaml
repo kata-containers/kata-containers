@@ -13,10 +13,6 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "kata-deploy.labels" . | nindent 4 }}
-  annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-weight": "-5"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 data:
   pod-spec.yaml: |
     {{- .Values.verification.pod | nindent 4 }}
