@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration};
 
 use std::convert::TryFrom;
 use std::ffi::{CString, OsStr};
@@ -96,7 +97,6 @@ use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::fs;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
@@ -701,25 +701,60 @@ impl AgentService {
 
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
-        tokio::select! {
+        // Create one in-flight read future and reuse it in both branches.
+        let read_fut = read_stream(&reader, req.len as usize);
+        tokio::pin!(read_fut);
+
+        // Cancellation and polling model: Rust async is polled, not preempted.
+        // `Future::poll()` is a synchronous function call that runs to completion and
+        // returns Ready or Pending (`std::future::Future`).
+        // Readiness notifications (Waker::wake / Tokio Notify) only schedule the task
+        // to be polled again later; they do not interrupt an in-progress poll.
+        // Therefore, a Notify becoming ready while `poll_read()` is executing cannot cause
+        // the read future to be dropped mid-way; cancellation can only happen when the branch
+        // is still pending between polls (Tokio `select!` cancels by dropping non-selected futures).
+        // Detailed information, please refer to Tokio doc for more information:
+        // - Future::poll: https://doc.rust-lang.org/std/future/trait.Future.html
+        // - Waker: https://doc.rust-lang.org/std/task/struct.Waker.html
+        // - Tokio select!: https://docs.rs/tokio/latest/tokio/macro.select.html
+        let data = tokio::select! {
             // Poll the futures in the order they appear from top to bottom
             // it is very important to avoid data loss. If there is still
             // data in the buffer and read_stream branch will return
             // Poll::Ready so that the term_exit_notifier will never polled
             // before all data were read.
             biased;
-            v = read_stream(&reader, req.len as usize)  => {
-                let vector = v?;
 
-                let mut resp = ReadStreamResponse::new();
-                resp.set_data(vector);
-
-                Ok(resp)
-            }
+            v = &mut read_fut => v?,
             _ = term_exit_notifier.notified() => {
-                Err(anyhow!("eof"))
+                // Drain-after-exit rationale:
+                // The process has exited, but the data may still be buffered in the pipe/pty.
+                // We should keep waiting for the same in-flight read for a bounded window to drain the data.
+                //
+                // It enters this branch only if `term_exit_notifier.notified()` fires. It then try to "drain"
+                // any remaining buffered output for a short, bounded time window:
+                // - If non-empty data is read: return immediately.
+                // - else then return empty data as EOF.
+
+                const DRAIN_DEADLINE_MS: u64 = 500; // 500ms
+                let deadline = Duration::from_millis(DRAIN_DEADLINE_MS);
+
+                // Attempt to drain remaining buffered output after process exit
+                // Try reading with timeout
+                match timeout(deadline, &mut read_fut).await {
+                    Ok(v) => v?, // got data or EOF (empty)
+                    _ => {
+                        warn!(sl(), "exit-drain timeout, return EOF"; "container-id" => cid, "exec-id" => eid);
+                        Vec::new() // Return empty as EOF
+                    }
+                }
             }
-        }
+        };
+
+        let mut resp = ReadStreamResponse::new();
+        resp.set_data(data);
+
+        Ok(resp)
     }
 }
 
