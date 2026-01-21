@@ -25,34 +25,29 @@ pub async fn configure_containerd_runtime(
     let runtime_name = format!("kata-{adjusted_shim}");
     let configuration = format!("configuration-{shim}");
 
-    log::info!("configure_containerd_runtime: Checking drop-in support");
-    let use_drop_in =
-        super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
-    log::info!("configure_containerd_runtime: use_drop_in={}", use_drop_in);
+    log::info!("configure_containerd_runtime: Getting containerd paths");
+    let paths = config.get_containerd_paths(runtime).await?;
+    log::info!("configure_containerd_runtime: use_drop_in={}", paths.use_drop_in);
 
-    let configuration_file: std::path::PathBuf = if use_drop_in {
-        // Ensure we have the absolute path with /host prefix
-        let base_path = if config.containerd_drop_in_conf_file.starts_with("/host") {
-            // Already has /host prefix
-            Path::new(&config.containerd_drop_in_conf_file).to_path_buf()
+    let configuration_file: std::path::PathBuf = if paths.use_drop_in {
+        // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)
+        let base_path = if paths.drop_in_file.starts_with("/etc/containerd/") {
+            Path::new(&paths.drop_in_file).to_path_buf()
         } else {
-            // Need to add /host prefix
-            let drop_in_path = config.containerd_drop_in_conf_file.trim_start_matches('/');
+            // Need to add /host prefix for paths outside /etc/containerd
+            let drop_in_path = paths.drop_in_file.trim_start_matches('/');
             Path::new("/host").join(drop_in_path)
         };
 
         log::debug!("Using drop-in config file: {:?}", base_path);
         base_path
     } else {
-        log::debug!("Using main config file: {}", config.containerd_conf_file);
-        Path::new(&config.containerd_conf_file).to_path_buf()
+        log::debug!("Using main config file: {}", paths.config_file);
+        Path::new(&paths.config_file).to_path_buf()
     };
 
-    let containerd_root_conf_file = if matches!(runtime, "k0s-worker" | "k0s-controller") {
-        "/etc/containerd/containerd.toml"
-    } else {
-        &config.containerd_conf_file
-    };
+    // Use config_file to read containerd version from
+    let containerd_root_conf_file = &paths.config_file;
 
     let pluginid = if fs::read_to_string(containerd_root_conf_file)
         .unwrap_or_default()
@@ -165,21 +160,22 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
 
     fs::create_dir_all("/etc/containerd/")?;
 
-    let use_drop_in =
-        super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
+    // Get all paths and drop-in capability in one call
+    let paths = config.get_containerd_paths(runtime).await?;
 
-    if !use_drop_in {
-        if Path::new(&config.containerd_conf_file).exists()
-            && !Path::new(&config.containerd_conf_file_backup).exists()
-        {
-            fs::copy(
-                &config.containerd_conf_file,
-                &config.containerd_conf_file_backup,
-            )?;
+    if !paths.use_drop_in {
+        // For non-drop-in, backup the correct config file for each runtime
+        if Path::new(&paths.config_file).exists() && !Path::new(&paths.backup_file).exists() {
+            fs::copy(&paths.config_file, &paths.backup_file)?;
         }
     } else {
         // Create the drop-in file directory and file
-        let drop_in_file = format!("/host{}", config.containerd_drop_in_conf_file);
+        // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)
+        let drop_in_file = if paths.drop_in_file.starts_with("/etc/containerd/") {
+            paths.drop_in_file.clone()
+        } else {
+            format!("/host{}", paths.drop_in_file)
+        };
         log::info!("Creating drop-in file at: {}", drop_in_file);
 
         if let Some(parent) = Path::new(&drop_in_file).parent() {
@@ -200,20 +196,20 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
 
         // Add the drop-in file to the imports array in the main config
-        // The append_to_toml_array function is idempotent and will not add duplicates
-        log::info!(
-            "Adding drop-in to imports in: {}",
-            config.containerd_conf_file
-        );
-        let imports_path = ".imports";
-        let drop_in_path = format!("\"{}\"", config.containerd_drop_in_conf_file);
+        if let Some(imports_file) = &paths.imports_file {
+            log::info!("Adding drop-in to imports in: {}", imports_file);
+            let imports_path = ".imports";
+            let drop_in_path = format!("\"{}\"", paths.drop_in_file);
 
-        toml_utils::append_to_toml_array(
-            Path::new(&config.containerd_conf_file),
-            imports_path,
-            &drop_in_path,
-        )?;
-        log::info!("Successfully added drop-in to imports array");
+            toml_utils::append_to_toml_array(
+                Path::new(imports_file),
+                imports_path,
+                &drop_in_path,
+            )?;
+            log::info!("Successfully added drop-in to imports array");
+        } else {
+            log::info!("Runtime auto-loads drop-in files, skipping imports");
+        }
     }
 
     log::info!("Configuring {} shim(s)", config.shims_for_arch.len());
@@ -228,27 +224,27 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
 }
 
 pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
-    let use_drop_in =
-        super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
+    // Get all paths and drop-in capability in one call
+    let paths = config.get_containerd_paths(runtime).await?;
 
-    if use_drop_in {
-        let drop_in_path = config.containerd_drop_in_conf_file.clone();
-        toml_utils::remove_from_toml_array(
-            Path::new(&config.containerd_conf_file),
-            ".imports",
-            &format!("\"{drop_in_path}\""),
-        )?;
+    if paths.use_drop_in {
+        // Remove drop-in from imports array (if imports are used)
+        if let Some(imports_file) = &paths.imports_file {
+            toml_utils::remove_from_toml_array(
+                Path::new(imports_file),
+                ".imports",
+                &format!("\"{}\"", paths.drop_in_file),
+            )?;
+        }
         return Ok(());
     }
 
-    if Path::new(&config.containerd_conf_file_backup).exists() {
-        fs::remove_file(&config.containerd_conf_file)?;
-        fs::rename(
-            &config.containerd_conf_file_backup,
-            &config.containerd_conf_file,
-        )?;
+    // For non-drop-in, restore from backup
+    if Path::new(&paths.backup_file).exists() {
+        fs::remove_file(&paths.config_file)?;
+        fs::rename(&paths.backup_file, &paths.config_file)?;
     } else {
-        fs::remove_file(&config.containerd_conf_file).ok();
+        fs::remove_file(&paths.config_file).ok();
     }
 
     Ok(())
@@ -264,11 +260,13 @@ pub fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<(
             }
         }
         "k0s-worker" | "k0s-controller" => {
-            let drop_in_file = format!("/host{}", config.containerd_drop_in_conf_file);
-            if let Some(parent) = Path::new(&drop_in_file).parent() {
+            // k0s uses /etc/containerd/containerd.d/ for drop-ins (no /host prefix needed)
+            // Path is fixed for k0s, so we can hardcode it here
+            let drop_in_file_path = "/etc/containerd/containerd.d/kata-deploy.toml";
+            if let Some(parent) = Path::new(drop_in_file_path).parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::File::create(&drop_in_file)?;
+            fs::File::create(drop_in_file_path)?;
         }
         "containerd" => {
             if !Path::new(&config.containerd_conf_file).exists() {
