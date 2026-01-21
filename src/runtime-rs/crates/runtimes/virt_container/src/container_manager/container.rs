@@ -330,28 +330,30 @@ impl Container {
                     exec.process
                         .passfd_io_init(hvsock_uds_path, *passfd_port)
                         .await?;
-                }
 
-                if let Err(e) = inner.start_exec_process(process).await {
-                    let device_manager = self.resource_manager.get_device_manager().await;
-                    let _ = inner.stop_process(process, true, &device_manager).await;
-                    return Err(e).context("enter process");
-                }
-
-                {
-                    let exec = inner
-                        .exec_processes
-                        .get(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    if exec.process.height != 0 && exec.process.width != 0 {
-                        inner
-                            .win_resize_process(process, exec.process.height, exec.process.width)
-                            .await
-                            .context("win resize")?;
+                    if let Err(e) = inner.start_exec_process(process).await {
+                        let device_manager = self.resource_manager.get_device_manager().await;
+                        let _ = inner.stop_process(process, true, &device_manager).await;
+                        return Err(e).context("enter process");
                     }
-                }
 
-                if self.passfd_listener_addr.is_some() {
+                    {
+                        let exec = inner
+                            .exec_processes
+                            .get(&process.exec_id)
+                            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                        if exec.process.height != 0 && exec.process.width != 0 {
+                            inner
+                                .win_resize_process(
+                                    process,
+                                    exec.process.height,
+                                    exec.process.width,
+                                )
+                                .await
+                                .context("win resize")?;
+                        }
+                    }
+
                     // In passfd io mode, we don't bother with the IO.
                     // We send `WaitProcessRequest` immediately to the agent
                     // and wait for the response in a separate thread.
@@ -364,6 +366,24 @@ impl Container {
                         .passfd_io_wait(containers, self.agent.clone())
                         .await?;
                 } else {
+                    // resize window when process height/width > 0.
+                    {
+                        let exec = inner
+                            .exec_processes
+                            .get(&process.exec_id)
+                            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                        if exec.process.height != 0 && exec.process.width != 0 {
+                            inner
+                                .win_resize_process(
+                                    process,
+                                    exec.process.height,
+                                    exec.process.width,
+                                )
+                                .await
+                                .context("resize window")?;
+                        }
+                    }
+
                     // In legacy io mode, we handle IO by polling the agent.
                     // When IO is done, we send `WaitProcessRequest` to agent
                     // to get the exit status.
