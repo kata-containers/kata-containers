@@ -1775,10 +1775,6 @@ async fn read_stream(reader: &Mutex<ReadHalf<PipeStream>>, l: usize) -> Result<V
     let len = reader.read(&mut content).await?;
     content.resize(len, 0);
 
-    if len == 0 {
-        return Err(anyhow!("read meet eof"));
-    }
-
     Ok(content)
 }
 
