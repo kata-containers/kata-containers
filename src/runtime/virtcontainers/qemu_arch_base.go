@@ -18,9 +18,9 @@ import (
 	"strings"
 
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
-	"gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -172,7 +172,7 @@ type qemuArch interface {
 
 	// scans the PCIe space and returns the biggest BAR sizes for 32-bit
 	// and 64-bit addressable memory
-	getBARsMaxAddressableMemory() (uint64, uint64)
+	getBARsMaxAddressableMemory(hypervisorConfig *HypervisorConfig) (uint64, uint64)
 
 	// Query QMP to find a device's PCI path given its QOM path or ID
 	qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error)
@@ -876,35 +876,29 @@ func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, nu
 
 // getBARsMaxAddressableMemory we need to know the BAR sizes to configure the
 // PCIe Root Port or PCIe Downstream Port attaching a device with huge BARs.
-func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
+func (q *qemuArchBase) getBARsMaxAddressableMemory(hypervisorConfig *HypervisorConfig) (uint64, uint64) {
+	totalBarSize32 := uint64(512 * 1024 * 1024) // 512MB default
+    totalBarSize64 := uint64(512 * 1024 * 1024)
 
-	pci := nvpci.New()
-	devs, _ := pci.GetAllDevices()
+    var vfioDevices []*config.VFIODev
+    var err error
+    for _, dev := range hypervisorConfig.VFIODevices {
+      	vfioDevices, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
+        if err != nil {
+            //Probably dont panic but if we cant this, dont start the VM as it wont work
+        	panic(fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err))
+		}
+        for _, vfioDevice := range vfioDevices {
+      		hvLogger.WithField("subsystem", "qemuAmd64").Warnf("VFIOOO: vendor=%s, device=%s", vfioDevice.VendorID, vfioDevice.DeviceID)
+        	totalBarSize64 += vfioDevice.TotalBarSize
+		}
+    }
 
-	// Since we do not know which devices are going to be hotplugged,
-	// we're going to use the GPU with the biggest BARs to initialize the
-	// root port, this should work for all other devices as well.
-	// defaults are 2MB for both, if no suitable devices found
-	max32bit := uint64(2 * 1024 * 1024)
-	max64bit := uint64(2 * 1024 * 1024)
-
-	for _, dev := range devs {
-		if !dev.IsGPU() {
-			continue
-		}
-		memSize32bit, memSize64bit := dev.Resources.GetTotalAddressableMemory(true)
-		if max32bit < memSize32bit {
-			max32bit = memSize32bit
-		}
-		if max64bit < memSize64bit {
-			max64bit = memSize64bit
-		}
-	}
-	// The actual 32bit is most of the time a power of 2 but we need some
-	// buffer so double that to leave space for other IO functions.
-	// The 64bit size is not a power of 2 and hence is already rounded up
-	// to the higher value.
-	return max32bit * 2, max64bit
+    //We need to *2 here incase a continuous range cant be found
+    //KATA sets cbitpos=51 this is enough for 2PetaByes of apeture
+    //Not worried about running out
+    //Yes worried if this might effect h100/b100 devices that have encrypted VRAM
+    return totalBarSize32, totalBarSize64 * 2
 }
 
 // appendIOMMU appends a virtual IOMMU device

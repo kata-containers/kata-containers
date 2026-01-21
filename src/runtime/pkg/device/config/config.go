@@ -430,6 +430,9 @@ type VFIODev struct {
 	// HostPath is the path to the device on the host we need it as a reference
 	// to match a /dev/vfio/<num> device to a device in GK mode
 	HostPath string
+
+	// Total size of all declared bars in bytes
+	TotalBarSize uint64
 }
 
 // IOMMUFDID returns the IOMMUFD ID if the VFIO device is backed by IOMMUFD
