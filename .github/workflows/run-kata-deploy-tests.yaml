@@ -22,6 +22,10 @@ on:
         type: string
         default: ""
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-kata-deploy
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -37,6 +41,9 @@ jobs:
           - k3s
           - rke2
           - microk8s
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}

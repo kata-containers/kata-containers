@@ -2,6 +2,10 @@ name: Kata Containers CI (manually triggered)
 on:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-devel
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:

@@ -28,6 +28,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64
+  cancel-in-progress: true
+
 jobs:
   build-asset:
     name: build-asset
@@ -53,6 +57,9 @@ jobs:
           - ovmf
           - qemu
           - virtiofsd
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm64-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
@@ -153,6 +160,9 @@ jobs:
           - rootfs-image
           - rootfs-image-nvidia-gpu
           - rootfs-initrd
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -217,6 +227,9 @@ jobs:
         asset:
           - busybox
           - kernel-nvidia-gpu-modules
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-arm-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
         with:
