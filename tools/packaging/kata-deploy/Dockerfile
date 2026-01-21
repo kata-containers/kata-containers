@@ -122,7 +122,7 @@ RUN \
 #### Prepare runtime dependencies (nsenter and required libraries)
 # This stage assembles all runtime dependencies based on architecture
 # using ldd to find exact library dependencies
-FROM debian:bookworm-slim AS runtime-assembler
+FROM debian:trixie-slim AS runtime-assembler
 
 ARG DESTINATION=/opt/kata-artifacts
 
@@ -206,7 +206,7 @@ RUN \
 	esac
 
 #### kata-deploy main image
-FROM gcr.io/distroless/static-debian12@sha256:87bce11be0af225e4ca761c40babb06d6d559f5767fbf7dc3c47f0f1a466b92c
+FROM gcr.io/distroless/static-debian13@sha256:972618ca78034aaddc55864342014a96b85108c607372f7cbd0dbd1361f1d841
 
 ARG DESTINATION=/opt/kata-artifacts
 
