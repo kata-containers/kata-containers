@@ -26,11 +26,7 @@ const CONTAINERD_BASED_RUNTIMES: &[&str] = &[
 ];
 
 /// Runtimes that don't support containerd drop-in configuration files
-const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &[
-    "crio",
-    "k0s-worker",
-    "k0s-controller",
-];
+const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &["crio"];
 
 fn is_containerd_based(runtime: &str) -> bool {
     CONTAINERD_BASED_RUNTIMES.contains(&runtime)
@@ -111,6 +107,11 @@ pub async fn is_containerd_capable_of_using_drop_in_files(
 ) -> Result<bool> {
     if RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT.contains(&runtime) {
         return Ok(false);
+    }
+
+    // k0s always supports drop-in files (auto-loads from containerd.d/)
+    if runtime == "k0s-worker" || runtime == "k0s-controller" {
+        return Ok(true);
     }
 
     // Check containerd version - only 2.0+ supports drop-in files properly
