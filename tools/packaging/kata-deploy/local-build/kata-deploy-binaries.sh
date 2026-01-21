@@ -698,28 +698,14 @@ install_kernel_helper() {
 	export kernel_ref="$(get_from_kata_deps .${kernel_yaml_path}.ref)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
-	if [[ "${kernel_name}" == "kernel"*"-confidential" ]] && [[ "${ARCH}" == "x86_64" ]]; then
-		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
-		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-	fi
-
 	if [[ "${kernel_name}" == "kernel-nvidia-gpu" ]]; then
 		kernel_version="$(get_from_kata_deps .assets.kernel.nvidia.version)"
 		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia.url)"
 	fi
 
-	if [[ "${kernel_name}" == "kernel-nvidia-gpu-confidential" ]]; then
-		kernel_version="$(get_from_kata_deps .assets.kernel.nvidia-confidential.version)"
-		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia-confidential.url)"
-	fi
-
-	case ${kernel_name} in
-		kernel-nvidia-gpu*|kernel*-confidential)
-			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
-			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
-			extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
-			;;
-	esac
+	local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
+	local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
+	extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
 
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 
@@ -735,13 +721,6 @@ install_kernel_helper() {
 
 #Install kernel asset
 install_kernel() {
-	install_kernel_helper \
-		"assets.kernel" \
-		"kernel" \
-		""
-}
-
-install_kernel_confidential() {
 	if [ "${ARCH}" == "s390x" ]; then
 		export MEASURED_ROOTFS=no
 	else
@@ -749,8 +728,8 @@ install_kernel_confidential() {
 	fi
 
 	install_kernel_helper \
-		"assets.kernel.confidential" \
-		"kernel-confidential" \
+		"assets.kernel" \
+		"kernel" \
 		"-x"
 }
 
@@ -782,14 +761,6 @@ install_kernel_nvidia_gpu() {
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia"
-}
-
-#Install GPU and TEE enabled kernel asset
-install_kernel_nvidia_gpu_confidential() {
-	install_kernel_helper \
-		"assets.kernel.nvidia-confidential" \
-		"kernel-nvidia-gpu-confidential" \
 		"-x -g nvidia"
 }
 
@@ -1312,7 +1283,6 @@ handle_build() {
 		install_kata_ctl
 		install_kata_manager
 		install_kernel
-		install_kernel_confidential
 		install_kernel_cca_confidential
 		install_kernel_dragonball_experimental
 		install_log_parser_rs
@@ -1355,8 +1325,6 @@ handle_build() {
 
 	kernel) install_kernel ;;
 
-	kernel-confidential) install_kernel_confidential ;;
-
 	kernel-cca-confidential) install_kernel_cca_confidential ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
@@ -1364,8 +1332,6 @@ handle_build() {
 	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
-
-	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
 
 	nydus) install_nydus ;;
 
