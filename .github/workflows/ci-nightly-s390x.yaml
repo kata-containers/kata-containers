@@ -6,6 +6,10 @@ name: Nightly CI for s390x
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-nightly-s390x
+  cancel-in-progress: true
+
 jobs:
   check-internal-test-result:
     name: check-internal-test-result

@@ -27,6 +27,10 @@ on:
         type: string
         default: ""
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-free-runner
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -47,6 +51,9 @@ jobs:
           { vmm: cloud-hypervisor, containerd_version: lts },
           { vmm: cloud-hypervisor, containerd_version: active },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-free-runner-${{ toJSON(matrix) }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -124,4 +131,3 @@ jobs:
         if: always()
         timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
-
