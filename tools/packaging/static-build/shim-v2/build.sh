@@ -69,19 +69,31 @@ case "${RUNTIME_CHOICE}" in
 		#Build rust project using cross build musl image to speed up
 		[[ "${CROSS_BUILD}" == "true" && ${ARCH} != "s390x" ]] && container_image="messense/rust-musl-cross:${GCC_ARCH}-musl" && CC=${GCC_ARCH}-unknown-linux-musl-gcc
 
+		# When using messense/rust-musl-cross with --user flag override
+		# RUSTUP_HOME and CARGO_HOME to writable locations to avoid permission errors
+		RUST_ENV_VARS=""
+		RUST_SETUP_CMD=""
+		if [[ "${container_image}" == messense/rust-musl-cross:* ]]; then
+			RUST_ENV_VARS="--env RUSTUP_HOME=/tmp/.rustup --env CARGO_HOME=/tmp/.cargo"
+			# Add the target architecture since rust-toolchain.toml triggers a sync
+			RUST_SETUP_CMD="rustup target add ${GCC_ARCH}-unknown-linux-musl && "
+		fi
+
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			--env CROSS_BUILD=${CROSS_BUILD} \
 			--env ARCH=${ARCH} \
 			--env CC="${CC}" \
+			${RUST_ENV_VARS} \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
-			bash -c "make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+			bash -c "${RUST_SETUP_CMD}make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
 		docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 			--env CROSS_BUILD=${CROSS_BUILD} \
 		        --env ARCH=${ARCH} \
 		        --env CC="${CC}" \
+			${RUST_ENV_VARS} \
 			-w "${repo_root_dir}/src/runtime-rs" \
 			--user "$(id -u)":"$(id -g)" \
 			"${container_image}" \
