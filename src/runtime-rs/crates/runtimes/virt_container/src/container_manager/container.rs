@@ -384,20 +384,42 @@ impl Container {
                         }
                     }
 
-                    // In legacy io mode, we handle IO by polling the agent.
-                    // When IO is done, we send `WaitProcessRequest` to agent
-                    // to get the exit status.
-                    let container_io =
-                        inner.new_container_io(process).await.context("io stream")?;
-
                     let exec = inner
                         .exec_processes
                         .get_mut(&process.exec_id)
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+
+                    let oci_process = exec.oci_process.clone();
+                    let process_id = process.clone();
+                    let agent = self.agent.clone();
+
                     exec.process
-                        .start_io_and_wait(containers, self.agent.clone(), container_io)
+                        .start_io_exec_and_wait(
+                            containers,
+                            self.agent.clone(),
+                            process_id.clone(),
+                            move || {
+                                let agent = agent.clone();
+                                let process_id = process_id.clone();
+                                let oci_process = oci_process.clone();
+                                async move {
+                                    agent
+                                        .exec_process(agent::ExecProcessRequest {
+                                            process_id: process_id.into(),
+                                            string_user: None,
+                                            process: Some(oci_process),
+                                            stdin_port: None,
+                                            stdout_port: None,
+                                            stderr_port: None,
+                                        })
+                                        .await
+                                        .context("exec process")?;
+                                    Ok(())
+                                }
+                            },
+                        )
                         .await
-                        .context("start io and wait")?;
+                        .context("start io exec and wait")?;
                 }
             }
         }
