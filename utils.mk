@@ -184,6 +184,13 @@ standard_rust_check:
 	cargo clippy --all-targets --all-features --release \
 		-- \
 		-D warnings
+	cargo check
+	@DIFF=$$(git diff HEAD); \
+	if [ -n "$$DIFF" ]; then \
+		echo "ERROR: cargo check resulted in uncommited changes"; \
+		echo "$$DIFF"; \
+		exit 1; \
+	fi
 
 # Install a file (full version).
 #
