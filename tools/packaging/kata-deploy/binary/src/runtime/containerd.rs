@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::{Config, ContainerdPaths};
+use crate::config::{Config, ContainerdPaths, CustomRuntime};
 use crate::k8s;
 use crate::utils;
 use crate::utils::toml as toml_utils;
@@ -174,6 +174,60 @@ pub async fn configure_containerd_runtime(
     Ok(())
 }
 
+/// Custom runtimes use an isolated config directory under custom-runtimes/{handler}/
+pub async fn configure_custom_containerd_runtime(
+    config: &Config,
+    runtime: &str,
+    custom_runtime: &CustomRuntime,
+) -> Result<()> {
+    log::info!(
+        "configure_custom_containerd_runtime: Starting for handler={}",
+        custom_runtime.handler
+    );
+
+    let paths = config.get_containerd_paths(runtime).await?;
+    let configuration_file = get_containerd_output_path(&paths);
+    let pluginid = get_containerd_pluginid(&paths.config_file)?;
+
+    log::info!(
+        "configure_custom_containerd_runtime: Writing to {:?}, pluginid={}",
+        configuration_file,
+        pluginid
+    );
+
+    let pod_annotations = "[\"io.katacontainers.*\"]";
+
+    // Determine snapshotter if specified
+    let snapshotter = custom_runtime.containerd_snapshotter.as_ref().map(|s| {
+        if s == "nydus" {
+            match config.multi_install_suffix.as_ref() {
+                Some(suffix) if !suffix.is_empty() => format!("\"{s}-{suffix}\""),
+                _ => format!("\"{s}\""),
+            }
+        } else {
+            format!("\"{s}\"")
+        }
+    });
+
+    let params = ContainerdRuntimeParams {
+        runtime_name: custom_runtime.handler.clone(),
+        runtime_path: format!(
+            "\"{}\"",
+            utils::get_kata_containers_runtime_path(&custom_runtime.base_config, &config.dest_dir)
+        ),
+        config_path: format!(
+            "\"{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml\"",
+            config.dest_dir,
+            custom_runtime.handler,
+            custom_runtime.base_config
+        ),
+        pod_annotations,
+        snapshotter,
+    };
+
+    write_containerd_runtime_config(&configuration_file, pluginid, &params)
+}
+
 pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> {
     info!("Add Kata Containers as a supported runtime for containerd");
 
@@ -236,6 +290,30 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         log::info!("Configuring runtime for shim: {}", shim);
         configure_containerd_runtime(config, runtime, shim).await?;
         log::info!("Successfully configured runtime for shim: {}", shim);
+    }
+
+    if config.custom_runtimes_enabled {
+        if config.custom_runtimes.is_empty() {
+            anyhow::bail!(
+                "Custom runtimes enabled but no custom runtimes found in configuration. \
+                 Check that custom-runtimes.list exists and is readable."
+            );
+        }
+        log::info!(
+            "Configuring {} custom runtime(s)",
+            config.custom_runtimes.len()
+        );
+        for custom_runtime in &config.custom_runtimes {
+            log::info!(
+                "Configuring custom runtime: {}",
+                custom_runtime.handler
+            );
+            configure_custom_containerd_runtime(config, runtime, custom_runtime).await?;
+            log::info!(
+                "Successfully configured custom runtime: {}",
+                custom_runtime.handler
+            );
+        }
     }
 
     log::info!("Successfully configured all containerd runtimes");

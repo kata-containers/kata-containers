@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::{Config, CustomRuntime};
 use crate::utils;
 use anyhow::Result;
 use log::info;
@@ -84,6 +84,42 @@ pub async fn configure_crio_runtime(config: &Config, shim: &str) -> Result<()> {
     write_crio_runtime_config(&mut file, &params)
 }
 
+pub async fn configure_custom_crio_runtime(
+    config: &Config,
+    custom_runtime: &CustomRuntime,
+) -> Result<()> {
+    info!(
+        "Configuring custom CRI-O runtime: {}",
+        custom_runtime.handler
+    );
+
+    let guest_pull = custom_runtime
+        .crio_pull_type
+        .as_ref()
+        .map(|p| p == "guest-pull")
+        .unwrap_or(false);
+
+    let params = CrioRuntimeParams {
+        runtime_name: &custom_runtime.handler,
+        runtime_path: utils::get_kata_containers_runtime_path(
+            &custom_runtime.base_config,
+            &config.dest_dir,
+        ),
+        config_path: format!(
+            "{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml",
+            config.dest_dir, custom_runtime.handler, custom_runtime.base_config
+        ),
+        guest_pull,
+    };
+
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&config.crio_drop_in_conf_file)?;
+
+    write_crio_runtime_config(&mut file, &params)
+}
+
 pub async fn configure_crio(config: &Config) -> Result<()> {
     info!("Add Kata Containers as a supported runtime for CRIO:");
 
@@ -113,6 +149,22 @@ pub async fn configure_crio(config: &Config) -> Result<()> {
 
     for shim in &config.shims_for_arch {
         configure_crio_runtime(config, shim).await?;
+    }
+
+    if config.custom_runtimes_enabled {
+        if config.custom_runtimes.is_empty() {
+            anyhow::bail!(
+                "Custom runtimes enabled but no custom runtimes found in configuration. \
+                 Check that custom-runtimes.list exists and is readable."
+            );
+        }
+        info!(
+            "Configuring {} custom runtime(s) for CRI-O",
+            config.custom_runtimes.len()
+        );
+        for custom_runtime in &config.custom_runtimes {
+            configure_custom_crio_runtime(config, custom_runtime).await?;
+        }
     }
 
     if config.debug {
