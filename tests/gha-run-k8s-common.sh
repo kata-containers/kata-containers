@@ -604,7 +604,11 @@ function helm_helper() {
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 						;;
-					qemu-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs)
+					qemu-runtime-rs)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
+						;;
+					qemu-coco-dev|qemu-coco-dev-runtime-rs)
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
 						;;

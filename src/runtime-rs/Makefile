@@ -130,8 +130,23 @@ FCJAILERPATH = $(FCBINDIR)/$(FCJAILERCMD)
 FCVALIDJAILERPATHS = [\"$(FCJAILERPATH)\"]
 
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
+
+# EDK2 firmware names per architecture
+ifeq ($(ARCH), aarch64)
+    EDK2_NAME := aavmf
+endif
+
+# Set firmware paths from QEMUFW/QEMUFWVOL if defined
 FIRMWAREPATH :=
 FIRMWAREVOLUMEPATH :=
+ifneq (,$(QEMUCMD))
+    ifneq (,$(QEMUFW))
+        FIRMWAREPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFW)
+    endif
+    ifneq (,$(QEMUFWVOL))
+        FIRMWAREVOLUMEPATH := $(PREFIXDEPS)/share/$(EDK2_NAME)/$(QEMUFWVOL)
+    endif
+endif
 
 ROOTMEASURECONFIG ?= ""
 KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
@@ -374,6 +389,11 @@ ifneq (,$(QEMUCMD))
 ifeq ($(ARCH), s390x)
     VMROOTFSDRIVER_QEMU := virtio-blk-ccw
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-blk-ccw
+else ifeq ($(ARCH), aarch64)
+    # NVDIMM/virtio-pmem has issues on arm64 (cache coherency problems with DAX),
+    # so we use virtio-blk-pci instead.
+    VMROOTFSDRIVER_QEMU := virtio-blk-pci
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
 else
     VMROOTFSDRIVER_QEMU := virtio-pmem
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
