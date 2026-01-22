@@ -120,10 +120,12 @@ jobs:
 
       - name: Delete kata-deploy
         if: always()
+        timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
 
       - name: Delete CoCo KBS
         if: always()
+        timeout-minutes: 10
         run: |
           [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] && echo "ITA_KEY=${GH_ITA_KEY}" >> "${GITHUB_ENV}"
           bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs

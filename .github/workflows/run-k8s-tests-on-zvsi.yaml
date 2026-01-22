@@ -137,10 +137,12 @@ jobs:
 
       - name: Delete kata-deploy
         if: always()
+        timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi
 
       - name: Delete CoCo KBS
         if: always()
+        timeout-minutes: 10
         run: |
           if [ "${KBS}" == "true" ]; then
             bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
