@@ -31,6 +31,9 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 repo_root_dir="${BATS_TEST_DIRNAME}/../../../"
 load "${repo_root_dir}/tests/gha-run-k8s-common.sh"
 
+# Load shared helm deployment helpers
+source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
+
 setup() {
 	ensure_helm
 
@@ -79,7 +82,6 @@ EOF
 	
 	# Install kata-deploy via Helm
 	echo "Installing kata-deploy with Helm..."
-	local helm_chart_dir="tools/packaging/kata-deploy/helm-chart/kata-deploy"
 	
 	# Timeouts can be customized via environment variables:
 	# - KATA_DEPLOY_TIMEOUT: Overall helm timeout (includes all hooks)
@@ -97,43 +99,11 @@ EOF
 	echo "  DaemonSet rollout: ${daemonset_timeout}s (includes image pull)"
 	echo "  Verification pod: ${verification_timeout}s (pod execution)"
 
-	helm dependency build "${helm_chart_dir}"
-	
-	# Disable all shims except the one being tested
-	helm upgrade --install kata-deploy "${helm_chart_dir}" \
-		--set image.reference="${DOCKER_REGISTRY}/${DOCKER_REPO}" \
-		--set image.tag="${DOCKER_TAG}" \
-		--set debug=true \
-		--set k8sDistribution="${KUBERNETES}" \
-		--set shims.clh.enabled=false \
-		--set shims.cloud-hypervisor.enabled=false \
-		--set shims.dragonball.enabled=false \
-		--set shims.fc.enabled=false \
-		--set shims.qemu.enabled=false \
-		--set shims.qemu-runtime-rs.enabled=false \
-		--set shims.qemu-cca.enabled=false \
-		--set shims.qemu-se.enabled=false \
-		--set shims.qemu-se-runtime-rs.enabled=false \
-		--set shims.qemu-nvidia-gpu.enabled=false \
-		--set shims.qemu-nvidia-gpu-snp.enabled=false \
-		--set shims.qemu-nvidia-gpu-tdx.enabled=false \
-		--set shims.qemu-sev.enabled=false \
-		--set shims.qemu-snp.enabled=false \
-		--set shims.qemu-snp-runtime-rs.enabled=false \
-		--set shims.qemu-tdx.enabled=false \
-		--set shims.qemu-tdx-runtime-rs.enabled=false \
-		--set shims.qemu-coco-dev.enabled=false \
-		--set shims.qemu-coco-dev-runtime-rs.enabled=false \
-		--set "shims.${KATA_HYPERVISOR}.enabled=true" \
-		--set "defaultShim.amd64=${KATA_HYPERVISOR}" \
-		--set "defaultShim.arm64=${KATA_HYPERVISOR}" \
-		--set runtimeClasses.enabled=true \
-		--set runtimeClasses.createDefault=true \
+	# Deploy kata-deploy using shared helper with verification options
+	HELM_TIMEOUT="${helm_timeout}" deploy_kata "" \
 		--set-file verification.pod="${verification_yaml}" \
 		--set verification.timeout="${verification_timeout}" \
-		--set verification.daemonsetTimeout="${daemonset_timeout}" \
-		--namespace kube-system \
-		--wait --timeout "${helm_timeout}"
+		--set verification.daemonsetTimeout="${daemonset_timeout}"
 	
 	rm -f "${verification_yaml}"
 	
@@ -179,7 +149,5 @@ EOF
 }
 
 teardown() {
-	pushd "${repo_root_dir}"
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
-	popd
+	uninstall_kata
 }

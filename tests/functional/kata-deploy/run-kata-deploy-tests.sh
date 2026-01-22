@@ -19,6 +19,7 @@ if [[ -n "${KATA_DEPLOY_TEST_UNION:-}" ]]; then
 else
 	KATA_DEPLOY_TEST_UNION=( \
 		"kata-deploy.bats" \
+		"kata-deploy-custom-runtimes.bats" \
 	)
 fi
 
