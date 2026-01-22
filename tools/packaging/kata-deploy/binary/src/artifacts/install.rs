@@ -102,6 +102,11 @@ pub async fn install_artifacts(config: &Config) -> Result<()> {
         configure_shim_config(config, shim).await?;
     }
 
+    // Install custom runtime configuration files if enabled
+    if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
+        install_custom_runtime_configs(config)?;
+    }
+
     if std::env::var("HOST_OS").unwrap_or_default() == "cbl-mariner" {
         configure_mariner(config).await?;
     }
@@ -118,12 +123,113 @@ pub async fn install_artifacts(config: &Config) -> Result<()> {
 pub async fn remove_artifacts(config: &Config) -> Result<()> {
     info!("deleting kata artifacts");
 
+    // Remove custom runtime configs first (before removing main install dir)
+    if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
+        remove_custom_runtime_configs(config)?;
+    }
+
     if Path::new(&config.host_install_dir).exists() {
         fs::remove_dir_all(&config.host_install_dir)?;
     }
 
     nfd::remove_nfd_rules(config).await?;
 
+    Ok(())
+}
+
+/// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
+fn install_custom_runtime_configs(config: &Config) -> Result<()> {
+    info!("Installing custom runtime configuration files");
+
+    for runtime in &config.custom_runtimes {
+        // Create isolated directory for this handler
+        let handler_dir = format!(
+            "/host/{}/share/defaults/kata-containers/custom-runtimes/{}",
+            config.dest_dir, runtime.handler
+        );
+        let config_d_dir = format!("{}/config.d", handler_dir);
+
+        fs::create_dir_all(&config_d_dir)
+            .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
+
+        // Copy base config (already modified by kata-deploy with debug, proxy, annotations)
+        let base_src = format!(
+            "/host/{}/share/defaults/kata-containers/configuration-{}.toml",
+            config.dest_dir, runtime.base_config
+        );
+        let base_dest = format!("{}/configuration-{}.toml", handler_dir, runtime.base_config);
+
+        info!(
+            "Copying base config for {}: {} -> {}",
+            runtime.handler, base_src, base_dest
+        );
+
+        fs::copy(&base_src, &base_dest).with_context(|| {
+            format!(
+                "Failed to copy base config from {} to {}",
+                base_src, base_dest
+            )
+        })?;
+
+        // Copy drop-in file if provided
+        if let Some(ref drop_in_src) = runtime.drop_in_file {
+            let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
+
+            info!(
+                "Copying drop-in for {}: {} -> {}",
+                runtime.handler, drop_in_src, drop_in_dest
+            );
+
+            fs::copy(drop_in_src, &drop_in_dest).with_context(|| {
+                format!(
+                    "Failed to copy drop-in from {} to {}",
+                    drop_in_src, drop_in_dest
+                )
+            })?;
+        }
+    }
+
+    info!(
+        "Successfully installed {} custom runtime config(s)",
+        config.custom_runtimes.len()
+    );
+    Ok(())
+}
+
+fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
+    info!("Removing custom runtime configuration files");
+
+    let custom_runtimes_dir = format!(
+        "/host/{}/share/defaults/kata-containers/custom-runtimes",
+        config.dest_dir
+    );
+
+    for runtime in &config.custom_runtimes {
+        // Remove the entire handler directory (includes config.d/)
+        let handler_dir = format!("{}/{}", custom_runtimes_dir, runtime.handler);
+
+        if Path::new(&handler_dir).exists() {
+            info!("Removing custom runtime directory: {}", handler_dir);
+            if let Err(e) = fs::remove_dir_all(&handler_dir) {
+                log::warn!(
+                    "Failed to remove custom runtime directory {}: {}",
+                    handler_dir,
+                    e
+                );
+            }
+        }
+    }
+
+    // Remove the custom-runtimes directory if empty
+    if Path::new(&custom_runtimes_dir).exists() {
+        if let Ok(entries) = fs::read_dir(&custom_runtimes_dir) {
+            if entries.count() == 0 {
+                let _ = fs::remove_dir(&custom_runtimes_dir);
+            }
+        }
+    }
+
+    info!("Successfully removed custom runtime config files");
     Ok(())
 }
 
@@ -784,6 +890,8 @@ mod tests {
             containerd_conf_file_backup: "/etc/containerd/config.toml.bak".to_string(),
             containerd_drop_in_conf_file: "/opt/kata/containerd/config.d/kata-deploy.toml"
                 .to_string(),
+            custom_runtimes_enabled: false,
+            custom_runtimes: vec![],
         }
     }
 
