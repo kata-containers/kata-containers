@@ -125,7 +125,7 @@ If you want to enable SELinux in Permissive mode, add `enforcing=0` to the kerne
 Enable full debug as follows:
 
 ```bash
-$ sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
+$ sudo sed -i -E 's/^(\s*enable_debug\s*=\s*)false/\1true/' /etc/kata-containers/configuration.toml
 $ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' /etc/kata-containers/configuration.toml
 ```
 
