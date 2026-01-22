@@ -1062,12 +1062,10 @@ impl Container {
 
     // Get the number of NVIDIA passthrough GPUs requested in resource limits.
     // Returns the count from "nvidia.com/pgpu" if present.
-    pub fn get_nvidia_pgpu_count(&self) -> Option<usize> {
-        self.resources
-            .as_ref()
-            .and_then(|r| r.limits.as_ref())
-            .and_then(|l| l.get("nvidia.com/pgpu"))
-            .and_then(|v| v.parse::<usize>().ok())
+    /// Count NVIDIA passthrough GPU requests using an explicit allowlist of resource keys.
+    pub fn get_nvidia_pgpu_count(&self, pgpu_resource_keys: &[String]) -> Option<usize> {
+        let limits = self.resources.as_ref()?.limits.as_ref()?;
+        sum_limits_by_keys(limits, pgpu_resource_keys)
     }
 }
 
@@ -1119,4 +1117,84 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
     pause_container.init(config, is_pause_container).await;
     containers.insert(0, pause_container);
     debug!("pause container added.");
+}
+
+fn sum_limits_by_keys(limits: &BTreeMap<String, String>, keys: &[String]) -> Option<usize> {
+    if keys.is_empty() {
+        return None;
+    }
+
+    let mut total: usize = 0;
+    let mut matched_any = false;
+
+    for key in keys {
+        if let Some(v) = limits.get(key) {
+            matched_any = true;
+            let n = v.parse::<usize>().ok()?;
+            total = total.saturating_add(n);
+        }
+    }
+
+    // Preserve historical semantics:
+    // - if at least one key matched and all matched values parsed, return Some(total)
+    // - if no key matched, return None
+    matched_any.then_some(total)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_limits(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
+        entries
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn sum_limits_none_when_keys_empty() {
+        let limits = make_limits(&[("nvidia.com/pgpu", "2")]);
+        assert_eq!(sum_limits_by_keys(&limits, &[]), None);
+    }
+
+    #[test]
+    fn sum_limits_none_when_no_match() {
+        let limits = make_limits(&[("nvidia.com/pgpu", "2")]);
+        let keys = vec!["vendor.com/gpu".to_string()];
+        assert_eq!(sum_limits_by_keys(&limits, &keys), None);
+    }
+
+    #[test]
+    fn sum_limits_sums_matching_keys() {
+        let limits = make_limits(&[("nvidia.com/pgpu", "2"), ("nvidia.com/gpu_model", "1")]);
+        let keys = vec![
+            "nvidia.com/pgpu".to_string(),
+            "nvidia.com/gpu_model".to_string(),
+        ];
+        assert_eq!(sum_limits_by_keys(&limits, &keys), Some(3));
+    }
+
+    #[test]
+    fn sum_limits_none_on_parse_failure() {
+        let limits = make_limits(&[("nvidia.com/pgpu", "two")]);
+        let keys = vec!["nvidia.com/pgpu".to_string()];
+        assert_eq!(sum_limits_by_keys(&limits, &keys), None);
+    }
+
+    #[test]
+    fn get_nvidia_pgpu_count_uses_allowlist_keys() {
+        let limits = make_limits(&[("nvidia.com/pgpu", "1"), ("nvidia.com/GH100", "2")]);
+        let keys = vec![
+            "nvidia.com/pgpu".to_string(),
+            "nvidia.com/GH100".to_string(),
+        ];
+        let mut c = Container::default();
+        c.resources = Some(ResourceRequirements {
+            requests: None,
+            limits: Some(limits),
+        });
+
+        assert_eq!(c.get_nvidia_pgpu_count(&keys), Some(3));
+    }
 }

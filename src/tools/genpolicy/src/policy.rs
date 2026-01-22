@@ -479,6 +479,18 @@ pub struct VfioDeviceAnnotations {
 
     /// Device type for NVIDIA GPU VFIO devices (gk variant).
     pub nvidia_gpu_gk_device_type: String,
+
+    /// Allowlist of K8s extended resource names that should be treated as NVIDIA
+    /// passthrough GPU (pGPU) requests when generating policy.
+    ///
+    /// Examples:
+    /// - "nvidia.com/pgpu" (legacy default)
+    /// - "nvidia.com/GH100_H100_PCIE" (model-specific resource name)
+    ///
+    /// This is generation-time configuration; policy enforcement does not need it.
+    /// We therefore skip serializing it into `policy_data`.
+    #[serde(default = "default_nvidia_pgpu_resource_keys", skip_serializing)]
+    pub nvidia_pgpu_resource_keys: Vec<String>,
 }
 
 /// Device annotation patterns for various device types.
@@ -729,7 +741,14 @@ impl AgentPolicy {
 
         // Generate expected device entries and annotation key-value pairs for VFIO devices
         let mut runtime_anno_patterns = BTreeMap::new();
-        if let Some(nvidia_pgpu_count) = yaml_container.get_nvidia_pgpu_count() {
+        if let Some(nvidia_pgpu_count) = yaml_container.get_nvidia_pgpu_count(
+            &self
+                .config
+                .settings
+                .device_annotations
+                .vfio
+                .nvidia_pgpu_resource_keys,
+        ) {
             if nvidia_pgpu_count > 0 {
                 for _ in 0..nvidia_pgpu_count {
                     let mut device = agent::Device::new();
@@ -1244,4 +1263,9 @@ pub fn get_kata_namespaces(
     });
 
     namespaces
+}
+
+fn default_nvidia_pgpu_resource_keys() -> Vec<String> {
+    // Backward compatible default: historically genpolicy assumed "nvidia.com/pgpu".
+    vec!["nvidia.com/pgpu".to_owned()]
 }
