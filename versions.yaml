@@ -310,9 +310,6 @@ externals:
     version: "v1.7.25"
     lts: "v1.7"
     active: "v2.1"
-    # keep the latest version to make the current PR ci work, once it was
-    # merged,we can remove the latest version.
-    latest: "v2.2"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
@@ -496,18 +493,6 @@ languages:
         'newest-version' is the latest version known to work when
         building Kata
       newest-version: "1.64.8"
-
-plugins:
-  description: |
-    Details of plugins required for the components or testing.
-
-  sriov-network-device:
-    description: |
-      The SR-IOV network device plugin is Kubernetes device plugin for
-      discovering and advertising SR-IOV virtual functions (VFs)
-      available on a Kubernetes host.
-    url: "https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin"
-    version: "b7f6d3e0679796e907ecca88cfab0e32e326850d"
 
 docker_images:
   description: "Docker images used for testing"
