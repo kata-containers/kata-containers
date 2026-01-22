@@ -2296,6 +2296,14 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_iommu(&mut self) {
+        // vIOMMU (Intel IOMMU) is not supported on the "virt" machine type (arm64)
+        if self.machine.r#type == "virt" {
+            self.kernel
+                .params
+                .append(&mut KernelParams::from_string("iommu.passthrough=0"));
+            return;
+        }
+
         let dev_iommu = DeviceIntelIommu::new();
         self.devices.push(Box::new(dev_iommu));
 
