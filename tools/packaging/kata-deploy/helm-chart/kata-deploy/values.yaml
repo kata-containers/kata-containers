@@ -340,3 +340,64 @@ verification:
   #     --set-file verification.pod=/path/to/your-verification-pod.yaml
   #
   pod: ""
+
+# Custom Runtimes - bring your own RuntimeClass with base config + drop-in overrides
+# Each custom runtime uses an existing Kata config as a base and applies user overrides
+# via Kata's config.d drop-in mechanism.
+#
+# IMPORTANT: The base config is copied AFTER kata-deploy has applied its modifications
+# (debug, proxy, annotations). Custom runtimes inherit these settings from their base.
+#
+# Usage with values file (recommended):
+#   Create a custom-runtimes.values.yaml file:
+#
+#   customRuntimes:
+#     enabled: true
+#     runtimes:
+#       my-gpu-runtime:
+#         baseConfig: "qemu-nvidia-gpu"  # Required: existing config to use as base
+#         dropIn: |                       # Optional: overrides via config.d mechanism
+#           [hypervisor.qemu]
+#           default_memory = 1024
+#           default_vcpus = 4
+#         runtimeClass: |
+#           kind: RuntimeClass
+#           apiVersion: node.k8s.io/v1
+#           metadata:
+#             name: kata-my-gpu-runtime
+#             labels:
+#               app.kubernetes.io/managed-by: kata-deploy
+#           handler: kata-my-gpu-runtime
+#           overhead:
+#             podFixed:
+#               memory: "640Mi"
+#               cpu: "500m"
+#           scheduling:
+#             nodeSelector:
+#               katacontainers.io/kata-runtime: "true"
+#         # Optional: CRI-specific configuration
+#         containerd:
+#           snapshotter: "nydus"  # Configure containerd snapshotter (nydus, erofs, etc.)
+#         crio:
+#           pullType: "guest-pull"  # Configure CRI-O runtime_pull_image = true
+#
+#   Then deploy with:
+#     helm install kata-deploy ./kata-deploy -f custom-runtimes.values.yaml
+#
+# Available base configs: qemu, qemu-nvidia-gpu, qemu-snp, qemu-tdx, cloud-hypervisor, fc, etc.
+# The correct shim binary is automatically selected based on the baseConfig.
+#
+customRuntimes:
+  enabled: false
+  runtimes: {}
+  # Example structure:
+  # runtimes:
+  #   my-runtime:
+  #     baseConfig: "qemu-nvidia-gpu"   # Required: base config name
+  #     dropIn: ""                      # Optional: TOML overrides for config.d
+  #     runtimeClass: |
+  #       <full RuntimeClass YAML>
+  #     containerd:
+  #       snapshotter: ""  # Optional: nydus, erofs, or empty for default
+  #     crio:
+  #       pullType: ""  # Optional: guest-pull or empty for default

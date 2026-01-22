@@ -284,6 +284,10 @@ spec:
         - name: HOST_OS
           value: {{ . | quote }}
 {{- end }}
+{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+        - name: CUSTOM_RUNTIMES_ENABLED
+          value: "true"
+{{- end }}
         securityContext:
           privileged: true
         volumeMounts:
@@ -293,6 +297,11 @@ spec:
           mountPath: /etc/containerd/
         - name: host
           mountPath: /host/
+{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+        - name: custom-configs
+          mountPath: /custom-configs/
+          readOnly: true
+{{- end }}
       volumes:
       - name: crio-conf
         hostPath:
@@ -303,6 +312,15 @@ spec:
       - name: host
         hostPath:
           path: /
+{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+      - name: custom-configs
+        configMap:
+{{- if .Values.env.multiInstallSuffix }}
+          name: {{ .Chart.Name }}-custom-configs-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+          name: {{ .Chart.Name }}-custom-configs
+{{- end }}
+{{- end }}
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
