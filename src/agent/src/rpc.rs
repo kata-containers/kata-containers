@@ -716,49 +716,46 @@ impl AgentService {
                 Ok(resp)
             }
             _ = term_exit_notifier.notified() => {
-                // This change can affect the response time of exec, but the impact is bounded and only applies to
-                // a small subset of requests where the process has already exited and no stdout/stderr data is immediately available.
-                // With the current `drain after exit` logic:
-                // The drain loop is entered only if term_exit_notifier.notified() fires first (i.e., the process exit notification arrives
-                // before a successful read returns data). The loop terminates under any of the following conditions:
-                // - Non-empty data is read: return immediately (virtually no additional latency).
-                // - Empty data (EOF) is read: return immediately (virtually no additional latency).
-                // - No result is obtained and timeouts keep occurring: wait up to the configured deadline (e.g., 100ms), then return empty data to signal EOF.
+                // Drain-after-exit rationale:
+                // This can affect exec response time, but the impact is bounded and only applies to a small subset
+                // of requests where the process has already exited and no stdout/stderr data is immediately available.
+                //
+                // It enters this branch only if `term_exit_notifier.notified()` fires before a successful read completes.
+                // It then try to "drain" any remaining buffered output for a short, bounded time window:
+                // - If non-empty data is read: return immediately.
+                // - If empty data (EOF) is read: return immediately.
+                // - If no data becomes available: retry until the deadline, then return empty data as EOF.
 
-                // In Summary:
-                // Typical case: there is negligible impact (microseconds to milliseconds).
-                // Worst case: the response may be delayed by at most approximately deadline (e.g., up to 100ms), plus normal RPC and scheduling overhead.
-                let deadline = Instant::now() + Duration::from_millis(100);
-                let data: Vec<u8> = loop {
-                    let remain = deadline.saturating_duration_since(Instant::now());
-                    if remain.is_zero() {
-                        break Vec::new();
-                    }
+                const DRAIN_DEADLINE_MS: u64 = 50; // 50ms
+                const DRAIN_STEP_MS: u64 = 10; // 10ms
 
-                    match timeout(remain, read_stream(&reader, req.len as usize)).await {
-                        Ok(Ok(v)) if !v.is_empty() => {
-                            // got remaining buffered data
-                            break v;
-                        }
-                        Ok(Ok(_)) => {
-                            // empty vec means real EOF now
-                            break Vec::new();
-                        }
+                let deadline = Instant::now() + Duration::from_millis(DRAIN_DEADLINE_MS);
+                let step = Duration::from_millis(DRAIN_STEP_MS);
+
+                // Attempt to drain remaining buffered output after process exit
+                let data = loop {
+                    // Check if deadline has passed
+                    let remaining = match deadline.checked_duration_since(Instant::now()) {
+                        Some(d) => d.min(step),
+                        None => break Vec::new(), // Deadline passed
+                    };
+
+                    // Try reading with timeout
+                    match timeout(remaining, read_stream(&reader, req.len as usize)).await {
+                        // Got remaining buffered data or empty data means real EOF now
+                        Ok(Ok(data)) => break data,
                         Ok(Err(e)) => {
                             warn!(sl(), "read_stream error after exit (treat as eof): {:?}", e);
                             break Vec::new();
                         }
                         Err(_) => {
-                            // timed out this step, try again until deadline
+                            warn!(sl(), "Try again until deadline, remaining time: {:?}", remaining);
                             continue;
                         }
                     }
                 };
 
-                let mut resp = ReadStreamResponse::new();
-                resp.set_data(data);
-
-                Ok(resp)
+                Ok(ReadStreamResponse { data, ..Default::default() })
             }
         }
     }

@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path"
@@ -2485,11 +2486,16 @@ func (k *kataAgent) readProcessStream(containerID, processID string, data []byte
 		ContainerId: containerID,
 		ExecId:      processID,
 		Len:         uint32(len(data))})
-	if err == nil {
-		copy(data, resp.Data)
-		return len(resp.Data), nil
+	if err != nil {
+		return 0, err
 	}
-	return 0, err
+
+	if len(resp.Data) == 0 {
+		return 0, io.EOF
+	}
+
+	copy(data, resp.Data)
+	return len(resp.Data), nil
 }
 
 func (k *kataAgent) getGuestDetails(ctx context.Context, req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
