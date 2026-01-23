@@ -18,6 +18,8 @@ kernel = "@KERNELPATH_COCO@"
 image = "@IMAGECONFIDENTIALPATH@"
 # initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
+# Set to 0 to use Unix Domain Socket (/var/run/tdx-qgs/qgs.socket) instead of vsock.
+# If port is 0 but the socket does not exist, Kata falls back to vsock port 4050.
 tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
 
 # rootfs filesystem type:

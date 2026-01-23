@@ -433,6 +433,7 @@ guest_hook_path = ""
 # It's important to note that setting "tdx_quote_generation_service_socket_port" to 0 enables communication via Unix Domain Sockets (UDS).
 # To activate UDS, the QGS service itself must be launched with the "-port=0" parameter and the UDS will always be located at /var/run/tdx-qgs/qgs.socket.
 # -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}}'
+# If port is set to 0 but /var/run/tdx-qgs/qgs.socket does not exist on the host, Kata will automatically fall back to vsock port 4050 for backwards compatibility.
 tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
 
 #
