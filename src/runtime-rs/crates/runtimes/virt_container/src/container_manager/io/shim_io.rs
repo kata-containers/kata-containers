@@ -6,24 +6,19 @@
 
 use std::{
     io,
-    os::{
-        fd::IntoRawFd,
-        unix::{
-            fs::OpenOptionsExt,
-            io::{FromRawFd, RawFd},
-            net::UnixStream as StdUnixStream,
-            prelude::AsRawFd,
-        },
+    os::unix::{
+        fs::{FileTypeExt, OpenOptionsExt},
+        io::RawFd,
+        prelude::AsRawFd,
     },
     pin::Pin,
     task::{Context as TaskContext, Poll},
 };
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use tokio::{
-    fs::OpenOptions,
+    fs::{File, OpenOptions},
     io::{AsyncRead, AsyncWrite},
-    net::UnixStream as AsyncUnixStream,
 };
 use url::Url;
 
@@ -41,18 +36,24 @@ fn set_flag_with_blocking(fd: RawFd) {
     }
 }
 
-fn open_fifo_write(path: &str) -> Result<AsyncUnixStream> {
+fn open_fifo_write(path: &str) -> Result<File> {
     let std_file = std::fs::OpenOptions::new()
         .write(true)
         // It's not for non-block openning FIFO but for non-block stream which
         // will be add into tokio runtime.
         .custom_flags(libc::O_NONBLOCK)
         .open(path)
-        .with_context(|| format!("open {path} with write"))?;
-    let fd = std_file.into_raw_fd();
-    let std_stream = unsafe { StdUnixStream::from_raw_fd(fd) };
+        .with_context(|| format!("open fifo for write: {path}"))?;
 
-    AsyncUnixStream::from_std(std_stream).map_err(|e| anyhow!(e))
+    // Debug
+    let meta = std_file.metadata()?;
+    if !meta.file_type().is_fifo() {
+        debug!(sl!(), "[DEBUG]{} is not a fifo (type mismatch)", path);
+    }
+
+    set_flag_with_blocking(std_file.as_raw_fd());
+
+    Ok(File::from_std(std_file))
 }
 
 pub struct ShimIo {
@@ -104,9 +105,7 @@ impl ShimIo {
                 None => None,
                 Some(out) => match Url::parse(out.as_str()) {
                     Err(url::ParseError::RelativeUrlWithoutBase) => {
-                        let out = "fifo://".to_owned() + out.as_str();
-                        let u = Url::parse(out.as_str()).unwrap();
-                        Some(u)
+                        Url::parse(&format!("fifo://{}", out)).ok()
                     }
                     Err(err) => {
                         warn!(sl!(), "unable to parse stdout uri: {}", err);
@@ -117,26 +116,25 @@ impl ShimIo {
             }
         };
 
-        let stdout_url = get_url(stdout);
         let get_fd = |url: &Option<Url>| -> Option<Box<dyn AsyncWrite + Send + Unpin>> {
             info!(sl!(), "get fd for {:?}", &url);
             if let Some(url) = url {
                 if url.scheme() == "fifo" {
                     let path = url.path();
                     match open_fifo_write(path) {
-                        Ok(s) => {
-                            return Some(Box::new(ShimIoWrite::Stream(s)));
-                        }
-                        Err(err) => {
-                            error!(sl!(), "failed to open file {} error {:?}", url.path(), err);
-                        }
+                        Ok(f) => return Some(Box::new(ShimIoWrite::File(f))),
+                        Err(err) => error!(sl!(), "failed to open fifo {} error {:?}", path, err),
                     }
+                } else {
+                    warn!(sl!(), "unsupported io scheme {}", url.scheme());
                 }
             }
             None
         };
 
+        let stdout_url = get_url(stdout);
         let stderr_url = get_url(stderr);
+
         Ok(Self {
             stdin: stdin_fd,
             stdout: get_fd(&stdout_url),
@@ -147,7 +145,7 @@ impl ShimIo {
 
 #[derive(Debug)]
 enum ShimIoWrite {
-    Stream(AsyncUnixStream),
+    File(File),
     // TODO: support other type
 }
 
@@ -157,20 +155,20 @@ impl AsyncWrite for ShimIoWrite {
         cx: &mut TaskContext<'_>,
         buf: &[u8],
     ) -> Poll<io::Result<usize>> {
-        match *self {
-            ShimIoWrite::Stream(ref mut s) => Pin::new(s).poll_write(cx, buf),
+        match &mut *self {
+            ShimIoWrite::File(f) => Pin::new(f).poll_write(cx, buf),
         }
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
-        match *self {
-            ShimIoWrite::Stream(ref mut s) => Pin::new(s).poll_flush(cx),
+        match &mut *self {
+            ShimIoWrite::File(f) => Pin::new(f).poll_flush(cx),
         }
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<io::Result<()>> {
-        match *self {
-            ShimIoWrite::Stream(ref mut s) => Pin::new(s).poll_shutdown(cx),
+        match &mut *self {
+            ShimIoWrite::File(f) => Pin::new(f).poll_shutdown(cx),
         }
     }
 }
