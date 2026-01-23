@@ -27,6 +27,20 @@ use tokio::{
 };
 use url::Url;
 
+/// Clear O_NONBLOCK for an fd (turn it into blocking mode).
+fn set_flag_with_blocking(fd: RawFd) {
+    let flag = unsafe { libc::fcntl(fd, libc::F_GETFL) };
+    if flag < 0 {
+        error!(sl!(), "failed to fcntl(F_GETFL) fd {} ret {}", fd, flag);
+        return;
+    }
+
+    let ret = unsafe { libc::fcntl(fd, libc::F_SETFL, flag & !libc::O_NONBLOCK) };
+    if ret < 0 {
+        error!(sl!(), "failed to fcntl(F_SETFL) fd {} ret {}", fd, ret);
+    }
+}
+
 fn open_fifo_write(path: &str) -> Result<AsyncUnixStream> {
     let std_file = std::fs::OpenOptions::new()
         .write(true)
@@ -57,14 +71,6 @@ impl ShimIo {
             sl!(),
             "new shim io stdin {:?} stdout {:?} stderr {:?}", stdin, stdout, stderr
         );
-
-        let set_flag_with_blocking = |fd: RawFd| {
-            let flag = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-            let ret = unsafe { libc::fcntl(fd, libc::F_SETFL, flag & !libc::O_NONBLOCK) };
-            if ret < 0 {
-                error!(sl!(), "failed to set fcntl for fd {} error {}", fd, ret);
-            }
-        };
 
         let stdin_fd: Option<Box<dyn AsyncRead + Send + Unpin>> = if let Some(stdin) = stdin {
             info!(sl!(), "open stdin {:?}", &stdin);
