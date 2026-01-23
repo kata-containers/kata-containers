@@ -337,22 +337,9 @@ impl Container {
                         return Err(e).context("enter process");
                     }
 
-                    {
-                        let exec = inner
-                            .exec_processes
-                            .get(&process.exec_id)
-                            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                        if exec.process.height != 0 && exec.process.width != 0 {
-                            inner
-                                .win_resize_process(
-                                    process,
-                                    exec.process.height,
-                                    exec.process.width,
-                                )
-                                .await
-                                .context("win resize")?;
-                        }
-                    }
+                    self.resize_process_window(&inner, process)
+                        .await
+                        .context("win resize")?;
 
                     // In passfd io mode, we don't bother with the IO.
                     // We send `WaitProcessRequest` immediately to the agent
@@ -367,22 +354,9 @@ impl Container {
                         .await?;
                 } else {
                     // resize window when process height/width > 0.
-                    {
-                        let exec = inner
-                            .exec_processes
-                            .get(&process.exec_id)
-                            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                        if exec.process.height != 0 && exec.process.width != 0 {
-                            inner
-                                .win_resize_process(
-                                    process,
-                                    exec.process.height,
-                                    exec.process.width,
-                                )
-                                .await
-                                .context("resize window")?;
-                        }
-                    }
+                    self.resize_process_window(&inner, process)
+                        .await
+                        .context("resize window")?;
 
                     // In legacy io mode, we handle IO by polling the agent.
                     // When IO is done, we send `WaitProcessRequest` to agent
@@ -568,6 +542,25 @@ impl Container {
             .await
             .context("agent pause container")?;
         inner.set_state(ProcessStatus::Running).await;
+
+        Ok(())
+    }
+
+    pub async fn resize_process_window(
+        &self,
+        inner: &ContainerInner,
+        process: &ContainerProcess,
+    ) -> Result<()> {
+        let exec = inner
+            .exec_processes
+            .get(&process.exec_id)
+            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+        if exec.process.height != 0 && exec.process.width != 0 {
+            inner
+                .win_resize_process(process, exec.process.height, exec.process.width)
+                .await
+                .context("win resize")?;
+        }
 
         Ok(())
     }
