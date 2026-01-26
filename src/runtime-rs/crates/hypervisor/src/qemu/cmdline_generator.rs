@@ -2621,8 +2621,10 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
+            .set_kernel_irqchip("split")
             .set_confidential_guest_support("tdx")
-            .set_nvdimm(false);
+            .set_nvdimm(false)
+            .set_memory_backend(format!("ram{}", id).as_str());
     }
 
     /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.
