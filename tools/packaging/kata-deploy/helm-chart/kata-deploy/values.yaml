@@ -25,10 +25,18 @@ debug: false
 snapshotter:
   setup: []  # ["nydus", "erofs"] or []
 
-# Enable all available shims
+# Shim configuration
+# By default (disableAll: false), all shims with enabled: ~ (null) are enabled.
+# Set disableAll: true to disable all shims, then explicitly enable specific ones:
+#   shims:
+#     disableAll: true
+#     qemu:
+#       enabled: true  # Only qemu is enabled
 shims:
+  disableAll: false
+
   clh:
-    enabled: true
+    enabled: ~  # null = use disableAll setting (enabled when false, disabled when true)
     supportedArches:
       - amd64
       - arm64
@@ -37,7 +45,7 @@ shims:
       snapshotter: ""
 
   cloud-hypervisor:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - arm64
@@ -46,7 +54,7 @@ shims:
       snapshotter: ""
 
   dragonball:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - arm64
@@ -55,7 +63,7 @@ shims:
       snapshotter: ""
 
   fc:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - arm64
@@ -64,7 +72,7 @@ shims:
       snapshotter: "devmapper" # requires pre-configuration on the user side
 
   qemu:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - arm64
@@ -75,7 +83,7 @@ shims:
       snapshotter: ""
 
   qemu-runtime-rs:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - arm64
@@ -85,7 +93,7 @@ shims:
       snapshotter: ""
 
   qemu-nvidia-gpu:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - arm64
@@ -94,7 +102,7 @@ shims:
       snapshotter: ""
 
   qemu-nvidia-gpu-snp:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -108,7 +116,7 @@ shims:
       noProxy: ""
 
   qemu-nvidia-gpu-tdx:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -122,7 +130,7 @@ shims:
       noProxy: ""
 
   qemu-snp:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -136,7 +144,7 @@ shims:
       noProxy: ""
 
   qemu-snp-runtime-rs:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -150,7 +158,7 @@ shims:
       noProxy: ""
 
   qemu-tdx:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -164,7 +172,7 @@ shims:
       noProxy: ""
 
   qemu-tdx-runtime-rs:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
     allowedHypervisorAnnotations: []
@@ -178,7 +186,7 @@ shims:
       noProxy: ""
 
   qemu-se:
-    enabled: true
+    enabled: ~
     supportedArches:
       - s390x
     allowedHypervisorAnnotations: []
@@ -192,7 +200,7 @@ shims:
       noProxy: ""
 
   qemu-se-runtime-rs:
-    enabled: true
+    enabled: ~
     supportedArches:
       - s390x
     allowedHypervisorAnnotations: []
@@ -206,7 +214,7 @@ shims:
       noProxy: ""
 
   qemu-cca:
-    enabled: true
+    enabled: ~
     supportedArches:
       - arm64
     allowedHypervisorAnnotations: []
@@ -220,7 +228,7 @@ shims:
       noProxy: ""
 
   qemu-coco-dev:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - s390x
@@ -235,7 +243,7 @@ shims:
       noProxy: ""
 
   qemu-coco-dev-runtime-rs:
-    enabled: true
+    enabled: ~
     supportedArches:
       - amd64
       - s390x

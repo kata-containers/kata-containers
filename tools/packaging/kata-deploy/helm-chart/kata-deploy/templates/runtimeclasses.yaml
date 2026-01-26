@@ -3,11 +3,22 @@
 {{- $createDefaultRC := .Values.runtimeClasses.createDefault }}
 {{- $defaultRCName := .Values.runtimeClasses.defaultName }}
 
-{{- /* Get enabled shims from structured config */ -}}
+{{- /* Get enabled shims from structured config using null-aware logic */ -}}
+{{- $disableAll := .Values.shims.disableAll | default false -}}
 {{- $enabledShims := list -}}
 {{- range $shimName, $shimConfig := .Values.shims -}}
-{{- if $shimConfig.enabled -}}
+{{- if ne $shimName "disableAll" -}}
+{{- $shimEnabled := false -}}
+{{- if eq $shimConfig.enabled true -}}
+{{- $shimEnabled = true -}}
+{{- else if eq $shimConfig.enabled false -}}
+{{- $shimEnabled = false -}}
+{{- else if not $disableAll -}}
+{{- $shimEnabled = true -}}
+{{- end -}}
+{{- if $shimEnabled -}}
 {{- $enabledShims = append $enabledShims $shimName -}}
+{{- end -}}
 {{- end -}}
 {{- end -}}
 
