@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration, Instant};
 
 use std::convert::TryFrom;
 use std::ffi::{CString, OsStr};
@@ -95,7 +96,6 @@ use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::fs;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
@@ -716,7 +716,46 @@ impl AgentService {
                 Ok(resp)
             }
             _ = term_exit_notifier.notified() => {
-                Err(anyhow!("eof"))
+                // Drain-after-exit rationale:
+                // This can affect exec response time, but the impact is bounded and only applies to a small subset
+                // of requests where the process has already exited and no stdout/stderr data is immediately available.
+                //
+                // It enters this branch only if `term_exit_notifier.notified()` fires before a successful read completes.
+                // It then try to "drain" any remaining buffered output for a short, bounded time window:
+                // - If non-empty data is read: return immediately.
+                // - If empty data (EOF) is read: return immediately.
+                // - If no data becomes available: retry until the deadline, then return empty data as EOF.
+
+                const DRAIN_DEADLINE_MS: u64 = 50; // 50ms
+                const DRAIN_STEP_MS: u64 = 10; // 10ms
+
+                let deadline = Instant::now() + Duration::from_millis(DRAIN_DEADLINE_MS);
+                let step = Duration::from_millis(DRAIN_STEP_MS);
+
+                // Attempt to drain remaining buffered output after process exit
+                let data = loop {
+                    // Check if deadline has passed
+                    let remaining = match deadline.checked_duration_since(Instant::now()) {
+                        Some(d) => d.min(step),
+                        None => break Vec::new(), // Deadline passed
+                    };
+
+                    // Try reading with timeout
+                    match timeout(remaining, read_stream(&reader, req.len as usize)).await {
+                        // Got remaining buffered data or empty data means real EOF now
+                        Ok(Ok(data)) => break data,
+                        Ok(Err(e)) => {
+                            warn!(sl(), "read_stream error after exit (treat as eof): {:?}", e);
+                            break Vec::new();
+                        }
+                        Err(_) => {
+                            warn!(sl(), "Try again until deadline, remaining time: {:?}", remaining);
+                            continue;
+                        }
+                    }
+                };
+
+                Ok(ReadStreamResponse { data, ..Default::default() })
             }
         }
     }
@@ -1772,10 +1811,6 @@ async fn read_stream(reader: &Mutex<ReadHalf<PipeStream>>, l: usize) -> Result<V
     let mut reader = reader.lock().await;
     let len = reader.read(&mut content).await?;
     content.resize(len, 0);
-
-    if len == 0 {
-        return Err(anyhow!("read meet eof"));
-    }
 
     Ok(content)
 }
