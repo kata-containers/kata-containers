@@ -566,11 +566,8 @@ function helm_helper() {
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
 	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
-		# Disable all shims first (in case we started from an example file with shims enabled)
-		# Then we'll enable only the ones specified in HELM_SHIMS
-		for shim_key in $(yq '.shims | keys | .[]' "${values_yaml}" 2>/dev/null); do
-			yq -i ".shims.${shim_key}.enabled = false" "${values_yaml}"
-		done
+		# Disable all shims at once, then enable only the ones specified in HELM_SHIMS
+		yq -i ".shims.disableAll = true" "${values_yaml}"
 
 		# Use new structured format
 		if [[ -n "${HELM_DEBUG}" ]]; then

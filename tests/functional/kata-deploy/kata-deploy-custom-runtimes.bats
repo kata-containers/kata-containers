@@ -100,21 +100,18 @@ CHART_PATH="$(get_chart_path)"
 
 @test "Helm template: Custom runtimes only mode (no standard shims)" {
 	# Test that Helm chart renders correctly when all standard shims are disabled
-	# and only custom runtimes are enabled
+	# using shims.disableAll and only custom runtimes are enabled
 	
-	# Use generate_base_values to get all shims disabled except KATA_HYPERVISOR
-	local base_values_file
-	base_values_file=$(mktemp)
-	generate_base_values "${base_values_file}"
-	
-	# Create overlay that disables the one enabled shim and adds custom runtimes
-	local custom_values_file
-	custom_values_file=$(mktemp)
-	cat > "${custom_values_file}" <<EOF
-# Disable the shim that was enabled in base values
+	local values_file
+	values_file=$(mktemp)
+	cat > "${values_file}" <<EOF
+image:
+  reference: quay.io/kata-containers/kata-deploy
+  tag: latest
+
+# Disable all standard shims at once
 shims:
-  ${KATA_HYPERVISOR}:
-    enabled: false
+  disableAll: true
 
 # Enable only custom runtimes
 customRuntimes:
@@ -140,11 +137,8 @@ customRuntimes:
         pullType: ""
 EOF
 
-	helm template kata-deploy "${CHART_PATH}" \
-		-f "${base_values_file}" \
-		-f "${custom_values_file}" \
-		> /tmp/rendered.yaml
-	rm -f "${base_values_file}" "${custom_values_file}"
+	helm template kata-deploy "${CHART_PATH}" -f "${values_file}" > /tmp/rendered.yaml
+	rm -f "${values_file}"
 
 	# Verify custom runtime resources are created
 	grep -q "kata-deploy-custom-configs" /tmp/rendered.yaml
