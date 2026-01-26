@@ -34,7 +34,7 @@ on:
       AZ_APPID:
         required: true
       AZ_TENANT_ID:
-       required: true
+        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
       ITA_KEY:
@@ -53,6 +53,9 @@ jobs:
             vmm: qemu-tdx
           - runner: sev-snp
             vmm: qemu-snp
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -141,6 +144,9 @@ jobs:
           { vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
           { vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.environment.vmm }}-${{ matrix.environment.snapshotter }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -266,6 +272,9 @@ jobs:
           { k8s: microk8s, vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
           { k8s: microk8s, vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.environment.vmm }}-${{ matrix.environment.snapshotter }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -378,6 +387,9 @@ jobs:
           - erofs
         pull-type:
           - default
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     environment: ci
     env:

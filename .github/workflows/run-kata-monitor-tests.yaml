@@ -13,10 +13,6 @@ on:
         type: string
         default: ""
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
@@ -38,6 +34,9 @@ jobs:
           # TODO: enable with containerd when https://github.com/kata-containers/kata-containers/issues/9761 is fixed
           - container_engine: containerd
             vmm: qemu
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.container_engine}}-${{ matrix.vmm }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
