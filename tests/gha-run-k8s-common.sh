@@ -679,7 +679,7 @@ function helm_helper() {
 		# HELM_ALLOWED_HYPERVISOR_ANNOTATIONS: if not in per-shim format (no colon), convert to per-shim format
 		# Output format: "qemu:foo,bar clh:foo" (space-separated entries, each with shim:annotations where annotations are comma-separated)
 		# Example: "foo bar" with shim "qemu-tdx" -> "qemu-tdx:foo,bar"
-		if [[ "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" != *:* ]]; then
+		if [[ -n "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" && "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" != *:* ]]; then
 			# Simple format: convert to per-shim format for all enabled shims
 			# "default_vcpus" -> "qemu-tdx:default_vcpus" (single shim)
 			# "image kernel default_vcpus" -> "qemu-tdx:image,kernel,default_vcpus" (single shim)
@@ -697,7 +697,7 @@ function helm_helper() {
 		fi
 
 		# HELM_AGENT_HTTPS_PROXY: if not in per-shim format (no equals), convert to per-shim format
-		if [[ "${HELM_AGENT_HTTPS_PROXY}" != *=* ]]; then
+		if [[ -n "${HELM_AGENT_HTTPS_PROXY}" && "${HELM_AGENT_HTTPS_PROXY}" != *=* ]]; then
 			# Simple format: convert to per-shim format for all enabled shims
 			# "http://proxy:8080" -> "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy:8080"
 			local converted_proxy=""
@@ -711,7 +711,7 @@ function helm_helper() {
 		fi
 
 		# HELM_AGENT_NO_PROXY: if not in per-shim format (no equals), convert to per-shim format
-		if [[ "${HELM_AGENT_NO_PROXY}" != *=* ]]; then
+		if [[ -n "${HELM_AGENT_NO_PROXY}" && "${HELM_AGENT_NO_PROXY}" != *=* ]]; then
 			# Simple format: convert to per-shim format for all enabled shims
 			# "localhost,127.0.0.1" -> "qemu-tdx=localhost,127.0.0.1;qemu-snp=localhost,127.0.0.1"
 			local converted_noproxy=""
