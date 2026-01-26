@@ -1306,9 +1306,9 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_image_confidential
+		install_image_mariner
 		install_initrd
 		install_initrd_confidential
-		install_initrd_mariner
 		install_kata_ctl
 		install_kata_manager
 		install_kernel
