@@ -1997,6 +1997,41 @@ impl ToQemuParams for ObjectTdxGuest {
     }
 }
 
+#[derive(Debug)]
+struct ObjectMemBackendMemfd {
+    id: String,
+    size: u32,
+    share: String,
+}
+
+impl ObjectMemBackendMemfd {
+    #[allow(dead_code)]
+    fn new(id: &str, is_private: bool, mem_size: u32) -> Self {
+        ObjectMemBackendMemfd {
+            id: id.to_string(),
+            size: mem_size,
+            share: if is_private {
+                "off".to_string()
+            } else {
+                "on".to_string()
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectMemBackendMemfd {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("memory-backend-memfd".to_owned());
+        params.push(format!("id=ram{}", self.id));
+        params.push(format!("size={}M", self.size));
+        params.push(format!("share={}", self.share));
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
 /// PCIeRootPortDevice directly attached onto the root bus
 /// -device pcie-root-port,id=rp0,bus=pcie.0,chassis=0,slot=0,multifunction=off,pref64-reserve=<X>B,mem-reserve=<Y>B
 #[derive(Debug, Default)]
