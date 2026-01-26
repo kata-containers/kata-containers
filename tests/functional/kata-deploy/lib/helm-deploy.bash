@@ -38,46 +38,9 @@ image:
 k8sDistribution: "${KUBERNETES}"
 debug: true
 
-# Disable all shims, then enable only the one we need
+# Disable all shims at once, then enable only the one we need
 shims:
-  clh:
-    enabled: false
-  cloud-hypervisor:
-    enabled: false
-  dragonball:
-    enabled: false
-  fc:
-    enabled: false
-  qemu:
-    enabled: false
-  qemu-runtime-rs:
-    enabled: false
-  qemu-cca:
-    enabled: false
-  qemu-se:
-    enabled: false
-  qemu-se-runtime-rs:
-    enabled: false
-  qemu-nvidia-gpu:
-    enabled: false
-  qemu-nvidia-gpu-snp:
-    enabled: false
-  qemu-nvidia-gpu-tdx:
-    enabled: false
-  qemu-sev:
-    enabled: false
-  qemu-snp:
-    enabled: false
-  qemu-snp-runtime-rs:
-    enabled: false
-  qemu-tdx:
-    enabled: false
-  qemu-tdx-runtime-rs:
-    enabled: false
-  qemu-coco-dev:
-    enabled: false
-  qemu-coco-dev-runtime-rs:
-    enabled: false
+  disableAll: true
   ${KATA_HYPERVISOR}:
     enabled: true
 
