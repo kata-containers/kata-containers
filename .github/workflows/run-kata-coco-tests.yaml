@@ -49,6 +49,9 @@ jobs:
             vmm: qemu-tdx
           - runner: sev-snp
             vmm: qemu-snp
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.runner }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -151,6 +154,9 @@ jobs:
           - pull-type: experimental-force-guest-pull
             vmm: qemu-coco-dev
             snapshotter: ""
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}-${{ matrix.snapshotter }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     permissions:
       id-token: write # Used for OIDC access to log into Azure
@@ -277,6 +283,9 @@ jobs:
           - erofs
         pull-type:
           - default
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-erofs
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     environment: ci
     env:

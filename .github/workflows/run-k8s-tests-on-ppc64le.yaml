@@ -34,6 +34,9 @@ jobs:
           - qemu
         k8s:
           - kubeadm
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}
+      cancel-in-progress: true
     runs-on: ppc64le-k8s
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
