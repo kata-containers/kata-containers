@@ -184,6 +184,7 @@ impl QemuInner {
                         tdx_config.qgs_port,
                         &tdx_config.mrconfigid,
                         tdx_config.debug,
+                        tdx_config.memory_size,
                     ),
                 },
                 DeviceType::PortDevice(port_device) => {

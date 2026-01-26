@@ -2005,7 +2005,6 @@ struct ObjectMemBackendMemfd {
 }
 
 impl ObjectMemBackendMemfd {
-    #[allow(dead_code)]
     fn new(id: &str, is_private: bool, mem_size: u32) -> Self {
         ObjectMemBackendMemfd {
             id: id.to_string(),
@@ -2612,7 +2611,11 @@ impl<'a> QemuCmdLine<'a> {
         qgs_port: u32,
         mrconfigid: &Option<String>,
         debug: bool,
+        memory_size: u32,
     ) {
+        let mem_backend_object = ObjectMemBackendMemfd::new(id, true, memory_size);
+        self.devices.push(Box::new(mem_backend_object));
+
         let tdx_object = ObjectTdxGuest::new(id, mrconfigid.clone(), qgs_port, debug);
         self.devices.push(Box::new(tdx_object));
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
