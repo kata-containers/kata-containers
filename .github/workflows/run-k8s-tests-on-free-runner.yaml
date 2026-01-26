@@ -47,6 +47,9 @@ jobs:
           { vmm: cloud-hypervisor, containerd_version: lts },
           { vmm: cloud-hypervisor, containerd_version: active },
         ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${matrix.environment.vmm}-${matrix.environment.containerd_version}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -124,4 +127,3 @@ jobs:
         if: always()
         timeout-minutes: 15
         run: bash tests/integration/kubernetes/gha-run.sh cleanup
-
