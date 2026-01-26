@@ -65,6 +65,9 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
             instance-type: normal
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}-${{ matrix.host_os }}-${{ matrix.instance-type }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     permissions:
       contents: read
