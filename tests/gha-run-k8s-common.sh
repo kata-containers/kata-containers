@@ -583,7 +583,7 @@ function helm_helper() {
 			# HELM_SHIMS is a space-separated list of shim names
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
-			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-tdx qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
 
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
