@@ -30,6 +30,8 @@ pub struct SevSnpConfig {
 pub struct TdxConfig {
     // Object ID
     pub id: String,
+    // Private memory size
+    pub memory_size: u32,
     // Firmware path
     pub firmware: String,
     // Quote Qeneration Socket port

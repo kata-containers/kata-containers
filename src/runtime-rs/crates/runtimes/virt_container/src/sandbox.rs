@@ -494,6 +494,7 @@ impl VirtSandbox {
             GuestProtection::Tdx => {
                 Ok(Some(ProtectionDeviceConfig::Tdx(TdxConfig {
                     id: "tdx".to_owned(),
+                    memory_size: hypervisor_config.memory_info.default_memory,
                     firmware: hypervisor_config.boot_info.firmware.clone(),
                     qgs_port: hypervisor_config.security_info.qgs_port,
                     mrconfigid: init_data,
