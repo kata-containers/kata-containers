@@ -11,7 +11,7 @@ set -o errexit
 set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
-MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
 IMAGE_SIZE_ALIGNMENT_MB=${IMAGE_SIZE_ALIGNMENT_MB:-128}
 
 #For cross build
@@ -23,7 +23,7 @@ ARCH=${ARCH:-$(uname -m)}
 [ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
 TARGET_OS=${TARGET_OS:-linux}
 [ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
-VARIANT=${VARIANT:-}
+BUILD_VARIANT=${BUILD_VARIANT:-}
 
 readonly script_name="${0##*/}"
 readonly script_dir=$(dirname "$(readlink -f "$0")")
@@ -170,7 +170,7 @@ build_with_container() {
 		   --env BLOCK_SIZE="${block_size}" \
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
-		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+		   --env MEASURED_ROOTFS_MODE="${MEASURED_ROOTFS_MODE}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
@@ -178,7 +178,7 @@ build_with_container() {
 		   --env USER="$(id -u)" \
 		   --env GROUP="$(id -g)" \
 		   --env IMAGE_SIZE_ALIGNMENT_MB="${IMAGE_SIZE_ALIGNMENT_MB}" \
-		   --env VARIANT="${VARIANT}" \
+		   --env BUILD_VARIANT="${BUILD_VARIANT}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
@@ -382,6 +382,7 @@ create_disk() {
 	local img_size="$2"
 	local fs_type="$3"
 	local part_start="$4"
+	local -r measured_rootfs_mode="$(get_measured_rootfs_mode)"
 
 	info "Creating raw disk with size ${img_size}M"
 	qemu-img create -q -f raw "${image}" "${img_size}M"
@@ -396,7 +397,7 @@ create_disk() {
 	else
 		rootfs_end_unit="MiB"
 	fi
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	if [[ -n "${measured_rootfs_mode}" ]]; then
 		info "Creating partitions with hash device"
 		# The hash data will take less than one percent disk space to store
 		hash_start=$(echo $img_size | awk '{print $1 * 0.99}' |cut -d $(locale decimal_point) -f 1)
@@ -486,11 +487,56 @@ create_rootfs_image() {
 		fsck.ext4 -D -y "${device}p1"
 	fi
 
-	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -b "${device}p2" ]; then
-		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
-		local image_dir=$(dirname "${image}")
-		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash_${VARIANT}.txt 2>&1
-		OK "Root hash file created for variant: ${VARIANT}"
+	local -r measured_rootfs_mode="$(get_measured_rootfs_mode)"
+	if [[ -n "${measured_rootfs_mode}" ]] && [[ -b "${device}p2" ]]; then
+		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2 (mode: ${measured_rootfs_mode})"
+		local -r image_dir=$(dirname "${image}")
+		local verity_output
+		if [[ "${measured_rootfs_mode}" == "kernelinit" ]]; then
+			verity_output=$(veritysetup format --no-superblock "${device}p1" "${device}p2" 2>&1)
+		else
+			verity_output=$(veritysetup format "${device}p1" "${device}p2" 2>&1)
+		fi
+		build_kernel_verity_params() {
+			local -r mode="$1"
+			local -r output="$2"
+			local root_hash
+			local salt
+			local data_blocks
+			local data_block_size
+			local hash_block_size
+
+			read_verity_field() {
+				local -r label="$1"
+				local value
+
+				value=$(printf '%s\n' "${output}" | sed -n "s/^${label}:[[:space:]]*//p")
+				value="${value// \[*/}"
+				[[ -n "${value}" ]] || die "Missing '${label}' in verity output for ${image}"
+
+				echo "${value}"
+			}
+
+			root_hash=$(read_verity_field "Root hash")
+			salt=$(read_verity_field "Salt")
+			data_blocks=$(read_verity_field "Data blocks")
+			data_block_size=$(read_verity_field "Data block size")
+			hash_block_size=$(read_verity_field "Hash block size")
+
+			printf 'mode=%s,root_hash=%s,salt=%s,data_blocks=%s,data_block_size=%s,hash_block_size=%s' \
+				"${mode}" \
+				"${root_hash}" \
+				"${salt}" \
+				"${data_blocks}" \
+				"${data_block_size}" \
+				"${hash_block_size}"
+		}
+
+		local kernel_verity_params
+		kernel_verity_params="$(build_kernel_verity_params "${measured_rootfs_mode}" "${verity_output}")"
+
+		printf '%s\n' "${kernel_verity_params}" > "${image_dir}"/root_hash_"${BUILD_VARIANT}".txt
+		OK "Root hash file created for variant: ${BUILD_VARIANT}"
 	fi
 
 	losetup -d "${device}"
@@ -503,7 +549,7 @@ create_erofs_rootfs_image() {
 	local block_size="$3"
 	local agent_bin="$4"
 
-	if [ "$block_size" -ne 4096 ]; then
+	if [[ "${block_size}" -ne 4096 ]]; then
 		die "Invalid block size for erofs"
 	fi
 
@@ -511,7 +557,8 @@ create_erofs_rootfs_image() {
 		die "Could not setup loop device"
 	fi
 
-	local mount_dir=$(mktemp -p "${TMPDIR:-/tmp}" -d osbuilder-mount-dir.XXXX)
+	local mount_dir
+	mount_dir=$(mktemp -p "${TMPDIR:-/tmp}" -d osbuilder-mount-dir.XXXX)
 
 	info "Copying content from rootfs to root partition"
 	cp -a "${rootfs}"/* "${mount_dir}"
@@ -525,10 +572,10 @@ create_erofs_rootfs_image() {
 	info "Setup systemd"
 	setup_systemd "${mount_dir}"
 
-	readonly fsimage="$(mktemp)"
+	local -r fsimage="$(mktemp)"
 	mkfs.erofs -Enoinline_data "${fsimage}" "${mount_dir}"
-	local img_size="$(stat -c"%s" "${fsimage}")"
-	local img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
+	local -r img_size="$(stat -c"%s" "${fsimage}")"
+	local -r img_size_mb="$(((("${img_size}" + 1048576) / 1048576) + 1 + "${rootfs_start}"))"
 
 	create_disk "${image}" "${img_size_mb}" "ext4" "${rootfs_start}"
 

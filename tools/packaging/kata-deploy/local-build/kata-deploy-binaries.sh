@@ -42,7 +42,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 
 ARCH=${ARCH:-$(uname -m)}
 BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
-MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
@@ -72,6 +72,10 @@ die() {
 	msg="$*"
 	echo "ERROR: ${msg}" >&2
 	exit 1
+}
+
+is_measured_rootfs_enabled() {
+	[[ -n "$(get_measured_rootfs_mode)" ]]
 }
 
 info() {
@@ -187,7 +191,7 @@ get_kernel_modules_dir() {
 cleanup_and_fail_shim_v2_specifics() {
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		local root_hash_file="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash_${variant}.txt"
-		[ -f "${root_hash_file}" ] && rm -f "${root_hash_file}"
+		[[ -f "${root_hash_file}" ]] && rm -f "${root_hash_file}"
 	done
 
 	return $(cleanup_and_fail "${1:-}" "${2:-}")
@@ -212,47 +216,37 @@ cleanup_and_fail() {
 }
 
 install_cached_shim_v2_tarball_get_root_hash() {
-	if [ "${MEASURED_ROOTFS}" != "yes" ]; then
-		return 0
-	fi
-
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 	local root_hash_basedir="./opt/kata/share/kata-containers/"
-	local found_any=""
 
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 		local image_conf_tarball="kata-static-rootfs-image-${variant}.tar.zst"
 		local tarball_path="${tarball_dir}/${image_conf_tarball}"
+		local root_hash_path="${root_hash_basedir}root_hash_${variant}.txt"
 
-		# If variant does not exist we skip the current iteration
-		[ ! -f "${tarball_path}" ] && continue
+		# If variant does not exist we skip the current iteration.
+		[[ ! -f "${tarball_path}" ]] && continue
 
-		tar --zstd -xvf "${tarball_path}" "${root_hash_basedir}root_hash_${variant}.txt" --transform s,"${root_hash_basedir}",, || die "Failed to extract root hash from ${tarball_path}"
+		tar --zstd -tf "${tarball_path}" "${root_hash_path}" >/dev/null 2>&1 || continue
+		tar --zstd -xvf "${tarball_path}" "${root_hash_path}" --transform s,"${root_hash_basedir}",, || die "Failed to extract root hash from ${tarball_path}"
 		mv "root_hash_${variant}.txt" "${tarball_dir}/"
-		found_any="yes"
 	done
-
-	[ -z "${found_any}" ] && die "No files to copy for shim-v2 with MEASURED_ROOTFS support"
 
 	return 0
 }
 
 install_cached_shim_v2_tarball_compare_root_hashes() {
-	if [ "${MEASURED_ROOTFS}" != "yes" ]; then
-		return 0
-	fi
-
 	local found_any=""
 	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-		# skip if one or the other does not exist
-		[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ] && continue
+		# Skip if one or the other does not exist.
+		[[ ! -f "${tarball_dir}/root_hash_${variant}.txt" ]] && continue
 
 		diff "${tarball_dir}/root_hash_${variant}.txt" "shim-v2-root_hash_${variant}.txt" || return 1
 		found_any="yes"
 	done
-	[ -z "${found_any}" ] && die "No root_hash_variant.txt files found for diff with MEASURED_ROOTFS support"
+	[[ -z "${found_any}" ]] && return 0
 
 	return 0
 }
@@ -492,9 +486,9 @@ install_image() {
 #Install guest image for confidential guests
 install_image_confidential() {
 	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS=no
+		export MEASURED_ROOTFS_MODE=""
 	else
-		export MEASURED_ROOTFS=yes
+		export MEASURED_ROOTFS_MODE="initramfs"
 	fi
 	install_image "confidential"
 }
@@ -602,7 +596,7 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export MEASURED_ROOTFS=no
+	export MEASURED_ROOTFS_MODE=""
 	install_initrd "confidential"
 }
 
@@ -629,7 +623,7 @@ install_initrd_confidential() {
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS=yes
+	export MEASURED_ROOTFS_MODE="kernelinit"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -639,6 +633,7 @@ install_image_nvidia_gpu() {
 # Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY
+	export MEASURED_ROOTFS_MODE=""
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -648,7 +643,7 @@ install_initrd_nvidia_gpu() {
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS=yes
+	export MEASURED_ROOTFS_MODE="kernelinit"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -658,9 +653,9 @@ install_image_nvidia_gpu_confidential() {
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY
+	export MEASURED_ROOTFS_MODE=""
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	# TODO: export MEASURED_ROOTFS=yes
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
 	install_initrd "nvidia-gpu-confidential"
 }
@@ -763,9 +758,9 @@ install_kernel() {
 
 install_kernel_confidential() {
 	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS=no
+		export MEASURED_ROOTFS_MODE=""
 	else
-		export MEASURED_ROOTFS=yes
+		export MEASURED_ROOTFS_MODE="initramfs"
 	fi
 
 	install_kernel_helper \
@@ -775,7 +770,7 @@ install_kernel_confidential() {
 }
 
 install_kernel_cca_confidential() {
-	export MEASURED_ROOTFS=yes
+	export MEASURED_ROOTFS_MODE="initramfs"
 
 	install_kernel_helper \
 		"assets.kernel-arm-experimental.confidential" \
@@ -799,7 +794,7 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
-	export MEASURED_ROOTFS=yes
+	export MEASURED_ROOTFS_MODE="kernelinit"
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
@@ -808,7 +803,7 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	export MEASURED_ROOTFS=yes
+	export MEASURED_ROOTFS_MODE="kernelinit"
 	install_kernel_helper \
 		"assets.kernel.nvidia-confidential" \
 		"kernel-nvidia-gpu-confidential" \
@@ -1038,27 +1033,25 @@ install_shimv2() {
 
 	export GO_VERSION
 	export RUST_VERSION
-	export MEASURED_ROOTFS
+	export MEASURED_ROOTFS_MODE
 	export RUNTIME_CHOICE
 
-	if [ "${MEASURED_ROOTFS}" = "yes" ]; then
-		local found_any=""
-		for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-			local image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
-			# only one variant may be built at a time so we need to
-			# skip one or the other if not available
-			[ -f "${image_conf_tarball}" ] || continue
+	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
+		local image_conf_tarball
+		image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
+		# Only one variant may be built at a time so we need to
+		# skip one or the other if not available.
+		[[ -f "${image_conf_tarball}" ]] || continue
 
-			local root_hash_basedir="./opt/kata/share/kata-containers/"
-			if ! tar --zstd -xvf "${image_conf_tarball}" --transform s,"${root_hash_basedir}",, "${root_hash_basedir}root_hash_${variant}.txt"; then
-				die "Cannot extract root hash from ${image_conf_tarball} for shim-v2 with MEASURED_ROOTFS support, needs a rootfs with MEASURED_ROOTFS support"
-			fi
+		local root_hash_basedir="./opt/kata/share/kata-containers/"
+		local root_hash_path="${root_hash_basedir}root_hash_${variant}.txt"
+		tar --zstd -tf "${image_conf_tarball}" "${root_hash_path}" >/dev/null 2>&1 || continue
+		if ! tar --zstd -xvf "${image_conf_tarball}" --transform s,"${root_hash_basedir}",, "${root_hash_path}"; then
+			die "Cannot extract root hash from ${image_conf_tarball}"
+		fi
 
-			mv "root_hash_${variant}.txt" "${workdir}/root_hash_${variant}.txt"
-			found_any="yes"
-		done
-		[ -z "${found_any}" ] && die "No root_hash_variant.txt files found for shim-v2 with MEASURED_ROOTFS support, needs a rootfs with MEASURED_ROOTFS support"
-	fi
+		mv "root_hash_${variant}.txt" "${workdir}/root_hash_${variant}.txt"
+	done
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
@@ -1489,9 +1482,9 @@ handle_build() {
 			tar --zstd -tvf "${modules_final_tarball_path}"
 			;;
 		shim-v2)
-			if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+			if is_measured_rootfs_enabled; then
 				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
-					[ -f "${workdir}/root_hash_${variant}.txt" ] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/shim-v2-root_hash_${variant}.txt"
+					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/shim-v2-root_hash_${variant}.txt"
 				done
 			fi
 			;;
@@ -1550,15 +1543,15 @@ handle_build() {
 				)
 				;;
 			shim-v2)
-				if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+				if is_measured_rootfs_enabled; then
 					local found_any=""
 					for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 						# The variants could be built independently we need to check if
 						# they exist and then push them to the registry
-						[ -f "${workdir}/shim-v2-root_hash_${variant}.txt" ] && files_to_push+=("shim-v2-root_hash_${variant}.txt")
+					[[ -f "${workdir}/shim-v2-root_hash_${variant}.txt" ]] && files_to_push+=("shim-v2-root_hash_${variant}.txt")
 						found_any="yes"
 					done
-					[ -z "${found_any}" ] && die "No files to push for shim-v2 with MEASURED_ROOTFS support"
+					[[ -z "${found_any}" ]] && die "No files to push for shim-v2 with MEASURED_ROOTFS_MODE support"
 				fi
 				;;
 			*)
