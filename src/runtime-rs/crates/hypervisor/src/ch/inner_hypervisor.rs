@@ -151,7 +151,11 @@ impl CloudHypervisorInner {
         #[cfg(target_arch = "aarch64")]
         let console_param_debug = KernelParams::from_string("console=ttyAMA0,115200n8");
 
-        let mut rootfs_param = KernelParams::new_rootfs_kernel_params(rootfs_driver, rootfs_type)?;
+        let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
+            &cfg.boot_info.kernel_verity_params,
+            rootfs_driver,
+            rootfs_type,
+        )?;
 
         let mut console_params = if enable_debug {
             if confidential_guest {
@@ -165,8 +169,7 @@ impl CloudHypervisorInner {
 
         params.append(&mut console_params);
 
-        // Add the rootfs device
-        params.append(&mut rootfs_param);
+        params.append(&mut rootfs_params);
 
         // Now add some additional options required for CH
         let extra_options = [
