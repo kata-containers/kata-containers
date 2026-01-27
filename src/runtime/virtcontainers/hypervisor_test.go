@@ -22,6 +22,7 @@ func TestGetKernelRootParams(t *testing.T) {
 		expected      []Param
 		disableNvdimm bool
 		dax           bool
+		verityParams  string
 		error         bool
 	}{
 		// EXT4
@@ -34,6 +35,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           false,
+			verityParams:  "",
 			error:         false,
 		},
 		{
@@ -45,6 +47,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           true,
+			verityParams:  "",
 			error:         false,
 		},
 		{
@@ -56,6 +59,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: true,
 			dax:           false,
+			verityParams:  "",
 			error:         false,
 		},
 
@@ -69,6 +73,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           false,
+			verityParams:  "",
 			error:         false,
 		},
 		{
@@ -80,6 +85,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           true,
+			verityParams:  "",
 			error:         false,
 		},
 		{
@@ -91,6 +97,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: true,
 			dax:           false,
+			verityParams:  "",
 			error:         false,
 		},
 
@@ -104,6 +111,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           false,
+			verityParams:  "",
 			error:         false,
 		},
 		{
@@ -115,6 +123,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           true,
+			verityParams:  "",
 			error:         false,
 		},
 		{
@@ -126,6 +135,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: true,
 			dax:           false,
+			verityParams:  "",
 			error:         false,
 		},
 
@@ -139,6 +149,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: false,
 			dax:           false,
+			verityParams:  "",
 			error:         true,
 		},
 
@@ -152,12 +163,75 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: true,
 			dax:           true,
+			verityParams:  "",
+			error:         true,
+		},
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{
+					Key:   "dm-mod.create",
+					Value: "\"dm-verity,,,ro,0 8 verity 1 /dev/vda1 /dev/vda2 4096 4096 1 0 sha256 abc def\"",
+				},
+				{Key: "root", Value: "/dev/dm-0"},
+				{Key: "rootflags", Value: "data=ordered,errors=remount-ro ro"},
+				{Key: "rootfstype", Value: string(EXT4)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			verityParams:  "mode=kernelinit,root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+			error:         false,
+		},
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"root", string(Nvdimm)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+				{"rootfs_verity.scheme", "dm-verity"},
+				{"rootfs_verity.hash", "abc"},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			verityParams:  "mode=initramfs,root_hash=abc",
+			error:         false,
+		},
+		{
+			rootfstype:    string(EXT4),
+			expected:      []Param{},
+			disableNvdimm: false,
+			dax:           false,
+			verityParams:  "mode=kernelinit,root_hash=abc,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+			error:         true,
+		},
+		{
+			rootfstype:    string(EXT4),
+			expected:      []Param{},
+			disableNvdimm: false,
+			dax:           false,
+			verityParams:  "mode=kernelinit,root_hash=abc,salt=def,data_block_size=4096,hash_block_size=4096",
+			error:         true,
+		},
+		{
+			rootfstype:    string(EXT4),
+			expected:      []Param{},
+			disableNvdimm: false,
+			dax:           false,
+			verityParams:  "mode=initramfs",
+			error:         true,
+		},
+		{
+			rootfstype:    string(EXT4),
+			expected:      []Param{},
+			disableNvdimm: false,
+			dax:           false,
+			verityParams:  "mode=unknown,root_hash=abc",
 			error:         true,
 		},
 	}
 
 	for _, t := range tests {
-		kernelRootParams, err := GetKernelRootParams(t.rootfstype, t.disableNvdimm, t.dax)
+		kernelRootParams, err := GetKernelRootParams(t.rootfstype, t.disableNvdimm, t.dax, t.verityParams)
 		if t.error {
 			assert.Error(err)
 			continue
