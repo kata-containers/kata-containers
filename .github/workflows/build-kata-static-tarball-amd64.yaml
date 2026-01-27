@@ -47,7 +47,6 @@ jobs:
           - coco-guest-components
           - firecracker
           - kernel
-          - kernel-confidential
           - kernel-debug
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
