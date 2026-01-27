@@ -332,11 +332,10 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 	if !caps.IsFsSharingSupported() {
 		if mustCopyEmptyDir {
 			f.srcGuestMapLock.Lock()
+			defer f.srcGuestMapLock.Unlock()
 			if guestPath, ok := f.srcGuestMap[m.Source]; ok {
-				f.srcGuestMapLock.Unlock()
 				return &SharedFile{guestPath: guestPath}, nil
 			}
-			f.srcGuestMapLock.Unlock()
 		}
 
 		f.Logger().Debug("filesystem sharing is not supported, files will be copied")
@@ -420,9 +419,7 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 		if mustCopyEmptyDir {
 			// Cache the host emptyDir guestPath so other containers in the pod
 			// share the same copied writable directory.
-			f.srcGuestMapLock.Lock()
 			f.srcGuestMap[m.Source] = guestPath
-			f.srcGuestMapLock.Unlock()
 		}
 	} else {
 		// These mounts are created in the shared dir
@@ -480,7 +477,7 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 		}
 	}
 
-	// Not deleting from f.srcGuestMapLock since this function is not
+	// Not deleting from f.srcGuestMap since this function is not
 	// called for mounts without HostPath.
 
 	return nil
