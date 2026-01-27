@@ -56,6 +56,24 @@ warn() {
 	echo >&2 "WARN: $*"
 }
 
+get_measured_rootfs_mode() {
+	local mode="${MEASURED_ROOTFS_MODE:-}"
+
+	if [[ -z "${mode}" ]]; then
+		echo ""
+		return
+	fi
+
+	case "${mode}" in
+		initramfs|kernelinit)
+			echo "${mode}"
+			;;
+		*)
+			die "Invalid MEASURED_ROOTFS_MODE='${mode}' (expected initramfs or kernelinit)"
+			;;
+	esac
+}
+
 get_repo_hash() {
 	local repo_dir=${1:-}
 	[ -d "${repo_dir}" ] || die "${repo_dir} is not a directory"
