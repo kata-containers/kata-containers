@@ -112,6 +112,8 @@ spec:
               fieldPath: spec.nodeName
         - name: DEBUG
           value: {{ include "kata-deploy.getDebug" . | quote }}
+        - name: KATA_VERSION
+          value: {{ default .Chart.AppVersion .Values.image.tag | quote }}
         {{- $shimsAmd64 := include "kata-deploy.getEnabledShimsForArch" (dict "root" . "arch" "amd64") | trim -}}
         {{- if $shimsAmd64 }}
         - name: SHIMS_X86_64

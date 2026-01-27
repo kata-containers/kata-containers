@@ -87,6 +87,47 @@ impl K8sClient {
         Ok(())
     }
 
+    pub async fn annotate_node(
+        &self,
+        annotation_key: &str,
+        annotation_value: Option<&str>,
+    ) -> Result<()> {
+        let mut node = self.get_node().await?;
+
+        let annotations = node
+            .metadata
+            .annotations
+            .get_or_insert_with(Default::default);
+
+        if let Some(value) = annotation_value {
+            annotations.insert(annotation_key.to_string(), value.to_string());
+            info!(
+               "Setting annotation {}={} on node {}",
+                annotation_key, value, self.node_name
+            );
+        } else {
+            annotations.remove(annotation_key);
+            info!(
+                "Removing annotation {} from node {}",
+                annotation_key, self.node_name
+            );
+        }
+
+        let patch = Patch::Merge(json!({
+            "metadata": {
+                "annotations": annotations
+            }
+        }));
+
+        let pp = PatchParams::default();
+        self.node_api
+            .patch(&self.node_name, &pp, &patch)
+            .await
+            .with_context(|| format!("Failed to patch node: {}", self.node_name))?;
+
+        Ok(())
+    }
+
     pub async fn count_kata_deploy_daemonsets(&self) -> Result<usize> {
         use k8s_openapi::api::apps::v1::DaemonSet;
         use kube::api::{Api, ListParams};
@@ -570,6 +611,17 @@ pub async fn label_node(
 ) -> Result<()> {
     let client = K8sClient::new(&config.node_name).await?;
     client.label_node(label_key, label_value, overwrite).await
+}
+
+pub async fn annotate_node(
+    config: &Config,
+    annotation_key: &str,
+    annotation_value: Option<&str>,
+) -> Result<()> {
+    let client = K8sClient::new(&config.node_name).await?;
+    client
+        .annotate_node(annotation_key, annotation_value)
+        .await
 }
 
 pub async fn count_kata_deploy_daemonsets(config: &Config) -> Result<usize> {

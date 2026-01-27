@@ -188,6 +188,24 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 
     k8s::label_node(config, "katacontainers.io/kata-runtime", Some("true"), true).await?;
 
+    // Annotate node with installation status for upgrade orchestration
+    let version = std::env::var("KATA_VERSION").unwrap_or_else(|_| "unknown".to_string());
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    
+    k8s::annotate_node(
+        config,
+        "katacontainers.io/kata-deploy-installed-version",
+        Some(&version),
+    )
+    .await?;
+    k8s::annotate_node(
+        config,
+        "katacontainers.io/kata-deploy-installed-at",
+        Some(&timestamp),
+    )
+    .await?;
+    info!("Node annotated with Kata version {} at {}", version, timestamp);
+
     info!("Kata Containers installation completed successfully");
     Ok(())
 }
@@ -203,9 +221,21 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     );
 
     if config.helm_post_delete_hook && kata_deploy_installations == 0 {
-        info!("Helm post-delete hook: removing kata-runtime label");
+        info!("Helm post-delete hook: removing kata-runtime label and annotations");
         k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
-        info!("Successfully removed kata-runtime label");
+        k8s::annotate_node(
+            config,
+            "katacontainers.io/kata-deploy-installed-version",
+            None,
+        )
+        .await?;
+        k8s::annotate_node(
+            config,
+            "katacontainers.io/kata-deploy-installed-at",
+            None,
+        )
+        .await?;
+        info!("Successfully removed kata-runtime label and install annotations");
     }
 
     match config.experimental_setup_snapshotter.as_ref() {
@@ -249,6 +279,19 @@ async fn reset(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Resetting Kata Containers");
 
     k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
+    k8s::annotate_node(
+        config,
+        "katacontainers.io/kata-deploy-installed-version",
+        None,
+    )
+    .await?;
+    k8s::annotate_node(
+        config,
+        "katacontainers.io/kata-deploy-installed-at",
+        None,
+    )
+    .await?;
+
     runtime::lifecycle::restart_cri_runtime(config, runtime).await?;
     if matches!(runtime, "crio" | "containerd") {
         utils::host_systemctl(&["restart", "kubelet"])?;

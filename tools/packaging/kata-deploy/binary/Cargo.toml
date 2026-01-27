@@ -48,5 +48,8 @@ regex = "1.10"
 # Async runtime (required by kube-rs and for async main)
 tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "time"] }
 
+# Date/time for timestamps
+chrono = "0.4"
+
 [dev-dependencies]
 tempfile = "3.8"
