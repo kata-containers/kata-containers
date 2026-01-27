@@ -20,7 +20,6 @@ endif
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
-	kernel-confidential-tarball \
 	kernel-debug-tarball \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
@@ -144,10 +143,7 @@ kernel-nvidia-gpu-tarball:
 kernel-tarball:
 	${MAKE} $@-build
 
-ernel-debug-tarball:
-	${MAKE} $@-build
-
-kernel-confidential-tarball:
+kernel-debug-tarball:
 	${MAKE} $@-build
 
 kernel-cca-confidential-tarball:

@@ -1360,8 +1360,6 @@ handle_build() {
 
 	kernel) install_kernel ;;
 
-	kernel-confidential) install_kernel_confidential ;;
-
 	kernel-debug) install_kernel_debug ;;
 
 	kernel-cca-confidential) install_kernel_cca_confidential ;;

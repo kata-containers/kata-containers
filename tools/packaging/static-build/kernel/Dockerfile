@@ -19,6 +19,7 @@ RUN apt-get update && \
 	    ca-certificates \
 	    curl \
 	    debhelper \
+	    dwarves \
 	    flex \
 	    git \
 	    iptables \

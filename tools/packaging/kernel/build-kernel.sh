@@ -322,7 +322,8 @@ get_kernel_frag_path() {
 
 	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
 		info "Enable kernel debug"
-		local debug_configs="$(ls ${common_path}/common/debug.conf)"
+		local debug_path="${arch_path}/../debug"
+		local debug_configs="$(ls ${debug_path}/*.conf)"
 		all_configs="${all_configs} ${debug_configs}"
 	fi
 
