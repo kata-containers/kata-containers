@@ -44,6 +44,8 @@ jobs:
           - agent
           - coco-guest-components
           - kernel
+          - kernel-confidential
+          - kernel-debug
           - pause-image
           - qemu
           - virtiofsd

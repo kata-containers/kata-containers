@@ -12,7 +12,8 @@ It also requires [yq](https://github.com/mikefarah/yq) version v4.40.7.
 > **Hint**: `go install github.com/mikefarah/yq/v4@latest`
 
 
-The Linux kernel scripts further require a few packages (flex, bison, and libelf-dev)
+The Linux kernel scripts further require a few packages (flex, bison, libelf-dev, and
+dwarves for BTF generation in debug kernels).
 
 
 ## Usage
@@ -71,6 +72,18 @@ containers path (`/usr/share/kata-containers/`).
 
 ```bash
 $ sudo ./build-kernel.sh install
+```
+
+## Debug Kernel
+
+Kata Containers provides a kernel with debug configs enabled (symbols, BTF, tracing).
+
+To build this debug kernel, set `KERNEL_DEBUG_ENABLED=yes` for **all phases**:
+
+```bash
+$ KERNEL_DEBUG_ENABLED=yes ./build-kernel.sh setup
+$ KERNEL_DEBUG_ENABLED=yes ./build-kernel.sh build
+$ sudo KERNEL_DEBUG_ENABLED=yes ./build-kernel.sh install
 ```
 
 ## Submit Kernel Changes
