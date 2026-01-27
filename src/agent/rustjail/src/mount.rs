@@ -752,15 +752,6 @@ fn parse_mount(m: &Mount) -> (MsFlags, MsFlags, String) {
     (flags, pgflags, data.join(","))
 }
 
-// This function constructs a canonicalized path by combining the `rootfs` and `unsafe_path` elements.
-// The resulting path is guaranteed to be ("below" / "in a directory under") the `rootfs` directory.
-//
-// Parameters:
-//
-// - `rootfs` is the absolute path to the root of the containers root filesystem directory.
-// - `unsafe_path` is path inside a container. It is unsafe since it may try to "escape" from the containers
-//    rootfs by using one or more "../" path elements or is its a symlink to path.
-
 fn mount_from(
     cfd_log: RawFd,
     m: &Mount,
