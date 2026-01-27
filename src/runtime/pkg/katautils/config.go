@@ -93,6 +93,7 @@ type hypervisor struct {
 	MachineAccelerators            string                    `toml:"machine_accelerators"`
 	CPUFeatures                    string                    `toml:"cpu_features"`
 	KernelParams                   string                    `toml:"kernel_params"`
+	KernelVerityParams             string                    `toml:"kernel_verity_params"`
 	MachineType                    string                    `toml:"machine_type"`
 	QgsPort                        uint32                    `toml:"tdx_quote_generation_service_socket_port"`
 	BlockDeviceDriver              string                    `toml:"block_device_driver"`
@@ -385,6 +386,10 @@ func (h hypervisor) kernelParams() string {
 	}
 
 	return h.KernelParams
+}
+
+func (h hypervisor) kernelVerityParams() string {
+	return h.KernelVerityParams
 }
 
 func (h hypervisor) machineType() string {
@@ -814,6 +819,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:            rootfsType,
 		FirmwarePath:          firmware,
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:    h.kernelVerityParams(),
 		NumVCPUsF:             h.defaultVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
@@ -948,6 +954,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MachineAccelerators:      machineAccelerators,
 		CPUFeatures:              cpuFeatures,
 		KernelParams:             vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:       h.kernelVerityParams(),
 		HypervisorMachineType:    machineType,
 		QgsPort:                  h.qgsPort(),
 		NumVCPUsF:                h.defaultVCPUs(),
@@ -1088,6 +1095,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		FirmwarePath:                   firmware,
 		MachineAccelerators:            machineAccelerators,
 		KernelParams:                   vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams:             h.kernelVerityParams(),
 		HypervisorMachineType:          machineType,
 		NumVCPUsF:                      h.defaultVCPUs(),
 		DefaultMaxVCPUs:                h.defaultMaxVCPUs(),
@@ -1165,16 +1173,17 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	kernelParams := h.kernelParams()
 
 	return vc.HypervisorConfig{
-		KernelPath:      kernel,
-		ImagePath:       image,
-		RootfsType:      rootfsType,
-		KernelParams:    vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		NumVCPUsF:       h.defaultVCPUs(),
-		DefaultMaxVCPUs: h.defaultMaxVCPUs(),
-		MemorySize:      h.defaultMemSz(),
-		MemSlots:        h.defaultMemSlots(),
-		EntropySource:   h.GetEntropySource(),
-		Debug:           h.Debug,
+		KernelPath:         kernel,
+		ImagePath:          image,
+		RootfsType:         rootfsType,
+		KernelParams:       vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
+		KernelVerityParams: h.kernelVerityParams(),
+		NumVCPUsF:          h.defaultVCPUs(),
+		DefaultMaxVCPUs:    h.defaultMaxVCPUs(),
+		MemorySize:         h.defaultMemSz(),
+		MemSlots:           h.defaultMemSlots(),
+		EntropySource:      h.GetEntropySource(),
+		Debug:              h.Debug,
 	}, nil
 }
 
@@ -1249,6 +1258,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ImagePath:             image,
 		RootfsType:            rootfsType,
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
+		KernelVerityParams:    h.kernelVerityParams(),
 		HypervisorMachineType: machineType,
 		NumVCPUsF:             h.defaultVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
