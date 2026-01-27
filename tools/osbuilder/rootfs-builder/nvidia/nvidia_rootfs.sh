@@ -24,7 +24,7 @@ KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 AGENT_POLICY="${AGENT_POLICY:-no}"
 
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:?NVIDIA_GPU_STACK must be set}
-VARIANT=${VARIANT:?VARIANT must be set}
+BUILD_VARIANT=${BUILD_VARIANT:?BUILD_VARIANT must be set}
 ARCH=${ARCH:?ARCH must be set}
 
 machine_arch="${ARCH}"
@@ -37,7 +37,7 @@ else
     die "Unsupported architecture: ${machine_arch}"
 fi
 
-readonly stage_one="${BUILD_DIR:?}/rootfs-${VARIANT:?}-stage-one"
+readonly stage_one="${BUILD_DIR:?}/rootfs-${BUILD_VARIANT:?}-stage-one"
 
 setup_nvidia-nvrc() {
 	local url ver

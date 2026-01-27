@@ -38,7 +38,7 @@ build_initrd() {
 	info "initrd os: $os_name"
 	info "initrd os version: $os_version"
 	make initrd \
-		VARIANT="${image_initrd_suffix}" \
+		BUILD_VARIANT="${image_initrd_suffix}" \
 		DISTRO="$os_name" \
 		DEBUG="${DEBUG:-}" \
 		OS_VERSION="${os_version}" \
@@ -68,7 +68,7 @@ build_image() {
 	info "image os: $os_name"
 	info "image os version: $os_version"
 	make image \
-		VARIANT="${image_initrd_suffix}" \
+		BUILD_VARIANT="${image_initrd_suffix}" \
 		DISTRO="${os_name}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
@@ -86,8 +86,8 @@ build_image() {
 	fi
 
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
-	if [ -e "root_hash_${image_initrd_suffix}.txt" ]; then
-		info "Copying root hash file for variant: ${image_initrd_suffix} $PWD"
+	if [[ -e "root_hash_${image_initrd_suffix}.txt" ]]; then
+		info "Copying root hash file for variant: ${image_initrd_suffix} ${PWD}"
 		cp "root_hash_${image_initrd_suffix}.txt" "${install_dir}/"
 	fi
 	(

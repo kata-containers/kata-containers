@@ -26,17 +26,19 @@ PLATFORM=
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
-MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 kernel_builder_args="-a ${ARCH:-} $*"
 KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
-if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
-	info "build initramfs for kernel with measured rootfs support"
-	"${initramfs_builder}"
-	# Turn on the flag to build the kernel with support to
-	# measured rootfs.
-	kernel_builder_args+=" -m"
+measured_rootfs_mode="$(get_measured_rootfs_mode)"
+if [[ -n "${measured_rootfs_mode}" ]]; then
+	kernel_builder_args+=" -m ${measured_rootfs_mode}"
+
+	if [[ "${measured_rootfs_mode}" == "initramfs" ]]; then
+		info "build initramfs for kernel with measured rootfs support"
+		"${initramfs_builder}"
+	fi
 fi
 
 if [[ "${CROSS_BUILD:-}" == "true" ]]; then

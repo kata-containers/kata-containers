@@ -7,5 +7,6 @@ dracut/dracut.conf.d/15-extra-libs.conf
 kata-centos-dnf.conf
 kata-containers-initrd.img
 kata-containers.img
+root_hash*.txt
 rootfs-builder/centos/RPM-GPG-KEY-*
 typescript

@@ -16,7 +16,7 @@ AGENT_VERSION=${AGENT_VERSION:-}
 RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
-MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
@@ -60,9 +60,9 @@ REPO_COMPONENTS=${REPO_COMPONENTS:-""}
 
 KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-""}
-VARIANT=${VARIANT:-""}
+BUILD_VARIANT=${BUILD_VARIANT:-""}
 
-[[ "${VARIANT}" == "nvidia-gpu"* ]] && source "${script_dir}/nvidia/nvidia_rootfs.sh"
+[[ "${BUILD_VARIANT}" == "nvidia-gpu"* ]] && source "${script_dir}/nvidia/nvidia_rootfs.sh"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -562,7 +562,7 @@ build_rootfs_distro()
 			--env AGENT_INIT="${AGENT_INIT}" \
 			--env AGENT_POLICY_FILE="${AGENT_POLICY_FILE}" \
 			--env ARCH="${ARCH}" \
-			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+			--env MEASURED_ROOTFS_MODE="${MEASURED_ROOTFS_MODE}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
@@ -571,7 +571,7 @@ build_rootfs_distro()
 			--env REPO_COMPONENTS="${REPO_COMPONENTS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
-			--env VARIANT="${VARIANT}" \
+			--env BUILD_VARIANT="${BUILD_VARIANT}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
@@ -913,13 +913,13 @@ main()
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
 
-	if [ "${VARIANT}" = "nvidia-gpu" ]; then
+	if [ "${BUILD_VARIANT}" = "nvidia-gpu" ]; then
 		setup_nvidia_gpu_rootfs_stage_one
 		setup_nvidia_gpu_rootfs_stage_two
 		return $?
 	fi
 
-	if [ "${VARIANT}" = "nvidia-gpu-confidential" ]; then
+	if [ "${BUILD_VARIANT}" = "nvidia-gpu-confidential" ]; then
 		setup_nvidia_gpu_rootfs_stage_one "confidential"
 		setup_nvidia_gpu_rootfs_stage_two "confidential"
 		return $?
