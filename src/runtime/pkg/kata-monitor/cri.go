@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -25,31 +25,50 @@ const (
 	unixProtocol = "unix"
 )
 
-// getAddressAndDialer returns the address parsed from the given endpoint and a context dialer.
-func getAddressAndDialer(endpoint string) (string, func(ctx context.Context, addr string) (net.Conn, error), error) {
+// Returns (protocol, address, dialer, error)
+func getAddressAndDialer(endpoint string) (string, string, func(ctx context.Context, addr string) (net.Conn, error), error) {
 	protocol, addr, err := parseEndpointWithFallbackProtocol(endpoint, unixProtocol)
 	if err != nil {
-		return "", nil, err
-	}
-	if protocol != unixProtocol {
-		return "", nil, fmt.Errorf("only support unix socket endpoint")
+		return "", "", nil, err
 	}
 
-	return addr, dial, nil
+	// Define the dialer based on the protocol discovered
+	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, protocol, addr)
+	}
+
+	return protocol, addr, dialer, nil
 }
 
 func getConnection(endPoint string) (*grpc.ClientConn, error) {
-	var conn *grpc.ClientConn
-	addr, dialer, err := getAddressAndDialer(endPoint)
+	protocol, addr, dialer, err := getAddressAndDialer(endPoint)
 	if err != nil {
 		return nil, err
 	}
-	conn, err = grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(dialer))
-	if err != nil {
-		errMsg := errors.Wrapf(err, "connect endpoint '%s', make sure you are running as root and the endpoint has been started", endPoint)
-		return nil, errMsg
+
+	dialTarget := fmt.Sprintf("%s:///%s", protocol, strings.TrimPrefix(addr, "/"))
+
+	wrappedDialer := func(ctx context.Context, target string) (net.Conn, error) {
+		cleanAddr := target
+		if idx := strings.Index(target, "://"); idx != -1 {
+			cleanAddr = strings.TrimPrefix(target[idx+3:], "/")
+			if protocol == unixProtocol {
+				cleanAddr = "/" + cleanAddr
+			}
+		}
+		return dialer(ctx, cleanAddr)
 	}
-	monitorLog.Tracef("connected successfully using endpoint: %s", endPoint)
+
+	monitorLog.Tracef("connecting to %s (resolved target: %s)", endPoint, dialTarget)
+
+	conn, err := grpc.NewClient(dialTarget,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(wrappedDialer),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("gRPC connection failed for %s. make sure you are running as root and the endpoint has been started: %w", endPoint, err)
+	}
+
 	return conn, nil
 }
 
@@ -74,10 +93,6 @@ func getRuntimeClient(runtimeEndpoint string) (pb.RuntimeServiceClient, *grpc.Cl
 
 	runtimeClient := pb.NewRuntimeServiceClient(conn)
 	return runtimeClient, conn, nil
-}
-
-func dial(ctx context.Context, addr string) (net.Conn, error) {
-	return (&net.Dialer{}).DialContext(ctx, unixProtocol, addr)
 }
 
 func parseEndpointWithFallbackProtocol(endpoint string, fallbackProtocol string) (protocol string, addr string, err error) {
