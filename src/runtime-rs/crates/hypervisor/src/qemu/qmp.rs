@@ -28,8 +28,13 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use qapi_spec::Dictionary;
+use std::thread;
+use std::time::Instant;
+
 /// default qmp connection read timeout
 const DEFAULT_QMP_READ_TIMEOUT: u64 = 250;
+const DEFAULT_QMP_CONNECT_DEADLINE_MS: u64 = 5000;
+const DEFAULT_QMP_RETRY_SLEEP_MS: u64 = 50;
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -58,29 +63,43 @@ impl Debug for Qmp {
 
 impl Qmp {
     pub fn new(qmp_sock_path: &str) -> Result<Self> {
-        let stream = UnixStream::connect(qmp_sock_path)?;
+        let try_new_once_fn = || -> Result<Qmp> {
+            let stream = UnixStream::connect(qmp_sock_path)?;
 
-        // Set the read timeout to protect runtime-rs from blocking forever
-        // trying to set up QMP connection if qemu fails to launch.  The exact
-        // value is a matter of judegement.  Setting it too long would risk
-        // being ineffective since container runtime would timeout first anyway
-        // (containerd's task creation timeout is 2 s by default).  OTOH
-        // setting it too short would risk interfering with a normal launch,
-        // perhaps just seeing some delay due to a heavily loaded host.
-        stream.set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))?;
+            stream
+                .set_read_timeout(Some(Duration::from_millis(DEFAULT_QMP_READ_TIMEOUT)))
+                .context("set qmp read timeout")?;
 
-        let mut qmp = Qmp {
-            qmp: qapi::Qmp::new(qapi::Stream::new(
-                BufReader::new(stream.try_clone()?),
-                stream,
-            )),
-            guest_memory_block_size: 0,
+            let mut qmp = Qmp {
+                qmp: qapi::Qmp::new(qapi::Stream::new(
+                    BufReader::new(stream.try_clone()?),
+                    stream,
+                )),
+                guest_memory_block_size: 0,
+            };
+
+            let info = qmp.qmp.handshake().context("qmp handshake failed")?;
+            info!(sl!(), "QMP initialized: {:#?}", info);
+
+            Ok(qmp)
         };
 
-        let info = qmp.qmp.handshake()?;
-        info!(sl!(), "QMP initialized: {:#?}", info);
+        let deadline = Instant::now() + Duration::from_millis(DEFAULT_QMP_CONNECT_DEADLINE_MS);
+        let mut last_err: Option<anyhow::Error> = None;
 
-        Ok(qmp)
+        while Instant::now() < deadline {
+            match try_new_once_fn() {
+                Ok(qmp) => return Ok(qmp),
+                Err(e) => {
+                    debug!(sl!(), "QMP not ready yet: {}", e);
+                    last_err = Some(e);
+                    thread::sleep(Duration::from_millis(DEFAULT_QMP_RETRY_SLEEP_MS));
+                }
+            }
+        }
+
+        Err(last_err.unwrap_or_else(|| anyhow!("QMP init timed out")))
+            .with_context(|| format!("timed out waiting for QMP ready: {}", qmp_sock_path))
     }
 
     pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
