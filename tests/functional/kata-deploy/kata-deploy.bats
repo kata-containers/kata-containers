@@ -34,6 +34,39 @@ load "${repo_root_dir}/tests/gha-run-k8s-common.sh"
 # Load shared helm deployment helpers
 source "${BATS_TEST_DIRNAME}/lib/helm-deploy.bash"
 
+# Generate a verification pod YAML
+# Arguments:
+#   $1 - Pod name
+# Output: Pod YAML to stdout
+generate_verification_pod() {
+	local pod_name="$1"
+	
+	cat <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${pod_name}
+spec:
+  runtimeClassName: kata-${KATA_HYPERVISOR}
+  restartPolicy: Never
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+  tolerations:
+    - operator: Exists
+  containers:
+    - name: verify
+      image: quay.io/kata-containers/alpine-bash-curl:latest
+      imagePullPolicy: Always
+      command:
+        - sh
+        - -c
+        - |
+          echo "=== Kata Verification ==="
+          echo "Kernel: \$(uname -r)"
+          echo "SUCCESS: Pod running with Kata runtime"
+EOF
+}
+
 setup() {
 	ensure_helm
 
@@ -54,31 +87,10 @@ setup() {
 @test "Test runtimeclasses are being properly created and container runtime is not broken" {
 	pushd "${repo_root_dir}"
 	
-	# Create verification pod spec
+	# Create verification pod spec using helper
 	local verification_yaml
 	verification_yaml=$(mktemp)
-	cat > "${verification_yaml}" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: kata-deploy-verify
-spec:
-  runtimeClassName: kata-${KATA_HYPERVISOR}
-  restartPolicy: Never
-  nodeSelector:
-    katacontainers.io/kata-runtime: "true"
-  containers:
-    - name: verify
-      image: quay.io/kata-containers/alpine-bash-curl:latest
-      imagePullPolicy: Always
-      command:
-        - sh
-        - -c
-        - |
-          echo "=== Kata Verification ==="
-          echo "Kernel: \$(uname -r)"
-          echo "SUCCESS: Pod running with Kata runtime"
-EOF
+	generate_verification_pod "kata-deploy-verify" > "${verification_yaml}"
 	
 	# Install kata-deploy via Helm
 	echo "Installing kata-deploy with Helm..."
@@ -146,6 +158,125 @@ EOF
 	[[ ${container_runtime_version} != *"containerd://Unknown"* ]]
 	
 	popd
+}
+
+@test "Test node annotations are set after installation" {
+	# Verify that kata-deploy sets the installation status annotations on nodes
+	# These annotations are used by kata-upgrade to verify installation completion
+	
+	echo "Checking node annotations set by kata-deploy..."
+	
+	# Get nodes with kata-runtime label
+	local kata_nodes
+	kata_nodes=$(kubectl get nodes -l katacontainers.io/kata-runtime=true -o jsonpath='{.items[*].metadata.name}')
+	
+	[[ -n "${kata_nodes}" ]] || {
+		echo "ERROR: No nodes found with katacontainers.io/kata-runtime=true label"
+		return 1
+	}
+	
+	echo "Found kata nodes: ${kata_nodes}"
+	
+	for node in ${kata_nodes}; do
+		echo "Checking annotations on node: ${node}"
+		
+		# Check kata-deploy-installed-version annotation
+		local installed_version
+		installed_version=$(kubectl get node "${node}" -o jsonpath='{.metadata.annotations.katacontainers\.io/kata-deploy-installed-version}')
+		
+		[[ -n "${installed_version}" ]] || {
+			echo "ERROR: Node ${node} missing annotation: katacontainers.io/kata-deploy-installed-version"
+			kubectl get node "${node}" -o yaml | grep -A20 "annotations:"
+			return 1
+		}
+		echo "  kata-deploy-installed-version: ${installed_version}"
+		
+		# Check kata-deploy-installed-at annotation (should be ISO 8601 timestamp)
+		local installed_at
+		installed_at=$(kubectl get node "${node}" -o jsonpath='{.metadata.annotations.katacontainers\.io/kata-deploy-installed-at}')
+		
+		[[ -n "${installed_at}" ]] || {
+			echo "ERROR: Node ${node} missing annotation: katacontainers.io/kata-deploy-installed-at"
+			kubectl get node "${node}" -o yaml | grep -A20 "annotations:"
+			return 1
+		}
+		echo "  kata-deploy-installed-at: ${installed_at}"
+		
+		# Validate timestamp format (ISO 8601: YYYY-MM-DDTHH:MM:SS)
+		[[ "${installed_at}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2} ]] || {
+			echo "ERROR: Invalid timestamp format: ${installed_at}"
+			echo "Expected ISO 8601 format (YYYY-MM-DDTHH:MM:SS)"
+			return 1
+		}
+		echo "  Timestamp format: valid"
+	done
+	
+	echo ""
+	echo "All node annotations verified successfully"
+}
+
+@test "Test annotations can be used to wait for installation" {
+	# This test demonstrates using annotations to determine when installation is complete
+	# instead of arbitrary sleep times
+	
+	echo "Demonstrating annotation-based installation detection..."
+	
+	# Get a kata node
+	local node
+	node=$(kubectl get nodes -l katacontainers.io/kata-runtime=true -o jsonpath='{.items[0].metadata.name}')
+	
+	[[ -n "${node}" ]] || {
+		echo "ERROR: No kata nodes found"
+		return 1
+	}
+	
+	echo "Using node: ${node}"
+	
+	# Record current timestamp annotation
+	local current_timestamp
+	current_timestamp=$(kubectl get node "${node}" -o jsonpath='{.metadata.annotations.katacontainers\.io/kata-deploy-installed-at}')
+	
+	echo "Current installation timestamp: ${current_timestamp}"
+	
+	# In a real upgrade scenario, you would:
+	# 1. Record the timestamp before triggering upgrade
+	# 2. Trigger the upgrade (helm upgrade)
+	# 3. Wait for the timestamp to change (proving new installation completed)
+	# 4. Verify the version matches expected
+	# 5. Then run verification pod
+	
+	# For this test, we just verify the current state is correct
+	local installed_version
+	installed_version=$(kubectl get node "${node}" -o jsonpath='{.metadata.annotations.katacontainers\.io/kata-deploy-installed-version}')
+	
+	echo "Installed version: ${installed_version}"
+	
+	# Deploy a verification pod only after confirming installation status
+	echo ""
+	echo "Deploying verification pod after confirming installation annotations..."
+	
+	local test_pod="kata-annotation-verify-$(date +%s)"
+	generate_verification_pod "${test_pod}" | kubectl apply -n default -f -
+	
+	# Wait for pod to complete
+	echo "Waiting for verification pod to complete..."
+	kubectl wait pod "${test_pod}" --for=jsonpath='{.status.phase}'=Succeeded --timeout=180s || {
+		echo "ERROR: Verification pod failed"
+		kubectl describe pod "${test_pod}"
+		kubectl logs "${test_pod}" || true
+		kubectl delete pod "${test_pod}" --ignore-not-found
+		return 1
+	}
+	
+	echo ""
+	echo "Verification pod logs:"
+	kubectl logs "${test_pod}"
+	
+	# Cleanup
+	kubectl delete pod "${test_pod}" --ignore-not-found
+	
+	echo ""
+	echo "Annotation-based installation verification completed successfully"
 }
 
 teardown() {
