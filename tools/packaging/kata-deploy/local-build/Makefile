@@ -20,6 +20,8 @@ endif
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
+	kernel-confidential-tarball \
+	kernel-debug-tarball \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-tarball \
@@ -42,6 +44,7 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	cloud-hypervisor-glibc-tarball
 else ifeq ($(ARCH), s390x)
 BASE_TARBALLS = serial-targets \
+	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
 	shim-v2-tarball \
@@ -51,6 +54,7 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
 	kernel-cca-confidential-tarball \
+	kernel-debug-tarball \
 	kernel-tarball \
 	qemu-tarball \
 	qemu-cca-experimental-tarball \
@@ -138,6 +142,12 @@ kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
 kernel-tarball:
+	${MAKE} $@-build
+
+ernel-debug-tarball:
+	${MAKE} $@-build
+
+kernel-confidential-tarball:
 	${MAKE} $@-build
 
 kernel-cca-confidential-tarball:

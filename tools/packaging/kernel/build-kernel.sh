@@ -583,6 +583,10 @@ install_kata() {
 		fi
 	fi
 
+	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
+		suffix="-debug${suffix}"
+	fi
+
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
 	vmlinux="vmlinux-${kernel_version}-${config_version}${suffix}"
 

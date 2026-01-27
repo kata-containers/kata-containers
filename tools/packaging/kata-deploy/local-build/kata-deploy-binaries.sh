@@ -115,6 +115,7 @@ options:
 	kata-manager
 	kernel
 	kernel-cca-confidential
+	kernel-debug
 	kernel-dragonball-experimental
 	kernel-experimental
 	kernel-nvidia-gpu
@@ -739,6 +740,15 @@ install_kernel() {
 		"${extra_cmd}"
 }
 
+install_kernel_debug() {
+	export KERNEL_DEBUG_ENABLED="yes"
+
+	install_kernel_helper \
+		"assets.kernel" \
+		"kernel-debug" \
+		""
+}
+
 install_kernel_cca_confidential() {
 	export CONFIDENTIAL_GUEST="yes"
 	export MEASURED_ROOTFS="yes"
@@ -1349,6 +1359,10 @@ handle_build() {
 	kata-manager) install_kata_manager ;;
 
 	kernel) install_kernel ;;
+
+	kernel-confidential) install_kernel_confidential ;;
+
+	kernel-debug) install_kernel_debug ;;
 
 	kernel-cca-confidential) install_kernel_cca_confidential ;;
 
