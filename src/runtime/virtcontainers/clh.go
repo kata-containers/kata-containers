@@ -466,8 +466,8 @@ func (clh *cloudHypervisor) enableProtection() error {
 	}
 }
 
-func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bool, debug bool, confidential bool, iommu bool) ([]Param, error) {
-	params, err := GetKernelRootParams(rootfstype, disableNvdimm, dax)
+func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bool, debug bool, confidential bool, iommu bool, kernelVerityParams string) ([]Param, error) {
+	params, err := GetKernelRootParams(rootfstype, disableNvdimm, dax, kernelVerityParams)
 	if err != nil {
 		return []Param{}, err
 	}
@@ -587,7 +587,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	disableNvdimm := (clh.config.DisableImageNvdimm || clh.config.ConfidentialGuest)
 	enableDax := !disableNvdimm
 
-	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU)
+	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU, hypervisorConfig.KernelVerityParams)
 	if err != nil {
 		return err
 	}

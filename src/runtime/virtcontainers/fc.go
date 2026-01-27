@@ -699,7 +699,12 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		return err
 	}
 
-	params, err := GetKernelRootParams(fc.config.RootfsType, true, false)
+	params, err := GetKernelRootParams(
+		fc.config.RootfsType,
+		true,
+		false,
+		fc.config.KernelVerityParams,
+	)
 	if err != nil {
 		return err
 	}
