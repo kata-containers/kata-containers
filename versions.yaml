@@ -293,8 +293,8 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "026694d44d4ec483465d2fa5f80a0376166b174d"
-    toolchain: "1.85.1"
+    version: "9aae2eae6a03ab97d6561bbe74f8b99843836bba"
+    toolchain: "1.90.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
