@@ -144,13 +144,14 @@ impl DragonballInner {
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
 
         if self.config.boot_info.initrd.is_empty() {
-            // get rootfs driver
+            // When booting from the image, add rootfs and verity parameters here.
             let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
-
-            kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
+            let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
+                &self.config.boot_info.kernel_verity_params,
                 &rootfs_driver,
                 &self.config.boot_info.rootfs_type,
-            )?);
+            )?;
+            kernel_params.append(&mut rootfs_params);
         }
 
         kernel_params.append(&mut KernelParams::from_string(

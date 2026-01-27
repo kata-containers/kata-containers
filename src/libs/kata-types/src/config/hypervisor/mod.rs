@@ -294,6 +294,10 @@ pub struct BootInfo {
     #[serde(default)]
     pub kernel_params: String,
 
+    /// Guest kernel dm-verity parameters.
+    #[serde(default)]
+    pub kernel_verity_params: String,
+
     /// Path to initrd file on host.
     #[serde(default)]
     pub initrd: String,

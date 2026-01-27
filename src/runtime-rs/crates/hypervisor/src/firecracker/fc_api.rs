@@ -86,12 +86,12 @@ impl FcInner {
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
         kernel_params.push(Param::new("pci", "off"));
         kernel_params.push(Param::new("iommu", "off"));
-        let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
-
-        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
-            &rootfs_driver,
+        let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
+            &self.config.boot_info.kernel_verity_params,
+            &self.config.blockdev_info.block_device_driver,
             &self.config.boot_info.rootfs_type,
-        )?);
+        )?;
+        kernel_params.append(&mut rootfs_params);
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
