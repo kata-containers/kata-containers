@@ -31,7 +31,6 @@ pub struct Settings {
 /// Volume settings loaded from genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Volumes {
-    pub emptyDir: EmptyDirVolume,
     pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
     pub image_volume: ImageVolume,

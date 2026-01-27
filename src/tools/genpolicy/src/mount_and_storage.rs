@@ -105,7 +105,6 @@ pub fn get_mount_and_storage(
     storages: &mut Vec<agent::Storage>,
     yaml_volume: &volume::Volume,
     yaml_mount: &pod::VolumeMount,
-    pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
     debug!(
         "get_mount_and_storage: adding mount and storage for: {:?}",
@@ -113,27 +112,18 @@ pub fn get_mount_and_storage(
     );
 
     if let Some(emptyDir) = &yaml_volume.emptyDir {
-        let settings_volumes = &settings.volumes;
-        let mut volume: Option<&settings::EmptyDirVolume> = None;
-
-        if let Some(medium) = &emptyDir.medium {
-            if medium == "Memory" {
-                volume = Some(&settings_volumes.emptyDir_memory);
-            }
+        let is_tmpfs = emptyDir.medium.as_ref().is_some_and(|m| m == "Memory");
+        if is_tmpfs {
+            get_memory_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount);
+        } else {
+            let access = if yaml_mount.readOnly == Some(true) {
+                debug!("setting read only access for emptyDir mount");
+                "ro"
+            } else {
+                "rw"
+            };
+            get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", access);
         }
-
-        if volume.is_none() {
-            volume = Some(&settings_volumes.emptyDir);
-        }
-
-        get_empty_dir_mount_and_storage(
-            settings,
-            p_mounts,
-            storages,
-            yaml_mount,
-            volume.unwrap(),
-            pod_security_context,
-        );
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
     } else if yaml_volume.hostPath.is_some() {
@@ -149,50 +139,25 @@ pub fn get_mount_and_storage(
     }
 }
 
-fn get_empty_dir_mount_and_storage(
+fn get_memory_empty_dir_mount_and_storage(
     settings: &settings::Settings,
     p_mounts: &mut Vec<policy::KataMount>,
     storages: &mut Vec<agent::Storage>,
     yaml_mount: &pod::VolumeMount,
-    settings_empty_dir: &settings::EmptyDirVolume,
-    pod_security_context: &Option<pod::PodSecurityContext>,
 ) {
-    debug!("Settings emptyDir: {:?}", settings_empty_dir);
+    let settings_empty_dir = &settings.volumes.emptyDir_memory;
+    debug!("Settings emptyDir_memory: {:?}", settings_empty_dir);
 
-    if yaml_mount.subPathExpr.is_none() {
-        let mut options = settings_empty_dir.options.clone();
-        if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
-            // This matches the runtime behavior of only setting the fsgid if the mountpoint GID is not 0.
-            // https://github.com/kata-containers/kata-containers/blob/b69da5f3ba8385c5833b31db41a846a203812675/src/runtime/virtcontainers/kata_agent.go#L1602-L1607
-            if gid != 0 {
-                options.push(format!("fsgid={gid}"));
-            }
-        }
-        storages.push(agent::Storage {
-            driver: settings_empty_dir.driver.clone(),
-            driver_options: Vec::new(),
-            source: settings_empty_dir.source.clone(),
-            fstype: settings_empty_dir.fstype.clone(),
-            options,
-            mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
-            fs_group: protobuf::MessageField::none(),
-            special_fields: ::protobuf::SpecialFields::new(),
-        });
-    }
-
-    let source = if yaml_mount.subPathExpr.is_some() {
-        let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
-        let name = OsString::from(file_name).into_string().unwrap();
-        format!("{}{name}$", &settings.volumes.configMap.mount_source)
-    } else {
-        format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name)
-    };
-
-    let mount_type = if yaml_mount.subPathExpr.is_some() {
-        "bind"
-    } else {
-        &settings_empty_dir.mount_type
-    };
+    storages.push(agent::Storage {
+        driver: settings_empty_dir.driver.clone(),
+        driver_options: Vec::new(),
+        source: settings_empty_dir.source.clone(),
+        fstype: settings_empty_dir.fstype.clone(),
+        options: settings_empty_dir.options.clone(),
+        mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
+        fs_group: protobuf::MessageField::none(),
+        special_fields: ::protobuf::SpecialFields::new(),
+    });
 
     let access = match yaml_mount.readOnly {
         Some(true) => {
@@ -204,8 +169,8 @@ fn get_empty_dir_mount_and_storage(
 
     p_mounts.push(policy::KataMount {
         destination: yaml_mount.mountPath.to_string(),
-        type_: mount_type.to_string(),
-        source,
+        type_: settings_empty_dir.mount_type.clone(),
+        source: format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name),
         options: vec![
             "rbind".to_string(),
             "rprivate".to_string(),
