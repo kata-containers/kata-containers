@@ -1,0 +1,63 @@
+# Copyright (c) 2026 The Kata Containers Authors
+# SPDX-License-Identifier: Apache-2.0
+
+# Argo Workflows namespace where the WorkflowTemplate will be created
+argoNamespace: argo
+
+# Default workflow parameters (can be overridden when submitting workflows)
+defaults:
+  # Helm release name for kata-deploy
+  helmRelease: kata-deploy
+
+  # Namespace where kata-deploy is installed
+  helmNamespace: kube-system
+
+  # Label selector for nodes to upgrade (optional if using taint selection)
+  nodeSelector: ""
+
+  # Taint-based node selection (optional, alternative to label selector)
+  # Select nodes that have a taint with this key
+  nodeTaintKey: ""
+  # Optional: filter by taint value (only used if nodeTaintKey is set)
+  nodeTaintValue: ""
+
+  # Namespace for verification pods
+  verificationNamespace: default
+
+  # Verification pod spec (REQUIRED)
+  #
+  # A verification pod is required to validate each node after upgrade.
+  # The chart will fail to install without one.
+  #
+  # Provide via:
+  #   helm install kata-upgrade ... \
+  #     --set-file defaults.verificationPod=/path/to/your-verification-pod.yaml
+  #
+  # Or override at workflow submission (base64-encoded):
+  #   argo submit ... -p verification-pod="$(base64 -w0 < pod.yaml)"
+  #
+  # Note: kata-deploy's own verification is disabled during upgrade because
+  # it is cluster-wide (designed for initial install), while kata-upgrade
+  # performs per-node verification with proper placeholder substitution.
+  #
+  # Placeholders substituted at runtime:
+  #   ${NODE} - the node being upgraded/verified
+  #   ${TEST_POD} - generated unique pod name
+  #
+  verificationPod: ""
+
+  # Optional: Drain nodes before upgrade (default: false)
+  # Not required for Kata upgrades since running VMs use in-memory binaries.
+  # Enable if you prefer to evict workloads before upgrading.
+  drainEnabled: false
+
+  # Timeout for node drain (only used if drainEnabled is true)
+  drainTimeout: "300s"
+
+# Container images used by workflow steps
+images:
+  # Helm image for helm upgrade operations (multi-arch)
+  helm: quay.io/kata-containers/helm:latest
+
+  # Kubectl image for kubernetes operations (multi-arch)
+  kubectl: quay.io/kata-containers/kubectl:latest

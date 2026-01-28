@@ -1,0 +1,31 @@
+# Copyright (c) 2026 The Kata Containers Authors
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v2
+name: kata-upgrade
+description: Argo Workflows-based upgrade orchestration for Kata Containers
+
+type: application
+
+# Chart version - follows kata-containers versioning
+version: "3.26.0"
+
+# App version - matches kata-containers
+appVersion: "3.26.0"
+
+keywords:
+  - kata-containers
+  - upgrade
+  - argo-workflows
+  - gitops
+
+home: https://katacontainers.io
+
+sources:
+  - https://github.com/kata-containers/kata-containers
+
+maintainers:
+  - name: Kata Containers Community
+
+annotations:
+  kata-containers.io/companion-chart: kata-deploy
