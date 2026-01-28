@@ -62,8 +62,8 @@ pub struct PolicyData {
     /// kata agent endpoint, that get added to the output policy.
     pub request_defaults: RequestDefaults,
 
-    /// Device annotation settings read from genpolicy-settings.json.
-    pub device_annotations: DeviceAnnotations,
+    /// Device settings read from genpolicy-settings.json.
+    pub devices: Devices,
 }
 
 /// OCI Container spec. This struct is very similar to the Spec struct from
@@ -465,38 +465,23 @@ pub struct ClusterConfig {
     pub pause_container_id_policy: String,
 }
 
-/// VFIO device annotation patterns for runtime-assigned CDI annotations.
+/// Describes patterns for supported VFIO devices.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct VfioDeviceAnnotations {
+pub struct VfioDevices {
     /// Device path prefix for VFIO devices (without device number suffix).
     pub device_path: String,
 
     /// Regex pattern for VFIO CDI annotation keys.
-    pub key_regex: String,
+    pub anno_key_regex: String,
 
-    /// Regex pattern for NVIDIA GPU CDI annotation values.
-    pub nvidia_gpu_value_regex: String,
-
-    /// Device type for NVIDIA GPU VFIO devices (gk variant).
-    pub nvidia_gpu_gk_device_type: String,
-
-    /// Allowlist of K8s extended resource names that should be treated as NVIDIA
-    /// passthrough GPU (pGPU) requests when generating policy.
-    ///
-    /// Examples:
-    /// - "nvidia.com/pgpu" (legacy default)
-    /// - "nvidia.com/GH100_H100_PCIE" (model-specific resource name)
-    ///
-    /// This is generation-time configuration; policy enforcement does not need it.
-    /// We therefore skip serializing it into `policy_data`.
-    #[serde(default = "default_nvidia_pgpu_resource_keys", skip_serializing)]
-    pub nvidia_pgpu_resource_keys: Vec<String>,
+    /// NVIDIA-specific VFIO settings.
+    pub nvidia: VfioNvidiaDevices,
 }
 
-/// Device annotation patterns for various device types.
+/// Device-related settings for policy generation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DeviceAnnotations {
-    pub vfio: VfioDeviceAnnotations,
+pub struct Devices {
+    pub vfio: VfioDevices,
 }
 
 /// Struct used to read data from the settings file and copy that data into the policy.
@@ -504,6 +489,23 @@ pub struct DeviceAnnotations {
 pub struct SandboxData {
     /// Expected value of the CreateSandboxRequest storages field.
     pub storages: Vec<agent::Storage>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VfioNvidiaDevices {
+    /// Regex pattern for NVIDIA GPU CDI annotation values.
+    pub gpu_anno_value_regex: String,
+
+    /// Device type for NVIDIA GPU VFIO devices (gk variant).
+    pub gpu_gk_device_type: String,
+
+    /// Allowlist of K8s extended resource names that should be treated as NVIDIA
+    /// passthrough GPU (pGPU) requests when generating policy.
+    ///
+    /// This is generation-time configuration; policy enforcement does not need it.
+    /// We therefore skip serializing it into `policy_data`.
+    #[serde(skip_serializing)]
+    pub pgpu_resource_keys: Vec<String>,
 }
 
 enum K8sEnvFromSource {
@@ -629,7 +631,7 @@ impl AgentPolicy {
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
             sandbox: self.config.settings.sandbox.clone(),
-            device_annotations: self.config.settings.device_annotations.clone(),
+            devices: self.config.settings.devices.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -718,13 +720,13 @@ impl AgentPolicy {
             for volumeDevice in volumeDevices {
                 if volumeDevice
                     .devicePath
-                    .starts_with(&self.config.settings.device_annotations.vfio.device_path)
+                    .starts_with(&self.config.settings.devices.vfio.device_path)
                 {
                     panic!(
                         "Requested volume device file path '{}' conflicts with the file path reserved for VFIO device passthrough '{}'. \
                          Note: for VFIO device passthrough, use resource limits (e.g., nvidia.com/gpu).",
                         volumeDevice.devicePath,
-                        self.config.settings.device_annotations.vfio.device_path
+                        self.config.settings.devices.vfio.device_path
                     );
                 }
 
@@ -741,14 +743,9 @@ impl AgentPolicy {
 
         // Generate expected device entries and annotation key-value pairs for VFIO devices
         let mut runtime_anno_patterns = BTreeMap::new();
-        if let Some(nvidia_pgpu_count) = yaml_container.get_nvidia_pgpu_count(
-            &self
-                .config
-                .settings
-                .device_annotations
-                .vfio
-                .nvidia_pgpu_resource_keys,
-        ) {
+        if let Some(nvidia_pgpu_count) = yaml_container
+            .get_nvidia_pgpu_count(&self.config.settings.devices.vfio.nvidia.pgpu_resource_keys)
+        {
             if nvidia_pgpu_count > 0 {
                 for _ in 0..nvidia_pgpu_count {
                     let mut device = agent::Device::new();
@@ -757,20 +754,15 @@ impl AgentPolicy {
                     // the device path prefix <device_path>. When enforcing the policy, we
                     // we validate against this prefix and compare the observed device
                     // number with the number from the provided CDI annotations.
-                    device.set_container_path(
-                        self.config
-                            .settings
-                            .device_annotations
-                            .vfio
-                            .device_path
-                            .clone(),
-                    );
+                    device
+                        .set_container_path(self.config.settings.devices.vfio.device_path.clone());
                     device.set_type(
                         self.config
                             .settings
-                            .device_annotations
+                            .devices
                             .vfio
-                            .nvidia_gpu_gk_device_type
+                            .nvidia
+                            .gpu_gk_device_type
                             .clone(),
                     );
                     device.set_vm_path("".to_string());
@@ -778,17 +770,13 @@ impl AgentPolicy {
                 }
 
                 runtime_anno_patterns.insert(
+                    self.config.settings.devices.vfio.anno_key_regex.clone(),
                     self.config
                         .settings
-                        .device_annotations
+                        .devices
                         .vfio
-                        .key_regex
-                        .clone(),
-                    self.config
-                        .settings
-                        .device_annotations
-                        .vfio
-                        .nvidia_gpu_value_regex
+                        .nvidia
+                        .gpu_anno_value_regex
                         .clone(),
                 );
             }
@@ -1263,9 +1251,4 @@ pub fn get_kata_namespaces(
     });
 
     namespaces
-}
-
-fn default_nvidia_pgpu_resource_keys() -> Vec<String> {
-    // Backward compatible default: historically genpolicy assumed "nvidia.com/pgpu".
-    vec!["nvidia.com/pgpu".to_owned()]
 }
