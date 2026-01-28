@@ -155,6 +155,8 @@ setup() {
 	firmware_path=$(echo "$qemu_cmd" | grep -oP -- '-bios \K[^ ]+')
 	vcpu_count=$(echo "$qemu_cmd" | grep -oP -- '-smp \K\d+')
 	append=$(echo "$qemu_cmd" | sed -n 's/.*-append \(.*\) -bios.*/\1/p')
+	# Remove escape backslashes for quotes from output for dm-mod.create parameters
+	append="${append//\\\"/\"}"
 
 	measure_args=(
 		--mode=snp
