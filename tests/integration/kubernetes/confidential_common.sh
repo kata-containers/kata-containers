@@ -5,7 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# shellcheck disable=SC2154 # Variables set by BATS before sourcing this file
+# shellcheck disable=SC1091
 source "${BATS_TEST_DIRNAME}/tests_common.sh"
+# shellcheck disable=SC1091
 source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
@@ -19,7 +22,7 @@ function setup_unencrypted_confidential_pod() {
 
 	export SSH_KEY_FILE="${pod_config_dir}/confidential/unencrypted/ssh/unencrypted"
 
-	if [ -n "${GH_PR_NUMBER}" ]; then
+	if [[ -n "${GH_PR_NUMBER}" ]]; then
 		# Use correct address in pod yaml
 		sed -i "s/-nightly/-${GH_PR_NUMBER}/" "${pod_config_dir}/pod-confidential-unencrypted.yaml"
 	fi
@@ -32,6 +35,7 @@ function setup_unencrypted_confidential_pod() {
 # and returns the remote command to be executed to that specific hypervisor
 # in order to identify whether the workload is running on a TEE environment
 function get_remote_command_per_hypervisor() {
+	# shellcheck disable=SC2153 # KATA_HYPERVISOR is set by caller
 	case "${KATA_HYPERVISOR}" in
 		qemu-se*)
 			echo "cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
@@ -54,6 +58,7 @@ function check_hypervisor_for_confidential_tests() {
 	local kata_hypervisor="${1}"
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
+	# shellcheck disable=SC2076 # intentionally use literal string matching
 	if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||\
 	[[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
 		return 0
@@ -118,30 +123,34 @@ function is_confidential_gpu_hardware() {
 
 function create_loop_device(){
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
-	local node="$(get_one_kata_node)"
-	cleanup_loop_device "$loop_file"
+	local node
+	node="$(get_one_kata_node)"
+	cleanup_loop_device "${loop_file}"
 
-	exec_host "$node" "dd if=/dev/zero of=$loop_file bs=1M count=2500"
-	exec_host "$node" "losetup -fP $loop_file >/dev/null 2>&1"
-	local device=$(exec_host "$node" losetup -j $loop_file | awk -F'[: ]' '{print $1}')
+	exec_host "${node}" "dd if=/dev/zero of=${loop_file} bs=1M count=2500"
+	exec_host "${node}" "losetup -fP ${loop_file} >/dev/null 2>&1"
+	local device
+	device=$(exec_host "${node}" losetup -j "${loop_file}" | awk -F'[: ]' '{print $1}')
 
-	echo $device
+	echo "${device}"
 }
 
 function cleanup_loop_device(){
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
-	local node="$(get_one_kata_node)"
+	local node
+	node="$(get_one_kata_node)"
 	# Find all loop devices associated with $loop_file
-	local existed_devices=$(exec_host "$node" losetup -j $loop_file | awk -F'[: ]' '{print $1}')
+	local existed_devices
+	existed_devices=$(exec_host "${node}" losetup -j "${loop_file}" | awk -F'[: ]' '{print $1}')
 
-	if [ -n "$existed_devices" ]; then
+	if [[ -n "${existed_devices}" ]]; then
 		# Iterate over each found loop device and detach it
-		for d in $existed_devices; do
-			exec_host "$node" "losetup -d "$d" >/dev/null 2>&1"
+		for d in ${existed_devices}; do
+			exec_host "${node}" "losetup -d ${d} >/dev/null 2>&1"
 		done
 	fi
 
-	exec_host "$node" "rm -f "$loop_file" >/dev/null 2>&1 || true"
+	exec_host "${node}" "rm -f ${loop_file} >/dev/null 2>&1 || true"
 }
 
 # This function creates pod yaml. Parameters
@@ -159,33 +168,33 @@ function create_coco_pod_yaml() {
 	guest_components_rest_api=${5:-}
 	node=${6:-}
 
-	local CC_KBS_ADDR
-	export CC_KBS_ADDR=$(kbs_k8s_svc_http_addr)
+	CC_KBS_ADDR=$(kbs_k8s_svc_http_addr)
+	export CC_KBS_ADDR
 
 	kernel_params_annotation="io.katacontainers.config.hypervisor.kernel_params"
 	kernel_params_value=""
 
-	if [ -n "$image_policy" ]; then
+	if [[ -n "${image_policy}" ]]; then
 		kernel_params_value+=" agent.image_policy_file=${image_policy}"
 		kernel_params_value+=" agent.enable_signature_verification=true"
 	fi
 
-	if [ -n "$image_registry_auth" ]; then
+	if [[ -n "${image_registry_auth}" ]]; then
 		kernel_params_value+=" agent.image_registry_auth=${image_registry_auth}"
 	fi
 
-	if [ -n "$guest_components_procs" ]; then
+	if [[ -n "${guest_components_procs}" ]]; then
 		kernel_params_value+=" agent.guest_components_procs=${guest_components_procs}"
 	fi
 
-	if [ -n "$guest_components_rest_api" ]; then
+	if [[ -n "${guest_components_rest_api}" ]]; then
 		kernel_params_value+=" agent.guest_components_rest_api=${guest_components_rest_api}"
 	fi
 
 	kernel_params_value+=" agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
 
 	# Note: this is not local as we use it in the caller test
-	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
+	kata_pod="$(new_pod_config "${image}" "kata-${KATA_HYPERVISOR}")"
 	set_container_command "${kata_pod}" "0" "sleep" "30"
 
 	# Set annotations
@@ -198,8 +207,8 @@ function create_coco_pod_yaml() {
 
 	add_allow_all_policy_to_yaml "${kata_pod}"
 
-	if [ -n "$node" ]; then
-		set_node "${kata_pod}" "$node"
+	if [[ -n "${node}" ]]; then
+		set_node "${kata_pod}" "${node}"
 	fi
 }
 
@@ -218,7 +227,7 @@ function create_coco_pod_yaml_with_annotations() {
 	cc_initdata_annotation_key="io.katacontainers.config.hypervisor.cc_init_data"
 
 	# Note: this is not local as we use it in the caller test
-	kata_pod="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
+	kata_pod="$(new_pod_config "${image}" "kata-${KATA_HYPERVISOR}")"
 	set_container_command "${kata_pod}" "0" "sleep" "30"
 
 	# Set annotations
@@ -232,8 +241,8 @@ function create_coco_pod_yaml_with_annotations() {
 		"${cc_initdata_annotation_key}" \
 		"${cc_initdata_annotation_value}"
 
-	if [ -n "$node" ]; then
-		set_node "${kata_pod}" "$node"
+	if [[ -n "${node}" ]]; then
+		set_node "${kata_pod}" "${node}"
 	fi
 }
 
@@ -315,7 +324,7 @@ confidential_teardown_common() {
 	local node_start_time="$2"
 
 	# Run common teardown
-	teardown_common "${node}" ${node_start_time}
+	teardown_common "${node}" "${node_start_time}"
 
 	# Also try and print the kbs logs on failure
 	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then

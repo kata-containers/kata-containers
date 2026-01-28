@@ -11,6 +11,7 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_dir="$(cd "${script_dir}/../../.." && pwd)"
 
+GOPATH="${GOPATH:-}"
 GOPATH_LOCAL="${GOPATH%%:*}"
 K8S_FILTER_FLAG="kubernetes"
 
@@ -22,12 +23,13 @@ main()
 
 	mapfile -d " " -t _K8S_TEST_UNION <<< "${K8S_TEST_UNION}"
 
-	if [ ! -f ${GOPATH_LOCAL}/bin/yq ]; then
-		${repo_root_dir}/ci/install_yq.sh > /dev/null
+	if [[ ! -f "${GOPATH_LOCAL}/bin/yq" ]]; then
+		"${repo_root_dir}/ci/install_yq.sh" > /dev/null
 	fi
 
-        local K8S_SKIP_UNION=$("${GOPATH_LOCAL}/bin/yq" ".${K8S_FILTER_FLAG}" "${K8S_CONFIG_FILE}")
-        [ "${K8S_SKIP_UNION}" == "null" ] && return
+        local K8S_SKIP_UNION
+        K8S_SKIP_UNION=$("${GOPATH_LOCAL}/bin/yq" ".${K8S_FILTER_FLAG}" "${K8S_CONFIG_FILE}")
+        [[ "${K8S_SKIP_UNION}" == "null" ]] && return
         mapfile -t _K8S_SKIP_UNION <<< "${K8S_SKIP_UNION}"
 
 	for TEST_ENTRY in "${_K8S_TEST_UNION[@]}"
@@ -48,9 +50,9 @@ main()
 			# SKIP_ENTRY="${SKIP_ENTRY%"${A}"}" - remove the spaces from the string
 			SKIP_ENTRY="${SKIP_ENTRY%"${SKIP_ENTRY##*[![:space:]]}"}"
 			SKIP_ENTRY="${SKIP_ENTRY}.bats"
-			[ "$SKIP_ENTRY" == "$TEST_ENTRY" ] && flag="true"
+			[[ "${SKIP_ENTRY}" == "${TEST_ENTRY}" ]] && flag="true"
 		done
-		[ "$flag" == "false" ] && result+=("$TEST_ENTRY")
+		[[ "${flag}" == "false" ]] && result+=("${TEST_ENTRY}")
 	done
 	echo "${result[@]}"
 }
