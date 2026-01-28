@@ -600,6 +600,36 @@ container_exec_with_retries() {
 	echo "${cmd_out}"
 }
 
+# Get the logs of a pod with retries
+#
+# This function retries "kubectl logs" several times, if:
+# - kubectl returns a failure exit code, or
+# - kubectl exits successfully but produces empty console output.
+# These retries are an attempt to work around issues similar to what we have seen in the kubectl exec
+#
+# Parameters:
+#	$1	- pod name
+kubectl_logs_with_retries() {
+	local -r pod_name="$1"
+	for _ in {1..10}; do
+		bats_unbuffered_info "Getting the logs of pod ${pod_name}: $*"
+		if ! log_out=$(kubectl logs "${pod_name}"); then
+			bats_unbuffered_info "kubectl logs failed"
+			log_out=""
+		fi
+
+		if [[ -n "${log_out}" ]]; then
+			bats_unbuffered_info "log output: ${log_out}"
+			break
+		else
+			bats_unbuffered_info "Warning: empty output from kubectl logs"
+			sleep 1
+		fi
+	done
+
+	echo "${log_out}"
+}
+
 set_nginx_image() {
 	input_yaml=$1
 	output_yaml=$2
