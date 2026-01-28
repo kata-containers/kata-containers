@@ -163,6 +163,22 @@ paths:
         429:
           description: The VM instance could not be resized because a cpu removal is still pending.
 
+  /vm.resize-disk:
+    put:
+      summary: Resize a disk
+      requestBody:
+        description: Resizes a disk attached to the VM
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VmResizeDisk"
+        required: true
+      responses:
+        204:
+          description: The disk was successfully resized.
+        500:
+          description: The disk could not be resized.
+
   /vm.resize-zone:
     put:
       summary: Resize a memory zone
@@ -966,6 +982,15 @@ components:
           format: int16
         rate_limiter_config:
           $ref: "#/components/schemas/RateLimiterConfig"
+        offload_tso:
+          type: boolean
+          default: true
+        offload_ufo:
+          type: boolean
+          default: true
+        offload_csum:
+          type: boolean
+          default: true
 
     RngConfig:
       required:
@@ -1191,6 +1216,17 @@ components:
           format: int64
         desired_balloon:
           description: desired balloon size in bytes
+          type: integer
+          format: int64
+
+    VmResizeDisk:
+      type: object
+      properties:
+        id:
+          description: disk identifier
+          type: string
+        desired_size:
+          description: desired disk size in bytes
           type: integer
           format: int64
 

@@ -45,6 +45,7 @@ docs/VmCoredumpData.md
 docs/VmInfo.md
 docs/VmRemoveDevice.md
 docs/VmResize.md
+docs/VmResizeDisk.md
 docs/VmResizeZone.md
 docs/VmSnapshotConfig.md
 docs/VmmPingResponse.md
@@ -90,6 +91,7 @@ model_vm_coredump_data.go
 model_vm_info.go
 model_vm_remove_device.go
 model_vm_resize.go
+model_vm_resize_disk.go
 model_vm_resize_zone.go
 model_vm_snapshot_config.go
 model_vmm_ping_response.go
