@@ -156,10 +156,16 @@ setup() {
 	vcpu_count=$(echo "$qemu_cmd" | grep -oP -- '-smp \K\d+')
 	append=$(echo "$qemu_cmd" | sed -n 's/.*-append \(.*\) -bios.*/\1/p')
 
+	family=$(cpuid | grep -m 1 -oP -- '\(family synth\).*\(\K[^)]+')
+	stepping=$(cpuid | grep -m 1 -oP -- 'stepping id.*\(\K[^)]+')
+	model=$(cpuid | grep -m 1 -oP -- 'model.*\(\K[^)]+')
+
 	launch_measurement=$(PATH="${PATH}:${HOME}/.local/bin" sev-snp-measure \
 		--mode=snp \
 		--vcpus="${vcpu_count}" \
-		--vcpu-type=EPYC-v4 \
+		--vcpu-family="${family}" \
+		--vcpu-model="${model}" \
+		--vcpu-stepping="${stepping}" \
 		--output-format=base64 \
 		--ovmf="${firmware_path}" \
 		--kernel="${kernel_path}" \

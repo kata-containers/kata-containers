@@ -369,11 +369,6 @@ impl Cpu {
             cpu_features: config.cpu_info.cpu_features.clone(),
         }
     }
-
-    fn set_type(&mut self, cpu_type: &str) -> &mut Self {
-        self.r#type = cpu_type.to_owned();
-        self
-    }
 }
 
 #[async_trait]
@@ -2566,8 +2561,6 @@ impl<'a> QemuCmdLine<'a> {
         self.machine
             .set_confidential_guest_support("snp")
             .set_nvdimm(false);
-
-        self.cpu.set_type("EPYC-v4");
     }
 
     pub fn add_tdx_protection_device(
