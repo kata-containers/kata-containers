@@ -1,7 +1,7 @@
 module github.com/kata-containers/tests
 
 // Keep in sync with version in versions.yaml
-go 1.24.11
+go 1.24.12
 
 // WARNING: Do NOT use `replace` directives as those break dependabot:
 // https://github.com/kata-containers/kata-containers/issues/11020
