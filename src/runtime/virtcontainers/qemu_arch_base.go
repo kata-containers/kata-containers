@@ -170,9 +170,9 @@ type qemuArch interface {
 	// be used with the -bios option, ommit -bios option if the path is empty.
 	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, initdataDigest []byte) ([]govmmQemu.Device, string, error)
 
-	// scans the PCIe space and returns the biggest BAR sizes for 32-bit
-	// and 64-bit addressable memory
-	getBARsMaxAddressableMemory() (uint64, uint64)
+	// scans the PCIe space and returns the total BAR sizes for 32-bit
+	// and 64-bit addressable memory for the given VFIO devices
+	getBARsMaxAddressableMemory(vfioDevices []config.DeviceInfo) (uint64, uint64)
 
 	// Query QMP to find a device's PCI path given its QOM path or ID
 	qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error)
@@ -874,25 +874,39 @@ func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, nu
 	return genericAppendPCIeSwitchPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
 }
 
-// getBARsMaxAddressableMemory we need to know the BAR sizes to configure the
-// PCIe Root Port or PCIe Downstream Port attaching a device with huge BARs.
-func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
-
+// getBARsMaxAddressableMemory calculates total BAR sizes for the given VFIO devices
+// to configure the PCIe Root Port or PCIe Downstream Port.
+// Cold-plugged devices directly contribute to the root port size.
+// As it's not known in advance which devices are going to be hot-plugged, space
+// for hot-plugging a single device is added using the GPU with the biggest BAR size.
+func (q *qemuArchBase) getBARsMaxAddressableMemory(vfioDevices []config.DeviceInfo) (uint64, uint64) {
 	pci := nvpci.New()
 	devs, _ := pci.GetAllDevices()
 
-	// Since we do not know which devices are going to be hotplugged,
-	// we're going to use the GPU with the biggest BARs to initialize the
-	// root port, this should work for all other devices as well.
-	// defaults are 2MB for both, if no suitable devices found
-	max32bit := uint64(2 * 1024 * 1024)
-	max64bit := uint64(2 * 1024 * 1024)
+	attachedPaths := make(map[string]bool)
+	for _, dev := range vfioDevices {
+		if dev.HostPath != "" {
+			attachedPaths[dev.HostPath] = true
+		}
+	}
+
+	total32bit := uint64(2 * 1024 * 1024)
+	total64bit := uint64(2 * 1024 * 1024)
+	max32bit := uint64(0)
+	max64bit := uint64(0)
 
 	for _, dev := range devs {
 		if !dev.IsGPU() {
 			continue
 		}
 		memSize32bit, memSize64bit := dev.Resources.GetTotalAddressableMemory(true)
+
+		// Cold-plugged devices always contribute to the port size.
+		if attachedPaths[dev.Path] {
+			total32bit += memSize32bit
+			total64bit += memSize64bit
+		}
+
 		if max32bit < memSize32bit {
 			max32bit = memSize32bit
 		}
@@ -900,11 +914,19 @@ func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
 			max64bit = memSize64bit
 		}
 	}
+
+	// Add space for hot-plugging.
+	// Since we do not know which device is going to be hotplugged,
+	// we're going to use the GPU with the biggest BAR size.
+	// Note that this does not support hot-plugging multiple GPUs.
+	total32bit += max32bit
+	total64bit += max64bit
+
 	// The actual 32bit is most of the time a power of 2 but we need some
 	// buffer so double that to leave space for other IO functions.
 	// The 64bit size is not a power of 2 and hence is already rounded up
 	// to the higher value.
-	return max32bit * 2, max64bit
+	return total32bit * 2, total64bit
 }
 
 // appendIOMMU appends a virtual IOMMU device
