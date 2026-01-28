@@ -824,7 +824,7 @@ install_kata()
 	fi
 
 	if [[ "${file}" == *.tar.zst ]]; then
-		sudo tar --zstd -xvf "${file}"
+		sudo tar --zstd -C / -xvf "${file}"
 	else
 		sudo tar -C / -xvf "${file}"
 	fi
