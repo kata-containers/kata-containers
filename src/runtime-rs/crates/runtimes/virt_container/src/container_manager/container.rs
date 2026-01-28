@@ -330,28 +330,17 @@ impl Container {
                     exec.process
                         .passfd_io_init(hvsock_uds_path, *passfd_port)
                         .await?;
-                }
 
-                if let Err(e) = inner.start_exec_process(process).await {
-                    let device_manager = self.resource_manager.get_device_manager().await;
-                    let _ = inner.stop_process(process, true, &device_manager).await;
-                    return Err(e).context("enter process");
-                }
-
-                {
-                    let exec = inner
-                        .exec_processes
-                        .get(&process.exec_id)
-                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
-                    if exec.process.height != 0 && exec.process.width != 0 {
-                        inner
-                            .win_resize_process(process, exec.process.height, exec.process.width)
-                            .await
-                            .context("win resize")?;
+                    if let Err(e) = inner.start_exec_process(process).await {
+                        let device_manager = self.resource_manager.get_device_manager().await;
+                        let _ = inner.stop_process(process, true, &device_manager).await;
+                        return Err(e).context("enter process");
                     }
-                }
 
-                if self.passfd_listener_addr.is_some() {
+                    self.resize_process_window(&inner, process)
+                        .await
+                        .context("win resize")?;
+
                     // In passfd io mode, we don't bother with the IO.
                     // We send `WaitProcessRequest` immediately to the agent
                     // and wait for the response in a separate thread.
@@ -364,20 +353,47 @@ impl Container {
                         .passfd_io_wait(containers, self.agent.clone())
                         .await?;
                 } else {
-                    // In legacy io mode, we handle IO by polling the agent.
-                    // When IO is done, we send `WaitProcessRequest` to agent
-                    // to get the exit status.
-                    let container_io =
-                        inner.new_container_io(process).await.context("io stream")?;
+                    // resize window when process height/width > 0.
+                    self.resize_process_window(&inner, process)
+                        .await
+                        .context("resize window")?;
 
                     let exec = inner
                         .exec_processes
                         .get_mut(&process.exec_id)
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+
+                    let oci_process = exec.oci_process.clone();
+                    let process_id = process.clone();
+                    let agent = self.agent.clone();
+
                     exec.process
-                        .start_io_and_wait(containers, self.agent.clone(), container_io)
+                        .start_io_exec_and_wait(
+                            containers,
+                            self.agent.clone(),
+                            process_id.clone(),
+                            move || {
+                                let agent = agent.clone();
+                                let process_id = process_id.clone();
+                                let oci_process = oci_process.clone();
+                                async move {
+                                    agent
+                                        .exec_process(agent::ExecProcessRequest {
+                                            process_id: process_id.into(),
+                                            string_user: None,
+                                            process: Some(oci_process),
+                                            stdin_port: None,
+                                            stdout_port: None,
+                                            stderr_port: None,
+                                        })
+                                        .await
+                                        .context("exec process")?;
+                                    Ok(())
+                                }
+                            },
+                        )
                         .await
-                        .context("start io and wait")?;
+                        .context("start io exec and wait")?;
                 }
             }
         }
@@ -548,6 +564,25 @@ impl Container {
             .await
             .context("agent pause container")?;
         inner.set_state(ProcessStatus::Running).await;
+
+        Ok(())
+    }
+
+    pub async fn resize_process_window(
+        &self,
+        inner: &ContainerInner,
+        process: &ContainerProcess,
+    ) -> Result<()> {
+        let exec = inner
+            .exec_processes
+            .get(&process.exec_id)
+            .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+        if exec.process.height != 0 && exec.process.width != 0 {
+            inner
+                .win_resize_process(process, exec.process.height, exec.process.width)
+                .await
+                .context("win resize")?;
+        }
 
         Ok(())
     }
