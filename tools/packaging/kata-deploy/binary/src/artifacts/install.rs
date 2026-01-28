@@ -325,10 +325,6 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
         configure_experimental_force_guest_pull(&kata_config_file).await?;
     }
 
-    if shim.contains("tdx") {
-        configure_tdx(config, shim, &kata_config_file).await?;
-    }
-
     if config.dest_dir != "/opt/kata" {
         adjust_installation_prefix(config, shim, &kata_config_file).await?;
     }
@@ -593,138 +589,6 @@ async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<(
     set_toml_bool_to_true(config_file, "runtime.experimental_force_guest_pull")
 }
 
-async fn configure_tdx(config: &Config, _shim: &str, config_file: &Path) -> Result<()> {
-    let os_release_paths = ["/host/etc/os-release", "/host/usr/lib/os-release"];
-    let mut os_release_content = String::new();
-    for path in &os_release_paths {
-        if Path::new(path).exists() {
-            os_release_content = fs::read_to_string(path)?;
-            break;
-        }
-    }
-
-    let id = extract_os_release_field(&os_release_content, "ID");
-    let version_id = extract_os_release_field(&os_release_content, "VERSION_ID");
-
-    match (id.as_deref(), version_id.as_deref()) {
-        (Some("ubuntu"), Some(v @ ("24.04" | "25.04" | "25.10"))) => {
-            tdx_supported(config, "ubuntu", v, config_file).await?;
-        }
-        (Some("ubuntu"), Some(v)) => {
-            log::warn!(
-                "Distro ubuntu {} does not support TDX and the TDX related runtime classes will not work in your cluster!",
-                v
-            );
-        }
-        (Some("ubuntu"), None) => {
-            log::warn!(
-                "Distro ubuntu does not have VERSION_ID and the TDX related runtime classes will not work in your cluster!"
-            );
-        }
-        (Some("centos"), Some("9")) => {
-            tdx_supported(config, "centos", "9", config_file).await?;
-        }
-        (Some("centos"), Some(v)) => {
-            log::warn!(
-                "Distro centos {} does not support TDX and the TDX related runtime classes will not work in your cluster!",
-                v
-            );
-        }
-        (Some("centos"), None) => {
-            log::warn!(
-                "Distro centos does not have VERSION_ID and the TDX related runtime classes will not work in your cluster!"
-            );
-        }
-        (Some(distro), _) => {
-            log::warn!(
-                "Distro {} does not support TDX and the TDX related runtime classes will not work in your cluster!",
-                distro
-            );
-        }
-        (None, _) => {
-            log::warn!(
-                "Could not determine OS distro and the TDX related runtime classes will not work in your cluster!"
-            );
-        }
-    }
-
-    Ok(())
-}
-
-fn extract_os_release_field(content: &str, field: &str) -> Option<String> {
-    for line in content.lines() {
-        if let Some((key, value)) = line.split_once('=') {
-            if key == field {
-                return Some(value.trim_matches('"').to_string());
-            }
-        }
-    }
-    None
-}
-
-async fn tdx_supported(
-    _config: &Config,
-    distro: &str,
-    version: &str,
-    config_file: &Path,
-) -> Result<()> {
-    let qemu_path = match distro {
-        "ubuntu" => "/usr/bin/qemu-system-x86_64",
-        "centos" => "/usr/libexec/qemu-kvm",
-        _ => return Ok(()),
-    };
-
-    let ovmf_path = match distro {
-        "ubuntu" => "/usr/share/ovmf/OVMF.fd",
-        "centos" => "/usr/share/edk2/ovmf/OVMF.inteltdx.fd",
-        _ => return Ok(()),
-    };
-
-    let current_qemu =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.path").unwrap_or_default();
-    if current_qemu.contains("PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT") {
-        log::debug!(
-            "Updating hypervisor.qemu.path in {}: old=\"{}\" new=\"{}\"",
-            config_file.display(),
-            current_qemu,
-            qemu_path
-        );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.path",
-            &format!("\"{qemu_path}\""),
-        )?;
-    }
-
-    let current_ovmf =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.firmware").unwrap_or_default();
-    if current_ovmf.contains("PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT") {
-        log::debug!(
-            "Updating hypervisor.qemu.firmware in {}: old=\"{}\" new=\"{}\"",
-            config_file.display(),
-            current_ovmf,
-            ovmf_path
-        );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.firmware",
-            &format!("\"{ovmf_path}\""),
-        )?;
-    }
-
-    let instructions = match distro {
-        "ubuntu" => "https://github.com/canonical/tdx/tree/3.3",
-        "centos" => "https://sigs.centos.org/virt/tdx",
-        _ => "",
-    };
-
-    info!(
-        "In order to use the tdx related runtime classes, ensure TDX is properly configured for {distro} {version} by following the instructions provided at: {instructions}"
-    );
-
-    Ok(())
-}
-
 async fn adjust_installation_prefix(config: &Config, shim: &str, config_file: &Path) -> Result<()> {
     let content = fs::read_to_string(config_file)?;
 
@@ -896,27 +760,6 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_os_release_field() {
-        let content = r#"ID=ubuntu
-VERSION_ID="24.04"
-"#;
-        assert_eq!(extract_os_release_field(content, "ID"), Some("ubuntu".to_string()));
-        assert_eq!(extract_os_release_field(content, "VERSION_ID"), Some("24.04".to_string()));
-    }
-
-    #[test]
-    fn test_extract_os_release_field_empty() {
-        let content = "";
-        assert_eq!(extract_os_release_field(content, "ID"), None);
-    }
-
-    #[test]
-    fn test_extract_os_release_field_missing() {
-        let content = "ID=ubuntu\n";
-        assert_eq!(extract_os_release_field(content, "VERSION_ID"), None);
-    }
-
-    #[test]
     fn test_get_hypervisor_name_qemu_variants() {
         // Test all QEMU variants
         assert_eq!(get_hypervisor_name("qemu").unwrap(), "qemu");
@@ -974,50 +817,6 @@ VERSION_ID="24.04"
             err_msg.contains("Unknown shim 'custom'"),
             "Error message should mention the custom shim"
         );
-    }
-
-    #[test]
-    fn test_tdx_qemu_path_ubuntu() {
-        // Test TDX QEMU path resolution for Ubuntu
-        let qemu_path = match "ubuntu" {
-            "ubuntu" => "/usr/bin/qemu-system-x86_64",
-            "centos" => "/usr/libexec/qemu-kvm",
-            _ => "",
-        };
-        assert_eq!(qemu_path, "/usr/bin/qemu-system-x86_64");
-    }
-
-    #[test]
-    fn test_tdx_qemu_path_centos() {
-        // Test TDX QEMU path resolution for CentOS
-        let qemu_path = match "centos" {
-            "ubuntu" => "/usr/bin/qemu-system-x86_64",
-            "centos" => "/usr/libexec/qemu-kvm",
-            _ => "",
-        };
-        assert_eq!(qemu_path, "/usr/libexec/qemu-kvm");
-    }
-
-    #[test]
-    fn test_tdx_ovmf_path_ubuntu() {
-        // Test TDX OVMF path resolution for Ubuntu
-        let ovmf_path = match "ubuntu" {
-            "ubuntu" => "/usr/share/ovmf/OVMF.fd",
-            "centos" => "/usr/share/edk2/ovmf/OVMF.inteltdx.fd",
-            _ => "",
-        };
-        assert_eq!(ovmf_path, "/usr/share/ovmf/OVMF.fd");
-    }
-
-    #[test]
-    fn test_tdx_ovmf_path_centos() {
-        // Test TDX OVMF path resolution for CentOS
-        let ovmf_path = match "centos" {
-            "ubuntu" => "/usr/share/ovmf/OVMF.fd",
-            "centos" => "/usr/share/edk2/ovmf/OVMF.inteltdx.fd",
-            _ => "",
-        };
-        assert_eq!(ovmf_path, "/usr/share/edk2/ovmf/OVMF.inteltdx.fd");
     }
 
     #[test]
