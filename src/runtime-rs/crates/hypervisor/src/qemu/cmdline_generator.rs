@@ -1997,6 +1997,40 @@ impl ToQemuParams for ObjectTdxGuest {
     }
 }
 
+#[derive(Debug)]
+struct ObjectMemBackendMemfd {
+    id: String,
+    size: u32,
+    share: String,
+}
+
+impl ObjectMemBackendMemfd {
+    fn new(id: &str, is_private: bool, mem_size: u32) -> Self {
+        ObjectMemBackendMemfd {
+            id: id.to_string(),
+            size: mem_size,
+            share: if is_private {
+                "off".to_string()
+            } else {
+                "on".to_string()
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectMemBackendMemfd {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("memory-backend-memfd".to_owned());
+        params.push(format!("id=ram{}", self.id));
+        params.push(format!("size={}M", self.size));
+        params.push(format!("share={}", self.share));
+
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
 /// PCIeRootPortDevice directly attached onto the root bus
 /// -device pcie-root-port,id=rp0,bus=pcie.0,chassis=0,slot=0,multifunction=off,pref64-reserve=<X>B,mem-reserve=<Y>B
 #[derive(Debug, Default)]
@@ -2577,14 +2611,20 @@ impl<'a> QemuCmdLine<'a> {
         qgs_port: u32,
         mrconfigid: &Option<String>,
         debug: bool,
+        memory_size: u32,
     ) {
+        let mem_backend_object = ObjectMemBackendMemfd::new(id, true, memory_size);
+        self.devices.push(Box::new(mem_backend_object));
+
         let tdx_object = ObjectTdxGuest::new(id, mrconfigid.clone(), qgs_port, debug);
         self.devices.push(Box::new(tdx_object));
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
+            .set_kernel_irqchip("split")
             .set_confidential_guest_support("tdx")
-            .set_nvdimm(false);
+            .set_nvdimm(false)
+            .set_memory_backend(format!("ram{}", id).as_str());
     }
 
     /// Note: add_pcie_root_port and add_pcie_switch_port follow kata-runtime's related implementations of vfio devices.
