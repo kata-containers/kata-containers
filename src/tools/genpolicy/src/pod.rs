@@ -1060,9 +1060,7 @@ impl Container {
         }
     }
 
-    // Get the number of NVIDIA passthrough GPUs requested in resource limits.
-    // Returns the count from "nvidia.com/pgpu" if present.
-    /// Count NVIDIA passthrough GPU requests using an explicit allowlist of resource keys.
+    // Count NVIDIA passthrough GPU requests using an explicit allowlist of resource keys.
     pub fn get_nvidia_pgpu_count(&self, pgpu_resource_keys: &[String]) -> Option<usize> {
         let limits = self.resources.as_ref()?.limits.as_ref()?;
         sum_limits_by_keys(limits, pgpu_resource_keys)
@@ -1189,11 +1187,13 @@ mod tests {
             "nvidia.com/pgpu".to_string(),
             "nvidia.com/GH100".to_string(),
         ];
-        let mut c = Container::default();
-        c.resources = Some(ResourceRequirements {
-            requests: None,
-            limits: Some(limits),
-        });
+        let c = Container {
+            resources: Some(ResourceRequirements {
+                requests: None,
+                limits: Some(limits),
+            }),
+            ..Default::default()
+        };
 
         assert_eq!(c.get_nvidia_pgpu_count(&keys), Some(3));
     }

@@ -197,17 +197,17 @@
             ]
         }
     },
-    "device_annotations": {
+    "devices": {
         "vfio": {
             "device_path": "/dev/vfio/devices/vfio",
-            "key_regex": "^cdi\\.k8s\\.io/vfio[0-9]+$",
-            "nvidia_gpu_value_regex": "^nvidia\\.com/gpu=[0-9]+$",
-            "nvidia_gpu_gk_device_type": "vfio-pci-gk",
-            "nvidia_pgpu_resource_keys": [
-                "nvidia.com/pgpu",
-                "nvidia.com/GH100_H100_PCIE",
-                "nvidia.com/GH100_H100L_94GB"
-            ]
+            "anno_key_regex": "^cdi\\.k8s\\.io/vfio[0-9]+$",
+            "nvidia": {
+                "gpu_anno_value_regex": "^nvidia\\.com/gpu=[0-9]+$",
+                "gpu_gk_device_type": "vfio-pci-gk",
+                "pgpu_resource_keys": [
+                    "nvidia.com/pgpu"
+                ]
+            }
         }
     },
     "mount_destinations": [
