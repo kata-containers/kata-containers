@@ -15,6 +15,8 @@ updates:
       - "/src/tools/trace-forwarder"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
     ignore:
     # rust-vmm repos might cause incompatibilities on patch versions, so
     # lets handle them manually for now.
@@ -85,8 +87,12 @@ updates:
       - "src/tools/csi-kata-directvolume"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "monthly"
+    cooldown:
+      default-days: 7

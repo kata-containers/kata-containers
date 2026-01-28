@@ -37,6 +37,9 @@ jobs:
           - k3s
           - rke2
           - microk8s
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}-${{ matrix.k8s }}
+      cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
