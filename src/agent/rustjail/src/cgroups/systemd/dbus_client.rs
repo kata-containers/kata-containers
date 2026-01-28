@@ -50,24 +50,24 @@ impl SystemdInterface for DBusClient {
 
         // enable CPUAccounting & MemoryAccounting & (Block)IOAccounting by default
         let mut properties: Properties = vec![
-            ("CPUAccounting", Value::Bool(true)),
-            ("DefaultDependencies", Value::Bool(false)),
-            ("MemoryAccounting", Value::Bool(true)),
-            ("TasksAccounting", Value::Bool(true)),
-            ("Description", Value::Str("kata-agent container".into())),
-            ("PIDs", Value::Array(vec![pid as u32].into())),
+            &("CPUAccounting", &Value::Bool(true)),
+            &("DefaultDependencies", &Value::Bool(false)),
+            &("MemoryAccounting", &Value::Bool(true)),
+            &("TasksAccounting", &Value::Bool(true)),
+            &("Description", &Value::Str("kata-agent container".into())),
+            &("PIDs", &Value::Array(vec![pid as u32].into())),
         ];
 
         match *cg_hierarchy {
-            CgroupHierarchy::Legacy => properties.push(("IOAccounting", Value::Bool(true))),
-            CgroupHierarchy::Unified => properties.push(("BlockIOAccounting", Value::Bool(true))),
+            CgroupHierarchy::Legacy => properties.push(&("IOAccounting", &Value::Bool(true))),
+            CgroupHierarchy::Unified => properties.push(&("BlockIOAccounting", &Value::Bool(true))),
         }
 
         if self.unit_name.ends_with(SLICE_SUFFIX) {
-            properties.push(("Wants", Value::Str(parent.into())));
+            properties.push(&("Wants", &Value::Str(parent.into())));
         } else {
-            properties.push(("Slice", Value::Str(parent.into())));
-            properties.push(("Delegate", Value::Bool(true)));
+            properties.push(&("Slice", &Value::Str(parent.into())));
+            properties.push(&("Delegate", &Value::Bool(true)));
         }
 
         proxy
