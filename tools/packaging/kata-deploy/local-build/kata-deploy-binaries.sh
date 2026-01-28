@@ -1042,7 +1042,7 @@ install_shimv2() {
 	if [ "${MEASURED_ROOTFS}" = "yes" ]; then
 		local found_any=""
 		for variant in confidential nvidia-gpu-confidential; do
-			local image_conf_tarball="$(find "${workdir}" -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
+			local image_conf_tarball="$(find "${workdir}" -maxdepth 1 -name "kata-static-rootfs-image-${variant}.tar.zst" 2>/dev/null | head -n 1)"
 			# only one variant may be built at a time so we need to
 			# skip one or the other if not available
 			[ -f "${image_conf_tarball}" ] || continue
