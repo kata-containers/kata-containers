@@ -472,7 +472,7 @@ allow_log_directory(p_oci, i_oci) if {
 allow_devices(p_devices, i_devices, i_oci) if {
     print("allow_devices: start")
 
-    vfio_device_path := policy_data.device_annotations.vfio.device_path
+    vfio_device_path := policy_data.devices.vfio.device_path
 
     p_volume_devices := [d | d := p_devices[_]; d.container_path != vfio_device_path]
     i_volume_devices := [d | d := i_devices[_]; not startswith(d.container_path, vfio_device_path)]
@@ -515,7 +515,7 @@ allow_vfio_device(p_vfio_devices, i_vfio_device) if {
 
     some p_device in p_vfio_devices
 
-    vfio_device_path := policy_data.device_annotations.vfio.device_path
+    vfio_device_path := policy_data.devices.vfio.device_path
     startswith(i_vfio_device.container_path, vfio_device_path)
     suffix := trim_prefix(i_vfio_device.container_path, vfio_device_path)
     regex.match("^[0-9]+$", suffix)
@@ -556,7 +556,7 @@ allow_vfio_device_cdi_correlation(p_vfio_devices, i_vfio_devices, i_oci) if {
 
     count(i_vfio_devices) == count(p_vfio_devices)
 
-    vfio_device_path := policy_data.device_annotations.vfio.device_path
+    vfio_device_path := policy_data.devices.vfio.device_path
     vfio_numbers := [suffix |
         d := i_vfio_devices[_];
         suffix := trim_prefix(d.container_path, vfio_device_path);
