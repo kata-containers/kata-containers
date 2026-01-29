@@ -45,8 +45,8 @@ install_nvidia_fabricmanager() {
 		return
 	}
 	echo "chroot: Install NVIDIA fabricmanager"
-	eval "${APT_INSTALL}" nvidia-fabricmanager libnvidia-nscq
-	apt-mark hold nvidia-fabricmanager libnvidia-nscq
+	eval "${APT_INSTALL}" nvidia-fabricmanager libnvidia-nscq nvlsm
+	apt-mark hold nvidia-fabricmanager libnvidia-nscq nvlsm
 }
 
 install_userspace_components() {

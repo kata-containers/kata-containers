@@ -145,8 +145,8 @@ chisseled_nvswitch() {
 
 	mkdir -p usr/share/nvidia/nvswitch
 
-	cp -a "${stage_one}"/usr/bin/nv-fabricmanager 	bin/.
-	cp -a "${stage_one}"/usr/share/nvidia/nvswitch usr/share/nvidia/.
+	cp -a "${stage_one}"/usr/bin/nv-fabricmanager	bin/.
+	cp -a "${stage_one}"/usr/share/nvidia/nvswitch	usr/share/nvidia/.
 
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
 
@@ -156,6 +156,14 @@ chisseled_nvswitch() {
 	# if the specified log file can't be opened or the path is empty.
 	# LOG_FILE_NAME=/var/log/fabricmanager.log -> setting to empty for stderr -> kmsg
 	sed -i 's|^LOG_FILE_NAME=.*|LOG_FILE_NAME=|' usr/share/nvidia/nvswitch/fabricmanager.cfg
+
+	# NVLINK SubnetManager dependencies
+	local nvlsm=usr/share/nvidia/nvlsm
+	mkdir -p "${nvlsm}"
+
+	cp -a "${stage_one}"/opt/nvidia/nvlsm/lib/libgrpc_mgr.so	lib/.
+	cp -a "${stage_one}"/opt/nvidia/nvlsm/sbin/nvlsm			sbin/.
+	cp -a "${stage_one}/${nvlsm}"/*.conf						"${nvlsm}"/.
 }
 
 chisseled_dcgm() {
