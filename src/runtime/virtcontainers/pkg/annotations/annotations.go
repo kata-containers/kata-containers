@@ -84,6 +84,9 @@ const (
 	// KernelParams is a sandbox annotation for passing additional guest kernel parameters.
 	KernelParams = kataAnnotHypervisorPrefix + "kernel_params"
 
+	// KernelVerityParams is a sandbox annotation for passing guest dm-verity parameters.
+	KernelVerityParams = kataAnnotHypervisorPrefix + "kernel_verity_params"
+
 	// MachineType is a sandbox annotation to specify the type of machine being emulated by the hypervisor.
 	MachineType = kataAnnotHypervisorPrefix + "machine_type"
 
