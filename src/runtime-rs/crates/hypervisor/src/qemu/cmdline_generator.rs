@@ -2545,6 +2545,9 @@ impl<'a> QemuCmdLine<'a> {
         firmware: &str,
         host_data: &Option<String>,
     ) {
+        // For SEV-SNP, memory overcommit is not supported. we only set the memory size.
+        self.memory.set_maxmem_size(0).set_num_slots(0);
+
         let sev_snp_object =
             ObjectSevSnpGuest::new(true, cbitpos, phys_addr_reduction, host_data.clone());
         self.devices.push(Box::new(sev_snp_object));
