@@ -76,6 +76,164 @@ const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
 
 const KERNEL_PARAM_DELIMITER: &str = " ";
+/// Block size (in bytes) used by dm-verity block size validation.
+pub const VERITY_BLOCK_SIZE_BYTES: u64 = 512;
+/// Kernel dm-verity mode handled by the initramfs.
+pub const VERITY_MODE_INITRAMFS: &str = "initramfs";
+/// Kernel dm-verity mode handled directly by the kernel.
+pub const VERITY_MODE_KERNELINIT: &str = "kernelinit";
+
+/// Parsed kernel dm-verity parameters.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct KernelVerityParams {
+    /// Verity mode ("kernelinit" or "initramfs").
+    pub mode: String,
+    /// Root hash value.
+    pub root_hash: String,
+    /// Salt used to generate verity hash tree.
+    pub salt: String,
+    /// Number of data blocks in the verity mapping.
+    pub data_blocks: u64,
+    /// Data block size in bytes.
+    pub data_block_size: u64,
+    /// Hash block size in bytes.
+    pub hash_block_size: u64,
+}
+
+/// Parse and validate kernel dm-verity parameters.
+pub fn parse_kernel_verity_params(params: &str) -> Result<Option<KernelVerityParams>> {
+    if params.trim().is_empty() {
+        return Ok(None);
+    }
+
+    let mut values = HashMap::new();
+    for field in params.split(',') {
+        let field = field.trim();
+        if field.is_empty() {
+            continue;
+        }
+        let mut parts = field.splitn(2, '=');
+        let key = parts.next().unwrap_or("");
+        let value = parts.next().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid kernel_verity_params entry: {field}"),
+            )
+        })?;
+        if key.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid kernel_verity_params entry: {field}"),
+            ));
+        }
+        values.insert(key.to_string(), value.to_string());
+    }
+
+    let mode = values
+        .get("mode")
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing kernel_verity_params mode",
+            )
+        })?
+        .to_string();
+    if mode != VERITY_MODE_KERNELINIT && mode != VERITY_MODE_INITRAMFS {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Invalid kernel_verity_params mode: {mode}"),
+        ));
+    }
+
+    let root_hash = values
+        .get("root_hash")
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing kernel_verity_params root_hash",
+            )
+        })?
+        .to_string();
+
+    let salt = values.get("salt").cloned().unwrap_or_default();
+
+    let parse_uint_field = |name: &str| -> Result<u64> {
+        match values.get(name) {
+            Some(value) if !value.is_empty() => value.parse::<u64>().map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("Invalid kernel_verity_params {} '{}': {}", name, value, e),
+                )
+            }),
+            _ => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Missing kernel_verity_params {name}"),
+            )),
+        }
+    };
+
+    let (data_blocks, data_block_size, hash_block_size) = if mode == VERITY_MODE_KERNELINIT {
+        let data_blocks = parse_uint_field("data_blocks")?;
+        let data_block_size = parse_uint_field("data_block_size")?;
+        let hash_block_size = parse_uint_field("hash_block_size")?;
+
+        if salt.is_empty() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Missing kernel_verity_params salt",
+            ));
+        }
+        if data_blocks == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid kernel_verity_params data_blocks: must be non-zero",
+            ));
+        }
+        if data_block_size == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid kernel_verity_params data_block_size: must be non-zero",
+            ));
+        }
+        if hash_block_size == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid kernel_verity_params hash_block_size: must be non-zero",
+            ));
+        }
+        if data_block_size % VERITY_BLOCK_SIZE_BYTES != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid kernel_verity_params data_block_size: must be multiple of {}",
+                    VERITY_BLOCK_SIZE_BYTES
+                ),
+            ));
+        }
+        if hash_block_size % VERITY_BLOCK_SIZE_BYTES != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid kernel_verity_params hash_block_size: must be multiple of {}",
+                    VERITY_BLOCK_SIZE_BYTES
+                ),
+            ));
+        }
+
+        (data_blocks, data_block_size, hash_block_size)
+    } else {
+        (0, 0, 0)
+    };
+
+    Ok(Some(KernelVerityParams {
+        mode,
+        root_hash,
+        salt,
+        data_blocks,
+        data_block_size,
+        hash_block_size,
+    }))
+}
 
 lazy_static! {
     static ref HYPERVISOR_PLUGINS: Mutex<HashMap<String, Arc<dyn ConfigPlugin>>> =
@@ -443,6 +601,17 @@ impl BootInfo {
         all_params.extend(new_param_list);
 
         self.kernel_params = all_params.join(KERNEL_PARAM_DELIMITER);
+    }
+
+    /// Replace kernel dm-verity parameters after validation.
+    pub fn replace_kernel_verity_params(&mut self, new_params: &str) -> Result<()> {
+        if new_params.trim().is_empty() {
+            return Ok(());
+        }
+
+        parse_kernel_verity_params(new_params)?;
+        self.kernel_verity_params = new_params.to_string();
+        Ok(())
     }
 
     /// Validate guest kernel image annotation.
