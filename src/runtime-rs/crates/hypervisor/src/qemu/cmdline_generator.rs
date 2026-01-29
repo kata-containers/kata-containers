@@ -272,6 +272,18 @@ impl Memory {
         self.memory_backend_file = Some(mem_file.clone());
         self
     }
+
+    #[allow(dead_code)]
+    fn set_maxmem_size(&mut self, max_size: u64) -> &mut Self {
+        self.max_size = max_size;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_num_slots(&mut self, num_slots: u32) -> &mut Self {
+        self.num_slots = num_slots;
+        self
+    }
 }
 
 #[async_trait]
