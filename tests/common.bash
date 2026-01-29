@@ -1022,3 +1022,113 @@ function version_greater_than_equal() {
 		return 1
 	fi
 }
+
+# Run bats tests with proper reporting
+#
+# This function provides consistent test execution and reporting across
+# all test suites (k8s, nvidia, kata-deploy, etc.)
+#
+# Parameters:
+#	$1 - Test directory (where tests are located and reports will be saved)
+#	$2 - Array name containing test files (passed by reference)
+#
+# Environment variables:
+#	BATS_TEST_FAIL_FAST - Set to "yes" to stop at first failure (default: "no")
+#
+# Example usage:
+#	tests=("test1.bats" "test2.bats")
+#	run_bats_tests "/path/to/tests" tests
+#
+function run_bats_tests() {
+	local test_dir="$1"
+	local -n test_array=$2
+	local fail_fast="${BATS_TEST_FAIL_FAST:-no}"
+
+	local report_dir="${test_dir}/reports/$(date +'%F-%T')"
+	mkdir -p "${report_dir}"
+
+	info "Running tests with bats version: $(bats --version). Save outputs to ${report_dir}"
+
+	local tests_fail=()
+	for test_entry in "${test_array[@]}"; do
+		test_entry=$(echo "${test_entry}" | tr -d '[:space:][:cntrl:]')
+		[ -z "${test_entry}" ] && continue
+
+		info "Executing ${test_entry}"
+
+		# Output file will be prefixed with "ok" or "not_ok" based on the result
+		local out_file="${report_dir}/${test_entry}.out"
+
+		pushd "${test_dir}" > /dev/null
+		if ! bats --timing --show-output-of-passing-tests "${test_entry}" | tee "${out_file}"; then
+			tests_fail+=("${test_entry}")
+			mv "${out_file}" "$(dirname "${out_file}")/not_ok-$(basename "${out_file}")"
+			[[ "${fail_fast}" == "yes" ]] && break
+		else
+			mv "${out_file}" "$(dirname "${out_file}")/ok-$(basename "${out_file}")"
+		fi
+		popd > /dev/null
+	done
+
+	if [[ ${#tests_fail[@]} -ne 0 ]]; then
+		die "Tests FAILED from suites: ${tests_fail[*]}"
+	fi
+
+	info "All tests SUCCEEDED"
+}
+
+# Report bats test results from the reports directory
+#
+# This function displays a summary of test results and outputs from
+# the reports directory created by run_bats_tests().
+#
+# Parameters:
+#	$1 - Test directory (where reports subdirectory is located)
+#
+# Example usage:
+#	report_bats_tests "/path/to/tests"
+#
+function report_bats_tests() {
+	local test_dir="$1"
+	local reports_dir="${test_dir}/reports"
+
+	if [[ ! -d "${reports_dir}" ]]; then
+		warn "No reports directory found: ${reports_dir}"
+		return 1
+	fi
+
+	for report_dir in "${reports_dir}"/*; do
+		[[ ! -d "${report_dir}" ]] && continue
+
+		local ok=()
+		local not_ok=()
+		mapfile -t ok < <(find "${report_dir}" -name "ok-*.out" 2>/dev/null)
+		mapfile -t not_ok < <(find "${report_dir}" -name "not_ok-*.out" 2>/dev/null)
+
+		cat <<-EOF
+		SUMMARY ($(basename "${report_dir}")):
+		 Pass:  ${#ok[*]}
+		 Fail:  ${#not_ok[*]}
+		EOF
+
+		echo -e "\nSTATUSES:"
+		for out in "${not_ok[@]}" "${ok[@]}"; do
+			[[ -z "${out}" ]] && continue
+			local status
+			local bats
+			status=$(basename "${out}" | cut -d '-' -f1)
+			bats=$(basename "${out}" | cut -d '-' -f2- | sed 's/.out$//')
+			echo " ${status} ${bats}"
+		done
+
+		echo -e "\nOUTPUTS:"
+		for out in "${not_ok[@]}" "${ok[@]}"; do
+			[[ -z "${out}" ]] && continue
+			local bats
+			bats=$(basename "${out}" | cut -d '-' -f2- | sed 's/.out$//')
+			echo "::group::${bats}"
+			cat "${out}"
+			echo "::endgroup::"
+		done
+	done
+}

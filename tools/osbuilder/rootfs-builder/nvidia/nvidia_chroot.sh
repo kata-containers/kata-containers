@@ -17,14 +17,13 @@ die() {
   echo "chroot: ${msg}" >&2
   exit 1
 }
-
-run_file_name=$2
-run_fm_file_name=$3
-arch_target=$4
-nvidia_gpu_stack="$5"
-driver_version=""
-base_os="noble"
-
+arch_target="${1:?arch_target not specified}"
+nvidia_gpu_stack="${2:?nvidia_gpu_stack not specified}"
+cuda_repo_osv="${3:?cuda_repo_osv not specified}"
+cuda_repo_url="${4:?cuda_repo_url not specified}"
+cuda_repo_pkg="${5:?cuda_repo_pkg not specified}"
+tools_repo_url="${6:?tools_repo_url not specified}"
+tools_repo_pkg="${7:?tools_repo_pkg not specified}"
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -32,31 +31,6 @@ export DEBIAN_FRONTEND=noninteractive
 is_feature_enabled() {
 	local feature="$1"
 	[[ ",${nvidia_gpu_stack}," == *",${feature},"* ]]
-}
-
-set_driver_version() {
-	# Extract the driver=XXX part first, then get the value
-	if [[ "${nvidia_gpu_stack}" =~ driver=([^,]+) ]]; then
-		driver_version="${BASH_REMATCH[1]}"
-	fi
-	echo "chroot: driver_version: ${driver_version}"
-	echo "chroot:  TODO remove with new NVRC"
-	cat <<-CHROOT_EOF > "/supported-gpu.devids"
-		0x230E
-		0x2321
-		0x2322
-		0x2324
-		0x2329
-		0x232C
-		0x2330
-		0x2331
-		0x2335
-		0x2339
-		0x233A
-		0x233B
-		0x2342
-		0x2348
-	CHROOT_EOF
 }
 
 install_nvidia_ctk() {
@@ -76,13 +50,19 @@ install_nvidia_fabricmanager() {
 }
 
 install_userspace_components() {
+	# Extract the driver=XXX part first, then get the value
+	if [[ "${nvidia_gpu_stack}" =~ driver=([^,]+) ]]; then
+		driver_version="${BASH_REMATCH[1]}"
+	fi
+	echo "chroot: driver_version: ${driver_version}"
+
 	eval "${APT_INSTALL}" nvidia-driver-pinning-"${driver_version}"
-	eval "${APT_INSTALL}" nvidia-imex nvidia-firmware        \
+	eval "${APT_INSTALL}" nvidia-imex nvidia-firmware    \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
 		libnvidia-nscq
 
-	apt-mark hold nvidia-imex nvidia-firmware                \
+	apt-mark hold nvidia-imex nvidia-firmware            \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
 		libnvidia-nscq
@@ -111,37 +91,45 @@ setup_apt_repositories() {
 	rm -f /etc/apt/sources.list.d/*
 
 	key="/usr/share/keyrings/ubuntu-archive-keyring.gpg"
+	comp="main restricted universe multiverse"
 
-	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${base_os}".list
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os} main restricted universe multiverse
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-updates main restricted universe multiverse
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-security main restricted universe multiverse
-		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${base_os}-backports main restricted universe multiverse
+	cat <<-CHROOT_EOF > /etc/apt/sources.list.d/"${cuda_repo_osv}".list
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv} ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv}-updates ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv}-security ${comp}
+		deb [arch=${deb_arch} signed-by=${key}] http://${mirror} ${cuda_repo_osv}-backports ${comp}
 	CHROOT_EOF
 
-	local arch="${arch_target}"
-	[[ ${arch_target} == "aarch64" ]] && arch="sbsa"
-	# shellcheck disable=SC2015
-	[[ ${base_os} == "noble" ]] && osver="ubuntu2404" || die "Unknown base_os ${base_os} used"
+	# Tools repository is always needed for toolkit, DCGM and other helpers
+	curl -fsSL -O "${tools_repo_url}/${tools_repo_pkg}"
+	dpkg -i "${tools_repo_pkg}" && rm -f "${tools_repo_pkg}"
 
-	keyring="cuda-keyring_1.1-1_all.deb"
-	# Use consistent curl flags: -fsSL for download, -O for output
-	curl -fsSL -O "https://developer.download.nvidia.com/compute/cuda/repos/${osver}/${arch}/${keyring}"
-	dpkg -i "${keyring}" && rm -f "${keyring}"
+	# Remote or local CUDA repository
+	curl -fsSL -O "${cuda_repo_url}/${cuda_repo_pkg}"
+	dpkg -i "${cuda_repo_pkg}" && rm -f "${cuda_repo_pkg}"
 
-	# Set priorities: Ubuntu repos highest, NVIDIA Container Toolkit next, CUDA repo blocked for driver packages
+	# Copy keyring if local repo was installed
+	keyring="/var/cuda-repo-*-local/cuda-*-keyring.gpg"
+	# shellcheck disable=SC2128 # Intentional: expect exactly one match
+	[[ -e "${keyring}" ]] && cp "${keyring}" /usr/share/keyrings/
+
+	# Set priorities: CUDA repos highest, Ubuntu non-driver next, Ubuntu blocked for driver packages
 	cat <<-CHROOT_EOF > /etc/apt/preferences.d/nvidia-priority
 		Package: *
-		Pin: $(dirname "${mirror}")
+		Pin: origin $(dirname "${mirror}")
 		Pin-Priority: 400
 
 		Package: nvidia-* libnvidia-*
-		Pin: $(dirname "${mirror}")
+		Pin: origin $(dirname "${mirror}")
 		Pin-Priority: -1
 
 		Package: *
 		Pin: origin developer.download.nvidia.com
 		Pin-Priority: 800
+
+		Package: *
+		Pin: origin ""
+		Pin-Priority: 900
 	CHROOT_EOF
 
 	apt update
@@ -181,7 +169,6 @@ cleanup_rootfs() {
 # Start of script
 echo "chroot: Setup NVIDIA GPU rootfs stage one"
 
-set_driver_version
 setup_apt_repositories
 install_userspace_components
 install_nvidia_fabricmanager

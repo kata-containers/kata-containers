@@ -126,5 +126,6 @@ jobs:
 
       - name: Delete CoCo KBS
         if: always() && matrix.environment.name != 'nvidia-gpu'
+        timeout-minutes: 10
         run: |
           bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs

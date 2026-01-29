@@ -74,43 +74,21 @@ impl KernelParams {
     pub(crate) fn new_rootfs_kernel_params(rootfs_driver: &str, rootfs_type: &str) -> Result<Self> {
         let mut params = vec![];
 
-        // DAX is disabled on aarch64 due to kernel panic in dax_disassociate_entry
-        // with virtio-pmem on kernel 6.18.x
-        #[cfg(target_arch = "aarch64")]
-        let use_dax = false;
-        #[cfg(not(target_arch = "aarch64"))]
-        let use_dax = true;
-
         match rootfs_driver {
             VM_ROOTFS_DRIVER_PMEM => {
                 params.push(Param::new("root", VM_ROOTFS_ROOT_PMEM));
                 match rootfs_type {
                     VM_ROOTFS_FILESYSTEM_EXT4 => {
-                        if use_dax {
-                            params.push(Param::new(
-                                "rootflags",
-                                "dax,data=ordered,errors=remount-ro ro",
-                            ));
-                        } else {
-                            params.push(Param::new(
-                                "rootflags",
-                                "data=ordered,errors=remount-ro ro",
-                            ));
-                        }
+                        params.push(Param::new(
+                            "rootflags",
+                            "dax,data=ordered,errors=remount-ro ro",
+                        ));
                     }
                     VM_ROOTFS_FILESYSTEM_XFS => {
-                        if use_dax {
-                            params.push(Param::new("rootflags", "dax ro"));
-                        } else {
-                            params.push(Param::new("rootflags", "ro"));
-                        }
+                        params.push(Param::new("rootflags", "dax ro"));
                     }
                     VM_ROOTFS_FILESYSTEM_EROFS => {
-                        if use_dax {
-                            params.push(Param::new("rootflags", "dax ro"));
-                        } else {
-                            params.push(Param::new("rootflags", "ro"));
-                        }
+                        params.push(Param::new("rootflags", "dax ro"));
                     }
                     _ => {
                         return Err(anyhow!("Unsupported rootfs type {}", rootfs_type));
@@ -255,22 +233,6 @@ mod tests {
 
     #[test]
     fn test_rootfs_kernel_params() {
-        // DAX is disabled on aarch64
-        #[cfg(target_arch = "aarch64")]
-        let ext4_pmem_rootflags = "data=ordered,errors=remount-ro ro";
-        #[cfg(not(target_arch = "aarch64"))]
-        let ext4_pmem_rootflags = "dax,data=ordered,errors=remount-ro ro";
-
-        #[cfg(target_arch = "aarch64")]
-        let xfs_pmem_rootflags = "ro";
-        #[cfg(not(target_arch = "aarch64"))]
-        let xfs_pmem_rootflags = "dax ro";
-
-        #[cfg(target_arch = "aarch64")]
-        let erofs_pmem_rootflags = "ro";
-        #[cfg(not(target_arch = "aarch64"))]
-        let erofs_pmem_rootflags = "dax ro";
-
         let tests = &[
             // EXT4
             TestData {
@@ -279,7 +241,7 @@ mod tests {
                 expect_params: KernelParams {
                     params: [
                         Param::new("root", VM_ROOTFS_ROOT_PMEM),
-                        Param::new("rootflags", ext4_pmem_rootflags),
+                        Param::new("rootflags", "dax,data=ordered,errors=remount-ro ro"),
                         Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EXT4),
                     ]
                     .to_vec(),
@@ -306,7 +268,7 @@ mod tests {
                 expect_params: KernelParams {
                     params: [
                         Param::new("root", VM_ROOTFS_ROOT_PMEM),
-                        Param::new("rootflags", xfs_pmem_rootflags),
+                        Param::new("rootflags", "dax ro"),
                         Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_XFS),
                     ]
                     .to_vec(),
@@ -333,7 +295,7 @@ mod tests {
                 expect_params: KernelParams {
                     params: [
                         Param::new("root", VM_ROOTFS_ROOT_PMEM),
-                        Param::new("rootflags", erofs_pmem_rootflags),
+                        Param::new("rootflags", "dax ro"),
                         Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EROFS),
                     ]
                     .to_vec(),

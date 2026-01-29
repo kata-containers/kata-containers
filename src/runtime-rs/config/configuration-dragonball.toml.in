@@ -92,10 +92,11 @@ default_maxvcpus = @DEFMAXVCPUS_DB@
 # * Until 5 PCI bridges can be cold plugged per VM.
 #   This limitation could be a bug in the kernel
 # Default number of bridges per SB/VM:
-# unspecified or 0   --> will be set to @DEFBRIDGES@
+# unspecified or 0   --> will be set to @DEF_DGB_BRIDGES@
 # > 1 <= 5           --> will be set to the specified number
 # > 5                --> will be set to 5
-default_bridges = @DEFBRIDGES@
+# As Dragonball VMM does not support PCI hotplug options, it should be set 0.
+default_bridges = @DEF_DGB_BRIDGES@
 
 # Reclaim guest freed memory.
 # Enabling this will result in the VM balloon device having f_reporting=on set.

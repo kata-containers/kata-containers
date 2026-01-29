@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::{self, Result};
 use std::path::{Path, PathBuf};
@@ -206,8 +206,8 @@ impl TomlConfig {
     }
 
     /// Get agent-specfic kernel parameters for further Hypervisor config revision
-    pub fn get_agent_kernel_params(&self) -> Result<HashMap<String, String>> {
-        let mut kv = HashMap::new();
+    pub fn get_agent_kernel_params(&self) -> Result<BTreeMap<String, String>> {
+        let mut kv = BTreeMap::new();
         if let Some(cfg) = self.agent.get(&self.runtime.agent_name) {
             if cfg.debug {
                 kv.insert(LOG_LEVEL_OPTION.to_string(), LOG_LEVEL_DEBUG.to_string());

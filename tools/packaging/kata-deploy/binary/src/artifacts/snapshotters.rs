@@ -85,7 +85,11 @@ pub async fn configure_snapshotter(
     runtime: &str,
     config: &Config,
 ) -> Result<()> {
-    let pluginid = if fs::read_to_string(&config.containerd_conf_file)
+    // Get all paths and drop-in capability in one call
+    let paths = config.get_containerd_paths(runtime).await?;
+    
+    // Read containerd version from config_file to determine pluginid
+    let pluginid = if fs::read_to_string(&paths.config_file)
         .unwrap_or_default()
         .contains("version = 3")
     {
@@ -94,28 +98,21 @@ pub async fn configure_snapshotter(
         "\"io.containerd.grpc.v1.cri\".containerd"
     };
 
-    let use_drop_in =
-        crate::runtime::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
-
-    let configuration_file: std::path::PathBuf = if use_drop_in {
-        // Ensure we have the absolute path with /host prefix
-        let base_path = if config.containerd_drop_in_conf_file.starts_with("/host") {
-            // Already has /host prefix
-            Path::new(&config.containerd_drop_in_conf_file).to_path_buf()
+    let configuration_file: std::path::PathBuf = if paths.use_drop_in {
+        // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)
+        let base_path = if paths.drop_in_file.starts_with("/etc/containerd/") {
+            Path::new(&paths.drop_in_file).to_path_buf()
         } else {
-            // Need to add /host prefix
-            let drop_in_path = config.containerd_drop_in_conf_file.trim_start_matches('/');
+            // Need to add /host prefix for paths outside /etc/containerd
+            let drop_in_path = paths.drop_in_file.trim_start_matches('/');
             Path::new("/host").join(drop_in_path)
         };
 
         log::debug!("Snapshotter using drop-in config file: {:?}", base_path);
         base_path
     } else {
-        log::debug!(
-            "Snapshotter using main config file: {}",
-            config.containerd_conf_file
-        );
-        Path::new(&config.containerd_conf_file).to_path_buf()
+        log::debug!("Snapshotter using main config file: {}", paths.config_file);
+        Path::new(&paths.config_file).to_path_buf()
     };
 
     match snapshotter {

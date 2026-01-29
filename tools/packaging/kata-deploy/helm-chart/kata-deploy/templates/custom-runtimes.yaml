@@ -1,0 +1,58 @@
+{{- if and .Values.customRuntimes.enabled .Values.customRuntimes.runtimes }}
+---
+# ConfigMap containing custom runtime configurations and drop-in files
+# This is mounted into the kata-deploy pod at /custom-configs/
+apiVersion: v1
+kind: ConfigMap
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-custom-configs-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-custom-configs
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kata-deploy.labels" . | nindent 4 }}
+data:
+  # Format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+  custom-runtimes.list: |
+{{- range $name, $runtime := .Values.customRuntimes.runtimes }}
+{{- $handler := "" }}
+{{- /* Extract handler from runtimeClass YAML */ -}}
+{{- if $runtime.runtimeClass }}
+{{- range (splitList "\n" $runtime.runtimeClass) }}
+{{- $line := trim . }}
+{{- if hasPrefix "handler:" $line }}
+{{- $handler = trim (trimPrefix "handler:" $line) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $handler }}
+    {{ $handler }}:{{ $runtime.baseConfig }}:{{ $runtime.containerd.snapshotter | default "" }}:{{ $runtime.crio.pullType | default "" }}
+{{- end }}
+{{- end }}
+{{- /* Generate drop-in files for each runtime */ -}}
+{{- range $name, $runtime := .Values.customRuntimes.runtimes }}
+{{- $handler := "" }}
+{{- if $runtime.runtimeClass }}
+{{- range (splitList "\n" $runtime.runtimeClass) }}
+{{- $line := trim . }}
+{{- if hasPrefix "handler:" $line }}
+{{- $handler = trim (trimPrefix "handler:" $line) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $handler $runtime.dropIn }}
+  dropin-{{ $handler }}.toml: |
+{{ $runtime.dropIn | indent 4 }}
+{{- end }}
+{{- end }}
+---
+# RuntimeClasses for custom runtimes
+{{- range $name, $runtime := .Values.customRuntimes.runtimes }}
+{{- if $runtime.runtimeClass }}
+{{ $runtime.runtimeClass }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

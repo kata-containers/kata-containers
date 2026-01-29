@@ -6,6 +6,7 @@
 #
 
 set -e
+set -o pipefail
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 # shellcheck disable=SC1091 # import based on variable
@@ -53,20 +54,6 @@ if [[ "${ENABLE_NVRC_TRACE:-true}" == "true" ]]; then
 	enable_nvrc_trace
 fi
 
-info "Running tests with bats version: $(bats --version)"
-
-tests_fail=()
-for K8S_TEST_ENTRY in "${K8S_TEST_NV[@]}"
-do
-	K8S_TEST_ENTRY=$(echo "${K8S_TEST_ENTRY}" | tr -d '[:space:][:cntrl:]')
-	info "$(kubectl get pods --all-namespaces 2>&1)"
-	info "Executing ${K8S_TEST_ENTRY}"
-	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"; then
-		tests_fail+=("${K8S_TEST_ENTRY}")
-		[[ "${K8S_TEST_FAIL_FAST}" = "yes" ]] && break
-	fi
-done
-
-[[ ${#tests_fail[@]} -ne 0 ]] && die "Tests FAILED from suites: ${tests_fail[*]}"
-
-info "All tests SUCCEEDED"
+# Use common bats test runner with proper reporting
+export BATS_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST}"
+run_bats_tests "${kubernetes_dir}" K8S_TEST_NV

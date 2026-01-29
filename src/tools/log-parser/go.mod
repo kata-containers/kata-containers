@@ -1,7 +1,7 @@
 module github.com/kata-containers/kata-containers/src/tools/log-parser
 
 // Keep in sync with version in versions.yaml
-go 1.24.11
+go 1.24.12
 
 require (
 	github.com/BurntSushi/toml v1.1.0

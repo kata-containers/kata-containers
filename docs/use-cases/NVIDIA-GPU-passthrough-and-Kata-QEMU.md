@@ -96,18 +96,16 @@ request.
 
 ### Kata runtime
 
-Depending on the Kata runtime's configuration, the orchestration flow then
-differs between VFIO cold-plug and hot-plug. This behavior can be
-controlled via the `hot_plug_vfio` and `cold_plug_vfio` configuration
-settings:
+The Kata runtime for the NVIDIA GPU handlers is configured to cold-plug VFIO
+devices (`cold_plug_vfio` is set to `root-port` while
+`hot_plug_vfio` is set to `no-port`). Cold-plug is by design the only
+supported mode for NVIDIA GPU passthrough of the NVIDIA reference stack.
 
-- **Cold-plug scenario:**
-In this scenario, the Kata runtime attaches the GPU at VM launch time, when
+With cold-plug, the Kata runtime attaches the GPU at VM launch time, when
 creating the pod sandbox. This happens *before* the create container request,
 i.e., before the Kata runtime receives the OCI spec including device
 configurations from containerd. Thus, a mechanism to acquire the device
-information is required:
-When the `cold_plug_vfio` configuration is enabled, the runtime calls the
+information is required. This is done by the runtime calling the
 `coldPlugDevices()` function during sandbox creation. In this function,
 the runtime queries Kubelet's Pod Resources API to discover allocated GPU
 device IDs (e.g., `nvidia.com/pgpu = [vfio0]`). The runtime formats these as
@@ -118,23 +116,8 @@ specifications and determines the device path the GPU is backed by
 PCI BDF (e.g., `0000:21:00`) and cold-plugs the GPU by launching QEMU with
 relevant parameters for device passthrough (e.g.,
 `-device vfio-pci,host=0000:21:00.0,x-pci-vendor-id=0x10de,x-pci-device-id=0x2321,bus=rp0,iommufd=iommufdvfio-faf829f2ea7aec330`).
-Cold-plug is the default setting used in the NVIDIA GPU TEE and non-TEE
-shim configuration, with `cold_plug_vfio` set to `root-port` and
-`hot_plug_vfio` set to `no-port`.
 
-- **Hot-plug scenario:**
-In this scenario, the Kata runtime skips the `coldPlugDevices` function, and
-thus, querying the Kubelet's Pod Resources API, during sandbox creation.
-Instead, when the runtime receives a create container request with the device
-information contained in the OCI spec, the runtime attaches the GPU to the
-running pod VM using QEMU's QMP `device_add` command. Since the Kubelet has
-passed the device information via the OCI spec as part of the create container
-request, querying the Pod Resources API is not necessary. The runtime then
-provides the kata-agent with relevant device information - most importantly,
-the device PCI BDF - indicating which devices it will need to expected to be
-hot-plugged.
-
-In both scenarios, the runtime also creates *inner runtime* CDI annotations
+The runtime also creates *inner runtime* CDI annotations
 which map host VFIO devices to guest GPU devices. These are annotations
 intended for the kata-agent, here referred to as the inner runtime (inside the
 UVM), to properly handle GPU passthrough into containers. These annotations
@@ -144,8 +127,8 @@ The annotations are key-value pairs consisting of `cdi.k8s.io/vfio<num>` keys
 (derived from the host VFIO device path, e.g., `/dev/vfio/devices/vfio1`) and
 `nvidia.com/gpu=<index>` values (referencing the corresponding device in the
 guest CDI spec). These annotations are injected by the runtime during container
-creation for both cold-plug and hot-plug scenarios via the
-`annotateContainerWithVFIOMetadata` function (see `container.go`).
+creation via the `annotateContainerWithVFIOMetadata` function (see
+`container.go`).
 
 We continue describing the orchestration flow inside the UVM in the next
 section.
@@ -196,9 +179,8 @@ The resulting root filesystem contains the following software components:
 When the Kata runtime asks QEMU to launch the VM, the UVM's Linux kernel
 boots and mounts the root filesystem. After this, NVRC starts as the initial
 process.
-The behavior then differs between cold-plug and hot-plug scenarios:
 
-- **Cold-plug scenario:** NVRC scans for NVIDIA GPUs on the PCI bus, loads the
+NVRC scans for NVIDIA GPUs on the PCI bus, loads the
 NVIDIA kernel modules, waits for driver initialization, creates the device nodes,
 and initializes the GPU hardware (using the `nvidia-smi` binary). NVRC also
 creates the guest-side CDI specification file (using the
@@ -209,19 +191,9 @@ for each device, specifying device nodes (e.g., `/dev/nvidia0`,
 `/dev/nvidiactl`), library mounts, and environment variables to be mounted
 into the container which receives the passthrough GPU.
 
-- **Hot-plug scenario:** NVRC performs initial system setup but no GPUs are
-present at VM boot time. Instead, both NVRC and kata-agent monitor for PCI
-uevents to detect GPUs that are hot-plugged later during container creation.
-When a GPU hot-plug event occurs, NVRC detects the uevent, identifies the GPU,
-loads the appropriate drivers, and generates the CDI specifications for the
-newly added GPU. Meanwhile, kata-agent uses a `PciMatcher` to wait for the
-device to appear under `/sys/devices/`, ensuring the GPU is ready for container
-integration.
-
-In both scenarios, NVRC forks the Kata agent while continuing to run as the
+Then, NVRC forks the Kata agent while continuing to run as the
 init system. This allows NVRC to handle ongoing GPU management tasks
-(including hot-plug scenarios) while kata-agent focuses on container lifecycle
-management. See the
+while kata-agent focuses on container lifecycle management. See the
 [NVRC sources](https://github.com/NVIDIA/nvrc/blob/main/src/main.rs) for an
 overview on the steps carried out by NVRC.
 
@@ -309,7 +281,7 @@ $ deploy_k8s
 
 > **Note:**
 >
-> The NVIDIA GPU runtime classes use VFIO cold-plug by default which, as
+> The NVIDIA GPU runtime classes use VFIO cold-plug which, as
 > described above, requires the Kata runtime to query Kubelet's Pod Resources
 > API to discover allocated GPU devices during sandbox creation. For
 > Kubernetes versions **older than 1.34**, you must explicitly enable the

@@ -12,7 +12,6 @@ updates:
       - "/src/tools/agent-ctl"
       - "/src/tools/genpolicy"
       - "/src/tools/kata-ctl"
-      - "/src/tools/runk"
       - "/src/tools/trace-forwarder"
     schedule:
       interval: "daily"

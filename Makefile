@@ -18,7 +18,6 @@ TOOLS =
 TOOLS += agent-ctl
 TOOLS += kata-ctl
 TOOLS += log-parser
-TOOLS += runk
 TOOLS += trace-forwarder
 
 STANDARD_TARGETS = build check clean install static-checks-build test vendor

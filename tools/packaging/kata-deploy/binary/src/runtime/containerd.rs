@@ -3,14 +3,102 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::{Config, ContainerdPaths, CustomRuntime};
 use crate::k8s;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::{Context, Result};
 use log::info;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+struct ContainerdRuntimeParams {
+    /// Runtime name (e.g., "kata-qemu")
+    runtime_name: String,
+    /// Path to the shim binary
+    runtime_path: String,
+    /// Path to the kata configuration file
+    config_path: String,
+    /// Pod annotations to allow
+    pod_annotations: &'static str,
+    /// Optional snapshotter to configure
+    snapshotter: Option<String>,
+}
+
+fn get_containerd_pluginid(config_file: &str) -> Result<&'static str> {
+    let content = fs::read_to_string(config_file)
+        .with_context(|| format!("Failed to read containerd config file: {}", config_file))?;
+
+    if content.contains("version = 3") {
+        Ok("\"io.containerd.cri.v1.runtime\"")
+    } else if content.contains("version = 2") {
+        Ok("\"io.containerd.grpc.v1.cri\"")
+    } else {
+        Ok("cri")
+    }
+}
+
+fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
+    if paths.use_drop_in {
+        if paths.drop_in_file.starts_with("/etc/containerd/") {
+            Path::new(&paths.drop_in_file).to_path_buf()
+        } else {
+            let drop_in_path = paths.drop_in_file.trim_start_matches('/');
+            Path::new("/host").join(drop_in_path)
+        }
+    } else {
+        Path::new(&paths.config_file).to_path_buf()
+    }
+}
+
+fn write_containerd_runtime_config(
+    config_file: &Path,
+    pluginid: &str,
+    params: &ContainerdRuntimeParams,
+) -> Result<()> {
+    let runtime_table = format!(
+        ".plugins.{}.containerd.runtimes.{}",
+        pluginid, params.runtime_name
+    );
+    let runtime_options_table = format!("{runtime_table}.options");
+    let runtime_type = format!("\"io.containerd.{}.v2\"", params.runtime_name);
+
+    toml_utils::set_toml_value(
+        config_file,
+        &format!("{runtime_table}.runtime_type"),
+        &runtime_type,
+    )?;
+    toml_utils::set_toml_value(
+        config_file,
+        &format!("{runtime_table}.runtime_path"),
+        &params.runtime_path,
+    )?;
+    toml_utils::set_toml_value(
+        config_file,
+        &format!("{runtime_table}.privileged_without_host_devices"),
+        "true",
+    )?;
+    toml_utils::set_toml_value(
+        config_file,
+        &format!("{runtime_table}.pod_annotations"),
+        params.pod_annotations,
+    )?;
+    toml_utils::set_toml_value(
+        config_file,
+        &format!("{runtime_options_table}.ConfigPath"),
+        &params.config_path,
+    )?;
+
+    if let Some(ref snapshotter) = params.snapshotter {
+        toml_utils::set_toml_value(
+            config_file,
+            &format!("{runtime_table}.snapshotter"),
+            snapshotter,
+        )?;
+    }
+
+    Ok(())
+}
 
 pub async fn configure_containerd_runtime(
     config: &Config,
@@ -18,6 +106,7 @@ pub async fn configure_containerd_runtime(
     shim: &str,
 ) -> Result<()> {
     log::info!("configure_containerd_runtime: Starting for shim={}", shim);
+
     let adjusted_shim = match config.multi_install_suffix.as_ref() {
         Some(suffix) if !suffix.is_empty() => format!("{shim}-{suffix}"),
         _ => shim.to_string(),
@@ -25,139 +114,118 @@ pub async fn configure_containerd_runtime(
     let runtime_name = format!("kata-{adjusted_shim}");
     let configuration = format!("configuration-{shim}");
 
-    log::info!("configure_containerd_runtime: Checking drop-in support");
-    let use_drop_in =
-        super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
-    log::info!("configure_containerd_runtime: use_drop_in={}", use_drop_in);
-
-    let configuration_file: std::path::PathBuf = if use_drop_in {
-        // Ensure we have the absolute path with /host prefix
-        let base_path = if config.containerd_drop_in_conf_file.starts_with("/host") {
-            // Already has /host prefix
-            Path::new(&config.containerd_drop_in_conf_file).to_path_buf()
-        } else {
-            // Need to add /host prefix
-            let drop_in_path = config.containerd_drop_in_conf_file.trim_start_matches('/');
-            Path::new("/host").join(drop_in_path)
-        };
-
-        log::debug!("Using drop-in config file: {:?}", base_path);
-        base_path
-    } else {
-        log::debug!("Using main config file: {}", config.containerd_conf_file);
-        Path::new(&config.containerd_conf_file).to_path_buf()
-    };
-
-    let containerd_root_conf_file = if matches!(runtime, "k0s-worker" | "k0s-controller") {
-        "/etc/containerd/containerd.toml"
-    } else {
-        &config.containerd_conf_file
-    };
-
-    let pluginid = if fs::read_to_string(containerd_root_conf_file)
-        .unwrap_or_default()
-        .contains("version = 3")
-    {
-        "\"io.containerd.cri.v1.runtime\""
-    } else if fs::read_to_string(containerd_root_conf_file)
-        .unwrap_or_default()
-        .contains("version = 2")
-    {
-        "\"io.containerd.grpc.v1.cri\""
-    } else {
-        "cri"
-    };
-
-    let runtime_table = format!(".plugins.{pluginid}.containerd.runtimes.{runtime_name}");
-    let runtime_options_table = format!("{runtime_table}.options");
-    let runtime_type = format!("\"io.containerd.{runtime_name}.v2\"");
-    let runtime_config_path = format!(
-        "\"{}/{}.toml\"",
-        utils::get_kata_containers_config_path(shim, &config.dest_dir),
-        configuration
-    );
-    let runtime_path = format!(
-        "\"{}\"",
-        utils::get_kata_containers_runtime_path(shim, &config.dest_dir)
-    );
+    let paths = config.get_containerd_paths(runtime).await?;
+    let configuration_file = get_containerd_output_path(&paths);
+    let pluginid = get_containerd_pluginid(&paths.config_file)?;
 
     log::info!(
-        "configure_containerd_runtime: Writing to config file: {:?}",
-        configuration_file
+        "configure_containerd_runtime: Writing to {:?}, pluginid={}",
+        configuration_file,
+        pluginid
     );
-    log::info!("configure_containerd_runtime: Setting runtime_type");
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.runtime_type"),
-        &runtime_type,
-    )?;
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.runtime_path"),
-        &runtime_path,
-    )?;
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.privileged_without_host_devices"),
-        "true",
-    )?;
 
-    let pod_annotations = if shim.contains("nvidia-gpu-") {
-        "[\"io.katacontainers.*\",\"cdi.k8s.io/*\"]"
-    } else {
-        "[\"io.katacontainers.*\"]"
-    };
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_table}.pod_annotations"),
+    let pod_annotations = "[\"io.katacontainers.*\"]";
+
+    // Determine snapshotter if configured
+    let snapshotter = config
+        .snapshotter_handler_mapping_for_arch
+        .as_ref()
+        .and_then(|mapping| {
+            mapping.split(',').find_map(|m| {
+                let parts: Vec<&str> = m.split(':').collect();
+                if parts.len() == 2 && parts[0] == shim {
+                    let value = parts[1];
+                    let snapshotter_value = if value == "nydus" {
+                        match config.multi_install_suffix.as_ref() {
+                            Some(suffix) if !suffix.is_empty() => format!("\"{value}-{suffix}\""),
+                            _ => format!("\"{value}\""),
+                        }
+                    } else {
+                        format!("\"{value}\"")
+                    };
+                    Some(snapshotter_value)
+                } else {
+                    None
+                }
+            })
+        });
+
+    let params = ContainerdRuntimeParams {
+        runtime_name,
+        runtime_path: format!(
+            "\"{}\"",
+            utils::get_kata_containers_runtime_path(shim, &config.dest_dir)
+        ),
+        config_path: format!(
+            "\"{}/{}.toml\"",
+            utils::get_kata_containers_config_path(shim, &config.dest_dir),
+            configuration
+        ),
         pod_annotations,
-    )?;
+        snapshotter,
+    };
 
-    toml_utils::set_toml_value(
-        &configuration_file,
-        &format!("{runtime_options_table}.ConfigPath"),
-        &runtime_config_path,
-    )?;
+    write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
 
     if config.debug {
         toml_utils::set_toml_value(&configuration_file, ".debug.level", "\"debug\"")?;
     }
 
-    match config.snapshotter_handler_mapping_for_arch.as_ref() {
-        Some(mapping) => {
-            let snapshotters: Vec<&str> = mapping.split(',').collect();
-            for m in snapshotters {
-                // Format is already validated in snapshotter_handler_mapping_validation_check
-                // and should be validated in Helm templates
-                let parts: Vec<&str> = m.split(':').collect();
-                let key = parts[0];
-                let value = parts[1];
-
-                if key != shim {
-                    continue;
-                }
-
-                let snapshotter_value = if value == "nydus" {
-                    match config.multi_install_suffix.as_ref() {
-                        Some(suffix) if !suffix.is_empty() => format!("\"{value}-{suffix}\""),
-                        _ => format!("\"{value}\""),
-                    }
-                } else {
-                    format!("\"{value}\"")
-                };
-
-                toml_utils::set_toml_value(
-                    &configuration_file,
-                    &format!("{runtime_table}.snapshotter"),
-                    &snapshotter_value,
-                )?;
-                break;
-            }
-        }
-        _ => {}
-    }
-
     Ok(())
+}
+
+/// Custom runtimes use an isolated config directory under custom-runtimes/{handler}/
+pub async fn configure_custom_containerd_runtime(
+    config: &Config,
+    runtime: &str,
+    custom_runtime: &CustomRuntime,
+) -> Result<()> {
+    log::info!(
+        "configure_custom_containerd_runtime: Starting for handler={}",
+        custom_runtime.handler
+    );
+
+    let paths = config.get_containerd_paths(runtime).await?;
+    let configuration_file = get_containerd_output_path(&paths);
+    let pluginid = get_containerd_pluginid(&paths.config_file)?;
+
+    log::info!(
+        "configure_custom_containerd_runtime: Writing to {:?}, pluginid={}",
+        configuration_file,
+        pluginid
+    );
+
+    let pod_annotations = "[\"io.katacontainers.*\"]";
+
+    // Determine snapshotter if specified
+    let snapshotter = custom_runtime.containerd_snapshotter.as_ref().map(|s| {
+        if s == "nydus" {
+            match config.multi_install_suffix.as_ref() {
+                Some(suffix) if !suffix.is_empty() => format!("\"{s}-{suffix}\""),
+                _ => format!("\"{s}\""),
+            }
+        } else {
+            format!("\"{s}\"")
+        }
+    });
+
+    let params = ContainerdRuntimeParams {
+        runtime_name: custom_runtime.handler.clone(),
+        runtime_path: format!(
+            "\"{}\"",
+            utils::get_kata_containers_runtime_path(&custom_runtime.base_config, &config.dest_dir)
+        ),
+        config_path: format!(
+            "\"{}/share/defaults/kata-containers/custom-runtimes/{}/configuration-{}.toml\"",
+            config.dest_dir,
+            custom_runtime.handler,
+            custom_runtime.base_config
+        ),
+        pod_annotations,
+        snapshotter,
+    };
+
+    write_containerd_runtime_config(&configuration_file, pluginid, &params)
 }
 
 pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> {
@@ -165,21 +233,22 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
 
     fs::create_dir_all("/etc/containerd/")?;
 
-    let use_drop_in =
-        super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
+    // Get all paths and drop-in capability in one call
+    let paths = config.get_containerd_paths(runtime).await?;
 
-    if !use_drop_in {
-        if Path::new(&config.containerd_conf_file).exists()
-            && !Path::new(&config.containerd_conf_file_backup).exists()
-        {
-            fs::copy(
-                &config.containerd_conf_file,
-                &config.containerd_conf_file_backup,
-            )?;
+    if !paths.use_drop_in {
+        // For non-drop-in, backup the correct config file for each runtime
+        if Path::new(&paths.config_file).exists() && !Path::new(&paths.backup_file).exists() {
+            fs::copy(&paths.config_file, &paths.backup_file)?;
         }
     } else {
         // Create the drop-in file directory and file
-        let drop_in_file = format!("/host{}", config.containerd_drop_in_conf_file);
+        // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)
+        let drop_in_file = if paths.drop_in_file.starts_with("/etc/containerd/") {
+            paths.drop_in_file.clone()
+        } else {
+            format!("/host{}", paths.drop_in_file)
+        };
         log::info!("Creating drop-in file at: {}", drop_in_file);
 
         if let Some(parent) = Path::new(&drop_in_file).parent() {
@@ -200,20 +269,20 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         }
 
         // Add the drop-in file to the imports array in the main config
-        // The append_to_toml_array function is idempotent and will not add duplicates
-        log::info!(
-            "Adding drop-in to imports in: {}",
-            config.containerd_conf_file
-        );
-        let imports_path = ".imports";
-        let drop_in_path = format!("\"{}\"", config.containerd_drop_in_conf_file);
+        if let Some(imports_file) = &paths.imports_file {
+            log::info!("Adding drop-in to imports in: {}", imports_file);
+            let imports_path = ".imports";
+            let drop_in_path = format!("\"{}\"", paths.drop_in_file);
 
-        toml_utils::append_to_toml_array(
-            Path::new(&config.containerd_conf_file),
-            imports_path,
-            &drop_in_path,
-        )?;
-        log::info!("Successfully added drop-in to imports array");
+            toml_utils::append_to_toml_array(
+                Path::new(imports_file),
+                imports_path,
+                &drop_in_path,
+            )?;
+            log::info!("Successfully added drop-in to imports array");
+        } else {
+            log::info!("Runtime auto-loads drop-in files, skipping imports");
+        }
     }
 
     log::info!("Configuring {} shim(s)", config.shims_for_arch.len());
@@ -223,32 +292,56 @@ pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> 
         log::info!("Successfully configured runtime for shim: {}", shim);
     }
 
+    if config.custom_runtimes_enabled {
+        if config.custom_runtimes.is_empty() {
+            anyhow::bail!(
+                "Custom runtimes enabled but no custom runtimes found in configuration. \
+                 Check that custom-runtimes.list exists and is readable."
+            );
+        }
+        log::info!(
+            "Configuring {} custom runtime(s)",
+            config.custom_runtimes.len()
+        );
+        for custom_runtime in &config.custom_runtimes {
+            log::info!(
+                "Configuring custom runtime: {}",
+                custom_runtime.handler
+            );
+            configure_custom_containerd_runtime(config, runtime, custom_runtime).await?;
+            log::info!(
+                "Successfully configured custom runtime: {}",
+                custom_runtime.handler
+            );
+        }
+    }
+
     log::info!("Successfully configured all containerd runtimes");
     Ok(())
 }
 
 pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
-    let use_drop_in =
-        super::manager::is_containerd_capable_of_using_drop_in_files(config, runtime).await?;
+    // Get all paths and drop-in capability in one call
+    let paths = config.get_containerd_paths(runtime).await?;
 
-    if use_drop_in {
-        let drop_in_path = config.containerd_drop_in_conf_file.clone();
-        toml_utils::remove_from_toml_array(
-            Path::new(&config.containerd_conf_file),
-            ".imports",
-            &format!("\"{drop_in_path}\""),
-        )?;
+    if paths.use_drop_in {
+        // Remove drop-in from imports array (if imports are used)
+        if let Some(imports_file) = &paths.imports_file {
+            toml_utils::remove_from_toml_array(
+                Path::new(imports_file),
+                ".imports",
+                &format!("\"{}\"", paths.drop_in_file),
+            )?;
+        }
         return Ok(());
     }
 
-    if Path::new(&config.containerd_conf_file_backup).exists() {
-        fs::remove_file(&config.containerd_conf_file)?;
-        fs::rename(
-            &config.containerd_conf_file_backup,
-            &config.containerd_conf_file,
-        )?;
+    // For non-drop-in, restore from backup
+    if Path::new(&paths.backup_file).exists() {
+        fs::remove_file(&paths.config_file)?;
+        fs::rename(&paths.backup_file, &paths.config_file)?;
     } else {
-        fs::remove_file(&config.containerd_conf_file).ok();
+        fs::remove_file(&paths.config_file).ok();
     }
 
     Ok(())
@@ -264,11 +357,13 @@ pub fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<(
             }
         }
         "k0s-worker" | "k0s-controller" => {
-            let drop_in_file = format!("/host{}", config.containerd_drop_in_conf_file);
-            if let Some(parent) = Path::new(&drop_in_file).parent() {
+            // k0s uses /etc/containerd/containerd.d/ for drop-ins (no /host prefix needed)
+            // Path is fixed for k0s, so we can hardcode it here
+            let drop_in_file_path = "/etc/containerd/containerd.d/kata-deploy.toml";
+            if let Some(parent) = Path::new(drop_in_file_path).parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::File::create(&drop_in_file)?;
+            fs::File::create(drop_in_file_path)?;
         }
         "containerd" => {
             if !Path::new(&config.containerd_conf_file).exists() {

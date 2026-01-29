@@ -7,6 +7,37 @@ use anyhow::{Context, Result};
 use log::info;
 use std::env;
 
+/// Containerd configuration paths and capabilities for a specific runtime
+#[derive(Debug, Clone)]
+pub struct ContainerdPaths {
+    /// File to read containerd version from and write to (non-drop-in mode)
+    pub config_file: String,
+    /// Backup file path before modification
+    pub backup_file: String,
+    /// File to add/remove drop-in imports from (drop-in mode)
+    /// None if imports are not needed (e.g., k0s auto-loads from containerd.d/)
+    pub imports_file: Option<String>,
+    /// Path to the drop-in configuration file
+    pub drop_in_file: String,
+    /// Whether drop-in files can be used (based on containerd version)
+    pub use_drop_in: bool,
+}
+
+/// Custom runtime configuration parsed from ConfigMap
+#[derive(Debug, Clone)]
+pub struct CustomRuntime {
+    /// Handler name (e.g., "kata-my-custom-runtime")
+    pub handler: String,
+    /// Base configuration to copy (e.g., "qemu", "qemu-nvidia-gpu")
+    pub base_config: String,
+    /// Path to the drop-in file (if provided)
+    pub drop_in_file: Option<String>,
+    /// Containerd snapshotter to use (e.g., "nydus", "erofs")
+    pub containerd_snapshotter: Option<String>,
+    /// CRI-O pull type (e.g., "guest-pull")
+    pub crio_pull_type: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub node_name: String,
@@ -31,6 +62,8 @@ pub struct Config {
     pub containerd_conf_file: String,
     pub containerd_conf_file_backup: String,
     pub containerd_drop_in_conf_file: String,
+    pub custom_runtimes_enabled: bool,
+    pub custom_runtimes: Vec<CustomRuntime>,
 }
 
 impl Config {
@@ -136,6 +169,15 @@ impl Config {
         .map(|s| s.trim().to_string())
         .collect();
 
+        // Parse custom runtimes from ConfigMap
+        let custom_runtimes_enabled =
+            env::var("CUSTOM_RUNTIMES_ENABLED").unwrap_or_else(|_| "false".to_string()) == "true";
+        let custom_runtimes = if custom_runtimes_enabled {
+            parse_custom_runtimes()?
+        } else {
+            Vec::new()
+        };
+
         let config = Config {
             node_name,
             debug,
@@ -159,6 +201,8 @@ impl Config {
             containerd_conf_file,
             containerd_conf_file_backup,
             containerd_drop_in_conf_file,
+            custom_runtimes_enabled,
+            custom_runtimes,
         };
 
         // Validate the configuration
@@ -172,15 +216,18 @@ impl Config {
     /// All validations are performed on the `_for_arch` values, which are the final
     /// values after architecture-specific processing.
     fn validate(&self) -> Result<()> {
-        // Validate SHIMS_FOR_ARCH is not empty and not just whitespace
-        if self.shims_for_arch.is_empty() {
+        // Must have either standard shims OR custom runtimes enabled
+        let has_standard_shims = !self.shims_for_arch.is_empty();
+        let has_custom_runtimes = self.custom_runtimes_enabled && !self.custom_runtimes.is_empty();
+
+        if !has_standard_shims && !has_custom_runtimes {
             return Err(anyhow::anyhow!(
-                "SHIMS for the current architecture must not be empty. \
-                 Please provide at least one shim via SHIMS or SHIMS_<ARCH>"
+                "No runtimes configured. Please provide at least one shim via SHIMS \
+                 or enable custom runtimes with CUSTOM_RUNTIMES_ENABLED=true"
             ));
         }
 
-        // Check for empty shim names
+        // Check for empty shim names (only if we have standard shims)
         for shim in &self.shims_for_arch {
             if shim.trim().is_empty() {
                 return Err(anyhow::anyhow!(
@@ -189,19 +236,21 @@ impl Config {
             }
         }
 
-        // Validate DEFAULT_SHIM_FOR_ARCH exists in SHIMS_FOR_ARCH
-        if self.default_shim_for_arch.trim().is_empty() {
-            return Err(anyhow::anyhow!(
-                "DEFAULT_SHIM for the current architecture must not be empty"
-            ));
-        }
+        // Validate DEFAULT_SHIM only if we have standard shims
+        if has_standard_shims {
+            if self.default_shim_for_arch.trim().is_empty() {
+                return Err(anyhow::anyhow!(
+                    "DEFAULT_SHIM for the current architecture must not be empty"
+                ));
+            }
 
-        if !self.shims_for_arch.contains(&self.default_shim_for_arch) {
-            return Err(anyhow::anyhow!(
-                "DEFAULT_SHIM '{}' must be one of the configured SHIMS for this architecture: [{}]",
-                self.default_shim_for_arch,
-                self.shims_for_arch.join(", ")
-            ));
+            if !self.shims_for_arch.contains(&self.default_shim_for_arch) {
+                return Err(anyhow::anyhow!(
+                    "DEFAULT_SHIM '{}' must be one of the configured SHIMS for this architecture: [{}]",
+                    self.default_shim_for_arch,
+                    self.shims_for_arch.join(", ")
+                ));
+            }
         }
 
         // Validate ALLOWED_HYPERVISOR_ANNOTATIONS_FOR_ARCH shim-specific entries
@@ -358,6 +407,67 @@ impl Config {
             "* EXPERIMENTAL_FORCE_GUEST_PULL: {}",
             self.experimental_force_guest_pull_for_arch.join(",")
         );
+        info!(
+            "* CUSTOM_RUNTIMES_ENABLED: {}",
+            self.custom_runtimes_enabled
+        );
+        if !self.custom_runtimes.is_empty() {
+            info!("* CUSTOM_RUNTIMES:");
+            for runtime in &self.custom_runtimes {
+                info!(
+                    "  - {}: base_config={}, drop_in={}, containerd_snapshotter={:?}, crio_pull_type={:?}",
+                    runtime.handler,
+                    runtime.base_config,
+                    runtime.drop_in_file.is_some(),
+                    runtime.containerd_snapshotter,
+                    runtime.crio_pull_type
+                );
+            }
+        }
+    }
+
+    /// Get containerd configuration file paths based on runtime type and containerd version
+    pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
+        use crate::runtime::manager;
+        
+        // Check if drop-in files can be used based on containerd version
+        let use_drop_in = manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
+        
+        let paths = match runtime {
+            "k0s-worker" | "k0s-controller" => ContainerdPaths {
+                config_file: "/etc/containerd/containerd.toml".to_string(),
+                backup_file: "/etc/containerd/containerd.toml.bak".to_string(), // Never used, but needed for consistency
+                imports_file: None, // k0s auto-loads from containerd.d/, imports not needed
+                drop_in_file: "/etc/containerd/containerd.d/kata-deploy.toml".to_string(),
+                use_drop_in,
+            },
+            "microk8s" => ContainerdPaths {
+                // microk8s uses containerd-template.toml instead of config.toml
+                config_file: "/etc/containerd/containerd-template.toml".to_string(),
+                backup_file: "/etc/containerd/containerd-template.toml.bak".to_string(),
+                imports_file: Some("/etc/containerd/containerd-template.toml".to_string()),
+                drop_in_file: self.containerd_drop_in_conf_file.clone(),
+                use_drop_in,
+            },
+            "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => ContainerdPaths {
+                // k3s/rke2 generates config.toml from config.toml.tmpl on each restart
+                // We must modify the template file so our changes persist
+                config_file: "/etc/containerd/config.toml.tmpl".to_string(),
+                backup_file: "/etc/containerd/config.toml.tmpl.bak".to_string(),
+                imports_file: Some("/etc/containerd/config.toml.tmpl".to_string()),
+                drop_in_file: self.containerd_drop_in_conf_file.clone(),
+                use_drop_in,
+            },
+            _ => ContainerdPaths {
+                config_file: self.containerd_conf_file.clone(),
+                backup_file: self.containerd_conf_file_backup.clone(),
+                imports_file: Some(self.containerd_conf_file.clone()),
+                drop_in_file: self.containerd_drop_in_conf_file.clone(),
+                use_drop_in,
+            },
+        };
+        
+        Ok(paths)
     }
 }
 
@@ -375,12 +485,100 @@ fn get_arch() -> Result<String> {
     .to_string())
 }
 
+/// Parse custom runtimes from the mounted ConfigMap at /custom-configs/
+/// Reads the custom-runtimes.list file which contains entries in the format:
+/// handler:baseConfig:containerd_snapshotter:crio_pulltype
+/// Optionally reads drop-in files named dropin-{handler}.toml
+fn parse_custom_runtimes() -> Result<Vec<CustomRuntime>> {
+    let custom_configs_dir = "/custom-configs";
+    let list_file = format!("{}/custom-runtimes.list", custom_configs_dir);
+
+    let list_content = match std::fs::read_to_string(&list_file) {
+        Ok(content) => content,
+        Err(e) => {
+            log::warn!(
+                "Could not read custom runtimes list at {}: {}",
+                list_file,
+                e
+            );
+            return Ok(Vec::new());
+        }
+    };
+
+    let mut custom_runtimes = Vec::new();
+    for line in list_content.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        // Parse format: handler:baseConfig:containerd_snapshotter:crio_pulltype
+        let parts: Vec<&str> = line.split(':').collect();
+        let handler = parts.first().map(|s| s.trim()).unwrap_or("");
+        if handler.is_empty() {
+            continue;
+        }
+
+        let base_config = parts.get(1).map(|s| s.trim()).unwrap_or("");
+        if base_config.is_empty() {
+            anyhow::bail!(
+                "Custom runtime '{}' missing required baseConfig field",
+                handler
+            );
+        }
+
+        let containerd_snapshotter = parts
+            .get(2)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let crio_pull_type = parts
+            .get(3)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        // Check for optional drop-in file
+        let drop_in_file_path = format!("{}/dropin-{}.toml", custom_configs_dir, handler);
+        let drop_in_file = if std::path::Path::new(&drop_in_file_path).exists() {
+            Some(drop_in_file_path)
+        } else {
+            None
+        };
+
+        log::info!(
+            "Found custom runtime: handler={}, base_config={}, drop_in={:?}, containerd_snapshotter={:?}, crio_pull_type={:?}",
+            handler,
+            base_config,
+            drop_in_file.is_some(),
+            containerd_snapshotter,
+            crio_pull_type
+        );
+
+        custom_runtimes.push(CustomRuntime {
+            handler: handler.to_string(),
+            base_config: base_config.to_string(),
+            drop_in_file,
+            containerd_snapshotter,
+            crio_pull_type,
+        });
+    }
+
+    log::info!(
+        "Parsed {} custom runtime(s) from {}",
+        custom_runtimes.len(),
+        list_file
+    );
+    Ok(custom_runtimes)
+}
+
 /// Get default shims list for a specific architecture
 /// Returns only shims that are supported for that architecture
 fn get_default_shims_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" => "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-snp qemu-tdx",
-        "aarch64" => "clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-cca",
+        "x86_64" => "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
+        "aarch64" => "clh cloud-hypervisor dragonball fc qemu qemu-runtime-rs qemu-nvidia-gpu qemu-cca",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
         "ppc64le" => "qemu",
         _ => "qemu", // Fallback to qemu for unknown architectures
@@ -614,12 +812,12 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_empty_shims() {
+    fn test_validate_empty_shims_no_custom_runtimes() {
         setup_minimal_env();
         // Empty strings are filtered out, so we need to unset the variable
         // and ensure no default is provided. Since we always have a default,
-        // this test verifies that if somehow we get empty shims, validation fails.
-        // To test this, we need to set a variable that will result in empty shims after processing.
+        // this test verifies that if somehow we get empty shims AND no custom runtimes,
+        // validation fails.
         let arch = get_arch().unwrap();
         let arch_suffix = match arch.as_str() {
             "x86_64" => "_X86_64",
@@ -631,8 +829,10 @@ mod tests {
         std::env::remove_var(format!("SHIMS{}", arch_suffix));
         // Set a variable that will result in empty shims after split
         std::env::set_var(format!("SHIMS{}", arch_suffix), "   ");
+        // Ensure custom runtimes are disabled
+        std::env::set_var("CUSTOM_RUNTIMES_ENABLED", "false");
 
-        assert_config_error_contains("SHIMS for the current architecture must not be empty");
+        assert_config_error_contains("No runtimes configured");
         cleanup_env_vars();
     }
 

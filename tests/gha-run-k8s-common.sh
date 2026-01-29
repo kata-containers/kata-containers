@@ -28,6 +28,7 @@ HELM_SHIMS="${HELM_SHIMS:-}"
 HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
 HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
 HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${HELM_EXPERIMENTAL_FORCE_GUEST_PULL:-}"
+HELM_VERIFY_DEPLOYMENT="${HELM_VERIFY_DEPLOYMENT:-false}"
 KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-600}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
@@ -565,11 +566,8 @@ function helm_helper() {
 	[[ -n "${HELM_K8S_DISTRIBUTION}" ]] && yq -i ".k8sDistribution = \"${HELM_K8S_DISTRIBUTION}\"" "${values_yaml}"
 
 	if [[ "${HELM_DEFAULT_INSTALLATION}" = "false" ]]; then
-		# Disable all shims first (in case we started from an example file with shims enabled)
-		# Then we'll enable only the ones specified in HELM_SHIMS
-		for shim_key in $(yq '.shims | keys | .[]' "${values_yaml}" 2>/dev/null); do
-			yq -i ".shims.${shim_key}.enabled = false" "${values_yaml}"
-		done
+		# Disable all shims at once, then enable only the ones specified in HELM_SHIMS
+		yq -i ".shims.disableAll = true" "${values_yaml}"
 
 		# Use new structured format
 		if [[ -n "${HELM_DEBUG}" ]]; then
@@ -585,7 +583,7 @@ function helm_helper() {
 			# HELM_SHIMS is a space-separated list of shim names
 			# Enable each shim and set supported architectures
 			# TEE shims that need defaults unset (will be set based on env vars)
-			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-tdx qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+			tee_shims="qemu-se qemu-se-runtime-rs qemu-cca qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
 
 			for shim in ${HELM_SHIMS}; do
 				# Determine supported architectures based on shim name
@@ -599,11 +597,15 @@ function helm_helper() {
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"arm64\"]" "${values_yaml}"
 						;;
-					qemu-snp|qemu-tdx|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
+					qemu-snp|qemu-snp-runtime-rs|qemu-tdx|qemu-tdx-runtime-rs|qemu-nvidia-gpu-snp|qemu-nvidia-gpu-tdx)
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\"]" "${values_yaml}"
 						;;
-					qemu-runtime-rs|qemu-coco-dev|qemu-coco-dev-runtime-rs)
+					qemu-runtime-rs)
+						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
+						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"arm64\", \"s390x\"]" "${values_yaml}"
+						;;
+					qemu-coco-dev|qemu-coco-dev-runtime-rs)
 						yq -i ".shims.${shim}.enabled = true" "${values_yaml}"
 						yq -i ".shims.${shim}.supportedArches = [\"amd64\", \"s390x\"]" "${values_yaml}"
 						;;
@@ -677,7 +679,7 @@ function helm_helper() {
 		# HELM_ALLOWED_HYPERVISOR_ANNOTATIONS: if not in per-shim format (no colon), convert to per-shim format
 		# Output format: "qemu:foo,bar clh:foo" (space-separated entries, each with shim:annotations where annotations are comma-separated)
 		# Example: "foo bar" with shim "qemu-tdx" -> "qemu-tdx:foo,bar"
-		if [[ "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" != *:* ]]; then
+		if [[ -n "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" && "${HELM_ALLOWED_HYPERVISOR_ANNOTATIONS}" != *:* ]]; then
 			# Simple format: convert to per-shim format for all enabled shims
 			# "default_vcpus" -> "qemu-tdx:default_vcpus" (single shim)
 			# "image kernel default_vcpus" -> "qemu-tdx:image,kernel,default_vcpus" (single shim)
@@ -695,7 +697,7 @@ function helm_helper() {
 		fi
 
 		# HELM_AGENT_HTTPS_PROXY: if not in per-shim format (no equals), convert to per-shim format
-		if [[ "${HELM_AGENT_HTTPS_PROXY}" != *=* ]]; then
+		if [[ -n "${HELM_AGENT_HTTPS_PROXY}" && "${HELM_AGENT_HTTPS_PROXY}" != *=* ]]; then
 			# Simple format: convert to per-shim format for all enabled shims
 			# "http://proxy:8080" -> "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy:8080"
 			local converted_proxy=""
@@ -709,7 +711,7 @@ function helm_helper() {
 		fi
 
 		# HELM_AGENT_NO_PROXY: if not in per-shim format (no equals), convert to per-shim format
-		if [[ "${HELM_AGENT_NO_PROXY}" != *=* ]]; then
+		if [[ -n "${HELM_AGENT_NO_PROXY}" && "${HELM_AGENT_NO_PROXY}" != *=* ]]; then
 			# Simple format: convert to per-shim format for all enabled shims
 			# "localhost,127.0.0.1" -> "qemu-tdx=localhost,127.0.0.1;qemu-snp=localhost,127.0.0.1"
 			local converted_noproxy=""
@@ -819,10 +821,53 @@ function helm_helper() {
 		[[ -n "${HELM_HOST_OS}" ]] && yq -i ".env.hostOS=\"${HELM_HOST_OS}\"" "${values_yaml}"
 	fi
 
+	# Enable verification during deployment if HELM_VERIFY_DEPLOYMENT is set
+	# Creates a simple verification pod that runs with the Kata runtime
+	local helm_set_file_args=""
+	if [[ "${HELM_VERIFY_DEPLOYMENT}" == "true" ]]; then
+		# Determine runtime class from HELM_DEFAULT_SHIM or default to kata-qemu
+		local runtime_class="kata-qemu"
+		if [[ -n "${HELM_DEFAULT_SHIM}" ]]; then
+			runtime_class="kata-${HELM_DEFAULT_SHIM}"
+		fi
+		
+		local verification_yaml
+		verification_yaml=$(mktemp)
+		cat > "${verification_yaml}" << 'VERIFICATION_POD_EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kata-deploy-verify
+spec:
+  runtimeClassName: RUNTIME_CLASS_PLACEHOLDER
+  restartPolicy: Never
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+  containers:
+    - name: verify
+      image: quay.io/kata-containers/alpine-bash-curl:latest
+      imagePullPolicy: Always
+      command:
+        - sh
+        - -c
+        - |
+          echo "=== Kata Verification ==="
+          echo "Kernel: $(uname -r)"
+          echo "SUCCESS: Pod running with Kata runtime"
+VERIFICATION_POD_EOF
+		# Replace runtime class placeholder
+		sed -i "s|RUNTIME_CLASS_PLACEHOLDER|${runtime_class}|g" "${verification_yaml}"
+		echo "Enabling deployment verification with runtimeClass: ${runtime_class}"
+		helm_set_file_args="--set-file verification.pod=${verification_yaml}"
+		# Clean up temp file on exit
+		trap "rm -f ${verification_yaml}" EXIT
+	fi
+
 	echo "::group::Final kata-deploy manifests used in the test"
 	cat "${values_yaml}"
 	echo ""
-	helm template "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
+	# ${helm_set_file_args} is intentionally left unquoted
+	helm template "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system
 	[[ "$(yq .image.reference "${values_yaml}")" = "${HELM_IMAGE_REFERENCE}" ]] || die "Failed to set image reference"
 	[[ "$(yq .image.tag "${values_yaml}")" = "${HELM_IMAGE_TAG}" ]] || die "Failed to set image tag"
 	echo "::endgroup::"
@@ -832,12 +877,13 @@ function helm_helper() {
 
 	max_tries=3
 	interval=10
-	i=10
+	i=0
 
 	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
 	set +e # Disable immediate exit on failure
 	while true; do
-		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
+		# ${helm_set_file_args} is intentionally left unquoted
+		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" ${helm_set_file_args} --namespace kube-system --debug
 		ret=${?}
 		if [[ ${ret} -eq 0 ]]; then
 			echo "Helm install succeeded!"
@@ -845,15 +891,16 @@ function helm_helper() {
 		fi
 		i=$((i+1))
 		if [[ ${i} -lt ${max_tries} ]]; then
-			echo "Retrying after ${interval} seconds (Attempt ${i} of $((max_tries - 1)))"
+			echo "Retrying after ${interval} seconds (Attempt ${i} of ${max_tries})"
 		else
 			break
 		fi
 		sleep "${interval}"
 	done
 	set -e # Re-enable immediate exit on failure
-	if [[ ${i} -eq ${max_tries} ]]; then
-		die "Failed to deploy kata-deploy after ${max_tries} tries"
+	if [[ ${i} -ge ${max_tries} ]]; then
+		echo "ERROR: Failed to deploy kata-deploy after ${max_tries} tries"
+		return 1
 	fi
 
 	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets

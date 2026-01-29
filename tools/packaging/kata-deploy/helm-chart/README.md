@@ -158,7 +158,7 @@ All values can be overridden with --set key=value or a custom `-f myvalues.yaml`
 | `env.installationPrefix` | Prefix where to install the Kata artifacts | `/opt/kata` |
 | `env.hostOS` | Provide host-OS setting, e.g. `cbl-mariner` to do additional configurations | `""` |
 | `env.multiInstallSuffix` | Enable multiple Kata installation on the same node with suffix e.g. `/opt/kata-PR12232` | `""` |
-| `env._experimentalSetupSnapshotter` | Deploys (nydus) and/or sets up (erofs, nydus) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
+| `env._experimentalSetupSnapshotter` | Deploys (`nydus`) and/or sets up (`erofs`, `nydus`) the snapshotter(s) specified as the value (supports multiple snapshotters, separated by commas; e.g., `nydus,erofs`) | `""` |
 | `env._experimentalForceGuestPull` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value (supports multiple shims, separated by commas; e.g., `qemu-tdx,qemu-snp`) | `""` |
 | `env._experimentalForceGuestPull_x86_64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for x86_64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
 | `env._experimentalForceGuestPull_aarch64` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for aarch64 (if set, overrides `_experimentalForceGuestPull`) | `""` |
@@ -198,6 +198,9 @@ snapshotter:
 
 # Configure shims
 shims:
+  # Disable all shims at once (useful when enabling only specific shims or custom runtimes)
+  disableAll: false
+
   qemu:
     enabled: true
     supportedArches:
@@ -236,6 +239,7 @@ defaultShim:
 2. **Architecture-aware**: Shims declare which architectures they support
 3. **Type safety**: Structured format reduces configuration errors
 4. **Easy to use**: All shims are enabled by default in `values.yaml`, so you can use the chart directly without modification
+5. **Disable all at once**: Use `shims.disableAll: true` to disable all standard shims, useful when enabling only specific shims or using custom runtimes only
 
 ### Example: Enable `qemu` shim with new format
 
@@ -267,7 +271,7 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 
 This includes all available Kata Containers shims:
 - Standard shims: `qemu`, `qemu-runtime-rs`, `clh`, `cloud-hypervisor`, `dragonball`, `fc`
-- TEE shims: `qemu-snp`, `qemu-tdx`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
+- TEE shims: `qemu-snp`, `qemu-snp-runtime-rs`, `qemu-tdx`, `qemu-tdx-runtime-rs`, `qemu-se`, `qemu-se-runtime-rs`, `qemu-cca`, `qemu-coco-dev`, `qemu-coco-dev-runtime-rs`
 - NVIDIA GPU shims: `qemu-nvidia-gpu`, `qemu-nvidia-gpu-snp`, `qemu-nvidia-gpu-tdx`
 - Remote shims: `remote` (for `peer-pods`/`cloud-api-adaptor`, disabled by default)
 
@@ -351,26 +355,13 @@ The kata-deploy script will no longer create `runtimeClasses`
 
 ## Example: only `qemu` shim and debug enabled
 
-Since all shims are enabled by default, you need to disable the ones you don't want:
+Use `shims.disableAll=true` to disable all shims at once, then enable only the ones you need:
 
 ```sh
-# Using --set flags (disable all except qemu)
+# Using --set flags (disable all, then enable qemu)
 $ helm install kata-deploy \
-  --set shims.clh.enabled=false \
-  --set shims.cloud-hypervisor.enabled=false \
-  --set shims.dragonball.enabled=false \
-  --set shims.fc.enabled=false \
-  --set shims.qemu-runtime-rs.enabled=false \
-  --set shims.qemu-nvidia-gpu.enabled=false \
-  --set shims.qemu-nvidia-gpu-snp.enabled=false \
-  --set shims.qemu-nvidia-gpu-tdx.enabled=false \
-  --set shims.qemu-snp.enabled=false \
-  --set shims.qemu-tdx.enabled=false \
-  --set shims.qemu-se.enabled=false \
-  --set shims.qemu-se-runtime-rs.enabled=false \
-  --set shims.qemu-cca.enabled=false \
-  --set shims.qemu-coco-dev.enabled=false \
-  --set shims.qemu-coco-dev-runtime-rs.enabled=false \
+  --set shims.disableAll=true \
+  --set shims.qemu.enabled=true \
   --set debug=true \
   "${CHART}" --version  "${VERSION}"
 ```
@@ -381,40 +372,9 @@ Or use a custom values file:
 # custom-values.yaml
 debug: true
 shims:
+  disableAll: true
   qemu:
     enabled: true
-  clh:
-    enabled: false
-  cloud-hypervisor:
-    enabled: false
-  dragonball:
-    enabled: false
-  fc:
-    enabled: false
-  qemu-runtime-rs:
-    enabled: false
-  qemu-nvidia-gpu:
-    enabled: false
-  qemu-nvidia-gpu-snp:
-    enabled: false
-  qemu-nvidia-gpu-tdx:
-    enabled: false
-  qemu-snp:
-    enabled: false
-  qemu-tdx:
-    enabled: false
-  qemu-se:
-    enabled: false
-  qemu-se-runtime-rs:
-    enabled: false
-  qemu-cca:
-    enabled: false
-  qemu-coco-dev:
-    enabled: false
-  qemu-coco-dev-runtime-rs:
-    enabled: false
-  remote:
-    enabled: false
 ```
 
 ```sh

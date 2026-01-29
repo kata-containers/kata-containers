@@ -1,7 +1,7 @@
 module github.com/kata-containers/kata-containers/src/runtime
 
 // Keep in sync with version in versions.yaml
-go 1.24.11
+go 1.24.12
 
 // WARNING: Do NOT use `replace` directives as those break dependabot:
 // https://github.com/kata-containers/kata-containers/issues/11020
@@ -49,7 +49,7 @@ require (
 	github.com/safchain/ethtool v0.6.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.11.1
-	github.com/urfave/cli v1.22.15
+	github.com/urfave/cli v1.22.17
 	github.com/vishvananda/netlink v1.3.1
 	github.com/vishvananda/netns v0.0.5
 	gitlab.com/nvidia/cloud-native/go-nvlib v0.0.0-20220601114329-47893b162965
@@ -85,7 +85,7 @@ require (
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/containernetworking/cni v1.3.0 // indirect
-	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect

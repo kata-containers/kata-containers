@@ -242,15 +242,38 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
-    version: "v0.0.1"
+    version: "v0.1.1"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
   nvidia:
-    desc: "NVIDIA driver version"
+    desc: "NVIDIA compute stack"
     driver:
+      desc: "NVIDIA kernel driver"
       version: "590.48.01"
       # yamllint disable-line rule:line-length
       url: "https://github.com/NVIDIA/open-gpu-kernel-modules/archive/refs/tags/"
+    cuda:
+      desc: "NVIDIA CUDA repository"
+      repo:
+        x86_64:
+          # yamllint disable-line rule:line-length
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/"
+          pkg: "cuda-keyring_1.1-1_all.deb"
+        aarch64:
+          # yamllint disable-line rule:line-length
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/"
+          pkg: "cuda-keyring_1.1-1_all.deb"
+    tools:
+      desc: "NVIDIA container toolkit and tools repository"
+      repo:
+        x86_64:
+          # yamllint disable-line rule:line-length
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/"
+          pkg: "cuda-keyring_1.1-1_all.deb"
+        aarch64:
+          # yamllint disable-line rule:line-length
+          url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/"
+          pkg: "cuda-keyring_1.1-1_all.deb"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
@@ -270,8 +293,8 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "026694d44d4ec483465d2fa5f80a0376166b174d"
-    toolchain: "1.85.1"
+    version: "9aae2eae6a03ab97d6561bbe74f8b99843836bba"
+    toolchain: "1.90.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
@@ -453,12 +476,12 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     # When updating this, also update in go.mod files.
-    version: "1.24.11"
+    version: "1.24.12"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.24.11"
+      newest-version: "1.24.12"
 
   rust:
     description: "Rust language"

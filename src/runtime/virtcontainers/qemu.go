@@ -861,6 +861,10 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 				return fmt.Errorf("Cannot get VFIO device from IOMMUFD with device: %v err: %v", dev, err)
 			}
 		} else {
+			if q.config.ConfidentialGuest {
+				return fmt.Errorf("ConfidentialGuest needs IOMMUFD - cannot use %s", dev.HostPath)
+			}
+
 			vfioDevices, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
 			if err != nil {
 				return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)

@@ -22,6 +22,7 @@ cloud-hypervisor = ["runtimes/cloud-hypervisor"]
 
 [dependencies]
 anyhow = { workspace = true }
+containerd-shim-protos = { workspace = true }
 go-flag = { workspace = true }
 nix = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
