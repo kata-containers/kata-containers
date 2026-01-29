@@ -138,7 +138,7 @@ func GetKernelRootParams(rootfstype string, disableNvdimm bool, dax bool, kernel
 		rootfstype = string(EXT4)
 	}
 
-	if cfg != nil && cfg.mode == verityModeKernelInit {
+	if cfg != nil {
 		rootDevice := "/dev/pmem0p1"
 		hashDevice := "/dev/pmem0p2"
 		if disableNvdimm {
@@ -210,24 +210,14 @@ func GetKernelRootParams(rootfstype string, disableNvdimm bool, dax bool, kernel
 	}
 
 	kernelRootParams = append(kernelRootParams, Param{"rootfstype", rootfstype})
-	if cfg != nil && cfg.mode == verityModeInitramfs {
-		kernelRootParams = append(kernelRootParams,
-			Param{Key: "rootfs_verity.scheme", Value: "dm-verity"},
-			Param{Key: "rootfs_verity.hash", Value: cfg.rootHash},
-		)
-	}
-
 	return kernelRootParams, nil
 }
 
 const (
-	verityModeKernelInit = "kernelinit"
-	verityModeInitramfs  = "initramfs"
 	verityBlockSizeBytes = 512
 )
 
 type kernelVerityConfig struct {
-	mode          string
 	rootHash      string
 	salt          string
 	dataBlocks    uint64
@@ -253,15 +243,7 @@ func ParseKernelVerityParams(params string) (*kernelVerityConfig, error) {
 		values[parts[0]] = parts[1]
 	}
 
-	mode := values["mode"]
-	switch mode {
-	case verityModeKernelInit, verityModeInitramfs:
-	default:
-		return nil, fmt.Errorf("invalid kernel_verity_params mode: %q", mode)
-	}
-
 	cfg := &kernelVerityConfig{
-		mode:     mode,
 		rootHash: values["root_hash"],
 		salt:     values["salt"],
 	}
@@ -269,56 +251,53 @@ func ParseKernelVerityParams(params string) (*kernelVerityConfig, error) {
 		return nil, fmt.Errorf("missing kernel_verity_params root_hash")
 	}
 
-	if cfg.mode == verityModeKernelInit {
-		parseUintField := func(name string) (uint64, error) {
-			value, ok := values[name]
-			if !ok || value == "" {
-				return 0, fmt.Errorf("missing kernel_verity_params %s", name)
-			}
-			parsed, err := strconv.ParseUint(value, 10, 64)
-			if err != nil {
-				return 0, fmt.Errorf("invalid kernel_verity_params %s %q: %w", name, value, err)
-			}
-			return parsed, nil
+	parseUintField := func(name string) (uint64, error) {
+		value, ok := values[name]
+		if !ok || value == "" {
+			return 0, fmt.Errorf("missing kernel_verity_params %s", name)
 		}
-
-		dataBlocks, err := parseUintField("data_blocks")
+		parsed, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
-			return nil, err
+			return 0, fmt.Errorf("invalid kernel_verity_params %s %q: %w", name, value, err)
 		}
-		dataBlockSize, err := parseUintField("data_block_size")
-		if err != nil {
-			return nil, err
-		}
-		hashBlockSize, err := parseUintField("hash_block_size")
-		if err != nil {
-			return nil, err
-		}
-
-		if dataBlocks == 0 {
-			return nil, fmt.Errorf("invalid kernel_verity_params data_blocks: must be non-zero")
-		}
-		if dataBlockSize == 0 {
-			return nil, fmt.Errorf("invalid kernel_verity_params data_block_size: must be non-zero")
-		}
-		if hashBlockSize == 0 {
-			return nil, fmt.Errorf("invalid kernel_verity_params hash_block_size: must be non-zero")
-		}
-		if dataBlockSize%verityBlockSizeBytes != 0 {
-			return nil, fmt.Errorf("invalid kernel_verity_params data_block_size: must be multiple of %d", verityBlockSizeBytes)
-		}
-		if hashBlockSize%verityBlockSizeBytes != 0 {
-			return nil, fmt.Errorf("invalid kernel_verity_params hash_block_size: must be multiple of %d", verityBlockSizeBytes)
-		}
-
-		cfg.dataBlocks = dataBlocks
-		cfg.dataBlockSize = dataBlockSize
-		cfg.hashBlockSize = hashBlockSize
-
-		if cfg.salt == "" {
-			return nil, fmt.Errorf("missing kernel_verity_params salt")
-		}
+		return parsed, nil
 	}
+
+	dataBlocks, err := parseUintField("data_blocks")
+	if err != nil {
+		return nil, err
+	}
+	dataBlockSize, err := parseUintField("data_block_size")
+	if err != nil {
+		return nil, err
+	}
+	hashBlockSize, err := parseUintField("hash_block_size")
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.salt == "" {
+		return nil, fmt.Errorf("missing kernel_verity_params salt")
+	}
+	if dataBlocks == 0 {
+		return nil, fmt.Errorf("invalid kernel_verity_params data_blocks: must be non-zero")
+	}
+	if dataBlockSize == 0 {
+		return nil, fmt.Errorf("invalid kernel_verity_params data_block_size: must be non-zero")
+	}
+	if hashBlockSize == 0 {
+		return nil, fmt.Errorf("invalid kernel_verity_params hash_block_size: must be non-zero")
+	}
+	if dataBlockSize%verityBlockSizeBytes != 0 {
+		return nil, fmt.Errorf("invalid kernel_verity_params data_block_size: must be multiple of %d", verityBlockSizeBytes)
+	}
+	if hashBlockSize%verityBlockSizeBytes != 0 {
+		return nil, fmt.Errorf("invalid kernel_verity_params hash_block_size: must be multiple of %d", verityBlockSizeBytes)
+	}
+
+	cfg.dataBlocks = dataBlocks
+	cfg.dataBlockSize = dataBlockSize
+	cfg.hashBlockSize = hashBlockSize
 
 	return cfg, nil
 }

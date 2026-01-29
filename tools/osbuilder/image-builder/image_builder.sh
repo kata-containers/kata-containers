@@ -11,7 +11,7 @@ set -o errexit
 set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
-MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 IMAGE_SIZE_ALIGNMENT_MB=${IMAGE_SIZE_ALIGNMENT_MB:-128}
 
 #For cross build
@@ -170,7 +170,7 @@ build_with_container() {
 		   --env BLOCK_SIZE="${block_size}" \
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
-		   --env MEASURED_ROOTFS_MODE="${MEASURED_ROOTFS_MODE}" \
+		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
@@ -382,7 +382,6 @@ create_disk() {
 	local img_size="$2"
 	local fs_type="$3"
 	local part_start="$4"
-	local -r measured_rootfs_mode="$(get_measured_rootfs_mode)"
 
 	info "Creating raw disk with size ${img_size}M"
 	qemu-img create -q -f raw "${image}" "${img_size}M"
@@ -397,7 +396,7 @@ create_disk() {
 	else
 		rootfs_end_unit="MiB"
 	fi
-	if [[ -n "${measured_rootfs_mode}" ]]; then
+	if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 		info "Creating partitions with hash device"
 		# The hash data will take less than one percent disk space to store
 		hash_start=$(echo $img_size | awk '{print $1 * 0.99}' |cut -d $(locale decimal_point) -f 1)
@@ -487,19 +486,13 @@ create_rootfs_image() {
 		fsck.ext4 -D -y "${device}p1"
 	fi
 
-	local -r measured_rootfs_mode="$(get_measured_rootfs_mode)"
-	if [[ -n "${measured_rootfs_mode}" ]] && [[ -b "${device}p2" ]]; then
-		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2 (mode: ${measured_rootfs_mode})"
+	if [[ "${MEASURED_ROOTFS}" == "yes" ]] && [[ -b "${device}p2" ]]; then
+		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
 		local -r image_dir=$(dirname "${image}")
 		local verity_output
-		if [[ "${measured_rootfs_mode}" == "kernelinit" ]]; then
-			verity_output=$(veritysetup format --no-superblock "${device}p1" "${device}p2" 2>&1)
-		else
-			verity_output=$(veritysetup format "${device}p1" "${device}p2" 2>&1)
-		fi
+		verity_output=$(veritysetup format --no-superblock "${device}p1" "${device}p2" 2>&1)
 		build_kernel_verity_params() {
-			local -r mode="$1"
-			local -r output="$2"
+			local -r output="$1"
 			local root_hash
 			local salt
 			local data_blocks
@@ -523,8 +516,7 @@ create_rootfs_image() {
 			data_block_size=$(read_verity_field "Data block size")
 			hash_block_size=$(read_verity_field "Hash block size")
 
-			printf 'mode=%s,root_hash=%s,salt=%s,data_blocks=%s,data_block_size=%s,hash_block_size=%s' \
-				"${mode}" \
+			printf 'root_hash=%s,salt=%s,data_blocks=%s,data_block_size=%s,hash_block_size=%s' \
 				"${root_hash}" \
 				"${salt}" \
 				"${data_blocks}" \
@@ -533,7 +525,7 @@ create_rootfs_image() {
 		}
 
 		local kernel_verity_params
-		kernel_verity_params="$(build_kernel_verity_params "${measured_rootfs_mode}" "${verity_output}")"
+		kernel_verity_params="$(build_kernel_verity_params "${verity_output}")"
 
 		printf '%s\n' "${kernel_verity_params}" > "${image_dir}"/root_hash_"${BUILD_VARIANT}".txt
 		OK "Root hash file created for variant: ${BUILD_VARIANT}"

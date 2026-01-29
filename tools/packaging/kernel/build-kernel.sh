@@ -28,7 +28,6 @@ readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${script_dir}/configs/fragments"
 readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
-readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # xPU vendor
 readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
@@ -68,7 +67,7 @@ linux_headers=""
 # Kernel Reference to download using git
 kernel_ref=""
 # Enable measurement of the guest rootfs at boot.
-measured_rootfs_mode="${MEASURED_ROOTFS_MODE:-}"
+measured_rootfs="false"
 
 CROSS_BUILD_ARG=""
 
@@ -108,7 +107,7 @@ Options:
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
 	-H <deb|rpm>	: Linux headers for guest fs module building.
-	-m <mode>       : Set measured rootfs mode (initramfs|kernelinit).
+	-m              : Enable measured rootfs.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-r <ref>        : Enable git mode to download kernel using ref.
@@ -133,12 +132,6 @@ arch_to_kernel() {
 		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
 	esac
-}
-
-# When building for measured rootfs initramfs mode, the initramfs image should be previously built.
-check_initramfs_or_die() {
-	[ -f "${default_initramfs}" ] || \
-		die "Initramfs for measured rootfs not found at ${default_initramfs}"
 }
 
 get_git_kernel() {
@@ -312,24 +305,11 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${dpu_configs}"
 	fi
 
-	if [[ -n "${measured_rootfs_mode}" ]]; then
+	if [[ "${measured_rootfs}" == "true" ]]; then
 		info "Enabling config for confidential guest trust storage protection"
 		local cryptsetup_configs
 		cryptsetup_configs="$(ls "${common_path}"/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
-
-		if [[ "${measured_rootfs_mode}" == "initramfs" ]]; then
-			check_initramfs_or_die
-			info "Enabling config for confidential guest measured boot"
-			local initramfs_configs
-			initramfs_configs="$(ls "${common_path}"/confidential_containers/initramfs.conf)"
-			all_configs="${all_configs} ${initramfs_configs}"
-		elif [[ "${measured_rootfs_mode}" == "kernelinit" ]]; then
-			info "Enabling config for dm-verity kernel-init"
-			local kernelinit_configs
-			kernelinit_configs="$(ls "${common_path}"/confidential_containers/kernelinit.conf)"
-			all_configs="${all_configs} ${kernelinit_configs}"
-		fi
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -513,12 +493,6 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-	if [[ "${measured_rootfs_mode}" == "initramfs" ]]; then
-		check_initramfs_or_die
-		info "Copying initramfs from: ${default_initramfs}"
-		cp "${default_initramfs}" ./
-	fi
-
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
 	ARCH=${arch_target}  make oldconfig ${CROSS_BUILD_ARG}
@@ -650,7 +624,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:dD:eEfg:hH:k:m:p:r:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:r:st:u:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -689,9 +663,7 @@ main() {
 				linux_headers="${OPTARG}"
 				;;
 			m)
-				measured_rootfs_mode="${OPTARG}"
-				[[ "${measured_rootfs_mode}" == "initramfs" || "${measured_rootfs_mode}" == "kernelinit" ]] || \
-					die "Invalid measured rootfs mode '${measured_rootfs_mode}' (expected initramfs or kernelinit)"
+				measured_rootfs="true"
 				;;
 			k)
 				kernel_path="$(realpath ${OPTARG})"

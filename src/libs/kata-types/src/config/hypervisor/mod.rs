@@ -78,16 +78,9 @@ const MAX_BRIDGE_SIZE: u32 = 5;
 const KERNEL_PARAM_DELIMITER: &str = " ";
 /// Block size (in bytes) used by dm-verity block size validation.
 pub const VERITY_BLOCK_SIZE_BYTES: u64 = 512;
-/// Kernel dm-verity mode handled by the initramfs.
-pub const VERITY_MODE_INITRAMFS: &str = "initramfs";
-/// Kernel dm-verity mode handled directly by the kernel.
-pub const VERITY_MODE_KERNELINIT: &str = "kernelinit";
-
 /// Parsed kernel dm-verity parameters.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct KernelVerityParams {
-    /// Verity mode ("kernelinit" or "initramfs").
-    pub mode: String,
     /// Root hash value.
     pub root_hash: String,
     /// Salt used to generate verity hash tree.
@@ -129,22 +122,6 @@ pub fn parse_kernel_verity_params(params: &str) -> Result<Option<KernelVerityPar
         values.insert(key.to_string(), value.to_string());
     }
 
-    let mode = values
-        .get("mode")
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Missing kernel_verity_params mode",
-            )
-        })?
-        .to_string();
-    if mode != VERITY_MODE_KERNELINIT && mode != VERITY_MODE_INITRAMFS {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Invalid kernel_verity_params mode: {mode}"),
-        ));
-    }
-
     let root_hash = values
         .get("root_hash")
         .ok_or_else(|| {
@@ -172,61 +149,54 @@ pub fn parse_kernel_verity_params(params: &str) -> Result<Option<KernelVerityPar
         }
     };
 
-    let (data_blocks, data_block_size, hash_block_size) = if mode == VERITY_MODE_KERNELINIT {
-        let data_blocks = parse_uint_field("data_blocks")?;
-        let data_block_size = parse_uint_field("data_block_size")?;
-        let hash_block_size = parse_uint_field("hash_block_size")?;
+    let data_blocks = parse_uint_field("data_blocks")?;
+    let data_block_size = parse_uint_field("data_block_size")?;
+    let hash_block_size = parse_uint_field("hash_block_size")?;
 
-        if salt.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Missing kernel_verity_params salt",
-            ));
-        }
-        if data_blocks == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid kernel_verity_params data_blocks: must be non-zero",
-            ));
-        }
-        if data_block_size == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid kernel_verity_params data_block_size: must be non-zero",
-            ));
-        }
-        if hash_block_size == 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "Invalid kernel_verity_params hash_block_size: must be non-zero",
-            ));
-        }
-        if data_block_size % VERITY_BLOCK_SIZE_BYTES != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "Invalid kernel_verity_params data_block_size: must be multiple of {}",
-                    VERITY_BLOCK_SIZE_BYTES
-                ),
-            ));
-        }
-        if hash_block_size % VERITY_BLOCK_SIZE_BYTES != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "Invalid kernel_verity_params hash_block_size: must be multiple of {}",
-                    VERITY_BLOCK_SIZE_BYTES
-                ),
-            ));
-        }
-
-        (data_blocks, data_block_size, hash_block_size)
-    } else {
-        (0, 0, 0)
-    };
+    if salt.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Missing kernel_verity_params salt",
+        ));
+    }
+    if data_blocks == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid kernel_verity_params data_blocks: must be non-zero",
+        ));
+    }
+    if data_block_size == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid kernel_verity_params data_block_size: must be non-zero",
+        ));
+    }
+    if hash_block_size == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Invalid kernel_verity_params hash_block_size: must be non-zero",
+        ));
+    }
+    if data_block_size % VERITY_BLOCK_SIZE_BYTES != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Invalid kernel_verity_params data_block_size: must be multiple of {}",
+                VERITY_BLOCK_SIZE_BYTES
+            ),
+        ));
+    }
+    if hash_block_size % VERITY_BLOCK_SIZE_BYTES != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Invalid kernel_verity_params hash_block_size: must be multiple of {}",
+                VERITY_BLOCK_SIZE_BYTES
+            ),
+        ));
+    }
 
     Ok(Some(KernelVerityParams {
-        mode,
         root_hash,
         salt,
         data_blocks,

@@ -11,9 +11,7 @@ use crate::{
     VM_ROOTFS_ROOT_BLK, VM_ROOTFS_ROOT_PMEM,
 };
 use kata_types::config::LOG_VPORT_OPTION;
-use kata_types::config::hypervisor::{
-    parse_kernel_verity_params, VERITY_BLOCK_SIZE_BYTES, VERITY_MODE_INITRAMFS,
-};
+use kata_types::config::hypervisor::{parse_kernel_verity_params, VERITY_BLOCK_SIZE_BYTES};
 use kata_types::fs::{
     VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
 };
@@ -60,7 +58,6 @@ fn split_kernel_params(params_string: &str) -> Vec<String> {
 }
 
 struct KernelVerityConfig {
-    mode: String,
     root_hash: String,
     salt: String,
     data_blocks: u64,
@@ -73,7 +70,6 @@ fn new_kernel_verity_params(params_string: &str) -> Result<Option<KernelVerityCo
         .map_err(|err| anyhow!(err.to_string()))?;
 
     Ok(cfg.map(|params| KernelVerityConfig {
-        mode: params.mode,
         root_hash: params.root_hash,
         salt: params.salt,
         data_blocks: params.data_blocks,
@@ -202,14 +198,6 @@ impl KernelParams {
             Some(cfg) => cfg,
             None => return Ok(params),
         };
-
-        if cfg.mode == VERITY_MODE_INITRAMFS {
-            params.append(&mut KernelParams::from_string(&format!(
-                "rootfs_verity.scheme=dm-verity rootfs_verity.hash={}",
-                cfg.root_hash
-            )));
-            return Ok(params);
-        }
 
         let (root_device, hash_device) = match rootfs_driver {
             VM_ROOTFS_DRIVER_PMEM => ("/dev/pmem0p1", "/dev/pmem0p2"),
@@ -495,18 +483,7 @@ mod tests {
     #[test]
     fn test_kernel_verity_params() -> Result<()> {
         let params = KernelParams::new_rootfs_kernel_params(
-            "mode=initramfs,root_hash=abc",
-            VM_ROOTFS_DRIVER_PMEM,
-            VM_ROOTFS_FILESYSTEM_EXT4,
-        )?;
-        assert!(params
-            .to_string()?
-            .contains("rootfs_verity.scheme=dm-verity"));
-        assert!(params.to_string()?.contains("rootfs_verity.hash=abc"));
-        assert!(params.to_string()?.contains("root="));
-
-        let params = KernelParams::new_rootfs_kernel_params(
-            "mode=kernelinit,root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+            "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
             VM_ROOTFS_DRIVER_BLK,
             VM_ROOTFS_FILESYSTEM_EXT4,
         )?;
@@ -516,13 +493,40 @@ mod tests {
         assert!(params_string.contains("rootfstype=ext4"));
 
         let err = KernelParams::new_rootfs_kernel_params(
-            "mode=kernelinit,root_hash=abc,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+            "root_hash=abc,data_blocks=1,data_block_size=4096,hash_block_size=4096",
             VM_ROOTFS_DRIVER_BLK,
             VM_ROOTFS_FILESYSTEM_EXT4,
         )
         .err()
         .expect("expected missing salt error");
         assert!(format!("{err}").contains("Missing kernel_verity_params salt"));
+
+        let err = KernelParams::new_rootfs_kernel_params(
+            "root_hash=abc,salt=def,data_block_size=4096,hash_block_size=4096",
+            VM_ROOTFS_DRIVER_BLK,
+            VM_ROOTFS_FILESYSTEM_EXT4,
+        )
+        .err()
+        .expect("expected missing data_blocks error");
+        assert!(format!("{err}").contains("Missing kernel_verity_params data_blocks"));
+
+        let err = KernelParams::new_rootfs_kernel_params(
+            "root_hash=abc,salt=def,data_blocks=foo,data_block_size=4096,hash_block_size=4096",
+            VM_ROOTFS_DRIVER_BLK,
+            VM_ROOTFS_FILESYSTEM_EXT4,
+        )
+        .err()
+        .expect("expected invalid data_blocks error");
+        assert!(format!("{err}").contains("Invalid kernel_verity_params data_blocks"));
+
+        let err = KernelParams::new_rootfs_kernel_params(
+            "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096,badfield",
+            VM_ROOTFS_DRIVER_BLK,
+            VM_ROOTFS_FILESYSTEM_EXT4,
+        )
+        .err()
+        .expect("expected invalid entry error");
+        assert!(format!("{err}").contains("Invalid kernel_verity_params entry"));
 
         Ok(())
     }
