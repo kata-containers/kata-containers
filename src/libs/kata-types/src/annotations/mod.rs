@@ -149,6 +149,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_KERNEL_HASH: &str =
 /// A sandbox annotation for passing additional guest kernel parameters.
 pub const KATA_ANNO_CFG_HYPERVISOR_KERNEL_PARAMS: &str =
     "io.katacontainers.config.hypervisor.kernel_params";
+/// A sandbox annotation for passing guest dm-verity parameters.
+pub const KATA_ANNO_CFG_HYPERVISOR_KERNEL_VERITY_PARAMS: &str =
+    "io.katacontainers.config.hypervisor.kernel_verity_params";
 /// A sandbox annotation for passing a container guest image path.
 pub const KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH: &str = "io.katacontainers.config.hypervisor.image";
 /// A sandbox annotation for passing a container guest image SHA-512 hash value.
@@ -629,6 +632,9 @@ impl Annotation {
                     }
                     KATA_ANNO_CFG_HYPERVISOR_KERNEL_PARAMS => {
                         hv.boot_info.replace_kernel_params(value);
+                    }
+                    KATA_ANNO_CFG_HYPERVISOR_KERNEL_VERITY_PARAMS => {
+                        hv.boot_info.replace_kernel_verity_params(value)?;
                     }
                     KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH => {
                         hv.boot_info.validate_boot_path(value)?;
