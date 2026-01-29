@@ -179,21 +179,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			},
 			disableNvdimm: true,
 			dax:           false,
-			verityParams:  "mode=kernelinit,root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
-			error:         false,
-		},
-		{
-			rootfstype: string(EXT4),
-			expected: []Param{
-				{"root", string(Nvdimm)},
-				{"rootflags", "data=ordered,errors=remount-ro ro"},
-				{"rootfstype", string(EXT4)},
-				{"rootfs_verity.scheme", "dm-verity"},
-				{"rootfs_verity.hash", "abc"},
-			},
-			disableNvdimm: false,
-			dax:           false,
-			verityParams:  "mode=initramfs,root_hash=abc",
+			verityParams:  "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
 			error:         false,
 		},
 		{
@@ -201,7 +187,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			expected:      []Param{},
 			disableNvdimm: false,
 			dax:           false,
-			verityParams:  "mode=kernelinit,root_hash=abc,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+			verityParams:  "root_hash=abc,data_blocks=1,data_block_size=4096,hash_block_size=4096",
 			error:         true,
 		},
 		{
@@ -209,7 +195,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			expected:      []Param{},
 			disableNvdimm: false,
 			dax:           false,
-			verityParams:  "mode=kernelinit,root_hash=abc,salt=def,data_block_size=4096,hash_block_size=4096",
+			verityParams:  "root_hash=abc,salt=def,data_block_size=4096,hash_block_size=4096",
 			error:         true,
 		},
 		{
@@ -217,7 +203,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			expected:      []Param{},
 			disableNvdimm: false,
 			dax:           false,
-			verityParams:  "mode=initramfs",
+			verityParams:  "root_hash=abc,salt=def,data_blocks=foo,data_block_size=4096,hash_block_size=4096",
 			error:         true,
 		},
 		{
@@ -225,7 +211,7 @@ func TestGetKernelRootParams(t *testing.T) {
 			expected:      []Param{},
 			disableNvdimm: false,
 			dax:           false,
-			verityParams:  "mode=unknown,root_hash=abc",
+			verityParams:  "root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096,badfield",
 			error:         true,
 		},
 	}

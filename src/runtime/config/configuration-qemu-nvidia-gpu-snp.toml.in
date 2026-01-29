@@ -93,7 +93,7 @@ snp_guest_policy = 196608
 kernel_params = "@KERNELPARAMS_NV@"
 
 # Optional dm-verity parameters (comma-separated key=value list):
-# mode=kernelinit|initramfs,root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=...
+# root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=...
 # These are used by the runtime to assemble dm-verity kernel params.
 kernel_verity_params = "@KERNELVERITYPARAMS_CONFIDENTIAL_NV@"
 

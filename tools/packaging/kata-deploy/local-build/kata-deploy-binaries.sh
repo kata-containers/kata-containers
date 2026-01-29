@@ -42,7 +42,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 
 ARCH=${ARCH:-$(uname -m)}
 BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
-MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
@@ -72,10 +72,6 @@ die() {
 	msg="$*"
 	echo "ERROR: ${msg}" >&2
 	exit 1
-}
-
-is_measured_rootfs_enabled() {
-	[[ -n "$(get_measured_rootfs_mode)" ]]
 }
 
 info() {
@@ -486,9 +482,9 @@ install_image() {
 #Install guest image for confidential guests
 install_image_confidential() {
 	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS_MODE=""
+		export MEASURED_ROOTFS="no"
 	else
-		export MEASURED_ROOTFS_MODE="initramfs"
+		export MEASURED_ROOTFS="yes"
 	fi
 	install_image "confidential"
 }
@@ -596,7 +592,7 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export MEASURED_ROOTFS_MODE=""
+	export MEASURED_ROOTFS="no"
 	install_initrd "confidential"
 }
 
@@ -623,7 +619,7 @@ install_initrd_confidential() {
 # Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS_MODE="kernelinit"
+	export MEASURED_ROOTFS="yes"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -633,7 +629,7 @@ install_image_nvidia_gpu() {
 # Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS_MODE=""
+	export MEASURED_ROOTFS="no"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -643,7 +639,7 @@ install_initrd_nvidia_gpu() {
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS_MODE="kernelinit"
+	export MEASURED_ROOTFS="yes"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -653,7 +649,7 @@ install_image_nvidia_gpu_confidential() {
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY
-	export MEASURED_ROOTFS_MODE=""
+	export MEASURED_ROOTFS="no"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
 	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm"}
@@ -758,9 +754,9 @@ install_kernel() {
 
 install_kernel_confidential() {
 	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS_MODE=""
+		export MEASURED_ROOTFS="no"
 	else
-		export MEASURED_ROOTFS_MODE="initramfs"
+		export MEASURED_ROOTFS="yes"
 	fi
 
 	install_kernel_helper \
@@ -770,7 +766,7 @@ install_kernel_confidential() {
 }
 
 install_kernel_cca_confidential() {
-	export MEASURED_ROOTFS_MODE="initramfs"
+	export MEASURED_ROOTFS="yes"
 
 	install_kernel_helper \
 		"assets.kernel-arm-experimental.confidential" \
@@ -794,7 +790,7 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
-	export MEASURED_ROOTFS_MODE="kernelinit"
+	export MEASURED_ROOTFS="yes"
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
@@ -803,7 +799,7 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	export MEASURED_ROOTFS_MODE="kernelinit"
+	export MEASURED_ROOTFS="yes"
 	install_kernel_helper \
 		"assets.kernel.nvidia-confidential" \
 		"kernel-nvidia-gpu-confidential" \
@@ -1033,7 +1029,7 @@ install_shimv2() {
 
 	export GO_VERSION
 	export RUST_VERSION
-	export MEASURED_ROOTFS_MODE
+	export MEASURED_ROOTFS
 	export RUNTIME_CHOICE
 
 	for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
@@ -1482,7 +1478,7 @@ handle_build() {
 			tar --zstd -tvf "${modules_final_tarball_path}"
 			;;
 		shim-v2)
-			if is_measured_rootfs_enabled; then
+			if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 				for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 					[[ -f "${workdir}/root_hash_${variant}.txt" ]] && mv "${workdir}/root_hash_${variant}.txt" "${workdir}/shim-v2-root_hash_${variant}.txt"
 				done
@@ -1543,7 +1539,7 @@ handle_build() {
 				)
 				;;
 			shim-v2)
-				if is_measured_rootfs_enabled; then
+				if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
 					local found_any=""
 					for variant in confidential nvidia-gpu nvidia-gpu-confidential; do
 						# The variants could be built independently we need to check if
@@ -1551,7 +1547,7 @@ handle_build() {
 					[[ -f "${workdir}/shim-v2-root_hash_${variant}.txt" ]] && files_to_push+=("shim-v2-root_hash_${variant}.txt")
 						found_any="yes"
 					done
-					[[ -z "${found_any}" ]] && die "No files to push for shim-v2 with MEASURED_ROOTFS_MODE support"
+					[[ -z "${found_any}" ]] && die "No files to push for shim-v2 with MEASURED_ROOTFS support"
 				fi
 				;;
 			*)

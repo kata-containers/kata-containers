@@ -41,25 +41,6 @@ warning()
 	echo "WARNING: ${msg}"
 }
 
-get_measured_rootfs_mode()
-{
-	local mode="${MEASURED_ROOTFS_MODE:-}"
-
-	if [[ -z "${mode}" ]]; then
-		echo ""
-		return
-	fi
-
-	case "${mode}" in
-		initramfs|kernelinit)
-			echo "${mode}"
-			;;
-		*)
-			die "Invalid MEASURED_ROOTFS_MODE='${mode}' (expected initramfs or kernelinit)"
-			;;
-	esac
-}
-
 check_program()
 {
 	type "$1" >/dev/null 2>&1

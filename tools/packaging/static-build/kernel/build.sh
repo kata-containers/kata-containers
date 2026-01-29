@@ -18,7 +18,6 @@ repo_root_dir="${repo_root_dir:-}"
 
 [[ -n "${repo_root_dir}" ]] || die "repo_root_dir is not set"
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
-readonly initramfs_builder="${repo_root_dir}/tools/packaging/static-build/initramfs/build.sh"
 
 BUILDX=
 PLATFORM=
@@ -26,19 +25,13 @@ PLATFORM=
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
-MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 kernel_builder_args="-a ${ARCH:-} $*"
 KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
-measured_rootfs_mode="$(get_measured_rootfs_mode)"
-if [[ -n "${measured_rootfs_mode}" ]]; then
-	kernel_builder_args+=" -m ${measured_rootfs_mode}"
-
-	if [[ "${measured_rootfs_mode}" == "initramfs" ]]; then
-		info "build initramfs for kernel with measured rootfs support"
-		"${initramfs_builder}"
-	fi
+if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
+	kernel_builder_args+=" -m"
 fi
 
 if [[ "${CROSS_BUILD:-}" == "true" ]]; then
