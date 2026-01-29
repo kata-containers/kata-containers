@@ -128,7 +128,7 @@ const (
 )
 
 func GetKernelRootParams(rootfstype string, disableNvdimm bool, dax bool, kernelVerityParams string) ([]Param, error) {
-	cfg, err := parseKernelVerityParams(kernelVerityParams)
+	cfg, err := ParseKernelVerityParams(kernelVerityParams)
 	if err != nil {
 		return []Param{}, err
 	}
@@ -235,7 +235,7 @@ type kernelVerityConfig struct {
 	hashBlockSize uint64
 }
 
-func parseKernelVerityParams(params string) (*kernelVerityConfig, error) {
+func ParseKernelVerityParams(params string) (*kernelVerityConfig, error) {
 	if strings.TrimSpace(params) == "" {
 		return nil, nil
 	}
