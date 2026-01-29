@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: footubuntu
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   volumes:
   - name: runv

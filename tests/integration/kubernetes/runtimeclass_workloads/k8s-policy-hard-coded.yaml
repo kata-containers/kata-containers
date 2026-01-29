@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: hard-coded-policy-pod
 spec:
-  terminationGracePeriodSeconds: 0
   shareProcessNamespace: true
   runtimeClassName: kata
   containers:

@@ -10,7 +10,6 @@ metadata:
   labels:
     app: tcp-liveness
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: tcp-liveness

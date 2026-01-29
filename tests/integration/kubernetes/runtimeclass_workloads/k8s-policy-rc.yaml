@@ -17,7 +17,6 @@ spec:
       labels:
         app: policy-nginx-rc
     spec:
-      terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       containers:
       - name: nginxtest

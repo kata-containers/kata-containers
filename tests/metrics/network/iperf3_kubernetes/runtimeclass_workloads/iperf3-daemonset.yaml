@@ -26,4 +26,3 @@ spec:
       - name: iperf3-client
         image: networkstatic/iperf3
         command: ['/bin/sh', '-c', 'sleep infinity']
-      terminationGracePeriodSeconds: 0

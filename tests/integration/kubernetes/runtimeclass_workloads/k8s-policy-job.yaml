@@ -10,7 +10,6 @@ metadata:
 spec:
   template:
     spec:
-      terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       containers:
         - name: hello

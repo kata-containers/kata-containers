@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: test-readonly-volume
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   restartPolicy: Never
   volumes:
