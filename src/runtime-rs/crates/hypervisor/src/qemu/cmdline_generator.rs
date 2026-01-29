@@ -1899,6 +1899,7 @@ impl ToQemuParams for ObjectSevSnpGuest {
                 "kernel-hashes={}",
                 if self.kernel_hashes { "on" } else { "off" }
             ));
+            params.push("policy=0x30000".to_owned());
             if let Some(host_data) = &self.host_data {
                 params.push(format!("host-data={host_data}"))
             }
