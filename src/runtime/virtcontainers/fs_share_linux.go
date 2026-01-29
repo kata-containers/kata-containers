@@ -306,13 +306,14 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 
 	// Check if this volume source has already been shared by another container in this pod
 	f.srcGuestMapLock.Lock()
-	defer f.srcGuestMapLock.Unlock()
 	if guestPath, ok := f.srcGuestMap[m.Source]; ok {
+		f.srcGuestMapLock.Unlock()
 		if caps.IsFsSharingSupported() {
 			m.HostPath = filepath.Join(getMountPath(f.sandbox.ID()), filepath.Base(guestPath))
 		}
 		return &SharedFile{guestPath: guestPath}, nil
 	}
+	f.srcGuestMapLock.Unlock()
 
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
