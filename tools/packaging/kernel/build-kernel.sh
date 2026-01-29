@@ -520,9 +520,12 @@ build_kernel() {
 	popd >>/dev/null
 
 	if [[ "${gpu_vendor}" == "${VENDOR_NVIDIA}" ]]; then
+		# We need in-tree modules as well as out-of-tree ones for NVIDIA GPU
+		make -C "${kernel_path}" -j "$(nproc)" INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${kernel_path}" modules_install
+
 		pushd open-gpu-kernel-modules
 		make -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" > /dev/null
-		make INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" modules_install
+		make INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH="${kernel_path}" -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" modules_install
 		make -j "$(nproc)" CC=gcc SYSSRC="${kernel_path}" clean > /dev/null
 	fi
 }
