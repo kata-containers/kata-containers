@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: POD_NAME
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   shareProcessNamespace: true
   containers:

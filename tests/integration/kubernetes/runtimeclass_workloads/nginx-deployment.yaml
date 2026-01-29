@@ -17,7 +17,6 @@ spec:
       labels:
         app: nginx
     spec:
-      terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       containers:
       - name: nginx

@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: memory-test
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: memory-test-ctr

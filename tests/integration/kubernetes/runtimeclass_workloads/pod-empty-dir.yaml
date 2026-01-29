@@ -8,7 +8,6 @@ kind: Pod
 metadata:
   name: sharevol-kata
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
   - name: test

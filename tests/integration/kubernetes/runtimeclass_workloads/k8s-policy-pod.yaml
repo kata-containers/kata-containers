@@ -9,7 +9,6 @@ metadata:
   name: policy-pod
   uid: policy-pod-uid
 spec:
-  terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
     - name: prometheus
