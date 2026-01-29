@@ -103,8 +103,13 @@ func SetEphemeralStorageType(ociSpec specs.Spec, disableGuestEmptyDir bool) spec
 		if vc.IsEphemeralStorage(mnt.Source) {
 			ociSpec.Mounts[idx].Type = vc.KataEphemeralDevType
 		}
-		if vc.Isk8sHostEmptyDir(mnt.Source) && !disableGuestEmptyDir {
-			ociSpec.Mounts[idx].Type = vc.KataLocalDevType
+		if !disableGuestEmptyDir {
+			if vc.Isk8sHostEmptyDir(mnt.Source) {
+				ociSpec.Mounts[idx].Type = vc.KataLocalDevType
+			}
+			if ok := vc.IsKubeletEmptyDirSubpath(mnt.Source); ok {
+				ociSpec.Mounts[idx].Type = vc.KataLocalDevType
+			}
 		}
 	}
 	return ociSpec

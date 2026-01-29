@@ -51,6 +51,31 @@ setup() {
 	kubectl exec $pod_name -- "${dd_command[@]}" | tail -1 | grep 0
 }
 
+@test "Empty dir volume with subPath shares data from initContainer" {
+  # Regression test for kata-containers#12218 (fixed by PR #12280)
+  local pod_file="${pod_config_dir}/pod-empty-dir-subpath.yaml"
+
+  # Generate policy if running under CoCo (no-op in non-CoCo runs)
+  auto_generate_policy "${policy_settings_dir}" "${pod_file}"
+
+  kubectl create -f "${pod_file}"
+
+  # Wait until the pod finishes (Succeeded or Failed)
+  local cmd="kubectl get pod ${pod_name} -o jsonpath='{.status.phase}' | grep -E 'Succeeded|Failed'"
+  waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
+
+  local phase
+  phase="$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}')"
+  assert_equal "Succeeded" "${phase}"
+
+  pod_logs_file="$(mktemp)"
+  kubectl logs "${pod_name}" main > "${pod_logs_file}"
+  bats_unbuffered_info "Main container logs: $(cat "${pod_logs_file}")"
+
+  grep -q "from-init" "${pod_logs_file}"
+  grep -q "subpath-ok" "${pod_logs_file}"
+}
+
 @test "Empty dir volume when FSGroup is specified with non-root container" {
 	local agnhost_name
 	local agnhost_version
