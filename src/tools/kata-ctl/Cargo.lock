@@ -2025,6 +2025,7 @@ dependencies = [
  "glob",
  "hex",
  "lazy_static",
+ "nix 0.26.4",
  "num_cpus",
  "oci-spec",
  "regex",

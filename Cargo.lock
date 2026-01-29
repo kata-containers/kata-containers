@@ -2304,6 +2304,7 @@ dependencies = [
  "glob",
  "hex",
  "lazy_static",
+ "nix 0.26.4",
  "num_cpus",
  "oci-spec 0.8.3",
  "regex",

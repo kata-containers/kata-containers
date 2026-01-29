@@ -26,7 +26,6 @@
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
 use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
 use crate::{resolve_path, sl, validate_path};
-use byte_unit::{Byte, Unit};
 use lazy_static::lazy_static;
 use regex::RegexSet;
 use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
@@ -34,7 +33,6 @@ use std::collections::HashMap;
 use std::io::{self, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
 mod dragonball;
 pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
@@ -1018,13 +1016,16 @@ impl MemoryInfo {
             self.file_mem_backend,
             "Memory backend file {} is invalid: {}"
         )?;
-        if self.default_maxmemory == 0 {
-            let s = System::new_with_specifics(
-                RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
-            );
-            self.default_maxmemory = Byte::from_u64(s.total_memory())
-                .get_adjusted_unit(Unit::MiB)
-                .get_value() as u32;
+
+        let sysinfo = nix::sys::sysinfo::sysinfo()?;
+        let host_memory = sysinfo.ram_total() >> 20;
+
+        if u64::from(self.default_memory) > host_memory {
+            self.default_memory = host_memory as u32;
+        }
+
+        if self.default_maxmemory == 0 || u64::from(self.default_maxmemory) > host_memory {
+            self.default_maxmemory = host_memory as u32;
         }
         Ok(())
     }

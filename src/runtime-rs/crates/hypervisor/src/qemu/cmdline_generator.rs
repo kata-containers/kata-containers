@@ -249,29 +249,8 @@ struct Memory {
 
 impl Memory {
     fn new(config: &HypervisorConfig) -> Memory {
-        // Move this to QemuConfig::adjust_config()?
-
-        let mut mem_size = config.memory_info.default_memory as u64;
-        let mut max_mem_size = config.memory_info.default_maxmemory as u64;
-
-        if let Ok(sysinfo) = nix::sys::sysinfo::sysinfo() {
-            let host_memory = sysinfo.ram_total() >> 20;
-
-            if mem_size > host_memory {
-                info!(sl!(), "'default_memory' given in configuration.toml is greater than host memory, adjusting to host memory");
-                mem_size = host_memory
-            }
-
-            if max_mem_size == 0 || max_mem_size > host_memory {
-                max_mem_size = host_memory
-            }
-        } else {
-            warn!(sl!(), "Failed to get host memory size, cannot verify or adjust configuration.toml's 'default_maxmemory'");
-
-            if max_mem_size == 0 {
-                max_mem_size = mem_size;
-            };
-        }
+        let mem_size = config.memory_info.default_memory as u64;
+        let max_mem_size = config.memory_info.default_maxmemory as u64;
 
         // Memory sizes are given in megabytes in configuration.toml so we
         // need to convert them to bytes for storage.
