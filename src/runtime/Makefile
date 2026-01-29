@@ -152,9 +152,9 @@ FIRMWARETDVFVOLUMEPATH :=
 
 FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
 
-ROOTMEASURECONFIG ?= ""
-KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
-KERNELQEMUCOCODEVPARAMS += $(ROOTMEASURECONFIG)
+KERNELVERITYPARAMS ?= ""
+KERNELVERITYPARAMS_NV ?= ""
+KERNELVERITYPARAMS_CONFIDENTIAL_NV ?= ""
 
 # Name of default configuration file the runtime will use.
 CONFIG_FILE = configuration.toml
@@ -221,8 +221,8 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 #Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 #Default experimental features enabled
@@ -659,6 +659,8 @@ USER_VARS += DEFAULTMEMORY_NV
 USER_VARS += DEFAULTVFIOPORT_NV
 USER_VARS += DEFAULTPCIEROOTPORT_NV
 USER_VARS += KERNELPARAMS_NV
+USER_VARS += KERNELVERITYPARAMS_NV
+USER_VARS += KERNELVERITYPARAMS_CONFIDENTIAL_NV
 USER_VARS += DEFAULTTIMEOUT_NV
 USER_VARS += DEFSANDBOXCGROUPONLY_NV
 USER_VARS += DEFROOTFSTYPE
@@ -685,6 +687,7 @@ USER_VARS += TDXCPUFEATURES
 USER_VARS += DEFMACHINETYPE_CLH
 USER_VARS += DEFMACHINETYPE_STRATOVIRT
 USER_VARS += KERNELPARAMS
+USER_VARS += KERNELVERITYPARAMS
 USER_VARS += KERNELTDXPARAMS
 USER_VARS += KERNELQEMUCOCODEVPARAMS
 USER_VARS += LIBEXECDIR

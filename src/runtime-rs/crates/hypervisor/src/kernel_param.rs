@@ -11,6 +11,9 @@ use crate::{
     VM_ROOTFS_ROOT_BLK, VM_ROOTFS_ROOT_PMEM,
 };
 use kata_types::config::LOG_VPORT_OPTION;
+use kata_types::config::hypervisor::{
+    parse_kernel_verity_params, VERITY_BLOCK_SIZE_BYTES, VERITY_MODE_INITRAMFS,
+};
 use kata_types::fs::{
     VM_ROOTFS_FILESYSTEM_EROFS, VM_ROOTFS_FILESYSTEM_EXT4, VM_ROOTFS_FILESYSTEM_XFS,
 };
@@ -20,7 +23,78 @@ use kata_types::fs::{
 const VSOCK_LOGS_PORT: &str = "1025";
 
 const KERNEL_KV_DELIMITER: &str = "=";
-const KERNEL_PARAM_DELIMITER: &str = " ";
+const KERNEL_PARAM_DELIMITER: char = ' ';
+
+// Split kernel params on spaces, but keep quoted substrings intact.
+// Example: dm-mod.create="dm-verity,,,ro,0 736328 verity 1 /dev/vda1 /dev/vda2 ...".
+fn split_kernel_params(params_string: &str) -> Vec<String> {
+    let mut params = Vec::new();
+    let mut current = String::new();
+    let mut in_quote = false;
+
+    for c in params_string.chars() {
+        if c == '"' {
+            in_quote = !in_quote;
+            current.push(c);
+            continue;
+        }
+
+        if c == KERNEL_PARAM_DELIMITER && !in_quote {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() {
+                params.push(trimmed.to_string());
+            }
+            current.clear();
+            continue;
+        }
+
+        current.push(c);
+    }
+
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        params.push(trimmed.to_string());
+    }
+
+    params
+}
+
+struct KernelVerityConfig {
+    mode: String,
+    root_hash: String,
+    salt: String,
+    data_blocks: u64,
+    data_block_size: u64,
+    hash_block_size: u64,
+}
+
+fn new_kernel_verity_params(params_string: &str) -> Result<Option<KernelVerityConfig>> {
+    let cfg = parse_kernel_verity_params(params_string)
+        .map_err(|err| anyhow!(err.to_string()))?;
+
+    Ok(cfg.map(|params| KernelVerityConfig {
+        mode: params.mode,
+        root_hash: params.root_hash,
+        salt: params.salt,
+        data_blocks: params.data_blocks,
+        data_block_size: params.data_block_size,
+        hash_block_size: params.hash_block_size,
+    }))
+}
+
+fn kernel_verity_root_flags(rootfs_type: &str) -> Result<String> {
+    let normalized = if rootfs_type.is_empty() {
+        VM_ROOTFS_FILESYSTEM_EXT4
+    } else {
+        rootfs_type
+    };
+
+    match normalized {
+        VM_ROOTFS_FILESYSTEM_EXT4 => Ok("data=ordered,errors=remount-ro ro".to_string()),
+        VM_ROOTFS_FILESYSTEM_XFS | VM_ROOTFS_FILESYSTEM_EROFS => Ok("ro".to_string()),
+        _ => Err(anyhow!("Unsupported rootfs type {}", rootfs_type)),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Param {
@@ -71,7 +145,11 @@ impl KernelParams {
         Self { params }
     }
 
-    pub(crate) fn new_rootfs_kernel_params(rootfs_driver: &str, rootfs_type: &str) -> Result<Self> {
+    pub(crate) fn new_rootfs_kernel_params(
+        kernel_verity_params: &str,
+        rootfs_driver: &str,
+        rootfs_type: &str,
+    ) -> Result<Self> {
         let mut params = vec![];
 
         match rootfs_driver {
@@ -119,7 +197,60 @@ impl KernelParams {
 
         params.push(Param::new("rootfstype", rootfs_type));
 
-        Ok(Self { params })
+        let mut params = Self { params };
+        let cfg = match new_kernel_verity_params(kernel_verity_params)? {
+            Some(cfg) => cfg,
+            None => return Ok(params),
+        };
+
+        if cfg.mode == VERITY_MODE_INITRAMFS {
+            params.append(&mut KernelParams::from_string(&format!(
+                "rootfs_verity.scheme=dm-verity rootfs_verity.hash={}",
+                cfg.root_hash
+            )));
+            return Ok(params);
+        }
+
+        let (root_device, hash_device) = match rootfs_driver {
+            VM_ROOTFS_DRIVER_PMEM => ("/dev/pmem0p1", "/dev/pmem0p2"),
+            VM_ROOTFS_DRIVER_BLK | VM_ROOTFS_DRIVER_BLK_CCW | VM_ROOTFS_DRIVER_MMIO => {
+                ("/dev/vda1", "/dev/vda2")
+            }
+            _ => return Err(anyhow!("Unsupported rootfs driver {}", rootfs_driver)),
+        };
+
+        let data_sectors = (cfg.data_block_size / VERITY_BLOCK_SIZE_BYTES) * cfg.data_blocks;
+        let root_flags = kernel_verity_root_flags(rootfs_type)?;
+
+        let dm_cmd = format!(
+            "dm-verity,,,ro,0 {} verity 1 {} {} {} {} {} 0 sha256 {} {}",
+            data_sectors,
+            root_device,
+            hash_device,
+            cfg.data_block_size,
+            cfg.hash_block_size,
+            cfg.data_blocks,
+            cfg.root_hash,
+            cfg.salt
+        );
+
+        params.remove_all_by_key("root".to_string());
+        params.remove_all_by_key("rootflags".to_string());
+        params.remove_all_by_key("rootfstype".to_string());
+
+        params.push(Param {
+            key: "dm-mod.create".to_string(),
+            value: format!("\"{}\"", dm_cmd),
+        });
+        params.push(Param::new("root", "/dev/dm-0"));
+        params.push(Param::new("rootflags", &root_flags));
+        if rootfs_type.is_empty() {
+            params.push(Param::new("rootfstype", VM_ROOTFS_FILESYSTEM_EXT4));
+        } else {
+            params.push(Param::new("rootfstype", rootfs_type));
+        }
+
+        Ok(params)
     }
 
     pub(crate) fn append(&mut self, params: &mut KernelParams) {
@@ -138,7 +269,7 @@ impl KernelParams {
     pub(crate) fn from_string(params_string: &str) -> Self {
         let mut params = vec![];
 
-        let parameters_vec: Vec<&str> = params_string.split(KERNEL_PARAM_DELIMITER).collect();
+        let parameters_vec = split_kernel_params(params_string);
 
         for param in parameters_vec.iter() {
             if param.is_empty() {
@@ -170,7 +301,7 @@ impl KernelParams {
             parameters.push(param.to_string()?);
         }
 
-        Ok(parameters.join(KERNEL_PARAM_DELIMITER))
+        Ok(parameters.join(&KERNEL_PARAM_DELIMITER.to_string()))
     }
 }
 
@@ -347,7 +478,8 @@ mod tests {
 
         for (i, t) in tests.iter().enumerate() {
             let msg = format!("test[{i}]: {t:?}");
-            let result = KernelParams::new_rootfs_kernel_params(t.rootfs_driver, t.rootfs_type);
+            let result =
+                KernelParams::new_rootfs_kernel_params("", t.rootfs_driver, t.rootfs_type);
             let msg = format!("{msg}, result: {result:?}");
             if t.result.is_ok() {
                 assert!(result.is_ok(), "{}", msg);
@@ -358,5 +490,40 @@ mod tests {
                 assert!(actual_error == expected_error, "{}", msg);
             }
         }
+    }
+
+    #[test]
+    fn test_kernel_verity_params() -> Result<()> {
+        let params = KernelParams::new_rootfs_kernel_params(
+            "mode=initramfs,root_hash=abc",
+            VM_ROOTFS_DRIVER_PMEM,
+            VM_ROOTFS_FILESYSTEM_EXT4,
+        )?;
+        assert!(params
+            .to_string()?
+            .contains("rootfs_verity.scheme=dm-verity"));
+        assert!(params.to_string()?.contains("rootfs_verity.hash=abc"));
+        assert!(params.to_string()?.contains("root="));
+
+        let params = KernelParams::new_rootfs_kernel_params(
+            "mode=kernelinit,root_hash=abc,salt=def,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+            VM_ROOTFS_DRIVER_BLK,
+            VM_ROOTFS_FILESYSTEM_EXT4,
+        )?;
+        let params_string = params.to_string()?;
+        assert!(params_string.contains("dm-mod.create="));
+        assert!(params_string.contains("root=/dev/dm-0"));
+        assert!(params_string.contains("rootfstype=ext4"));
+
+        let err = KernelParams::new_rootfs_kernel_params(
+            "mode=kernelinit,root_hash=abc,data_blocks=1,data_block_size=4096,hash_block_size=4096",
+            VM_ROOTFS_DRIVER_BLK,
+            VM_ROOTFS_FILESYSTEM_EXT4,
+        )
+        .err()
+        .expect("expected missing salt error");
+        assert!(format!("{err}").contains("Missing kernel_verity_params salt"));
+
+        Ok(())
     }
 }

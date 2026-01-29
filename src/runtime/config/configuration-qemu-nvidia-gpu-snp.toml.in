@@ -15,7 +15,7 @@
 [hypervisor.qemu]
 path = "@QEMUSNPPATH@"
 kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
-initrd = "@INITRDPATH_CONFIDENTIAL_NV@"
+image = "@IMAGEPATH_CONFIDENTIAL_NV@"
 
 machine_type = "@MACHINETYPE@"
 
@@ -34,7 +34,7 @@ rootfs_type = @DEFROOTFSTYPE@
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
@@ -75,7 +75,7 @@ snp_id_auth = ""
 
 # SNP Guest Policy, the ‘POLICY’ parameter to the SNP_LAUNCH_START command.
 # If unset, the QEMU default policy (0x30000) will be used.
-# Notice that the guest policy is enforced at VM launch, and your pod VMs 
+# Notice that the guest policy is enforced at VM launch, and your pod VMs
 # won't start at all if the policy denys it. This will be indicated by a
 # 'SNP_LAUNCH_START' error.
 snp_guest_policy = 196608
@@ -91,6 +91,11 @@ snp_guest_policy = 196608
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
 kernel_params = "@KERNELPARAMS_NV@"
+
+# Optional dm-verity parameters (comma-separated key=value list):
+# mode=kernelinit|initramfs,root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=...
+# These are used by the runtime to assemble dm-verity kernel params.
+kernel_verity_params = "@KERNELVERITYPARAMS_CONFIDENTIAL_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
@@ -394,10 +399,10 @@ disable_image_nvdimm = @DEFDISABLEIMAGENVDIMM_NV@
 pcie_root_port = 0
 
 # In a confidential compute environment hot-plugging can compromise
-# security. 
-# Enable cold-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
-# The default setting is  "no-port", which means disabled. 
+# security.
+# Enable cold-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
+# The default setting is  "no-port", which means disabled.
 cold_plug_vfio = "@DEFAULTVFIOPORT_NV@"
 
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
@@ -710,9 +715,9 @@ enable_pprof = false
 
 # Indicates the CreateContainer request timeout needed for the workload(s)
 # It using guest_pull this includes the time to pull the image inside the guest
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)  
-# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
+# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
+# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout.
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFAULTTIMEOUT_NV@
 

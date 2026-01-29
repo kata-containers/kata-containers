@@ -148,8 +148,7 @@ ifneq (,$(QEMUCMD))
     endif
 endif
 
-ROOTMEASURECONFIG ?= ""
-KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
+KERNELVERITYPARAMS ?= ""
 
 # TDX
 DEFSHAREDFS_QEMU_TDX_VIRTIOFS := none
@@ -176,8 +175,8 @@ DEFMEMSLOTS := 10
 DEFMAXMEMSZ := 0
 ##VAR DEFBRIDGES=<number> Default number of bridges
 DEFBRIDGES := 1
-DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\"]
-DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
+DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\"]
+DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
 ##VAR DEFAULTEXPFEATURES=[features] Default experimental features enabled
@@ -527,6 +526,7 @@ USER_VARS += MACHINEACCELERATORS
 USER_VARS += CPUFEATURES
 USER_VARS += DEFMACHINETYPE_CLH
 USER_VARS += KERNELPARAMS
+USER_VARS += KERNELVERITYPARAMS
 USER_VARS += KERNELPARAMS_DB
 USER_VARS += KERNELPARAMS_FC
 USER_VARS += LIBEXECDIR

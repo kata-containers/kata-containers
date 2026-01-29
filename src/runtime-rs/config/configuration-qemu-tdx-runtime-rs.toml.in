@@ -39,7 +39,7 @@ vm_rootfs_driver = "virtio-blk-pci"
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
@@ -73,6 +73,11 @@ valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
 kernel_params = "@KERNELTDXPARAMS@"
+
+# Optional dm-verity parameters (comma-separated key=value list):
+# mode=kernelinit|initramfs,root_hash=...,salt=...,data_blocks=...,data_block_size=...,hash_block_size=...
+# These are used by the runtime to assemble dm-verity kernel params.
+kernel_verity_params = "@KERNELVERITYPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty

@@ -17,6 +17,11 @@ mount -t proc -o nodev,noexec,nosuid proc /proc
 echo "/sbin/mdev" > /proc/sys/kernel/hotplug
 mdev -s
 
+log() {
+	msg="initramfs: $*"
+	printf '%s\n' "$msg" > /dev/kmsg
+}
+
 get_option() {
 	local value
 	value=" $(cat /proc/cmdline) "
@@ -34,24 +39,24 @@ hash_device=${root_device%?}2
 # just mounted when verification is disabled.
 if [ ! -e "${root_device}" ]
 then
-	echo "No root device ${root_device} found"
+	log "No root device ${root_device} found"
 	exit 1
 fi
 
 if [ "${rootfs_verifier}" = "dm-verity" ]
 then
-	echo "Verify the root device with ${rootfs_verifier}"
+	log "Verify the root device with ${rootfs_verifier}"
 
 	if [ ! -e "${hash_device}" ]
 	then
-		echo "No hash device ${hash_device} found. Cannot verify the root device"
+		log "No hash device ${hash_device} found. Cannot verify the root device"
 		exit 1
 	fi
 
 	veritysetup open --panic-on-corruption "${root_device}" root "${hash_device}" "${rootfs_hash}"
 	mount /dev/mapper/root /mnt
 else
-	echo "No LUKS device found"
+	log "No LUKS device found"
 	mount "${root_device}" /mnt
 fi
 

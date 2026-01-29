@@ -773,7 +773,12 @@ func (q *qemuArchBase) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, 
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {
 	if config.ImagePath != "" {
-		kernelRootParams, err := GetKernelRootParams(config.RootfsType, q.disableNvdimm, false)
+		kernelRootParams, err := GetKernelRootParams(
+			config.RootfsType,
+			q.disableNvdimm,
+			false,
+			config.KernelVerityParams,
+		)
 		if err != nil {
 			return err
 		}
@@ -781,7 +786,12 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) error {
 			q.qemuMachine.Options = strings.Join([]string{
 				q.qemuMachine.Options, qemuNvdimmOption,
 			}, ",")
-			kernelRootParams, err = GetKernelRootParams(config.RootfsType, q.disableNvdimm, q.dax)
+			kernelRootParams, err = GetKernelRootParams(
+				config.RootfsType,
+				q.disableNvdimm,
+				q.dax,
+				config.KernelVerityParams,
+			)
 			if err != nil {
 				return err
 			}

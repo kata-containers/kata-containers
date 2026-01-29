@@ -636,6 +636,15 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 		}
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelVerityParams]; ok {
+		if value != "" {
+			if _, err := vc.ParseKernelVerityParams(value); err != nil {
+				return fmt.Errorf("invalid kernel_verity_params in annotation: %w", err)
+			}
+			config.HypervisorConfig.KernelVerityParams = value
+		}
+	}
+
 	return nil
 }
 
