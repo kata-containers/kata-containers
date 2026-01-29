@@ -219,6 +219,15 @@ queue_size = 128
 # Block device multi-queue, default 1
 num_queues = 1
 
+# network_queues configures the number of virtio-net queue pairs (RX/TX) exposed to the guest.
+# Setting network_queues = N creates N RX queues and N TX queues (i.e., N queue pairs).
+# More queues can improve network throughput and reduce per-queue contention by allowing packet processing to scale
+# across multiple vCPUs/threads (subject to host/guest capabilities and backend configuration such as vhost-net).
+# Increasing this value consumes more resources (e.g., virtqueue state, interrupts/MSI-X vectors, backend threads),
+# so it should typically not exceed the number of vCPUs or the practical parallelism of the networking backend.
+# Default: 1, Range: 1..=256
+network_queues = @DEFNETQUEUES@
+
 # Enable huge pages for VM RAM, default false
 # Enabling this will result in the VM memory
 # being allocated using huge pages.
