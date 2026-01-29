@@ -19,7 +19,7 @@ pub struct Settings {
     pub pause_container: policy::KataSpec,
     pub other_container: policy::KataSpec,
     pub volumes: Volumes,
-    pub device_annotations: policy::DeviceAnnotations,
+    pub devices: policy::Devices,
     pub kata_config: KataConfig,
     pub cluster_config: policy::ClusterConfig,
     pub request_defaults: policy::RequestDefaults,
