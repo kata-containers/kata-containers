@@ -114,29 +114,29 @@ adapt_common_policy_settings_for_non_coco() {
 
 	# Using UpdateEphemeralMountsRequest - instead of CopyFileRequest.
 	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Using a different path to container container root.
 	jq '.common.root_path = "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Using CreateContainer Storage input structs for configMap & secret volumes - instead of using CopyFile like CoCo.
 	jq '.kata_config.enable_configmap_secret_storages = true' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Using watchable binds for configMap volumes - instead of CopyFileRequest.
 	jq '.volumes.configMap.mount_point = "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-" | .volumes.configMap.driver = "watchable-bind"' \
 		"${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Using a Storage input struct for paths shared with the Host using virtio-fs.
 	jq '.sandbox.storages += [{"driver":"virtio-fs","driver_options":[],"fs_group":null,"fstype":"virtiofs","mount_point":"/run/kata-containers/shared/containers/","options":[],"source":"kataShared"}]' \
 		"${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	# Disable guest pull.
 	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for AKS Hosts
@@ -144,16 +144,16 @@ adapt_common_policy_settings_for_aks() {
 	info "Adapting common policy settings for AKS Hosts"
 
 	jq '.pause_container.Process.User.UID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	jq '.pause_container.Process.User.GID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	jq '.cluster_config.pause_container_image = "mcr.microsoft.com/oss/v2/kubernetes/pause:3.6"' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 
 	jq '.cluster_config.pause_container_id_policy = "v2"' "${settings_dir}/genpolicy-settings.json" > temp.json
-	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for CBL-Mariner Hosts
@@ -161,7 +161,7 @@ adapt_common_policy_settings_for_cbl_mariner() {
 	local settings_dir=$1
 
 	info "Adapting common policy settings for KATA_HOST_OS=cbl-mariner"
-	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # Adapt common policy settings for NVIDIA GPU platforms (CI runners use containerd 2.x).
@@ -169,7 +169,7 @@ adapt_common_policy_settings_for_nvidia_gpu() {
 	local settings_dir=$1
 
 	info "Adapting common policy settings for NVIDIA GPU platform (${KATA_HYPERVISOR})"
-	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for various platforms
@@ -195,10 +195,10 @@ create_common_genpolicy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
-	adapt_common_policy_settings "${default_genpolicy_settings_dir}"
-
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
+
+	adapt_common_policy_settings "${genpolicy_settings_dir}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
