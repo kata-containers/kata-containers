@@ -282,7 +282,7 @@ teardown() {
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"
-	teardown_common "${node}" "${node_start_time:-}"
+
 	# Clean-up
 	kubectl delete pod "${pod_name}"
 	kubectl delete configmap "${configmap_name}"
@@ -291,4 +291,6 @@ teardown() {
 	rm -f "${incorrect_configmap_yaml}"
 	rm -f "${testcase_pre_generate_pod_yaml}"
 	rm -f "${testcase_pre_generate_configmap_yaml}"
+
+	teardown_common "${node}" "${node_start_time:-}"
 }
