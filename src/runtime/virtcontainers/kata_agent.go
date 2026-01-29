@@ -1620,6 +1620,8 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount, annotations map
 			}
 			if sizeOption != "" {
 				dir_options = append(dir_options, sizeOption)
+				// save size option to mount options for later use in update
+				mounts[idx].Options = append(mounts[idx].Options, sizeOption)
 			}
 
 
