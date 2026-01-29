@@ -19,6 +19,7 @@ ovmf_repo="${ovmf_repo:-}"
 ovmf_version="${ovmf_version:-}"
 ovmf_package="${ovmf_package:-}"
 package_output_dir="${package_output_dir:-}"
+tdx_reference_value_calculator_url="${tdx_reference_value_calculator_url:-}"
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX="${PREFIX:-/opt/kata}"
 architecture="${architecture:-X64}"
@@ -69,6 +70,18 @@ build_path_fv="${build_path_target_toolchain}/FV"
 if [ "${ovmf_build}" == "tdx" ]; then
 	build_path_arch="${build_path_target_toolchain}/X64"
 	stat "${build_path_fv}/OVMF.fd"
+	info "Building reference value calculator"
+	curl -fsSL $tdx_reference_value_calculator_url -o $build_root/td_shim_tee_info_hash.py
+
+	reference_value=$(python3 $build_root/td_shim_tee_info_hash.py \
+		-i $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd)
+	cat <<EOF > $build_root/reference_value.json
+{
+	"rvps://coco/v0.18.0/tdx/mr_td": [
+		"$reference_value"
+	]
+}
+EOF
 elif [ "${ovmf_build}" == "arm64" ] || [ "${ovmf_build}" == "cca" ]; then
 	stat "${build_path_fv}/QEMU_EFI.fd"
 	stat "${build_path_fv}/QEMU_VARS.fd"
@@ -91,6 +104,7 @@ if [ "${ovmf_build}" == "sev" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}/AMDSEV.fd"
 elif [ "${ovmf_build}" == "tdx" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}/OVMF.inteltdx.fd"
+	install $build_root/reference_value.json "${install_dir}/reference_value.json"
 elif [ "${ovmf_build}" == "arm64" ] || [ "${ovmf_build}" == "cca" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/QEMU_EFI.fd "${install_dir}/AAVMF_CODE.fd"
 	install $build_root/$ovmf_dir/"${build_path_fv}"/QEMU_VARS.fd "${install_dir}/AAVMF_VARS.fd"
