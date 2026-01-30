@@ -718,11 +718,17 @@ impl AgentService {
         // - Waker: https://doc.rust-lang.org/std/task/struct.Waker.html
         // - Tokio select!: https://docs.rs/tokio/latest/tokio/macro.select.html
         let data = tokio::select! {
-            // Poll the futures in the order they appear from top to bottom
-            // it is very important to avoid data loss. If there is still
-            // data in the buffer and read_stream branch will return
-            // Poll::Ready so that the term_exit_notifier will never polled
-            // before all data were read.
+            // Use `biased` to make the polling order deterministic (top-to-bottom).
+            // This ensures that *when multiple branches are ready at the same time*,
+            // we prefer reading pending output over reacting to the exit notification.
+            //
+            // Note: `biased` does NOT guarantee that we won't lose output. If the exit
+            // notification becomes ready while `read_stream` is still pending, the
+            // exit branch may be selected and we may stop reading before draining the
+            // remaining buffered data.
+            //
+            // Detailed information, please refer to Tokio doc for more information:
+            // https://docs.rs/tokio/latest/src/tokio/macros/select.rs.html#67
             biased;
 
             v = &mut read_fut => v?,
