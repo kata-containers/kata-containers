@@ -508,11 +508,6 @@ measure_node_time() {
 
 # Execute a command in a pod and grep kubectl's output.
 #
-# This function retries "kubectl exec" several times, if:
-# - kubectl returns a failure exit code, or
-# - kubectl exits successfully but produces empty console output.
-# These retries are an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
-#
 # Parameters:
 #	$1	- pod name
 #	$2	- the grep pattern
@@ -525,15 +520,10 @@ grep_pod_exec_output() {
 	shift
 	local -r grep_arg="$1"
 	shift
-	pod_exec_with_retries "${pod_name}" "$@" | grep "${grep_arg}"
+	pod_exec "${pod_name}" "$@" | grep "${grep_arg}"
 }
 
 # Execute a command in a pod and echo kubectl's output to stdout.
-#
-# This function retries "kubectl exec" several times, if:
-# - kubectl returns a failure exit code, or
-# - kubectl exits successfully but produces empty console output.
-# These retries are an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
 #
 # Parameters:
 #	$1	- pod name
@@ -541,7 +531,7 @@ grep_pod_exec_output() {
 #
 # Exit code:
 #	0
-pod_exec_with_retries() {
+pod_exec() {
 	local -r pod_name="$1"
 	shift
 	local -r container_name=""
