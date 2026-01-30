@@ -54,8 +54,8 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# List the files
-	pod_exec_with_retries "${pod_name}" "${pod_exec_command[@]}" | grep -w "password"
-	pod_exec_with_retries "${pod_name}" "${pod_exec_command[@]}" | grep -w "username"
+	pod_exec "${pod_name}" "${pod_exec_command[@]}" | grep -w "password"
+	pod_exec "${pod_name}" "${pod_exec_command[@]}" | grep -w "username"
 
 	# Create a pod that has access to the secret data through environment variables
 	kubectl create -f "${pod_env_yaml_file}"
@@ -64,8 +64,8 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$second_pod_name"
 
 	# Display environment variables
-	pod_exec_with_retries "${second_pod_name}" "${pod_env_exec_command[@]}" | grep -w "SECRET_USERNAME"
-	pod_exec_with_retries "${second_pod_name}" "${pod_env_exec_command[@]}" | grep -w "SECRET_PASSWORD"
+	pod_exec "${second_pod_name}" "${pod_env_exec_command[@]}" | grep -w "SECRET_USERNAME"
+	pod_exec "${second_pod_name}" "${pod_env_exec_command[@]}" | grep -w "SECRET_PASSWORD"
 }
 
 teardown() {
