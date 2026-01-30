@@ -97,9 +97,56 @@ Architecture Committee, or other admins to be added to, or removed from teams.
 | Kubernetes | Supported | | Extensive CI across multiple platforms, with varying levels of testing across multiple K8s platforms e.g. AKS, kubeadm, k3s, rke2, k0s, microk8s |
 | CRI-O | Not maintained | [@kata-containers/cri-o](https://github.com/orgs/kata-containers/teams/cri-o) | Tests disabled in CI as of 2024. Minimal recent maintenance. Documentation exists but limited active support |
 | |
+| **Storage Backends** | | | |
+| virtio-fs | Supported | [@kata-containers/storage](https://github.com/orgs/kata-containers/teams/storage)* | Default filesystem sharing mechanism. Universal support across all platforms and hypervisors. Exception: TEE environments use `shared_fs = none` by default |
+| Nydus snapshotter | Supported | [@kata-containers/storage](https://github.com/orgs/kata-containers/teams/storage)* | Image acceleration with lazy loading. Dedicated CI workflow. Primary contributors: Intel, Microsoft, IBM. Supports QEMU, Cloud Hypervisor, Dragonball. amd64 only in CI |
+| EROFS snapshotter | Experimental | [@kata-containers/storage](https://github.com/orgs/kata-containers/teams/storage)* | Recent addition with fsverity support. Limited CI coverage (ubuntu-24.04 only). Built-in containerd snapshotter |
+| Overlay filesystem | Supported | [@kata-containers/storage](https://github.com/orgs/kata-containers/teams/storage)* | Standard for container layering. Implicitly tested in all container workflows |
+| Device Mapper | Best-effort | [@kata-containers/storage](https://github.com/orgs/kata-containers/teams/storage)* | Block device snapshotter. Disabled by default (`disable_block_device_use = true`). Minimal CI testing |
+| virtio-9p | Deprecated | | Legacy filesystem sharing. No CI testing. Maintained for backward compatibility only |
+| |
+| **Networking** | | | |
+| VETH | Supported | [@kata-containers/networking](https://github.com/orgs/kata-containers/teams/networking)* | Default network endpoint type. Full hot-plug support. Rate limiting supported. Contributors: Intel, IBM |
+| TAP / TUNTAP | Supported | [@kata-containers/networking](https://github.com/orgs/kata-containers/teams/networking)* | Hot-plug scenarios. Vhost-net configurable. Contributors: Intel, IBM |
+| MACVLAN / IPVLAN | Supported | [@kata-containers/networking](https://github.com/orgs/kata-containers/teams/networking)* | Full support with TC-filter interworking model. Hot-plug supported. Contributors: Intel, IBM |
+| Physical (SR-IOV) | Supported | [@kata-containers/networking](https://github.com/orgs/kata-containers/teams/networking)* | VFIO passthrough with hot-plug support added 2023. Primary contributor: Intel |
+| MACVTAP | Deprecated | | Legacy implementation. No hot-plug support. TC-filter preferred |
+| VHOST-USER | Best-effort | [@kata-containers/networking](https://github.com/orgs/kata-containers/teams/networking)* | Cold-plug only. No hot-plug support. Use case: OVS-DPDK, VPP |
+| VFIO (DAN) | Experimental | [@kata-containers/networking](https://github.com/orgs/kata-containers/teams/networking)* | Direct Assigned Network. Added 2024. No hot-plug support yet. Primary contributor: NVIDIA |
+| |
+| **Security & Attestation** | SH: I'm not sure if this section makes sense to call out here? | | |
+| Policy Enforcement (kata-opa) | Supported | [@kata-containers/security](https://github.com/orgs/kata-containers/teams/security)* | OPA-based policy engine. 8 test suites in CI. Comprehensive documentation. Contributors: IBM, Intel, ARM |
+| Genpolicy | Supported | [@kata-containers/genpolicy](https://github.com/orgs/kata-containers/teams/genpolicy) | Auto-policy generation tool. Multi-platform CI. Active development for GPU, CronJob, etc. Contributors: Microsoft, Edgeless Systems, IBM |
+| Confidential Data Hub | Best-effort | [@kata-containers/security](https://github.com/orgs/kata-containers/teams/security)* | CDH client in kata-agent. Tested in CoCo CI (TEE and non-TEE). Contributors: Microsoft, IBM, Alibaba. Limited maintainer bandwidth |
+| Attestation Agent | Best-effort | [@kata-containers/security](https://github.com/orgs/kata-containers/teams/security)* | External dependency (confidential-containers/guest-components). Comprehensive attestation tests. Depends on external CoCo project |
+| KBS Integration | Best-effort | [@kata-containers/security](https://github.com/orgs/kata-containers/teams/security)* | Key Broker Service integration. External dependency (CoCo Trustee). Tested in TEE and cloud environments |
+| |
+| **Device Passthrough** | | | |
+| NVIDIA GPU | Supported | [@kata-containers/nvidia-gpu](https://github.com/orgs/kata-containers/teams/nvidia-gpu)* | Comprehensive support for passthrough, vGPU, confidential GPU (SNP). Dedicated CI with A100/H100. IOMMUFD support. Primary team: NVIDIA |
+| IBM CEX (VFIO-AP) | Supported | [@kata-containers/arch-s390x](https://github.com/orgs/kata-containers/teams/arch-s390x) | Crypto Express passthrough for s390x. Cold-plug support. Confidential Computing integration. Primary team: IBM |
+| Intel Integrated GPU | Supported | [@kata-containers/intel-gpu](https://github.com/orgs/kata-containers/teams/intel-gpu)* | GVT-d/GVT-g mediated passthrough. Documentation maintained. Limited CI. Primary team: Intel |
+| Intel Discrete GPU | Supported | [@kata-containers/intel-gpu](https://github.com/orgs/kata-containers/teams/intel-gpu)* | Max/Flex/Arc series. SR-IOV support (63 VFs). Documentation maintained. Limited CI. Primary team: Intel |
+| Intel QAT | Not maintained | | QuickAssist Technology. Documentation simplified to external references. No dedicated CI |
+| |
+| **Memory & Resource Management** | | | |
+| cgroup v2 | Supported | [@kata-containers/cgroups](https://github.com/orgs/kata-containers/teams/cgroups)* | Full cgroup v2 support as of 2024. Production-ready. Contributors: Ant Group, IBM, NVIDIA |
+| CPU Hotplug | Supported | [@kata-containers/cgroups](https://github.com/orgs/kata-containers/teams/cgroups)* | Automatic vCPU scaling. QEMU, Dragonball, Cloud Hypervisor supported. Not supported on Firecracker or TEE VMs. Contributors: Ant Group, IBM |
+| VM Cache | Supported | [@kata-containers/performance](https://github.com/orgs/kata-containers/teams/performance)* | Pre-cached VMs for faster startup. QEMU only. Stable but not actively developed. Mutually exclusive with VM templating |
+| virtio-mem | Supported | [@kata-containers/performance](https://github.com/orgs/kata-containers/teams/performance)* | Dynamic memory resizing. QEMU only. Disabled by default. Not compatible with TEEs. Contributors: Ant Group |
+| VM Templating | Best-effort | [@kata-containers/performance](https://github.com/orgs/kata-containers/teams/performance)* | COW-based VM cloning. Recent runtime-rs implementation. 73% latency reduction. Security considerations (side-channel attacks). Primary contributor: Community |
+| mem-agent | Experimental | [@kata-containers/performance](https://github.com/orgs/kata-containers/teams/performance)* | PSI/MgLRU-based memory optimization. Runtime-rs only. Active development. Not compatible with TEEs. Primary contributor: ISCAS (Chinese Academy of Sciences) |
+| |
+| **Observability** | | | |
+| Logging | Supported | [@kata-containers/observability](https://github.com/orgs/kata-containers/teams/observability)* | Core functionality. Logfmt/JSON formats. Fluentd integration documented. Production-ready |
+| Metrics | Best-effort | [@kata-containers/observability](https://github.com/orgs/kata-containers/teams/observability)* | Prometheus-based metrics. 356 documented metrics. CI tests are flaky. No dedicated maintainer team |
+| kata-monitor | Not maintained | [@kata-containers/observability](https://github.com/orgs/kata-containers/teams/observability)* | Metrics aggregation daemon. Containerd tests disabled. Minimal recent development (10 commits in 2 years) |
+| Tracing | Obsolete | | OpenTelemetry/Jaeger integration. Disabled by default. trace-forwarder has CVEs. Not recommended for production |
+
+*Note: GitHub teams marked with * may need to be created or updated
 
 ### Table TODO
-- Add configuration options e.g. snapshotters
+- Create/update GitHub teams for new categories
+- Review and update deprecated/obsolete items for potential removal
 
 ## Doc TODOs
 
