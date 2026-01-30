@@ -1168,6 +1168,29 @@ pub struct SecurityInfo {
     #[serde(default)]
     pub sev_snp_guest: bool,
 
+    /// SNP 'ID Block' and 'ID Authentication Information Structure'.
+    /// If one of snp_id_block or snp_id_auth is specified, the other must be specified, too.
+    /// Notice that the default SNP policy of QEMU (0x30000) is used by Kata, if not explicitly
+    /// set via 'snp_guest_policy' option. The IDBlock contains the guest policy as field, and
+    /// it must match the value from 'snp_guest_policy' or, if unset, the QEMU default policy.
+    /// 96-byte, base64-encoded blob to provide the 'ID Block' structure for the
+    /// SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
+    #[serde(default)]
+    pub snp_id_block: String,
+
+    /// 4096-byte, base64-encoded blob to provide the 'ID Authentication Information Structure'
+    /// for the SNP_LAUNCH_FINISH command defined in the SEV-SNP firmware ABI (QEMU default: all-zero)
+    #[serde(default)]
+    pub snp_id_auth: String,
+
+    /// SNP Guest Policy, the 'POLICY' parameter to the SNP_LAUNCH_START command.
+    /// If unset, the QEMU default policy (0x30000) will be used.
+    /// Notice that the guest policy is enforced at VM launch, and your pod VMs
+    /// won't start at all if the policy denys it. This will be indicated by a
+    /// 'SNP_LAUNCH_START' error.
+    #[serde(default = "default_snp_guest_policy")]
+    pub snp_guest_policy: u32,
+
     /// Path to OCI hook binaries in the *guest rootfs*.
     ///
     /// This setting does not affect host-side hooks, which must instead be
@@ -1227,6 +1250,10 @@ pub struct SecurityInfo {
 
 fn default_qgs_port() -> u32 {
     4050
+}
+
+fn default_snp_guest_policy() -> u32 {
+    0x30000
 }
 
 impl SecurityInfo {
