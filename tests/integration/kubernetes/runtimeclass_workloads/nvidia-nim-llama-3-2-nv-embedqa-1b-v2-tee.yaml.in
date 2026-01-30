@@ -10,7 +10,11 @@ metadata:
   labels:
     app: ${POD_NAME_EMBEDQA}
   annotations:
-    io.katacontainers.config.hypervisor.kernel_params: "agent.image_registry_auth=kbs:///default/credentials/nvcr agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
+    # Start CDH process and configure AA for KBS communication
+    # aa_kbc_params tells the Attestation Agent where KBS is located
+    io.katacontainers.config.hypervisor.kernel_params: "agent.guest_components_procs=confidential-data-hub agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
+    # cc_init_data annotation will be added by genpolicy with CDH configuration
+    # from the custom default-initdata.toml created by create_nim_initdata_file()
 spec:
   restartPolicy: Always
   runtimeClassName: kata
@@ -29,7 +33,7 @@ spec:
       - name: NGC_API_KEY
         valueFrom:
           secretKeyRef:
-            name: ngc-api-key-embedqa
+            name: ngc-api-key-sealed-embedqa
             key: api-key
       - name: NIM_HTTP_API_PORT
         value: "8000"
@@ -88,7 +92,9 @@ data:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: ngc-api-key-embedqa
+  name: ngc-api-key-sealed-embedqa
 type: Opaque
 data:
-  api-key: "${NGC_API_KEY_BASE64}"
+  # Sealed secret pointing to kbs:///default/ngc-api-key/embedqa
+  # CDH will unseal this by fetching the actual key from KBS
+  api-key: "${NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64}"
