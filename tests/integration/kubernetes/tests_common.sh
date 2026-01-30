@@ -546,18 +546,13 @@ pod_exec_with_retries() {
 	shift
 	local -r container_name=""
 
-	container_exec_with_retries "${pod_name}" "${container_name}" "$@"
+	container_exec "${pod_name}" "${container_name}" "$@"
 }
 
 # Execute a command in a pod's container and echo kubectl's output to stdout.
 #
 # If the caller specifies an empty container name as parameter, the command is executed in pod's default container,
 # or in pod's first container if there is no default.
-#
-# This function retries "kubectl exec" several times, if:
-# - kubectl returns a failure exit code, or
-# - kubectl exits successfully but produces empty console output.
-# These retries are an attempt to work around issues similar to https://github.com/kubernetes/kubernetes/issues/124571.
 #
 # Parameters:
 #	$1	- pod name
@@ -566,36 +561,36 @@ pod_exec_with_retries() {
 #
 # Exit code:
 #	0
-container_exec_with_retries() {
+container_exec() {
 	local -r pod_name="$1"
 	shift
 	local -r container_name="$1"
 	shift
 	local cmd_out=""
 
-	for _ in {1..10}; do
-		if [[ -n "${container_name}" ]]; then
-			bats_unbuffered_info "Executing in pod ${pod_name}, container ${container_name}: $*"
-			if ! cmd_out=$(kubectl exec "${pod_name}" -c "${container_name}" -- "$@"); then
-				bats_unbuffered_info "kubectl exec failed"
-				cmd_out=""
-			fi
-		else
-			bats_unbuffered_info "Executing in pod ${pod_name}: $*"
-			if ! cmd_out=$(kubectl exec "${pod_name}" -- "$@"); then
-				bats_unbuffered_info "kubectl exec failed"
-				cmd_out=""
-			fi
+	if [[ -n "${container_name}" ]]; then
+		bats_unbuffered_info "Executing in pod ${pod_name}, container ${container_name}: $*"
+		if ! cmd_out=$(kubectl exec "${pod_name}" -c "${container_name}" -- "$@"); then
+			bats_unbuffered_info "kubectl exec failed"
+			cmd_out=""
+			# preserve failure semantics: return kubectl's exit code
+			return 1
 		fi
+	else
+		bats_unbuffered_info "Executing in pod ${pod_name}: $*"
+		if ! cmd_out=$(kubectl exec "${pod_name}" -- "$@"); then
+			bats_unbuffered_info "kubectl exec failed"
+			cmd_out=""
+			# preserve failure semantics: return kubectl's exit code
+			return 1
+		fi
+	fi
 
-		if [[ -n "${cmd_out}" ]]; then
-			bats_unbuffered_info "command output: ${cmd_out}"
-			break
-		else
-			bats_unbuffered_info "Warning: empty output from kubectl exec"
-			sleep 1
-		fi
-	done
+	if [[ -n "${cmd_out}" ]]; then
+		bats_unbuffered_info "command output: ${cmd_out}"
+	else
+		bats_unbuffered_info "Warning: empty output from kubectl exec"
+	fi
 
 	echo "${cmd_out}"
 }
