@@ -277,19 +277,21 @@ fn get_config_map_mount_and_storage(
     });
 }
 
+/// Get a shared bind mount.
+/// The runtime generates deterministic paths: {cid}-{hash(source)[:16]}-{basename(dest)}
+/// So we generate: $(sfprefix){basename(dest)}$
 fn get_shared_bind_mount(
     yaml_mount: &pod::VolumeMount,
     p_mounts: &mut Vec<policy::KataMount>,
     propagation: &str,
     access: &str,
 ) {
-    // The Kata Shim filepath.Base() to extract the last element of this path, in
-    // https://github.com/kata-containers/kata-containers/blob/5e46f814dd79ab6b34588a83825260413839735a/src/runtime/virtcontainers/fs_share_linux.go#L305
-    // In Rust, Path::file_name() has a similar behavior.
-    let path = Path::new(&yaml_mount.mountPath);
-    let mount_path = path.file_name().unwrap().to_str().unwrap();
+    let dest_basename = Path::new(&yaml_mount.mountPath)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&yaml_mount.mountPath);
 
-    let source = format!("$(sfprefix){mount_path}$");
+    let source = format!("$(sfprefix){}$", dest_basename);
 
     let dest = yaml_mount.mountPath.clone();
     let type_ = "bind".to_string();

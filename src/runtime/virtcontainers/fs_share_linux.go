@@ -9,6 +9,7 @@ package virtcontainers
 
 import (
 	"context"
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"encoding/hex"
 	"fmt"
@@ -29,7 +30,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
 // Splitting Regex pattern:
@@ -76,14 +76,6 @@ func resolveRootDir() string {
 	return rootDir
 }
 
-// mountCacheKey uniquely identifies a mount within a sandbox.
-// The cache is keyed by container ID and source path because guestPath
-// is container-specific (includes container ID and random bytes).
-type mountCacheKey struct {
-	containerID string
-	source      string
-}
-
 type FilesystemShare struct {
 	sandbox *Sandbox
 	watcher *fsnotify.Watcher
@@ -92,12 +84,8 @@ type FilesystemShare struct {
 	// Regex to match only the timestamped directory inside the k8's volume mount
 	timestampDirRegex *regexp.Regexp
 	// srcDstMap tracks file-level source to destination mappings for configmap/secret watching
-	srcDstMap     map[string][]string
-	srcDstMapLock sync.Mutex
-	// srcGuestMap caches volume source path to guest path, enabling caching
-	// within a container if it mounts the same source multiple times
-	srcGuestMap          map[mountCacheKey]string
-	srcGuestMapLock      sync.Mutex
+	srcDstMap            map[string][]string
+	srcDstMapLock        sync.Mutex
 	eventLoopStarted     bool
 	eventLoopStartedLock sync.Mutex
 	watcherDoneChannel   chan bool
@@ -120,7 +108,6 @@ func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 		sandbox:            s,
 		watcherDoneChannel: make(chan bool),
 		srcDstMap:          make(map[string][]string),
-		srcGuestMap:        make(map[mountCacheKey]string),
 		watcher:            watcher,
 		configVolRegex:     configVolRegex,
 		timestampDirRegex:  timestampDirRegex,
@@ -312,28 +299,11 @@ func (f *FilesystemShare) Cleanup(ctx context.Context) error {
 func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount) (*SharedFile, error) {
 	caps := f.sandbox.hypervisor.Capabilities(ctx)
 
-	// Cache key includes container ID because guestPath is container-specific.
-	// This allows caching within a single container (if it mounts the same source multiple times)
-	// while ensuring different containers get their own mounts.
-	cacheKey := mountCacheKey{containerID: c.id, source: m.Source}
-
-	// Check if this volume source has already been shared by this container
-	f.srcGuestMapLock.Lock()
-	if cachedGuestPath, ok := f.srcGuestMap[cacheKey]; ok {
-		f.srcGuestMapLock.Unlock()
-		if caps.IsFsSharingSupported() {
-			m.HostPath = filepath.Join(getMountPath(f.sandbox.ID()), filepath.Base(cachedGuestPath))
-		}
-		return &SharedFile{guestPath: cachedGuestPath}, nil
-	}
-	f.srcGuestMapLock.Unlock()
-
-	randBytes, err := utils.GenerateRandomBytes(8)
-	if err != nil {
-		return nil, err
-	}
-
-	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
+	// Generate a deterministic filename based on source path hash.
+	// Pattern: {cid}-{hash(source)[:16]}-{basename(dest)}
+	// The hash ensures uniqueness for different sources with the same destination basename.
+	sourceHash := sha256.Sum256([]byte(m.Source))
+	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(sourceHash[:8]), filepath.Base(m.Destination))
 	guestPath := filepath.Join(kataGuestSharedDir(), filename)
 
 	// copy file to container's rootfs if filesystem sharing is not supported, otherwise
@@ -448,11 +418,6 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 		m.HostPath = mountDest
 	}
 
-	// Cache the guestPath for this container and volume source
-	f.srcGuestMapLock.Lock()
-	defer f.srcGuestMapLock.Unlock()
-	f.srcGuestMap[cacheKey] = guestPath
-
 	return &SharedFile{
 		guestPath: guestPath,
 	}, nil
@@ -476,12 +441,6 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 			syscall.Rmdir(m.HostPath)
 		}
 	}
-
-	// Remove the cache entry for this container and volume source
-	cacheKey := mountCacheKey{containerID: c.id, source: m.Source}
-	f.srcGuestMapLock.Lock()
-	delete(f.srcGuestMap, cacheKey)
-	f.srcGuestMapLock.Unlock()
 
 	return nil
 }
