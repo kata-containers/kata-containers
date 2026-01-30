@@ -1876,6 +1876,11 @@ impl ObjectSevSnpGuest {
             is_snp,
         }
     }
+
+    fn set_policy(&mut self, policy: u32) -> &mut Self {
+        self.policy = policy;
+        self
+    }
 }
 
 #[async_trait]
@@ -2551,8 +2556,10 @@ impl<'a> QemuCmdLine<'a> {
         // For SEV-SNP, memory overcommit is not supported. we only set the memory size.
         self.memory.set_maxmem_size(0).set_num_slots(0);
 
-        let sev_snp_object =
+        let mut sev_snp_object =
             ObjectSevSnpGuest::new(true, cbitpos, phys_addr_reduction, host_data.clone());
+        sev_snp_object.set_policy(self.config.security_info.snp_guest_policy);
+
         self.devices.push(Box::new(sev_snp_object));
 
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
