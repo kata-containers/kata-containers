@@ -20,6 +20,20 @@ k8sDistribution: "k8s"  # k8s, k3s, rke2, k0s, microk8s
 nodeSelector: {}
 tolerations: []
 
+# Update strategy for the kata-deploy DaemonSet
+# Default is RollingUpdate with maxUnavailable: 1
+# Examples:
+# updateStrategy:
+#   type: OnDelete
+# updateStrategy:
+#   type: RollingUpdate
+#   rollingUpdate:
+#     maxUnavailable: 25%
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
 debug: false
 
 snapshotter:
@@ -320,18 +334,18 @@ node-feature-discovery:
 verification:
   # Namespace where verification pod will be created
   namespace: default
-  
+
   # Timeout for the verification pod itself to complete (seconds)
   # This is how long to wait for the verification pod to run and finish successfully.
   # Default: 180s (3 minutes)
   timeout: 180
-  
+
   # Timeout for kata-deploy DaemonSet rollout (seconds)
   # This includes waiting for the kata-deploy image to be pulled from the registry
   # and pods to start. Large images over slow networks may need more time.
   # Default: 1200s (20 minutes)
   daemonsetTimeout: 1200
-  
+
   # Pod spec for verification (optional)
   # If provided, a verification job will run after install/upgrade.
   # If empty, no verification is performed.
