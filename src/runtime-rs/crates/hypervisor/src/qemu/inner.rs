@@ -660,13 +660,70 @@ impl QemuInner {
 
         let coldplugged_mem_mb = self.config.memory_info.default_memory;
         let coldplugged_mem = megs_to_bytes(coldplugged_mem_mb);
-        let new_total_mem = megs_to_bytes(new_total_mem_mb);
+        let mut new_total_mem = megs_to_bytes(new_total_mem_mb);
 
         if new_total_mem < coldplugged_mem {
             warn!(sl!(), "asked to resize to {} M but that is less than cold-plugged memory size ({}), nothing to do",new_total_mem_mb,
                 bytes_to_megs(coldplugged_mem));
 
             return Ok((coldplugged_mem_mb, MemoryConfig::default()));
+        }
+
+        // Apply memory overhead compensation if configured.
+        // This matches the Go implementation logic for handling orchestrator cgroup limits.
+        if self.config.memory_info.memory_overhead > self.config.memory_info.default_memory {
+            warn!(
+                sl!(),
+                "Memory overhead {} MB is larger than default memory {} MB, ignoring",
+                self.config.memory_info.memory_overhead,
+                self.config.memory_info.default_memory
+            );
+            self.config.memory_info.memory_overhead = 0;
+        }
+
+        if self.config.memory_info.memory_overhead > 0 {
+            let cur_hotplugged_memory = qmp.hotplugged_memory_size()?;
+            let current_memory_mb = bytes_to_megs(coldplugged_mem + cur_hotplugged_memory);
+            let delta_mb = new_total_mem_mb - current_memory_mb;
+            let host_unaccounted_mb = self.config.memory_info.default_memory - self.config.memory_info.memory_overhead;
+
+            info!(
+                sl!(),
+                "Memory overhead compensation: overhead={} MB, default_memory={} MB, current_memory={} MB, requested={} MB, delta={} MB, host_unaccounted={} MB",
+                self.config.memory_info.memory_overhead,
+                self.config.memory_info.default_memory,
+                current_memory_mb,
+                new_total_mem_mb,
+                delta_mb,
+                host_unaccounted_mb
+            );
+
+            if host_unaccounted_mb > delta_mb {
+                // Defer to next hotplug - this request is too small to mask the overhead
+                self.config.memory_info.memory_overhead += delta_mb;
+                warn!(
+                    sl!(),
+                    "Host-side cgroup is smaller than VM default size, deferring hotplug. This may lead to OOM messages. Increase memory request to fix it. Unaccounted: {} MB, Delta: {} MB, New overhead: {} MB",
+                    host_unaccounted_mb,
+                    delta_mb,
+                    self.config.memory_info.memory_overhead
+                );
+                // Return early without hotplugging
+                return Ok((current_memory_mb, MemoryConfig::default()));
+            } else {
+                // This request is big enough to hide the overhead
+                let adjusted_delta = delta_mb - host_unaccounted_mb;
+                new_total_mem_mb = current_memory_mb + adjusted_delta;
+                new_total_mem = megs_to_bytes(new_total_mem_mb);
+                self.config.memory_info.memory_overhead = 0;
+
+                info!(
+                    sl!(),
+                    "Applied memory overhead compensation: adjusted delta from {} MB to {} MB, reset overhead to 0",
+                    delta_mb,
+                    adjusted_delta
+                );
+            }
         }
 
         let guest_mem_block_size = qmp.guest_memory_block_size();

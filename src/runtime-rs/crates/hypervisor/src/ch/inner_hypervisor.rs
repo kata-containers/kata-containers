@@ -874,7 +874,7 @@ impl CloudHypervisorInner {
         self.guest_memory_block_size_mb
     }
 
-    pub(crate) async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+    pub(crate) async fn resize_memory(&mut self, mut new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
         let socket = self
             .api_socket
             .as_ref()
@@ -887,12 +887,68 @@ impl CloudHypervisorInner {
                 .context("get vminfo")?;
 
         let current_mem_size = vminfo.config.memory.size;
-        let new_total_mem = megs_to_bytes(new_mem_mb);
+        let mut new_total_mem = megs_to_bytes(new_mem_mb);
 
         info!(
             sl!(),
             "cloud-hypervisor::resize_memory(): asked to resize memory to {} MB, current memory is {} MB", new_mem_mb, bytes_to_megs(current_mem_size)
         );
+
+        // Apply memory overhead compensation if configured.
+        // This matches the Go implementation logic for handling orchestrator cgroup limits.
+        if self.config.memory_info.memory_overhead > self.config.memory_info.default_memory {
+            warn!(
+                sl!(),
+                "Memory overhead {} MB is larger than default memory {} MB, ignoring",
+                self.config.memory_info.memory_overhead,
+                self.config.memory_info.default_memory
+            );
+            self.config.memory_info.memory_overhead = 0;
+        }
+
+        if self.config.memory_info.memory_overhead > 0 {
+            let current_memory_mb = bytes_to_megs(current_mem_size);
+            let delta_mb = new_mem_mb - current_memory_mb;
+            let host_unaccounted_mb = self.config.memory_info.default_memory - self.config.memory_info.memory_overhead;
+
+            info!(
+                sl!(),
+                "Memory overhead compensation: overhead={} MB, default_memory={} MB, current_memory={} MB, requested={} MB, delta={} MB, host_unaccounted={} MB",
+                self.config.memory_info.memory_overhead,
+                self.config.memory_info.default_memory,
+                current_memory_mb,
+                new_mem_mb,
+                delta_mb,
+                host_unaccounted_mb
+            );
+
+            if host_unaccounted_mb > delta_mb {
+                // Defer to next hotplug - this request is too small to mask the overhead
+                self.config.memory_info.memory_overhead += delta_mb;
+                warn!(
+                    sl!(),
+                    "Host-side cgroup is smaller than VM default size, deferring hotplug. This may lead to OOM messages. Increase memory request to fix it. Unaccounted: {} MB, Delta: {} MB, New overhead: {} MB",
+                    host_unaccounted_mb,
+                    delta_mb,
+                    self.config.memory_info.memory_overhead
+                );
+                // Return early without hotplugging
+                return Ok((current_memory_mb, MemoryConfig::default()));
+            } else {
+                // This request is big enough to hide the overhead
+                let adjusted_delta = delta_mb - host_unaccounted_mb;
+                new_mem_mb = current_memory_mb + adjusted_delta;
+                new_total_mem = megs_to_bytes(new_mem_mb);
+                self.config.memory_info.memory_overhead = 0;
+
+                info!(
+                    sl!(),
+                    "Applied memory overhead compensation: adjusted delta from {} MB to {} MB, reset overhead to 0",
+                    delta_mb,
+                    adjusted_delta
+                );
+            }
+        }
 
         // Early Check to verify if boot memory is the same as requested
         if current_mem_size == new_total_mem {

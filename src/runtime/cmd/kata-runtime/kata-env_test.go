@@ -141,6 +141,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, ociConfig oci.Runti
 		DefaultVCPUCount:     hypConfig.NumVCPUs(),
 		DefaultMaxVCPUCount:  hypConfig.DefaultMaxVCPUs,
 		DefaultMemSize:       hypConfig.MemorySize,
+		DefaultMemOverhead:   hypConfig.MemoryOverhead,
 		DefaultMsize9p:       hypConfig.Msize9p,
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,

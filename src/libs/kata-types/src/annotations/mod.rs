@@ -215,6 +215,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY: &str =
 /// A sandbox annotation to specify the memory slots assigned to the VM by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS: &str =
     "io.katacontainers.config.hypervisor.memory_slots";
+/// A sandbox annotation that specifies the default memory overhead in MiB for the VM.
+pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD: &str =
+    "io.katacontainers.config.hypervisor.memory_overhead";
 /// A sandbox annotation that specifies the memory space used for nvdimm device by the hypervisor.
 pub const KATA_ANNO_CFG_HYPERVISOR_MEMORY_PREALLOC: &str =
     "io.katacontainers.config.hypervisor.enable_mem_prealloc";
@@ -811,6 +814,15 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_MEMORY_SLOTS => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             hv.memory_info.memory_slots = v.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
+
+                    KATA_ANNO_CFG_HYPERVISOR_MEMORY_OVERHEAD => match self.get_value::<u32>(key) {
+                        Ok(v) => {
+                            hv.memory_info.memory_overhead = v.unwrap_or_default();
                         }
                         Err(_e) => {
                             return Err(u32_err);

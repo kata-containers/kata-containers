@@ -206,7 +206,7 @@ impl Hypervisor for CloudHypervisor {
     }
 
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.resize_memory(new_mem_mb).await
     }
 

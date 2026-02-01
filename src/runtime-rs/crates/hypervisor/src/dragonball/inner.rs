@@ -402,7 +402,7 @@ impl DragonballInner {
         Ok((old_vcpus, new_vcpus))
     }
 
-    pub(crate) fn resize_memory(&mut self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+    pub(crate) fn resize_memory(&mut self, mut new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
         // check the invalid request memory
         if new_mem_mb > self.hypervisor_config().memory_info.default_maxmemory {
             warn!(
@@ -417,6 +417,61 @@ impl DragonballInner {
                     ..Default::default()
                 },
             ));
+        }
+
+        // Apply memory overhead compensation if configured.
+        // This matches the Go implementation logic for handling orchestrator cgroup limits.
+        if self.config.memory_info.memory_overhead > self.config.memory_info.default_memory {
+            warn!(
+                sl!(),
+                "Memory overhead {} MB is larger than default memory {} MB, ignoring",
+                self.config.memory_info.memory_overhead,
+                self.config.memory_info.default_memory
+            );
+            self.config.memory_info.memory_overhead = 0;
+        }
+
+        if self.config.memory_info.memory_overhead > 0 {
+            let current_memory_mb = self.config.memory_info.default_memory + self.mem_hotplug_size_mb;
+            let delta_mb = new_mem_mb - current_memory_mb;
+            let host_unaccounted_mb = self.config.memory_info.default_memory - self.config.memory_info.memory_overhead;
+
+            info!(
+                sl!(),
+                "Memory overhead compensation: overhead={} MB, default_memory={} MB, current_memory={} MB, requested={} MB, delta={} MB, host_unaccounted={} MB",
+                self.config.memory_info.memory_overhead,
+                self.config.memory_info.default_memory,
+                current_memory_mb,
+                new_mem_mb,
+                delta_mb,
+                host_unaccounted_mb
+            );
+
+            if host_unaccounted_mb > delta_mb {
+                // Defer to next hotplug - this request is too small to mask the overhead
+                self.config.memory_info.memory_overhead += delta_mb;
+                warn!(
+                    sl!(),
+                    "Host-side cgroup is smaller than VM default size, deferring hotplug. This may lead to OOM messages. Increase memory request to fix it. Unaccounted: {} MB, Delta: {} MB, New overhead: {} MB",
+                    host_unaccounted_mb,
+                    delta_mb,
+                    self.config.memory_info.memory_overhead
+                );
+                // Return early without hotplugging
+                return Ok((current_memory_mb, MemoryConfig::default()));
+            } else {
+                // This request is big enough to hide the overhead
+                let adjusted_delta = delta_mb - host_unaccounted_mb;
+                new_mem_mb = current_memory_mb + adjusted_delta;
+                self.config.memory_info.memory_overhead = 0;
+
+                info!(
+                    sl!(),
+                    "Applied memory overhead compensation: adjusted delta from {} MB to {} MB, reset overhead to 0",
+                    delta_mb,
+                    adjusted_delta
+                );
+            }
         }
 
         let had_mem_mb = self.config.memory_info.default_memory + self.mem_hotplug_size_mb;
