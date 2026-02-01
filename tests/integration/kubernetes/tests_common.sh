@@ -169,7 +169,7 @@ adapt_common_policy_settings_for_nvidia_gpu() {
 	local settings_dir=$1
 
 	info "Adapting common policy settings for NVIDIA GPU platform (${KATA_HYPERVISOR})"
-	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
+	jq '.kata_config.oci_version = "1.3.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for various platforms
