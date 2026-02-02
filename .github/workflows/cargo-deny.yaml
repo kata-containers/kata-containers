@@ -1,0 +1,34 @@
+name: Cargo Deny Check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+permissions: {}
+
+jobs:
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        checks:
+          - advisories
+          - bans licenses sources
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run the cargo deny check ( ${{ matrix.checks }})
+        uses: EmbarkStudios/cargo-deny-action@3fd3802e88374d3fe9159b834c7714ec57d6c979 #2.0.15
+        with:
+          command: check ${{ matrix.checks }}
