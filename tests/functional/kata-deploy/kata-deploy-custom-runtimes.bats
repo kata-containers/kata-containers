@@ -155,7 +155,7 @@ EOF
 # End-to-End Tests (require cluster with kata-deploy)
 # =============================================================================
 
-@test "E2E: Custom RuntimeClass exists with correct properties" {
+@test "E2E: Custom RuntimeClass exists and can run a pod" {
 	# Check RuntimeClass exists
 	run kubectl get runtimeclass "${CUSTOM_RUNTIME_HANDLER}" -o name
 	if [[ "${status}" -ne 0 ]]; then
@@ -194,15 +194,6 @@ EOF
 	label=$(kubectl get runtimeclass "${CUSTOM_RUNTIME_HANDLER}" -o jsonpath='{.metadata.labels.app\.kubernetes\.io/managed-by}')
 	echo "# Label app.kubernetes.io/managed-by: ${label}" >&3
 	[[ "${label}" == "Helm" ]]
-
-	BATS_TEST_COMPLETED=1
-}
-
-@test "E2E: Custom runtime can run a pod" {
-	# Check if the custom RuntimeClass exists
-	if ! kubectl get runtimeclass "${CUSTOM_RUNTIME_HANDLER}" &>/dev/null; then
-		skip "Custom RuntimeClass ${CUSTOM_RUNTIME_HANDLER} not found"
-	fi
 
 	# Create a test pod using the custom runtime
 	cat <<EOF | kubectl apply -f -
