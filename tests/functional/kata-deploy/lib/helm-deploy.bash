@@ -115,7 +115,7 @@ deploy_kata() {
 	kubectl -n "${HELM_NAMESPACE}" rollout status daemonset/kata-deploy --timeout=300s
 
 	# Give it a moment to configure runtimes
-	sleep 10
+	sleep 60
 
 	return 0
 }
