@@ -161,7 +161,7 @@ EOF
 	if [[ "${status}" -ne 0 ]]; then
 		echo "# RuntimeClass not found. kata-deploy logs:" >&3
 		kubectl -n kube-system logs -l name=kata-deploy --tail=50 2>/dev/null || true
-		fail "Custom RuntimeClass ${CUSTOM_RUNTIME_HANDLER} not found"
+		die "Custom RuntimeClass ${CUSTOM_RUNTIME_HANDLER} not found"
 	fi
 
 	echo "# RuntimeClass ${CUSTOM_RUNTIME_HANDLER} exists" >&3
@@ -239,7 +239,7 @@ EOF
 			Failed)
 				echo "# Pod failed" >&3
 				kubectl describe pod "${TEST_POD_NAME}" >&3
-				fail "Pod failed to run with custom runtime"
+				die "Pod failed to run with custom runtime"
 				;;
 			*)
 				local current_time
@@ -247,7 +247,7 @@ EOF
 				if (( current_time - start_time > timeout )); then
 					echo "# Timeout waiting for pod" >&3
 					kubectl describe pod "${TEST_POD_NAME}" >&3
-					fail "Timeout waiting for pod to be ready"
+					die "Timeout waiting for pod to be ready"
 				fi
 				sleep 5
 				;;
@@ -262,7 +262,7 @@ EOF
 		echo "# Pod ran successfully with custom runtime" >&3
 		BATS_TEST_COMPLETED=1
 	else
-		fail "Pod did not complete successfully (exit code: ${exit_code})"
+		die "Pod did not complete successfully (exit code: ${exit_code})"
 	fi
 }
 
