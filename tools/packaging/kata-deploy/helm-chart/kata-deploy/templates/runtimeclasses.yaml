@@ -22,7 +22,7 @@
 {{- end -}}
 {{- end -}}
 
-{{- /* Define runtime class configurations with their overhead settings */ -}}
+{{- /* Define runtime class configurations with their overhead settings and node selectors */ -}}
 {{- $runtimeClassConfigs := dict
   "clh" (dict "memory" "130Mi" "cpu" "250m")
   "cloud-hypervisor" (dict "memory" "130Mi" "cpu" "250m")
@@ -49,6 +49,7 @@
 {{- /* Create RuntimeClass for each enabled shim */ -}}
 {{- range $shim := $enabledShims }}
 {{- $config := index $runtimeClassConfigs $shim }}
+{{- $shimConfig := index $.Values.shims $shim }}
 {{- if $config }}
 ---
 kind: RuntimeClass
@@ -78,6 +79,11 @@ overhead:
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
+{{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.nodeSelector }}
+{{- range $key, $value := $shimConfig.runtimeClass.nodeSelector }}
+    {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
 
