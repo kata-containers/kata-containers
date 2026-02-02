@@ -1,0 +1,16 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-pod
+spec:
+  restartPolicy: Never
+  runtimeClassName: kata-cc
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      command:
+        - /bin/sh
+      args:
+        - "-c"
+        - echo hello
