@@ -599,9 +599,6 @@ impl AgentPolicy {
         let mut yaml_string = String::new();
         for i in 0..self.resources.len() {
             let annotation = self.resources[i].generate_initdata_anno(self);
-            if self.config.base64_out {
-                println!("{annotation}");
-            }
             yaml_string += &self.resources[i].serialize(&annotation);
         }
 
@@ -614,8 +611,7 @@ impl AgentPolicy {
                 .unwrap()
                 .write_all(yaml_string.as_bytes())
                 .unwrap();
-        } else {
-            // When input YAML came through stdin, print the output YAML to stdout.
+        } else if !self.config.base64_out && !self.config.raw_out {
             std::io::stdout().write_all(yaml_string.as_bytes()).unwrap();
         }
     }
@@ -639,13 +635,18 @@ impl AgentPolicy {
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
         let policy = format!("{}\npolicy_data := {json_data}", &self.rules);
+        let mut initdata = self.config.initdata.clone();
+        initdata.insert_data("policy.rego", policy.clone());
+        let encoded = kata_types::initdata::encode_initdata(&initdata);
+
         if self.config.raw_out {
             std::io::stdout().write_all(policy.as_bytes()).unwrap();
         }
-        let mut initdata = self.config.initdata.clone();
-        initdata.insert_data("policy.rego", policy);
+        if self.config.base64_out {
+            std::io::stdout().write_all(encoded.as_bytes()).unwrap();
+        }
 
-        kata_types::initdata::encode_initdata(&initdata)
+        encoded
     }
 
     pub fn get_container_policy(
