@@ -302,19 +302,6 @@ func (f *FilesystemShare) Cleanup(ctx context.Context) error {
 }
 
 func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount) (*SharedFile, error) {
-	caps := f.sandbox.hypervisor.Capabilities(ctx)
-
-	// Check if this volume source has already been shared by another container in this pod
-	f.srcGuestMapLock.Lock()
-	if guestPath, ok := f.srcGuestMap[m.Source]; ok {
-		f.srcGuestMapLock.Unlock()
-		if caps.IsFsSharingSupported() {
-			m.HostPath = filepath.Join(getMountPath(f.sandbox.ID()), filepath.Base(guestPath))
-		}
-		return &SharedFile{guestPath: guestPath}, nil
-	}
-	f.srcGuestMapLock.Unlock()
-
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return nil, err
@@ -325,7 +312,15 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 
 	// copy file to container's rootfs if filesystem sharing is not supported, otherwise
 	// bind mount it in the shared directory.
+	caps := f.sandbox.hypervisor.Capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
+		f.srcGuestMapLock.Lock()
+		if guestPath, ok := f.srcGuestMap[m.Source]; ok {
+			f.srcGuestMapLock.Unlock()
+			return &SharedFile{guestPath: guestPath}, nil
+		}
+		f.srcGuestMapLock.Unlock()
+
 		f.Logger().Debug("filesystem sharing is not supported, files will be copied")
 
 		var ignored bool
