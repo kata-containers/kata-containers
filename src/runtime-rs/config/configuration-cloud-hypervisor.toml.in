@@ -19,7 +19,7 @@ image = "@IMAGEPATH@"
 #   - xfs
 #   - erofs
 rootfs_type = @DEFROOTFSTYPE@
- 
+
 # Block storage driver to be used for the VM rootfs is backed
 # by a block device.
 vm_rootfs_driver = "@VMROOTFSDRIVER_CLH@"
@@ -41,7 +41,7 @@ valid_hypervisor_paths = @CLHVALIDHYPERVISORPATHS@
 
 # List of valid annotations values for ctlpath
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: 
+# Your distribution recommends:
 valid_ctlpaths = []
 
 # Optional space-separated list of options to pass to the guest kernel.

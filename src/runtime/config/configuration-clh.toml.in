@@ -251,9 +251,9 @@ guest_hook_path = ""
 # and we strongly advise users to refer the Cloud Hypervisor official
 # documentation for a better understanding of its internals:
 # https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/io_throttling.md
-# 
+#
 # Bandwidth rate limiter options
-# 
+#
 # net_rate_limiter_bw_max_rate controls network I/O bandwidth (size in bits/sec
 # for SB/VM).
 # The same value is used for inbound and outbound bandwidth.
@@ -287,9 +287,9 @@ net_rate_limiter_ops_one_time_burst = 0
 # and we strongly advise users to refer the Cloud Hypervisor official
 # documentation for a better understanding of its internals:
 # https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/io_throttling.md
-# 
+#
 # Bandwidth rate limiter options
-# 
+#
 # disk_rate_limiter_bw_max_rate controls disk I/O bandwidth (size in bits/sec
 # for SB/VM).
 # The same value is used for inbound and outbound bandwidth.
@@ -476,9 +476,9 @@ enable_pprof = false
 
 # Indicates the CreateContainer request timeout needed for the workload(s)
 # It using guest_pull this includes the time to pull the image inside the guest
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)  
-# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
+# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)
+# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config
+# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout.
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 
