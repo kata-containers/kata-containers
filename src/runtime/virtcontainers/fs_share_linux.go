@@ -76,14 +76,6 @@ func resolveRootDir() string {
 	return rootDir
 }
 
-// mountCacheKey uniquely identifies a mount within a sandbox.
-// The cache is keyed by container ID and source path because guestPath
-// is container-specific (includes container ID and random bytes).
-type mountCacheKey struct {
-	containerID string
-	source      string
-}
-
 type FilesystemShare struct {
 	sandbox *Sandbox
 	watcher *fsnotify.Watcher
@@ -94,9 +86,9 @@ type FilesystemShare struct {
 	// srcDstMap tracks file-level source to destination mappings for configmap/secret watching
 	srcDstMap     map[string][]string
 	srcDstMapLock sync.Mutex
-	// srcGuestMap caches volume source path to guest path, enabling caching
-	// within a container if it mounts the same source multiple times
-	srcGuestMap          map[mountCacheKey]string
+	// srcGuestMap caches volume source path to guest path, enabling multiple containers
+	// in the same pod to share the same volume mount
+	srcGuestMap          map[string]string
 	srcGuestMapLock      sync.Mutex
 	eventLoopStarted     bool
 	eventLoopStartedLock sync.Mutex
@@ -120,7 +112,7 @@ func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 		sandbox:            s,
 		watcherDoneChannel: make(chan bool),
 		srcDstMap:          make(map[string][]string),
-		srcGuestMap:        make(map[mountCacheKey]string),
+		srcGuestMap:        make(map[string]string),
 		watcher:            watcher,
 		configVolRegex:     configVolRegex,
 		timestampDirRegex:  timestampDirRegex,
@@ -312,19 +304,14 @@ func (f *FilesystemShare) Cleanup(ctx context.Context) error {
 func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount) (*SharedFile, error) {
 	caps := f.sandbox.hypervisor.Capabilities(ctx)
 
-	// Cache key includes container ID because guestPath is container-specific.
-	// This allows caching within a single container (if it mounts the same source multiple times)
-	// while ensuring different containers get their own mounts.
-	cacheKey := mountCacheKey{containerID: c.id, source: m.Source}
-
-	// Check if this volume source has already been shared by this container
+	// Check if this volume source has already been shared by another container in this pod
 	f.srcGuestMapLock.Lock()
-	if cachedGuestPath, ok := f.srcGuestMap[cacheKey]; ok {
+	if guestPath, ok := f.srcGuestMap[m.Source]; ok {
 		f.srcGuestMapLock.Unlock()
 		if caps.IsFsSharingSupported() {
-			m.HostPath = filepath.Join(getMountPath(f.sandbox.ID()), filepath.Base(cachedGuestPath))
+			m.HostPath = filepath.Join(getMountPath(f.sandbox.ID()), filepath.Base(guestPath))
 		}
-		return &SharedFile{guestPath: cachedGuestPath}, nil
+		return &SharedFile{guestPath: guestPath}, nil
 	}
 	f.srcGuestMapLock.Unlock()
 
@@ -448,10 +435,10 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 		m.HostPath = mountDest
 	}
 
-	// Cache the guestPath for this container and volume source
+	// Cache the guestPath for this volume source so other containers can share it
 	f.srcGuestMapLock.Lock()
 	defer f.srcGuestMapLock.Unlock()
-	f.srcGuestMap[cacheKey] = guestPath
+	f.srcGuestMap[m.Source] = guestPath
 
 	return &SharedFile{
 		guestPath: guestPath,
@@ -477,10 +464,8 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 		}
 	}
 
-	// Remove the cache entry for this container and volume source
-	cacheKey := mountCacheKey{containerID: c.id, source: m.Source}
 	f.srcGuestMapLock.Lock()
-	delete(f.srcGuestMap, cacheKey)
+	delete(f.srcGuestMap, m.Source)
 	f.srcGuestMapLock.Unlock()
 
 	return nil
