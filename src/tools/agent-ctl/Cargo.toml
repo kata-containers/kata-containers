@@ -15,7 +15,7 @@ protocols = { path = "../../libs/protocols", features = ["with-serde"] }
 rustjail = { path = "../../agent/rustjail" }
 oci-spec = { version = "0.8.1", features = ["runtime"] }
 
-clap = { version = "4.5.40", features = ["derive", "cargo"] }
+clap = { version = "4.5.56", features = ["derive", "cargo"] }
 lazy_static = "1.4.0"
 anyhow = "1.0.31"
 hex = "0.4.2"
