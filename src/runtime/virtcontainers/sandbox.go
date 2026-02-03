@@ -21,14 +21,13 @@ import (
 	"sync"
 	"syscall"
 
-	v1 "github.com/containerd/cgroups/stats/v1"
-	v2 "github.com/containerd/cgroups/v2/stats"
+	v1stats "github.com/containerd/cgroups/v3/cgroup1/stats"
+	v2stats "github.com/containerd/cgroups/v3/cgroup2/stats"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
-	cri "github.com/containerd/containerd/pkg/cri/annotations"
 	crio "github.com/cri-o/cri-o/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
@@ -703,13 +702,13 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 func setHypervisorConfigAnnotations(sandboxConfig *SandboxConfig) {
 	if len(sandboxConfig.Containers) > 0 {
 		// These values are required by remote hypervisor
-		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
+		for _, a := range []string{annotations.CRISandboxName, crio.SandboxName} {
 			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
 				sandboxConfig.HypervisorConfig.SandboxName = value
 			}
 		}
 
-		for _, a := range []string{cri.SandboxNamespace, crio.Namespace} {
+		for _, a := range []string{annotations.CRISandboxNamespace, crio.Namespace} {
 			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
 				sandboxConfig.HypervisorConfig.SandboxNamespace = value
 			}
@@ -1796,10 +1795,10 @@ func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 
 	// TODO Do we want to aggregate the overhead cgroup stats to the sandbox ones?
 	switch mt := metrics.(type) {
-	case *v1.Metrics:
+	case *v1stats.Metrics:
 		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.Usage.Total
 		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage.Usage
-	case *v2.Metrics:
+	case *v2stats.Metrics:
 		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.UsageUsec
 		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage
 	default:

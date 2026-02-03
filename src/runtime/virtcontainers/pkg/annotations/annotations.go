@@ -24,6 +24,37 @@ const (
 	SandboxConfigPathKey = kataAnnotationsPrefix + "config_path"
 )
 
+// CRI annotations - standard CRI annotation keys used by containerd and other CRI implementations.
+// These were previously imported from github.com/containerd/containerd/pkg/cri/annotations.
+const (
+	// CRIContainerType is the container type (sandbox or container) annotation
+	CRIContainerType = "io.kubernetes.cri.container-type"
+
+	// CRISandboxName is the name of the sandbox (pod)
+	CRISandboxName = "io.kubernetes.cri.sandbox-name"
+
+	// CRISandboxNamespace is the name of the namespace of the sandbox (pod)
+	CRISandboxNamespace = "io.kubernetes.cri.sandbox-namespace"
+
+	// CRISandboxID is the sandbox ID annotation
+	CRISandboxID = "io.kubernetes.cri.sandbox-id"
+
+	// CRIContainerTypeSandbox represents a pod sandbox container
+	CRIContainerTypeSandbox = "sandbox"
+
+	// CRIContainerTypeContainer represents a container running within a pod
+	CRIContainerTypeContainer = "container"
+
+	// CRISandboxCPUPeriod is the CPU CFS scheduler period for the sandbox
+	CRISandboxCPUPeriod = "io.kubernetes.cri.sandbox-cpu-period"
+
+	// CRISandboxCPUQuota is the CPU CFS scheduler quota for the sandbox
+	CRISandboxCPUQuota = "io.kubernetes.cri.sandbox-cpu-quota"
+
+	// CRISandboxMem is the initial memory for the sandbox
+	CRISandboxMem = "io.kubernetes.cri.sandbox-memory"
+)
+
 // Annotations related to Hypervisor configuration
 const (
 	//

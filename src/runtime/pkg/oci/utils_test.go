@@ -15,7 +15,6 @@ import (
 	"strings"
 	"testing"
 
-	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -203,22 +202,22 @@ func TestContainerType(t *testing.T) {
 		},
 		{
 			description:     "unexpected annotation, expect error",
-			annotationKey:   ctrAnnotations.ContainerType,
+			annotationKey:   vcAnnotations.CRIContainerType,
 			annotationValue: "foo",
 			expectedType:    vc.UnknownContainerType,
 			expectedErr:     true,
 		},
 		{
 			description:     "containerd sandbox",
-			annotationKey:   ctrAnnotations.ContainerType,
-			annotationValue: string(ctrAnnotations.ContainerTypeSandbox),
+			annotationKey:   vcAnnotations.CRIContainerType,
+			annotationValue: string(vcAnnotations.CRIContainerTypeSandbox),
 			expectedType:    vc.PodSandbox,
 			expectedErr:     false,
 		},
 		{
 			description:     "containerd container",
-			annotationKey:   ctrAnnotations.ContainerType,
-			annotationValue: string(ctrAnnotations.ContainerTypeContainer),
+			annotationKey:   vcAnnotations.CRIContainerType,
+			annotationValue: string(vcAnnotations.CRIContainerTypeContainer),
 			expectedType:    vc.PodContainer,
 			expectedErr:     false,
 		},
@@ -1178,9 +1177,9 @@ func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	spec := specs.Spec{
 		Annotations: make(map[string]string),
 	}
-	spec.Annotations[ctrAnnotations.SandboxCPUPeriod] = period
-	spec.Annotations[ctrAnnotations.SandboxCPUQuota] = quota
-	spec.Annotations[ctrAnnotations.SandboxMem] = memory
+	spec.Annotations[vcAnnotations.CRISandboxCPUPeriod] = period
+	spec.Annotations[vcAnnotations.CRISandboxCPUQuota] = quota
+	spec.Annotations[vcAnnotations.CRISandboxMem] = memory
 
 	return &spec
 }
