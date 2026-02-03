@@ -209,19 +209,37 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
 
     fs::create_dir_all(format!("{}/nydus-snapshotter", config.host_install_dir))?;
 
+    // Remove existing binaries before copying new ones.
+    // This is crucial for atomic updates (same pattern as copy_artifacts in install.rs):
+    // - If the file is in use (e.g., a running binary), the old inode stays alive
+    // - The new copy creates a new inode
+    // - Running processes keep using the old inode until they exit
+    // - New processes use the new file immediately
+    // Without this, fs::copy would fail with ETXTBSY ("Text file busy") if the
+    // nydus-snapshotter service is still running from a previous installation.
+    let grpc_binary = format!(
+        "{}/nydus-snapshotter/containerd-nydus-grpc",
+        config.host_install_dir
+    );
+    let overlayfs_binary = format!(
+        "{}/nydus-snapshotter/nydus-overlayfs",
+        config.host_install_dir
+    );
+    for binary in [&grpc_binary, &overlayfs_binary] {
+        match fs::remove_file(binary) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+
     fs::copy(
         "/opt/kata-artifacts/nydus-snapshotter/containerd-nydus-grpc",
-        format!(
-            "{}/nydus-snapshotter/containerd-nydus-grpc",
-            config.host_install_dir
-        ),
+        &grpc_binary,
     )?;
     fs::copy(
         "/opt/kata-artifacts/nydus-snapshotter/nydus-overlayfs",
-        format!(
-            "{}/nydus-snapshotter/nydus-overlayfs",
-            config.host_install_dir
-        ),
+        &overlayfs_binary,
     )?;
 
     fs::write(
