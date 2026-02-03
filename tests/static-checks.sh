@@ -440,6 +440,7 @@ static_check_license_headers()
 
 		local missing=$(grep \
 			--exclude=".git/*" \
+			--exclude=".editorconfig" \
 			--exclude=".gitignore" \
 			--exclude=".dockerignore" \
 			--exclude="Gopkg.lock" \
