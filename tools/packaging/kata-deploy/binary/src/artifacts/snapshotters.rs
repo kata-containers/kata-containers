@@ -145,6 +145,22 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
         _ => "nydus-snapshotter".to_string(),
     };
 
+    // Clean up existing nydus-snapshotter state to ensure fresh start with new version.
+    // This is safe across all K8s distributions (k3s, rke2, k0s, microk8s, etc.) because
+    // we only touch the nydus data directory, not containerd's internals.
+    // When containerd tries to use non-existent snapshots, it will re-pull/re-unpack.
+    let nydus_data_dir = format!("/host/var/lib/{nydus_snapshotter}");
+    info!("Cleaning up existing nydus-snapshotter state at {}", nydus_data_dir);
+    
+    // Stop the service first if it exists (ignore errors if not running)
+    let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]);
+    
+    // Remove the data directory to clean up old snapshots with potentially incorrect labels
+    if Path::new(&nydus_data_dir).exists() {
+        info!("Removing nydus data directory: {}", nydus_data_dir);
+        fs::remove_dir_all(&nydus_data_dir).ok();
+    }
+
     let config_guest_pulling = "/opt/kata-artifacts/nydus-snapshotter/config-guest-pulling.toml";
     let nydus_snapshotter_service =
         "/opt/kata-artifacts/nydus-snapshotter/nydus-snapshotter.service";

@@ -321,7 +321,7 @@ spec:
           name: {{ .Chart.Name }}-custom-configs
 {{- end }}
 {{- end }}
+{{- with .Values.updateStrategy }}
   updateStrategy:
-    rollingUpdate:
-      maxUnavailable: 1
-    type: RollingUpdate
+    {{- toYaml . | nindent 4 }}
+{{- end}}

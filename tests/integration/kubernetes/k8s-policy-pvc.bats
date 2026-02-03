@@ -62,9 +62,11 @@ teardown() {
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"
-	teardown_common "${node}" "${node_start_time:-}"
+
 	# Clean-up
 	kubectl delete -f "${correct_pod_yaml}"
 	kubectl delete -f "${pvc_yaml}"
 	rm -f "${incorrect_pod_yaml}"
+
+	teardown_common "${node}" "${node_start_time:-}"
 }
