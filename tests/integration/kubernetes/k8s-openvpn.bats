@@ -34,17 +34,10 @@ setup() {
     client_secret_template_yaml="${pod_config_dir}/openvpn/openvpn-client-secret.yaml.in"
     client_secret_instance_yaml="${pod_config_dir}/openvpn/openvpn-client-secret-instance.yaml"
 
-    # See issue https://github.com/kata-containers/kata-containers/issues/11162 and
-    # other references to this issue in the genpolicy source folder.
-    if [[ "${SNAPSHOTTER:-}" == "nydus" ]]; then
-        add_allow_all_policy_to_yaml "$server_pod_yaml"
-        add_allow_all_policy_to_yaml "$client_pod_yaml"
-    else
-        policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
-        add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
-        auto_generate_policy "${policy_settings_dir}" "$server_pod_yaml" "$server_configmap_yaml" "--config-file $server_secret_template_yaml"
-        auto_generate_policy "${policy_settings_dir}" "$client_pod_yaml" "$client_configmap_yaml" "--config-file $client_secret_template_yaml"
-    fi
+    policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+    add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+    auto_generate_policy "${policy_settings_dir}" "$server_pod_yaml" "$server_configmap_yaml" "--config-file $server_secret_template_yaml"
+    auto_generate_policy "${policy_settings_dir}" "$client_pod_yaml" "$client_configmap_yaml" "--config-file $client_secret_template_yaml"
 }
 
 @test "Pods establishing a VPN connection using openvpn" {
