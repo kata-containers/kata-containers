@@ -472,6 +472,7 @@ pub struct VfioDevices {
     pub device_path: String,
 
     /// Regex pattern for VFIO CDI annotation keys.
+    #[serde(skip_serializing)]
     pub anno_key_regex: String,
 
     /// NVIDIA-specific VFIO settings.
@@ -494,9 +495,11 @@ pub struct SandboxData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VfioNvidiaDevices {
     /// Regex pattern for NVIDIA GPU CDI annotation values.
+    #[serde(skip_serializing)]
     pub gpu_anno_value_regex: String,
 
     /// Device type for NVIDIA GPU VFIO devices (gk variant).
+    #[serde(skip_serializing)]
     pub gpu_gk_device_type: String,
 
     /// Allowlist of K8s extended resource names that should be treated as NVIDIA
