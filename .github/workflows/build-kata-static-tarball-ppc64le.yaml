@@ -26,6 +26,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ppc64le
+  cancel-in-progress: true
+
 jobs:
   build-asset:
     name: build-asset
@@ -42,6 +46,9 @@ jobs:
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ matrix.asset }}-${{ matrix.asset }}-${{ matrix.stage }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -100,6 +107,9 @@ jobs:
           - rootfs-initrd
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -166,7 +176,7 @@ jobs:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
         if: ${{ inputs.stage == 'release' }}
         with:
-          name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+          name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}-ppc64le-${{ matrix.asset }}
 
   build-asset-shim-v2:
     name: build-asset-shim-v2
