@@ -1585,7 +1585,7 @@ func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs
 
 // handleEphemeralStorage handles ephemeral storages by
 // creating a Storage from corresponding source of the mount point
-func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount, annoations map[string]string) ([]*grpc.Storage, error) {
+func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount, annotations map[string]string) ([]*grpc.Storage, error) {
 	var epheStorages []*grpc.Storage
 	for idx, mnt := range mounts {
 		if mnt.Type == KataEphemeralDevType {
@@ -1613,15 +1613,15 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount, annoations map[
 			mounts[idx].Type = "bind"
 
 			// parse sizeLimit option for emptyDir
-			sizeOption, err := parseEmptyDirSize(annoations, volumeName)
+			sizeOption, err := parseEmptyDirSize(annotations, volumeName)
 			if err != nil {
 				k.Logger().WithError(err).Errorf("failed to parse empty dir size for %s", volumeName)
 				// return nil, err
 			}
-
 			if sizeOption != "" {
 				dir_options = append(dir_options, sizeOption)
 			}
+
 
 			// Create a storage struct so that kata agent is able to create
 			// tmpfs backed volume inside the VM
@@ -1638,12 +1638,12 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount, annoations map[
 	return epheStorages, nil
 }
 
-func parseEmptyDirSize(annoations map[string]string, volumeName string) (string, error) {
-	if annoations == nil {
+func parseEmptyDirSize(annotations map[string]string, volumeName string) (string, error) {
+	if annotations == nil {
 		return "", nil
 	}
 
-	if val, found := annoations[vcAnnotations.KataAnnotSandboxVolumesEmptyDirPrefix]; found {
+	if val, found := annotations[vcAnnotations.KataAnnotSandboxVolumesEmptyDirPrefix]; found {
 		eds, err := vcAnnotations.ParseEmptyDirs(val)
 		if err != nil {
 			return "", err

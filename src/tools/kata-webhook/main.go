@@ -77,12 +77,11 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 		pod.Annotations = make(map[string]string)
 	}
 
-	annoationValue, err := eds.String()
+	annotationValue, err := eds.String()
 	if err != nil {
 		return nil, err
 	}
-	// pod.Annotations["io.katacontainers.sandbox.volumes.emptydir"] = annoationValue
-	pod.Annotations[kataAnnotations.KataAnnotSandboxVolumesEmptyDirPrefix] = annoationValue
+	pod.Annotations[kataAnnotations.KataAnnotSandboxVolumesEmptyDirPrefix] = annotationValue
 
 	return &kwhmutating.MutatorResult{
 		MutatedObject: pod,

@@ -11,7 +11,7 @@ import "encoding/json"
 // see https://kubernetes.io/docs/concepts/storage/volumes/#emptydir
 
 const (
-	// annoation key
+	// annotation key
 	kataAnnotSandboxVolumesPrefix         = kataAnnotSandboxPrefix + "volumes."
 	KataAnnotSandboxVolumesEmptyDirPrefix = kataAnnotSandboxVolumesPrefix + "emptydir"
 
