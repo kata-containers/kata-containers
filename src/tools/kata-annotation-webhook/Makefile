@@ -10,14 +10,14 @@ include ../../../utils.mk
 default: build
 
 build:
-	CGO_ENABLED=0 go build -o bin/kata-webhook \
+	CGO_ENABLED=0 go build -o bin/kata-annotation-webhook \
 		--ldflags "-w -extldflags '-static'"
 
 image: build
-	docker build -t liubin/kata-webhook .
+	docker build -t quay.io/kata-containers/kata-annotation-webhook .
 
 clean:
-	rm bin/kata-webhook
+	rm bin/kata-annotation-webhook
 
 test:
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,16 +26,8 @@ import (
 	kataAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 )
 
-const (
-	runtimeClassEnvKey  = "KATA_RUNTIME_CLASS"
-	defaultRuntimeClass = "kata"
-)
-
-func getRuntimeClass() string {
-	if runtimeClass, ok := os.LookupEnv(runtimeClassEnvKey); ok {
-		return runtimeClass
-	}
-	return defaultRuntimeClass
+func isKataRuntimeClass(runtimeClassName string) bool {
+	return strings.HasPrefix(runtimeClassName, "kata")
 }
 
 func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj metav1.Object) (*kwhmutating.MutatorResult, error) {
@@ -43,9 +36,7 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 		return &kwhmutating.MutatorResult{}, nil
 	}
 
-	kataRuntimeClassName := getRuntimeClass()
-
-	if pod.Spec.RuntimeClassName == nil || *pod.Spec.RuntimeClassName != kataRuntimeClassName {
+	if pod.Spec.RuntimeClassName == nil || !isKataRuntimeClass(*pod.Spec.RuntimeClassName) {
 		return &kwhmutating.MutatorResult{}, nil
 	}
 

@@ -1,26 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kata-webhook
+  name: kata-annotation-webhook
   labels:
-    app: kata-webhook
+    app: kata-annotation-webhook
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kata-webhook
+      app: kata-annotation-webhook
   template:
     metadata:
       labels:
-        app: kata-webhook
+        app: kata-annotation-webhook
     spec:
       containers:
-        - name: kata-webhook
-          image: liubin/kata-webhook:latest
+        - name: kata-annotation-webhook
+          image: quay.io/kata-containers/kata-annotation-webhook:latest
           imagePullPolicy: Always
-          env:
-          - name: KATA_RUNTIME_CLASS
-            value: "kata"
           args:
             - -tls-cert-file=/etc/webhook/certs/cert.pem
             - -tls-key-file=/etc/webhook/certs/key.pem
@@ -31,17 +28,17 @@ spec:
       volumes:
         - name: webhook-certs
           secret:
-            secretName: kata-webhook-certs
+            secretName: kata-annotation-webhook-certs
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: kata-webhook
+  name: kata-annotation-webhook-svc
   labels:
-    app: kata-webhook
+    app: kata-annotation-webhook
 spec:
   ports:
   - port: 443
     targetPort: 443
   selector:
-    app: kata-webhook
+    app: kata-annotation-webhook

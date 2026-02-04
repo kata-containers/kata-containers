@@ -7,8 +7,9 @@
 set -x
 
 WEBHOOK_NS=${1:-"default"}
-WEBHOOK_SVC="kata-webhook"
-HOST="${WEBHOOK_SVC}.${WEBHOOK_NS}.svc"
+WEBHOOK_SVC="kata-annotation-webhook"
+# API server connects to the Service name (kata-annotation-webhook-svc), not the deployment name
+HOST="kata-annotation-webhook-svc.${WEBHOOK_NS}.svc"
 
 # Create certs for our webhook
 openssl genrsa -out webhookCA.key 2048
