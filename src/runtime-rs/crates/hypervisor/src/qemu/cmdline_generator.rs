@@ -179,10 +179,17 @@ impl Kernel {
         let mut kernel_params = KernelParams::new(config.debug_info.enable_debug);
 
         if config.boot_info.initrd.is_empty() {
+            // DAX is disabled on ARM due to a kernel panic in caches_clean_inval_pou.
+            #[cfg(target_arch = "aarch64")]
+            let use_dax = false;
+            #[cfg(not(target_arch = "aarch64"))]
+            let use_dax = true;
+
             let mut rootfs_params = KernelParams::new_rootfs_kernel_params(
                 &config.boot_info.kernel_verity_params,
                 &config.boot_info.vm_rootfs_driver,
                 &config.boot_info.rootfs_type,
+                use_dax,
             )
             .context("adding rootfs/verity params failed")?;
             kernel_params.append(&mut rootfs_params);

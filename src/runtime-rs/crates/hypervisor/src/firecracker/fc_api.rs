@@ -90,6 +90,7 @@ impl FcInner {
             &self.config.boot_info.kernel_verity_params,
             &self.config.blockdev_info.block_device_driver,
             &self.config.boot_info.rootfs_type,
+            true,
         )?;
         kernel_params.append(&mut rootfs_params);
         kernel_params.append(&mut KernelParams::from_string(

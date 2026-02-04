@@ -150,6 +150,7 @@ impl CloudHypervisorInner {
             &cfg.boot_info.kernel_verity_params,
             rootfs_driver,
             rootfs_type,
+            true,
         )?;
 
         let mut console_params = if enable_debug {
