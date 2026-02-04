@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::config::Config;
+use crate::config::{Config, DEFAULT_KATA_INSTALL_DIR};
 use crate::k8s::nfd;
 use crate::k8s::runtimeclasses;
 use crate::utils;
@@ -395,6 +395,7 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
         "/host{}",
         utils::get_kata_containers_config_path(shim, &config.dest_dir)
     );
+    let config_d_dir = format!("{}/config.d", runtime_config_dir);
 
     let kata_config_file = Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
 
@@ -406,6 +407,12 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
              file in the artifacts.",
             shim
         ));
+    }
+
+    // 1. Installation prefix adjustments (if not default)
+    if config.dest_dir != DEFAULT_KATA_INSTALL_DIR {
+        let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
+        write_drop_in_file(&config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
     }
 
     configure_proxy(config, shim, &kata_config_file, "https_proxy").await?;
@@ -423,10 +430,6 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
         .contains(&shim.to_string())
     {
         configure_experimental_force_guest_pull(&kata_config_file).await?;
-    }
-
-    if config.dest_dir != "/opt/kata" {
-        adjust_installation_prefix(config, shim, &kata_config_file).await?;
     }
 
     Ok(())
@@ -588,6 +591,138 @@ fn set_toml_bool_to_true(config_file: &Path, path: &str) -> Result<()> {
     Ok(())
 }
 
+/// Write a drop-in configuration file to the config.d directory.
+/// If content is empty, the file is not created.
+fn write_drop_in_file(config_d_dir: &str, filename: &str, content: &str) -> Result<()> {
+    if content.is_empty() {
+        return Ok(());
+    }
+
+    let drop_in_path = format!("{}/{}", config_d_dir, filename);
+    fs::write(&drop_in_path, content)
+        .with_context(|| format!("Failed to write drop-in file: {}", drop_in_path))?;
+
+    log::debug!("Created drop-in file: {}", drop_in_path);
+    Ok(())
+}
+
+/// Get the QEMU share directory name for a given shim.
+/// Some shims use experimental QEMU builds with different firmware paths.
+fn get_qemu_share_name(shim: &str) -> Option<String> {
+    if !is_qemu_shim(shim) {
+        return None;
+    }
+
+    let share_name = match shim {
+        "qemu-cca" => "qemu-cca-experimental",
+        "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
+        "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
+        _ => "qemu",
+    };
+
+    Some(share_name.to_string())
+}
+
+/// Create a QEMU wrapper script that adds the -L flag for firmware paths.
+/// This is needed when using a non-default installation prefix.
+fn create_qemu_wrapper_script(config: &Config, shim: &str) -> Result<Option<String>> {
+    let qemu_share = match get_qemu_share_name(shim) {
+        Some(share) => share,
+        None => return Ok(None), // Not a QEMU shim, no wrapper needed
+    };
+
+    let qemu_binary = format!("{}/bin/qemu-system-x86_64", config.dest_dir);
+    let wrapper_script_path = format!("{}-installation-prefix", qemu_binary);
+    let host_wrapper_path = format!("/host{}", wrapper_script_path);
+
+    // Create wrapper script if it doesn't exist
+    if !Path::new(&host_wrapper_path).exists() {
+        // Ensure parent directory exists
+        if let Some(parent) = Path::new(&host_wrapper_path).parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let script_content = format!(
+            r#"#!/usr/bin/env bash
+
+exec {} "$@" -L {}/share/kata-{}/qemu/
+"#,
+            qemu_binary, config.dest_dir, qemu_share
+        );
+
+        fs::write(&host_wrapper_path, &script_content)?;
+        let mut perms = fs::metadata(&host_wrapper_path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&host_wrapper_path, perms)?;
+
+        log::debug!("Created QEMU wrapper script: {}", host_wrapper_path);
+    }
+
+    Ok(Some(wrapper_script_path))
+}
+
+/// Get the hypervisor binary path for a given shim.
+/// Returns the path to the hypervisor binary based on the shim type.
+fn get_hypervisor_path(config: &Config, shim: &str) -> Result<String> {
+    if is_qemu_shim(shim) {
+        // For QEMU shims, use the wrapper script that adds firmware paths
+        // create_qemu_wrapper_script always returns Some for QEMU shims
+        create_qemu_wrapper_script(config, shim)?
+            .ok_or_else(|| anyhow::anyhow!("QEMU wrapper script should always be created for QEMU shims"))
+    } else {
+        // For non-QEMU shims, use the appropriate hypervisor binary
+        let binary = match shim {
+            "clh" | "cloud-hypervisor" => "cloud-hypervisor",
+            "fc" | "firecracker" => "firecracker",
+            "dragonball" => "dragonball",
+            "stratovirt" => "stratovirt",
+            // Remote and other shims don't have a local hypervisor binary
+            _ => return Ok(String::new()),
+        };
+        Ok(format!("{}/bin/{}", config.dest_dir, binary))
+    }
+}
+
+/// Generate drop-in content for installation prefix adjustments.
+/// This replaces /opt/kata with the custom dest_dir in all relevant paths.
+/// For QEMU shims, this also creates a wrapper script for firmware paths.
+fn generate_installation_prefix_drop_in(config: &Config, shim: &str) -> Result<String> {
+    let hypervisor_name = get_hypervisor_name(shim)?;
+
+    // Build the drop-in content with adjusted paths
+    let mut content = String::new();
+    content.push_str("# Installation prefix adjustments\n");
+    content.push_str("# Generated by kata-deploy\n\n");
+
+    // Hypervisor section
+    content.push_str(&format!("[hypervisor.{}]\n", hypervisor_name));
+
+    // Only set hypervisor path if applicable for this shim type
+    let hypervisor_path = get_hypervisor_path(config, shim)?;
+    if !hypervisor_path.is_empty() {
+        content.push_str(&format!("path = \"{}\"\n", hypervisor_path));
+    }
+
+    // Common paths for all hypervisors
+    content.push_str(&format!("kernel = \"{}/share/kata-containers/vmlinux.container\"\n", config.dest_dir));
+    content.push_str(&format!("image = \"{}/share/kata-containers/kata-containers.img\"\n", config.dest_dir));
+    content.push_str(&format!("initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n", config.dest_dir));
+
+    // QEMU-specific paths (firmware is only relevant for QEMU)
+    if is_qemu_shim(shim) {
+        content.push_str(&format!("firmware = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
+        content.push_str(&format!("firmware_volume = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
+    }
+
+    // Firecracker-specific paths (jailer is only for Firecracker)
+    if shim == "fc" || shim == "firecracker" {
+        content.push_str(&format!("jailer_path = \"{}/bin/jailer\"\n", config.dest_dir));
+        content.push_str(&format!("valid_jailer_paths = [\"{}/bin/jailer\"]\n", config.dest_dir));
+    }
+
+    Ok(content)
+}
+
 async fn configure_debug(config_file: &Path, shim: &str) -> Result<()> {
     let hypervisor_name = get_hypervisor_name(shim)?;
 
@@ -689,90 +824,6 @@ async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<(
     set_toml_bool_to_true(config_file, "runtime.experimental_force_guest_pull")
 }
 
-async fn adjust_installation_prefix(config: &Config, shim: &str, config_file: &Path) -> Result<()> {
-    let content = fs::read_to_string(config_file)?;
-
-    if content.contains(&config.dest_dir) {
-        return Ok(());
-    }
-
-    let new_content = content.replace("/opt/kata", &config.dest_dir);
-    fs::write(config_file, new_content)?;
-
-    if is_qemu_shim(shim) {
-        adjust_qemu_cmdline(config, shim, config_file, None)?;
-    }
-
-    Ok(())
-}
-
-/// Note: The host_base_path parameter is kept to allow for unit testing with temporary directories
-fn adjust_qemu_cmdline(
-    config: &Config,
-    shim: &str,
-    config_file: &Path,
-    host_base_path: Option<&str>,
-) -> Result<()> {
-    let qemu_share = match shim {
-        "qemu-cca" => "qemu-cca-experimental".to_string(),
-        "qemu-nvidia-gpu-snp" => "qemu-snp-experimental".to_string(),
-        "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental".to_string(),
-        s if is_qemu_shim(s) => "qemu".to_string(),
-        _ => anyhow::bail!(
-            "adjust_qemu_cmdline called with non-QEMU shim '{}'. This is a programming error.",
-            shim
-        ),
-    };
-
-    // Get QEMU path from config
-    let qemu_binary = toml_utils::get_toml_value(config_file, ".hypervisor.qemu.path")?;
-    let qemu_binary = qemu_binary.trim_matches('"');
-    let qemu_binary_script = format!("{qemu_binary}-installation-prefix");
-
-    // Use provided base path or default to /host for production
-    let base_path = host_base_path.unwrap_or("/host");
-    let qemu_binary_script_host_path = format!("{base_path}/{qemu_binary_script}");
-
-    // Create wrapper script if it doesn't exist
-    if !Path::new(&qemu_binary_script_host_path).exists() {
-        // Ensure parent directory exists
-        if let Some(parent) = Path::new(&qemu_binary_script_host_path).parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let script_content = format!(
-            r#"#!/usr/bin/env bash
-
-exec {} "$@" -L {}/share/kata-{}/qemu/
-"#,
-            qemu_binary, config.dest_dir, qemu_share
-        );
-        fs::write(&qemu_binary_script_host_path, script_content)?;
-        let mut perms = fs::metadata(&qemu_binary_script_host_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&qemu_binary_script_host_path, perms)?;
-    }
-
-    // Update config file to use wrapper script using toml_edit
-    let current_path =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.path").unwrap_or_default();
-    if !current_path.contains(&qemu_binary_script) {
-        log::debug!(
-            "Updating hypervisor.qemu.path in {}: old=\"{}\" new=\"{}\"",
-            config_file.display(),
-            current_path,
-            qemu_binary_script
-        );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.path",
-            &format!("\"{qemu_binary_script}\""),
-        )?;
-    }
-
-    Ok(())
-}
-
 async fn configure_mariner(config: &Config) -> Result<()> {
     let config_path = format!(
         "{}/share/defaults/kata-containers/configuration-clh.toml",
@@ -827,37 +878,6 @@ async fn configure_mariner(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Helper to create a minimal test Config with optional overrides
-    fn create_test_config(shim: &str) -> crate::config::Config {
-        crate::config::Config {
-            node_name: "test-node".to_string(),
-            debug: false,
-            shims_for_arch: vec![shim.to_string()],
-            default_shim_for_arch: shim.to_string(),
-            allowed_hypervisor_annotations_for_arch: vec![],
-            snapshotter_handler_mapping_for_arch: None,
-            agent_https_proxy: None,
-            agent_no_proxy: None,
-            pull_type_mapping_for_arch: None,
-            installation_prefix: None,
-            multi_install_suffix: None,
-            helm_post_delete_hook: false,
-            experimental_setup_snapshotter: None,
-            experimental_force_guest_pull_for_arch: vec![],
-            dest_dir: "/opt/kata".to_string(),
-            host_install_dir: "/host/opt/kata".to_string(),
-            crio_drop_in_conf_dir: "/etc/crio/crio.conf.d/".to_string(),
-            crio_drop_in_conf_file: "/etc/crio/crio.conf.d//99-kata-deploy".to_string(),
-            crio_drop_in_conf_file_debug: "/etc/crio/crio.conf.d//100-debug".to_string(),
-            containerd_conf_file: "/etc/containerd/config.toml".to_string(),
-            containerd_conf_file_backup: "/etc/containerd/config.toml.bak".to_string(),
-            containerd_drop_in_conf_file: "/opt/kata/containerd/config.d/kata-deploy.toml"
-                .to_string(),
-            custom_runtimes_enabled: false,
-            custom_runtimes: vec![],
-        }
-    }
 
     #[test]
     fn test_get_hypervisor_name_qemu_variants() {
@@ -1060,283 +1080,6 @@ mod tests {
             result,
             "agent.log=debug agent.no_proxy=localhost,127.0.0.1,.local"
         );
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_standard() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-qemu.toml");
-        let host_base = temp_dir.path().join("host");
-
-        // QEMU binary path (doesn't need to exist)
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        // Create a minimal TOML config
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script was created
-        let wrapper_script_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name(format!("qemu-system-x86_64-installation-prefix"));
-        assert!(
-            wrapper_script_path.exists(),
-            "Wrapper script should be created at {:?}",
-            wrapper_script_path
-        );
-
-        // Verify wrapper script content
-        let content = std::fs::read_to_string(&wrapper_script_path).unwrap();
-        assert!(content.contains("#!/usr/bin/env bash"));
-        assert!(content.contains(&format!("exec {}", qemu_binary)));
-        assert!(content.contains("-L /opt/kata/share/kata-qemu/qemu/"));
-
-        // Verify TOML was updated
-        let updated_path =
-            crate::utils::toml::get_toml_value(&config_file, "hypervisor.qemu.path").unwrap();
-        assert!(updated_path.contains("installation-prefix"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_cca_experimental() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-qemu-cca.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu-cca");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu-cca",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script uses qemu-cca-experimental share path
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        assert!(content.contains("-L /opt/kata/share/kata-qemu-cca-experimental/qemu/"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_nvidia_gpu_snp() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir
-            .path()
-            .join("configuration-qemu-nvidia-gpu-snp.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu-nvidia-gpu-snp");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu-nvidia-gpu-snp",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script uses qemu-snp-experimental share path
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        assert!(content.contains("-L /opt/kata/share/kata-qemu-snp-experimental/qemu/"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_nvidia_gpu_tdx() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir
-            .path()
-            .join("configuration-qemu-nvidia-gpu-tdx.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu-nvidia-gpu-tdx");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu-nvidia-gpu-tdx",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script uses qemu-tdx-experimental share path
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        assert!(content.contains("-L /opt/kata/share/kata-qemu-tdx-experimental/qemu/"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_idempotent() {
-        // Test that running adjust_qemu_cmdline multiple times is safe
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-qemu.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu");
-
-        // Run twice - should be idempotent
-        adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-        adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script exists and hasn't been corrupted
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        assert!(wrapper_path.exists());
-
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        // Count occurrences of shebang - should be exactly 1
-        assert_eq!(content.matches("#!/usr/bin/env bash").count(), 1);
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_invalid_shim() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-fc.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let toml_content = r#"
-[hypervisor.firecracker]
-path = "/opt/kata/bin/firecracker"
-"#;
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("fc");
-
-        // Should fail for non-QEMU shim
-        let result = adjust_qemu_cmdline(
-            &config,
-            "fc",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        );
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("non-QEMU shim"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_missing_config_file() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let host_base = temp_dir.path().join("host");
-        let config_file = temp_dir.path().join("nonexistent.toml");
-
-        let config = create_test_config("qemu");
-
-        // Should fail for missing config file
-        let result = adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_invalid_toml() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let host_base = temp_dir.path().join("host");
-        let config_file = temp_dir.path().join("invalid.toml");
-
-        // Write invalid TOML
-        std::fs::write(&config_file, "this is [ not valid { toml").unwrap();
-
-        let config = create_test_config("qemu");
-
-        // Should fail for invalid TOML
-        let result = adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        );
-        assert!(result.is_err());
     }
 
     #[test]

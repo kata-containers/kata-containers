@@ -7,6 +7,10 @@ use anyhow::{Context, Result};
 use log::info;
 use std::env;
 
+/// Default Kata Containers installation directory.
+/// This is where Kata artifacts are installed by default.
+pub const DEFAULT_KATA_INSTALL_DIR: &str = "/opt/kata";
+
 /// Containerd configuration paths and capabilities for a specific runtime
 #[derive(Debug, Clone)]
 pub struct ContainerdPaths {
@@ -109,7 +113,6 @@ impl Config {
         let pull_type_mapping_for_arch = get_arch_var_or_base("PULL_TYPE_MAPPING", &arch);
 
         let installation_prefix = env::var("INSTALLATION_PREFIX").ok().filter(|s| !s.is_empty());
-        let default_dest_dir = "/opt/kata";
         let dest_dir = match installation_prefix {
             Some(ref prefix) => {
                 if !prefix.starts_with('/') {
@@ -117,9 +120,9 @@ impl Config {
                         r#"INSTALLATION_PREFIX must begin with a "/" (ex. /hoge/fuga)"#
                     ));
                 }
-                format!("{prefix}{default_dest_dir}")
+                format!("{prefix}{DEFAULT_KATA_INSTALL_DIR}")
             }
-            None => default_dest_dir.to_string(),
+            None => DEFAULT_KATA_INSTALL_DIR.to_string(),
         };
 
         let multi_install_suffix = env::var("MULTI_INSTALL_SUFFIX").ok().and_then(|s| {
