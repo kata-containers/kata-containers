@@ -416,19 +416,15 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
     }
 
     // 2. Debug configuration (boolean flags only via drop-in)
-    // kernel_params for debug will be handled by the combined kernel_params drop-in
     if config.debug {
         let debug_content = generate_debug_drop_in(shim)?;
         write_drop_in_file(&config_d_dir, "20-debug.toml", &debug_content)?;
     }
 
-    configure_proxy(config, shim, &kata_config_file, "https_proxy").await?;
-
-    configure_no_proxy(config, shim, &kata_config_file).await?;
-
-    if config.debug {
-        configure_debug(&kata_config_file, shim).await?;
-    }
+    // 3. Combined kernel_params (proxy, debug, etc.)
+    // Reads base kernel_params from original config and combines with new params
+    let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
+    write_drop_in_file(&config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
 
     configure_hypervisor_annotations(config, shim, &kata_config_file).await?;
 
@@ -437,144 +433,6 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
         .contains(&shim.to_string())
     {
         configure_experimental_force_guest_pull(&kata_config_file).await?;
-    }
-
-    Ok(())
-}
-
-fn update_kernel_param(current_params: &str, param_name: &str, param_value: &str) -> String {
-    let full_param = format!("{param_name}={param_value}");
-    let search_prefix = format!("{param_name}=");
-
-    // Split params by whitespace and process each
-    let params: Vec<&str> = current_params.split_whitespace().collect();
-    let mut updated_params: Vec<String> = Vec::new();
-    let mut found = false;
-
-    for param in params {
-        if param.starts_with(&search_prefix) {
-            // Replace existing parameter with new value
-            updated_params.push(full_param.clone());
-            found = true;
-        } else {
-            updated_params.push(param.to_string());
-        }
-    }
-
-    // If parameter wasn't found, append it
-    if !found {
-        updated_params.push(full_param);
-    }
-
-    updated_params.join(" ")
-}
-
-async fn configure_proxy(
-    config: &Config,
-    shim: &str,
-    config_file: &Path,
-    proxy_type: &str,
-) -> Result<()> {
-    let proxy_var = if proxy_type == "https_proxy" {
-        &config.agent_https_proxy
-    } else {
-        return Ok(());
-    };
-
-    let proxy_value = match proxy_var {
-        Some(proxy) if !proxy.is_empty() && proxy.contains('=') => {
-            // Per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
-            proxy
-                .split(';')
-                .find_map(|m| {
-                    let parts: Vec<&str> = m.splitn(2, '=').collect();
-                    if parts.len() == 2 && parts[0] == shim {
-                        Some(parts[1].to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_default()
-        }
-        Some(proxy) if !proxy.is_empty() => proxy.clone(),
-        _ => return Ok(()),
-    };
-
-    if !proxy_value.is_empty() {
-        let hypervisor_name = get_hypervisor_name(shim)?;
-        let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-        let param_name = "agent.https_proxy";
-
-        // Get current kernel_params and update/append the proxy setting
-        let current_params =
-            toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
-
-        let updated_params = update_kernel_param(&current_params, param_name, &proxy_value);
-
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            kernel_params_path,
-            config_file.display(),
-            current_params,
-            updated_params
-        );
-
-        // Set the updated kernel_params (replace entire value)
-        toml_utils::set_toml_value(
-            config_file,
-            &kernel_params_path,
-            &format!("\"{}\"", updated_params),
-        )?;
-    }
-
-    Ok(())
-}
-
-async fn configure_no_proxy(config: &Config, shim: &str, config_file: &Path) -> Result<()> {
-    let no_proxy_value = match &config.agent_no_proxy {
-        Some(no_proxy) if !no_proxy.is_empty() && no_proxy.contains('=') => {
-            // Per-shim format
-            no_proxy
-                .split(';')
-                .find_map(|m| {
-                    let parts: Vec<&str> = m.splitn(2, '=').collect();
-                    if parts.len() == 2 && parts[0] == shim {
-                        Some(parts[1].to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_default()
-        }
-        Some(no_proxy) if !no_proxy.is_empty() => no_proxy.clone(),
-        _ => return Ok(()),
-    };
-
-    if !no_proxy_value.is_empty() {
-        let hypervisor_name = get_hypervisor_name(shim)?;
-        let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-
-        // Get current kernel_params and update/append the no_proxy setting
-        let current_params =
-            toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
-
-        let updated_params =
-            update_kernel_param(&current_params, "agent.no_proxy", &no_proxy_value);
-
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            kernel_params_path,
-            config_file.display(),
-            current_params,
-            updated_params
-        );
-
-        // Set the updated kernel_params (replace entire value)
-        toml_utils::set_toml_value(
-            config_file,
-            &kernel_params_path,
-            &format!("\"{}\"", updated_params),
-        )?;
     }
 
     Ok(())
@@ -756,43 +614,102 @@ enable_debug = true
     Ok(content)
 }
 
-async fn configure_debug(config_file: &Path, shim: &str) -> Result<()> {
+/// Get proxy value for a specific shim from config.
+/// Handles both per-shim format ("qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080")
+/// and global format ("http://proxy:8080").
+fn get_proxy_value_for_shim(proxy_var: &Option<String>, shim: &str) -> Option<String> {
+    match proxy_var {
+        Some(proxy) if !proxy.is_empty() && proxy.contains('=') => {
+            // Per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
+            proxy
+                .split(';')
+                .find_map(|m| {
+                    let parts: Vec<&str> = m.splitn(2, '=').collect();
+                    if parts.len() == 2 && parts[0] == shim {
+                        Some(parts[1].to_string())
+                    } else {
+                        None
+                    }
+                })
+        }
+        Some(proxy) if !proxy.is_empty() => Some(proxy.clone()),
+        _ => None,
+    }
+}
+
+/// Read base kernel_params from the original configuration file.
+fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
+    let hypervisor_name = get_hypervisor_name(shim)?;
+    let original_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
+    );
+    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let config_path = Path::new(&original_config_file);
+
+    if !config_path.exists() {
+        // If original config doesn't exist, return empty - this might happen in tests
+        return Ok(String::new());
+    }
+
+    let kernel_params_path = format!("hypervisor.{}.kernel_params", hypervisor_name);
+    let base_params = toml_utils::get_toml_value(config_path, &kernel_params_path)
+        .unwrap_or_default();
+
+    // Remove surrounding quotes if present
+    Ok(base_params.trim_matches('"').to_string())
+}
+
+/// Generate drop-in content for all kernel_params modifications.
+/// This reads the base kernel_params from the original config and combines
+/// with proxy settings, debug settings, and any other kernel_params.
+/// Using a single drop-in file avoids the TOML merge replacing behavior.
+fn generate_kernel_params_drop_in(config: &Config, shim: &str) -> Result<String> {
+    let mut additional_params = Vec::new();
+
+    // Add proxy settings
+    if let Some(proxy) = get_proxy_value_for_shim(&config.agent_https_proxy, shim) {
+        additional_params.push(format!("agent.https_proxy={}", proxy));
+    }
+    if let Some(no_proxy) = get_proxy_value_for_shim(&config.agent_no_proxy, shim) {
+        additional_params.push(format!("agent.no_proxy={}", no_proxy));
+    }
+
+    // Add debug settings
+    if config.debug {
+        additional_params.push("agent.log=debug".to_string());
+        additional_params.push("initcall_debug".to_string());
+    }
+
+    // If no additional params to set, return empty (base params are in original config)
+    if additional_params.is_empty() {
+        return Ok(String::new());
+    }
+
+    // Read base kernel_params from original config
+    let base_params = read_base_kernel_params(config, shim)?;
+
+    // Combine base params with additional params
+    let combined_params = if base_params.is_empty() {
+        additional_params.join(" ")
+    } else {
+        format!("{} {}", base_params, additional_params.join(" "))
+    };
+
     let hypervisor_name = get_hypervisor_name(shim)?;
 
-    let hypervisor_enable_debug_path = format!("hypervisor.{hypervisor_name}.enable_debug");
-    set_toml_bool_to_true(config_file, &hypervisor_enable_debug_path)?;
+    let content = format!(
+        r#"# Kernel parameters
+# Generated by kata-deploy
+# This file combines base kernel_params with additional settings
 
-    set_toml_bool_to_true(config_file, "runtime.enable_debug")?;
+[hypervisor.{}]
+kernel_params = "{}"
+"#,
+        hypervisor_name, combined_params
+    );
 
-    set_toml_bool_to_true(config_file, "agent.kata.debug_console_enabled")?;
-
-    set_toml_bool_to_true(config_file, "agent.kata.enable_debug")?;
-
-    let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-    let current_params =
-        toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
-
-    let mut debug_params = String::new();
-    if !current_params.contains("agent.log=debug") {
-        debug_params.push_str(" agent.log=debug");
-    }
-    if !current_params.contains("initcall_debug") {
-        debug_params.push_str(" initcall_debug");
-    }
-
-    if !debug_params.is_empty() {
-        let new_params = format!("{}{}", current_params, debug_params);
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            kernel_params_path,
-            config_file.display(),
-            current_params,
-            new_params
-        );
-        toml_utils::append_to_toml_string(config_file, &kernel_params_path, debug_params.trim())?;
-    }
-
-    Ok(())
+    Ok(content)
 }
 
 async fn configure_hypervisor_annotations(
@@ -1039,83 +956,6 @@ mod tests {
     }
 
     #[test]
-    fn test_update_kernel_param_append_new() {
-        // Test appending a new parameter to empty params
-        let current = "";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(result, "agent.https_proxy=http://proxy:8080");
-
-        // Test appending to existing params
-        let current = "console=ttyS0 agent.log=debug";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(
-            result,
-            "console=ttyS0 agent.log=debug agent.https_proxy=http://proxy:8080"
-        );
-    }
-
-    #[test]
-    fn test_update_kernel_param_replace_existing() {
-        // Test replacing an existing parameter
-        let current = "console=ttyS0 agent.https_proxy=http://old:8080 agent.log=debug";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-        assert_eq!(
-            result,
-            "console=ttyS0 agent.https_proxy=http://new:9090 agent.log=debug"
-        );
-
-        // Test replacing when it's the first parameter
-        let current = "agent.https_proxy=http://old:8080 console=ttyS0";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-        assert_eq!(result, "agent.https_proxy=http://new:9090 console=ttyS0");
-
-        // Test replacing when it's the last parameter
-        let current = "console=ttyS0 agent.https_proxy=http://old:8080";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-        assert_eq!(result, "console=ttyS0 agent.https_proxy=http://new:9090");
-    }
-
-    #[test]
-    fn test_update_kernel_param_with_duplicates() {
-        // Test that we replace all occurrences when there are duplicates (avoid duplicates)
-        let current = "agent.https_proxy=http://proxy1:8080 console=ttyS0 agent.https_proxy=http://proxy2:8080";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-
-        // Should replace the first occurrence and also replace any subsequent duplicates
-        // This ensures we don't have multiple conflicting values for the same parameter
-        assert_eq!(
-            result,
-            "agent.https_proxy=http://new:9090 console=ttyS0 agent.https_proxy=http://new:9090"
-        );
-
-        // Note: Having duplicate parameters in kernel_params is unusual, but if they exist,
-        // we update all of them to the same new value to maintain consistency
-    }
-
-    #[test]
-    fn test_update_kernel_param_complex_values() {
-        // Test with URL containing special characters
-        let current = "console=ttyS0";
-        let result = update_kernel_param(
-            current,
-            "agent.https_proxy",
-            "http://proxy:8080/path?query=1",
-        );
-        assert_eq!(
-            result,
-            "console=ttyS0 agent.https_proxy=http://proxy:8080/path?query=1"
-        );
-
-        // Test with no_proxy containing comma-separated list
-        let current = "agent.log=debug";
-        let result = update_kernel_param(current, "agent.no_proxy", "localhost,127.0.0.1,.local");
-        assert_eq!(
-            result,
-            "agent.log=debug agent.no_proxy=localhost,127.0.0.1,.local"
-        );
-    }
-
-    #[test]
     fn test_copy_artifacts_nonexistent_source() {
         let temp_dest = tempfile::tempdir().unwrap();
         let result = copy_artifacts("/nonexistent/source", temp_dest.path().to_str().unwrap());
@@ -1128,49 +968,5 @@ mod tests {
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Unknown shim"));
-    }
-
-    #[test]
-    fn test_update_kernel_param_idempotent() {
-        // Test that running update_kernel_param multiple times with same value is idempotent
-        let initial = "console=ttyS0 agent.log=debug";
-
-        // First update
-        let result1 = update_kernel_param(initial, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(
-            result1,
-            "console=ttyS0 agent.log=debug agent.https_proxy=http://proxy:8080"
-        );
-
-        // Second update with same value - should replace, not append
-        let result2 = update_kernel_param(&result1, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(
-            result2,
-            "console=ttyS0 agent.log=debug agent.https_proxy=http://proxy:8080"
-        );
-
-        // Verify no duplication occurred
-        assert_eq!(result1, result2, "update_kernel_param must be idempotent");
-    }
-
-    #[test]
-    fn test_update_kernel_param_multiple_runs_different_values() {
-        // Test that updating with different values replaces correctly
-        let initial = "console=ttyS0";
-
-        let result1 = update_kernel_param(initial, "agent.https_proxy", "http://proxy1:8080");
-        assert_eq!(
-            result1,
-            "console=ttyS0 agent.https_proxy=http://proxy1:8080"
-        );
-
-        let result2 = update_kernel_param(&result1, "agent.https_proxy", "http://proxy2:9090");
-        assert_eq!(
-            result2,
-            "console=ttyS0 agent.https_proxy=http://proxy2:9090"
-        );
-
-        // Ensure only one proxy parameter exists
-        assert_eq!(result2.matches("agent.https_proxy").count(), 1);
     }
 }
