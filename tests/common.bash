@@ -616,24 +616,32 @@ function download_from_mirror_list() {
         local urls_path="${1}"
         local filename="${2}"
         local dest_dir="${3:-.}"
+        local versions_file="${repo_root_dir}/versions.yaml"
+
+        command -v yq &>/dev/null || die 'yq command is not in your $PATH'
 
         local urls
-        urls=$(get_from_kata_deps "${urls_path}")
+        # Query yq to get URLs as clean lines (using .[] to iterate array elements)
+        local yq_version
+        yq_version=$(yq --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | cut -d. -f1)
+        if [ "$yq_version" -eq 3 ]; then
+                local dependency
+                dependency=$(echo "${urls_path}" | sed "s/^\.//g")
+                urls=$("yq" read -p p "$versions_file" "${dependency}.*")
+        else
+                urls=$("yq" "${urls_path} | .[]" "$versions_file")
+        fi
+
         if [[ -z "${urls}" ]]; then
                 echo "Error: No URLs found at ${urls_path}" >&2
                 return 1
         fi
 
-        # Convert YAML array to bash array (one URL per line from yq)
+        # Iterate over each URL (one per line)
         local url
         while IFS= read -r url; do
                 # Skip empty lines
                 [[ -z "${url}" ]] && continue
-                # Remove leading "- " if present (for yq v3 output)
-                url="${url#- }"
-                # Remove surrounding quotes if present (yq output may include them)
-                url="${url%\"}"
-                url="${url#\"}"
                 local full_url="${url}${filename}"
                 echo "Trying to download from: ${full_url}" >&2
                 if curl -sfLo "${dest_dir}/${filename}" "${full_url}"; then
