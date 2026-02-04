@@ -144,6 +144,29 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
     Ok(())
 }
 
+/// Write the common drop-in configuration files for a shim.
+/// This is shared between standard runtimes and custom runtimes.
+fn write_common_drop_ins(config: &Config, shim: &str, config_d_dir: &str) -> Result<()> {
+    // 1. Installation prefix adjustments (if not default)
+    if config.dest_dir != DEFAULT_KATA_INSTALL_DIR {
+        let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
+        write_drop_in_file(config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
+    }
+
+    // 2. Debug configuration (boolean flags only via drop-in)
+    if config.debug {
+        let debug_content = generate_debug_drop_in(shim)?;
+        write_drop_in_file(config_d_dir, "20-debug.toml", &debug_content)?;
+    }
+
+    // 3. Combined kernel_params (proxy, debug, etc.)
+    // Reads base kernel_params from original config and combines with new params
+    let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
+    write_drop_in_file(config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+
+    Ok(())
+}
+
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
 /// Custom runtimes inherit the same drop-in configurations as standard runtimes
 /// (installation prefix, debug, kernel_params) plus any user-provided overrides.
@@ -192,25 +215,8 @@ fn install_custom_runtime_configs(config: &Config) -> Result<()> {
             );
         }
 
-        // Generate the same drop-in files that standard runtimes get
-        // Use the base_config as the shim for hypervisor name resolution
-        let shim = &runtime.base_config;
-
-        // 1. Installation prefix adjustments (if not default)
-        if config.dest_dir != "/opt/kata" {
-            let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
-            write_drop_in_file(&config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
-        }
-
-        // 2. Debug configuration (boolean flags only via drop-in)
-        if config.debug {
-            let debug_content = generate_debug_drop_in(shim)?;
-            write_drop_in_file(&config_d_dir, "20-debug.toml", &debug_content)?;
-        }
-
-        // 3. Combined kernel_params (proxy, debug, etc.)
-        let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
-        write_drop_in_file(&config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+        // Generate the common drop-in files (shared with standard runtimes)
+        write_common_drop_ins(config, &runtime.base_config, &config_d_dir)?;
 
         // Copy user-provided drop-in file if provided (at 50-overrides.toml)
         if let Some(ref drop_in_src) = runtime.drop_in_file {
@@ -431,22 +437,8 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
         ));
     }
 
-    // 1. Installation prefix adjustments (if not default)
-    if config.dest_dir != DEFAULT_KATA_INSTALL_DIR {
-        let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
-        write_drop_in_file(&config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
-    }
-
-    // 2. Debug configuration (boolean flags only via drop-in)
-    if config.debug {
-        let debug_content = generate_debug_drop_in(shim)?;
-        write_drop_in_file(&config_d_dir, "20-debug.toml", &debug_content)?;
-    }
-
-    // 3. Combined kernel_params (proxy, debug, etc.)
-    // Reads base kernel_params from original config and combines with new params
-    let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
-    write_drop_in_file(&config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+    // Generate common drop-in files (shared with custom runtimes)
+    write_common_drop_ins(config, shim, &config_d_dir)?;
 
     configure_hypervisor_annotations(config, shim, &kata_config_file).await?;
 
