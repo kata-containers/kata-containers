@@ -68,9 +68,10 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			kernelParamsDebug:    kernelParamsDebug,
 			kernelParams:         kernelParams,
 			disableNvdimm:        config.DisableImageNvdimm,
-			dax:                  true,
-			protection:           noneProtection,
-			legacySerial:         config.LegacySerial,
+			// DAX is disabled on ARM due to a kernel panic in caches_clean_inval_pou.
+			dax:          false,
+			protection:   noneProtection,
+			legacySerial: config.LegacySerial,
 		},
 		measurementAlgo: config.MeasurementAlgo,
 	}
