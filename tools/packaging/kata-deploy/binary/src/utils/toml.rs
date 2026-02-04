@@ -354,40 +354,6 @@ pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result
     Ok(())
 }
 
-/// Append a string to a TOML string value (e.g., kernel_params)
-/// This function is idempotent - it won't duplicate existing values
-pub fn append_to_toml_string(file_path: &Path, path: &str, append_value: &str) -> Result<()> {
-    let current_value = get_toml_value(file_path, path).unwrap_or_else(|_| String::new());
-    let current_value = current_value.trim().trim_matches('"');
-
-    // Split current value into tokens and check if append_value already exists
-    let tokens: Vec<&str> = current_value.split_whitespace().collect();
-    let append_trimmed = append_value.trim();
-
-    // Check if the value (or any param with same key) already exists
-    let value_already_exists = if append_trimmed.contains('=') {
-        // For key=value params, check if the key already exists
-        let append_key = append_trimmed.split('=').next().unwrap();
-        tokens
-            .iter()
-            .any(|token| token.contains('=') && token.split('=').next().unwrap() == append_key)
-    } else {
-        // For simple values, check exact match
-        tokens.contains(&append_trimmed)
-    };
-
-    let new_value = if current_value.is_empty() {
-        append_trimmed.to_string()
-    } else if value_already_exists {
-        // Value already exists, don't append (idempotency)
-        current_value.to_string()
-    } else {
-        format!("{} {}", current_value, append_trimmed)
-    };
-
-    set_toml_value(file_path, path, &format!("\"{new_value}\""))
-}
-
 fn parse_toml_value(value: &str) -> Item {
     use toml_edit::Formatted;
 
@@ -558,38 +524,6 @@ mod tests {
     }
 
     #[test]
-    fn test_append_to_toml_string() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(
-            path,
-            "[hypervisor]\n[hypervisor.qemu]\nkernel_params = \"param1 param2\"\n",
-        )
-        .unwrap();
-
-        append_to_toml_string(path, "hypervisor.qemu.kernel_params", "param3").unwrap();
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.contains("param1 param2 param3"));
-    }
-
-    #[test]
-    fn test_append_to_toml_string_empty() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(
-            path,
-            "[hypervisor]\n[hypervisor.qemu]\nkernel_params = \"\"\n",
-        )
-        .unwrap();
-
-        append_to_toml_string(path, "hypervisor.qemu.kernel_params", "first_param").unwrap();
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.contains("first_param"));
-    }
-
-    #[test]
     fn test_hierarchical_toml_paths() {
         let file = NamedTempFile::new().unwrap();
         let path = file.path();
@@ -661,12 +595,15 @@ mod tests {
                 );
 
                 // Test modifying kernel_params on real config
-                let result = append_to_toml_string(
+                let current = get_toml_value(temp_path, "hypervisor.qemu.kernel_params")
+                    .unwrap_or_default();
+                let new_value = format!("{} agent.log=debug", current.trim_matches('"'));
+                let result = set_toml_value(
                     temp_path,
                     "hypervisor.qemu.kernel_params",
-                    "agent.log=debug",
+                    &format!("\"{}\"", new_value),
                 );
-                assert!(result.is_ok(), "Should be able to append to kernel_params");
+                assert!(result.is_ok(), "Should be able to set kernel_params");
 
                 // Test enabling debug on real config
                 let result = set_toml_value(temp_path, "hypervisor.qemu.enable_debug", "true");
@@ -765,19 +702,11 @@ kernel_params = "console=hvc0"
         )
         .unwrap();
 
-        // Add https_proxy
-        append_to_toml_string(
+        // Set kernel_params with proxy settings
+        set_toml_value(
             path,
             "hypervisor.qemu.kernel_params",
-            "agent.https_proxy=http://proxy.example.com:8080",
-        )
-        .unwrap();
-
-        // Add no_proxy
-        append_to_toml_string(
-            path,
-            "hypervisor.qemu.kernel_params",
-            "agent.no_proxy=localhost,127.0.0.1",
+            "\"console=hvc0 agent.https_proxy=http://proxy.example.com:8080 agent.no_proxy=localhost,127.0.0.1\"",
         )
         .unwrap();
 
@@ -948,13 +877,16 @@ kernel_params = "console=hvc0"
                     rootfs.err()
                 );
 
-                // Test adding debug parameters
-                let result = append_to_toml_string(
+                // Test setting kernel parameters
+                let current = get_toml_value(temp_path, "hypervisor.dragonball.kernel_params")
+                    .unwrap_or_default();
+                let new_value = format!("{} agent.log=debug", current.trim_matches('"'));
+                let result = set_toml_value(
                     temp_path,
                     "hypervisor.dragonball.kernel_params",
-                    "agent.log=debug",
+                    &format!("\"{}\"", new_value),
                 );
-                assert!(result.is_ok(), "Should append to kernel_params");
+                assert!(result.is_ok(), "Should set kernel_params");
             }
         }
     }
@@ -1244,46 +1176,6 @@ kernel_params = "console=hvc0"
         assert_eq!(value1, value2, "set_toml_value must be idempotent");
         // get_toml_value returns the value without TOML formatting quotes
         assert_eq!(value1, "/opt/kata/bin/qemu");
-    }
-
-    #[test]
-    fn test_append_to_toml_string_idempotent_with_duplicates() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path();
-
-        // Initial TOML with kernel params
-        std::fs::write(
-            temp_path,
-            "[hypervisor.qemu]\nkernel_params = \"console=ttyS0\"\n",
-        )
-        .unwrap();
-
-        // Append first time
-        append_to_toml_string(
-            temp_path,
-            "hypervisor.qemu.kernel_params",
-            "agent.log=debug",
-        )
-        .unwrap();
-        let value1 = get_toml_value(temp_path, "hypervisor.qemu.kernel_params").unwrap();
-
-        // Append same value second time - should not duplicate
-        append_to_toml_string(
-            temp_path,
-            "hypervisor.qemu.kernel_params",
-            "agent.log=debug",
-        )
-        .unwrap();
-        let value2 = get_toml_value(temp_path, "hypervisor.qemu.kernel_params").unwrap();
-
-        // Should be identical (no duplication)
-        assert_eq!(
-            value1, value2,
-            "append_to_toml_string must not create duplicates"
-        );
-        assert!(value2.contains("console=ttyS0"));
-        assert!(value2.contains("agent.log=debug"));
-        assert_eq!(value2.matches("agent.log=debug").count(), 1);
     }
 
     #[test]
