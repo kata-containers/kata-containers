@@ -145,6 +145,8 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
 }
 
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
+/// Custom runtimes inherit the same drop-in configurations as standard runtimes
+/// (installation prefix, debug, kernel_params) plus any user-provided overrides.
 fn install_custom_runtime_configs(config: &Config) -> Result<()> {
     info!("Installing custom runtime configuration files");
 
@@ -190,7 +192,27 @@ fn install_custom_runtime_configs(config: &Config) -> Result<()> {
             );
         }
 
-        // Copy drop-in file if provided
+        // Generate the same drop-in files that standard runtimes get
+        // Use the base_config as the shim for hypervisor name resolution
+        let shim = &runtime.base_config;
+
+        // 1. Installation prefix adjustments (if not default)
+        if config.dest_dir != "/opt/kata" {
+            let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
+            write_drop_in_file(&config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
+        }
+
+        // 2. Debug configuration (boolean flags only via drop-in)
+        if config.debug {
+            let debug_content = generate_debug_drop_in(shim)?;
+            write_drop_in_file(&config_d_dir, "20-debug.toml", &debug_content)?;
+        }
+
+        // 3. Combined kernel_params (proxy, debug, etc.)
+        let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
+        write_drop_in_file(&config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+
+        // Copy user-provided drop-in file if provided (at 50-overrides.toml)
         if let Some(ref drop_in_src) = runtime.drop_in_file {
             let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
 
