@@ -602,6 +602,52 @@ function get_from_kata_deps() {
         echo "$result"
 }
 
+# Download a file by trying multiple mirror URLs until one succeeds.
+# This function is useful for downloading files from unreliable sources
+# by providing fallback mirrors.
+#
+# $1 - path in versions.yaml to the urls array (e.g., ".externals.gperf.urls")
+# $2 - filename to download (will be appended to each mirror URL)
+# $3 - destination directory (defaults to current directory)
+#
+# Returns: 0 on success, 1 on failure
+# Output: Prints the path to the downloaded file on success
+function download_from_mirror_list() {
+        local urls_path="${1}"
+        local filename="${2}"
+        local dest_dir="${3:-.}"
+
+        local urls
+        urls=$(get_from_kata_deps "${urls_path}")
+        if [[ -z "${urls}" ]]; then
+                echo "Error: No URLs found at ${urls_path}" >&2
+                return 1
+        fi
+
+        # Convert YAML array to bash array (one URL per line from yq)
+        local url
+        while IFS= read -r url; do
+                # Skip empty lines
+                [[ -z "${url}" ]] && continue
+                # Remove leading "- " if present (for yq v3 output)
+                url="${url#- }"
+                # Remove surrounding quotes if present (yq output may include them)
+                url="${url%\"}"
+                url="${url#\"}"
+                local full_url="${url}${filename}"
+                echo "Trying to download from: ${full_url}" >&2
+                if curl -sfLo "${dest_dir}/${filename}" "${full_url}"; then
+                        echo "Successfully downloaded ${filename}" >&2
+                        echo "${dest_dir}/${filename}"
+                        return 0
+                fi
+                echo "Failed to download from ${full_url}, trying next mirror..." >&2
+        done <<< "${urls}"
+
+        echo "Error: Failed to download ${filename} from all mirrors" >&2
+        return 1
+}
+
 # project: org/repo format
 # base_version: ${major}.${minor}
 # allow_unstable: Whether alpha / beta releases should be considered (default: false)

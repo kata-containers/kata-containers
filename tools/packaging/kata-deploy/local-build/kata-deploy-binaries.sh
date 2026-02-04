@@ -1112,7 +1112,8 @@ install_agent() {
 	export LIBSECCOMP_VERSION="$(get_from_kata_deps ".externals.libseccomp.version")"
 	export LIBSECCOMP_URL="$(get_from_kata_deps ".externals.libseccomp.url")"
 	export GPERF_VERSION="$(get_from_kata_deps ".externals.gperf.version")"
-	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
+	# Note: gperf URLs are now fetched from versions.yaml .externals.gperf.urls array
+	# by ci/install_libseccomp.sh using download_from_mirror_list
 
 	info "build static agent"
 	DESTDIR="${destdir}" AGENT_POLICY="${AGENT_POLICY}" "${agent_builder}"
@@ -1215,7 +1216,8 @@ install_tools_helper() {
 	export LIBSECCOMP_VERSION="$(get_from_kata_deps ".externals.libseccomp.version")"
 	export LIBSECCOMP_URL="$(get_from_kata_deps ".externals.libseccomp.url")"
 	export GPERF_VERSION="$(get_from_kata_deps ".externals.gperf.version")"
-	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
+	# Note: gperf URLs are now fetched from versions.yaml .externals.gperf.urls array
+	# by ci/install_libseccomp.sh using download_from_mirror_list
 
 	info "build static ${tool}"
 	${tools_builder} ${tool}

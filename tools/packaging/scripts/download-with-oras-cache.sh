@@ -365,7 +365,17 @@ download_component() {
 	
 	if [[ -z "${base_url}" ]]; then
 		if command -v yq &>/dev/null; then
-			base_url=$(get_from_kata_deps ".externals.${component}.url")
+			# For gperf, URLs are now in an array (.externals.gperf.urls)
+			# For other components, use the single url field
+			if [[ "${component}" == "gperf" ]]; then
+				# Get the first URL from the urls array
+				base_url=$(get_from_kata_deps ".externals.${component}.urls[0]")
+				# Remove surrounding quotes if present
+				base_url="${base_url%\"}"
+				base_url="${base_url#\"}"
+			else
+				base_url=$(get_from_kata_deps ".externals.${component}.url")
+			fi
 		else
 			die "Component URL not provided and yq not available. Set ${component_upper}_URL environment variable."
 		fi

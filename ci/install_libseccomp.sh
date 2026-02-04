@@ -41,12 +41,9 @@ gperf_version="${GPERF_VERSION:-""}"
 if [[ -z "${gperf_version}" ]]; then
 	gperf_version=$(get_from_kata_deps ".externals.gperf.version")
 fi
-gperf_url="${GPERF_URL:-""}"
-if [[ -z "${gperf_url}" ]]; then
-	gperf_url=$(get_from_kata_deps ".externals.gperf.url")
-fi
 gperf_tarball="gperf-${gperf_version}.tar.gz"
-gperf_tarball_url="${gperf_url}/${gperf_tarball}"
+# Path to the urls array in versions.yaml (used by download_from_mirror_list)
+gperf_urls_path=".externals.gperf.urls"
 
 # Use ORAS cache for gperf downloads (gperf upstream can be unreliable)
 USE_ORAS_CACHE="${USE_ORAS_CACHE:-yes}"
@@ -76,6 +73,8 @@ build_and_install_gperf() {
 	echo "Build and install gperf version ${gperf_version}"
 	mkdir -p "${gperf_install_dir}"
 
+	local downloaded_tarball=""
+
 	# Use ORAS cache if available and enabled
 	if [[ "${USE_ORAS_CACHE}" == "yes" ]] && [[ -f "${oras_cache_helper}" ]]; then
 		echo "Using ORAS cache for gperf download"
@@ -83,16 +82,21 @@ build_and_install_gperf() {
 		local cached_tarball
 		cached_tarball=$(download_component gperf "$(pwd)")
 		if [[ -f "${cached_tarball}" ]]; then
-			gperf_tarball="${cached_tarball}"
+			downloaded_tarball="${cached_tarball}"
 		else
-			echo "ORAS cache download failed, falling back to direct download"
-			curl -sLO "${gperf_tarball_url}"
+			echo "ORAS cache download failed, falling back to mirror list"
 		fi
-	else
-		curl -sLO "${gperf_tarball_url}"
 	fi
 
-	tar -xf "${gperf_tarball}"
+	# If ORAS cache failed or was not used, try downloading from mirror list
+	if [[ -z "${downloaded_tarball}" ]]; then
+		downloaded_tarball=$(download_from_mirror_list "${gperf_urls_path}" "${gperf_tarball}" "$(pwd)")
+		if [[ ! -f "${downloaded_tarball}" ]]; then
+			die "Failed to download gperf tarball from any mirror"
+		fi
+	fi
+
+	tar -xf "${downloaded_tarball}"
 	pushd "gperf-${gperf_version}"
 	# Unset $CC for configure, we will always use native for gperf
 	CC="" ./configure --prefix="${gperf_install_dir}"
