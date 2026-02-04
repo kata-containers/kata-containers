@@ -48,9 +48,18 @@ pub fn host_systemctl(args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-/// Get kata containers config path based on shim type
-pub fn get_kata_containers_config_path(shim: &str, dest_dir: &str) -> String {
-    let golang_config_path = format!("{dest_dir}/share/defaults/kata-containers");
+/// Get kata containers config path based on shim type.
+/// This returns the path where the shim's configuration will be read from.
+/// For standard runtimes using drop-in configuration, this is the per-shim directory.
+pub fn get_kata_containers_config_path(shim: &str, base_dir: &str) -> String {
+    let base_path = get_kata_containers_original_config_path(shim, base_dir);
+    format!("{base_path}/runtimes/{shim}")
+}
+
+/// Get the original kata containers config path (where configs are installed).
+/// This is where the original, unmodified configuration files live.
+pub fn get_kata_containers_original_config_path(shim: &str, base_dir: &str) -> String {
+    let golang_config_path = format!("{base_dir}/share/defaults/kata-containers");
     let rust_config_path = format!("{golang_config_path}/runtime-rs");
 
     if is_rust_shim(shim) {
@@ -61,35 +70,24 @@ pub fn get_kata_containers_config_path(shim: &str, dest_dir: &str) -> String {
 }
 
 /// Get kata containers runtime path based on shim type
-pub fn get_kata_containers_runtime_path(shim: &str, dest_dir: &str) -> String {
+pub fn get_kata_containers_runtime_path(shim: &str, base_dir: &str) -> String {
     if is_rust_shim(shim) {
-        format!("{dest_dir}/runtime-rs/bin/containerd-shim-kata-v2")
+        format!("{base_dir}/runtime-rs/bin/containerd-shim-kata-v2")
     } else {
-        format!("{dest_dir}/bin/containerd-shim-kata-v2")
+        format!("{base_dir}/bin/containerd-shim-kata-v2")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Helper to test config paths for multiple shims expecting the same result
-    fn assert_config_paths(shims: &[&str], dest_dir: &str, expected: &str) {
-        for shim in shims {
-            assert_eq!(
-                get_kata_containers_config_path(shim, dest_dir),
-                expected,
-                "Config path mismatch for shim '{}'",
-                shim
-            );
-        }
-    }
+    use rstest::rstest;
 
     /// Helper to test runtime paths for multiple shims expecting the same result
-    fn assert_runtime_paths(shims: &[&str], dest_dir: &str, expected: &str) {
+    fn assert_runtime_paths(shims: &[&str], base_dir: &str, expected: &str) {
         for shim in shims {
             assert_eq!(
-                get_kata_containers_runtime_path(shim, dest_dir),
+                get_kata_containers_runtime_path(shim, base_dir),
                 expected,
                 "Runtime path mismatch for shim '{}'",
                 shim
@@ -97,37 +95,38 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_get_kata_containers_config_path_golang() {
-        let go_shims = ["qemu", "qemu-tdx", "qemu-snp", "fc"];
-        assert_config_paths(
-            &go_shims,
-            "/opt/kata",
-            "/opt/kata/share/defaults/kata-containers",
-        );
+    // Tests for get_kata_containers_original_config_path (where original configs live)
+    #[rstest]
+    #[case("qemu", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case("qemu-tdx", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case("clh", "/opt/kata", "/opt/kata/share/defaults/kata-containers")]
+    #[case("cloud-hypervisor", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs")]
+    #[case("qemu-runtime-rs", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs")]
+    #[case("qemu", "/custom/path", "/custom/path/share/defaults/kata-containers")]
+    #[case("cloud-hypervisor", "/custom/path", "/custom/path/share/defaults/kata-containers/runtime-rs")]
+    fn test_get_kata_containers_original_config_path(
+        #[case] shim: &str,
+        #[case] base_dir: &str,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(get_kata_containers_original_config_path(shim, base_dir), expected);
     }
 
-    #[test]
-    fn test_get_kata_containers_config_path_rust() {
-        assert_config_paths(
-            RUST_SHIMS,
-            "/opt/kata",
-            "/opt/kata/share/defaults/kata-containers/runtime-rs",
-        );
-    }
-
-    #[test]
-    fn test_get_kata_containers_config_path_custom_dest() {
-        assert_config_paths(
-            &["qemu"],
-            "/usr/local/kata",
-            "/usr/local/kata/share/defaults/kata-containers",
-        );
-        assert_config_paths(
-            &["cloud-hypervisor"],
-            "/usr/local/kata",
-            "/usr/local/kata/share/defaults/kata-containers/runtime-rs",
-        );
+    // Tests for get_kata_containers_config_path (per-shim runtime directories)
+    #[rstest]
+    #[case("qemu", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtimes/qemu")]
+    #[case("qemu-tdx", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtimes/qemu-tdx")]
+    #[case("fc", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtimes/fc")]
+    #[case("cloud-hypervisor", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor")]
+    #[case("qemu-runtime-rs", "/opt/kata", "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/qemu-runtime-rs")]
+    #[case("qemu", "/custom/path", "/custom/path/share/defaults/kata-containers/runtimes/qemu")]
+    fn test_get_kata_containers_config_path(
+        #[case] shim: &str,
+        #[case] base_dir: &str,
+        #[case] expected: &str,
+    ) {
+        assert_eq!(get_kata_containers_config_path(shim, base_dir), expected);
     }
 
     #[test]
@@ -198,44 +197,25 @@ mod tests {
     }
 
     #[test]
-    fn test_config_paths_share_defaults() {
-        // Test Go runtime config paths use /opt/kata/share/defaults/kata-containers
-        let go_shims = ["qemu", "qemu-tdx", "fc", "clh"];
-        assert_config_paths(
-            &go_shims,
-            "/opt/kata",
-            "/opt/kata/share/defaults/kata-containers",
-        );
-    }
-
-    #[test]
-    fn test_config_paths_runtime_rs() {
-        // Test Rust runtime config paths use /opt/kata/share/defaults/kata-containers/runtime-rs
-        assert_config_paths(
-            RUST_SHIMS,
-            "/opt/kata",
-            "/opt/kata/share/defaults/kata-containers/runtime-rs",
-        );
-    }
-
-    #[test]
     fn test_full_deployment_paths_go_runtime() {
         // Test complete deployment structure for Go runtime
         let dest_dir = "/opt/kata";
         let shim = "qemu-tdx";
 
         let config_path = get_kata_containers_config_path(shim, dest_dir);
+        let original_path = get_kata_containers_original_config_path(shim, dest_dir);
         let runtime_path = get_kata_containers_runtime_path(shim, dest_dir);
 
-        // Expected paths for Go runtime
-        assert_eq!(config_path, "/opt/kata/share/defaults/kata-containers");
+        // Expected paths for Go runtime with per-shim directory
+        assert_eq!(config_path, "/opt/kata/share/defaults/kata-containers/runtimes/qemu-tdx");
+        assert_eq!(original_path, "/opt/kata/share/defaults/kata-containers");
         assert_eq!(runtime_path, "/opt/kata/bin/containerd-shim-kata-v2");
 
-        // Config file would be at
+        // Config file would be at (symlink to original)
         let config_file = format!("{}/configuration-{}.toml", config_path, shim);
         assert_eq!(
             config_file,
-            "/opt/kata/share/defaults/kata-containers/configuration-qemu-tdx.toml"
+            "/opt/kata/share/defaults/kata-containers/runtimes/qemu-tdx/configuration-qemu-tdx.toml"
         );
     }
 
@@ -246,11 +226,16 @@ mod tests {
         let shim = "cloud-hypervisor";
 
         let config_path = get_kata_containers_config_path(shim, dest_dir);
+        let original_path = get_kata_containers_original_config_path(shim, dest_dir);
         let runtime_path = get_kata_containers_runtime_path(shim, dest_dir);
 
-        // Expected paths for Rust runtime
+        // Expected paths for Rust runtime with per-shim directory
         assert_eq!(
             config_path,
+            "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor"
+        );
+        assert_eq!(
+            original_path,
             "/opt/kata/share/defaults/kata-containers/runtime-rs"
         );
         assert_eq!(
@@ -258,17 +243,17 @@ mod tests {
             "/opt/kata/runtime-rs/bin/containerd-shim-kata-v2"
         );
 
-        // Config file would be at
+        // Config file would be at (symlink to original)
         let config_file = format!("{}/configuration-{}.toml", config_path, shim);
         assert_eq!(
             config_file,
-            "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-cloud-hypervisor.toml"
+            "/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/cloud-hypervisor/configuration-cloud-hypervisor.toml"
         );
     }
 
     #[test]
     fn test_mixed_deployment_both_runtimes() {
-        // Test that both Go and Rust runtimes can coexist
+        // Test that both Go and Rust runtimes can coexist with separate directories
         let dest_dir = "/opt/kata";
 
         // Go runtime
@@ -283,12 +268,12 @@ mod tests {
         assert_ne!(qemu_config, clh_config);
         assert_ne!(qemu_binary, clh_binary);
 
-        // Verify Go runtime paths
-        assert!(qemu_config.ends_with("kata-containers"));
+        // Verify Go runtime paths include per-shim directory
+        assert!(qemu_config.contains("/runtimes/qemu"));
         assert!(qemu_binary.ends_with("/bin/containerd-shim-kata-v2"));
 
-        // Verify Rust runtime paths
-        assert!(clh_config.ends_with("runtime-rs"));
+        // Verify Rust runtime paths include per-shim directory
+        assert!(clh_config.contains("/runtimes/cloud-hypervisor"));
         assert!(clh_binary.ends_with("/runtime-rs/bin/containerd-shim-kata-v2"));
     }
 }

@@ -123,7 +123,14 @@ pub async fn install_artifacts(config: &Config) -> Result<()> {
 pub async fn remove_artifacts(config: &Config) -> Result<()> {
     info!("deleting kata artifacts");
 
-    // Remove custom runtime configs first (before removing main install dir)
+    // Remove runtime directories for each shim (drop-in configs, symlinks)
+    for shim in &config.shims_for_arch {
+        if let Err(e) = remove_runtime_directory(config, shim) {
+            log::warn!("Failed to remove runtime directory for {}: {}", shim, e);
+        }
+    }
+
+    // Remove custom runtime configs (before removing main install dir)
     if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
         remove_custom_runtime_configs(config)?;
     }
@@ -152,24 +159,36 @@ fn install_custom_runtime_configs(config: &Config) -> Result<()> {
         fs::create_dir_all(&config_d_dir)
             .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
 
-        // Copy base config (already modified by kata-deploy with debug, proxy, annotations)
-        let base_src = format!(
-            "/host/{}/share/defaults/kata-containers/configuration-{}.toml",
-            config.dest_dir, runtime.base_config
+        // Copy base config to the handler directory
+        // Custom runtime drop-ins will overlay on top of this
+        let base_config_filename = format!("configuration-{}.toml", runtime.base_config);
+        let original_config = format!(
+            "/host/{}/share/defaults/kata-containers/{}",
+            config.dest_dir, base_config_filename
         );
-        let base_dest = format!("{}/configuration-{}.toml", handler_dir, runtime.base_config);
+        let dest_config = format!("{}/{}", handler_dir, base_config_filename);
 
-        info!(
-            "Copying base config for {}: {} -> {}",
-            runtime.handler, base_src, base_dest
-        );
+        if Path::new(&original_config).exists() {
+            // Remove existing destination (might be a symlink from older versions)
+            let dest_path = Path::new(&dest_config);
+            if dest_path.exists() || dest_path.is_symlink() {
+                fs::remove_file(&dest_config).with_context(|| {
+                    format!("Failed to remove existing config: {}", dest_config)
+                })?;
+            }
 
-        fs::copy(&base_src, &base_dest).with_context(|| {
-            format!(
-                "Failed to copy base config from {} to {}",
-                base_src, base_dest
-            )
-        })?;
+            fs::copy(&original_config, &dest_config).with_context(|| {
+                format!(
+                    "Failed to copy config: {} -> {}",
+                    original_config, dest_config
+                )
+            })?;
+
+            info!(
+                "Copied config for custom runtime {}: {} -> {}",
+                runtime.handler, original_config, dest_config
+            );
+        }
 
         // Copy drop-in file if provided
         if let Some(ref drop_in_src) = runtime.drop_in_file {
@@ -288,21 +307,102 @@ fn set_executable_permissions(dir: &str) -> Result<()> {
     Ok(())
 }
 
-async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
-    let config_path = format!(
-        "/host/{}",
+/// Set up the runtime directory structure for a shim.
+/// Creates: {config_path}/runtimes/{shim}/
+///          {config_path}/runtimes/{shim}/config.d/
+///          {config_path}/runtimes/{shim}/configuration-{shim}.toml (copy of original)
+///
+/// Note: We copy the config file instead of symlinking because kata-containers'
+/// ResolvePath uses filepath.EvalSymlinks, which would resolve to the original
+/// location and look for config.d there instead of in our per-shim directory.
+fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
+    let original_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
+    );
+    let runtime_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_config_path(shim, &config.dest_dir)
+    );
+    let config_d_dir = format!("{}/config.d", runtime_config_dir);
+
+    // Create the runtime directory and config.d subdirectory
+    fs::create_dir_all(&config_d_dir)
+        .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
+
+    // Copy the original config file to the runtime directory
+    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let dest_config_file = format!("{}/configuration-{}.toml", runtime_config_dir, shim);
+
+    // Only copy if original exists
+    if Path::new(&original_config_file).exists() {
+        // Remove existing destination (might be a symlink from older versions)
+        // fs::copy follows symlinks and would write to the wrong location
+        let dest_path = Path::new(&dest_config_file);
+        if dest_path.exists() || dest_path.is_symlink() {
+            fs::remove_file(&dest_config_file)
+                .with_context(|| format!("Failed to remove existing config: {}", dest_config_file))?;
+        }
+
+        // Copy the base config file
+        fs::copy(&original_config_file, &dest_config_file)
+            .with_context(|| format!("Failed to copy config: {} -> {}", original_config_file, dest_config_file))?;
+        
+        log::debug!(
+            "Copied config for {}: {} -> {}",
+            shim,
+            original_config_file,
+            dest_config_file
+        );
+    }
+
+    Ok(())
+}
+
+/// Remove the runtime directory for a shim during cleanup
+fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
+    let runtime_config_dir = format!(
+        "/host{}",
         utils::get_kata_containers_config_path(shim, &config.dest_dir)
     );
 
-    let kata_config_file = Path::new(&config_path).join(format!("configuration-{shim}.toml"));
+    if Path::new(&runtime_config_dir).exists() {
+        fs::remove_dir_all(&runtime_config_dir)
+            .with_context(|| format!("Failed to remove runtime directory: {}", runtime_config_dir))?;
+        log::debug!("Removed runtime directory: {}", runtime_config_dir);
+    }
 
-    // The configuration file should exist after copy_artifacts() copied the kata artifacts.
-    // If it doesn't exist, it means either the copy failed or this shim doesn't have a config
-    // file in the artifacts (which would be a packaging error).
+    // Try to clean up parent 'runtimes' directory if empty
+    let runtimes_dir = Path::new(&runtime_config_dir).parent();
+    if let Some(runtimes_path) = runtimes_dir {
+        if runtimes_path.exists() {
+            if let Ok(entries) = fs::read_dir(runtimes_path) {
+                if entries.count() == 0 {
+                    let _ = fs::remove_dir(runtimes_path);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
+    // Set up the runtime directory structure with symlink to original config
+    setup_runtime_directory(config, shim)?;
+
+    let runtime_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_config_path(shim, &config.dest_dir)
+    );
+
+    let kata_config_file = Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
+
+    // The configuration file (symlink) should exist after setup_runtime_directory()
     if !kata_config_file.exists() {
         return Err(anyhow::anyhow!(
             "Configuration file not found: {kata_config_file:?}. This file should have been \
-             copied from the kata-artifacts. Check that the shim '{}' has a valid configuration \
+             symlinked from the original config. Check that the shim '{}' has a valid configuration \
              file in the artifacts.",
             shim
         ));
