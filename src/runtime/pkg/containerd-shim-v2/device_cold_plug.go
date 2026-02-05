@@ -19,8 +19,13 @@ import (
 )
 
 const (
+	// containerd CRI annotations
 	nameAnnotation      = "io.kubernetes.cri.sandbox-name"
 	namespaceAnnotation = "io.kubernetes.cri.sandbox-namespace"
+
+	// CRI-O annotations
+	crioNameAnnotation      = "io.kubernetes.cri-o.KubeName"
+	crioNamespaceAnnotation = "io.kubernetes.cri-o.Namespace"
 )
 
 // coldPlugDevices handles cold plug of CDI devices into the sandbox
@@ -78,8 +83,7 @@ func coldPlugWithAPI(ctx context.Context, s *service, ociSpec *specs.Spec) error
 // the Kubelet does not pass the device information via CRI during
 // Sandbox creation.
 func getDeviceSpec(ctx context.Context, socket string, ann map[string]string) ([]string, error) {
-	podName := ann[nameAnnotation]
-	podNs := ann[namespaceAnnotation]
+	podName, podNs := getPodIdentifiers(ann)
 
 	// create dialer for unix socket
 	dialer := func(ctx context.Context, target string) (net.Conn, error) {
@@ -111,7 +115,7 @@ func getDeviceSpec(ctx context.Context, socket string, ann map[string]string) ([
 	}
 	resp, err := client.Get(ctx, prr)
 	if err != nil {
-		return nil, fmt.Errorf("cold plug: GetPodResources failed: %w", err)
+		return nil, fmt.Errorf("cold plug: GetPodResources failed for pod(%s) in namespace(%s): %w", podName, podNs, err)
 	}
 	podRes := resp.PodResources
 	if podRes == nil {
@@ -141,6 +145,24 @@ func formatCDIDevIDs(specName string, devIDs []string) []string {
 	return result
 }
 
+// getPodIdentifiers returns the pod name and namespace from annotations.
+// It first checks containerd CRI annotations, then falls back to CRI-O annotations.
+func getPodIdentifiers(ann map[string]string) (podName, podNamespace string) {
+	podName = ann[nameAnnotation]
+	podNamespace = ann[namespaceAnnotation]
+
+	// Fall back to CRI-O annotations if containerd annotations are empty
+	if podName == "" {
+		podName = ann[crioNameAnnotation]
+	}
+	if podNamespace == "" {
+		podNamespace = ann[crioNamespaceAnnotation]
+	}
+
+	return podName, podNamespace
+}
+
 func debugPodID(ann map[string]string) string {
-	return fmt.Sprintf("%s/%s", ann[namespaceAnnotation], ann[nameAnnotation])
+	podName, podNamespace := getPodIdentifiers(ann)
+	return fmt.Sprintf("%s/%s", podNamespace, podName)
 }
