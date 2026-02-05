@@ -76,6 +76,11 @@ EOF"
 	container_name=$(kubectl exec $pod_name -c $second_container_name -- $env_command | grep CONTAINER_NAME)
 	[ "$container_name" == "CONTAINER_NAME=$second_container_name" ]
 
+	## Case with background process
+	run bash -c "kubectl exec -i ${pod_name} -- "$sh_command" <<-EOF
+md5sum /dev/urandom & 
+exit
+EOF"
 }
 
 teardown() {
