@@ -2317,8 +2317,13 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
         for specdev in devices.iter() {
             if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
                 let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
-                cdh_secure_mount("BlockDevice", &dev_major_minor, "LUKS", KATA_IMAGE_WORK_DIR)
-                    .await?;
+                cdh_secure_mount(
+                    "block-device",
+                    &dev_major_minor,
+                    "luks2",
+                    KATA_IMAGE_WORK_DIR,
+                )
+                .await?;
                 break;
             }
         }
@@ -2349,9 +2354,20 @@ pub(crate) async fn cdh_secure_mount(
 
     let options = std::collections::HashMap::from([
         ("deviceId".to_string(), device_id.to_string()),
-        ("encryptType".to_string(), encrypt_type.to_string()),
+        ("sourceType".to_string(), "empty".to_string()),
+        ("targetType".to_string(), "fileSystem".to_string()),
+        ("filesystemType".to_string(), "ext4".to_string()),
+        ("mkfsOpts".to_string(), "-E lazy_journal_init".to_string()),
+        ("encryptionType".to_string(), encrypt_type.to_string()),
         ("dataIntegrity".to_string(), integrity),
     ]);
+
+    std::fs::create_dir_all(mount_point).inspect_err(|e| {
+        error!(
+            sl(),
+            "Failed to create mount point directory {}: {:?}", mount_point, e
+        );
+    })?;
 
     confidential_data_hub::secure_mount(device_type, &options, vec![], mount_point).await?;
 
