@@ -203,7 +203,7 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 
 # Cache mode:
 #
-#  - none
+#  - never
 #    Metadata, data, and pathname lookup are not cached in guest. They are
 #    always fetched from host and any changes are immediately pushed to host.
 #
