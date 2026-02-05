@@ -304,7 +304,7 @@ debug_console_enabled = false
 
 # Agent connection dialing timeout value in seconds
 # (default: 45)
-dial_timeout = 45 
+dial_timeout = 45
 
 # Confidential Data Hub API timeout value in seconds
 # (default: 50)

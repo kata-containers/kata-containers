@@ -23,7 +23,7 @@ image = "@IMAGEPATH@"
 #   - erofs
 rootfs_type = @DEFROOTFSTYPE@
 
- 
+
 # Block storage driver to be used for the VM rootfs is backed
 # by a block device. This is virtio-blk-pci, virtio-blk-mmio or nvdimm
 vm_rootfs_driver = "@VMROOTFSDRIVER_DB@"
@@ -41,7 +41,7 @@ valid_hypervisor_paths = @DBVALIDHYPERVISORPATHS@
 
 # List of valid annotations values for ctlpath
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: 
+# Your distribution recommends:
 valid_ctlpaths = []
 
 # Optional space-separated list of options to pass to the guest kernel.

@@ -373,16 +373,16 @@ disable_image_nvdimm = false
 # Default false
 hotplug_vfio_on_root_bus = false
 
-# Enable hot-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
+# Enable hot-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
 # The default setting is  "no-port"
 hot_plug_vfio = "no-port"
 
 # In a confidential compute environment hot-plugging can compromise
-# security. 
-# Enable cold-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
-# The default setting is  "no-port", which means disabled. 
+# security.
+# Enable cold-plugging of VFIO devices to a bridge-port,
+# root-port or switch-port.
+# The default setting is  "no-port", which means disabled.
 cold_plug_vfio = "no-port"
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.

@@ -39,7 +39,7 @@ vm_rootfs_driver = "virtio-blk-pci"
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
