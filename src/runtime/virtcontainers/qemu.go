@@ -812,7 +812,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	// For more details, please see https://github.com/qemu/qemu/blob/master/docs/pcie.txt
 
 	// Deduce the right values for mem-reserve and pref-64-reserve memory regions
-	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory()
+	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory(hypervisorConfig)
 
 	// The default OVMF MMIO aperture is too small for some PCIe devices
 	// with huge BARs so we need to increase it.
