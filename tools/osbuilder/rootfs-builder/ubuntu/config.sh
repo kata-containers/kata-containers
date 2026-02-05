@@ -11,7 +11,8 @@ OS_VERSION=${OS_VERSION:-""}
 MEASURED_ROOTFS_MODE=${MEASURED_ROOTFS_MODE:-}
 PACKAGES="chrony iptables dbus"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
-if [[ "${MEASURED_ROOTFS_MODE}" = "initramfs" ]]; then
+# Measured rootfs mode and CDH secure storage feature require these tools in the guest
+if [[ "${MEASURED_ROOTFS_MODE}" = "initramfs" || "${CONFIDENTIAL_GUEST:-no}" = "yes" ]]; then
 	PACKAGES+=" cryptsetup-bin e2fsprogs"
 fi
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
