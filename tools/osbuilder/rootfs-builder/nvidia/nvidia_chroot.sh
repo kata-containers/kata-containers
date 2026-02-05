@@ -147,6 +147,18 @@ install_nvidia_dcgm() {
 		datacenter-gpu-manager-exporter
 }
 
+install_devkit_packages() {
+	is_feature_enabled "devkit" || {
+		echo "chroot: Skipping devkit packages installation"
+		return
+	}
+
+	echo "chroot: Install devkit packages"
+
+	eval "${APT_INSTALL}" kmod
+	apt-mark hold kmod
+}
+
 cleanup_rootfs() {
 	echo "chroot: Cleanup NVIDIA GPU rootfs"
 
@@ -174,4 +186,5 @@ install_userspace_components
 install_nvidia_fabricmanager
 install_nvidia_ctk
 install_nvidia_dcgm
+install_devkit_packages
 cleanup_rootfs
