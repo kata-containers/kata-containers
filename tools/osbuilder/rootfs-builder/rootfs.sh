@@ -458,7 +458,7 @@ build_rootfs_distro()
 		if [ "${AGENT_INIT}" == "yes" ]; then
 			die "Guest SELinux with the agent init is not supported yet"
 		fi
-		if [ "${distro}" != "centos" ]; then
+		if [ "${distro}" != "centos" ] && [ "${distro}" != "ubuntu" ]; then
 			die "The guest rootfs must be CentOS to enable guest SELinux"
 		fi
 	fi
@@ -466,6 +466,15 @@ build_rootfs_distro()
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
+		if [ "${SELINUX}" == "yes" ] && [ -f ${distro_config_dir}/kata-guest.te ]; then
+			# install the kata-guest SELinux policy module
+			checkmodule -M -m -o ${distro_config_dir}/kata-guest.mod ${distro_config_dir}/kata-guest.te
+			semodule_package -o ${distro_config_dir}/kata-guest.pp -m ${distro_config_dir}/kata-guest.mod
+			mv ${distro_config_dir}/kata-guest.pp ${ROOTFS_DIR}/root/kata-guest.pp
+			chroot ${ROOTFS_DIR} /usr/sbin/semodule -i /root/kata-guest.pp --verbose
+			# need to flip the boolean outside the module
+			chroot ${ROOTFS_DIR} /usr/sbin/setsebool -P systemd_tmpfiles_manage_all on
+		fi
 	else
 		engine_build_args=""
 		if [ -n "${USE_DOCKER}" ]; then
