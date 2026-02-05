@@ -24,9 +24,7 @@ message SecureMountRequest {
     string mount_point = 4;
 }
 
-message SecureMountResponse {
-    string mount_path = 1;
-}
+message SecureMountResponse {}
 
 message ImagePullRequest {
     // - `image_url`: The reference of the image to pull
