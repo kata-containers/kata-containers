@@ -451,4 +451,4 @@ kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 
 ## Related Charts
 
-- [kata-upgrade](kata-upgrade/README.md) - Argo Workflows-based upgrade orchestration for controlled, node-by-node upgrades with verification and automatic rollback
+- [kata-lifecycle-manager](kata-lifecycle-manager/README.md) - Argo Workflows-based lifecycle management for controlled, node-by-node upgrades with verification and automatic rollback

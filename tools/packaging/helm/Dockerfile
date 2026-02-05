@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Helm image based on kata-containers/kubectl for multi-arch support
-# Used for kata-upgrade workflows and other helm operations
+# Used for kata-lifecycle-manager workflows and other helm operations
 
 # hadolint ignore=DL3007
 FROM quay.io/kata-containers/kubectl:latest

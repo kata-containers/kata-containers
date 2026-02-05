@@ -30,14 +30,14 @@ defaults:
   # The chart will fail to install without one.
   #
   # Provide via:
-  #   helm install kata-upgrade ... \
+  #   helm install kata-lifecycle-manager ... \
   #     --set-file defaults.verificationPod=/path/to/your-verification-pod.yaml
   #
   # Or override at workflow submission (base64-encoded):
   #   argo submit ... -p verification-pod="$(base64 -w0 < pod.yaml)"
   #
   # Note: kata-deploy's own verification is disabled during upgrade because
-  # it is cluster-wide (designed for initial install), while kata-upgrade
+  # it is cluster-wide (designed for initial install), while kata-lifecycle-manager
   # performs per-node verification with proper placeholder substitution.
   #
   # Placeholders substituted at runtime:

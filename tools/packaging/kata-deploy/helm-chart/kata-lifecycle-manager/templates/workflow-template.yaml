@@ -13,13 +13,13 @@ helm/kubectl images for operations requiring those tools.
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
-  name: kata-upgrade
+  name: kata-lifecycle-manager
   namespace: {{ .Values.argoNamespace }}
   labels:
-    {{- include "kata-upgrade.labels" . | nindent 4 }}
+    {{- include "kata-lifecycle-manager.labels" . | nindent 4 }}
 spec:
   entrypoint: upgrade-all-nodes
-  serviceAccountName: {{ include "kata-upgrade.serviceAccountName" . }}
+  serviceAccountName: {{ include "kata-lifecycle-manager.serviceAccountName" . }}
 
   podGC:
     strategy: OnWorkflowSuccess
@@ -128,8 +128,8 @@ spec:
             echo ""
             echo "The upgrade cannot proceed without a verification pod."
             echo ""
-            echo "This should not happen if kata-upgrade was installed correctly."
-            echo "Reinstall with: helm upgrade kata-upgrade ... --set-file defaults.verificationPod=<path>"
+            echo "This should not happen if kata-lifecycle-manager was installed correctly."
+            echo "Reinstall with: helm upgrade kata-lifecycle-manager ... --set-file defaults.verificationPod=<path>"
             echo ""
             exit 1
           fi
@@ -440,7 +440,7 @@ spec:
           metadata:
             name: "{{`{{inputs.parameters.node-name}}`}}"
             annotations:
-              katacontainers.io/kata-upgrade-status: "preparing"
+              katacontainers.io/kata-lifecycle-manager-status: "preparing"
 
     # =========================================================================
     # CORDON NODE
@@ -458,7 +458,7 @@ spec:
           metadata:
             name: "{{`{{inputs.parameters.node-name}}`}}"
             annotations:
-              katacontainers.io/kata-upgrade-status: "cordoned"
+              katacontainers.io/kata-lifecycle-manager-status: "cordoned"
           spec:
             unschedulable: true
 
@@ -487,12 +487,12 @@ spec:
           # On failure: mark node as failed and uncordon
           cleanup_on_failure() {
             echo "ERROR: Drain failed, cleaning up node $NODE"
-            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="failed" || true
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="failed" || true
             kubectl uncordon "$NODE" || true
           }
           trap cleanup_on_failure EXIT
 
-          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="draining"
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="draining"
           kubectl drain "$NODE" \
             --ignore-daemonsets \
             --delete-emptydir-data \
@@ -528,19 +528,19 @@ spec:
           CHART="oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy"
 
           apk add --no-cache -q kubectl
-          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="upgrading"
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="upgrading"
 
           # On failure: mark node as failed and uncordon
           cleanup_on_failure() {
             echo "ERROR: Helm upgrade failed, cleaning up node $NODE"
-            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="failed" || true
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="failed" || true
             kubectl uncordon "$NODE" || true
           }
           trap cleanup_on_failure EXIT
 
           # Disable kata-deploy's verification (--set verification.pod="") because:
           # - kata-deploy verification is cluster-wide (runs once after helm upgrade)
-          # - kata-upgrade does per-node verification in verify-and-complete-node
+          # - kata-lifecycle-manager does per-node verification in verify-and-complete-node
           # The per-node verification is more appropriate for rolling upgrades.
           helm upgrade "$RELEASE" "$CHART" \
             --namespace "$NS" \
@@ -579,7 +579,7 @@ spec:
           # On failure: mark node as failed and uncordon
           cleanup_on_failure() {
             echo "ERROR: Timed out waiting for kata-deploy, cleaning up node $NODE"
-            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="failed" || true
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="failed" || true
             kubectl uncordon "$NODE" || true
           }
           trap cleanup_on_failure EXIT
@@ -630,7 +630,7 @@ spec:
           # Install kubectl (helm image is based on kubectl image but just in case)
           apk add --no-cache -q kubectl 2>/dev/null || true
 
-          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="verifying"
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="verifying"
 
           # Decode verification pod spec (base64-encoded)
           echo "Using verification pod from workflow parameters"
@@ -686,14 +686,14 @@ spec:
             echo "Uncordoning node $NODE..."
             kubectl uncordon "$NODE"
             kubectl annotate node "$NODE" --overwrite \
-              katacontainers.io/kata-upgrade-status="completed" \
+              katacontainers.io/kata-lifecycle-manager-status="completed" \
               katacontainers.io/kata-current-version="$VERSION"
             echo "Node $NODE upgrade completed successfully"
             exit 0
           else
             # Failure path: automatic rollback
             echo "Initiating automatic rollback for node $NODE..."
-            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolling-back"
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="rolling-back"
 
             helm rollback "$RELEASE" -n "$NS" --wait --timeout 10m
 
@@ -715,7 +715,7 @@ spec:
 
             # Uncordon and mark as rolled back
             kubectl uncordon "$NODE"
-            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolled-back"
+            kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="rolled-back"
             echo "Node $NODE rolled back to previous version"
 
             # Exit with error so workflow shows the failure
@@ -740,7 +740,7 @@ spec:
           echo "=== KATA UPGRADE SUMMARY ==="
           kubectl get nodes \
             -L katacontainers.io/kata-runtime \
-            -L katacontainers.io/kata-upgrade-status \
+            -L katacontainers.io/kata-lifecycle-manager-status \
             -L katacontainers.io/kata-current-version
 
     # =========================================================================
@@ -767,9 +767,9 @@ spec:
           NS="{{`{{workflow.parameters.helm-namespace}}`}}"
 
           apk add --no-cache -q kubectl
-          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolling-back"
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="rolling-back"
 
           helm rollback "$RELEASE" -n "$NS" --wait --timeout 10m
 
-          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-upgrade-status="rolled-back"
+          kubectl annotate node "$NODE" --overwrite katacontainers.io/kata-lifecycle-manager-status="rolled-back"
           kubectl uncordon "$NODE"

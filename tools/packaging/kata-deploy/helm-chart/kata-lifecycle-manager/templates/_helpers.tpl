@@ -6,14 +6,14 @@ SPDX-License-Identifier: Apache-2.0
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "kata-upgrade.name" -}}
+{{- define "kata-lifecycle-manager.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "kata-upgrade.fullname" -}}
+{{- define "kata-lifecycle-manager.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -29,9 +29,9 @@ Create a default fully qualified app name.
 {{/*
 Common labels
 */}}
-{{- define "kata-upgrade.labels" -}}
-helm.sh/chart: {{ include "kata-upgrade.name" . }}-{{ .Chart.Version }}
-app.kubernetes.io/name: {{ include "kata-upgrade.name" . }}
+{{- define "kata-lifecycle-manager.labels" -}}
+helm.sh/chart: {{ include "kata-lifecycle-manager.name" . }}-{{ .Chart.Version }}
+app.kubernetes.io/name: {{ include "kata-lifecycle-manager.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
@@ -41,6 +41,6 @@ app.kubernetes.io/part-of: kata-containers
 {{/*
 ServiceAccount name
 */}}
-{{- define "kata-upgrade.serviceAccountName" -}}
-{{- include "kata-upgrade.fullname" . }}
+{{- define "kata-lifecycle-manager.serviceAccountName" -}}
+{{- include "kata-lifecycle-manager.fullname" . }}
 {{- end }}

@@ -1,6 +1,6 @@
-# Kata Upgrade Helm Chart
+# Kata Lifecycle Manager Helm Chart
 
-Argo Workflows-based upgrade orchestration for Kata Containers.
+Argo Workflows-based lifecycle management for Kata Containers.
 
 This chart installs a namespace-scoped `WorkflowTemplate` that performs controlled,
 node-by-node upgrades of kata-deploy with verification and automatic rollback on failure.
@@ -16,10 +16,10 @@ node-by-node upgrades of kata-deploy with verification and automatic rollback on
 
 ```bash
 # From OCI registry (when published)
-helm install kata-upgrade oci://ghcr.io/kata-containers/kata-deploy-charts/kata-upgrade
+helm install kata-lifecycle-manager oci://ghcr.io/kata-containers/kata-deploy-charts/kata-lifecycle-manager
 
 # From local source
-helm install kata-upgrade ./kata-upgrade
+helm install kata-lifecycle-manager ./kata-lifecycle-manager
 ```
 
 ## Verification Pod (Required)
@@ -27,12 +27,12 @@ helm install kata-upgrade ./kata-upgrade
 A verification pod is **required** to validate each node after upgrade. The chart
 will fail to install without one.
 
-### Option A: Bake into kata-upgrade (recommended)
+### Option A: Bake into kata-lifecycle-manager (recommended)
 
 Provide the verification pod when installing the chart:
 
 ```bash
-helm install kata-upgrade ./kata-upgrade \
+helm install kata-lifecycle-manager ./kata-lifecycle-manager \
   --set-file defaults.verificationPod=./my-verification-pod.yaml
 ```
 
@@ -44,14 +44,14 @@ One-off override for a specific upgrade run. The pod spec must be base64-encoded
 because Argo workflow parameters don't handle multi-line YAML reliably:
 
 ```bash
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0 \
   -p verification-pod="$(base64 -w0 < ./my-verification-pod.yaml)"
 ```
 
 **Note:** During helm upgrade, kata-`kata-deploy`'s own verification is disabled
 (`--set verification.pod=""`). This is because kata-`kata-deploy`'s verification is
-cluster-wide (designed for initial install), while kata-upgrade performs
+cluster-wide (designed for initial install), while kata-lifecycle-manager performs
 per-node verification with proper placeholder substitution.
 
 ### Verification Pod Spec
@@ -116,24 +116,24 @@ Nodes can be selected using **labels**, **taints**, or **both**.
 
 ```bash
 # Label nodes for upgrade
-kubectl label node worker-1 katacontainers.io/kata-upgrade-window=true
+kubectl label node worker-1 katacontainers.io/kata-lifecycle-manager-window=true
 
 # Trigger upgrade
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0 \
-  -p node-selector="katacontainers.io/kata-upgrade-window=true"
+  -p node-selector="katacontainers.io/kata-lifecycle-manager-window=true"
 ```
 
 **Option B: Taint-based selection**
 
 ```bash
 # Taint nodes for upgrade
-kubectl taint nodes worker-1 kata-upgrade=pending:NoSchedule
+kubectl taint nodes worker-1 kata-lifecycle-manager=pending:NoSchedule
 
 # Trigger upgrade using taint selector
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0 \
-  -p node-taint-key=kata-upgrade \
+  -p node-taint-key=kata-lifecycle-manager \
   -p node-taint-value=pending
 ```
 
@@ -141,16 +141,16 @@ argo submit -n argo --from workflowtemplate/kata-upgrade \
 
 ```bash
 # Use both labels and taints for precise targeting
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0 \
   -p node-selector="node-pool=kata-pool" \
-  -p node-taint-key=kata-upgrade
+  -p node-taint-key=kata-lifecycle-manager
 ```
 
 ### 2. Trigger Upgrade
 
 ```bash
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0
 
 # Watch progress
@@ -225,13 +225,13 @@ maintenance operation, or if your organization's operational policies require it
 
 ```bash
 # Enable drain when installing the chart
-helm install kata-upgrade ./kata-upgrade \
+helm install kata-lifecycle-manager ./kata-lifecycle-manager \
   --set defaults.drainEnabled=true \
   --set defaults.drainTimeout=600s \
   --set-file defaults.verificationPod=./my-verification-pod.yaml
 
 # Or override at workflow submission time
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0 \
   -p drain-enabled=true \
   -p drain-timeout=600s
@@ -240,7 +240,7 @@ argo submit -n argo --from workflowtemplate/kata-upgrade \
 ## Rollback
 
 **Automatic rollback on verification failure:** If the verification pod fails (non-zero exit),
-kata-upgrade automatically:
+kata-lifecycle-manager automatically:
 1. Runs `helm rollback` to revert to the previous Helm release
 2. Waits for kata-deploy DaemonSet to be ready with the previous version
 3. `Uncordons` the node
@@ -251,7 +251,7 @@ This ensures nodes are never left in a broken state.
 **Manual rollback:** For cases where you need to rollback a successfully upgraded node:
 
 ```bash
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   --entrypoint rollback-node \
   -p node-name=worker-1
 ```
@@ -262,13 +262,13 @@ Check node annotations to monitor upgrade progress:
 
 ```bash
 kubectl get nodes \
-  -L katacontainers.io/kata-upgrade-status \
+  -L katacontainers.io/kata-lifecycle-manager-status \
   -L katacontainers.io/kata-current-version
 ```
 
 | Annotation | Description |
 |------------|-------------|
-| `katacontainers.io/kata-upgrade-status` | Current upgrade phase |
+| `katacontainers.io/kata-lifecycle-manager-status` | Current upgrade phase |
 | `katacontainers.io/kata-current-version` | Version after successful upgrade |
 
 Status values:
@@ -320,11 +320,11 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
   --namespace kube-system
 
 # Install upgrade tooling with your verification config
-helm install kata-upgrade oci://ghcr.io/kata-containers/kata-deploy-charts/kata-upgrade \
+helm install kata-lifecycle-manager oci://ghcr.io/kata-containers/kata-deploy-charts/kata-lifecycle-manager \
   --set-file defaults.verificationPod=./my-verification-pod.yaml
 
 # Trigger upgrade
-argo submit -n argo --from workflowtemplate/kata-upgrade \
+argo submit -n argo --from workflowtemplate/kata-lifecycle-manager \
   -p target-version=3.25.0
 ```
 

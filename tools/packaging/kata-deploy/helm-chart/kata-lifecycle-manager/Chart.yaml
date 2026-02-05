@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 apiVersion: v2
-name: kata-upgrade
-description: Argo Workflows-based upgrade orchestration for Kata Containers
+name: kata-lifecycle-manager
+description: Argo Workflows-based lifecycle management for Kata Containers
 
 type: application
 
@@ -15,6 +15,7 @@ appVersion: "3.26.0"
 
 keywords:
   - kata-containers
+  - lifecycle-management
   - upgrade
   - argo-workflows
   - gitops
