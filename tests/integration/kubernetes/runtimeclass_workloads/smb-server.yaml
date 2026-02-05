@@ -1,0 +1,49 @@
+#
+# Copyright (c) 2026 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# SMB/Samba server deployment for testing CIFS mount support in Kata
+#
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: smb-server
+  labels:
+    app: smb-server
+spec:
+  containers:
+  - name: samba
+    image: docker.io/dperson/samba:latest
+    args:
+      - "-u"
+      - "testuser;testpass"
+      - "-s"
+      - "share;/share;yes;no;no;testuser"
+      - "-p"
+    ports:
+    - containerPort: 445
+      name: smb
+    volumeMounts:
+    - name: share-data
+      mountPath: /share
+    securityContext:
+      capabilities:
+        add:
+        - NET_ADMIN
+  volumes:
+  - name: share-data
+    emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: smb-server
+spec:
+  selector:
+    app: smb-server
+  ports:
+  - port: 445
+    targetPort: 445
+  clusterIP: None

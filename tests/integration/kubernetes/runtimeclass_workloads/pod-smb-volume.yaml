@@ -1,0 +1,34 @@
+#
+# Copyright (c) 2026 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Test pod that mounts an SMB share and verifies xattr support with getfattr
+# Uses Alpine with cifs-utils and attr packages installed at runtime
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: smb-client-test
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: smb-client
+    image: docker.io/alpine:latest
+    command:
+    - /bin/sh
+    - -c
+    - |
+      set -e
+      apk add --no-cache cifs-utils attr
+      mkdir -p /mnt/smb
+      # Mount the SMB share
+      mount -t cifs //SMB_SERVER_IP/share /mnt/smb \
+        -o username=testuser,password=testpass,vers=3.0,uid=0,gid=0
+      # Signal that mount is ready
+      touch /tmp/mount-ready
+      # Keep container running
+      tail -f /dev/null
+    securityContext:
+      privileged: true
+  restartPolicy: Never
