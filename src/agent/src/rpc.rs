@@ -2329,12 +2329,34 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
                 );
 
                 let options = std::collections::HashMap::from([
-                    ("deviceId".to_string(), dev_major_minor),
-                    ("encryptType".to_string(), "LUKS".to_string()),
-                    ("dataIntegrity".to_string(), secure_storage_integrity),
+                    ("deviceId".to_string(), dev_major_minor.clone()),
+                    ("sourceType".to_string(), "empty".to_string()),
+                    ("targetType".to_string(), "fileSystem".to_string()),
+                    ("filesystemType".to_string(), "ext4".to_string()),
+                    ("encryptionType".to_string(), "luks2".to_string()),
+                    (
+                        "dataIntegrity".to_string(),
+                        secure_storage_integrity.clone(),
+                    ),
                 ]);
+
+                if let Err(e) = std::fs::create_dir_all(KATA_IMAGE_WORK_DIR) {
+                    error!(
+                        sl(),
+                        "Failed to create mount point directory {}: {:?}", KATA_IMAGE_WORK_DIR, e
+                    );
+                    return Err(anyhow!(e));
+                }
+
+                debug!(
+                    sl(),
+                    "Calling CDH secure_mount: volume_type=block-device, mount_point={}, options={:?}",
+                    KATA_IMAGE_WORK_DIR,
+                    options
+                );
+
                 confidential_data_hub::secure_mount(
-                    "BlockDevice",
+                    "block-device",
                     &options,
                     vec![],
                     KATA_IMAGE_WORK_DIR,

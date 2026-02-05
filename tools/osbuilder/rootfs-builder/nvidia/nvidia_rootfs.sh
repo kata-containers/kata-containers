@@ -330,8 +330,6 @@ coco_guest_components() {
 	mkdir -p "${pause_dir}/rootfs"
 	cp -a "${stage_one}/${pause_dir}"/config.json  "${pause_dir}/."
 	cp -a "${stage_one}/${pause_dir}"/rootfs/pause "${pause_dir}/rootfs/."
-
-	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
 }
 
 setup_nvidia_gpu_rootfs_stage_two() {
