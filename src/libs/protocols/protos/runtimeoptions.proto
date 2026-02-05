@@ -1,0 +1,20 @@
+// Copyright (c) 2024 The containerd Authors
+// SPDX-License-Identifier: Apache-2.0
+//
+// This proto definition is based on containerd's runtimeoptions/v1/api.proto
+// https://github.com/containerd/containerd/blob/main/api/types/runtimeoptions/v1/api.proto
+
+syntax = "proto3";
+
+package runtimeoptions.v1;
+
+message Options {
+	// TypeUrl specifies the type of the content inside the config file.
+	string type_url = 1;
+	// ConfigPath specifies the filesystem location of the config file
+	// used by the runtime.
+	string config_path = 2;
+	// Blob specifies an in-memory TOML blob passed from containerd's configuration section
+	// for this runtime. This will be used if config_path is not specified.
+	bytes config_body = 3;
+}
