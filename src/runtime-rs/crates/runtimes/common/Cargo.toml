@@ -10,7 +10,7 @@ license = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-containerd-shim-protos = { workspace = true }
+containerd-shim-protos = { workspace = true, features = ["sandbox"] }
 lazy_static = { workspace = true }
 nix = { workspace = true }
 protobuf = { workspace = true }

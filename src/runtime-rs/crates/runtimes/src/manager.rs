@@ -39,13 +39,14 @@ use resource::{
 };
 use runtime_spec as spec;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
+use protobuf::Message as ProtobufMessage;
 use std::{
     collections::HashMap,
     env,
     ops::Deref,
     os::unix::fs::{chown, MetadataExt},
     path::{Path, PathBuf},
-    str::{from_utf8, FromStr},
+    str::FromStr,
     sync::Arc,
     time::SystemTime,
 };
@@ -700,11 +701,21 @@ fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result
     } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {
         path
     } else if let Some(option) = option {
-        // get rid of the special characters in options to get the config path
-        if option.len() > 2 {
-            from_utf8(&option[2..])?.to_string()
-        } else {
-            String::from("")
+        // Parse the containerd runtime options protobuf message to extract the config path.
+        // The options are passed as a serialized runtimeoptions.v1.Options protobuf message
+        // from containerd's configuration (e.g., [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata.options]).
+        match <protocols::runtimeoptions::Options as ProtobufMessage>::parse_from_bytes(option) {
+            Ok(opts) => opts.config_path,
+            Err(e) => {
+                // Log the error but don't fail - fall back to default config paths
+                let logger = slog::Logger::clone(&slog_scope::logger());
+                slog::warn!(
+                    logger,
+                    "failed to parse containerd runtime options: {}, falling back to default config paths",
+                    e
+                );
+                String::from("")
+            }
         }
     } else {
         String::from("")
