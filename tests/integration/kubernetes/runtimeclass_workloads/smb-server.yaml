@@ -1,0 +1,55 @@
+#
+# Copyright (c) 2026 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# SMB/Samba server deployment for testing CIFS mount support in Kata
+#
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smb-server-config
+data:
+  config.yml: |
+    auth:
+      - user: testuser
+        group: testuser
+        uid: 1000
+        gid: 1000
+        password: testpass
+    share:
+      - name: share
+        path: /share
+        browsable: yes
+        readonly: no
+        guestok: no
+        validusers: testuser
+        writelist: testuser
+        veto: no
+        hidefiles: /_*/
+        recycle: no
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: smb-server
+spec:
+  containers:
+  - name: samba
+    image: quay.io/kata-containers/crazymax/samba:4.22.8
+    ports:
+    - containerPort: 445
+      name: smb
+    volumeMounts:
+    - name: samba-config
+      mountPath: /data/config.yml
+      subPath: config.yml
+    - name: share-data
+      mountPath: /share
+  volumes:
+  - name: samba-config
+    configMap:
+      name: smb-server-config
+  - name: share-data
+    emptyDir: {}
