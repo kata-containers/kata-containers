@@ -29,8 +29,20 @@ enum Action {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Set log level based on DEBUG environment variable
+    // This must be done before initializing the logger
+    let debug_enabled = std::env::var("DEBUG")
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
+
+    let log_level = if debug_enabled {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    };
+
     env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(log_level)
         .init();
 
     let args = Args::parse();

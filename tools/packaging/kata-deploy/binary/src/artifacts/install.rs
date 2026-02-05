@@ -147,14 +147,18 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
 /// Write the common drop-in configuration files for a shim.
 /// This is shared between standard runtimes and custom runtimes.
 fn write_common_drop_ins(config: &Config, shim: &str, config_d_dir: &str) -> Result<()> {
+    info!("Generating drop-in configuration files for shim: {}", shim);
+
     // 1. Installation prefix adjustments (if not default)
     if config.dest_dir != DEFAULT_KATA_INSTALL_DIR {
+        info!("  - Installation prefix: {} (non-default)", config.dest_dir);
         let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
         write_drop_in_file(config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
     }
 
     // 2. Debug configuration (boolean flags only via drop-in)
     if config.debug {
+        info!("  - Debug mode: enabled");
         let debug_content = generate_debug_drop_in(shim)?;
         write_drop_in_file(config_d_dir, "20-debug.toml", &debug_content)?;
     }
@@ -162,7 +166,10 @@ fn write_common_drop_ins(config: &Config, shim: &str, config_d_dir: &str) -> Res
     // 3. Combined kernel_params (proxy, debug, etc.)
     // Reads base kernel_params from original config and combines with new params
     let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
-    write_drop_in_file(config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+    if !kernel_params_content.is_empty() {
+        info!("  - Kernel parameters: configured");
+        write_drop_in_file(config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+    }
 
     Ok(())
 }
@@ -354,6 +361,9 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
     );
     let config_d_dir = format!("{}/config.d", runtime_config_dir);
 
+    info!("Setting up runtime directory for shim: {}", shim);
+    log::debug!("  Runtime config directory: {}", runtime_config_dir);
+
     // Create the runtime directory and config.d subdirectory
     fs::create_dir_all(&config_d_dir)
         .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
@@ -376,12 +386,7 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
         fs::copy(&original_config_file, &dest_config_file)
             .with_context(|| format!("Failed to copy config: {} -> {}", original_config_file, dest_config_file))?;
         
-        log::debug!(
-            "Copied config for {}: {} -> {}",
-            shim,
-            original_config_file,
-            dest_config_file
-        );
+        info!("  Copied base config: {}", dest_config_file);
     }
 
     Ok(())
@@ -481,7 +486,8 @@ fn write_drop_in_file(config_d_dir: &str, filename: &str, content: &str) -> Resu
     fs::write(&drop_in_path, content)
         .with_context(|| format!("Failed to write drop-in file: {}", drop_in_path))?;
 
-    log::debug!("Created drop-in file: {}", drop_in_path);
+    info!("Created drop-in file: {}", drop_in_path);
+    log::debug!("Drop-in file content:\n{}", content);
     Ok(())
 }
 
