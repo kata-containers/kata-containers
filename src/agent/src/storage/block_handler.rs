@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::linux_abi::pcipath_from_dev_tree_path;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
@@ -29,8 +29,9 @@ use crate::device::block_device_handler::{
 };
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
-use crate::pci;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
+#[cfg(target_arch = "s390x")]
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct VirtioBlkMmioHandler {}
@@ -84,8 +85,9 @@ impl StorageHandler for VirtioBlkPciHandler {
                 return Err(anyhow!("Invalid device {}", &storage.source));
             }
         } else {
-            let pcipath = pci::Path::from_str(&storage.source)?;
-            let dev_path = get_virtio_blk_pci_device_name(ctx.sandbox, &pcipath).await?;
+            let (root_complex, pcipath) = pcipath_from_dev_tree_path(&storage.source)?;
+            let dev_path =
+                get_virtio_blk_pci_device_name(ctx.sandbox, root_complex, &pcipath).await?;
             storage.source = dev_path;
         }
 

@@ -11,11 +11,15 @@ use crate::device::{
 };
 #[cfg(target_arch = "s390x")]
 use crate::linux_abi::CCW_ROOT_BUS_PATH;
-use crate::linux_abi::{create_pci_root_bus_path, SYSFS_DIR, SYSTEM_DEV_PATH};
+use crate::linux_abi::{
+    create_pci_root_bus_path, pcipath_from_dev_tree_path, SYSFS_DIR, SYSTEM_DEV_PATH,
+};
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+#[cfg(target_arch = "s390x")]
+use std::str::FromStr;
 
 #[cfg(target_arch = "s390x")]
 use kata_types::device::DRIVER_BLK_CCW_TYPE;
@@ -23,7 +27,6 @@ use kata_types::device::{DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE};
 use protocols::agent::Device;
 use regex::Regex;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -47,8 +50,8 @@ impl DeviceHandler for VirtioBlkPciDeviceHandler {
 
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
-        let pcipath = pci::Path::from_str(&device.id)?;
-        let vm_path = get_virtio_blk_pci_device_name(ctx.sandbox, &pcipath).await?;
+        let (root_complex, pcipath) = pcipath_from_dev_tree_path(&device.id)?;
+        let vm_path = get_virtio_blk_pci_device_name(ctx.sandbox, root_complex, &pcipath).await?;
 
         Ok(DeviceInfo::new(&vm_path, true)
             .context("New device info")?
@@ -112,11 +115,12 @@ impl DeviceHandler for VirtioBlkMmioDeviceHandler {
 #[instrument]
 pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
+    root_complex: &str,
     pcipath: &pci::Path,
 ) -> Result<String> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path(root_complex));
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
+    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path, root_complex);
 
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
@@ -167,8 +171,8 @@ pub struct VirtioBlkPciMatcher {
 }
 
 impl VirtioBlkPciMatcher {
-    pub fn new(relpath: &str) -> VirtioBlkPciMatcher {
-        let root_bus = create_pci_root_bus_path();
+    pub fn new(relpath: &str, root_complex: &str) -> VirtioBlkPciMatcher {
+        let root_bus = create_pci_root_bus_path(root_complex);
         let re = format!(r"^{root_bus}{relpath}/virtio[0-9]+/block/");
 
         VirtioBlkPciMatcher {
@@ -229,11 +233,13 @@ impl UeventMatcher for VirtioBlkCCWMatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(target_arch = "s390x")]
+    use std::str::FromStr;
 
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
     async fn test_virtio_blk_matcher() {
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_path("00");
         let devname = "vda";
 
         let mut uev_a = crate::uevent::Uevent::default();
@@ -242,12 +248,12 @@ mod tests {
         uev_a.subsystem = BLOCK.to_string();
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!("{root_bus}{relpath_a}/virtio4/block/{devname}");
-        let matcher_a = VirtioBlkPciMatcher::new(relpath_a);
+        let matcher_a = VirtioBlkPciMatcher::new(relpath_a, "00");
 
         let mut uev_b = uev_a.clone();
         let relpath_b = "/0000:00:0a.0/0000:00:0b.0";
         uev_b.devpath = format!("{root_bus}{relpath_b}/virtio0/block/{devname}");
-        let matcher_b = VirtioBlkPciMatcher::new(relpath_b);
+        let matcher_b = VirtioBlkPciMatcher::new(relpath_b, "00");
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
