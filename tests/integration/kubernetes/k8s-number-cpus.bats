@@ -42,7 +42,7 @@ setup() {
 
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
-		number_cpus=$(container_exec_with_retries "$pod_name" "$container_name" "${exec_command[@]}")
+		number_cpus=$(container_exec "$pod_name" "$container_name" "${exec_command[@]}")
 		if [[ "$number_cpus" =~ ^[0-9]+$ ]]; then
 			# Verify number of cpus
 			[ "$number_cpus" -le "$max_number_cpus" ]

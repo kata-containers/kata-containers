@@ -239,13 +239,8 @@ impl Process {
         Ok(())
     }
 
-    pub async fn start_io_and_wait(
-        &mut self,
-        containers: Arc<RwLock<HashMap<String, Container>>>,
-        agent: Arc<dyn Agent>,
-        container_io: ContainerIo,
-    ) -> Result<()> {
-        info!(self.logger, "start io and wait");
+    pub async fn pre_start_io_and_wait(&mut self) -> Result<ShimIo> {
+        info!(self.logger, "prepare FIFOs and shim info");
 
         self.pre_fifos_open()?;
         // new shim io
@@ -253,6 +248,18 @@ impl Process {
             .await
             .context("new shim io")?;
         self.post_fifos_open()?;
+
+        Ok(shim_io)
+    }
+
+    pub async fn post_start_io_and_wait(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        agent: Arc<dyn Agent>,
+        container_io: ContainerIo,
+        shim_io: ShimIo,
+    ) -> Result<()> {
+        info!(self.logger, "start run_io_copy");
 
         // start io copy for stdin
         if let Some(stdin) = shim_io.stdin {
@@ -286,6 +293,62 @@ impl Process {
         self.run_io_wait(containers, agent, wg)
             .await
             .context("run io thread")?;
+
+        Ok(())
+    }
+
+    pub async fn start_io_and_wait(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        agent: Arc<dyn Agent>,
+        container_io: ContainerIo,
+    ) -> Result<()> {
+        info!(self.logger, "start io and wait");
+
+        let shim_io = self
+            .pre_start_io_and_wait()
+            .await
+            .context("prepare start io and wait")?;
+
+        self.post_start_io_and_wait(containers, agent, container_io, shim_io)
+            .await
+            .context("post start io and wait")?;
+
+        Ok(())
+    }
+
+    // The `start_io_exec_and_wait` follow this sequence:
+    // (1) Prepare FIFO endpoints first within pre_start_io_and_wait.
+    // (2) Invoke start_exec() (agent.exec_process).
+    // (3) Create ContainerIo (ensuring it binds to an "already existing exec").
+    // (4) Launch run_io_copy and do run_io_wait within post_start_io_and_wait.
+    pub async fn start_io_exec_and_wait<F, Fut>(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        agent: Arc<dyn Agent>,
+        process_id: ContainerProcess,
+        start_exec: F,
+    ) -> Result<()>
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = Result<()>> + Send + 'static,
+    {
+        // 1. Prepare FIFO endpoints first. This avoids races where containerd opens/reads FIFOs before they are ready.
+        let shim_io = self.pre_start_io_and_wait().await?;
+
+        // 2. Actually start the exec_process. Ensure the agent has created and registered this exec_id before we attempt to read from it.
+        start_exec().await.context("start exec process")?;
+
+        // 3. Create container IO After the exec process is confirmed to started. As the agent should not return premature EOF/errors for this process.
+        // In legacy io mode, we handle IO by polling the agent.
+        let container_io = ContainerIo::new(agent.clone(), process_id.clone());
+
+        // 4. Start IO copy tasks and the wait thread.
+        self.post_start_io_and_wait(containers, agent, container_io, shim_io)
+            .await?;
+
+        info!(self.logger, "exec process started after io ready");
+
         Ok(())
     }
 

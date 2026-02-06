@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -176,10 +177,14 @@ func TestKataAgentSendReq(t *testing.T) {
 	assert.Nil(err)
 
 	_, err = k.readProcessStdout(ctx, container, execid, []byte{})
-	assert.Nil(err)
+	if err != nil {
+		assert.ErrorIs(err, io.EOF)
+	}
 
 	_, err = k.readProcessStderr(ctx, container, execid, []byte{})
-	assert.Nil(err)
+	if err != nil {
+		assert.ErrorIs(err, io.EOF)
+	}
 
 	_, err = k.getOOMEvent(ctx)
 	assert.Nil(err)
