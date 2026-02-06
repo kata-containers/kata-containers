@@ -92,9 +92,6 @@ setup() {
 }
 
 @test "Test we can pull an image inside the guest using trusted storage" {
-	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
     # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
 
@@ -112,14 +109,18 @@ setup() {
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$image_pulled_time_less_than_default_time" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
 
-
-    # Set CreateContainerRequest timeout for qemu-coco-dev
-    if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]]; then
-        create_container_timeout=300
-        set_metadata_annotation "$pod_config" \
-            "io.katacontainers.config.runtime.create_container_timeout" \
-            "${create_container_timeout}"
+    # Set CreateContainerRequest timeout in the annotation to allow for enough time for guest-pull where
+    # the container remains in 'creating' state until the pull completes. Usually pulling this and the large image in
+    # below test takes 30-60 seconds, but we occasionally observe spikes on all our bare-metal runners.
+    create_container_timeout=300
+    # On AKS, so far, these spikes have not been observed. Issue 10299, as referenced in other parts of this test, tells us
+    # that we cannot modify the runtimeRequestTimeout on AKS. We hence set the timeout to the 120s default value.
+    if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [ "${KBS_INGRESS}" = "aks" ]; then
+        create_container_timeout=120
     fi
+    set_metadata_annotation "$pod_config" \
+        "io.katacontainers.config.runtime.create_container_timeout" \
+        "${create_container_timeout}"
 
     # Set annotation to pull image in guest
     set_metadata_annotation "${pod_config}" \
@@ -131,16 +132,14 @@ setup() {
     cat $pod_config
 
     add_allow_all_policy_to_yaml "$pod_config"
-    local wait_time=120
-    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && wait_time=300
+    local wait_time=300
+    if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [ "${KBS_INGRESS}" = "aks" ]; then
+        wait_time=120
+    fi
     k8s_create_pod "$pod_config" "$wait_time"
 }
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
-	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
     local_device=$(create_loop_device)
     LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
@@ -186,10 +185,6 @@ setup() {
 }
 
 @test "Test we can pull a large image inside the guest with large createcontainer timeout" {
-	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-
     if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [ "${KBS_INGRESS}" = "aks" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10299"
     fi
@@ -208,8 +203,8 @@ setup() {
     IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
 
     # Set CreateContainerRequest timeout in the annotation to pull large image in guest
-    create_container_timeout=120
-    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && create_container_timeout=600
+    # Bare-metal CI runners' kubelets are configured with an equivalent runtimeRequestTimeout of 600s
+    create_container_timeout=600
     set_metadata_annotation "$pod_config" \
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
@@ -224,8 +219,7 @@ setup() {
     cat $pod_config
 
     add_allow_all_policy_to_yaml "$pod_config"
-    local wait_time=120
-    [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && wait_time=600
+    local wait_time=600
     k8s_create_pod "$pod_config" "$wait_time"
 }
 
