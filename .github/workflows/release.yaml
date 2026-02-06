@@ -284,11 +284,15 @@ jobs:
           echo "${QUAY_DEPLOYER_PASSWORD}" | helm registry login quay.io --username "${QUAY_DEPLOYER_USERNAME}" --password-stdin
           echo "${GITHUB_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
 
-      - name: Push helm chart to the OCI registries
+      - name: Push helm charts to the OCI registries
         run: |
           release_version=$(./tools/packaging/release/release.sh release-version)
+          # Push kata-deploy chart
           helm push "kata-deploy-${release_version}.tgz" oci://quay.io/kata-containers/kata-deploy-charts
           helm push "kata-deploy-${release_version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
+          # Push kata-lifecycle-manager chart
+          helm push "kata-lifecycle-manager-${release_version}.tgz" oci://quay.io/kata-containers/kata-deploy-charts
+          helm push "kata-lifecycle-manager-${release_version}.tgz" oci://ghcr.io/kata-containers/kata-deploy-charts
 
   publish-release:
     name: publish-release

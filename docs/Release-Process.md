@@ -28,13 +28,15 @@ Bug fixes are released as part of `MINOR` or `MAJOR` releases only. `PATCH` is a
 
 ## Release Process
 
-### Bump the `VERSION` and `Chart.yaml` file
+### Bump the `VERSION` and `Chart.yaml` files
 
 When the `kata-containers/kata-containers` repository is ready for a new release,
 first create a PR to set the release in the [`VERSION`](./../VERSION) file and update the
-`version` and `appVersion` in the
-[`Chart.yaml`](./../tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml) file and
-have it merged.
+`version` and `appVersion` in the following `Chart.yaml` files:
+- [`kata-deploy/Chart.yaml`](./../tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml)
+- [`kata-lifecycle-manager/Chart.yaml`](./../tools/packaging/kata-deploy/helm-chart/kata-lifecycle-manager/Chart.yaml)
+
+Have the PR merged before proceeding.
 
 ### Lock the `main` branch
 
