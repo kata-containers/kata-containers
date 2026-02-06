@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	cri "github.com/containerd/containerd/pkg/cri/annotations"
 	"github.com/containerd/ttrpc"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/hypervisor"
@@ -73,8 +72,8 @@ func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Net
 	defer s.Close()
 
 	annotations := map[string]string{}
-	annotations[cri.SandboxName] = hypervisorConfig.SandboxName
-	annotations[cri.SandboxNamespace] = hypervisorConfig.SandboxNamespace
+	annotations[hypannotations.CRISandboxName] = hypervisorConfig.SandboxName
+	annotations[hypannotations.CRISandboxNamespace] = hypervisorConfig.SandboxNamespace
 	annotations[hypannotations.MachineType] = hypervisorConfig.HypervisorMachineType
 	annotations[hypannotations.ImagePath] = hypervisorConfig.ImagePath
 	annotations[hypannotations.DefaultVCPUs] = strconv.FormatUint(uint64(hypervisorConfig.NumVCPUs()), 10)

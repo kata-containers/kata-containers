@@ -11,7 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/containerd/cgroups"
+	cgroups "github.com/containerd/cgroups/v3"
+	"github.com/containerd/cgroups/v3/cgroup1"
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
@@ -55,22 +56,22 @@ func newProperty(name string, units interface{}) systemdDbus.Property {
 	}
 }
 
-func cgroupHierarchy(path string) (cgroups.Hierarchy, cgroups.Path, error) {
+func cgroupPath(path string) (cgroup1.Path, error) {
 	if !IsSystemdCgroup(path) {
-		return cgroups.V1, cgroups.StaticPath(path), nil
-	} else {
-		slice, unit, err := getSliceAndUnit(path)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		cgroupSlicePath, _ := systemd.ExpandSlice(slice)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return cgroups.Systemd, cgroups.Slice(cgroupSlicePath, unit), nil
+		return cgroup1.StaticPath(path), nil
 	}
+
+	slice, unit, err := getSliceAndUnit(path)
+	if err != nil {
+		return nil, err
+	}
+
+	cgroupSlicePath, err := systemd.ExpandSlice(slice)
+	if err != nil {
+		return nil, err
+	}
+
+	return cgroup1.Slice(cgroupSlicePath, unit), nil
 }
 
 func createCgroupsSystemd(slice string, unit string, pid int) error {
