@@ -123,7 +123,14 @@ pub async fn install_artifacts(config: &Config) -> Result<()> {
 pub async fn remove_artifacts(config: &Config) -> Result<()> {
     info!("deleting kata artifacts");
 
-    // Remove custom runtime configs first (before removing main install dir)
+    // Remove runtime directories for each shim (drop-in configs, symlinks)
+    for shim in &config.shims_for_arch {
+        if let Err(e) = remove_runtime_directory(config, shim) {
+            log::warn!("Failed to remove runtime directory for {}: {}", shim, e);
+        }
+    }
+
+    // Remove custom runtime configs (before removing main install dir)
     if config.custom_runtimes_enabled && !config.custom_runtimes.is_empty() {
         remove_custom_runtime_configs(config)?;
     }
@@ -137,7 +144,39 @@ pub async fn remove_artifacts(config: &Config) -> Result<()> {
     Ok(())
 }
 
+/// Write the common drop-in configuration files for a shim.
+/// This is shared between standard runtimes and custom runtimes.
+fn write_common_drop_ins(config: &Config, shim: &str, config_d_dir: &str) -> Result<()> {
+    info!("Generating drop-in configuration files for shim: {}", shim);
+
+    // 1. Installation prefix adjustments (if not default)
+    if config.dest_dir != "/opt/kata" {
+        info!("  - Installation prefix: {} (non-default)", config.dest_dir);
+        let prefix_content = generate_installation_prefix_drop_in(config, shim)?;
+        write_drop_in_file(config_d_dir, "10-installation-prefix.toml", &prefix_content)?;
+    }
+
+    // 2. Debug configuration (boolean flags only via drop-in)
+    if config.debug {
+        info!("  - Debug mode: enabled");
+        let debug_content = generate_debug_drop_in(shim)?;
+        write_drop_in_file(config_d_dir, "20-debug.toml", &debug_content)?;
+    }
+
+    // 3. Combined kernel_params (proxy, debug, etc.)
+    // Reads base kernel_params from original config and combines with new params
+    let kernel_params_content = generate_kernel_params_drop_in(config, shim)?;
+    if !kernel_params_content.is_empty() {
+        info!("  - Kernel parameters: configured");
+        write_drop_in_file(config_d_dir, "30-kernel-params.toml", &kernel_params_content)?;
+    }
+
+    Ok(())
+}
+
 /// Each custom runtime gets an isolated directory under custom-runtimes/{handler}/
+/// Custom runtimes inherit the same drop-in configurations as standard runtimes
+/// (installation prefix, debug, kernel_params) plus any user-provided overrides.
 fn install_custom_runtime_configs(config: &Config) -> Result<()> {
     info!("Installing custom runtime configuration files");
 
@@ -152,26 +191,41 @@ fn install_custom_runtime_configs(config: &Config) -> Result<()> {
         fs::create_dir_all(&config_d_dir)
             .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
 
-        // Copy base config (already modified by kata-deploy with debug, proxy, annotations)
-        let base_src = format!(
-            "/host/{}/share/defaults/kata-containers/configuration-{}.toml",
-            config.dest_dir, runtime.base_config
+        // Copy base config to the handler directory
+        // Custom runtime drop-ins will overlay on top of this
+        let base_config_filename = format!("configuration-{}.toml", runtime.base_config);
+        let original_config = format!(
+            "/host/{}/share/defaults/kata-containers/{}",
+            config.dest_dir, base_config_filename
         );
-        let base_dest = format!("{}/configuration-{}.toml", handler_dir, runtime.base_config);
+        let dest_config = format!("{}/{}", handler_dir, base_config_filename);
 
-        info!(
-            "Copying base config for {}: {} -> {}",
-            runtime.handler, base_src, base_dest
-        );
+        if Path::new(&original_config).exists() {
+            // Remove existing destination (might be a symlink from older versions)
+            let dest_path = Path::new(&dest_config);
+            if dest_path.exists() || dest_path.is_symlink() {
+                fs::remove_file(&dest_config).with_context(|| {
+                    format!("Failed to remove existing config: {}", dest_config)
+                })?;
+            }
 
-        fs::copy(&base_src, &base_dest).with_context(|| {
-            format!(
-                "Failed to copy base config from {} to {}",
-                base_src, base_dest
-            )
-        })?;
+            fs::copy(&original_config, &dest_config).with_context(|| {
+                format!(
+                    "Failed to copy config: {} -> {}",
+                    original_config, dest_config
+                )
+            })?;
 
-        // Copy drop-in file if provided
+            info!(
+                "Copied config for custom runtime {}: {} -> {}",
+                runtime.handler, original_config, dest_config
+            );
+        }
+
+        // Generate the common drop-in files (shared with standard runtimes)
+        write_common_drop_ins(config, &runtime.base_config, &config_d_dir)?;
+
+        // Copy user-provided drop-in file if provided (at 50-overrides.toml)
         if let Some(ref drop_in_src) = runtime.drop_in_file {
             let drop_in_dest = format!("{}/50-overrides.toml", config_d_dir);
 
@@ -288,33 +342,108 @@ fn set_executable_permissions(dir: &str) -> Result<()> {
     Ok(())
 }
 
-async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
-    let config_path = format!(
-        "/host/{}",
+/// Set up the runtime directory structure for a shim.
+/// Creates: {config_path}/runtimes/{shim}/
+///          {config_path}/runtimes/{shim}/config.d/
+///          {config_path}/runtimes/{shim}/configuration-{shim}.toml (copy of original)
+///
+/// Note: We copy the config file instead of symlinking because kata-containers'
+/// ResolvePath uses filepath.EvalSymlinks, which would resolve to the original
+/// location and look for config.d there instead of in our per-shim directory.
+fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
+    let original_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
+    );
+    let runtime_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_config_path(shim, &config.dest_dir)
+    );
+    let config_d_dir = format!("{}/config.d", runtime_config_dir);
+
+    info!("Setting up runtime directory for shim: {}", shim);
+    log::debug!("  Runtime config directory: {}", runtime_config_dir);
+
+    // Create the runtime directory and config.d subdirectory
+    fs::create_dir_all(&config_d_dir)
+        .with_context(|| format!("Failed to create config.d directory: {}", config_d_dir))?;
+
+    // Copy the original config file to the runtime directory
+    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let dest_config_file = format!("{}/configuration-{}.toml", runtime_config_dir, shim);
+
+    // Only copy if original exists
+    if Path::new(&original_config_file).exists() {
+        // Remove existing destination (might be a symlink from older versions)
+        // fs::copy follows symlinks and would write to the wrong location
+        let dest_path = Path::new(&dest_config_file);
+        if dest_path.exists() || dest_path.is_symlink() {
+            fs::remove_file(&dest_config_file)
+                .with_context(|| format!("Failed to remove existing config: {}", dest_config_file))?;
+        }
+
+        // Copy the base config file
+        fs::copy(&original_config_file, &dest_config_file)
+            .with_context(|| format!("Failed to copy config: {} -> {}", original_config_file, dest_config_file))?;
+        
+        info!("  Copied base config: {}", dest_config_file);
+    }
+
+    Ok(())
+}
+
+/// Remove the runtime directory for a shim during cleanup
+fn remove_runtime_directory(config: &Config, shim: &str) -> Result<()> {
+    let runtime_config_dir = format!(
+        "/host{}",
         utils::get_kata_containers_config_path(shim, &config.dest_dir)
     );
 
-    let kata_config_file = Path::new(&config_path).join(format!("configuration-{shim}.toml"));
+    if Path::new(&runtime_config_dir).exists() {
+        fs::remove_dir_all(&runtime_config_dir)
+            .with_context(|| format!("Failed to remove runtime directory: {}", runtime_config_dir))?;
+        log::debug!("Removed runtime directory: {}", runtime_config_dir);
+    }
 
-    // The configuration file should exist after copy_artifacts() copied the kata artifacts.
-    // If it doesn't exist, it means either the copy failed or this shim doesn't have a config
-    // file in the artifacts (which would be a packaging error).
+    // Try to clean up parent 'runtimes' directory if empty
+    let runtimes_dir = Path::new(&runtime_config_dir).parent();
+    if let Some(runtimes_path) = runtimes_dir {
+        if runtimes_path.exists() {
+            if let Ok(entries) = fs::read_dir(runtimes_path) {
+                if entries.count() == 0 {
+                    let _ = fs::remove_dir(runtimes_path);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
+    // Set up the runtime directory structure with symlink to original config
+    setup_runtime_directory(config, shim)?;
+
+    let runtime_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_config_path(shim, &config.dest_dir)
+    );
+    let config_d_dir = format!("{}/config.d", runtime_config_dir);
+
+    let kata_config_file = Path::new(&runtime_config_dir).join(format!("configuration-{shim}.toml"));
+
+    // The configuration file (symlink) should exist after setup_runtime_directory()
     if !kata_config_file.exists() {
         return Err(anyhow::anyhow!(
             "Configuration file not found: {kata_config_file:?}. This file should have been \
-             copied from the kata-artifacts. Check that the shim '{}' has a valid configuration \
+             symlinked from the original config. Check that the shim '{}' has a valid configuration \
              file in the artifacts.",
             shim
         ));
     }
 
-    configure_proxy(config, shim, &kata_config_file, "https_proxy").await?;
-
-    configure_no_proxy(config, shim, &kata_config_file).await?;
-
-    if config.debug {
-        configure_debug(&kata_config_file, shim).await?;
-    }
+    // Generate common drop-in files (shared with custom runtimes)
+    write_common_drop_ins(config, shim, &config_d_dir)?;
 
     configure_hypervisor_annotations(config, shim, &kata_config_file).await?;
 
@@ -323,148 +452,6 @@ async fn configure_shim_config(config: &Config, shim: &str) -> Result<()> {
         .contains(&shim.to_string())
     {
         configure_experimental_force_guest_pull(&kata_config_file).await?;
-    }
-
-    if config.dest_dir != "/opt/kata" {
-        adjust_installation_prefix(config, shim, &kata_config_file).await?;
-    }
-
-    Ok(())
-}
-
-fn update_kernel_param(current_params: &str, param_name: &str, param_value: &str) -> String {
-    let full_param = format!("{param_name}={param_value}");
-    let search_prefix = format!("{param_name}=");
-
-    // Split params by whitespace and process each
-    let params: Vec<&str> = current_params.split_whitespace().collect();
-    let mut updated_params: Vec<String> = Vec::new();
-    let mut found = false;
-
-    for param in params {
-        if param.starts_with(&search_prefix) {
-            // Replace existing parameter with new value
-            updated_params.push(full_param.clone());
-            found = true;
-        } else {
-            updated_params.push(param.to_string());
-        }
-    }
-
-    // If parameter wasn't found, append it
-    if !found {
-        updated_params.push(full_param);
-    }
-
-    updated_params.join(" ")
-}
-
-async fn configure_proxy(
-    config: &Config,
-    shim: &str,
-    config_file: &Path,
-    proxy_type: &str,
-) -> Result<()> {
-    let proxy_var = if proxy_type == "https_proxy" {
-        &config.agent_https_proxy
-    } else {
-        return Ok(());
-    };
-
-    let proxy_value = match proxy_var {
-        Some(proxy) if !proxy.is_empty() && proxy.contains('=') => {
-            // Per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
-            proxy
-                .split(';')
-                .find_map(|m| {
-                    let parts: Vec<&str> = m.splitn(2, '=').collect();
-                    if parts.len() == 2 && parts[0] == shim {
-                        Some(parts[1].to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_default()
-        }
-        Some(proxy) if !proxy.is_empty() => proxy.clone(),
-        _ => return Ok(()),
-    };
-
-    if !proxy_value.is_empty() {
-        let hypervisor_name = get_hypervisor_name(shim)?;
-        let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-        let param_name = "agent.https_proxy";
-
-        // Get current kernel_params and update/append the proxy setting
-        let current_params =
-            toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
-
-        let updated_params = update_kernel_param(&current_params, param_name, &proxy_value);
-
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            kernel_params_path,
-            config_file.display(),
-            current_params,
-            updated_params
-        );
-
-        // Set the updated kernel_params (replace entire value)
-        toml_utils::set_toml_value(
-            config_file,
-            &kernel_params_path,
-            &format!("\"{}\"", updated_params),
-        )?;
-    }
-
-    Ok(())
-}
-
-async fn configure_no_proxy(config: &Config, shim: &str, config_file: &Path) -> Result<()> {
-    let no_proxy_value = match &config.agent_no_proxy {
-        Some(no_proxy) if !no_proxy.is_empty() && no_proxy.contains('=') => {
-            // Per-shim format
-            no_proxy
-                .split(';')
-                .find_map(|m| {
-                    let parts: Vec<&str> = m.splitn(2, '=').collect();
-                    if parts.len() == 2 && parts[0] == shim {
-                        Some(parts[1].to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_default()
-        }
-        Some(no_proxy) if !no_proxy.is_empty() => no_proxy.clone(),
-        _ => return Ok(()),
-    };
-
-    if !no_proxy_value.is_empty() {
-        let hypervisor_name = get_hypervisor_name(shim)?;
-        let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-
-        // Get current kernel_params and update/append the no_proxy setting
-        let current_params =
-            toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
-
-        let updated_params =
-            update_kernel_param(&current_params, "agent.no_proxy", &no_proxy_value);
-
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            kernel_params_path,
-            config_file.display(),
-            current_params,
-            updated_params
-        );
-
-        // Set the updated kernel_params (replace entire value)
-        toml_utils::set_toml_value(
-            config_file,
-            &kernel_params_path,
-            &format!("\"{}\"", updated_params),
-        )?;
     }
 
     Ok(())
@@ -488,43 +475,234 @@ fn set_toml_bool_to_true(config_file: &Path, path: &str) -> Result<()> {
     Ok(())
 }
 
-async fn configure_debug(config_file: &Path, shim: &str) -> Result<()> {
+/// Write a drop-in configuration file to the config.d directory.
+/// If content is empty, the file is not created.
+fn write_drop_in_file(config_d_dir: &str, filename: &str, content: &str) -> Result<()> {
+    if content.is_empty() {
+        return Ok(());
+    }
+
+    let drop_in_path = format!("{}/{}", config_d_dir, filename);
+    fs::write(&drop_in_path, content)
+        .with_context(|| format!("Failed to write drop-in file: {}", drop_in_path))?;
+
+    info!("Created drop-in file: {}", drop_in_path);
+    log::debug!("Drop-in file content:\n{}", content);
+    Ok(())
+}
+
+/// Get the QEMU share directory name for a given shim.
+/// Some shims use experimental QEMU builds with different firmware paths.
+fn get_qemu_share_name(shim: &str) -> Option<String> {
+    if !is_qemu_shim(shim) {
+        return None;
+    }
+
+    let share_name = match shim {
+        "qemu-cca" => "qemu-cca-experimental",
+        "qemu-nvidia-gpu-snp" => "qemu-snp-experimental",
+        "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental",
+        _ => "qemu",
+    };
+
+    Some(share_name.to_string())
+}
+
+/// Create a QEMU wrapper script that adds the -L flag for firmware paths.
+/// This is needed when using a non-default installation prefix.
+fn create_qemu_wrapper_script(config: &Config, shim: &str) -> Result<Option<String>> {
+    let qemu_share = match get_qemu_share_name(shim) {
+        Some(share) => share,
+        None => return Ok(None), // Not a QEMU shim, no wrapper needed
+    };
+
+    let qemu_binary = format!("{}/bin/qemu-system-x86_64", config.dest_dir);
+    let wrapper_script_path = format!("{}-installation-prefix", qemu_binary);
+    let host_wrapper_path = format!("/host{}", wrapper_script_path);
+
+    // Create wrapper script if it doesn't exist
+    if !Path::new(&host_wrapper_path).exists() {
+        // Ensure parent directory exists
+        if let Some(parent) = Path::new(&host_wrapper_path).parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let script_content = format!(
+            r#"#!/usr/bin/env bash
+
+exec {} "$@" -L {}/share/kata-{}/qemu/
+"#,
+            qemu_binary, config.dest_dir, qemu_share
+        );
+
+        fs::write(&host_wrapper_path, &script_content)?;
+        let mut perms = fs::metadata(&host_wrapper_path)?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&host_wrapper_path, perms)?;
+
+        log::debug!("Created QEMU wrapper script: {}", host_wrapper_path);
+    }
+
+    Ok(Some(wrapper_script_path))
+}
+
+/// Generate drop-in content for installation prefix adjustments.
+/// This replaces /opt/kata with the custom dest_dir in all relevant paths.
+/// For QEMU shims, this also creates a wrapper script for firmware paths.
+fn generate_installation_prefix_drop_in(config: &Config, shim: &str) -> Result<String> {
     let hypervisor_name = get_hypervisor_name(shim)?;
 
-    let hypervisor_enable_debug_path = format!("hypervisor.{hypervisor_name}.enable_debug");
-    set_toml_bool_to_true(config_file, &hypervisor_enable_debug_path)?;
+    // For QEMU shims, create wrapper script and use it as the path
+    let qemu_path = if is_qemu_shim(shim) {
+        match create_qemu_wrapper_script(config, shim)? {
+            Some(wrapper_path) => wrapper_path,
+            None => format!("{}/bin/qemu-system-x86_64", config.dest_dir),
+        }
+    } else {
+        format!("{}/bin/qemu-system-x86_64", config.dest_dir)
+    };
 
-    set_toml_bool_to_true(config_file, "runtime.enable_debug")?;
+    // Build the drop-in content with adjusted paths
+    let mut content = String::new();
+    content.push_str("# Installation prefix adjustments\n");
+    content.push_str("# Generated by kata-deploy\n\n");
 
-    set_toml_bool_to_true(config_file, "agent.kata.debug_console_enabled")?;
+    // Hypervisor paths
+    content.push_str(&format!("[hypervisor.{}]\n", hypervisor_name));
+    content.push_str(&format!("path = \"{}\"\n", qemu_path));
+    content.push_str(&format!("kernel = \"{}/share/kata-containers/vmlinux.container\"\n", config.dest_dir));
+    content.push_str(&format!("image = \"{}/share/kata-containers/kata-containers.img\"\n", config.dest_dir));
+    content.push_str(&format!("initrd = \"{}/share/kata-containers/kata-containers-initrd.img\"\n", config.dest_dir));
+    content.push_str(&format!("firmware = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
+    content.push_str(&format!("firmware_volume = \"{}/share/kata-containers/firmware/\"\n", config.dest_dir));
+    content.push_str(&format!("jailer_path = \"{}/bin/jailer\"\n", config.dest_dir));
+    content.push_str(&format!("valid_jailer_paths = [\"{}/bin/jailer\"]\n", config.dest_dir));
 
-    set_toml_bool_to_true(config_file, "agent.kata.enable_debug")?;
+    Ok(content)
+}
 
-    let kernel_params_path = format!("hypervisor.{hypervisor_name}.kernel_params");
-    let current_params =
-        toml_utils::get_toml_value(config_file, &kernel_params_path).unwrap_or_default();
+/// Generate drop-in content for debug configuration.
+/// Enables debug settings for the hypervisor, runtime, and agent.
+/// Note: kernel_params for debug are handled separately in generate_kernel_params_drop_in
+fn generate_debug_drop_in(shim: &str) -> Result<String> {
+    let hypervisor_name = get_hypervisor_name(shim)?;
 
-    let mut debug_params = String::new();
-    if !current_params.contains("agent.log=debug") {
-        debug_params.push_str(" agent.log=debug");
+    let content = format!(
+        r#"# Debug configuration
+# Generated by kata-deploy
+
+[hypervisor.{}]
+enable_debug = true
+
+[runtime]
+enable_debug = true
+
+[agent.kata]
+debug_console_enabled = true
+enable_debug = true
+"#,
+        hypervisor_name
+    );
+
+    Ok(content)
+}
+
+/// Get proxy value for a specific shim from config.
+/// Handles both per-shim format ("qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080")
+/// and global format ("http://proxy:8080").
+fn get_proxy_value_for_shim(proxy_var: &Option<String>, shim: &str) -> Option<String> {
+    match proxy_var {
+        Some(proxy) if !proxy.is_empty() && proxy.contains('=') => {
+            // Per-shim format: "qemu-tdx=http://proxy:8080;qemu-snp=http://proxy2:8080"
+            proxy
+                .split(';')
+                .find_map(|m| {
+                    let parts: Vec<&str> = m.splitn(2, '=').collect();
+                    if parts.len() == 2 && parts[0] == shim {
+                        Some(parts[1].to_string())
+                    } else {
+                        None
+                    }
+                })
+        }
+        Some(proxy) if !proxy.is_empty() => Some(proxy.clone()),
+        _ => None,
     }
-    if !current_params.contains("initcall_debug") {
-        debug_params.push_str(" initcall_debug");
+}
+
+/// Read base kernel_params from the original configuration file.
+fn read_base_kernel_params(config: &Config, shim: &str) -> Result<String> {
+    let hypervisor_name = get_hypervisor_name(shim)?;
+    let original_config_dir = format!(
+        "/host{}",
+        utils::get_kata_containers_original_config_path(shim, &config.dest_dir)
+    );
+    let original_config_file = format!("{}/configuration-{}.toml", original_config_dir, shim);
+    let config_path = Path::new(&original_config_file);
+
+    if !config_path.exists() {
+        // If original config doesn't exist, return empty - this might happen in tests
+        return Ok(String::new());
     }
 
-    if !debug_params.is_empty() {
-        let new_params = format!("{}{}", current_params, debug_params);
-        log::debug!(
-            "Updating {} in {}: old=\"{}\" new=\"{}\"",
-            kernel_params_path,
-            config_file.display(),
-            current_params,
-            new_params
-        );
-        toml_utils::append_to_toml_string(config_file, &kernel_params_path, debug_params.trim())?;
+    let kernel_params_path = format!("hypervisor.{}.kernel_params", hypervisor_name);
+    let base_params = toml_utils::get_toml_value(config_path, &kernel_params_path)
+        .unwrap_or_default();
+
+    // Remove surrounding quotes if present
+    Ok(base_params.trim_matches('"').to_string())
+}
+
+/// Generate drop-in content for all kernel_params modifications.
+/// This reads the base kernel_params from the original config and combines
+/// with proxy settings, debug settings, and any other kernel_params.
+/// Using a single drop-in file avoids the TOML merge replacing behavior.
+fn generate_kernel_params_drop_in(config: &Config, shim: &str) -> Result<String> {
+    let mut additional_params = Vec::new();
+
+    // Add proxy settings
+    if let Some(proxy) = get_proxy_value_for_shim(&config.agent_https_proxy, shim) {
+        additional_params.push(format!("agent.https_proxy={}", proxy));
+    }
+    if let Some(no_proxy) = get_proxy_value_for_shim(&config.agent_no_proxy, shim) {
+        additional_params.push(format!("agent.no_proxy={}", no_proxy));
     }
 
-    Ok(())
+    // Add debug settings
+    if config.debug {
+        additional_params.push("agent.log=debug".to_string());
+        additional_params.push("initcall_debug".to_string());
+    }
+
+    // If no additional params to set, return empty (base params are in original config)
+    if additional_params.is_empty() {
+        return Ok(String::new());
+    }
+
+    // Read base kernel_params from original config
+    let base_params = read_base_kernel_params(config, shim)?;
+
+    // Combine base params with additional params
+    let combined_params = if base_params.is_empty() {
+        additional_params.join(" ")
+    } else {
+        format!("{} {}", base_params, additional_params.join(" "))
+    };
+
+    let hypervisor_name = get_hypervisor_name(shim)?;
+
+    let content = format!(
+        r#"# Kernel parameters
+# Generated by kata-deploy
+# This file combines base kernel_params with additional settings
+
+[hypervisor.{}]
+kernel_params = "{}"
+"#,
+        hypervisor_name, combined_params
+    );
+
+    Ok(content)
 }
 
 async fn configure_hypervisor_annotations(
@@ -589,90 +767,6 @@ async fn configure_experimental_force_guest_pull(config_file: &Path) -> Result<(
     set_toml_bool_to_true(config_file, "runtime.experimental_force_guest_pull")
 }
 
-async fn adjust_installation_prefix(config: &Config, shim: &str, config_file: &Path) -> Result<()> {
-    let content = fs::read_to_string(config_file)?;
-
-    if content.contains(&config.dest_dir) {
-        return Ok(());
-    }
-
-    let new_content = content.replace("/opt/kata", &config.dest_dir);
-    fs::write(config_file, new_content)?;
-
-    if is_qemu_shim(shim) {
-        adjust_qemu_cmdline(config, shim, config_file, None)?;
-    }
-
-    Ok(())
-}
-
-/// Note: The host_base_path parameter is kept to allow for unit testing with temporary directories
-fn adjust_qemu_cmdline(
-    config: &Config,
-    shim: &str,
-    config_file: &Path,
-    host_base_path: Option<&str>,
-) -> Result<()> {
-    let qemu_share = match shim {
-        "qemu-cca" => "qemu-cca-experimental".to_string(),
-        "qemu-nvidia-gpu-snp" => "qemu-snp-experimental".to_string(),
-        "qemu-nvidia-gpu-tdx" => "qemu-tdx-experimental".to_string(),
-        s if is_qemu_shim(s) => "qemu".to_string(),
-        _ => anyhow::bail!(
-            "adjust_qemu_cmdline called with non-QEMU shim '{}'. This is a programming error.",
-            shim
-        ),
-    };
-
-    // Get QEMU path from config
-    let qemu_binary = toml_utils::get_toml_value(config_file, ".hypervisor.qemu.path")?;
-    let qemu_binary = qemu_binary.trim_matches('"');
-    let qemu_binary_script = format!("{qemu_binary}-installation-prefix");
-
-    // Use provided base path or default to /host for production
-    let base_path = host_base_path.unwrap_or("/host");
-    let qemu_binary_script_host_path = format!("{base_path}/{qemu_binary_script}");
-
-    // Create wrapper script if it doesn't exist
-    if !Path::new(&qemu_binary_script_host_path).exists() {
-        // Ensure parent directory exists
-        if let Some(parent) = Path::new(&qemu_binary_script_host_path).parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        let script_content = format!(
-            r#"#!/usr/bin/env bash
-
-exec {} "$@" -L {}/share/kata-{}/qemu/
-"#,
-            qemu_binary, config.dest_dir, qemu_share
-        );
-        fs::write(&qemu_binary_script_host_path, script_content)?;
-        let mut perms = fs::metadata(&qemu_binary_script_host_path)?.permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&qemu_binary_script_host_path, perms)?;
-    }
-
-    // Update config file to use wrapper script using toml_edit
-    let current_path =
-        toml_utils::get_toml_value(config_file, "hypervisor.qemu.path").unwrap_or_default();
-    if !current_path.contains(&qemu_binary_script) {
-        log::debug!(
-            "Updating hypervisor.qemu.path in {}: old=\"{}\" new=\"{}\"",
-            config_file.display(),
-            current_path,
-            qemu_binary_script
-        );
-        toml_utils::set_toml_value(
-            config_file,
-            "hypervisor.qemu.path",
-            &format!("\"{qemu_binary_script}\""),
-        )?;
-    }
-
-    Ok(())
-}
-
 async fn configure_mariner(config: &Config) -> Result<()> {
     let config_path = format!(
         "{}/share/defaults/kata-containers/configuration-clh.toml",
@@ -727,37 +821,6 @@ async fn configure_mariner(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Helper to create a minimal test Config with optional overrides
-    fn create_test_config(shim: &str) -> crate::config::Config {
-        crate::config::Config {
-            node_name: "test-node".to_string(),
-            debug: false,
-            shims_for_arch: vec![shim.to_string()],
-            default_shim_for_arch: shim.to_string(),
-            allowed_hypervisor_annotations_for_arch: vec![],
-            snapshotter_handler_mapping_for_arch: None,
-            agent_https_proxy: None,
-            agent_no_proxy: None,
-            pull_type_mapping_for_arch: None,
-            installation_prefix: None,
-            multi_install_suffix: None,
-            helm_post_delete_hook: false,
-            experimental_setup_snapshotter: None,
-            experimental_force_guest_pull_for_arch: vec![],
-            dest_dir: "/opt/kata".to_string(),
-            host_install_dir: "/host/opt/kata".to_string(),
-            crio_drop_in_conf_dir: "/etc/crio/crio.conf.d/".to_string(),
-            crio_drop_in_conf_file: "/etc/crio/crio.conf.d//99-kata-deploy".to_string(),
-            crio_drop_in_conf_file_debug: "/etc/crio/crio.conf.d//100-debug".to_string(),
-            containerd_conf_file: "/etc/containerd/config.toml".to_string(),
-            containerd_conf_file_backup: "/etc/containerd/config.toml.bak".to_string(),
-            containerd_drop_in_conf_file: "/opt/kata/containerd/config.d/kata-deploy.toml"
-                .to_string(),
-            custom_runtimes_enabled: false,
-            custom_runtimes: vec![],
-        }
-    }
 
     #[test]
     fn test_get_hypervisor_name_qemu_variants() {
@@ -886,360 +949,6 @@ mod tests {
     }
 
     #[test]
-    fn test_update_kernel_param_append_new() {
-        // Test appending a new parameter to empty params
-        let current = "";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(result, "agent.https_proxy=http://proxy:8080");
-
-        // Test appending to existing params
-        let current = "console=ttyS0 agent.log=debug";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(
-            result,
-            "console=ttyS0 agent.log=debug agent.https_proxy=http://proxy:8080"
-        );
-    }
-
-    #[test]
-    fn test_update_kernel_param_replace_existing() {
-        // Test replacing an existing parameter
-        let current = "console=ttyS0 agent.https_proxy=http://old:8080 agent.log=debug";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-        assert_eq!(
-            result,
-            "console=ttyS0 agent.https_proxy=http://new:9090 agent.log=debug"
-        );
-
-        // Test replacing when it's the first parameter
-        let current = "agent.https_proxy=http://old:8080 console=ttyS0";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-        assert_eq!(result, "agent.https_proxy=http://new:9090 console=ttyS0");
-
-        // Test replacing when it's the last parameter
-        let current = "console=ttyS0 agent.https_proxy=http://old:8080";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-        assert_eq!(result, "console=ttyS0 agent.https_proxy=http://new:9090");
-    }
-
-    #[test]
-    fn test_update_kernel_param_with_duplicates() {
-        // Test that we replace all occurrences when there are duplicates (avoid duplicates)
-        let current = "agent.https_proxy=http://proxy1:8080 console=ttyS0 agent.https_proxy=http://proxy2:8080";
-        let result = update_kernel_param(current, "agent.https_proxy", "http://new:9090");
-
-        // Should replace the first occurrence and also replace any subsequent duplicates
-        // This ensures we don't have multiple conflicting values for the same parameter
-        assert_eq!(
-            result,
-            "agent.https_proxy=http://new:9090 console=ttyS0 agent.https_proxy=http://new:9090"
-        );
-
-        // Note: Having duplicate parameters in kernel_params is unusual, but if they exist,
-        // we update all of them to the same new value to maintain consistency
-    }
-
-    #[test]
-    fn test_update_kernel_param_complex_values() {
-        // Test with URL containing special characters
-        let current = "console=ttyS0";
-        let result = update_kernel_param(
-            current,
-            "agent.https_proxy",
-            "http://proxy:8080/path?query=1",
-        );
-        assert_eq!(
-            result,
-            "console=ttyS0 agent.https_proxy=http://proxy:8080/path?query=1"
-        );
-
-        // Test with no_proxy containing comma-separated list
-        let current = "agent.log=debug";
-        let result = update_kernel_param(current, "agent.no_proxy", "localhost,127.0.0.1,.local");
-        assert_eq!(
-            result,
-            "agent.log=debug agent.no_proxy=localhost,127.0.0.1,.local"
-        );
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_standard() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-qemu.toml");
-        let host_base = temp_dir.path().join("host");
-
-        // QEMU binary path (doesn't need to exist)
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        // Create a minimal TOML config
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script was created
-        let wrapper_script_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name(format!("qemu-system-x86_64-installation-prefix"));
-        assert!(
-            wrapper_script_path.exists(),
-            "Wrapper script should be created at {:?}",
-            wrapper_script_path
-        );
-
-        // Verify wrapper script content
-        let content = std::fs::read_to_string(&wrapper_script_path).unwrap();
-        assert!(content.contains("#!/usr/bin/env bash"));
-        assert!(content.contains(&format!("exec {}", qemu_binary)));
-        assert!(content.contains("-L /opt/kata/share/kata-qemu/qemu/"));
-
-        // Verify TOML was updated
-        let updated_path =
-            crate::utils::toml::get_toml_value(&config_file, "hypervisor.qemu.path").unwrap();
-        assert!(updated_path.contains("installation-prefix"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_cca_experimental() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-qemu-cca.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu-cca");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu-cca",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script uses qemu-cca-experimental share path
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        assert!(content.contains("-L /opt/kata/share/kata-qemu-cca-experimental/qemu/"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_nvidia_gpu_snp() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir
-            .path()
-            .join("configuration-qemu-nvidia-gpu-snp.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu-nvidia-gpu-snp");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu-nvidia-gpu-snp",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script uses qemu-snp-experimental share path
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        assert!(content.contains("-L /opt/kata/share/kata-qemu-snp-experimental/qemu/"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_qemu_nvidia_gpu_tdx() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir
-            .path()
-            .join("configuration-qemu-nvidia-gpu-tdx.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu-nvidia-gpu-tdx");
-
-        adjust_qemu_cmdline(
-            &config,
-            "qemu-nvidia-gpu-tdx",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script uses qemu-tdx-experimental share path
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        assert!(content.contains("-L /opt/kata/share/kata-qemu-tdx-experimental/qemu/"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_idempotent() {
-        // Test that running adjust_qemu_cmdline multiple times is safe
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-qemu.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let qemu_binary = "/opt/kata/bin/qemu-system-x86_64";
-
-        let toml_content = format!(
-            r#"
-[hypervisor.qemu]
-path = "{}"
-kernel = "/opt/kata/share/kata-containers/vmlinux.container"
-"#,
-            qemu_binary
-        );
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("qemu");
-
-        // Run twice - should be idempotent
-        adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-        adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        )
-        .unwrap();
-
-        // Verify wrapper script exists and hasn't been corrupted
-        let wrapper_path = host_base
-            .join(qemu_binary.trim_start_matches('/'))
-            .with_file_name("qemu-system-x86_64-installation-prefix");
-        assert!(wrapper_path.exists());
-
-        let content = std::fs::read_to_string(&wrapper_path).unwrap();
-        // Count occurrences of shebang - should be exactly 1
-        assert_eq!(content.matches("#!/usr/bin/env bash").count(), 1);
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_invalid_shim() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let config_file = temp_dir.path().join("configuration-fc.toml");
-        let host_base = temp_dir.path().join("host");
-
-        let toml_content = r#"
-[hypervisor.firecracker]
-path = "/opt/kata/bin/firecracker"
-"#;
-        std::fs::write(&config_file, toml_content).unwrap();
-
-        let config = create_test_config("fc");
-
-        // Should fail for non-QEMU shim
-        let result = adjust_qemu_cmdline(
-            &config,
-            "fc",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        );
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("non-QEMU shim"));
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_missing_config_file() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let host_base = temp_dir.path().join("host");
-        let config_file = temp_dir.path().join("nonexistent.toml");
-
-        let config = create_test_config("qemu");
-
-        // Should fail for missing config file
-        let result = adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_adjust_qemu_cmdline_invalid_toml() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let host_base = temp_dir.path().join("host");
-        let config_file = temp_dir.path().join("invalid.toml");
-
-        // Write invalid TOML
-        std::fs::write(&config_file, "this is [ not valid { toml").unwrap();
-
-        let config = create_test_config("qemu");
-
-        // Should fail for invalid TOML
-        let result = adjust_qemu_cmdline(
-            &config,
-            "qemu",
-            &config_file,
-            Some(host_base.to_str().unwrap()),
-        );
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_copy_artifacts_nonexistent_source() {
         let temp_dest = tempfile::tempdir().unwrap();
         let result = copy_artifacts("/nonexistent/source", temp_dest.path().to_str().unwrap());
@@ -1252,49 +961,5 @@ path = "/opt/kata/bin/firecracker"
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("Unknown shim"));
-    }
-
-    #[test]
-    fn test_update_kernel_param_idempotent() {
-        // Test that running update_kernel_param multiple times with same value is idempotent
-        let initial = "console=ttyS0 agent.log=debug";
-
-        // First update
-        let result1 = update_kernel_param(initial, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(
-            result1,
-            "console=ttyS0 agent.log=debug agent.https_proxy=http://proxy:8080"
-        );
-
-        // Second update with same value - should replace, not append
-        let result2 = update_kernel_param(&result1, "agent.https_proxy", "http://proxy:8080");
-        assert_eq!(
-            result2,
-            "console=ttyS0 agent.log=debug agent.https_proxy=http://proxy:8080"
-        );
-
-        // Verify no duplication occurred
-        assert_eq!(result1, result2, "update_kernel_param must be idempotent");
-    }
-
-    #[test]
-    fn test_update_kernel_param_multiple_runs_different_values() {
-        // Test that updating with different values replaces correctly
-        let initial = "console=ttyS0";
-
-        let result1 = update_kernel_param(initial, "agent.https_proxy", "http://proxy1:8080");
-        assert_eq!(
-            result1,
-            "console=ttyS0 agent.https_proxy=http://proxy1:8080"
-        );
-
-        let result2 = update_kernel_param(&result1, "agent.https_proxy", "http://proxy2:9090");
-        assert_eq!(
-            result2,
-            "console=ttyS0 agent.https_proxy=http://proxy2:9090"
-        );
-
-        // Ensure only one proxy parameter exists
-        assert_eq!(result2.matches("agent.https_proxy").count(), 1);
     }
 }
