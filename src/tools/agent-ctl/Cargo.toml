@@ -55,7 +55,7 @@ hypervisor = { path = "../../runtime-rs/crates/hypervisor", features = ["cloud-h
 kata-sys-util = { path = "../../libs/kata-sys-util" }
 safe-path = { path = "../../libs/safe-path" }
 
-tokio = { version = "1.44.2", features = ["signal"] }
+tokio = { version = "1.49.0", features = ["signal"] }
 
 [features]
 default = ["cloud-hypervisor"]
