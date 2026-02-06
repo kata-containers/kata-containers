@@ -155,6 +155,45 @@ class Checker:
             status = "Not all required jobs passed!"
         return f"{out}\n\n{status}"
 
+    def write_step_summary(self):
+        """Write WARN/FAIL results to GitHub Step Summary if available"""
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+            return
+
+        lines = []
+        issues = []
+        pass_count = 0
+        fail_count = 0
+        warn_count = 0
+
+        for name, job in self.results.items():
+            status = self._job_status(job)
+            url = job.get("html_url", "")
+            if status == RUNNING:
+                warn_count += 1
+                link = f"[{name}]({url})" if url else name
+                issues.append(f"| WARN | {link} | Still running |")
+            elif status == PASS:
+                pass_count += 1
+            else:
+                fail_count += 1
+                link = f"[{name}]({url})" if url else name
+                issues.append(f"| FAIL | {link} | {status} |")
+
+        if issues:
+            lines.append("| Status | Job | Details |")
+            lines.append("|--------|-----|---------|")
+            lines.extend(sorted(issues))
+            lines.append("")
+
+        total = len(self.results)
+        lines.append(f"Total: {total}, Passed: {pass_count}, "
+                     f"Failed: {fail_count}, Running: {warn_count}")
+
+        with open(summary_path, "w", encoding="utf8") as summary:
+            summary.write("\n".join(lines) + "\n")
+
     def fetch_json_from_url(self, url, task, params=None):
         """Fetches URL and reports json output"""
         print(url, file=sys.stderr)
@@ -221,6 +260,7 @@ class Checker:
             for job in jobs:
                 self.record(run["name"], job)
         print(self)
+        self.write_step_summary()
         return self.status()
 
     def wait_for_required_tests(self):
