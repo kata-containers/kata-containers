@@ -26,11 +26,12 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+CONFIDENTIAL_GUEST=${CONFIDENTIAL_GUEST:-no}
 KBUILD_SIGN_PIN="${KBUILD_SIGN_PIN:-}"
 kernel_builder_args="-a ${ARCH:-} $*"
 KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
-if [[ "${MEASURED_ROOTFS}" == "yes" ]]; then
+if [[ "${MEASURED_ROOTFS}" == "yes" ]] || [[ "${CONFIDENTIAL_GUEST}" == "yes" ]]; then
 	kernel_builder_args+=" -m"
 fi
 
