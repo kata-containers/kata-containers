@@ -1,5 +1,9 @@
 name: CI | Run cri-containerd tests
 
+concurrency:
+  group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 on:
@@ -35,8 +39,6 @@ on:
 jobs:
   run-cri-containerd:
     name: run-cri-containerd-${{ inputs.arch }} (${{ inputs.containerd_version }}, ${{ inputs.vmm }})
-    strategy:
-      fail-fast: false
     runs-on: ${{ inputs.runner }}
     env:
       CONTAINERD_VERSION: ${{ inputs.containerd_version }}

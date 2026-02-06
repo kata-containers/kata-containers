@@ -37,6 +37,9 @@ jobs:
         asset:
           - kernel
           - virtiofsd
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
