@@ -89,6 +89,7 @@ else
 		"k8s-projected-volume.bats" \
 		"k8s-replication.bats" \
 		"k8s-seccomp.bats" \
+		"k8s-smb-volume.bats" \
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
