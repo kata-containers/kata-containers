@@ -461,10 +461,10 @@ ifneq (,$(QEMUCMD))
     KERNELSEPATH = $(KERNELDIR)/$(KERNELSENAME)
 
     # NVIDIA GPU specific options (all should be suffixed by _NV)
+    # Normal: uncompressed (KERNELTYPE). Confidential: compressed (KERNELCONFIDENTIALTYPE).
     KERNELNAME_NV = $(call MAKE_KERNEL_NAME_NV,$(KERNELTYPE))
     KERNELPATH_NV = $(KERNELDIR)/$(KERNELNAME_NV)
-
-    KERNELNAME_CONFIDENTIAL_NV = $(call MAKE_KERNEL_CONFIDENTIAL_NAME_NV,$(KERNELCONFIDENTIALTYPE))
+    KERNELNAME_CONFIDENTIAL_NV = $(call MAKE_KERNEL_NAME_NV,$(KERNELCONFIDENTIALTYPE))
     KERNELPATH_CONFIDENTIAL_NV = $(KERNELDIR)/$(KERNELNAME_CONFIDENTIAL_NV)
 
     DEFAULTVCPUS_NV = 1
@@ -874,11 +874,6 @@ endef
 define MAKE_KERNEL_NAME_NV
 $(if $(findstring uncompressed,$1),vmlinux-nvidia-gpu.container,vmlinuz-nvidia-gpu.container)
 endef
-
-define MAKE_KERNEL_CONFIDENTIAL_NAME_NV
-$(if $(findstring uncompressed,$1),vmlinux-nvidia-gpu-confidential.container,vmlinuz-nvidia-gpu-confidential.container)
-endef
-
 
 GENERATED_FILES += pkg/katautils/config-settings.go
 
