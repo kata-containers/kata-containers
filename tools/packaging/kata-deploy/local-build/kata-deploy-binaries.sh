@@ -118,7 +118,6 @@ options:
 	kernel-dragonball-experimental
 	kernel-experimental
 	kernel-nvidia-gpu
-	kernel-nvidia-gpu-confidential
 	nydus
 	pause-image
 	ovmf
@@ -173,14 +172,6 @@ get_kernel_modules_dir() {
 	fi
 
 	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
-	case ${kernel_name} in
-		kernel-nvidia-gpu-confidential)
-			kernel_modules_dir+="-nvidia-gpu-confidential"
-			;;
-		*)
-			;;
-	esac
-
 	echo ${kernel_modules_dir}
 }
 
@@ -365,15 +356,6 @@ get_latest_kernel_artefact_and_builder_image_version() {
 	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
 }
 
-get_latest_kernel_nvidia_confidential_artefact_and_builder_image_version() {
-		local kernel_version=$(get_from_kata_deps ".assets.kernel.nvidia-confidential.version")
-		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-		local latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
-		local latest_kernel_builder_image="$(get_kernel_image_name)"
-
-		echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
-}
-
 get_latest_kernel_nvidia_artefact_and_builder_image_version() {
 	local kernel_version
 	local kernel_kata_config_version
@@ -419,7 +401,7 @@ install_image() {
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
-			latest_artefact+="-$(get_latest_kernel_nvidia_confidential_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		fi
@@ -431,7 +413,7 @@ install_image() {
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the image
-		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version "${variant}")"
+		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -525,7 +507,7 @@ install_initrd() {
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
-			latest_artefact+="-$(get_latest_kernel_nvidia_confidential_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		fi
@@ -535,7 +517,7 @@ install_initrd() {
 
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the initrd as well
-		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version "${variant}")"
+		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -719,13 +701,8 @@ install_kernel_helper() {
 		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia.url)"
 	fi
 
-	if [[ "${kernel_name}" == "kernel-nvidia-gpu-confidential" ]]; then
-		kernel_version="$(get_from_kata_deps .assets.kernel.nvidia-confidential.version)"
-		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia-confidential.url)"
-	fi
-
 	case ${kernel_name} in
-		kernel-nvidia-gpu*|kernel*-confidential)
+		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental|kernel*-confidential)
 			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
 			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 			extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
@@ -794,15 +771,6 @@ install_kernel_nvidia_gpu() {
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia"
-}
-
-#Install GPU and TEE enabled kernel asset
-install_kernel_nvidia_gpu_confidential() {
-	export MEASURED_ROOTFS="yes"
-	install_kernel_helper \
-		"assets.kernel.nvidia-confidential" \
-		"kernel-nvidia-gpu-confidential" \
 		"-x -g nvidia"
 }
 
@@ -1381,8 +1349,6 @@ handle_build() {
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 
-	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
-
 	nydus) install_nydus ;;
 
 	ovmf) install_ovmf ;;
@@ -1449,7 +1415,7 @@ handle_build() {
 	tar --zstd -tvf "${final_tarball_path}"
 
 	case ${build_target} in
-		kernel-nvidia-gpu*)
+		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
 			if [[ ! -f "${modules_final_tarball_path}" ]]; then
 				local modules_dir
@@ -1533,7 +1499,7 @@ handle_build() {
 		)
 		oci_image="${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${normalized_tags}"
 		case ${build_target} in
-			kernel-nvidia-gpu*|kernel*-confidential)
+			kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental|kernel*-confidential)
 				files_to_push+=(
 					"kata-static-${build_target}-modules.tar.zst"
 				)

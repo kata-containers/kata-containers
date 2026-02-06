@@ -282,17 +282,9 @@ get_kernel_frag_path() {
 
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
-		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
-		# to match the suffix created in install_kata
-		# -nvidia-gpu-confidential, the linux headers will be named the very
-		# same if build with make deb-pkg for TDX or SNP.
 		local gpu_configs=$(mktemp).conf
 		local gpu_subst_configs="${gpu_path}/${gpu_vendor}.${arch_target}.conf.in"
-		if [[ "${conf_guest}" != "" ]];then
-			export CONF_GUEST_SUFFIX="-${conf_guest}"
-		else
-			export CONF_GUEST_SUFFIX=""
-		fi
+		export CONF_GUEST_SUFFIX=""
 		envsubst <${gpu_subst_configs} >${gpu_configs}
 		unset CONF_GUEST_SUFFIX
 
@@ -579,12 +571,10 @@ install_kata() {
 		suffix="-${build_type}"
 	fi
 
-	if [[ ${conf_guest} != "" ]];then
-		suffix="-${conf_guest}${suffix}"
-	fi
-
-	if [[ ${gpu_vendor} != "" ]];then
+	if [[ ${gpu_vendor} != "" ]]; then
 		suffix="-${gpu_vendor}-gpu${suffix}"
+	elif [[ ${conf_guest} != "" ]]; then
+		suffix="-${conf_guest}${suffix}"
 	fi
 
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
