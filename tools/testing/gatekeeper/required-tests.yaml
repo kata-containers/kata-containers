@@ -4,8 +4,6 @@ required_tests:
   - Pull request WIP checks / WIP Check
   - Darwin tests / test
   - Shellcheck required / shellcheck-required
-  # TODO: cargo-deny-runner.yaml not yet treated as conditional
-  - Cargo Crates Check Runner / cargo-deny-runner
   - GHA security analysis / zizmor
   - Lint GHA workflows / run-actionlint
 
