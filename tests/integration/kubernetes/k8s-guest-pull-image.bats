@@ -8,12 +8,17 @@
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
+export SNAPSHOTTER="${SNAPSHOTTER:-}"
+export EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
+
 setup() {
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ]; then
+        skip "Either SNAPSHOTTER=nydus or EXPERIMENTAL_FORCE_GUEST_PULL must be set for this test"
+    fi
 
     setup_common || die "setup_common failed"
     unencrypted_image="quay.io/prometheus/busybox:latest"
@@ -87,9 +92,6 @@ setup() {
 }
 
 @test "Test we can pull an image inside the guest using trusted storage" {
-	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
     # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
     # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
 
@@ -132,10 +134,6 @@ setup() {
 }
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
-	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
     local_device=$(create_loop_device)
     LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
@@ -181,10 +179,6 @@ setup() {
 }
 
 @test "Test we can pull a large image inside the guest with large createcontainer timeout" {
-	[ "$(uname -m)" == "s390x" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-    [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/10838"
-
     if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [ "${KBS_INGRESS}" = "aks" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10299"
     fi
@@ -229,7 +223,9 @@ teardown() {
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ]; then
+        skip "Either SNAPSHOTTER=nydus or EXPERIMENTAL_FORCE_GUEST_PULL must be set for this test"
+    fi
 
     teardown_common "${node}" "${node_start_time:-}"
     kubectl delete --ignore-not-found pvc trusted-pvc
