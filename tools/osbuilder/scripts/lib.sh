@@ -300,13 +300,13 @@ detect_libseccomp_info()
 	export LIBSECCOMP_VERSION="$(get_package_version_from_kata_yaml "$libseccomp_ver_yq_path")"
 	export LIBSECCOMP_URL="$(get_package_version_from_kata_yaml "$libseccomp_url_yq_path")"
 
-	info "Get gperf version and url from ${kata_versions_file}"
+	info "Get gperf version from ${kata_versions_file}"
 	local gperf_ver_yq_path="externals.gperf.version"
-	local gperf_url_yq_path="externals.gperf.url"
 	export GPERF_VERSION="$(get_package_version_from_kata_yaml "$gperf_ver_yq_path")"
-	export GPERF_URL="$(get_package_version_from_kata_yaml "$gperf_url_yq_path")"
+	# Note: gperf URLs are now fetched from versions.yaml .externals.gperf.urls array
+	# by ci/install_libseccomp.sh using download_from_mirror_list
 
-	[ -n "$LIBSECCOMP_VERSION" ] && [ -n "$GPERF_VERSION" ] && [ -n "$LIBSECCOMP_URL" ] && [ -n "$GPERF_URL" ]
+	[ -n "$LIBSECCOMP_VERSION" ] && [ -n "$GPERF_VERSION" ] && [ -n "$LIBSECCOMP_URL" ]
 }
 
 before_starting_container() {

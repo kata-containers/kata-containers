@@ -602,6 +602,60 @@ function get_from_kata_deps() {
         echo "$result"
 }
 
+# Download a file by trying multiple mirror URLs until one succeeds.
+# This function is useful for downloading files from unreliable sources
+# by providing fallback mirrors.
+#
+# $1 - path in versions.yaml to the urls array (e.g., ".externals.gperf.urls")
+# $2 - filename to download (will be appended to each mirror URL)
+# $3 - destination directory (defaults to current directory)
+#
+# Returns: 0 on success, 1 on failure
+# Output: Prints the path to the downloaded file on success
+function download_from_mirror_list() {
+        local urls_path="${1}"
+        local filename="${2}"
+        local dest_dir="${3:-.}"
+        local versions_file="${repo_root_dir}/versions.yaml"
+
+        command -v yq &>/dev/null || die 'yq command is not in your $PATH'
+
+        local urls
+        # Query yq to get URLs as clean lines (using .[] to iterate array elements)
+        local yq_version
+        yq_version=$(yq --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | cut -d. -f1)
+        if [ "$yq_version" -eq 3 ]; then
+                local dependency
+                dependency=$(echo "${urls_path}" | sed "s/^\.//g")
+                urls=$("yq" read -p p "$versions_file" "${dependency}.*")
+        else
+                urls=$("yq" "${urls_path} | .[]" "$versions_file")
+        fi
+
+        if [[ -z "${urls}" ]]; then
+                echo "Error: No URLs found at ${urls_path}" >&2
+                return 1
+        fi
+
+        # Iterate over each URL (one per line)
+        local url
+        while IFS= read -r url; do
+                # Skip empty lines
+                [[ -z "${url}" ]] && continue
+                local full_url="${url}${filename}"
+                echo "Trying to download from: ${full_url}" >&2
+                if curl -sfLo "${dest_dir}/${filename}" "${full_url}"; then
+                        echo "Successfully downloaded ${filename}" >&2
+                        echo "${dest_dir}/${filename}"
+                        return 0
+                fi
+                echo "Failed to download from ${full_url}, trying next mirror..." >&2
+        done <<< "${urls}"
+
+        echo "Error: Failed to download ${filename} from all mirrors" >&2
+        return 1
+}
+
 # project: org/repo format
 # base_version: ${major}.${minor}
 # allow_unstable: Whether alpha / beta releases should be considered (default: false)
