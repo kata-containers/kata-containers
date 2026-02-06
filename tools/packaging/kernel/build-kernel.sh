@@ -574,7 +574,10 @@ install_kata() {
 	if [[ ${gpu_vendor} != "" ]]; then
 		suffix="-${gpu_vendor}-gpu${suffix}"
 	elif [[ ${conf_guest} != "" ]]; then
-		suffix="-${conf_guest}${suffix}"
+		# CCA on aarch64 uses -confidential suffix; x86_64/s390x unified kernel does not
+		if [[ "${arch_target}" == "aarch64" ]]; then
+			suffix="-${conf_guest}${suffix}"
+		fi
 	fi
 
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"

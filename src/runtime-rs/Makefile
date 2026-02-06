@@ -377,7 +377,7 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_QEMU_SE = $(KERNELDIR)/$(KERNEL_NAME_QEMU_SE)
 
     KERNEL_TYPE_COCO = compressed
-    KERNEL_NAME_COCO = $(call MAKE_KERNEL_NAME_COCO,$(KERNEL_TYPE_COCO))
+    KERNEL_NAME_COCO = $(call MAKE_KERNEL_NAME,$(KERNEL_TYPE_COCO))
     KERNELPATH_COCO = $(KERNELDIR)/$(KERNEL_NAME_COCO)
 
     # overriding options
@@ -717,10 +717,6 @@ endef
 #   # $1 : KERNELTYPE (compressed or uncompressed)
 define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
-endef
-
-define MAKE_KERNEL_NAME_COCO
-$(if $(findstring uncompressed,$1),vmlinux-confidential.container,vmlinuz-confidential.container)
 endef
 
 .DEFAULT_GOAL := default

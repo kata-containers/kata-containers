@@ -39,11 +39,11 @@ build_secure_image() {
 		echo "No certificate specified. Using --no-verify option"
 	fi
 
-	if [ ! -f "${install_src_dir}/vmlinuz-confidential.container" ] ||
+	if [ ! -f "${install_src_dir}/vmlinuz.container" ] ||
 		[ ! -f "${install_src_dir}/kata-containers-initrd-confidential.img" ]; then
 		cat << EOF >&2
 Either kernel or initrd does not exist or is mistakenly named
-A file name for kernel must be vmlinuz-confidential.container (raw binary)
+A file name for kernel must be vmlinuz.container (raw binary)
 A file name for initrd must be kata-containers-initrd-confidential.img
 EOF
 		return 1
@@ -72,7 +72,7 @@ EOF
 		"${extra_arguments}" \
 		"${hkd_options}" \
 		--output="${install_dest_dir}/kata-containers-se.img" \
-		--image="${install_src_dir}/vmlinuz-confidential.container" \
+		--image="${install_src_dir}/vmlinuz.container" \
 		--ramdisk="${install_src_dir}/kata-containers-initrd-confidential.img" \
 		--parmfile="${parmfile}" \
 		"${key_verify_option}"
@@ -103,7 +103,7 @@ function repack_secure_image() {
 	# Make sure ${build_dir}/hdr exists
 	mkdir -p "${build_dir}/hdr"
 	# Prepare required files for building the secure image
-	cp "${kernel_base_dir}/vmlinuz-confidential.container" "${build_dir}/hdr/"
+	cp "${kernel_base_dir}/vmlinuz.container" "${build_dir}/hdr/"
 	cp "${kernel_base_dir}/kata-containers-initrd-confidential.img" "${build_dir}/hdr/"
 	# Build the secure image
 	build_secure_image "${kernel_params_value}" "${build_dir}/hdr" "${build_dir}/hdr"
@@ -116,7 +116,7 @@ function repack_secure_image() {
 	if [ "${for_kbs}" == "true" ]; then
 		# Rename kata-containers-se.img to hdr.bin and clean up kernel and initrd
 		mv "${build_dir}/hdr/kata-containers-se.img" "${build_dir}/hdr/hdr.bin"
-		rm -f ${build_dir}/hdr/{vmlinuz-confidential.container,kata-containers-initrd-confidential.img}
+		rm -f ${build_dir}/hdr/{vmlinuz.container,kata-containers-initrd-confidential.img}
 	else
 		# Clean up the build directory completely
 		rm -rf "${build_dir}"
