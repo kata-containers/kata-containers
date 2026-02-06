@@ -8,13 +8,16 @@
 #
 set -euo pipefail
 
+# BATS_TEST_DIRNAME, BATS_FILE_TMPDIR, KATA_HYPERVISOR are set by BATS or the caller
+# shellcheck disable=SC2154
+
 wait_time=60
 sleep_time=3
 
 # Delete all pods if any exist, otherwise just return
 #
 k8s_delete_all_pods_if_any_exists() {
-	[ -z "$(kubectl get --no-headers pods)" ] || \
+	[[ -z "$(kubectl get --no-headers pods)" ]] || \
 		kubectl delete --all pods
 }
 
@@ -28,7 +31,7 @@ k8s_wait_pod_be_ready() {
 	local pod_name="$1"
 	local wait_time="${2:-120}"
 
-	kubectl wait --timeout="${wait_time}s" --for=condition=ready "pods/$pod_name"
+	kubectl wait --timeout="${wait_time}s" --for=condition=ready "pods/${pod_name}"
 }
 
 # Create a pod with a given number of retries if an output includes a timeout.
@@ -44,30 +47,30 @@ retry_kubectl_apply() {
     local func_name="${FUNCNAME[0]}"
 
     while true; do
-        output=$(kubectl apply -f "$file_path" 2>&1) || true
+        output=$(kubectl apply -f "${file_path}" 2>&1) || true
         echo ""
-        echo "$func_name: Attempt $attempt/$retries"
-        echo "$output"
+        echo "${func_name}: Attempt ${attempt}/${retries}"
+        echo "${output}"
 
         # Check for timeout and retry if needed
-        if echo "$output" | grep -iq "timed out"; then
-            if [ $attempt -ge $retries ]; then
-                echo "$func_name: Max ${retries} retries reached. Failed due to timeout."
+        if echo "${output}" | grep -iq "timed out"; then
+            if [[ ${attempt} -ge ${retries} ]]; then
+                echo "${func_name}: Max ${retries} retries reached. Failed due to timeout."
                 return 1
             fi
-            echo "$func_name: Timeout encountered, retrying in $delay seconds..."
-            sleep $delay
+            echo "${func_name}: Timeout encountered, retrying in ${delay} seconds..."
+            sleep "${delay}"
             attempt=$((attempt + 1))
             continue
         fi
 
         # Check for any other kind of error
-        if echo "$output" | grep -iq "error"; then
-            echo "$func_name: Error detected in kubectl output. Aborting."
+        if echo "${output}" | grep -iq "error"; then
+            echo "${func_name}: Error detected in kubectl output. Aborting."
             return 1
         fi
 
-        echo "$func_name: Resource created successfully."
+        echo "${func_name}: Resource created successfully."
         return 0
     done
 }
@@ -83,7 +86,7 @@ k8s_create_pod() {
 	local wait_time="${2:-120}"
 	local pod_name=""
 
-	if [ ! -f "${config_file}" ]; then
+	if [[ ! -f "${config_file}" ]]; then
 		echo "Pod config file '${config_file}' does not exist"
 		return 1
 	fi
@@ -115,9 +118,10 @@ exec_host() {
 		die "A given node ${node} is not valid"
 	fi
 	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
-	local command="${@:2}"
+	local command="${*:2}"
 	# Make 7 character hash from the node name
-	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
+	local pod_name
+	pod_name="custom-node-debugger-$(echo -n "${node}" | sha1sum | cut -c1-7)"
 
 	# Run a debug pod
 	# Check if there is an existing node debugger pod and reuse it
@@ -126,11 +130,10 @@ exec_host() {
 		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
 			kubectl apply -n kube-system -f - > /dev/null
 		# Wait for the newly created pod to be ready
-		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
-		# Manually check the exit status of the previous command to handle errors explicitly
+		# Manually check the exit status of the kubectl wait command to handle errors explicitly
 		# since `set -e` is not enabled, allowing subsequent commands to run if needed.
-		if [ $? -ne 0 ]; then
-			return $?
+		if ! kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null; then
+			return 1
 		fi
 	fi
 
@@ -162,7 +165,7 @@ assert_logs_contain() {
 	local message="$4"
 
 	# Note: with image-rs we get more than the default 1000 lines of logs
-	exec_host "${node}" journalctl -x -t $log_id --since '"'$datetime'"' | grep "$message"
+	exec_host "${node}" journalctl -x -t "${log_id}" --since '"'"${datetime}"'"' | grep "${message}"
 }
 
 # Create a pod then assert it fails to run. Use in tests that you expect the
@@ -263,24 +266,24 @@ assert_rootfs_count() {
 	# verify that the sandbox_id is not empty;
 	# otherwise, the command $(exec_host $node "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
 	# may yield an unexpected count of rootfs.
-	if [ -z "$sandbox_id" ]; then
+	if [[ -z "${sandbox_id}" ]]; then
 		return 1
 	fi
 
 	# Max loop 3 times to get all pulled rootfs for given sandbox_id
 	for _ in {1..3}
 	do
-		allrootfs=$(exec_host $node "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
-		if [ -n "$allrootfs" ]; then
+		allrootfs=$(exec_host "${node}" "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
+		if [[ -n "${allrootfs}" ]]; then
 			break
 		else
 			sleep 1
 		fi
 	done
-	echo "allrootfs is: $allrootfs"
-	count=$(echo $allrootfs | grep -o "rootfs" | wc -l)
-	echo "count of container rootfs in host is: $count, expect count is less than, or equal to: $expect_count"
-	[ $expect_count -ge $count ]
+	echo "allrootfs is: ${allrootfs}"
+	count=$(echo "${allrootfs}" | grep -o "rootfs" | wc -l)
+	echo "count of container rootfs in host is: ${count}, expect count is less than, or equal to: ${expect_count}"
+	[[ "${expect_count}" -ge "${count}" ]]
 }
 
 # Create a pod configuration out of a template file.
@@ -296,6 +299,7 @@ assert_rootfs_count() {
 # 	directory.
 #
 new_pod_config() {
+	# shellcheck disable=SC2154 # BATS_TEST_DIRNAME set by BATS
 	local FIXTURES_DIR="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	local base_config="${FIXTURES_DIR}/pod-config.yaml.in"
 	local image="$1"
@@ -303,12 +307,13 @@ new_pod_config() {
 	local new_config
 
 	# The runtimeclass is not optional.
-	[ -n "$runtimeclass" ] || return 1
+	[[ -n "${runtimeclass}" ]] || return 1
 
+	# shellcheck disable=SC2154 # BATS_FILE_TMPDIR set by BATS
 	new_config=$(mktemp "${BATS_FILE_TMPDIR}/pod-config.XXXXXX.yaml")
-	IMAGE="$image" RUNTIMECLASS="$runtimeclass" envsubst < "$base_config" > "$new_config"
+	IMAGE="${image}" RUNTIMECLASS="${runtimeclass}" envsubst < "${base_config}" > "${new_config}"
 
-	echo "$new_config"
+	echo "${new_config}"
 }
 
 # Set an annotation on configuration metadata.
@@ -331,19 +336,20 @@ set_metadata_annotation() {
 	local metadata_path="${4:-}"
 	local annotation_key=""
 
-	[ -n "$metadata_path" ] && annotation_key+="${metadata_path}."
+	[[ -n "${metadata_path}" ]] && annotation_key+="${metadata_path}."
 
 	# yaml annotation key name.
 	annotation_key+="metadata.annotations.\"${key}\""
 
-	echo "$annotation_key"
+	echo "${annotation_key}"
 	# yq set annotations in yaml. Quoting the key because it can have
 	# dots.
 	yq -i ".${annotation_key} = \"${value}\"" "${yaml}"
 
+	# shellcheck disable=SC2154 # KATA_HYPERVISOR set by caller
 	if [[ "${key}" =~ kernel_params ]] && [[ "${KATA_HYPERVISOR}" == qemu-se* ]]; then
 		# A secure boot image for IBM SE should be rebuilt according to the KBS configuration.
-		if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+		if [[ -z "${IBM_SE_CREDS_DIR:-}" ]]; then
 			>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
 			return 1
 		fi
@@ -382,7 +388,7 @@ set_node() {
 	local node="$2"
 	local kind
 	local spec
-	[ -n "$node" ] || return 1
+	[[ -n "${node}" ]] || return 1
 
 	kind="$(yq -r '.kind' "${yaml}")"
 	if [[ "${kind}" = "Job" ]]; then
@@ -392,7 +398,7 @@ set_node() {
 	fi
 
   yq -i \
-    "${spec} = \"$node\"" \
+    "${spec} = \"${node}\"" \
     "${yaml}"
 }
 
@@ -406,18 +412,18 @@ get_node_kata_sandbox_id() {
 	local kata_sandbox_id=""
 	local local_wait_time="${wait_time}"
 	# Max loop 3 times to get kata_sandbox_id
-	while [ "$local_wait_time" -gt 0 ];
+	while [[ "${local_wait_time}" -gt 0 ]];
 	do
-		kata_sandbox_id=$(exec_host $node "ps -ef |\
+		kata_sandbox_id=$(exec_host "${node}" "ps -ef |\
 		  grep containerd-shim-kata-v2" |\
 		  grep -oP '(?<=-id\s)[a-f0-9]+' |\
 		  tail -1)
-		if [ -n "$kata_sandbox_id" ]; then
+		if [[ -n "${kata_sandbox_id}" ]]; then
 			break
 		else
 			sleep "${sleep_time}"
 			local_wait_time=$((local_wait_time-sleep_time))
 		fi
 	done
-	echo $kata_sandbox_id
+	echo "${kata_sandbox_id}"
 }
