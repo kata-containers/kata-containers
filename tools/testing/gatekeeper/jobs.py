@@ -135,12 +135,13 @@ class Checker:
         warn = []
         for name, job in self.results.items():
             status = self._job_status(job)
+            url = job.get("html_url", "")
             if status == RUNNING:
-                warn.append(f"WARN: {name} - Still running")
+                warn.append(f"WARN: {name} - Still running {url}")
             elif status == PASS:
-                good.append(f"PASS: {name} - success")
+                good.append(f"PASS: {name} - success {url}")
             else:
-                bad.append(f"FAIL: {name} - Not passed - {status}")
+                bad.append(f"FAIL: {name} - Not passed - {status} {url}")
         out = '\n'.join(sorted(good) + sorted(warn) + sorted(bad))
         stat = self.status()
         if stat == RUNNING:
