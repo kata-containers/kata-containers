@@ -99,7 +99,7 @@ kernel_verity_params = "@KERNELVERITYPARAMS_CONFIDENTIAL_NV@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWARESNPPATH@"
+firmware = "@FIRMWARESNPPATH_NV@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
