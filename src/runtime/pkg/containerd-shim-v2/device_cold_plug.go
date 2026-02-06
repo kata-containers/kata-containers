@@ -140,7 +140,9 @@ func getDeviceSpec(ctx context.Context, socket string, ann map[string]string) ([
 func formatCDIDevIDs(specName string, devIDs []string) []string {
 	var result []string
 	for _, id := range devIDs {
-		result = append(result, fmt.Sprintf("%s=%s", specName, id))
+		// Normalize IOMMUFD device IDs: vfio5 -> 5
+		cleanID := strings.TrimPrefix(id, "vfio")
+		result = append(result, fmt.Sprintf("%s=%s", specName, cleanID))
 	}
 	return result
 }
