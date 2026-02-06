@@ -58,6 +58,10 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		conf.DefaultMaxVCPUs = defaultMaxVCPUs
 	}
 
+	if numNUMA := conf.NumGuestNUMANodes(); numNUMA > 1 {
+		conf.DefaultMaxVCPUs -= conf.DefaultMaxVCPUs % numNUMA
+	}
+
 	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
 		conf.Msize9p = defaultMsize9p
 	}
