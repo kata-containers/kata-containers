@@ -47,7 +47,6 @@ jobs:
           - coco-guest-components
           - firecracker
           - kernel
-          - kernel-confidential
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
           - nydus
@@ -144,7 +143,7 @@ jobs:
           if-no-files-found: error
 
       - name: store-extratarballs-artifact ${{ matrix.asset }}
-        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
+        if: ${{ matrix.asset == 'kernel' || startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-amd64-${{ matrix.asset }}-modules${{ inputs.tarball-suffix }}
@@ -236,6 +235,7 @@ jobs:
         asset:
           - busybox
           - coco-guest-components
+          - kernel-modules
           - kernel-nvidia-gpu-modules
           - pause-image
     steps:

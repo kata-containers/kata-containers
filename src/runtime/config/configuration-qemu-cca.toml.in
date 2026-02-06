@@ -12,7 +12,7 @@
 
 [hypervisor.qemu]
 path = "@QEMUCCAEXPERIMENTALPATH@"
-kernel = "@KERNELCONFIDENTIALPATH@"
+kernel = "@KERNELCONFIDENTIALPATH_CCA@"
 image = "@IMAGECONFIDENTIALPATH@"
 machine_type = "@MACHINETYPE@"
 

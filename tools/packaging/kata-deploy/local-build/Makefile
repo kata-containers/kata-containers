@@ -20,7 +20,6 @@ endif
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
-	kernel-confidential-tarball \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-tarball \
@@ -141,9 +140,6 @@ kernel-nvidia-gpu-tarball:
 kernel-tarball:
 	${MAKE} $@-build
 
-kernel-confidential-tarball:
-	${MAKE} $@-build
-
 kernel-cca-confidential-tarball:
 	${MAKE} $@-build
 
@@ -174,7 +170,7 @@ qemu-cca-experimental-tarball:
 qemu-tarball:
 	${MAKE} $@-build
 
-boot-image-se-tarball: kernel-confidential-tarball rootfs-initrd-confidential-tarball
+boot-image-se-tarball: kernel-tarball rootfs-initrd-confidential-tarball
 	${MAKE} $@-build
 
 stratovirt-tarball:
@@ -183,13 +179,13 @@ stratovirt-tarball:
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
 	${MAKE} $@-build
 
 rootfs-image-mariner-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball

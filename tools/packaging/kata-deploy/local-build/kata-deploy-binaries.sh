@@ -113,7 +113,6 @@ options:
 	kata-ctl
 	kata-manager
 	kernel
-	kernel-confidential
 	kernel-cca-confidential
 	kernel-dragonball-experimental
 	kernel-experimental
@@ -333,15 +332,6 @@ get_latest_pause_image_artefact_and_builder_image_version() {
 	echo "${latest_pause_image_artefact}-${latest_pause_image_builder_image}"
 }
 
-get_latest_kernel_confidential_artefact_and_builder_image_version() {
-		local kernel_version=$(get_from_kata_deps ".assets.kernel.confidential.version")
-		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-		local latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
-		local latest_kernel_builder_image="$(get_kernel_image_name)"
-
-		echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
-}
-
 get_latest_kernel_artefact_and_builder_image_version() {
 	local kernel_version
 	local kernel_kata_config_version
@@ -403,10 +393,9 @@ install_image() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		else
-			latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
 
-		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
@@ -509,7 +498,7 @@ install_initrd() {
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
 		else
-			latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
 		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
@@ -662,6 +651,14 @@ install_cached_kernel_tarball_component() {
 		|| return 1
 
 	case ${kernel_name} in
+		"kernel")
+			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
+				local modules_dir
+				modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
+				mkdir -p "${modules_dir}" || true
+				tar --strip-components=1 --zstd -xvf "${workdir}/kata-static-${kernel_name}-modules.tar.zst" -C "${modules_dir}" || return 1
+			fi
+			;;
 		"kernel-nvidia-gpu"*"")
 			local modules_dir
 			modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
@@ -691,17 +688,20 @@ install_kernel_helper() {
 	export kernel_ref="$(get_from_kata_deps .${kernel_yaml_path}.ref)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
-	if [[ "${kernel_name}" == "kernel"*"-confidential" ]] && [[ "${ARCH}" == "x86_64" ]]; then
-		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
-		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-	fi
-
 	if [[ "${kernel_name}" == "kernel-nvidia-gpu" ]]; then
 		kernel_version="$(get_from_kata_deps .assets.kernel.nvidia.version)"
 		kernel_url="$(get_from_kata_deps .assets.kernel.nvidia.url)"
 	fi
 
 	case ${kernel_name} in
+		kernel)
+			# Main kernel on x86_64/s390x is built with -x (TEE); produce modules tarball for rootfs
+			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
+				local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
+				local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
+				extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+			fi
+			;;
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental|kernel*-confidential)
 			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
 			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
@@ -721,25 +721,23 @@ install_kernel_helper() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f -u "${kernel_url}" "${extra_cmd}"
 }
 
-#Install kernel asset
+#Install kernel asset (on x86_64 and s390x built with -x for TEE/confidential; other arches without -x)
 install_kernel() {
+	local extra_cmd=""
+	case "${ARCH}" in
+		s390x)
+			export MEASURED_ROOTFS="no"
+			extra_cmd="-x"
+			;;
+		x86_64)
+			export MEASURED_ROOTFS="yes"
+			extra_cmd="-x"
+			;;
+	esac
 	install_kernel_helper \
 		"assets.kernel" \
 		"kernel" \
-		""
-}
-
-install_kernel_confidential() {
-	if [ "${ARCH}" == "s390x" ]; then
-		export MEASURED_ROOTFS="no"
-	else
-		export MEASURED_ROOTFS="yes"
-	fi
-
-	install_kernel_helper \
-		"assets.kernel.confidential" \
-		"kernel-confidential" \
-		"-x"
+		"${extra_cmd}"
 }
 
 install_kernel_cca_confidential() {
@@ -1296,7 +1294,6 @@ handle_build() {
 		install_kata_ctl
 		install_kata_manager
 		install_kernel
-		install_kernel_confidential
 		install_kernel_cca_confidential
 		install_kernel_dragonball_experimental
 		install_log_parser_rs
@@ -1338,8 +1335,6 @@ handle_build() {
 	kata-manager) install_kata_manager ;;
 
 	kernel) install_kernel ;;
-
-	kernel-confidential) install_kernel_confidential ;;
 
 	kernel-cca-confidential) install_kernel_cca_confidential ;;
 
@@ -1415,6 +1410,22 @@ handle_build() {
 	tar --zstd -tvf "${final_tarball_path}"
 
 	case ${build_target} in
+		kernel)
+			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
+				local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
+				if [[ ! -f "${modules_final_tarball_path}" ]]; then
+					local modules_dir
+					modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
+					parent_dir=$(dirname "${modules_dir}")
+					parent_dir_basename=$(basename "${parent_dir}")
+					pushd "${parent_dir}"
+					rm -f "${parent_dir_basename}"/build
+					tar --zstd -cvf "${modules_final_tarball_path}" "."
+					popd
+				fi
+				tar --zstd -tvf "${modules_final_tarball_path}"
+			fi
+			;;
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
 			if [[ ! -f "${modules_final_tarball_path}" ]]; then
