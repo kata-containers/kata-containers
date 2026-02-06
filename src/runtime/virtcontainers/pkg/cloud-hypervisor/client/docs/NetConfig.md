@@ -19,6 +19,9 @@ Name | Type | Description | Notes
 **Id** | Pointer to **string** |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
+**OffloadTso** | Pointer to **bool** |  | [optional] [default to true]
+**OffloadUfo** | Pointer to **bool** |  | [optional] [default to true]
+**OffloadCsum** | Pointer to **bool** |  | [optional] [default to true]
 
 ## Methods
 
@@ -413,6 +416,81 @@ SetRateLimiterConfig sets RateLimiterConfig field to given value.
 `func (o *NetConfig) HasRateLimiterConfig() bool`
 
 HasRateLimiterConfig returns a boolean if a field has been set.
+
+### GetOffloadTso
+
+`func (o *NetConfig) GetOffloadTso() bool`
+
+GetOffloadTso returns the OffloadTso field if non-nil, zero value otherwise.
+
+### GetOffloadTsoOk
+
+`func (o *NetConfig) GetOffloadTsoOk() (*bool, bool)`
+
+GetOffloadTsoOk returns a tuple with the OffloadTso field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetOffloadTso
+
+`func (o *NetConfig) SetOffloadTso(v bool)`
+
+SetOffloadTso sets OffloadTso field to given value.
+
+### HasOffloadTso
+
+`func (o *NetConfig) HasOffloadTso() bool`
+
+HasOffloadTso returns a boolean if a field has been set.
+
+### GetOffloadUfo
+
+`func (o *NetConfig) GetOffloadUfo() bool`
+
+GetOffloadUfo returns the OffloadUfo field if non-nil, zero value otherwise.
+
+### GetOffloadUfoOk
+
+`func (o *NetConfig) GetOffloadUfoOk() (*bool, bool)`
+
+GetOffloadUfoOk returns a tuple with the OffloadUfo field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetOffloadUfo
+
+`func (o *NetConfig) SetOffloadUfo(v bool)`
+
+SetOffloadUfo sets OffloadUfo field to given value.
+
+### HasOffloadUfo
+
+`func (o *NetConfig) HasOffloadUfo() bool`
+
+HasOffloadUfo returns a boolean if a field has been set.
+
+### GetOffloadCsum
+
+`func (o *NetConfig) GetOffloadCsum() bool`
+
+GetOffloadCsum returns the OffloadCsum field if non-nil, zero value otherwise.
+
+### GetOffloadCsumOk
+
+`func (o *NetConfig) GetOffloadCsumOk() (*bool, bool)`
+
+GetOffloadCsumOk returns a tuple with the OffloadCsum field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetOffloadCsum
+
+`func (o *NetConfig) SetOffloadCsum(v bool)`
+
+SetOffloadCsum sets OffloadCsum field to given value.
+
+### HasOffloadCsum
+
+`func (o *NetConfig) HasOffloadCsum() bool`
+
+HasOffloadCsum returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

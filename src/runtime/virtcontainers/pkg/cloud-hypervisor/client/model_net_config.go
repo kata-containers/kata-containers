@@ -33,6 +33,9 @@ type NetConfig struct {
 	Id                *string            `json:"id,omitempty"`
 	PciSegment        *int32             `json:"pci_segment,omitempty"`
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
+	OffloadTso        *bool              `json:"offload_tso,omitempty"`
+	OffloadUfo        *bool              `json:"offload_ufo,omitempty"`
+	OffloadCsum       *bool              `json:"offload_csum,omitempty"`
 }
 
 // NewNetConfig instantiates a new NetConfig object
@@ -55,6 +58,12 @@ func NewNetConfig() *NetConfig {
 	this.VhostUser = &vhostUser
 	var vhostMode string = "Client"
 	this.VhostMode = &vhostMode
+	var offloadTso bool = true
+	this.OffloadTso = &offloadTso
+	var offloadUfo bool = true
+	this.OffloadUfo = &offloadUfo
+	var offloadCsum bool = true
+	this.OffloadCsum = &offloadCsum
 	return &this
 }
 
@@ -77,6 +86,12 @@ func NewNetConfigWithDefaults() *NetConfig {
 	this.VhostUser = &vhostUser
 	var vhostMode string = "Client"
 	this.VhostMode = &vhostMode
+	var offloadTso bool = true
+	this.OffloadTso = &offloadTso
+	var offloadUfo bool = true
+	this.OffloadUfo = &offloadUfo
+	var offloadCsum bool = true
+	this.OffloadCsum = &offloadCsum
 	return &this
 }
 
@@ -560,6 +575,102 @@ func (o *NetConfig) SetRateLimiterConfig(v RateLimiterConfig) {
 	o.RateLimiterConfig = &v
 }
 
+// GetOffloadTso returns the OffloadTso field value if set, zero value otherwise.
+func (o *NetConfig) GetOffloadTso() bool {
+	if o == nil || o.OffloadTso == nil {
+		var ret bool
+		return ret
+	}
+	return *o.OffloadTso
+}
+
+// GetOffloadTsoOk returns a tuple with the OffloadTso field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetOffloadTsoOk() (*bool, bool) {
+	if o == nil || o.OffloadTso == nil {
+		return nil, false
+	}
+	return o.OffloadTso, true
+}
+
+// HasOffloadTso returns a boolean if a field has been set.
+func (o *NetConfig) HasOffloadTso() bool {
+	if o != nil && o.OffloadTso != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetOffloadTso gets a reference to the given bool and assigns it to the OffloadTso field.
+func (o *NetConfig) SetOffloadTso(v bool) {
+	o.OffloadTso = &v
+}
+
+// GetOffloadUfo returns the OffloadUfo field value if set, zero value otherwise.
+func (o *NetConfig) GetOffloadUfo() bool {
+	if o == nil || o.OffloadUfo == nil {
+		var ret bool
+		return ret
+	}
+	return *o.OffloadUfo
+}
+
+// GetOffloadUfoOk returns a tuple with the OffloadUfo field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetOffloadUfoOk() (*bool, bool) {
+	if o == nil || o.OffloadUfo == nil {
+		return nil, false
+	}
+	return o.OffloadUfo, true
+}
+
+// HasOffloadUfo returns a boolean if a field has been set.
+func (o *NetConfig) HasOffloadUfo() bool {
+	if o != nil && o.OffloadUfo != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetOffloadUfo gets a reference to the given bool and assigns it to the OffloadUfo field.
+func (o *NetConfig) SetOffloadUfo(v bool) {
+	o.OffloadUfo = &v
+}
+
+// GetOffloadCsum returns the OffloadCsum field value if set, zero value otherwise.
+func (o *NetConfig) GetOffloadCsum() bool {
+	if o == nil || o.OffloadCsum == nil {
+		var ret bool
+		return ret
+	}
+	return *o.OffloadCsum
+}
+
+// GetOffloadCsumOk returns a tuple with the OffloadCsum field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NetConfig) GetOffloadCsumOk() (*bool, bool) {
+	if o == nil || o.OffloadCsum == nil {
+		return nil, false
+	}
+	return o.OffloadCsum, true
+}
+
+// HasOffloadCsum returns a boolean if a field has been set.
+func (o *NetConfig) HasOffloadCsum() bool {
+	if o != nil && o.OffloadCsum != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetOffloadCsum gets a reference to the given bool and assigns it to the OffloadCsum field.
+func (o *NetConfig) SetOffloadCsum(v bool) {
+	o.OffloadCsum = &v
+}
+
 func (o NetConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Tap != nil {
@@ -606,6 +717,15 @@ func (o NetConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.RateLimiterConfig != nil {
 		toSerialize["rate_limiter_config"] = o.RateLimiterConfig
+	}
+	if o.OffloadTso != nil {
+		toSerialize["offload_tso"] = o.OffloadTso
+	}
+	if o.OffloadUfo != nil {
+		toSerialize["offload_ufo"] = o.OffloadUfo
+	}
+	if o.OffloadCsum != nil {
+		toSerialize["offload_csum"] = o.OffloadCsum
 	}
 	return json.Marshal(toSerialize)
 }
