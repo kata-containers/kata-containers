@@ -83,9 +83,13 @@ type FilesystemShare struct {
 	configVolRegex *regexp.Regexp
 	// Regex to match only the timestamped directory inside the k8's volume mount
 	timestampDirRegex *regexp.Regexp
-	// The same volume mount can be shared by multiple containers in the same sandbox (pod)
-	srcDstMap            map[string][]string
-	srcDstMapLock        sync.Mutex
+	// srcDstMap tracks file-level source to destination mappings for configmap/secret watching
+	srcDstMap     map[string][]string
+	srcDstMapLock sync.Mutex
+	// srcGuestMap caches volume source path to guest path, enabling multiple containers
+	// in the same pod to share the same volume mount
+	srcGuestMap          map[string]string
+	srcGuestMapLock      sync.Mutex
 	eventLoopStarted     bool
 	eventLoopStartedLock sync.Mutex
 	watcherDoneChannel   chan bool
@@ -108,6 +112,7 @@ func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 		sandbox:            s,
 		watcherDoneChannel: make(chan bool),
 		srcDstMap:          make(map[string][]string),
+		srcGuestMap:        make(map[string]string),
 		watcher:            watcher,
 		configVolRegex:     configVolRegex,
 		timestampDirRegex:  timestampDirRegex,
@@ -309,6 +314,13 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 	// bind mount it in the shared directory.
 	caps := f.sandbox.hypervisor.Capabilities(ctx)
 	if !caps.IsFsSharingSupported() {
+		f.srcGuestMapLock.Lock()
+		if guestPath, ok := f.srcGuestMap[m.Source]; ok {
+			f.srcGuestMapLock.Unlock()
+			return &SharedFile{guestPath: guestPath}, nil
+		}
+		f.srcGuestMapLock.Unlock()
+
 		f.Logger().Debug("filesystem sharing is not supported, files will be copied")
 
 		var ignored bool
@@ -418,6 +430,11 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 		m.HostPath = mountDest
 	}
 
+	// Cache the guestPath for this volume source so other containers can share it
+	f.srcGuestMapLock.Lock()
+	defer f.srcGuestMapLock.Unlock()
+	f.srcGuestMap[m.Source] = guestPath
+
 	return &SharedFile{
 		guestPath: guestPath,
 	}, nil
@@ -441,6 +458,10 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 			syscall.Rmdir(m.HostPath)
 		}
 	}
+
+	f.srcGuestMapLock.Lock()
+	delete(f.srcGuestMap, m.Source)
+	f.srcGuestMapLock.Unlock()
 
 	return nil
 }

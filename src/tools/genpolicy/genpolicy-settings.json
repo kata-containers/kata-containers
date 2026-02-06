@@ -152,17 +152,6 @@
         }
     },
     "volumes": {
-        "emptyDir": {
-            "mount_type": "local",
-            "mount_source": "^$(cpath)/$(sandbox-id)/rootfs/local/",
-            "mount_point": "^$(cpath)/$(sandbox-id)/rootfs/local/",
-            "driver": "local",
-            "source": "local",
-            "fstype": "local",
-            "options": [
-                "mode=0777"
-            ]
-        },
         "emptyDir_memory": {
             "mount_type": "bind",
             "mount_source": "^/run/kata-containers/sandbox/ephemeral/",
