@@ -318,6 +318,9 @@ pub const KATA_ANNO_CFG_EXPERIMENTAL: &str = "io.katacontainers.config.runtime.e
 /// interface.
 pub const KATA_ANNO_CFG_INTER_NETWORK_MODEL: &str =
     "io.katacontainers.config.runtime.internetworking_model";
+/// Network device specific annotation for network queues
+pub const KATA_ANNO_CFG_HYPERVISOR_NETWORK_QUEUES: &str =
+    "io.katacontainers.config.hypervisor.network_queues";
 /// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 pub const KATA_ANNO_CFG_SANDBOX_CGROUP_ONLY: &str =
     "io.katacontainers.config.runtime.sandbox_cgroup_only";
@@ -905,6 +908,14 @@ impl Annotation {
                             }
                         }
                     }
+                    KATA_ANNO_CFG_HYPERVISOR_NETWORK_QUEUES => match self.get_value::<u32>(key) {
+                        Ok(r) => {
+                            hv.network_info.network_queues = r.unwrap_or_default();
+                        }
+                        Err(_e) => {
+                            return Err(u32_err);
+                        }
+                    },
                     // Hypervisor Security related annotations
                     KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH => {
                         hv.security_info.validate_path(value)?;

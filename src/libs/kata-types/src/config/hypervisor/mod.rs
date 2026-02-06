@@ -74,6 +74,7 @@ const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
 const MAX_BRIDGE_SIZE: u32 = 5;
+const MAX_NETWORK_QUEUES: u32 = 256;
 
 const KERNEL_PARAM_DELIMITER: &str = " ";
 /// Block size (in bytes) used by dm-verity block size validation.
@@ -1092,6 +1093,13 @@ impl NetworkInfo {
     /// Adjusts the network configuration information after loading from a configuration file.
     /// (Currently, this method performs no adjustments.)
     pub fn adjust_config(&mut self) -> Result<()> {
+        if self.network_queues == 0 {
+            self.network_queues = 1;
+        }
+        if self.network_queues > MAX_NETWORK_QUEUES {
+            self.network_queues = MAX_NETWORK_QUEUES;
+        }
+
         Ok(())
     }
 
