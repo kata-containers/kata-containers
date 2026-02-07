@@ -44,7 +44,6 @@ jobs:
           - agent
           - coco-guest-components
           - kernel
-          - kernel-confidential
           - pause-image
           - qemu
           - virtiofsd
@@ -118,6 +117,15 @@ jobs:
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
+          retention-days: 15
+          if-no-files-found: error
+
+      - name: store-extratarballs-artifact ${{ matrix.asset }}
+        if: ${{ matrix.asset == 'kernel' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-artifacts-s390x-${{ matrix.asset }}-modules${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}-modules.tar.zst
           retention-days: 15
           if-no-files-found: error
 

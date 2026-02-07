@@ -84,7 +84,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	fi
 	tar -xvf "${BUILD_DIR}/${nvrc}.tar.xz" -C ./bin/
 
-	local appendix="${rootfs_type:+"-${rootfs_type}"}"
+	local appendix=""
 	if echo "${NVIDIA_GPU_STACK}" | grep -q '\<dragonball\>'; then
     		appendix="-dragonball-experimental"
 	fi

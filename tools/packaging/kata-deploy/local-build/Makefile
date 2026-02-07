@@ -20,10 +20,8 @@ endif
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
-	kernel-confidential-tarball \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
-	kernel-nvidia-gpu-confidential-tarball \
 	kernel-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
@@ -139,13 +137,7 @@ kernel-dragonball-experimental-tarball:
 kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
-kernel-nvidia-gpu-confidential-tarball:
-	${MAKE} $@-build
-
 kernel-tarball:
-	${MAKE} $@-build
-
-kernel-confidential-tarball:
 	${MAKE} $@-build
 
 kernel-cca-confidential-tarball:
@@ -178,7 +170,7 @@ qemu-cca-experimental-tarball:
 qemu-tarball:
 	${MAKE} $@-build
 
-boot-image-se-tarball: kernel-confidential-tarball rootfs-initrd-confidential-tarball
+boot-image-se-tarball: kernel-tarball rootfs-initrd-confidential-tarball
 	${MAKE} $@-build
 
 stratovirt-tarball:
@@ -187,13 +179,13 @@ stratovirt-tarball:
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
 	${MAKE} $@-build
 
 rootfs-image-mariner-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball
@@ -205,10 +197,10 @@ rootfs-image-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu
 rootfs-initrd-nvidia-gpu-tarball: agent-tarball busybox-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
-rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+rootfs-initrd-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-tarball
 	${MAKE} $@-build
 
 rootfs-cca-confidential-image-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball

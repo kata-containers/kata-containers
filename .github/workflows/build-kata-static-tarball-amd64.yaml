@@ -47,10 +47,8 @@ jobs:
           - coco-guest-components
           - firecracker
           - kernel
-          - kernel-confidential
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
-          - kernel-nvidia-gpu-confidential
           - nydus
           - ovmf
           - ovmf-sev
@@ -145,7 +143,7 @@ jobs:
           if-no-files-found: error
 
       - name: store-extratarballs-artifact ${{ matrix.asset }}
-        if: ${{ startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
+        if: ${{ matrix.asset == 'kernel' || startsWith(matrix.asset, 'kernel-nvidia-gpu') }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: kata-artifacts-amd64-${{ matrix.asset }}-modules${{ inputs.tarball-suffix }}
@@ -237,8 +235,8 @@ jobs:
         asset:
           - busybox
           - coco-guest-components
+          - kernel-modules
           - kernel-nvidia-gpu-modules
-          - kernel-nvidia-gpu-confidential-modules
           - pause-image
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
