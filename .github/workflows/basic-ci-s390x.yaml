@@ -26,8 +26,6 @@ jobs:
       matrix:
         containerd_version: ['active']
         vmm: ['qemu-runtime-rs']
-    # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
-    if: false
     runs-on: s390x-large
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -48,7 +46,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
-        run: bash tests/integration/cri-containerd/gha-run.sh
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
         env:
           GH_TOKEN: ${{ github.token }}
 
