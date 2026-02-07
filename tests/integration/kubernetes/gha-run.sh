@@ -173,6 +173,17 @@ function deploy_kata() {
 
 	set_default_cluster_namespace
 
+	# Workaround to avoid modifying the workflow yaml files
+	case "${KATA_HYPERVISOR}" in
+		qemu-nvidia-gpu-*)
+			USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
+			SNAPSHOTTER="nydus"
+			EXPERIMENTAL_FORCE_GUEST_PULL=false
+			;;
+		*)
+			;;
+	esac
+
 	ANNOTATIONS="default_vcpus"
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
 		ANNOTATIONS="image kernel default_vcpus disable_image_nvdimm cc_init_data"
@@ -206,8 +217,11 @@ function deploy_kata() {
 				# as they are running on a GitHub runner (and not on a BM machine),
 				# and there the snapshotter is deployed on every run (rather than
 				# deployed when the machine is configured, as on the BM machines).
-				if [[ "${KATA_HYPERVISOR}" == qemu-coco-dev* ]] && [[ ${ARCH} == "x86_64" ]]; then
-					EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}"
+				if [[ ${ARCH} == "x86_64" ]]; then
+					case "${KATA_HYPERVISOR}" in
+						qemu-coco-dev*|qemu-nvidia-gpu-*) EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}" ;;
+						*) ;;
+					esac
 				fi
 				;;
 			*) ;;
@@ -215,10 +229,6 @@ function deploy_kata() {
 	fi
 
 	EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
-	if [[ "${KATA_HYPERVISOR}" == "qemu-nvidia-gpu-"* ]]; then
-		EXPERIMENTAL_FORCE_GUEST_PULL="${KATA_HYPERVISOR}"
-	fi
-	export EXPERIMENTAL_FORCE_GUEST_PULL
 
 	export HELM_K8S_DISTRIBUTION="${KUBERNETES}"
 	export HELM_IMAGE_REFERENCE="${DOCKER_REGISTRY}/${DOCKER_REPO}"

@@ -5,22 +5,28 @@
 
 #### Nydus snapshotter & nydus image
 
-FROM golang:1.24-alpine AS nydus-binary-downloader
+FROM golang:1.24-alpine AS nydus-binary-builder
 
-# Keep the version here aligned with "ndyus-snapshotter.version"
-# in versions.yaml
-ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.10
-ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
+# Use the PR branch that fixes proxy mode mounting for snapshots without nydus-proxy-mode label
+# PR: https://github.com/containerd/nydus-snapshotter/pull/708
+# Once merged, switch back to upstream with the merged version tag
+ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/fidencio/nydus-snapshotter
+ARG NYDUS_SNAPSHOTTER_BRANCH=topic/snapshot-fix-proxy-mode-mounting-for-snapshots-without-nydus-proxy-mode-label
+
+RUN apk add --no-cache git make gcc musl-dev
+
+WORKDIR /build
+
+# Clone nydus-snapshotter from PR branch
+RUN git clone --depth 100 --branch "${NYDUS_SNAPSHOTTER_BRANCH}" "${NYDUS_SNAPSHOTTER_REPO}" /build/nydus-snapshotter
+
+WORKDIR /build/nydus-snapshotter
 
 RUN \
-	mkdir -p /opt/nydus-snapshotter && \
-	ARCH="$(uname -m)" && \
-	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64 ; fi && \
-	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
-	apk add --no-cache curl && \
-	curl -fOL --progress-bar "${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" && \
-	tar xvzpf "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" -C /opt/nydus-snapshotter && \
-	rm "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"
+	mkdir -p /opt/nydus-snapshotter/bin && \
+	make static && \
+	cp bin/containerd-nydus-grpc /opt/nydus-snapshotter/bin/ && \
+	cp bin/nydus-overlayfs /opt/nydus-snapshotter/bin/
 
 #### Build binary package
 FROM ubuntu:22.04 AS rust-builder
@@ -223,8 +229,8 @@ COPY --from=runtime-assembler /output/lib64/ /lib64/
 
 # Copy nydus snapshotter
 COPY nydus-snapshotter ${DESTINATION}/nydus-snapshotter
-COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
-COPY --from=nydus-binary-downloader /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
+COPY --from=nydus-binary-builder /opt/nydus-snapshotter/bin/containerd-nydus-grpc ${DESTINATION}/nydus-snapshotter/
+COPY --from=nydus-binary-builder /opt/nydus-snapshotter/bin/nydus-overlayfs ${DESTINATION}/nydus-snapshotter/
 
 # Copy runtimeclasses and node-feature-rules
 COPY node-feature-rules ${DESTINATION}/node-feature-rules
