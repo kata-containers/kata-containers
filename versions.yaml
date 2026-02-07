@@ -317,7 +317,7 @@ externals:
     # version older than them.
     version: "v1.7.25"
     lts: "v1.7"
-    active: "v2.1"
+    active: "v2.2"
     # keep the latest version to make the current PR ci work, once it was
     # merged,we can remove the latest version.
     latest: "v2.2"
