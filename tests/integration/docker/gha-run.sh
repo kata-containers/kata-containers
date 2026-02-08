@@ -47,9 +47,8 @@ function run() {
 			info "Delete network"
 			docker network rm "$net_name"
 		fi
-		trap - RETURN
 	}
-	trap cleanup RETURN
+	trap 'cleanup; trap - RETURN' RETURN
 
 	container_id=$(sudo docker run -d --runtime "io.containerd.kata-${KATA_HYPERVISOR}.v2" busybox)
 
