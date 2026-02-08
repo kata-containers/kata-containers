@@ -87,6 +87,9 @@ const PIDNS_FD: &str = "PIDNS_FD";
 const PIDNS_ENABLED: &str = "PIDNS_ENABLED";
 const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
 
+// Use pidfd_open from process.rs
+pub use crate::process::pidfd_open;
+
 #[derive(Debug)]
 pub struct ContainerStatus {
     pre_status: ContainerState,
@@ -397,6 +400,29 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
     log_child!(cfd_log, "child process start run");
+
+    // Open PIDFD if supported (Linux 5.3+)
+    let pidfd: Option<RawFd> = {
+        // Try to open pidfd for the current process
+        let result = pidfd_open(std::process::id() as libc::pid_t, 0);
+        if result >= 0 {
+            log_child!(cfd_log, "Successfully opened pidfd: {}", result);
+            Some(result)
+        } else {
+            log_child!(
+                cfd_log,
+                "Failed to open pidfd (kernel may not support it), error: {}",
+                result
+            );
+            None
+        }
+    };
+
+    // Send pidfd back to parent if available
+    if let Some(fd) = pidfd {
+        let _ = write_sync(cwfd, crate::sync::SYNC_PIDFD, &fd.to_string());
+    }
+
     let buf = read_sync(crfd)?;
     let spec_str = std::str::from_utf8(&buf)?;
     let spec: oci::Spec = serde_json::from_str(spec_str)?;
@@ -1205,6 +1231,23 @@ impl BaseContainer for LinuxContainer {
         };
 
         p.pid = pid;
+
+        // get container process's pidfd if available
+        let pidfd_buf = read_async(&mut pipe_r).await?;
+        if !pidfd_buf.is_empty() {
+            let pidfd_str = std::str::from_utf8(&pidfd_buf).context("get pidfd string")?;
+            let pidfd = match pidfd_str.parse::<i32>() {
+                Ok(i) => i,
+                Err(e) => {
+                    return Err(anyhow!(format!(
+                        "failed to get container process's pidfd: {:?}",
+                        e
+                    )));
+                }
+            };
+            p.set_pidfd(pidfd);
+            info!(logger, "container process pidfd: {}", pidfd);
+        }
 
         if p.init {
             self.init_process_pid = p.pid;
