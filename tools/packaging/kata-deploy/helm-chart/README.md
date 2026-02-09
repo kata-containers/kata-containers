@@ -448,3 +448,65 @@ kata-qemu-snp-cicd              kata-qemu-snp-cicd              77s
 kata-qemu-tdx-cicd              kata-qemu-tdx-cicd              77s
 kata-stratovirt-cicd            kata-stratovirt-cicd            77s
 ```
+
+## Customizing Configuration with Drop-in Files
+
+When kata-deploy installs Kata Containers, the base configuration files should not
+be modified directly. Instead, use drop-in configuration files to customize
+settings. This approach ensures your customizations survive kata-deploy upgrades.
+
+### How Drop-in Files Work
+
+The Kata runtime reads the base configuration file and then applies any `.toml`
+files found in the `config.d/` directory alongside it. Files are processed in
+alphabetical order, with later files overriding earlier settings.
+
+### Creating Custom Drop-in Files
+
+To add custom settings, create a `.toml` file in the appropriate `config.d/`
+directory. Use a numeric prefix to control the order of application.
+
+**Reserved prefixes** (used by kata-deploy):
+- `10-*`: Core kata-deploy settings
+- `20-*`: Debug settings
+- `30-*`: Kernel parameters
+
+**Recommended prefixes for custom settings**: `50-89`
+
+### Example: Adding Custom Kernel Parameters
+
+```bash
+# SSH into the node or use kubectl exec
+sudo mkdir -p /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/
+sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-custom.toml << 'EOF'
+[hypervisor.qemu]
+kernel_params = "my_param=value"
+EOF
+```
+
+### Example: Changing Default Memory Size
+
+```bash
+sudo cat > /opt/kata/share/defaults/kata-containers/runtimes/qemu/config.d/50-memory.toml << 'EOF'
+[hypervisor.qemu]
+default_memory = 4096
+EOF
+```
+
+### Custom Runtimes
+
+For more complex customizations, you can define custom runtimes in your Helm
+values. Custom runtimes create isolated configuration directories with their
+own drop-in files:
+
+```yaml
+customRuntimes:
+  enabled: true
+  runtimes:
+    - handler: kata-custom
+      baseConfig: qemu
+      dropInFile: /path/to/your/config.toml
+```
+
+This creates a new Runtime Class `kata-custom` that extends the `qemu`
+configuration with your custom settings.
