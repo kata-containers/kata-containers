@@ -343,7 +343,7 @@ msize_9p = @DEFMSIZE9P@
 # nvdimm is not supported when `confidential_guest = true`.
 #
 # Default is false
-disable_image_nvdimm = false
+disable_image_nvdimm = true
 
 # Enable hot-plugging of VFIO devices to a bridge-port,
 # root-port or switch-port.
