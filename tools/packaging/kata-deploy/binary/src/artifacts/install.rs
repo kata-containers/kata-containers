@@ -216,6 +216,9 @@ fn install_custom_runtime_configs(config: &Config) -> Result<()> {
                 )
             })?;
 
+            // Add warning comment to inform users about drop-in files
+            add_kata_deploy_warning(Path::new(&dest_config))?;
+
             info!(
                 "Copied config for custom runtime {}: {} -> {}",
                 runtime.handler, original_config, dest_config
@@ -342,6 +345,41 @@ fn set_executable_permissions(dir: &str) -> Result<()> {
     Ok(())
 }
 
+/// Warning comment to prepend to configuration files installed by kata-deploy.
+/// This informs users to use drop-in files instead of modifying the base config directly.
+const KATA_DEPLOY_CONFIG_WARNING: &str = r#"# =============================================================================
+# IMPORTANT: This file is managed by kata-deploy. Do not modify it directly!
+#
+# To customize settings, create drop-in configuration files in the config.d/
+# directory alongside this file. Drop-in files are processed in alphabetical
+# order, with later files overriding earlier settings.
+#
+# Example: config.d/50-custom.toml
+#
+# See the kata-deploy documentation for more details:
+#   https://github.com/kata-containers/kata-containers/tree/main/tools/packaging/kata-deploy
+# =============================================================================
+
+"#;
+
+/// Prepends the kata-deploy warning comment to a configuration file.
+/// This informs users to use drop-in files instead of modifying the base config.
+fn add_kata_deploy_warning(config_file: &Path) -> Result<()> {
+    let content = fs::read_to_string(config_file)
+        .with_context(|| format!("Failed to read config file: {:?}", config_file))?;
+
+    // Check if the warning is already present (idempotency)
+    if content.contains("IMPORTANT: This file is managed by kata-deploy") {
+        return Ok(());
+    }
+
+    let new_content = format!("{}{}", KATA_DEPLOY_CONFIG_WARNING, content);
+    fs::write(config_file, new_content)
+        .with_context(|| format!("Failed to write config file: {:?}", config_file))?;
+
+    Ok(())
+}
+
 /// Set up the runtime directory structure for a shim.
 /// Creates: {config_path}/runtimes/{shim}/
 ///          {config_path}/runtimes/{shim}/config.d/
@@ -385,6 +423,9 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
         // Copy the base config file
         fs::copy(&original_config_file, &dest_config_file)
             .with_context(|| format!("Failed to copy config: {} -> {}", original_config_file, dest_config_file))?;
+
+        // Add warning comment to inform users about drop-in files
+        add_kata_deploy_warning(Path::new(&dest_config_file))?;
         
         info!("  Copied base config: {}", dest_config_file);
     }
