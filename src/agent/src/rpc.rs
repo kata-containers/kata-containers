@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration};
 
 use std::convert::TryFrom;
 use std::ffi::{CString, OsStr};
@@ -14,6 +15,7 @@ use std::fmt::Debug;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+#[cfg(target_arch = "s390x")]
 use std::str::FromStr;
 use std::sync::Arc;
 use ttrpc::{
@@ -95,7 +97,6 @@ use libc::{self, c_char, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use std::fs;
 use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
-use std::time::Duration;
 
 use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
@@ -700,25 +701,66 @@ impl AgentService {
 
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
-        tokio::select! {
-            // Poll the futures in the order they appear from top to bottom
-            // it is very important to avoid data loss. If there is still
-            // data in the buffer and read_stream branch will return
-            // Poll::Ready so that the term_exit_notifier will never polled
-            // before all data were read.
+        // Create one in-flight read future and reuse it in both branches.
+        let read_fut = read_stream(&reader, req.len as usize);
+        tokio::pin!(read_fut);
+
+        // Cancellation and polling model: Rust async is polled, not preempted.
+        // `Future::poll()` is a synchronous function call that runs to completion and
+        // returns Ready or Pending (`std::future::Future`).
+        // Readiness notifications (Waker::wake / Tokio Notify) only schedule the task
+        // to be polled again later; they do not interrupt an in-progress poll.
+        // Therefore, a Notify becoming ready while `poll_read()` is executing cannot cause
+        // the read future to be dropped mid-way; cancellation can only happen when the branch
+        // is still pending between polls (Tokio `select!` cancels by dropping non-selected futures).
+        // Detailed information, please refer to Tokio doc for more information:
+        // - Future::poll: https://doc.rust-lang.org/std/future/trait.Future.html
+        // - Waker: https://doc.rust-lang.org/std/task/struct.Waker.html
+        // - Tokio select!: https://docs.rs/tokio/latest/tokio/macro.select.html
+        let data = tokio::select! {
+            // Use `biased` to make the polling order deterministic (top-to-bottom).
+            // This ensures that *when multiple branches are ready at the same time*,
+            // we prefer reading pending output over reacting to the exit notification.
+            //
+            // Note: `biased` does NOT guarantee that we won't lose output. If the exit
+            // notification becomes ready while `read_stream` is still pending, the
+            // exit branch may be selected and we may stop reading before draining the
+            // remaining buffered data.
+            //
+            // Detailed information, please refer to Tokio doc for more information:
+            // https://docs.rs/tokio/latest/src/tokio/macros/select.rs.html#67
             biased;
-            v = read_stream(&reader, req.len as usize)  => {
-                let vector = v?;
 
-                let mut resp = ReadStreamResponse::new();
-                resp.set_data(vector);
-
-                Ok(resp)
-            }
+            v = &mut read_fut => v?,
             _ = term_exit_notifier.notified() => {
-                Err(anyhow!("eof"))
+                // Drain-after-exit rationale:
+                // The process has exited, but the data may still be buffered in the pipe/pty.
+                // We should keep waiting for the same in-flight read for a bounded window to drain the data.
+                //
+                // It enters this branch only if `term_exit_notifier.notified()` fires. It then try to "drain"
+                // any remaining buffered output for a short, bounded time window:
+                // - If non-empty data is read: return immediately.
+                // - else then return empty data as EOF.
+
+                const DRAIN_DEADLINE_MS: u64 = 500; // 500ms
+                let deadline = Duration::from_millis(DRAIN_DEADLINE_MS);
+
+                // Attempt to drain remaining buffered output after process exit
+                // Try reading with timeout
+                match timeout(deadline, &mut read_fut).await {
+                    Ok(v) => v?, // got data or EOF (empty)
+                    _ => {
+                        warn!(sl(), "exit-drain timeout, return EOF"; "container-id" => cid, "exec-id" => eid);
+                        Vec::new() // Return empty as EOF
+                    }
+                }
             }
-        }
+        };
+
+        let mut resp = ReadStreamResponse::new();
+        resp.set_data(data);
+
+        Ok(resp)
     }
 }
 
@@ -1019,10 +1061,11 @@ impl agent_ttrpc::AgentService for AgentService {
         if !interface.devicePath.is_empty() {
             #[cfg(not(target_arch = "s390x"))]
             {
-                let pcipath = pci::Path::from_str(&interface.devicePath).map_ttrpc_err(|e| {
-                    format!("Unexpected pci-path for network interface: {e:?}")
-                })?;
-                wait_for_pci_net_interface(&self.sandbox, &pcipath)
+                let (root_complex, pcipath) = pcipath_from_dev_tree_path(&interface.devicePath)
+                    .map_ttrpc_err(|e| {
+                        format!("Invalid PCI path for network interface: {:?}", e)
+                    })?;
+                wait_for_pci_net_interface(&self.sandbox, root_complex, &pcipath)
                     .await
                     .map_ttrpc_err(|e| format!("interface not available: {e:?}"))?;
             }
@@ -1773,10 +1816,6 @@ async fn read_stream(reader: &Mutex<ReadHalf<PipeStream>>, l: usize) -> Result<V
     let len = reader.read(&mut content).await?;
     content.resize(len, 0);
 
-    if len == 0 {
-        return Err(anyhow!("read meet eof"));
-    }
-
     Ok(content)
 }
 
@@ -2125,7 +2164,9 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
         slots.push(pci::SlotFn::new(*slot, 0)?);
     }
     let pcipath = pci::Path::new(slots)?;
-    let dev_name = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
+    // Default all virtio devices to root_complex 00 aka pcie.0
+    let root_complex = "00";
+    let dev_name = get_virtio_blk_pci_device_name(sandbox, root_complex, &pcipath).await?;
 
     let c_str = CString::new(dev_name)?;
     let ret = unsafe { libc::swapon(c_str.as_ptr() as *const c_char, 0) };

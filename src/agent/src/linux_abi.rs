@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::pci;
+use anyhow::{Context, Result};
 use cfg_if::cfg_if;
-
+use std::str::FromStr;
 // Linux ABI related constants.
 
 #[cfg(target_arch = "aarch64")]
@@ -18,19 +20,32 @@ pub const SYSFS_DIR: &str = "/sys";
     target_arch = "x86_64",
     target_arch = "x86"
 ))]
-pub fn create_pci_root_bus_path() -> String {
-    String::from("/devices/pci0000:00")
+// With NUMA, we need to make sure we use the correct root complex which is
+// defined by the pxb-pcie driver.
+pub fn create_pci_root_bus_path(root_complex: &str) -> String {
+    format!("/devices/pci0000:{root_complex}")
+}
+
+// This is used in several modules, let's create a helper function to parse the
+// qom path and switch easily once the shim sends us the full NUMA path
+pub fn pcipath_from_dev_tree_path(dev_tree_path: &str) -> Result<(&str, pci::Path)> {
+    // Placeholder until the shim send us the full NUMA path
+    // via shim in the form of root_complex/bus/device  10/00/02
+    // Currently the shim only sends us the bus/device 00/02
+    let pci_path = pci::Path::from_str(dev_tree_path)
+        .with_context(|| format!("Failed to parse PCI path from QOM path '{}'", dev_tree_path))?;
+    Ok(("00", pci_path))
 }
 
 #[cfg(target_arch = "aarch64")]
-pub fn create_pci_root_bus_path() -> String {
-    let ret = String::from("/devices/platform/4010000000.pcie/pci0000:00");
+pub fn create_pci_root_bus_path(root_complex: &str) -> String {
+    let ret = format!("/devices/platform/4010000000.pcie/pci0000:{root_complex}");
 
-    let acpi_root_bus_path = String::from("/devices/pci0000:00");
+    let acpi_root_bus_path = format!("/devices/pci0000:{root_complex}");
     let mut acpi_sysfs_dir = String::from(SYSFS_DIR);
     let mut sysfs_dir = String::from(SYSFS_DIR);
     let mut start_root_bus_path = String::from("/devices/platform/");
-    let end_root_bus_path = String::from("/pci0000:00");
+    let end_root_bus_path = format!("/pci0000:{root_complex}");
 
     // check if there is pci bus path for acpi
     acpi_sysfs_dir.push_str(&acpi_root_bus_path);
