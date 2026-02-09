@@ -41,6 +41,11 @@ PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-no}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-${GITHUB_ACTOR:-}}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-${GH_TOKEN:-}}"
 
+# GPG key for gperf tarball verification (current)
+GPERF_GPG_KEYS=(
+	"E0FFBD975397F77A32AB76ECB6301D9E1BBEAC08"
+)
+
 #
 # Install ORAS using the existing install script
 #
@@ -196,44 +201,59 @@ download_upstream() {
 	output_dir=$(dirname "${output_path}")
 
 	info "Downloading from upstream: ${url}"
-	curl -sSL -o "${output_path}" "${url}"
+	if ! curl -fsSL -o "${output_path}" "${url}"; then
+		die "Could not download from ${url}"
+	fi
 
 	# Download and verify using SHA256 checksum if available
 	if [[ -n "${checksum_url}" ]]; then
 		local checksum_file="${output_dir}/${tarball_name}.sha256"
-		if curl -sSL -o "${checksum_file}" "${checksum_url}" 2>/dev/null; then
-			info "Verifying SHA256 checksum..."
-			pushd "${output_dir}" > /dev/null
-			sha256sum -c "${tarball_name}.sha256" >&2
-			popd > /dev/null
-			info "SHA256 checksum verified"
-			# Keep the checksum file for caching
-		else
-			warn "Could not download checksum file from ${checksum_url}"
+		if ! curl -fsSL -o "${checksum_file}" "${checksum_url}" 2>/dev/null; then
+			die "Could not download checksum file from ${checksum_url}"
 		fi
+		info "Verifying SHA256 checksum..."
+		pushd "${output_dir}" > /dev/null
+		if ! sha256sum -c "${tarball_name}.sha256" >&2; then
+			popd > /dev/null
+			die "SHA256 checksum verification failed for ${tarball_name}"
+		fi
+		popd > /dev/null
+		info "SHA256 checksum verified"
+		# Keep the checksum file for caching
 	fi
 
-	# Download and verify using GPG signature if available
+	# Download and verify using GPG signature if available (gperf only; keys are gperf-specific)
 	if [[ -n "${gpg_sig_url}" ]]; then
-		local sig_file="${output_dir}/${tarball_name}.sig"
-		if curl -sSL -o "${sig_file}" "${gpg_sig_url}" 2>/dev/null; then
-			info "Verifying GPG signature..."
-			# Import GPG key from keyserver (gperf maintainer: Marcel Schaible)
-			gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys EDEB87A500CC0A211677FBFD93C08C88471097CD >&2 2>/dev/null || true
-			pushd "${output_dir}" > /dev/null
-			if gpg --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
-				info "GPG signature verified"
-				# Export the GPG key to cache alongside the signature for offline verification
-				gpg --export EDEB87A500CC0A211677FBFD93C08C88471097CD > "${tarball_name}.gpg-keyring" 2>/dev/null || true
-				info "Exported GPG public key for caching"
-			else
-				warn "GPG signature verification failed"
-			fi
-			popd > /dev/null
-			# Keep the sig file for caching
-		else
-			warn "Could not download GPG signature from ${gpg_sig_url}"
+		if [[ "${tarball_name}" != gperf-*.tar.gz ]]; then
+			die "GPG verification is only supported for gperf (tarball gperf-*.tar.gz), got: ${tarball_name}"
 		fi
+		local sig_file="${output_dir}/${tarball_name}.sig"
+		if ! curl -fsSL -o "${sig_file}" "${gpg_sig_url}" 2>/dev/null; then
+			die "Could not download GPG signature from ${gpg_sig_url}"
+		fi
+		info "Verifying GPG signature..."
+		# Import GPG keys from keyserver (gperf maintainers)
+		local import_ok="no"
+		for key in "${GPERF_GPG_KEYS[@]}"; do
+			if gpg --keyserver hkps://keyserver.ubuntu.com --recv-keys "${key}" >&2 2>/dev/null; then
+				import_ok="yes"
+			fi
+		done
+		if [[ "${import_ok}" != "yes" ]]; then
+			die "Failed to import GPG keys for ${tarball_name}"
+		fi
+		pushd "${output_dir}" > /dev/null
+		if gpg --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
+			info "GPG signature verified"
+			# Export the GPG keys to cache alongside the signature for offline verification
+			gpg --export "${GPERF_GPG_KEYS[@]}" > "${tarball_name}.gpg-keyring" 2>/dev/null || true
+			info "Exported GPG public keys for caching"
+		else
+			popd > /dev/null
+			die "GPG signature verification failed for ${tarball_name}"
+		fi
+		popd > /dev/null
+		# Keep the sig file for caching
 	fi
 
 	info "Downloaded: ${output_path}"
@@ -278,14 +298,23 @@ download_with_cache() {
 						popd > /dev/null
 					fi
 				elif [[ -f "${tarball_name}.sig" ]]; then
+					if [[ "${tarball_name}" != gperf-*.tar.gz ]]; then
+						die "GPG verification is only supported for gperf (tarball gperf-*.tar.gz), got: ${tarball_name}"
+					fi
 					# GPG signature file exists - import cached key if available
 					if [[ -f "${tarball_name}.gpg-keyring" ]]; then
 						# Import GPG key from cached keyring (no internet needed)
 						gpg --import "${tarball_name}.gpg-keyring" >&2 2>/dev/null || true
 						info "Imported GPG key from cache"
 					fi
-					# Verify if key is now available (gperf maintainer: Marcel Schaible)
-					if gpg --list-keys EDEB87A500CC0A211677FBFD93C08C88471097CD &>/dev/null; then
+					local key_available="no"
+					for key in "${GPERF_GPG_KEYS[@]}"; do
+						if gpg --list-keys "${key}" &>/dev/null; then
+							key_available="yes"
+							break
+						fi
+					done
+					if [[ "${key_available}" == "yes" ]]; then
 						if gpg --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
 							info "GPG signature verified for cached ${artifact_name}"
 							popd > /dev/null
