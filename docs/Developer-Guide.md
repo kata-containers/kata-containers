@@ -289,14 +289,14 @@ provided by your distribution.
 
 As a prerequisite, you need to install Docker. Otherwise, you will not be
 able to run the `rootfs.sh` script with `USE_DOCKER=true` as expected in
-the following example.
+the following example. Specifying the `OS_VERSION` is required when using `distro="ubuntu"`.
 
 ```bash
 $ export distro="ubuntu" # example
 $ export ROOTFS_DIR="$(realpath kata-containers/tools/osbuilder/rootfs-builder/rootfs)"
 $ sudo rm -rf "${ROOTFS_DIR}"
 $ pushd kata-containers/tools/osbuilder/rootfs-builder
-$ script -fec 'sudo -E USE_DOCKER=true ./rootfs.sh "${distro}"'
+$ script -fec 'sudo -E USE_DOCKER=true OS_VERSION=noble ./rootfs.sh "${distro}"'
 $ popd
 ```
 
