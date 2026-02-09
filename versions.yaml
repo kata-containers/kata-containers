@@ -212,6 +212,9 @@ assets:
       description: "Linux kernel with x86_64 TEEs (SNP and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
       version: "v6.18.5"
+      reference_value_calculator:
+        # Qemu Direct boot upon TDVF
+        tdx: "https://raw.githubusercontent.com/confidential-containers/td-shim/28bfa349f59a2d8da580e032c6fdcd79abd30824/td-shim-tools/src/bin/td-payload-reference-calculator/td_payload_qemu_hash.py"
     nvidia:
       description: "Linux kernel optimised for virtual machines"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
@@ -422,6 +425,7 @@ externals:
       version: "edk2-stable202511"
       package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
       package_output_dir: "IntelTdx"
+      reference_value_calculator: "https://raw.githubusercontent.com/confidential-containers/td-shim/28bfa349f59a2d8da580e032c6fdcd79abd30824/td-shim-tools/src/bin/td-shim-tee-info-hash/td_shim_tee_info_hash.py"
     arm64:
       description: "UEFI for arm64 virtual machines."
       version: "edk2-stable202508"
