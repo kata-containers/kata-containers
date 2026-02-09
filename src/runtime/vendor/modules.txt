@@ -13,7 +13,7 @@ github.com/AdaLogics/go-fuzz-headers
 # github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0
 ## explicit; go 1.18
 github.com/AdamKorcz/go-118-fuzz-build/testing
-# github.com/BurntSushi/toml v1.5.0
+# github.com/BurntSushi/toml v1.6.0
 ## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
