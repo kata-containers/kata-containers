@@ -36,7 +36,7 @@ setup() {
 
 teardown() {
 	[ "$(uname -m)" == "ppc64le" ] && skip "ip6tables tests for ppc64le"
-	
+
 	# Debugging information
 	kubectl logs "$pod_name"
 

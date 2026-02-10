@@ -389,7 +389,7 @@ impl FsDeviceMgr {
         };
 
         let vm_as = ctx.get_vm_as().map_err(|e| {
-            error!(ctx.logger(), "virtio-fs get vm_as error: {:?}", e; 
+            error!(ctx.logger(), "virtio-fs get vm_as error: {:?}", e;
                 "subsystem" => "virito-fs");
             FsDeviceError::DeviceManager(e)
         })?;

@@ -310,11 +310,11 @@ download_with_cache() {
 				fi
 			fi
 		fi
-		
+
 		# Cache miss or verification failed - download from upstream
 		info "Downloading ${artifact_name} from upstream..."
 		download_upstream "${upstream_url}" "${tarball_path}" "${checksum_url}" "${gpg_sig_url}"
-		
+
 		# Push to cache for future use (include verification files)
 		push_to_cache "${artifact_name}" "${version}" "${tarball_path}"
 	else
@@ -347,13 +347,13 @@ download_component() {
 	# Convert component name to uppercase for environment variable lookup
 	local component_upper
 	component_upper=$(echo "${component}" | tr '[:lower:]' '[:upper:]')
-	
+
 	# Get version and URL from environment variables or versions.yaml
 	local version_var="${component_upper}_VERSION"
 	local url_var="${component_upper}_URL"
 	local version="${!version_var:-}"
 	local base_url="${!url_var:-}"
-	
+
 	# Fall back to versions.yaml if environment variables not set
 	if [[ -z "${version}" ]]; then
 		if command -v yq &>/dev/null; then
@@ -362,7 +362,7 @@ download_component() {
 			die "Component version not provided and yq not available. Set ${component_upper}_VERSION environment variable."
 		fi
 	fi
-	
+
 	if [[ -z "${base_url}" ]]; then
 		if command -v yq &>/dev/null; then
 			base_url=$(get_from_kata_deps ".externals.${component}.url")

@@ -119,17 +119,17 @@ The metrics service also doesn't hold any metrics in memory.
 *Metrics size*: response size of one Prometheus scrape request.
 
 It's easy to estimate the size of one metrics fetch request issued by Prometheus.
-The formula to calculate the expected size when no gzip compression is in place is:  
+The formula to calculate the expected size when no gzip compression is in place is:
 9 + (144 - 9) * `number of kata sandboxes`
 
-Prometheus supports `gzip compression`. When enabled, the response size of each request will be smaller:  
+Prometheus supports `gzip compression`. When enabled, the response size of each request will be smaller:
 2 + (10 - 2) * `number of kata sandboxes`
 
-**Example**  
-We have 10 sandboxes running on a node. The expected size of one metrics fetch request issued by Prometheus against the kata-monitor agent running on that node will be:  
+**Example**
+We have 10 sandboxes running on a node. The expected size of one metrics fetch request issued by Prometheus against the kata-monitor agent running on that node will be:
 9 + (144 - 9) * 10 = **1.35M**
 
-If `gzip compression` is enabled:  
+If `gzip compression` is enabled:
 2 + (10 - 2) * 10 = **82K**
 
 #### Metrics delay ####

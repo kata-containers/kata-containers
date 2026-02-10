@@ -2,7 +2,7 @@
 
 `dbs-upcall` is a direct communication tool between VMM and guest developed upon VSOCK. The server side of the upcall is a driver in guest kernel (kernel patches are needed for this feature) and it'll start to serve the requests after the kernel starts. And the client side is in VMM , it'll be a thread that communicates with VSOCK through UDS.
 
-We have accomplished device hotplug / hot-unplug directly through upcall in order to avoid virtualization of ACPI to minimize virtual machines overhead. And there could be many other usage through this direct communication channel. 
+We have accomplished device hotplug / hot-unplug directly through upcall in order to avoid virtualization of ACPI to minimize virtual machines overhead. And there could be many other usage through this direct communication channel.
 
 ## Design
 
@@ -33,7 +33,7 @@ If request is sent in step 3, upcall state will change to `ServiceBusy` and upca
 There are two parts for the upcall request message : message header and message load.
 And there are three parts for the upcall reply message: message header, result and message load.
 
-Message Header contains following information and it remains the same for the request and the reply : 
+Message Header contains following information and it remains the same for the request and the reply :
 1. magic_version(u32): magic version for identifying upcall and the service type
 2. msg_size(u32): size of the message load
 3. msg_type(u32): type for the message to identify its usage  (e.g. ADD_CPU)
@@ -49,7 +49,7 @@ msg_load type 2: `cpu_dev_info`` - for CPU hotplug / hot-unplug request:
 1. count
 2. `apic_ver`
 3. `apic_ids[256]`
-   
+
 For the upcall reply message, reply contains result and two kinds of msg_load.
 If result is 0, the operation is successful.
 If result is not 0, result refers to the error code.

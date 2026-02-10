@@ -1,10 +1,10 @@
 # Kata Containers 3.0 rust runtime installation
-The following is an overview of the different installation methods available. 
+The following is an overview of the different installation methods available.
 
 ## Prerequisites
 
-Kata Containers 3.0 rust runtime requires nested virtualization or bare metal. Check 
-[hardware requirements](/src/runtime/README.md#hardware-requirements) to see if your system is capable of running Kata 
+Kata Containers 3.0 rust runtime requires nested virtualization or bare metal. Check
+[hardware requirements](/src/runtime/README.md#hardware-requirements) to see if your system is capable of running Kata
 Containers.
 
 ### Platform support
@@ -25,10 +25,10 @@ architectures:
 | Installation method                                  | Description                                                                                  | Automatic updates | Use case                                                                                      | Availability
 |------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|----------- |
 | [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | Yes |
-| [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users. | No |                                                                   
+| [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users. | No |
 | [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 | No |
 | [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system                                      | **No!**           | For those who want the latest release with more control.                                      | No |
-| [Build from source](#build-from-source-installation) | Build the software components manually                                                       | **No!**           | Power users and developers only.  | Yes |              
+| [Build from source](#build-from-source-installation) | Build the software components manually                                                       | **No!**           | Power users and developers only.  | Yes |
 
 ### Kata Deploy Installation
 
@@ -57,7 +57,7 @@ Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/helm-chart/README.m
     ```
 
 * Musl support for fully static binary
-    
+
     Example for `x86_64`
     ```
     $ rustup target add x86_64-unknown-linux-musl

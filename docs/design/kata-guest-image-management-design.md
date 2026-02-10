@@ -5,7 +5,7 @@ To safeguard the integrity of container images and prevent tampering from the ho
 ## Introduction to remote snapshot
 Containerd 1.7 introduced `remote snapshotter` feature which is the foundation for pulling images in the guest for Confidential Containers.
 
-While it's beyond the scope of this document to fully explain how the container rootfs is created to the point it can be executed,  a fundamental grasp of the snapshot concept is essential. Putting it in a simple way, containerd fetches the image layers from an OCI registry into its local content storage. However, they cannot be mounted as is (e.g. the layer can be tar+gzip compressed) as well as they should be immutable so the content can be shared among containers. Thus containerd leverages snapshots of those layers to build the container's rootfs. 
+While it's beyond the scope of this document to fully explain how the container rootfs is created to the point it can be executed,  a fundamental grasp of the snapshot concept is essential. Putting it in a simple way, containerd fetches the image layers from an OCI registry into its local content storage. However, they cannot be mounted as is (e.g. the layer can be tar+gzip compressed) as well as they should be immutable so the content can be shared among containers. Thus containerd leverages snapshots of those layers to build the container's rootfs.
 
 The role of `remote snapshotter` is to reuse snapshots that are stored in a remotely shared place, thus enabling containerd to prepare the container’s rootfs in a manner similar to that of a local `snapshotter`. The key behavior that makes this the building block of Kata's guest image management for Confidential Containers is that containerd will not pull the image layers from registry, instead it assumes that `remote snapshotter` and/or an external entity will perform that operation on his behalf.
 
@@ -48,7 +48,7 @@ Pull the container image directly from the guest VM using `nydus snapshotter` ba
 
 #### Architecture
 
-The following diagram provides an overview of the architecture for pulling image in the guest with key components. 
+The following diagram provides an overview of the architecture for pulling image in the guest with key components.
 ```mermaid
 flowchart LR
     Kubelet[kubelet]--> |1\. Pull image request & metadata|Containerd
@@ -129,7 +129,7 @@ Next the `handleImageGuestPullBlockVolume()` is called to build the Storage obje
 Below is an example of storage information packaged in the message sent to the kata-agent:
 
 ```json
-"driver": "image_guest_pull", 
+"driver": "image_guest_pull",
     "driver_options": [
         "image_guest_pull"{
             "metadata":{
@@ -145,15 +145,15 @@ Below is an example of storage information packaged in the message sent to the k
                 "io.kubernetes.cri.sandbox-uid": "de7c6a0c-79c0-44dc-a099-69bb39f180af",
             }
         }
-    ], 
-    "source": "quay.io/kata-containers/confidential-containers:unsigned", 
-    "fstype": "overlay", 
-    "options": [], 
+    ],
+    "source": "quay.io/kata-containers/confidential-containers:unsigned",
+    "fstype": "overlay",
+    "options": [],
     "mount_point": "/run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/rootfs",
 ```
 Next, the kata-agent's RPC module will handle the create container request which, among other things, involves adding storages to the sandbox. The storage module contains implementations of `StorageHandler` interface for various storage types, being the `ImagePullHandler` in charge of handling the storage object for the container image (the storage manager instantiates the handler based on the value of the "driver").
 
-`ImagePullHandler` delegates the image pulling operation to the `confidential_data_hub.pull_image()` that is going to create the image's bundle directory on the guest filesystem and, in turn, the `ImagePullService` of Confidential Data Hub to fetch, uncompress and mount the image's rootfs. 
+`ImagePullHandler` delegates the image pulling operation to the `confidential_data_hub.pull_image()` that is going to create the image's bundle directory on the guest filesystem and, in turn, the `ImagePullService` of Confidential Data Hub to fetch, uncompress and mount the image's rootfs.
 
 > **Notes:**
 > In this flow, `confidential_data_hub.pull_image()` parses the image metadata, looking for either the `io.kubernetes.cri.container-type: sandbox` or `io.kubernetes.cri-o.ContainerType: sandbox` (CRI-IO case) annotation, then it never calls the `pull_image()` RPC of Confidential Data Hub because the pause image is expected to already be inside the guest's filesystem, so instead `confidential_data_hub.unpack_pause_image()` is called.

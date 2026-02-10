@@ -112,4 +112,4 @@ if ! wait_for_daemonset ${DIRECTVOL_NAMESPACE} csi-kata-directvol-plugin; then
     exit 1
 fi
 
-kubectl get po,ds -A 
+kubectl get po,ds -A

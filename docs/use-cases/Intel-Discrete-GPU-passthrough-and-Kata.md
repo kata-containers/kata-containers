@@ -6,15 +6,15 @@ For integrated GPUs please refer to [Integrate-Intel-GPUs-with-Kata](Intel-GPU-p
 
 > **Note:** These instructions are for a system that has an x86_64 CPU.
 
-An Intel Discrete GPU can be passed to a Kata Container using GPU passthrough, 
+An Intel Discrete GPU can be passed to a Kata Container using GPU passthrough,
 or SR-IOV passthrough.
 
-In Intel GPU pass-through mode, an entire physical GPU is directly assigned to one VM. 
+In Intel GPU pass-through mode, an entire physical GPU is directly assigned to one VM.
 In this mode of operation, the GPU is accessed exclusively by the Intel driver running in
 the VM to which it is assigned. The GPU is not shared among VMs.
 
 With SR-IOV mode, it is possible to pass a Virtual GPU instance to a virtual machine.
-With this, multiple Virtual GPU instances can be carved out of a single physical GPU 
+With this, multiple Virtual GPU instances can be carved out of a single physical GPU
 and be passed to different VMs, allowing the GPU to be shared.
 
 | Technology | Description |
@@ -28,13 +28,13 @@ Intel GPUs Recommended for Virtualization:
 
 - Intel® Data Center GPU Max Series (`Ponte Vecchio`)
 - Intel® Data Center GPU Flex Series (`Arctic Sound-M`)
-- Intel® Data Center GPU Arc Series 
+- Intel® Data Center GPU Arc Series
 
 The following steps outline the workflow for using an Intel Graphics device with Kata Containers.
 
 ## Host BIOS requirements
 
-Hardware such as Intel Max and Flex series require larger PCI BARs. 
+Hardware such as Intel Max and Flex series require larger PCI BARs.
 
 For large BAR devices, MMIO mapping above the 4GB address space should be enabled in the PCI configuration of the BIOS.
 
@@ -89,7 +89,7 @@ CONFIG_VFIO_IOMMU_TYPE1
 CONFIG_VFIO_PCI
 ```
 
-## Host kernel command line 
+## Host kernel command line
 
 Your host kernel needs to be booted with `intel_iommu=on` and `i915.enable_iaf=0` on the kernel command
 line.
@@ -112,8 +112,8 @@ $ sudo update-grub
 
 For CentOS/RHEL:
 ```bash
-$ sudo grub2-mkconfig -o /boot/grub2/grub.cfg 
-``` 
+$ sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+```
 
 4. Reboot the system
 ```bash
@@ -234,7 +234,7 @@ Use the following steps to pass an Intel Graphics device in SR-IOV mode to a Kat
    $ BDF="0000:3a:00.0"
    $ cat  "/sys/bus/pci/devices/$BDF/sriov_totalvfs"
    63
-   ``` 
+   ```
 
    Create SR-IOV interfaces for the GPU:
    ```sh

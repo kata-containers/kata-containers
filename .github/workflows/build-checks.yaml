@@ -74,7 +74,7 @@ jobs:
               - rust
               - protobuf-compiler
         instance:
-          - ${{ inputs.instance }} 
+          - ${{ inputs.instance }}
 
     steps:
       - name: Adjust a permission for repo

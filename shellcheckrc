@@ -9,7 +9,7 @@ enable=check-unassigned-uppercase
 
 # Enforces braces around variable expansions to avoid ambiguity or confusion.
 # e.g. ${filename} rather than $filename
-enable=require-variable-braces 
+enable=require-variable-braces
 
 # Requires double-bracket syntax [[ expr ]] for safer, more consistent tests.
 # NO:  if [ "$var" = "value" ]

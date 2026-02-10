@@ -347,7 +347,7 @@ jobs:
           path: kata-tools-artifacts
 
       - name: Install kata & kata-tools
-        run: | 
+        run: |
           bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
           bash tests/functional/kata-agent-apis/gha-run.sh install-kata-tools kata-tools-artifacts
 

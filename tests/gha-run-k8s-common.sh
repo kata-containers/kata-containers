@@ -830,7 +830,7 @@ function helm_helper() {
 		if [[ -n "${HELM_DEFAULT_SHIM}" ]]; then
 			runtime_class="kata-${HELM_DEFAULT_SHIM}"
 		fi
-		
+
 		local verification_yaml
 		verification_yaml=$(mktemp)
 		cat > "${verification_yaml}" << 'VERIFICATION_POD_EOF'

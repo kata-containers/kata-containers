@@ -27,7 +27,7 @@ spec:
       containers:
       - name: kata-monitor
         image: quay.io/kata-containers/kata-monitor:2.0.0
-        args: 
+        args:
           - -log-level=debug
         ports:
           - containerPort: 8090

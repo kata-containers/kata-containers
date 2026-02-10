@@ -141,7 +141,7 @@ spec:
               name: csi-persist-data
             - mountPath: /dev
               name: dev-dir
-            # backend block file stored at storage-pool 
+            # backend block file stored at storage-pool
             - mountPath: /tmp/kata-directvol-storages
               name: storage-pool
             # direct volume mountInfo.json stored at shared-directvols
@@ -192,7 +192,7 @@ spec:
             path: /dev
             type: Directory
           name: dev-dir
-        # kata-containers backend rawblock stored there. 
+        # kata-containers backend rawblock stored there.
         - hostPath:
             path: /tmp/kata-directvol-storages
             type: DirectoryOrCreate

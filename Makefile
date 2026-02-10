@@ -47,10 +47,10 @@ docs-url-alive-check:
 	bash ci/docs-url-alive-check.sh
 
 build-and-publish-kata-debug:
-	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG} 
+	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG}
 
 docs-serve:
-	docker run --rm -p 8000:8000 -v ./docs:/docs:ro -v ${PWD}/zensical.toml:/zensical.toml:ro zensical/zensical serve --config-file /zensical.toml -a 0.0.0.0:8000 
+	docker run --rm -p 8000:8000 -v ./docs:/docs:ro -v ${PWD}/zensical.toml:/zensical.toml:ro zensical/zensical serve --config-file /zensical.toml -a 0.0.0.0:8000
 
 .PHONY: \
 	all \

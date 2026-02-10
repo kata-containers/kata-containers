@@ -30,7 +30,7 @@ $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ```
 
 > **Note**
-> - `-v 5.10.25`: Specify the guest kernel version. 
+> - `-v 5.10.25`: Specify the guest kernel version.
 > - `-g nvidia`: To build a guest kernel supporting Nvidia GPU.
 > - `-f`: The `.config` file is forced to be generated even if the kernel directory already exists.
 > - `-d`: Enable bash debug mode.

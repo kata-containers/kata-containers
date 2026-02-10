@@ -1,6 +1,6 @@
 # Kata Agent Policy
 
-Agent Policy is a Kata Containers feature that enables the Guest VM to perform additional validation for each [ttRPC API](../../src/libs/protocols/protos/agent.proto) request. 
+Agent Policy is a Kata Containers feature that enables the Guest VM to perform additional validation for each [ttRPC API](../../src/libs/protocols/protos/agent.proto) request.
 
 The Policy is commonly used for implementing confidential containers, where the Kata Shim and the Kata Agent have different trust properties. However, the Policy can be used for non-confidential containers too - e.g., for a basic defense in depth step of blocking the Host from starting an application on the Guest. However, for non-confidential containers, the Host might be able to modify the Policy and/or replace the Agent and disable its Policy rules, so a Policy is more helpful for confidential containers.
 
@@ -35,7 +35,7 @@ Kubernetes users can encode in `base64` format their Policy documents, and add t
 For example, the [`allow-all-except-exec-process.rego`](../../src/kata-opa/allow-all-except-exec-process.rego) sample policy file is different from the [default Policy](../../src/kata-opa/allow-all.rego) because it rejects any `ExecProcess` requests. To encode this policy file, you need to:
 - Embed the policy inside an init data struct
 - Compress
-- Base64 encode 
+- Base64 encode
 For example:
 
 ```bash

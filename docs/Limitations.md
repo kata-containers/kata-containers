@@ -206,7 +206,7 @@ For security reasons, the following mounts are disallowed:
 | `proc \|\| sysfs` | `*`       | not a directory (e.g. symlink)   | CVE-2019-19921 |
 
 For bind mounts under /proc, these destinations are allowed:
-	
+
  * `/proc/cpuinfo`
  * `/proc/diskstats`
  * `/proc/meminfo`

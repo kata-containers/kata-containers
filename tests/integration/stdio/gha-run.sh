@@ -10,7 +10,7 @@ set -o nounset
 set -o pipefail
 
 kata_tarball_dir="${2:-kata-artifacts}"
-runk_dir="$(dirname "$(readlink -f "$0")")" 
+runk_dir="$(dirname "$(readlink -f "$0")")"
 source "${runk_dir}/../../common.bash"
 source "${runk_dir}/../../gha-run-k8s-common.sh"
 

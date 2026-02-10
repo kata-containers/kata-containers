@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
     match args.action {
         Action::Install => {
             install(&config, &runtime).await?;
-            
+
             // DEPLOYMENT MODEL: Install runs as DaemonSet
             // After installation completes, the pod must stay alive to maintain
             // the kata-runtime label and artifacts. Sleep forever to keep pod running.
@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
         }
         Action::Cleanup => {
             cleanup(&config, &runtime).await?;
-            
+
             // DEPLOYMENT MODEL: Cleanup runs as Job or Helm post-delete hook
             // For Helm post-delete hooks, exit immediately.
             // This ensures the pod terminates cleanly without waiting
@@ -83,13 +83,13 @@ async fn main() -> Result<()> {
                 info!("Cleanup completed (Helm post-delete hook), exiting with status 0");
                 std::process::exit(0);
             }
-            
+
             // For regular cleanup jobs, exit normally after completion
             info!("Cleanup completed, exiting");
         }
         Action::Reset => {
             reset(&config, &runtime).await?;
-            
+
             // DEPLOYMENT MODEL: Reset runs as Job
             // Exit after completion so the job can complete
             info!("Reset completed, exiting");

@@ -6,7 +6,7 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 
 ENV GO_HOME="/opt"
-ENV GOCACHE="${GO_HOME}/.cache" 
+ENV GOCACHE="${GO_HOME}/.cache"
 ENV RUSTUP_HOME="/opt/rustup"
 ENV CARGO_HOME="/opt/cargo"
 ENV PATH="/opt/cargo/bin/:/opt/go/bin:${PATH}"
@@ -33,7 +33,7 @@ RUN apt-get update && \
         sudo && \
         apt-get clean && rm -rf /var/lib/apt/lists/&& \
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_VERSION}
-    
+
 RUN ARCH=$(uname -m); \
    	rust_arch=""; \
    	libc=""; \
@@ -44,8 +44,8 @@ RUN ARCH=$(uname -m); \
         "s390x") rust_arch="${ARCH}"; libc="gnu"; ;; \
         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
   	esac; \
-   	rustup target add "${rust_arch}-unknown-linux-${libc}" 
-        
+   	rustup target add "${rust_arch}-unknown-linux-${libc}"
+
 RUN ARCH=$(uname -m); \
     goarch=""; \
     kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \

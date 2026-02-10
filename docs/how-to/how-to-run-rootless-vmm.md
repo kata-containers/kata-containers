@@ -1,5 +1,5 @@
 ## Introduction
-To improve security, Kata Container supports running the VMM process (QEMU and cloud-hypervisor) as a non-`root` user. 
+To improve security, Kata Container supports running the VMM process (QEMU and cloud-hypervisor) as a non-`root` user.
 This document describes how to enable the rootless VMM mode and its limitations.
 
 ## Pre-requisites
@@ -20,8 +20,8 @@ By default, the VMM process still runs as the root user. There are two ways to e
 2. Set the Kubernetes annotation `io.katacontainers.hypervisor.rootless` to `true`.
 
 ## Implementation details
-When `rootless` flag is enabled, upon a request to create a Pod, Kata Containers runtime creates a random user and group (e.g. `kata-123`), and uses them to start the hypervisor process. 
-The `kvm` group is also given to the hypervisor process as a supplemental group to give the hypervisor process access to the `/dev/kvm` device. 
+When `rootless` flag is enabled, upon a request to create a Pod, Kata Containers runtime creates a random user and group (e.g. `kata-123`), and uses them to start the hypervisor process.
+The `kvm` group is also given to the hypervisor process as a supplemental group to give the hypervisor process access to the `/dev/kvm` device.
 Another necessary change is to move the hypervisor runtime files (e.g. `vhost-fs.sock`, `qmp.sock`) to a directory (under `/run/user/[uid]/`) where only the non-root hypervisor has access to.
 
 ## Limitations

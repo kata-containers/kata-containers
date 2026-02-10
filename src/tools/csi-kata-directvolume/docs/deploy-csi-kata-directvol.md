@@ -154,10 +154,10 @@ Containers:
       /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-zs9tm (ro)
 Conditions:
   Type              Status
-  Initialized       True 
-  Ready             True 
-  ContainersReady   True 
-  PodScheduled      True 
+  Initialized       True
+  Ready             True
+  ContainersReady   True
+  PodScheduled      True
 Volumes:
   kata-driectvol0-volume:
     Type:       PersistentVolumeClaim (a reference to a PersistentVolumeClaim in the same namespace)

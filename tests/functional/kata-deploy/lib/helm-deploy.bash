@@ -62,7 +62,7 @@ deploy_kata() {
 	local extra_values_file="${1:-}"
 	shift || true
 	local extra_helm_args=("$@")
-	
+
 	local chart_path
 	local values_yaml
 

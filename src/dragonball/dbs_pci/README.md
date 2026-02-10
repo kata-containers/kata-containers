@@ -22,6 +22,6 @@ There are several components in `dbs-pci` crate building together to emulate PCI
 
 8. `vfio` mod: `vfio` mod collects lots of information related to the `vfio` operations.
     a. `vfio` `msi` and `msix` capability and state
-    b. `vfio` interrupt information 
+    b. `vfio` interrupt information
     c. PCI region information
     d. `vfio` PCI device information and state

@@ -19,7 +19,7 @@ The Kubernetes cluster will use the
 
 ## Install and configure containerd
 
-First, follow the [How to use Kata Containers and Containerd](containerd-kata.md) to install and configure containerd. 
+First, follow the [How to use Kata Containers and Containerd](containerd-kata.md) to install and configure containerd.
 Then, make sure the containerd works with the [examples in it](containerd-kata.md#run).
 
 ## Install and configure Kubernetes
@@ -44,7 +44,7 @@ In order to allow Kubelet to use containerd (using the CRI interface), configure
   ```bash
   $ sudo mkdir -p  /etc/systemd/system/kubelet.service.d/
   $ cat << EOF | sudo tee  /etc/systemd/system/kubelet.service.d/0-containerd.conf
-  [Service]                                                 
+  [Service]
   Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
   EOF
   ```
@@ -182,7 +182,7 @@ If a pod has the `runtimeClassName` set to `kata`, the CRI runs the pod with the
     containers:
     - name: nginx
       image: nginx
-      
+
   EOF
   ```
 

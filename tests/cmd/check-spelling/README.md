@@ -39,9 +39,9 @@ to be accepted as correct. The following lists common examples of such words:
 $ ./kata-spell-check.sh check /path/to/file
 ```
 
-> **Note:** If you have made local edits to the dictionaries, you may 
+> **Note:** If you have made local edits to the dictionaries, you may
 > [re-create the master dictionary files](#create-the-master-dictionary-files)
-> as documented in the [Adding a new word](#adding-a-new-word) section, 
+> as documented in the [Adding a new word](#adding-a-new-word) section,
 > in order for your local edits take effect.
 
 ## Other options

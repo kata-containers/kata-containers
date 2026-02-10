@@ -66,12 +66,12 @@ false_positives["kata-monitor"]="GO-2025-3595 \
   GO-2022-1159"
 
 # Function to filter false positives and return both result and filtered output
-# This is required as at the moment there is no native support for silencing vulnerability findings. 
+# This is required as at the moment there is no native support for silencing vulnerability findings.
 # See https://go.dev/issue/61211 for updates.
 filter_and_check() {
   local binary_name="$1"
   local output="$2"
-  
+
   local fp_list="${false_positives[${binary_name}]:-}"
   if [[ -z "${fp_list}" ]]; then
     if grep -q "GO-\|vulnerability" <<< "${output}"; then
@@ -82,7 +82,7 @@ filter_and_check() {
     fi
     return
   fi
-  
+
   # Filter out false positives and summary lines
   local filtered_output="${output}"
   for fp_id in ${fp_list}; do

@@ -432,10 +432,10 @@ impl Config {
     /// Get containerd configuration file paths based on runtime type and containerd version
     pub async fn get_containerd_paths(&self, runtime: &str) -> Result<ContainerdPaths> {
         use crate::runtime::manager;
-        
+
         // Check if drop-in files can be used based on containerd version
         let use_drop_in = manager::is_containerd_capable_of_using_drop_in_files(self, runtime).await?;
-        
+
         let paths = match runtime {
             "k0s-worker" | "k0s-controller" => ContainerdPaths {
                 config_file: "/etc/containerd/containerd.toml".to_string(),
@@ -469,7 +469,7 @@ impl Config {
                 use_drop_in,
             },
         };
-        
+
         Ok(paths)
     }
 }
@@ -678,7 +678,7 @@ mod tests {
         cleanup_env_vars();
         std::env::set_var("NODE_NAME", "test-node");
         std::env::set_var("DEBUG", "false");
-        
+
         // Set arch-specific variables based on current architecture
         let arch = get_arch().unwrap();
         let arch_suffix = match arch.as_str() {
@@ -688,13 +688,13 @@ mod tests {
             "ppc64le" => "_PPC64LE",
             _ => "",
         };
-        
+
         if !arch_suffix.is_empty() {
             std::env::set_var(format!("SHIMS{}", arch_suffix), "qemu");
             std::env::set_var(format!("DEFAULT_SHIM{}", arch_suffix), "qemu");
         }
     }
-    
+
     /// Helper to set an arch-specific environment variable for testing
     fn set_arch_var(base_name: &str, value: &str) {
         let arch = get_arch().unwrap();
@@ -705,7 +705,7 @@ mod tests {
             "ppc64le" => "_PPC64LE",
             _ => "",
         };
-        
+
         if !arch_suffix.is_empty() {
             std::env::set_var(format!("{}{}", base_name, arch_suffix), value);
         }

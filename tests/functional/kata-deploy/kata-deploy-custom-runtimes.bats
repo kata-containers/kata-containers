@@ -101,7 +101,7 @@ CHART_PATH="$(get_chart_path)"
 @test "Helm template: Custom runtimes only mode (no standard shims)" {
 	# Test that Helm chart renders correctly when all standard shims are disabled
 	# using shims.disableAll and only custom runtimes are enabled
-	
+
 	local values_file
 	values_file=$(mktemp)
 	cat > "${values_file}" <<EOF

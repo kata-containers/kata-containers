@@ -80,8 +80,8 @@ In case of Kata, today the devices which we need in the guest are:
 - Dynamic Resource Management: `ACPI` is utilized to allow for dynamic VM
  resource management (for example: CPU, memory, device hotplug). This is
  required when containers are resized, or more generally when containers are
- added to a pod. 
- 
+ added to a pod.
+
 How these devices are utilized varies depending on the VMM utilized. We clarify
 the default settings provided when integrating Kata with the QEMU, Dragonball,
 Firecracker and Cloud Hypervisor VMMs in the following sections.

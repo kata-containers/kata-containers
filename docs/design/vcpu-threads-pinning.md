@@ -1,9 +1,9 @@
 # Design Doc for Kata Containers' VCPUs Pinning Feature
 
 ## Background
-By now, vCPU threads of Kata Containers are scheduled randomly to CPUs. And each pod would request a specific set of CPUs which we call it CPU set (just the CPU set meaning in Linux cgroups).    
+By now, vCPU threads of Kata Containers are scheduled randomly to CPUs. And each pod would request a specific set of CPUs which we call it CPU set (just the CPU set meaning in Linux cgroups).
 
-If the number of vCPU threads are equal to that of CPUs claimed in CPU set, we can then pin each vCPU thread to one specified CPU, to reduce the cost of random scheduling. 
+If the number of vCPU threads are equal to that of CPUs claimed in CPU set, we can then pin each vCPU thread to one specified CPU, to reduce the cost of random scheduling.
 
 ## Detailed Design
 
@@ -20,7 +20,7 @@ Two ways are provided to use this vCPU thread pinning feature: through `QEMU` co
 
 ### When is VCPUs Pinning Checked?
 
-As shown in Section 1, when `num(vCPU threads) == num(CPUs in CPU set)`, we shall pin each vCPU thread to a specified CPU. And when this condition is broken, we should restore to the original random scheduling pattern.  
+As shown in Section 1, when `num(vCPU threads) == num(CPUs in CPU set)`, we shall pin each vCPU thread to a specified CPU. And when this condition is broken, we should restore to the original random scheduling pattern.
 So when may `num(CPUs in CPU set)` change? There are 5 possible scenes:
 
 | Possible scenes                   | Related Code                               |
@@ -34,4 +34,4 @@ So when may `num(CPUs in CPU set)` change? There are 5 possible scenes:
 ### Core Pinning Logics
 
 We can split the whole process into the following steps. Related methods are `checkVCPUsPinning` and `resetVCPUsPinning`, in file Sandbox.go.
-![](arch-images/vcpus-pinning-process.png) 
+![](arch-images/vcpus-pinning-process.png)

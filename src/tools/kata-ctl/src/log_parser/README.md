@@ -24,7 +24,7 @@ Kata's `runtime-rs` logs are JSON objects in the following format:
 {"msg":"message","level":"INFO","ts":"1970-01-01T00:00:00.000000000Z","name":"kata-runtime","version":"0.1.0","pid":"0","source":"source","subsystem":"subsystem"}
 ```
 
-However, if `--ignore-missing-fields` is set, a log missing one or more of the following fields may be omitted: 
+However, if `--ignore-missing-fields` is set, a log missing one or more of the following fields may be omitted:
 
 - `level`
 - `name`

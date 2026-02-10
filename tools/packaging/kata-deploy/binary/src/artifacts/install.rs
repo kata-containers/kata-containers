@@ -326,7 +326,7 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
 
 fn set_executable_permissions(dir: &str) -> Result<()> {
     let bin_paths = vec!["bin", "runtime-rs/bin"];
-    
+
     for bin_path in bin_paths.iter() {
         let bin_dir = Path::new(dir).join(bin_path);
         if bin_dir.exists() {
@@ -426,7 +426,7 @@ fn setup_runtime_directory(config: &Config, shim: &str) -> Result<()> {
 
         // Add warning comment to inform users about drop-in files
         add_kata_deploy_warning(Path::new(&dest_config_file))?;
-        
+
         info!("  Copied base config: {}", dest_config_file);
     }
 

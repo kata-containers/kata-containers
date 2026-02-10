@@ -9,7 +9,7 @@
 
 ```sh
 # Environment variables
-# By default, the driver uses `/var/lib/spdk/vhost` and `/var/lib/spdk/rawdisks` 
+# By default, the driver uses `/var/lib/spdk/vhost` and `/var/lib/spdk/rawdisks`
 # you need to set your own paths according to your environment.
 export SPDK_DEVEL=<path-to-your-spdk>
 export VHU_UDS_PATH=<your_vhost_path>
@@ -60,8 +60,8 @@ $ kubectl exec -it spdk-pod-test -- /bin/sh
 
 $ lsblk
 NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
-vda    254:0    0  256M  1 disk 
-`-vda1 254:1    0  253M  1 part 
+vda    254:0    0  256M  1 disk
+`-vda1 254:1    0  253M  1 part
 vdb    254:16   0    2G  0 disk /data
 
 $ echo "hello spdk" > /data/test.txt

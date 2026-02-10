@@ -101,7 +101,7 @@
     ```
 
     > **Note:**
-    >    
+    >
     > The containerd daemon needs to be able to find the
     > `containerd-shim-kata-v2` binary to allow Kata Containers to be created.
 

@@ -5,7 +5,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: spdk-test-adapted  
+  storageClassName: spdk-test-adapted
   resources:
     requests:
       storage: 2Gi

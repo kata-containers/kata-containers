@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
 
-# Not working on ARM CI see https://github.com/kata-containers/tests/issues/4727  
+# Not working on ARM CI see https://github.com/kata-containers/tests/issues/4727
 setup() {
 	setup_common || die "setup_common failed"
 }

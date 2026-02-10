@@ -14,10 +14,10 @@ The diagram below gives an overview for the hypervisor config
 
 ![hypervisor config](../../docs/images/hypervisor-config.svg)
 
-VMM's config info will be loaded when initialize the runtime instance, there are some important functions need to be focused on. 
+VMM's config info will be loaded when initialize the runtime instance, there are some important functions need to be focused on.
 ### `VirtContainer::init()`
 
-This function initialize the runtime handler. It will register the plugins into the HYPERVISOR_PLUGINS. Different plugins are needed for different hypervisors. 
+This function initialize the runtime handler. It will register the plugins into the HYPERVISOR_PLUGINS. Different plugins are needed for different hypervisors.
 ```rust
 #[async_trait]
 impl RuntimeHandler for VirtContainer {
@@ -80,11 +80,11 @@ pub trait Hypervisor: Send + Sync {
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;
-    
+
     // device manager
     async fn add_device(&self, device: device::Device) -> Result<()>;
     async fn remove_device(&self, device: device::Device) -> Result<()>;
-    
+
     // utils
     async fn get_agent_socket(&self) -> Result<String>;
     async fn disconnect(&self);

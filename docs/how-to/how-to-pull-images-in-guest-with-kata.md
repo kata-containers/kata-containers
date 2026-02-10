@@ -16,7 +16,7 @@ To pull images in the guest, we need to do the following steps:
 
 ### Delete images used for pulling in the guest
 
-Though the `CRI Runtime Specific Snapshotter` is still an [experimental feature](https://github.com/containerd/containerd/blob/main/RELEASES.md#experimental-features) in containerd, which containerd is not supported to manage the same image in different `snapshotters`(The default `snapshotter` in containerd is `overlayfs`). To avoid errors caused by this, it is recommended to delete images (including the pause image) in containerd that needs to be pulled in guest later before configuring `nydus snapshotter` in containerd. 
+Though the `CRI Runtime Specific Snapshotter` is still an [experimental feature](https://github.com/containerd/containerd/blob/main/RELEASES.md#experimental-features) in containerd, which containerd is not supported to manage the same image in different `snapshotters`(The default `snapshotter` in containerd is `overlayfs`). To avoid errors caused by this, it is recommended to delete images (including the pause image) in containerd that needs to be pulled in guest later before configuring `nydus snapshotter` in containerd.
 
 ### Install `nydus snapshotter`
 
@@ -24,7 +24,7 @@ Though the `CRI Runtime Specific Snapshotter` is still an [experimental feature]
 
 To use DaemonSet to install `nydus snapshotter`, we need to ensure that `yq` exists in the host.
 
-1. Download `nydus snapshotter` repo 
+1. Download `nydus snapshotter` repo
 ```bash
 $ nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
 $ nydus_snapshotter_url=https://github.com/containerd/nydus-snapshotter
@@ -42,7 +42,7 @@ $ yq -i \
 $ yq -i \
 >	 'data.ENABLE_CONFIG_FROM_VOLUME = "false"' -P \
 >	 misc/snapshotter/base/nydus-snapshotter.yaml
-# Enable to run snapshotter as a systemd service 
+# Enable to run snapshotter as a systemd service
 # (skip if you want to run nydus snapshotter as a standalone process)
 $ yq -i \
 >	 'data.ENABLE_SYSTEMD_SERVICE = "true"' -P \
@@ -79,7 +79,7 @@ Created symlink /etc/systemd/system/multi-user.target.wants/nydus-snapshotter.se
 
 #### Install `nydus snapshotter` manually
 
-1. Download `nydus snapshotter` binary from release 
+1. Download `nydus snapshotter` binary from release
 ```bash
 $ ARCH=$(uname -m)
 $ golang_arch=$(case "$ARCH" in
@@ -111,7 +111,7 @@ level=info msg="Run daemons monitor..."
 Configure `nydus snapshotter` to enable `CRI Runtime Specific Snapshotter` in containerd. This ensures run kata containers with `nydus snapshotter`. Below, the steps are illustrated using `kata-qemu` as an example.
 
 ```toml
-# Modify containerd configuration to ensure that the following lines appear in the containerd configuration 
+# Modify containerd configuration to ensure that the following lines appear in the containerd configuration
 # (Assume that the containerd config is located in /etc/containerd/config.toml)
 
 [plugins."io.containerd.grpc.v1.cri".containerd]
@@ -124,7 +124,7 @@ Configure `nydus snapshotter` to enable `CRI Runtime Specific Snapshotter` in co
   snapshotter = "nydus"
 ```
 
-> **Notes:** 
+> **Notes:**
 > The `CRI Runtime Specific Snapshotter` feature only works for containerd v1.7.0 and above. So for Containerd v1.7.0 below, in addition to the above settings, we need to set the global `snapshotter` to `nydus` in containerd config. For example:
 
 ```toml
@@ -280,7 +280,7 @@ quay.io/confidential-containers/test-images               largeimage            
 ```bash
 $ lsblk --fs
 NAME                 FSTYPE LABEL UUID FSAVAIL FSUSE% MOUNTPOINT
-sda                                                   
+sda
 └─encrypted_disk_GsLDt
                                           178M    87% /run/kata-containers/image
 

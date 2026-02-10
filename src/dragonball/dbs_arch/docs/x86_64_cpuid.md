@@ -2,7 +2,7 @@
 
 ## Design
 
-CPUID is designed as the CPUID filter for Intel and AMD CPU Identification. Through CPUID configuration, we could set CPU topology, Cache topology, PMU status and other features for the VMs. 
+CPUID is designed as the CPUID filter for Intel and AMD CPU Identification. Through CPUID configuration, we could set CPU topology, Cache topology, PMU status and other features for the VMs.
 
 CPUID is developed based on the Firecracker CPUID code while we add other extensions such as CPU Topology and VPMU features.
 
@@ -34,7 +34,7 @@ pub struct VmSpec {
 ```
 
 ## Example
-We will show examples for filtering CPUID. 
+We will show examples for filtering CPUID.
 First, you need to use KVM_GET_CPUID2 ioctl to get the original CPUID, this part is not included in the db-cpuid.
 
 ```rust

@@ -6,7 +6,7 @@ spec:
   runtimeClassName: kata
   containers:
     - name: first-container
-      image: ubuntu:22.04 
+      image: ubuntu:22.04
       volumeMounts:
       - mountPath: "/data"
         name: kata-driectvol0-volume

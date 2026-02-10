@@ -10,19 +10,19 @@ Currently, there is no widely applicable and convenient method available for use
 
 ## Solution
 
-According to the proposal, it requires to use the `kata-ctl direct-volume` command to add a direct assigned block volume device to the Kata Containers runtime. 
+According to the proposal, it requires to use the `kata-ctl direct-volume` command to add a direct assigned block volume device to the Kata Containers runtime.
 
-And then with the help of method [get_volume_mount_info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L95), get information from JSON file: `(mountinfo.json)` and parse them into structure [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70) which is used to save device-related information. 
+And then with the help of method [get_volume_mount_info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L95), get information from JSON file: `(mountinfo.json)` and parse them into structure [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70) which is used to save device-related information.
 
-We only fill the `mountinfo.json`, such as `device` ,`volume_type`, `fs_type`, `metadata` and `options`, which correspond to the fields in [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70), to describe a device. 
+We only fill the `mountinfo.json`, such as `device` ,`volume_type`, `fs_type`, `metadata` and `options`, which correspond to the fields in [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70), to describe a device.
 
-The JSON file `mountinfo.json` placed in a sub-path `/kubelet/kata-test-vol-001/volume001` which under fixed path `/run/kata-containers/shared/direct-volumes/`. 
-And the full path looks like: `/run/kata-containers/shared/direct-volumes/kubelet/kata-test-vol-001/volume001`, But for some security reasons. it is 
+The JSON file `mountinfo.json` placed in a sub-path `/kubelet/kata-test-vol-001/volume001` which under fixed path `/run/kata-containers/shared/direct-volumes/`.
+And the full path looks like: `/run/kata-containers/shared/direct-volumes/kubelet/kata-test-vol-001/volume001`, But for some security reasons. it is
 encoded as `/run/kata-containers/shared/direct-volumes/L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx`.
 
-Finally, when running a Kata Containers with `ctr run --mount type=X, src=Y, dst=Z,,options=rbind:rw`, the `type=X` should be specified a proprietary type specifically designed for some kind of volume. 
+Finally, when running a Kata Containers with `ctr run --mount type=X, src=Y, dst=Z,,options=rbind:rw`, the `type=X` should be specified a proprietary type specifically designed for some kind of volume.
 
-Now, supported types: 
+Now, supported types:
 
 - `directvol` for direct volume
 - `vfiovol` for VFIO device based volume
@@ -46,10 +46,10 @@ $ sudo mkfs.ext4 /tmp/stor/rawdisk01.20g
 
 ```json
 {
-  "device": "/tmp/stor/rawdisk01.20g", 
-  "volume_type": "directvol", 
-  "fs_type": "ext4", 
-  "metadata":"{}", 
+  "device": "/tmp/stor/rawdisk01.20g",
+  "volume_type": "directvol",
+  "fs_type": "ext4",
+  "metadata":"{}",
   "options": []
 }
 ```
@@ -57,7 +57,7 @@ $ sudo mkfs.ext4 /tmp/stor/rawdisk01.20g
 ```bash
 $ sudo kata-ctl direct-volume add /kubelet/kata-direct-vol-002/directvol002 "{\"device\": \"/tmp/stor/rawdisk01.20g\", \"volume_type\": \"directvol\", \"fs_type\": \"ext4\", \"metadata\":"{}", \"options\": []}"
 $# /kubelet/kata-direct-vol-002/directvol002 <==> /run/kata-containers/shared/direct-volumes/W1lMa2F0ZXQva2F0YS10a2F0DAxvbC0wMDEvdm9sdW1lMDAx
-$ cat W1lMa2F0ZXQva2F0YS10a2F0DAxvbC0wMDEvdm9sdW1lMDAx/mountInfo.json 
+$ cat W1lMa2F0ZXQva2F0YS10a2F0DAxvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
 {"volume_type":"directvol","device":"/tmp/stor/rawdisk01.20g","fs_type":"ext4","metadata":{},"options":[]}
 ```
 
@@ -79,8 +79,8 @@ In this scenario, the device's host kernel driver will be replaced by `vfio-pci`
 And either device's BDF or its VFIO IOMMU group ID in `/dev/vfio/` is fine for "device" in `mountinfo.json`.
 
 ```bash
-$ lspci -nn -k -s 45:00.1 
-45:00.1 SCSI storage controller 
+$ lspci -nn -k -s 45:00.1
+45:00.1 SCSI storage controller
 ...
 Kernel driver in use: vfio-pci
 ...
@@ -99,9 +99,9 @@ First, configure the `mountinfo.json`, as below:
 ```json
 {
   "device": "45:00.1",
-  "volume_type": "vfiovol", 
-  "fs_type": "ext4", 
-  "metadata":"{}", 
+  "volume_type": "vfiovol",
+  "fs_type": "ext4",
+  "metadata":"{}",
   "options": []
 }
 ```
@@ -111,9 +111,9 @@ First, configure the `mountinfo.json`, as below:
 ```json
 {
   "device": "0000:45:00.1",
-  "volume_type": "vfiovol", 
-  "fs_type": "ext4", 
-  "metadata":"{}", 
+  "volume_type": "vfiovol",
+  "fs_type": "ext4",
+  "metadata":"{}",
   "options": []
 }
 ```
@@ -122,10 +122,10 @@ First, configure the `mountinfo.json`, as below:
 
 ```json
 {
-  "device": "/dev/vfio/110", 
-  "volume_type": "vfiovol", 
-  "fs_type": "ext4", 
-  "metadata":"{}", 
+  "device": "/dev/vfio/110",
+  "volume_type": "vfiovol",
+  "fs_type": "ext4",
+  "metadata":"{}",
   "options": []
 }
 ```
@@ -135,7 +135,7 @@ Second, run kata-containers with device(`/dev/vfio/110`) as an example:
 ```bash
 $ sudo kata-ctl direct-volume add /kubelet/kata-vfio-vol-003/vfiovol003 "{\"device\": \"/dev/vfio/110\", \"volume_type\": \"vfiovol\", \"fs_type\": \"ext4\", \"metadata\":"{}", \"options\": []}"
 $ # /kubelet/kata-vfio-vol-003/directvol003 <==> /run/kata-containers/shared/direct-volumes/F0va22F0ZvaS12F0YS10a2F0DAxvbC0F0ZXvdm9sdF0Z0YSx
-$ cat F0va22F0ZvaS12F0YS10a2F0DAxvbC0F0ZXvdm9sdF0Z0YSx/mountInfo.json 
+$ cat F0va22F0ZvaS12F0YS10a2F0DAxvbC0F0ZXvdm9sdF0Z0YSx/mountInfo.json
 {"volume_type":"vfiovol","device":"/dev/vfio/110","fs_type":"ext4","metadata":{},"options":[]}
 ```
 
