@@ -14,7 +14,7 @@ $ genpolicy -y test.yaml
 
 # Enable `genpolicy` logging
 
-`genpolicy` is using standard Rust logging. To enable logging, use the RUST_LOG environment variable - e.g., 
+`genpolicy` is using standard Rust logging. To enable logging, use the RUST_LOG environment variable - e.g.,
 
 ```bash
 $ RUST_LOG=info genpolicy -y test.yaml
@@ -45,7 +45,7 @@ spec:
         - "120"
 ```
 
-`genpolicy` downloads the `quay.io/prometheus/busybox:latest` container image. 
+`genpolicy` downloads the `quay.io/prometheus/busybox:latest` container image.
 
 Depending on the size of the container images and the speed of the network connection to the container registry, downloading these images might take several minutes. For testing scenarios where `genpolicy` gets executed several times, it can be useful to cache the container images after downloading them, in order to avoid most of the time needed to download the same container images multiple times. If a container image layer was already cached locally, `genpolicy` uses the local copy of that container layer. The application caches the image information under the `./layers_cache` directory.
 

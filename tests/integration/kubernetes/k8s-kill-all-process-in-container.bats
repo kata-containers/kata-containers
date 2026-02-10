@@ -37,7 +37,7 @@ setup() {
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \
 		-- $command | grep "tail" || true)
 	# Verify that the tail process didn't exist
-	[ -z $first_pid_container ] || die "found processes pid: $first_pid_container" 
+	[ -z $first_pid_container ] || die "found processes pid: $first_pid_container"
 }
 
 teardown() {

@@ -15,7 +15,7 @@ The dbs-device crate provides:
 
 The dbs-device crate is designed to support the virtual machine's device model.
 
-The core concepts of device model are [Port I/O](https://wiki.osdev.org/I/O_Ports) and 
+The core concepts of device model are [Port I/O](https://wiki.osdev.org/I/O_Ports) and
 [Memory-mapped I/O](https://en.wikipedia.org/wiki/Memory-mapped_I/O),
 which are two main methods of performing I/O between CPU and devices.
 
@@ -51,7 +51,7 @@ The difference of [`DeviceIo`] and [`DeviceIoMut`] is the reference type of `sel
   interior mutability and thread-safe protection itself
 - [`DeviceIoMut`] trait would pass a mutable reference `&mut self` to method, and it can give mutability to device
   which is wrapped by `Mutex` directly to simplify the difficulty of achieving interior mutability.
-  
+
 Additionally, the [`DeviceIo`] trait has an auto implement for `Mutex<T: DeviceIoMut>`
 
 Last, the device needs to be added to [`IoManager`] by using `register_device_io()`, and the function would add device

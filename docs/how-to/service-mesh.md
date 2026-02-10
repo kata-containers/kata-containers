@@ -169,7 +169,7 @@ Add the following annotation for CRI-O
 ```yaml
 io.kubernetes.cri-o.TrustedSandbox: "false"
 ```
-The following is an example of what your YAML can look like: 
+The following is an example of what your YAML can look like:
 
 ```yaml
 ...
@@ -199,7 +199,7 @@ Add the following annotation for containerd
 ```yaml
 io.kubernetes.cri.untrusted-workload: "true"
 ```
-The following is an example of what your YAML can look like: 
+The following is an example of what your YAML can look like:
 
 ```yaml
 ...

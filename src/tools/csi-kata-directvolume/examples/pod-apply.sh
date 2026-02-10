@@ -11,5 +11,5 @@ set -o pipefail
 BASE_DIR=$(dirname "$0")/pod-with-directvol
 
 kubectl apply -f ${BASE_DIR}/csi-storageclass.yaml
-kubectl apply -f ${BASE_DIR}/csi-pvc.yaml 
+kubectl apply -f ${BASE_DIR}/csi-pvc.yaml
 kubectl apply -f ${BASE_DIR}/csi-app.yaml

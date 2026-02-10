@@ -73,12 +73,12 @@ function install_yq() {
 		goarch=arm64
 		;;
 	"arm64")
-		# If we're on an apple silicon machine, just assign amd64. 
-		# The version of yq we use doesn't have a darwin arm build, 
+		# If we're on an apple silicon machine, just assign amd64.
+		# The version of yq we use doesn't have a darwin arm build,
 		# but Rosetta can come to the rescue here.
 		if [[ ${goos} == "Darwin" ]]; then
 			goarch=amd64
-		else 
+		else
 			goarch=arm64
 		fi
 		;;

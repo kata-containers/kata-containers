@@ -1,11 +1,11 @@
 # Kata Containers installation guides
 
-The following is an overview of the different installation methods available. 
+The following is an overview of the different installation methods available.
 
 ## Prerequisites
 
-Kata Containers requires nested virtualization or bare metal. Check 
-[hardware requirements](./../../README.md#hardware-requirements) to see if your system is capable of running Kata 
+Kata Containers requires nested virtualization or bare metal. Check
+[hardware requirements](./../../README.md#hardware-requirements) to see if your system is capable of running Kata
 Containers.
 
 The Kata Deploy Helm chart is the preferred  way to install all of the binaries and

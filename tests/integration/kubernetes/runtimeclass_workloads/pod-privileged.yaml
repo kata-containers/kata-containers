@@ -12,7 +12,7 @@ spec:
   runtimeClassName: kata
   restartPolicy: Never
   containers:
-  - image: quay.io/prometheus/busybox:latest 
+  - image: quay.io/prometheus/busybox:latest
     name: container
     securityContext:
       privileged: true

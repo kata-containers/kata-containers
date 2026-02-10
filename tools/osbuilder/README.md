@@ -178,8 +178,8 @@ $ make BUILD_METHOD=dracut DRACUT_KVERSION=5.2.1-23-kata AGENT_INIT=yes initrd
 
 ### Custom images
 
-The Kata Containers kernel and rootfs images are by design "minimal". If advanced, 
-site specific, or customized features are required, then building a customized 
+The Kata Containers kernel and rootfs images are by design "minimal". If advanced,
+site specific, or customized features are required, then building a customized
 kernel and/or rootfs may be required.
 
 ## Testing

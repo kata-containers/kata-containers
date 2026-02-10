@@ -107,7 +107,7 @@ Containers agent:
 By default, tracing is disabled for all components. To enable _any_ form of
 tracing an `enable_tracing` option must be enabled for at least one component.
 
-> **Note:** 
+> **Note:**
 >
 > Enabling this option will only allow tracing for subsequently
 > started containers.
@@ -187,7 +187,7 @@ from improvements in the tracing infrastructure. Overall, the impact of
 enabling runtime and agent tracing should be extremely low.
 
 ## Agent shutdown behaviour
- 
+
 In normal operation, the Kata runtime manages the VM shutdown and performs
 certain optimisations to speed up this process. However, if agent tracing is
 enabled, the agent itself is responsible for shutting down the VM. This it to

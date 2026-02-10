@@ -3,7 +3,7 @@ kind: Pod
 metadata:
   name: spdk-pod-test
 spec:
-  runtimeClassName: kata  
+  runtimeClassName: kata
   containers:
   - name: app
     image: docker.io/library/ubuntu:22.04

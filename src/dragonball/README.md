@@ -40,7 +40,7 @@ You could see the [official documentation](docs/) page for more details.
 # Supported Architectures
 - x86-64
 - aarch64
- 
+
 # Supported Kernel
 [TODO](https://github.com/kata-containers/kata-containers/issues/4303)
 

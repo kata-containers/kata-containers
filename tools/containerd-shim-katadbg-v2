@@ -69,7 +69,7 @@ fi
 #   This script will retrieve the output and return it to the
 #   caller, while letting dlv run in the background for debugging.
 #
-# -- $@ => give the shim all the parameters this script was given 
+# -- $@ => give the shim all the parameters this script was given
 #
 
 SHIMOUTPUT=$(mktemp /tmp/shim_output_XXXXXX)

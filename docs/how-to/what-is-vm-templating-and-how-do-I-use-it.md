@@ -10,8 +10,8 @@ much like a process fork done by the kernel but here we *fork* VMs.
 
 ### How is this different from VMCache
 
-Both [VMCache](../how-to/what-is-vm-cache-and-how-do-I-use-it.md) and VM templating help speed up new container creation.  
-When VMCache enabled, new VMs are created by the VMCache server.  So it is not vulnerable to share memory CVE because each VM doesn't share the memory.  
+Both [VMCache](../how-to/what-is-vm-cache-and-how-do-I-use-it.md) and VM templating help speed up new container creation.
+When VMCache enabled, new VMs are created by the VMCache server.  So it is not vulnerable to share memory CVE because each VM doesn't share the memory.
 VM templating saves a lot of memory if there are many Kata Containers running on the same host.
 
 ### What are the Pros

@@ -11,7 +11,7 @@
 #
 # Required environment variables:
 #   DOCKER_REGISTRY - Container registry for kata-deploy image
-#   DOCKER_REPO     - Repository name for kata-deploy image  
+#   DOCKER_REPO     - Repository name for kata-deploy image
 #   DOCKER_TAG      - Image tag to test
 #   KATA_HYPERVISOR - Hypervisor to test (qemu, clh, etc.)
 #   KUBERNETES      - K8s distribution (microk8s, k3s, rke2, etc.)
@@ -53,7 +53,7 @@ setup() {
 
 @test "Test runtimeclasses are being properly created and container runtime is not broken" {
 	pushd "${repo_root_dir}"
-	
+
 	# Create verification pod spec
 	local verification_yaml
 	verification_yaml=$(mktemp)
@@ -79,10 +79,10 @@ spec:
           echo "Kernel: \$(uname -r)"
           echo "SUCCESS: Pod running with Kata runtime"
 EOF
-	
+
 	# Install kata-deploy via Helm
 	echo "Installing kata-deploy with Helm..."
-	
+
 	# Timeouts can be customized via environment variables:
 	# - KATA_DEPLOY_TIMEOUT: Overall helm timeout (includes all hooks)
 	#   Default: 600s (10 minutes)
@@ -93,7 +93,7 @@ EOF
 	local helm_timeout="${KATA_DEPLOY_TIMEOUT:-600s}"
 	local daemonset_timeout="${KATA_DEPLOY_DAEMONSET_TIMEOUT:-300}"
 	local verification_timeout="${KATA_DEPLOY_VERIFICATION_TIMEOUT:-120}"
-	
+
 	echo "Timeout configuration:"
 	echo "  Helm overall: ${helm_timeout}"
 	echo "  DaemonSet rollout: ${daemonset_timeout}s (includes image pull)"
@@ -104,9 +104,9 @@ EOF
 		--set-file verification.pod="${verification_yaml}" \
 		--set verification.timeout="${verification_timeout}" \
 		--set verification.daemonsetTimeout="${daemonset_timeout}"
-	
+
 	rm -f "${verification_yaml}"
-	
+
 	echo ""
 	echo "::group::kata-deploy logs"
 	kubectl -n kube-system logs --tail=200 -l name=kata-deploy
@@ -116,13 +116,13 @@ EOF
 	echo "::group::Runtime classes"
 	kubectl get runtimeclass
 	echo "::endgroup::"
-	
+
 	# helm --wait already waits for post-install hooks to complete
 	# If helm returns successfully, the verification job passed
 	# The job is deleted after success (hook-delete-policy: hook-succeeded)
 	echo ""
 	echo "Helm install completed successfully - verification passed"
-	
+
 	# We filter `kata-mshv-vm-isolation` out as that's present on AKS clusters, but that's not coming from kata-deploy
 	current_runtime_classes=$(kubectl get runtimeclasses | grep -v "kata-mshv-vm-isolation" | grep "kata" | wc -l)
 	[[ ${current_runtime_classes} -eq ${expected_runtime_classes} ]]
@@ -144,7 +144,7 @@ EOF
 	# Check that the container runtime verison doesn't have unknown, which happens when containerd can't start properly
 	container_runtime_version=$(kubectl get nodes --no-headers -o custom-columns=CONTAINER_RUNTIME:.status.nodeInfo.containerRuntimeVersion)
 	[[ ${container_runtime_version} != *"containerd://Unknown"* ]]
-	
+
 	popd
 }
 

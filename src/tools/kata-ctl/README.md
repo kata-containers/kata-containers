@@ -56,7 +56,7 @@ $ kata-ctl --help
 ## Cross-builds
 
 For developers that want to build and test the `kata-ctl` tool on various architectures,
-the makefile included does have support for that. This would however, require installing 
+the makefile included does have support for that. This would however, require installing
 the cross compile toolchain for the target architecture on the host along with required libraries.
 
 [Cross](https://github.com/cross-rs/cross) is an open source tool that offers zero setup
@@ -82,7 +82,7 @@ cross build --target=s390x-unknown-linux-gnu
 You may also need to add the target on your host system prior to the above step as:
 ```
 rustup target add s390x-unknown-linux-gnu
-``` 
+```
 
 ## Documentation for included tools:
 | Component | Description |

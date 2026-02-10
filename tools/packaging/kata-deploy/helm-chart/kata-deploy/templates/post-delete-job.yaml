@@ -276,4 +276,4 @@ spec:
       - name: host
         hostPath:
           path: /
-      restartPolicy: Never 
+      restartPolicy: Never

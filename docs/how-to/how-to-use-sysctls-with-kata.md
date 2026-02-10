@@ -2,9 +2,9 @@
 
 ## Sysctls
 
-In Linux, the sysctl interface allows an administrator to modify kernel 
-parameters at runtime. Parameters are available via the `/proc/sys/` virtual 
-process file system. 
+In Linux, the sysctl interface allows an administrator to modify kernel
+parameters at runtime. Parameters are available via the `/proc/sys/` virtual
+process file system.
 
 The parameters include the following subsystems among others:
 - `fs` (file systems)
@@ -17,9 +17,9 @@ To get a complete list of kernel parameters, run:
 $ sudo sysctl -a
 ```
 
-Kubernetes provide mechanisms for setting namespaced sysctls. 
+Kubernetes provide mechanisms for setting namespaced sysctls.
 Namespaced sysctls can be set per pod in the case of Kubernetes.
-The following sysctls are known to be namespaced and can be set with 
+The following sysctls are known to be namespaced and can be set with
 Kubernetes:
 
 - `kernel.shm*`
@@ -84,14 +84,14 @@ The recommendation is to set them directly on the host or use a privileged
 container in the case of Kubernetes.
 
 In the case of Kata, the approach of setting sysctls on the host does not
-work since the host sysctls have no effect on a Kata Container running 
+work since the host sysctls have no effect on a Kata Container running
 inside a guest. Kata gives you the ability to set non-namespaced sysctls using a privileged container.
-This has the advantage that the non-namespaced sysctls are set inside the guest 
-without having any effect on the `/proc/sys` values of any other pod or the 
-host itself. 
+This has the advantage that the non-namespaced sysctls are set inside the guest
+without having any effect on the `/proc/sys` values of any other pod or the
+host itself.
 
 The recommended approach to do this would be to set the sysctl value in a
-privileged init container. In this way, the application containers do not need any elevated 
+privileged init container. In this way, the application containers do not need any elevated
 privileges.
 
 ```

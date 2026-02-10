@@ -2,8 +2,8 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: spdk-test-adapted
-provisioner: directvolume.csi.katacontainers.io  
+provisioner: directvolume.csi.katacontainers.io
 parameters:
-  katacontainers.direct.volume/volumetype: spdkvol  
+  katacontainers.direct.volume/volumetype: spdkvol
 reclaimPolicy: Delete
 volumeBindingMode: Immediate

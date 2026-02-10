@@ -15,7 +15,7 @@ setup_file() {
     info "Create a container"
     sandbox_id=$RANDOM
     container_id="test_container_${RANDOM}"
-    
+
     local cmds=()
     cmds+="-c 'CreateSandbox json://{\"sandbox_id\": \"$sandbox_id\"}'"
     run_agent_ctl "${cmds[@]}"

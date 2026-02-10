@@ -83,10 +83,10 @@ If you have [s390-tools](https://github.com/ibm-s390-linux/s390-tools) available
 
 ```
 [container]# lszcrypt -V
-CARD.DOM TYPE  MODE        STATUS     REQUESTS  PENDING HWTYPE QDEPTH FUNCTIONS  DRIVER      SESTAT     
+CARD.DOM TYPE  MODE        STATUS     REQUESTS  PENDING HWTYPE QDEPTH FUNCTIONS  DRIVER      SESTAT
 --------------------------------------------------------------------------------------------------------
-03       CEX8P EP11-Coproc online            2        0     14     08 -----XN-F- cex4card    -          
-03.0041  CEX8P EP11-Coproc online            2        0     14     08 -----XN-F- cex4queue   usable     
+03       CEX8P EP11-Coproc online            2        0     14     08 -----XN-F- cex4card    -
+03.0041  CEX8P EP11-Coproc online            2        0     14     08 -----XN-F- cex4queue   usable
 ```
 
 ---

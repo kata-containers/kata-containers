@@ -138,7 +138,7 @@ pub async fn cleanup_cri_runtime(config: &Config, runtime: &str) -> Result<()> {
         "cleanup_cri_runtime: Starting cleanup for runtime={}",
         runtime
     );
-    
+
     if runtime == "crio" {
         log::info!("cleanup_cri_runtime: Cleaning up crio");
         crio::cleanup_crio(config).await?;

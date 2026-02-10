@@ -8,5 +8,5 @@ parameters:
 provisioner: directvolume.csi.katacontainers.io
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
-allowVolumeExpansion: false 
+allowVolumeExpansion: false
 

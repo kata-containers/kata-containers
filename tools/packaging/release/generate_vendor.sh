@@ -41,7 +41,7 @@ create_vendor_tarball() {
 			popd
 		done
 	popd
-	
+
 	tar -cvzf ${1} ${vendor_dir_list}
 }
 

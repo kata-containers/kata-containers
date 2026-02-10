@@ -7,7 +7,7 @@ sandbox (virtual machine), such as memory-mapped I/O address space, port I/O add
 MSI/MSI-X vectors, device instance id, etc. The `dbs-allocator` crate is designed to help the resource manager
 to track and allocate these types of resources.
 
-Main components are:   
+Main components are:
 - *Constraints*: struct to declare constraints for resource allocation.
 ```rust
 #[derive(Copy, Clone, Debug)]
@@ -34,20 +34,20 @@ pub fn allocate(&mut self, constraint: &Constraint) -> Option<Range>
 pub fn free(&mut self, key: &Range) -> Option<T>
 pub fn insert(&mut self, key: Range, data: Option<T>) -> Self
 pub fn update(&mut self, key: &Range, data: T) -> Option<T>
-pub fn delete(&mut self, key: &Range) -> Option<T> 
+pub fn delete(&mut self, key: &Range) -> Option<T>
 pub fn get(&self, key: &Range) -> Option<NodeState<&T>>
 ```
 
 ## Usage
-The concept of Interval Tree may seem complicated, but using dbs-allocator to do resource allocation and release is simple and straightforward. 
+The concept of Interval Tree may seem complicated, but using dbs-allocator to do resource allocation and release is simple and straightforward.
 You can following these steps to allocate your VMM resource.
 ```rust
 // 1. To start with, we should create an interval tree for some specific resouces and give maximum address/id range as root node. The range here could be address range, id range, etc.
 ​
-let mut resources_pool = IntervalTree::new(); 
-resources_pool.insert(Range::new(MIN_RANGE, MAX_RANGE), None); 
+let mut resources_pool = IntervalTree::new();
+resources_pool.insert(Range::new(MIN_RANGE, MAX_RANGE), None);
 ​
-// 2. Next, create a constraint with the size for your resource, you could also assign the maximum, minimum and alignment for the constraint. Then we could use the constraint to allocate the resource in the range we previously decided. Interval Tree will give you the appropriate range. 
+// 2. Next, create a constraint with the size for your resource, you could also assign the maximum, minimum and alignment for the constraint. Then we could use the constraint to allocate the resource in the range we previously decided. Interval Tree will give you the appropriate range.
 let mut constraint = Constraint::new(SIZE);
 let mut resources_range = self.resources_pool.allocate(&constraint);
 ​
@@ -64,13 +64,13 @@ use dbs_allocator::{Constraint, IntervalTree, Range};
 let mut pci_device_pool = IntervalTree::new();
 ​
 // Init PCI device id pool with the range 0 to 255
-pci_device_pool.insert(Range::new(0x0u8, 0xffu8), None); 
+pci_device_pool.insert(Range::new(0x0u8, 0xffu8), None);
 ​
-// Construct a constraint with size 1 and alignment 1 to ask for an ID. 
-let mut constraint = Constraint::new(1u64).align(1u64); 
+// Construct a constraint with size 1 and alignment 1 to ask for an ID.
+let mut constraint = Constraint::new(1u64).align(1u64);
 ​
 // Get an ID from the pci_device_pool
-let mut id = pci_device_pool.allocate(&constraint).map(|e| e.min as u8); 
+let mut id = pci_device_pool.allocate(&constraint).map(|e| e.min as u8);
 ​
 // Pass the ID generated from dbs-allocator to vm-pci specified functions to create pci devices
 let mut pci_device = PciDevice::new(id as u8, ..);
@@ -84,15 +84,15 @@ use dbs_allocator::{Constraint, IntervalTree, Range};
 let mut mem_pool = IntervalTree::new();
 ​
 // Init memory address from GUEST_MEM_START to GUEST_MEM_END
-mem_pool.insert(Range::new(GUEST_MEM_START, GUEST_MEM_END), None); 
+mem_pool.insert(Range::new(GUEST_MEM_START, GUEST_MEM_END), None);
 ​
-// Construct a constraint with size, maximum addr and minimum address of memory region to ask for an memory allocation range. 
+// Construct a constraint with size, maximum addr and minimum address of memory region to ask for an memory allocation range.
 let constraint = Constraint::new(region.len())
                 .min(region.start_addr().raw_value())
                 .max(region.last_addr().raw_value());
 ​
 // Get the memory allocation range from the pci_device_pool
-let mem_range = mem_pool.allocate(&constraint).unwrap(); 
+let mem_range = mem_pool.allocate(&constraint).unwrap();
 ​
 // Update the mem_range in IntervalTree with memory region info
 mem_pool.update(&mem_range, region);

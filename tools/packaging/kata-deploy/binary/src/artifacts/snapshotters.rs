@@ -87,7 +87,7 @@ pub async fn configure_snapshotter(
 ) -> Result<()> {
     // Get all paths and drop-in capability in one call
     let paths = config.get_containerd_paths(runtime).await?;
-    
+
     // Read containerd version from config_file to determine pluginid
     let pluginid = if fs::read_to_string(&paths.config_file)
         .unwrap_or_default()
@@ -151,10 +151,10 @@ pub async fn install_nydus_snapshotter(config: &Config) -> Result<()> {
     // When containerd tries to use non-existent snapshots, it will re-pull/re-unpack.
     let nydus_data_dir = format!("/host/var/lib/{nydus_snapshotter}");
     info!("Cleaning up existing nydus-snapshotter state at {}", nydus_data_dir);
-    
+
     // Stop the service first if it exists (ignore errors if not running)
     let _ = utils::host_systemctl(&["stop", &format!("{nydus_snapshotter}.service")]);
-    
+
     // Remove the data directory to clean up old snapshots with potentially incorrect labels
     if Path::new(&nydus_data_dir).exists() {
         info!("Removing nydus data directory: {}", nydus_data_dir);

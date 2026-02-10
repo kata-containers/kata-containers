@@ -27,11 +27,11 @@ When the vCPU is created, it'll turn to `paused` state. After vCPU resource is r
 
 During the `running` state, VMM will catch vCPU exit and execute different logic according to the exit reason.
 
-If the VMM catch some exit reasons that it cannot handle, the state will change to `waiting_exit` and VMM will stop the virtual machine. 
+If the VMM catch some exit reasons that it cannot handle, the state will change to `waiting_exit` and VMM will stop the virtual machine.
 When the state switches to `waiting_exit`, an exit event will be sent to vCPU `exit_evt`, event manager will detect the change in `exit_evt` and set VMM `exit_evt_flag` as 1. A thread serving for VMM event loop will check `exit_evt_flag` and if the flag is 1, it'll stop the VMM.
 
 When the VMM is stopped / destroyed, the state will change to `exited`.
-   
+
 ## vCPU Hot plug
 Since `Dragonball Sandbox` doesn't support virtualization of ACPI system, we use [`upcall`](https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-upcall) to establish a direct communication channel between `Dragonball` and Guest in order to trigger vCPU hotplug.
 

@@ -7,7 +7,7 @@ image:
 command:
 - tail
 - -f
-- /dev/null 
+- /dev/null
 linux:
   resources:
     memory_limit_in_bytes: 524288000

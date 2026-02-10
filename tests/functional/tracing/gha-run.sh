@@ -10,7 +10,7 @@ set -o nounset
 set -o pipefail
 
 kata_tarball_dir="${2:-kata-artifacts}"
-tracing_dir="$(dirname "$(readlink -f "$0")")" 
+tracing_dir="$(dirname "$(readlink -f "$0")")"
 source "${tracing_dir}/../../common.bash"
 
 function install_dependencies() {
