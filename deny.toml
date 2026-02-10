@@ -1,32 +1,39 @@
+[graph]
 targets = [
-    { triple = "x86_64-apple-darwin" },
-    { triple = "x86_64-unknown-linux-gnu" },
-    { triple = "x86_64-unknown-linux-musl" },
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
 ]
 
 [advisories]
-vulnerability = "deny"
-unsound = "deny"
-unmaintained = "deny"
-ignore = ["RUSTSEC-2020-0071"]
+unmaintained = "workspace"
+unsound = "workspace"
+ignore = []
 
 [bans]
 multiple-versions = "allow"
-deny = [
-    { name = "cmake" },
-    { name = "openssl-sys" },
-]
+deny = []
 
 [licenses]
-unlicensed = "deny"
-allow-osi-fsf-free = "neither"
-copyleft = "allow"
 # We want really high confidence when inferring licenses from text
 confidence-threshold = 0.93
-allow = ["0BSD", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "CC0-1.0", "ISC", "MIT", "MPL-2.0"]
-private = { ignore = true}
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+private = { ignore = true }
 
-exceptions = []
+exceptions = [{ name = "unicode-ident", allow = ["Unicode-DFS-2016"] }]
 
 [sources]
 unknown-registry = "allow"
