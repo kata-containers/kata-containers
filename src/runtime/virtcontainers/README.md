@@ -289,7 +289,7 @@ $ ls /dev/vfio
 6. This device can now be passed. To verify the cards are there, you can use
 `lszcrypt` from `s390-tools` (`s390-tools` in Alpine, Debian, and Ubuntu,
 `s390utils` in Fedora). With `lszcrypt`, you can see the cards after the
-[configuration time](https://www.ibm.com/support/knowledgecenter/en/linuxonibm/com.ibm.linux.z.ubdd/ludd_t_crypt_add.html)
+[configuration time](https://www.ibm.com/docs/en/linux-on-systems?topic=c-lszcrypt-2)
 has passed.
 
 ```sh
