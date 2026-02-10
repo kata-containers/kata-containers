@@ -63,6 +63,9 @@ jobs:
             vmm: qemu
           - snapshotter: nydus
             vmm: qemu-runtime-rs
+    concurrency:
+      group:  ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm}}-${{ matrix.snapshotter}}
+      cancel-in-progress: true
     runs-on: s390x-large
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}

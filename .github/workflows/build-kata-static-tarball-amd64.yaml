@@ -63,6 +63,9 @@ jobs:
         exclude:
           - asset: cloud-hypervisor-glibc
             stage: release
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
@@ -170,6 +173,9 @@ jobs:
           - rootfs-initrd-confidential
           - rootfs-initrd-nvidia-gpu
           - rootfs-initrd-nvidia-gpu-confidential
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -238,6 +244,9 @@ jobs:
           - kernel-modules
           - kernel-nvidia-gpu-modules
           - pause-image
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
         with:
@@ -252,6 +261,9 @@ jobs:
       matrix:
         asset:
           - agent
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
         if: ${{ inputs.stage == 'release' }}
@@ -375,6 +387,9 @@ jobs:
           - trace-forwarder
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}

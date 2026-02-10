@@ -34,6 +34,10 @@ on:
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.arch }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:

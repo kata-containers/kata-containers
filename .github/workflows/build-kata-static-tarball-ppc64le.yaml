@@ -42,6 +42,9 @@ jobs:
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -100,6 +103,9 @@ jobs:
           - rootfs-initrd
         stage:
           - ${{ inputs.stage }}
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
