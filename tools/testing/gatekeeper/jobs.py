@@ -172,21 +172,38 @@ class Checker:
                 json.dump(output, out)
         return output
 
-    def get_jobs_for_workflow_run(self, run_id):
-        """Get jobs from a workflow id"""
-        total_count = -1
-        jobs = []
+    def paginated_fetch(self, url, items_key, task, params=None, per_page=30):
+        """
+        Fetches all items from a paginated GitHub API endpoint.
+
+        :param url: The base URL to fetch from
+        :param items_key: The key in the response JSON containing the items list
+        :param task: Task name for debug file naming
+        :param params: Additional query parameters
+        :param per_page: Number of items per page (default 30)
+        :returns: List of all items across all pages
+        """
+        items = []
         page = 1
+        total_count = -1
         while True:
-            url = f"{_GH_RUNS_URL}/{run_id}/jobs?per_page=30&page={page}"
+            page_params = {"per_page": per_page, "page": page}
+            if params:
+                page_params.update(params)
             output = self.fetch_json_from_url(
-                url, f"get_jobs_for_workflow_run__{run_id}")
-            jobs.extend(output["jobs"])
+                url, f"{task}_page{page}", page_params)
+            items.extend(output[items_key])
             total_count = max(total_count, output["total_count"])
-            if len(jobs) >= total_count:
+            if len(items) >= total_count:
                 break
             page += 1
-        return jobs
+        return items
+
+    def get_jobs_for_workflow_run(self, run_id):
+        """Get jobs from a workflow id"""
+        url = f"{_GH_RUNS_URL}/{run_id}/jobs"
+        return self.paginated_fetch(
+            url, "jobs", f"get_jobs_for_workflow_run__{run_id}")
 
     def check_workflow_runs_status(self, attempt):
         """
@@ -194,11 +211,10 @@ class Checker:
 
         :returns: 0 - all passing; 1 - any failure; 127 some jobs running
         """
-        # TODO: Check if we need pagination here as well
-        response = self.fetch_json_from_url(
-            _GH_RUNS_URL, f"check_workflow_runs_status_{attempt}",
+        workflow_runs = self.paginated_fetch(
+            _GH_RUNS_URL, "workflow_runs",
+            f"check_workflow_runs_status_{attempt}",
             {"head_sha": self.latest_commit_sha})
-        workflow_runs = response["workflow_runs"]
         for run in workflow_runs:
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
