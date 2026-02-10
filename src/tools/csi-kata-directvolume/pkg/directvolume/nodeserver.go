@@ -8,6 +8,7 @@
 package directvolume
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 	"kata-containers/csi-kata-directvolume/pkg/utils"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"

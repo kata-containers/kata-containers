@@ -8,9 +8,9 @@
 package directvolume
 
 import (
+	"context"
 	"sync"
 
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 
