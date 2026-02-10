@@ -184,69 +184,53 @@ pub async fn cleanup_cri_runtime(config: &Config, runtime: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    /// Helper function to test version check with expected error result
-    fn assert_version_check_error(version: &str) {
+    // --- containerd_version_is_2_or_newer ---
+
+    #[rstest]
+    #[case("containerd://2.0.0", true)]
+    #[case("containerd://2.1.5", true)]
+    #[case("containerd://2.1.5-k3s1", true)]
+    #[case("containerd://2.2.0", true)]
+    #[case("containerd://2.3.1", true)]
+    #[case("containerd://2.0.0-rc.1", true)]
+    #[case("containerd://1.6.28", false)]
+    #[case("containerd://1.7.15", false)]
+    #[case("containerd://1.7.0", false)]
+    #[case("containerd://", false)]
+    #[case("1.7.0", false)]
+    #[case("not-a-version", false)]
+    fn test_containerd_version_is_2_or_newer(#[case] version: &str, #[case] expected: bool) {
+        assert_eq!(
+            containerd_version_is_2_or_newer(version),
+            expected,
+            "version: {}",
+            version
+        );
+    }
+
+    // --- check_containerd_version_supports_drop_in (Result wrapper) ---
+
+    #[rstest]
+    #[case("containerd://2.0.0", true)]
+    #[case("containerd://2.1.5-k3s1", true)]
+    #[case("containerd://1.7.15", false)]
+    #[case("containerd://1.6.28", false)]
+    #[case("containerd://", false)]
+    #[case("1.7.0", false)]
+    #[case("not-a-version", false)]
+    fn test_check_containerd_version_supports_drop_in(
+        #[case] version: &str,
+        #[case] expected_ok: bool,
+    ) {
         let result = check_containerd_version_supports_drop_in(version);
-        assert!(result.is_err(), "Expected error for version: {}", version);
-    }
-
-    /// Helper function to test version check with expected success result
-    fn assert_version_check_ok(version: &str) {
-        let result = check_containerd_version_supports_drop_in(version);
-        assert!(result.is_ok(), "Expected success for version: {}", version);
-    }
-
-    #[test]
-    fn test_containerd_version_1_6_returns_error() {
-        assert_version_check_error("containerd://1.6.28");
-    }
-
-    #[test]
-    fn test_containerd_version_1_7_returns_error() {
-        assert_version_check_error("containerd://1.7.15");
-    }
-
-    #[test]
-    fn test_containerd_version_2_0_returns_ok() {
-        assert_version_check_ok("containerd://2.0.0");
-    }
-
-    #[test]
-    fn test_containerd_version_2_1_returns_ok() {
-        assert_version_check_ok("containerd://2.1.5");
-    }
-
-    #[test]
-    fn test_containerd_version_2_2_returns_ok() {
-        assert_version_check_ok("containerd://2.2.0");
-    }
-
-    #[test]
-    fn test_containerd_version_2_3_returns_ok() {
-        assert_version_check_ok("containerd://2.3.1");
-    }
-
-    #[test]
-    fn test_containerd_version_with_prerelease() {
-        assert_version_check_ok("containerd://2.0.0-rc.1");
-    }
-
-    #[test]
-    fn test_containerd_version_invalid_format() {
-        // Missing version number - conservatively assume no support
-        assert_version_check_error("containerd://");
-    }
-
-    #[test]
-    fn test_containerd_version_no_protocol() {
-        // No protocol prefix - conservatively assume no support
-        assert_version_check_error("1.7.0");
-    }
-
-    #[test]
-    fn test_containerd_version_malformed() {
-        // Malformed version - conservatively assume no support
-        assert_version_check_error("not-a-version");
+        assert_eq!(
+            result.is_ok(),
+            expected_ok,
+            "version: {}, result: {:?}",
+            version,
+            result
+        );
     }
 }
