@@ -25,8 +25,18 @@ const CONTAINERD_BASED_RUNTIMES: &[&str] = &[
     "microk8s",
 ];
 
-/// Runtimes that don't support containerd drop-in configuration files
-const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &["crio"];
+/// Runtimes that don't support containerd drop-in configuration files.
+///
+/// K3s and RKE2 generate the final config from a template (config.toml.tmpl or
+/// config-v3.toml.tmpl); they do not merge drop-in files when rendering, so we
+/// must write the Kata runtime block directly into the template.
+const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &[
+    "crio",
+    "k3s",
+    "k3s-agent",
+    "rke2-agent",
+    "rke2-server",
+];
 
 fn is_containerd_based(runtime: &str) -> bool {
     CONTAINERD_BASED_RUNTIMES.contains(&runtime)
@@ -80,25 +90,33 @@ pub async fn get_container_runtime(config: &Config) -> Result<String> {
     Ok(runtime)
 }
 
-/// Check if a containerd version string supports drop-in files
-/// Returns Ok(()) if version >= 2.0, Err otherwise
-fn check_containerd_version_supports_drop_in(runtime_version: &str) -> Result<()> {
-    let version_re = Regex::new(r"containerd://(\d+)\.(\d+)")?;
+/// Returns true if containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1") indicates
+/// containerd 2.x or newer, false for 1.x or unparseable. Used for drop-in support
+/// and for K3s/RKE2 template selection (config-v3.toml.tmpl vs config.toml.tmpl).
+pub fn containerd_version_is_2_or_newer(runtime_version: &str) -> bool {
+    let version_re = match Regex::new(r"containerd://(\d+)\.(\d+)") {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
     if let Some(caps) = version_re.captures(runtime_version) {
-        let major: u32 = caps.get(1).unwrap().as_str().parse()?;
-        if major >= 2 {
-            return Ok(());
+        if let Ok(major) = caps.get(1).unwrap().as_str().parse::<u32>() {
+            return major >= 2;
         }
-        return Err(anyhow::anyhow!(
-            "containerd version {}.x does not support drop-in files (requires >= 2.0)",
-            major
-        ));
     }
-    // If version string is malformed/unparseable, conservatively assume no support
-    Err(anyhow::anyhow!(
-        "Unable to parse containerd version from '{}', assuming no drop-in support",
-        runtime_version
-    ))
+    false
+}
+
+/// Check if a containerd version string supports drop-in files.
+/// Wrapper around containerd_version_is_2_or_newer for call sites that need Result.
+fn check_containerd_version_supports_drop_in(runtime_version: &str) -> Result<()> {
+    if containerd_version_is_2_or_newer(runtime_version) {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!(
+            "containerd version does not support drop-in files (requires >= 2.0), got '{}'",
+            runtime_version
+        ))
+    }
 }
 
 pub async fn is_containerd_capable_of_using_drop_in_files(

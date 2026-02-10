@@ -50,12 +50,43 @@ fn parse_toml_path(path: &str) -> Result<Vec<String>> {
     Ok(parts)
 }
 
+/// K3s/RKE2 containerd config templates start with a Go template directive that
+/// is not valid TOML. This helper strips it before parsing and returns it so we
+/// can prepend it back when writing.
+fn split_non_toml_header(content: &str) -> (&str, &str) {
+    if content.starts_with("{{") {
+        if let Some(pos) = content.find('\n') {
+            return (&content[..=pos], &content[pos + 1..]);
+        }
+        return (content, "");
+    }
+    ("", content)
+}
+
+/// Write a TOML file with an optional non-TOML header (e.g. K3s template line).
+/// Ensures the header ends with a newline before the TOML body.
+fn write_toml_with_header(
+    file_path: &Path,
+    header: &str,
+    doc: &DocumentMut,
+) -> Result<()> {
+    let normalized_header = if header.ends_with('\n') {
+        header.to_string()
+    } else {
+        format!("{header}\n")
+    };
+    std::fs::write(file_path, format!("{}{}", normalized_header, doc.to_string()))
+        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
+    Ok(())
+}
+
 /// Set a TOML value at a given path (e.g., ".plugins.cri.containerd.runtimes.kata.runtime_type")
 pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let mut doc = content
+    let (header, toml_content) = split_non_toml_header(&content);
+    let mut doc = toml_content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -83,8 +114,7 @@ pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
         }
     }
 
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
+    write_toml_with_header(file_path, header, &doc)?;
 
     Ok(())
 }
@@ -94,7 +124,8 @@ pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let doc = content
+    let (_header, toml_content) = split_non_toml_header(&content);
+    let doc = toml_content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -161,7 +192,8 @@ pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let mut doc = content
+    let (header, toml_content) = split_non_toml_header(&content);
+    let mut doc = toml_content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -214,8 +246,7 @@ pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result
         }
     }
 
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
+    write_toml_with_header(file_path, header, &doc)?;
 
     Ok(())
 }
@@ -225,7 +256,8 @@ pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Resu
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let mut doc = content
+    let (header, toml_content) = split_non_toml_header(&content);
+    let mut doc = toml_content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -265,8 +297,7 @@ pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Resu
         }
     }
 
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
+    write_toml_with_header(file_path, header, &doc)?;
 
     Ok(())
 }
@@ -276,7 +307,8 @@ pub fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let doc = content
+    let (_header, toml_content) = split_non_toml_header(&content);
+    let doc = toml_content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -319,7 +351,8 @@ pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let mut doc = content
+    let (header, toml_content) = split_non_toml_header(&content);
+    let mut doc = toml_content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -348,8 +381,7 @@ pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result
         }
     }
 
-    std::fs::write(file_path, doc.to_string())
-        .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
+    write_toml_with_header(file_path, header, &doc)?;
 
     Ok(())
 }
