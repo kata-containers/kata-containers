@@ -426,7 +426,172 @@ fn parse_toml_value(value: &str) -> Item {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use tempfile::NamedTempFile;
+
+    // --- split_non_toml_header ---
+
+    #[rstest]
+    #[case("", "", "")]
+    #[case("key = \"value\"\n", "", "key = \"value\"\n")]
+    #[case("[plugins]\nfoo = 1\n", "", "[plugins]\nfoo = 1\n")]
+    #[case(
+        "{{ template \"base\" . }}\n",
+        "{{ template \"base\" . }}\n",
+        ""
+    )]
+    #[case(
+        "{{ template \"base\" . }}\n[plugins]\nfoo = 1\n",
+        "{{ template \"base\" . }}\n",
+        "[plugins]\nfoo = 1\n"
+    )]
+    #[case(
+        "{{ template \"base\" . }}\n\n[debug]\nlevel = \"debug\"\n",
+        "{{ template \"base\" . }}\n",
+        "\n[debug]\nlevel = \"debug\"\n"
+    )]
+    // No trailing newline after the template line
+    #[case("{{ template \"base\" . }}", "{{ template \"base\" . }}", "")]
+    fn test_split_non_toml_header(
+        #[case] input: &str,
+        #[case] expected_header: &str,
+        #[case] expected_toml: &str,
+    ) {
+        let (header, toml) = split_non_toml_header(input);
+        assert_eq!(header, expected_header, "header mismatch for input: {:?}", input);
+        assert_eq!(toml, expected_toml, "toml mismatch for input: {:?}", input);
+    }
+
+    // --- TOML operations on files with K3s/RKE2 base template header ---
+
+    #[rstest]
+    fn test_set_toml_value_with_k3s_header() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
+
+        set_toml_value(
+            path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.runtime_type",
+            "\"io.containerd.kata-qemu.v2\"",
+        )
+        .unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.starts_with("{{ template \"base\" . }}\n"), "header must be preserved");
+        assert!(content.contains("runtime_type"), "value must be written");
+
+        let value = get_toml_value(
+            path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.runtime_type",
+        )
+        .unwrap();
+        assert_eq!(value, "io.containerd.kata-qemu.v2");
+    }
+
+    #[rstest]
+    fn test_set_toml_value_with_k3s_header_idempotent() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
+
+        for _ in 0..3 {
+            set_toml_value(path, ".debug.level", "\"debug\"").unwrap();
+        }
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert_eq!(
+            content.matches("{{ template \"base\" . }}").count(),
+            1,
+            "header must appear exactly once"
+        );
+        let value = get_toml_value(path, ".debug.level").unwrap();
+        assert_eq!(value, "debug");
+    }
+
+    #[rstest]
+    fn test_append_to_toml_array_with_k3s_header() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "{{ template \"base\" . }}\nimports = []\n").unwrap();
+
+        append_to_toml_array(path, ".imports", "\"/etc/containerd/conf.d/kata.toml\"").unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.starts_with("{{ template \"base\" . }}\n"));
+        assert!(content.contains("/etc/containerd/conf.d/kata.toml"));
+    }
+
+    #[rstest]
+    fn test_remove_from_toml_array_with_k3s_header() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(
+            path,
+            "{{ template \"base\" . }}\nimports = [\"/path/a\", \"/path/b\"]\n",
+        )
+        .unwrap();
+
+        remove_from_toml_array(path, ".imports", "\"/path/a\"").unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.starts_with("{{ template \"base\" . }}\n"));
+        assert!(!content.contains("/path/a"));
+        assert!(content.contains("/path/b"));
+    }
+
+    #[rstest]
+    fn test_set_toml_array_with_k3s_header() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
+
+        set_toml_array(
+            path,
+            ".imports",
+            &["/path/one".to_string(), "/path/two".to_string()],
+        )
+        .unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.starts_with("{{ template \"base\" . }}\n"));
+        let values = get_toml_array(path, ".imports").unwrap();
+        assert_eq!(values, vec!["/path/one", "/path/two"]);
+    }
+
+    #[rstest]
+    fn test_multiple_runtimes_with_k3s_header() {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
+
+        let pluginid = "\"io.containerd.cri.v1.runtime\"";
+        for shim in &["kata-qemu", "kata-clh"] {
+            let table = format!(".plugins.{pluginid}.containerd.runtimes.{shim}");
+            set_toml_value(
+                path,
+                &format!("{table}.runtime_type"),
+                &format!("\"io.containerd.{shim}.v2\""),
+            )
+            .unwrap();
+            set_toml_value(path, &format!("{table}.privileged_without_host_devices"), "true")
+                .unwrap();
+        }
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.starts_with("{{ template \"base\" . }}\n"));
+        assert!(content.contains("kata-qemu"));
+        assert!(content.contains("kata-clh"));
+
+        for shim in &["kata-qemu", "kata-clh"] {
+            let rt = get_toml_value(
+                path,
+                &format!(".plugins.{pluginid}.containerd.runtimes.{shim}.runtime_type"),
+            )
+            .unwrap();
+            assert_eq!(rt, format!("io.containerd.{shim}.v2"));
+        }
+    }
 
     #[test]
     fn test_set_toml_value() {
