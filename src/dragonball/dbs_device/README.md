@@ -15,8 +15,7 @@ The dbs-device crate provides:
 
 The dbs-device crate is designed to support the virtual machine's device model.
 
-The core concepts of device model are [Port I/O](https://wiki.osdev.org/I/O_Ports) and
-[Memory-mapped I/O](https://en.wikipedia.org/wiki/Memory-mapped_I/O),
+The core concepts of device model are [Memory-mapped I/O and port-mapped I/O](https://en.wikipedia.org/wiki/Memory-mapped_I/O_and_port-mapped_I/O),
 which are two main methods of performing I/O between CPU and devices.
 
 The device model provided by the dbs-device crate works as below:
