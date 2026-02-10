@@ -61,7 +61,7 @@ $ cd metrics/machine_learning
 $ ./tensorflow_resnet50_int8.sh 25 60
 ```
 
-# Kata Containers OpenVINO Benchmark
+# Kata Containers `OpenVINO` Benchmark
 
 This is a toolkit around neural networks using its built-in benchmarking support
 and analyzing the throughput and latency for various models.

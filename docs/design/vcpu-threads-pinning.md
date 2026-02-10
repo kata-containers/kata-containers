@@ -1,4 +1,4 @@
-# Design Doc for Kata Containers' VCPUs Pinning Feature
+# Design Doc for Kata Containers VCPUs Pinning Feature
 
 ## Background
 By now, vCPU threads of Kata Containers are scheduled randomly to CPUs. And each pod would request a specific set of CPUs which we call it CPU set (just the CPU set meaning in Linux cgroups).

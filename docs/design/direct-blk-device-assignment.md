@@ -49,14 +49,14 @@ There are a few options for reference:
    3. The CSI plugin can also lookup pod `runtimeclass` during `NodePublish`. This approach can be found in the [ALIBABA CSI plugin](https://github.com/kubernetes-sigs/alibaba-cloud-csi-driver/blob/master/pkg/disk/nodeserver.go#L248).
 2. The CSI node driver delegates the direct assigned volume to the Kata Containers runtime. The CSI node driver APIs need to
    be modified to pass the volume mount information and collect volume information to/from the Kata Containers runtime by invoking `kata-runtime` command line commands.
-   * **NodePublishVolume** -- It invokes `kata-runtime direct-volume add --volume-path [volumePath] --mount-info [mountInfo]`
+   * **`NodePublishVolume`** -- It invokes `kata-runtime direct-volume add --volume-path [volumePath] --mount-info [mountInfo]`
    to propagate the volume mount information to the Kata Containers runtime for it to carry out the filesystem mount operation.
    The `volumePath` is the [target_path](https://github.com/container-storage-interface/spec/blob/master/csi.proto#L1364) in the CSI `NodePublishVolumeRequest`.
    The `mountInfo` is a serialized JSON string.
-   * **NodeGetVolumeStats** -- It invokes `kata-runtime direct-volume stats --volume-path [volumePath]` to retrieve the filesystem stats of direct-assigned volume.
-   * **NodeExpandVolume** -- It invokes `kata-runtime direct-volume resize --volume-path [volumePath] --size [size]` to send a resize request to the Kata Containers runtime to
+   * **`NodeGetVolumeStats`** -- It invokes `kata-runtime direct-volume stats --volume-path [volumePath]` to retrieve the filesystem stats of direct-assigned volume.
+   * **`NodeExpandVolume`** -- It invokes `kata-runtime direct-volume resize --volume-path [volumePath] --size [size]` to send a resize request to the Kata Containers runtime to
    resize the direct-assigned volume.
-   * **NodeStageVolume/NodeUnStageVolume** -- It invokes `kata-runtime direct-volume remove --volume-path [volumePath]` to remove the persisted metadata of a direct-assigned volume.
+   * **`NodeStageVolume/NodeUnStageVolume`** -- It invokes `kata-runtime direct-volume remove --volume-path [volumePath]` to remove the persisted metadata of a direct-assigned volume.
 
 The `mountInfo` object is defined as follows:
 ```Golang
@@ -226,7 +226,7 @@ Let’s assume that changes have been made in the `aws-ebs-csi-driver` node driv
 1. In the node CSI driver, the `NodePublishVolume` API invokes: `kata-runtime direct-volume add --volume-path "/kubelet/a/b/c/d/sdf" --mount-info "{\"Device\": \"/dev/sdf\", \"fstype\": \"ext4\"}"`.
 2. The `Kata-runtime` writes the mount-info JSON to a file called `mountInfo.json` under `/run/kata-containers/shared/direct-volumes/kubelet/a/b/c/d/sdf`.
 
-**Node unstage volume**
+**Node `unstage` volume**
 1. In the node CSI driver, the `NodeUnstageVolume` API invokes: `kata-runtime direct-volume remove --volume-path "/kubelet/a/b/c/d/sdf"`.
 2. Kata-runtime deletes the directory `/run/kata-containers/shared/direct-volumes/kubelet/a/b/c/d/sdf`.
 
