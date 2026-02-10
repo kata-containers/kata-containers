@@ -1,0 +1,127 @@
+# Run Kubernetes integration tests on free GitHub runners  with a locally
+# deployed cluster (kubeadm).
+name: CI | Run kubernetes tests on free runner
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  run-k8s-tests:
+    name: run-k8s-tests
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [
+          { vmm: clh, containerd_version: lts },
+          { vmm: clh, containerd_version: active },
+          { vmm: dragonball, containerd_version: lts },
+          { vmm: dragonball, containerd_version: active },
+          { vmm: qemu, containerd_version: lts },
+          { vmm: qemu, containerd_version: active },
+          { vmm: qemu-runtime-rs, containerd_version: lts },
+          { vmm: qemu-runtime-rs, containerd_version: active },
+          { vmm: cloud-hypervisor, containerd_version: lts },
+          { vmm: cloud-hypervisor, containerd_version: active },
+        ]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HOST_OS: ubuntu
+      KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
+      KUBERNETES: vanilla
+      K8S_TEST_HOST_TYPE: baremetal-no-attestation
+      CONTAINER_ENGINE: containerd
+      CONTAINER_ENGINE_VERSION: ${{ matrix.environment.containerd_version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tools-tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kata-tools-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-tools-artifacts
+
+      - name: Install kata-tools
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
+
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
+
+      - name: Deploy k8s (kubeadm)
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Deploy Kata
+        timeout-minutes: 20
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
+
+      - name: Run tests
+        timeout-minutes: 60
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Report tests
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+
+      - name: Delete kata-deploy
+        if: always()
+        timeout-minutes: 15
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup
+

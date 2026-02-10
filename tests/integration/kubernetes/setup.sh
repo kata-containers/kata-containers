@@ -14,6 +14,7 @@ export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export KATA_HOST_OS="${KATA_HOST_OS:-}"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 export PULL_TYPE="${PULL_TYPE:-default}"
+export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
 declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
 declare -r runtimeclass_workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"

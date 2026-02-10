@@ -417,6 +417,14 @@ function deploy_vanilla_k8s() {
 	[[ -z "${container_engine}" ]] && die "container_engine is required"
 	[[ -z "${container_engine_version}" ]] && die "container_engine_version is required"
 
+	# Resolve lts/active to the actual version from versions.yaml (e.g. v1.7, v2.1)
+	case "${container_engine_version}" in
+		lts|active)
+			container_engine_version=$(get_from_kata_deps ".externals.containerd.${container_engine_version}")
+			;;
+		*) ;;
+	esac
+
 	install_system_dependencies "runc"
 	load_k8s_needed_modules
 	set_k8s_network_parameters
