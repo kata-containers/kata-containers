@@ -116,7 +116,10 @@ pub async fn configure_containerd_runtime(
 
     let paths = config.get_containerd_paths(runtime).await?;
     let configuration_file = get_containerd_output_path(&paths);
-    let pluginid = get_containerd_pluginid(&paths.config_file)?;
+    let pluginid = match paths.plugin_id.as_deref() {
+        Some(plugin_id) => plugin_id,
+        None => get_containerd_pluginid(&paths.config_file)?,
+    };
 
     log::info!(
         "configure_containerd_runtime: Writing to {:?}, pluginid={}",
@@ -187,7 +190,10 @@ pub async fn configure_custom_containerd_runtime(
 
     let paths = config.get_containerd_paths(runtime).await?;
     let configuration_file = get_containerd_output_path(&paths);
-    let pluginid = get_containerd_pluginid(&paths.config_file)?;
+    let pluginid = match paths.plugin_id.as_deref() {
+        Some(plugin_id) => plugin_id,
+        None => get_containerd_pluginid(&paths.config_file)?,
+    };
 
     log::info!(
         "configure_custom_containerd_runtime: Writing to {:?}, pluginid={}",
@@ -225,7 +231,8 @@ pub async fn configure_custom_containerd_runtime(
         snapshotter,
     };
 
-    write_containerd_runtime_config(&configuration_file, pluginid, &params)
+    write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
+    Ok(())
 }
 
 pub async fn configure_containerd(config: &Config, runtime: &str) -> Result<()> {
@@ -347,13 +354,24 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
     Ok(())
 }
 
-/// Setup containerd config files based on runtime type
-pub fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<()> {
+/// Setup containerd config files based on runtime type.
+/// For K3s/RKE2, resolves which template (v2 or v3) to use from the node's containerd version,
+/// then creates only that template file.
+pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<()> {
+    const K3S_RKE2_BASE_TMPL: &str = "{{ template \"base\" . }}\n";
+
     match runtime {
         "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
-            let tmpl_file = format!("{}.tmpl", config.containerd_conf_file);
-            if !Path::new(&tmpl_file).exists() && Path::new(&config.containerd_conf_file).exists() {
-                fs::copy(&config.containerd_conf_file, &tmpl_file)?;
+            // K3s/RKE2: create only the chosen template (v2 or v3). See docs.k3s.io/advanced#configuring-containerd
+            let paths = config.get_containerd_paths(runtime).await?;
+            let path = &paths.config_file;
+            if !Path::new(path).exists() {
+                if let Some(parent) = Path::new(path).parent() {
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("Failed to create containerd config dir: {parent:?}"))?;
+                }
+                fs::write(path, K3S_RKE2_BASE_TMPL)
+                    .with_context(|| format!("Failed to write K3s/RKE2 template: {path}"))?;
             }
         }
         "k0s-worker" | "k0s-controller" => {

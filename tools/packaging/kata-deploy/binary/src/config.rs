@@ -6,6 +6,65 @@
 use anyhow::{Context, Result};
 use log::info;
 use std::env;
+use std::fs;
+
+use crate::k8s;
+
+/// K3s/RKE2 containerd config template filenames (under the mounted containerd dir).
+/// V3 is for containerd 2.x; V2 is for containerd 1.x.
+pub const K3S_RKE2_CONTAINERD_V3_TMPL: &str = "/etc/containerd/config-v3.toml.tmpl";
+pub const K3S_RKE2_CONTAINERD_V2_TMPL: &str = "/etc/containerd/config.toml.tmpl";
+
+/// Resolves whether to use containerd config v3 (true) or v2 (false) for K3s/RKE2.
+/// 1. Tries config.toml (containerd config file): if it exists and contains "version = 3" or "version = 2", use that.
+/// 2. Else falls back to the node's containerRuntimeVersion (e.g. "containerd://2.1.5-k3s1").
+/// 3. If neither is available, returns an error.
+pub fn k3s_rke2_resolve_use_v3(
+    config_file_path: &str,
+    container_runtime_version: Option<&str>,
+) -> Result<bool> {
+    use crate::runtime::manager;
+
+    // 1. Try config.toml (generated config that may already exist on the node)
+    if let Ok(content) = fs::read_to_string(config_file_path) {
+        if content.contains("version = 3") {
+            return Ok(true);
+        }
+        if content.contains("version = 2") {
+            return Ok(false);
+        }
+    }
+
+    // 2. Fall back to node's container runtime version
+    if let Some(version) = container_runtime_version {
+        return Ok(manager::containerd_version_is_2_or_newer(version));
+    }
+
+    // 3. Neither source available
+    Err(anyhow::anyhow!(
+        "K3s/RKE2: cannot determine containerd config version (v2 vs v3). \
+         Need version from {config_file_path} (version = 2/3) or node containerRuntimeVersion."
+    ))
+}
+
+/// Returns the K3s/RKE2 containerd template path. Use v3 for containerd 2.x, v2 for 1.x.
+pub fn k3s_rke2_containerd_template_path(use_v3: bool) -> &'static str {
+    if use_v3 {
+        K3S_RKE2_CONTAINERD_V3_TMPL
+    } else {
+        K3S_RKE2_CONTAINERD_V2_TMPL
+    }
+}
+
+/// Returns the containerd CRI plugin ID for K3s/RKE2 (section key we write under).
+/// Config v3 uses "io.containerd.cri.v1.runtime", v2 uses "io.containerd.grpc.v1.cri".
+pub fn k3s_rke2_containerd_plugin_id(use_v3: bool) -> &'static str {
+    if use_v3 {
+        "\"io.containerd.cri.v1.runtime\""
+    } else {
+        "\"io.containerd.grpc.v1.cri\""
+    }
+}
 
 /// Default Kata Containers installation directory.
 /// This is where Kata artifacts are installed by default.
@@ -25,6 +84,8 @@ pub struct ContainerdPaths {
     pub drop_in_file: String,
     /// Whether drop-in files can be used (based on containerd version)
     pub use_drop_in: bool,
+    /// For K3s/RKE2: CRI plugin ID to use (derived from containerd version). Others: None (read from file).
+    pub plugin_id: Option<String>,
 }
 
 /// Custom runtime configuration parsed from ConfigMap
@@ -443,6 +504,7 @@ impl Config {
                 imports_file: None, // k0s auto-loads from containerd.d/, imports not needed
                 drop_in_file: "/etc/containerd/containerd.d/kata-deploy.toml".to_string(),
                 use_drop_in,
+                plugin_id: None,
             },
             "microk8s" => ContainerdPaths {
                 // microk8s uses containerd-template.toml instead of config.toml
@@ -451,22 +513,41 @@ impl Config {
                 imports_file: Some("/etc/containerd/containerd-template.toml".to_string()),
                 drop_in_file: self.containerd_drop_in_conf_file.clone(),
                 use_drop_in,
+                plugin_id: None,
             },
-            "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => ContainerdPaths {
-                // k3s/rke2 generates config.toml from config.toml.tmpl on each restart
-                // We must modify the template file so our changes persist
-                config_file: "/etc/containerd/config.toml.tmpl".to_string(),
-                backup_file: "/etc/containerd/config.toml.tmpl.bak".to_string(),
-                imports_file: Some("/etc/containerd/config.toml.tmpl".to_string()),
-                drop_in_file: self.containerd_drop_in_conf_file.clone(),
-                use_drop_in,
-            },
+            "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
+                // K3s/RKE2 generate config.toml from a template on each restart; we modify
+                // the template so our changes persist. Which template is chosen by containerd version
+                // (see k3s_rke2_resolve_use_v3). Refs: docs.k3s.io/advanced#configuring-containerd
+                let container_runtime_version = k8s::get_node_field(
+                    self,
+                    ".status.nodeInfo.containerRuntimeVersion",
+                )
+                .await
+                .ok();
+                let use_v3 = k3s_rke2_resolve_use_v3(
+                    &self.containerd_conf_file,
+                    container_runtime_version.as_deref(),
+                )?;
+                let config_file =
+                    k3s_rke2_containerd_template_path(use_v3).to_string();
+                let backup_file = format!("{config_file}.bak");
+                ContainerdPaths {
+                    config_file: config_file.clone(),
+                    backup_file,
+                    imports_file: Some(config_file),
+                    drop_in_file: self.containerd_drop_in_conf_file.clone(),
+                    use_drop_in,
+                    plugin_id: Some(k3s_rke2_containerd_plugin_id(use_v3).to_string()),
+                }
+            }
             _ => ContainerdPaths {
                 config_file: self.containerd_conf_file.clone(),
                 backup_file: self.containerd_conf_file_backup.clone(),
                 imports_file: Some(self.containerd_conf_file.clone()),
                 drop_in_file: self.containerd_drop_in_conf_file.clone(),
                 use_drop_in,
+                plugin_id: None,
             },
         };
 
