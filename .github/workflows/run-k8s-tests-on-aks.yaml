@@ -42,17 +42,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host_os:
-          - ubuntu
-        vmm:
-          - clh
-          - dragonball
-          - qemu
-          - qemu-runtime-rs
-          - cloud-hypervisor
-        instance-type:
-          - small
-          - normal
         include:
           - host_os: cbl-mariner
             vmm: clh
@@ -80,6 +69,7 @@ jobs:
       KUBERNETES: "vanilla"
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
       GENPOLICY_PULL_METHOD: ${{ matrix.genpolicy-pull-method }}
+      RUNS_ON_AKS: "true"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

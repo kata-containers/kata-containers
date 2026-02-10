@@ -39,6 +39,7 @@ AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
+RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
 # Common setup for tests.
 #
@@ -98,13 +99,11 @@ is_nvidia_gpu_platform() {
 }
 
 is_aks_cluster() {
-	case "${KATA_HYPERVISOR}" in
-		"qemu-tdx"|"qemu-snp"|qemu-nvidia-gpu*)
-			return 1
-			;;
-		*)
-			return 0
-	esac
+	if [[ "${RUNS_ON_AKS}" = "true" ]]; then
+		return 0
+	fi
+
+	return 1
 }
 
 adapt_common_policy_settings_for_non_coco() {

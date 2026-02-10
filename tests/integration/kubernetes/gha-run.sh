@@ -36,6 +36,7 @@ export PULL_TYPE="${PULL_TYPE:-default}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 export TARGET_ARCH="${TARGET_ARCH:-x86_64}"
+export RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
