@@ -256,8 +256,51 @@ struct Memory {
 
 impl Memory {
     fn new(config: &HypervisorConfig) -> Memory {
-        let mem_size = config.memory_info.default_memory as u64;
-        let max_mem_size = config.memory_info.default_maxmemory as u64;
+        // Move this to QemuConfig::adjust_config()?
+
+        let mut mem_size = config.memory_info.default_memory as u64;
+        let mut max_mem_size = config.memory_info.default_maxmemory as u64;
+
+        if let Ok(sysinfo) = nix::sys::sysinfo::sysinfo() {
+            let host_memory = sysinfo.ram_total() >> 20;
+
+            if mem_size > host_memory {
+                info!(sl!(), "'default_memory' given in configuration.toml is greater than host memory, adjusting to host memory");
+                mem_size = host_memory
+            }
+
+            if max_mem_size == 0 || max_mem_size > host_memory {
+                max_mem_size = host_memory
+            }
+
+            if cfg!(all(target_arch = "powerpc64", target_endian = "little")) {
+                const PPC64_MEM_BLOCK_SIZE: u64 = 256;
+
+                if !mem_size.is_multiple_of(PPC64_MEM_BLOCK_SIZE) {
+                    let old_mem_size = mem_size;
+                    mem_size = (mem_size / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE;
+                    info!(sl!(), "PowerPC: Aligned default_memory from {}MB to {}MB", old_mem_size, mem_size);
+                }
+
+                if !max_mem_size.is_multiple_of(PPC64_MEM_BLOCK_SIZE) {
+                    let old_max_mem_size = max_mem_size;
+                    max_mem_size = (max_mem_size / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE;
+                    info!(sl!(), "PowerPC: Aligned default_maxmemory from {}MB to {}MB", old_max_mem_size, max_mem_size);
+                }
+
+                if max_mem_size < mem_size {
+                    max_mem_size = mem_size;
+                }
+
+                info!(sl!(), "PowerPC memory alignment applied: mem_size={}MB, max_mem_size={}MB", mem_size, max_mem_size);
+            }
+        } else {
+            warn!(sl!(), "Failed to get host memory size, cannot verify or adjust configuration.toml's 'default_maxmemory'");
+
+            if max_mem_size == 0 {
+                max_mem_size = mem_size;
+            };
+        }
 
         // Memory sizes are given in megabytes in configuration.toml so we
         // need to convert them to bytes for storage.
