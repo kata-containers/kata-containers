@@ -59,7 +59,7 @@ impl K8sClient {
 
         let labels = node.metadata.labels.get_or_insert_with(Default::default);
 
-        if let Some(value) = label_value {
+        let patch = if let Some(value) = label_value {
             if overwrite || !labels.contains_key(label_key) {
                 labels.insert(label_key.to_string(), value.to_string());
                 info!(
@@ -67,16 +67,23 @@ impl K8sClient {
                     label_key, value, self.node_name
                 );
             }
+            Patch::Merge(json!({
+                "metadata": {
+                    "labels": labels
+                }
+            }))
         } else {
             labels.remove(label_key);
             info!("Removing label {} from node {}", label_key, self.node_name);
-        }
-
-        let patch = Patch::Merge(json!({
-            "metadata": {
-                "labels": labels
-            }
-        }));
+            // JSON merge patch: omit key = leave unchanged. To remove, set key to null.
+            let mut patch_labels = serde_json::Map::new();
+            patch_labels.insert(label_key.to_string(), serde_json::Value::Null);
+            Patch::Merge(json!({
+                "metadata": {
+                    "labels": patch_labels
+                }
+            }))
+        };
 
         let pp = PatchParams::default();
         self.node_api
