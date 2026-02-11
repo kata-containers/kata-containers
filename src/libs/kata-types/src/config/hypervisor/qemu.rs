@@ -14,7 +14,7 @@ use crate::config::default::MIN_QEMU_MEMORY_SIZE_MB;
 
 use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
-use crate::{resolve_path, validate_path};
+use crate::{resolve_path, sl, validate_path};
 
 /// Hypervisor name for qemu, used to index `TomlConfig::hypervisor`.
 pub const HYPERVISOR_NAME_QEMU: &str = "qemu";
@@ -94,6 +94,48 @@ impl ConfigPlugin for QemuConfig {
 
             if qemu.factory.template_path.is_empty() {
                 qemu.factory.template_path = default::DEFAULT_TEMPLATE_PATH.to_string();
+            }
+
+            // PowerPC64 little-endian memory alignment for QEMU
+            if cfg!(all(target_arch = "powerpc64", target_endian = "little")) {
+                const PPC64_MEM_BLOCK_SIZE: u64 = 256;
+
+                let mut mem_size = u64::from(qemu.memory_info.default_memory);
+                let mut max_mem_size = u64::from(qemu.memory_info.default_maxmemory);
+
+                if !mem_size.is_multiple_of(PPC64_MEM_BLOCK_SIZE) {
+                    let old_mem_size = mem_size;
+                    mem_size = (mem_size / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE;
+                    info!(
+                        sl!(),
+                        "PowerPC: Aligned default_memory from {}MB to {}MB", old_mem_size, mem_size
+                    );
+                }
+
+                if !max_mem_size.is_multiple_of(PPC64_MEM_BLOCK_SIZE) {
+                    let old_max_mem_size = max_mem_size;
+                    max_mem_size = (max_mem_size / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE;
+                    info!(
+                        sl!(),
+                        "PowerPC: Aligned default_maxmemory from {}MB to {}MB",
+                        old_max_mem_size,
+                        max_mem_size
+                    );
+                }
+
+                if max_mem_size != 0 && max_mem_size < mem_size {
+                    max_mem_size = mem_size;
+                }
+
+                info!(
+                    sl!(),
+                    "PowerPC memory alignment applied: mem_size={}MB, max_mem_size={}MB",
+                    mem_size,
+                    max_mem_size
+                );
+
+                qemu.memory_info.default_memory = mem_size as u32;
+                qemu.memory_info.default_maxmemory = max_mem_size as u32;
             }
         }
 
