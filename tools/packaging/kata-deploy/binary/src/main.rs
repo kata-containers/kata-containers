@@ -67,11 +67,21 @@ async fn main() -> Result<()> {
         Action::Install => {
             install(&config, &runtime).await?;
 
-            // DEPLOYMENT MODEL: Install runs as DaemonSet
-            // After installation completes, the pod must stay alive to maintain
-            // the kata-runtime label and artifacts. Sleep forever to keep pod running.
-            info!("Install completed, daemonset mode: sleeping forever");
-            std::future::pending::<()>().await;
+            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to maintain
+            // the kata-runtime label and artifacts; exit gracefully on SIGTERM.
+            info!("Install completed, daemonset mode: waiting for SIGTERM");
+            use tokio::signal::unix::{signal, SignalKind};
+            match signal(SignalKind::terminate()) {
+                Ok(mut sigterm) => {
+                    sigterm.recv().await;
+                    return Ok(());
+                }
+                Err(e) => {
+                    log::warn!("Failed to register SIGTERM handler: {}, sleeping forever", e);
+                    std::future::pending::<()>().await;
+                    return Ok(());
+                }
+            }
         }
         Action::Cleanup => {
             cleanup(&config, &runtime).await?;
