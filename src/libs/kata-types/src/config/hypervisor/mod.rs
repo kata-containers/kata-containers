@@ -1077,7 +1077,63 @@ impl MemoryInfo {
         if self.default_maxmemory == 0 || u64::from(self.default_maxmemory) > host_memory {
             self.default_maxmemory = host_memory as u32;
         }
+
+        // Apply PowerPC64 memory alignment
+        #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+        self.adjust_ppc64_memory_alignment();
+
         Ok(())
+    }
+
+    /// Adjusts memory values for PowerPC64 little-endian systems to meet
+    /// QEMU's 256MB block size alignment requirement.
+    ///
+    /// This method ensures both `default_memory` and
+    /// `default_maxmemory` meet this requirement by rounding down to the
+    /// nearest multiple of 256MB.
+    #[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
+    fn adjust_ppc64_memory_alignment(&mut self) {
+        const PPC64_MEM_BLOCK_SIZE: u64 = 256;
+
+        fn align_memory(value: u64, block_size: u64) -> u64 {
+            (value / block_size) * block_size
+        }
+
+        let mem_size = u64::from(self.default_memory);
+        let max_mem_size = u64::from(self.default_maxmemory);
+
+        let aligned_mem = align_memory(mem_size, PPC64_MEM_BLOCK_SIZE);
+        let mut aligned_max_mem = align_memory(max_mem_size, PPC64_MEM_BLOCK_SIZE);
+
+        if aligned_mem != mem_size {
+            info!(
+                sl!(),
+                "PowerPC: Aligned default_memory from {}MB to {}MB", mem_size, aligned_mem
+            );
+        }
+
+        if aligned_max_mem != max_mem_size {
+            info!(
+                sl!(),
+                "PowerPC: Aligned default_maxmemory from {}MB to {}MB",
+                max_mem_size,
+                aligned_max_mem
+            );
+        }
+
+        if aligned_max_mem != 0 && aligned_max_mem < aligned_mem {
+            aligned_max_mem = aligned_mem;
+        }
+
+        info!(
+            sl!(),
+            "PowerPC memory alignment applied: mem_size={}MB, max_mem_size={}MB",
+            aligned_mem,
+            aligned_max_mem
+        );
+
+        self.default_memory = aligned_mem as u32;
+        self.default_maxmemory = aligned_max_mem as u32;
     }
 
     /// Validates the memory configuration information.
