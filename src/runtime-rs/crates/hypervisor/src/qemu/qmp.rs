@@ -154,29 +154,42 @@ impl Qmp {
             }
             let core_id = match vcpu.props.core_id {
                 Some(id) => id,
-                None => continue,
+                None => {
+                    warn!(sl!(), "hotpluggable vcpu has no core_id, skipping");
+                    continue;
+                }
             };
             if vcpu.qom_path.is_some() {
                 info!(sl!(), "hotpluggable vcpu {} hotplugged already", core_id);
                 continue;
             }
-            let socket_id = match vcpu.props.socket_id {
-                Some(id) => id,
-                None => continue,
-            };
-            let thread_id = match vcpu.props.thread_id {
-                Some(id) => id,
-                None => continue,
-            };
-
+            let driver = &vcpu.type_;
             let mut cpu_args = Dictionary::new();
-            cpu_args.insert("socket-id".to_owned(), socket_id.into());
             cpu_args.insert("core-id".to_owned(), core_id.into());
-            cpu_args.insert("thread-id".to_owned(), thread_id.into());
+            if !is_flat_cpu_topology(driver) {
+                match (vcpu.props.socket_id, vcpu.props.thread_id) {
+                    (Some(socket_id), Some(thread_id)) => {
+                        cpu_args.insert("socket-id".to_owned(), socket_id.into());
+                        cpu_args.insert("thread-id".to_owned(), thread_id.into());
+                    }
+                    (None, None) => {
+                        warn!(sl!(), "hotpluggable vcpu {} has no socket_id and thread_id for driver {}, skipping", core_id, driver);
+                        continue;
+                    }
+                    (None, _) => {
+                        warn!(sl!(), "hotpluggable vcpu {} has no socket_id for driver {}, skipping", core_id, driver);
+                        continue;
+                    }
+                    (_, None) => {
+                        warn!(sl!(), "hotpluggable vcpu {} has no thread_id for driver {}, skipping", core_id, driver);
+                        continue;
+                    }
+                }
+            }
             self.qmp.execute(&qmp::device_add {
                 bus: None,
                 id: Some(vcpu_id_from_core_id(core_id)),
-                driver: hotpluggable_cpus[0].type_.clone(),
+                driver: driver.clone(),
                 arguments: cpu_args,
             })?;
 
@@ -893,6 +906,12 @@ impl Qmp {
 
 fn vcpu_id_from_core_id(core_id: i64) -> String {
     format!("cpu-{core_id}")
+}
+
+/// Returns whether the CPU driver uses a flat topology.
+/// s390x and ppc64le use a flat CPU topology.
+fn is_flat_cpu_topology(driver: &str) -> bool {
+    matches!(driver, "host-s390x-cpu" | "host-powerpc64-cpu")
 }
 
 // The get_pci_path_by_qdev_id function searches a device list for a device matching a given qdev_id,
