@@ -28,15 +28,11 @@ test:
 	exit 0
 install: install-runtime install-configs
 else ifeq ($(ARCH), powerpc64le)
-default:
-	@echo "PowerPC 64 LE is not currently supported"
-	exit 0
+default: runtime show-header
 test:
-	@echo "PowerPC 64 LE is not currently supported"
+	@echo "powerpc64le is not currently supported"
 	exit 0
-install:
-	@echo "PowerPC 64 LE is not currently supported"
-	exit 0
+install: install-runtime install-configs
 else ifeq ($(ARCH), riscv64gc)
 default: runtime show-header
 test:
