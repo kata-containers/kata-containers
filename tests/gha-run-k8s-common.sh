@@ -432,7 +432,35 @@ function deploy_vanilla_k8s() {
 		*) die "${container_engine} is not a container engine supported by this script" ;;
 	esac
 	sudo systemctl daemon-reload && sudo systemctl restart "${container_engine}"
-	do_deploy_k8s
+	local max_retries=5 retry_wait_sec=180 attempt=1
+	while true; do
+		local errexit_set=0
+		local deploy_status
+
+		# Detect if errexit (-e) is currently set and temporarily disable it
+		if [[ $- == *e* ]]; then
+			errexit_set=1
+			set +e
+		fi
+
+		do_deploy_k8s
+		deploy_status=$?
+
+		# Restore errexit state if it was previously enabled
+		if [[ ${errexit_set} -eq 1 ]]; then
+			set -e
+		fi
+		if [[ ${deploy_status} -eq 0 ]]; then
+			return 0
+		fi
+		if [[ ${attempt} -ge ${max_retries} ]]; then
+			>&2 echo "do_deploy_k8s failed after ${max_retries} attempts"
+			return 1
+		fi
+		>&2 echo "do_deploy_k8s attempt ${attempt}/${max_retries} failed, waiting ${retry_wait_sec}s before retry"
+		sleep "${retry_wait_sec}"
+		attempt=$((attempt + 1))
+	done
 }
 
 function deploy_k8s() {
