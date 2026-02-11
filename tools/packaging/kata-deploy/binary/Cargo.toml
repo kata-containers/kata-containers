@@ -46,7 +46,7 @@ walkdir = "2"
 regex = "1.10"
 
 # Async runtime (required by kube-rs and for async main)
-tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1.38", features = ["rt-multi-thread", "macros", "signal", "time"] }
 
 [dev-dependencies]
 tempfile = "3.8"
