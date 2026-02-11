@@ -114,6 +114,11 @@ $ helm upgrade kata-deploy -n kube-system \
 $ helm uninstall kata-deploy -n kube-system
 ```
 
+During uninstall, Helm will report that some resources were kept due to the
+resource policy (`ServiceAccount`, `ClusterRole`, `ClusterRoleBinding`). This
+is **normal**. A post-delete hook Job runs after uninstall and removes those
+resources so no cluster-wide `RBAC` is left behind.
+
 ## Configuration Reference
 
 All values can be overridden with --set key=value or a custom `-f myvalues.yaml`.

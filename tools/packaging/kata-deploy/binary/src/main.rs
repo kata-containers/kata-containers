@@ -224,8 +224,8 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
         kata_deploy_installations
     );
 
-    if config.helm_post_delete_hook && kata_deploy_installations == 0 {
-        info!("Helm post-delete hook: removing kata-runtime label");
+    if kata_deploy_installations == 0 {
+        info!("Removing kata-runtime label from node");
         k8s::label_node(config, "katacontainers.io/kata-runtime", None, false).await?;
         info!("Successfully removed kata-runtime label");
     }
@@ -246,18 +246,6 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     info!("Cleaning up CRI runtime configuration");
     runtime::cleanup_cri_runtime(config, runtime).await?;
     info!("Successfully cleaned up CRI runtime configuration");
-
-    if !config.helm_post_delete_hook && kata_deploy_installations == 0 {
-        info!("Setting cleanup label on node");
-        k8s::label_node(
-            config,
-            "katacontainers.io/kata-runtime",
-            Some("cleanup"),
-            true,
-        )
-        .await?;
-        info!("Successfully set cleanup label");
-    }
 
     info!("Removing kata artifacts from host");
     artifacts::remove_artifacts(config).await?;

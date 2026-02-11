@@ -1,0 +1,112 @@
+{{- /*
+Post-delete hook Job: removes the kept RBAC (ServiceAccount, ClusterRole, ClusterRoleBinding)
+so no cluster-wide leftovers remain after uninstall. Runs after the DaemonSet preStop cleanup.
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-rb-cleanup
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+{{- if .Values.env.multiInstallSuffix }}
+      labels:
+        name: {{ .Chart.Name }}-rb-cleanup-{{ .Values.env.multiInstallSuffix }}
+{{- end }}
+    spec:
+      restartPolicy: OnFailure
+{{- if .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+      serviceAccountName: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
+      containers:
+        - name: rb-cleanup
+          image: quay.io/kata-containers/kubectl:latest
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              echo "Helm reports 'These resources were kept due to the resource policy' during uninstall — this is normal."
+              echo "Waiting for DaemonSet pods to finish terminating (preStop cleanup) before removing RBAC..."
+              wait_timeout=300
+              waited=0
+              while [ "$waited" -lt "$wait_timeout" ]; do
+                count=$(kubectl get pod -n "${NAMESPACE}" -l "${DAEMONSET_POD_LABEL}" --no-headers 2>/dev/null | wc -l)
+                if [ "$count" -eq 0 ]; then
+                  echo "No DaemonSet pods remaining, proceeding to remove RBAC."
+                  break
+                fi
+                echo "  ${count} pod(s) still terminating, waiting... (${waited}s/${wait_timeout}s)"
+                sleep 5
+                waited=$((waited + 5))
+              done
+              if [ "$waited" -ge "$wait_timeout" ]; then
+                echo "Timeout waiting for pods; removing RBAC anyway (slow nodes may have incomplete cleanup)." >&2
+              fi
+              echo "This Job removes those resources:"
+              echo "  [ClusterRoleBinding] ${CLUSTER_ROLE_BINDING_NAME}"
+              echo "  [ClusterRole] ${CLUSTER_ROLE_NAME}"
+              echo "  [ServiceAccount] ${SERVICE_ACCOUNT_NAME} (namespace: ${NAMESPACE})"
+              echo "Removing them now..."
+              retries=3
+              retry_delay=2
+              delete_one() {
+                local kind="$1" name="$2" ns="$3"
+                local attempt=1
+                while [ "$attempt" -le "$retries" ]; do
+                  if [ -n "$ns" ]; then
+                    kubectl delete "$kind" "$name" -n "$ns" --ignore-not-found --wait=false && return 0
+                  else
+                    kubectl delete "$kind" "$name" --ignore-not-found --wait=false && return 0
+                  fi
+                  echo "Attempt $attempt/$retries failed, retrying in ${retry_delay}s..."
+                  sleep "$retry_delay"
+                  attempt=$((attempt + 1))
+                done
+                echo "Failed after $retries attempts" >&2
+                return 1
+              }
+              delete_one clusterrolebinding "${CLUSTER_ROLE_BINDING_NAME}" ""
+              delete_one clusterrole "${CLUSTER_ROLE_NAME}" ""
+              delete_one serviceaccount "${SERVICE_ACCOUNT_NAME}" "${NAMESPACE}"
+              echo "Kata-deploy RBAC cleanup completed."
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: DAEMONSET_POD_LABEL
+{{- if .Values.env.multiInstallSuffix }}
+              value: "name={{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}"
+{{- else }}
+              value: "name={{ .Chart.Name }}"
+{{- end }}
+            - name: CLUSTER_ROLE_BINDING_NAME
+{{- if .Values.env.multiInstallSuffix }}
+              value: {{ .Chart.Name }}-rb-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+              value: {{ .Chart.Name }}-rb
+{{- end }}
+            - name: CLUSTER_ROLE_NAME
+{{- if .Values.env.multiInstallSuffix }}
+              value: {{ .Chart.Name }}-role-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+              value: {{ .Chart.Name }}-role
+{{- end }}
+            - name: SERVICE_ACCOUNT_NAME
+{{- if .Values.env.multiInstallSuffix }}
+              value: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+              value: {{ .Chart.Name }}-sa
+{{- end }}

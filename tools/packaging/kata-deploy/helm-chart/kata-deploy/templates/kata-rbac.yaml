@@ -8,6 +8,9 @@ metadata:
   name: {{ .Chart.Name }}-sa
 {{- end }}
   namespace: {{ .Release.Namespace }}
+  annotations:
+    # Keep so DaemonSet pods retain API access during uninstall (preStop cleanup).
+    helm.sh/resource-policy: keep
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -17,6 +20,8 @@ metadata:
 {{- else }}
   name: {{ .Chart.Name }}-role
 {{- end }}
+  annotations:
+    helm.sh/resource-policy: keep
 rules:
 - apiGroups: [""]
   resources: ["nodes"]
@@ -42,6 +47,8 @@ metadata:
 {{- else }}
   name: {{ .Chart.Name }}-rb
 {{- end }}
+  annotations:
+    helm.sh/resource-policy: keep
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -56,5 +63,70 @@ subjects:
   name: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
   name: {{ .Chart.Name }}-sa
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+---
+# ServiceAccount and RBAC for the post-delete Job that removes the kept RBAC above.
+# Created as post-delete hooks with lower weight than the Job so they exist when the Job runs.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-sa-cleanup
+{{- end }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-cleanup-role-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-cleanup-role
+{{- end }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["clusterroles", "clusterrolebindings"]
+  verbs: ["delete"]
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["delete"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-cleanup-rb-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-cleanup-rb
+{{- end }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-cleanup-role-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-cleanup-role
+{{- end }}
+subjects:
+- kind: ServiceAccount
+{{- if .Values.env.multiInstallSuffix }}
+  name: {{ .Chart.Name }}-sa-cleanup-{{ .Values.env.multiInstallSuffix }}
+{{- else }}
+  name: {{ .Chart.Name }}-sa-cleanup
 {{- end }}
   namespace: {{ .Release.Namespace }}
