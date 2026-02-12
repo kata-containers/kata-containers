@@ -331,7 +331,7 @@ externals:
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
-    url: "http://ftpmirror.gnu.org/gperf/"
+    url: "https://ftp.gnu.org.uk/gnu/gperf/"
     version: "3.3"
 
   hadolint:
