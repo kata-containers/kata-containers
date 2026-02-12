@@ -54,10 +54,10 @@ ifeq (,$(not_check_version))
     # determine actual version of golang
     golang_version=$(subst go,,$(word 3,$(golang_version_raw)))
 
-    golang_version_fields=$(subst ., ,$(golang_version))
-
-    golang_version_major=$(word 1,$(golang_version_fields))
-    golang_version_minor=$(word 2,$(golang_version_fields))
+    # Some distributions, such as Fedora 44, add suffixes such as "rc", distro patches, etc.
+    # Normalize to numeric major.minor for version comparisons.
+    golang_version_major=$(shell echo "$(golang_version)" | sed -E 's/^([0-9]+).*/\1/')
+    golang_version_minor=$(shell echo "$(golang_version)" | sed -E 's/^[0-9]+\.([0-9]+).*/\1/')
 
     golang_major_ok=$(shell test $(golang_version_major) -ge $(golang_version_min_major) && echo ok)
     golang_minor_ok=$(shell test $(golang_version_major) -eq $(golang_version_min_major) -a $(golang_version_minor) -ge $(golang_version_min_minor) && echo ok)
