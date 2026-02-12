@@ -400,7 +400,7 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 		// Once the connection is opened, the following command MUST BE sent,
 		// the hypervisor needs to know the port number where the agent is listening in order to
 		// create the connection
-		if _, err = conn.Write([]byte(fmt.Sprintf("CONNECT %d\n", port))); err != nil {
+		if _, err = fmt.Fprintf(conn, "CONNECT %d\n", port); err != nil {
 			conn.Close()
 			return nil, err
 		}

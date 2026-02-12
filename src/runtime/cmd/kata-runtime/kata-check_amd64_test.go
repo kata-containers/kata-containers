@@ -340,7 +340,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		// Write the following into the denylist file
 		// blacklist <mod>
 		// install <mod> /bin/false
-		_, err = denylistFile.WriteString(fmt.Sprintf("blacklist %s\ninstall %s /bin/false\n", mod, mod))
+		_, err = fmt.Fprintf(denylistFile, "blacklist %s\ninstall %s /bin/false\n", mod, mod)
 		assert.Nil(err)
 	}
 	denylistFile.Close()
