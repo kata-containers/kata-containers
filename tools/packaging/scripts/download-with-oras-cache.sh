@@ -394,7 +394,15 @@ download_component() {
 
 	if [[ -z "${base_url}" ]]; then
 		if command -v yq &>/dev/null; then
-			base_url=$(get_from_kata_deps ".externals.${component}.url")
+			# Try urls array first (for components with multi-mirror support),
+			# then fall back to single url field
+			base_url=$(get_from_kata_deps ".externals.${component}.urls[0]")
+			if [[ -z "${base_url}" ]] || [[ "${base_url}" == "null" ]]; then
+				base_url=$(get_from_kata_deps ".externals.${component}.url")
+			fi
+			# Remove surrounding quotes if present
+			base_url="${base_url%\"}"
+			base_url="${base_url#\"}"
 		else
 			die "Component URL not provided and yq not available. Set ${component_upper}_URL environment variable."
 		fi
