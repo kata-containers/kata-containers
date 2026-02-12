@@ -94,11 +94,28 @@ jobs:
           ./ci/install_yq.sh
         env:
           INSTALL_IN_GOPATH: false
-      - name: Install golang
+
+      - name: Read properties from versions.yaml
         if: contains(matrix.component.needs, 'golang')
         run: |
-          ./tests/install_go.sh -f -p
-          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          [ -n "$go_version" ]
+          echo "GO_VERSION=${go_version}" >> "$GITHUB_ENV"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        if: contains(matrix.component.needs, 'golang')
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # Setup-go doesn't work properly with ppc64le: https://github.com/actions/setup-go/issues/648
+          architecture: ${{ contains(inputs.instance, 'ppc64le') && 'ppc64le' || '' }}
+
+      # - name: Install golang
+      #   if: contains(matrix.component.needs, 'golang')
+      #   run: |
+      #     ./tests/install_go.sh -f -p
+      #     echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+
       - name: Setup rust
         if: contains(matrix.component.needs, 'rust')
         run: |
