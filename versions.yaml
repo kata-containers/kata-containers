@@ -487,12 +487,12 @@ languages:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
     url: "github.com/golangci/golangci-lint"
-    version: "1.64.8"
+    version: "2.9.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.64.8"
+      newest-version: "2.9.0"
 
 docker_images:
   description: "Docker images used for testing"
