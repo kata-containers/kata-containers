@@ -194,10 +194,9 @@ fn install_custom_runtime_configs(config: &Config) -> Result<()> {
         // Copy base config to the handler directory
         // Custom runtime drop-ins will overlay on top of this
         let base_config_filename = format!("configuration-{}.toml", runtime.base_config);
-        let original_config = format!(
-            "/host/{}/share/defaults/kata-containers/{}",
-            config.dest_dir, base_config_filename
-        );
+        let config_base =
+            utils::get_kata_containers_original_config_path(&runtime.base_config, &config.dest_dir);
+        let original_config = format!("/host{}/{}", config_base, base_config_filename);
         let dest_config = format!("{}/{}", handler_dir, base_config_filename);
 
         if Path::new(&original_config).exists() {
