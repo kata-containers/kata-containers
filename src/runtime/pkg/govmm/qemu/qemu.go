@@ -3093,7 +3093,7 @@ func (config *Config) appendCPUs() error {
 
 		if config.SMP.MaxCPUs > 0 {
 			if config.SMP.MaxCPUs < config.SMP.CPUs {
-				return fmt.Errorf("MaxCPUs %d must be equal to or greater than CPUs %d",
+				return fmt.Errorf("maxCPUs %d must be equal to or greater than CPUs %d",
 					config.SMP.MaxCPUs, config.SMP.CPUs)
 			}
 			SMPParams = append(SMPParams, fmt.Sprintf("maxcpus=%d", config.SMP.MaxCPUs))

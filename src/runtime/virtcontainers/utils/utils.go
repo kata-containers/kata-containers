@@ -54,11 +54,11 @@ var sysModuleDir = "/sys/module"
 // FileCopy copys files from srcPath to dstPath
 func FileCopy(srcPath, dstPath string) error {
 	if srcPath == "" {
-		return fmt.Errorf("Source path cannot be empty")
+		return fmt.Errorf("source path cannot be empty")
 	}
 
 	if dstPath == "" {
-		return fmt.Errorf("Destination path cannot be empty")
+		return fmt.Errorf("destination path cannot be empty")
 	}
 
 	binPath, err := exec.LookPath(cpBinaryName)
@@ -140,7 +140,7 @@ func CalculateCPUsF(quota int64, period uint64) float32 {
 // Reference: https://github.com/torvalds/linux/blob/master/drivers/block/virtio_blk.c @c0aa3e0916d7e531e69b02e426f7162dfb1c6c0
 func GetVirtDriveName(index int) (string, error) {
 	if index < 0 {
-		return "", fmt.Errorf("Index cannot be negative for drive")
+		return "", fmt.Errorf("index cannot be negative for drive")
 	}
 
 	// Prefix used for virtio-block devices
@@ -162,7 +162,7 @@ func GetVirtDriveName(index int) (string, error) {
 	}
 
 	if index >= 0 {
-		return "", fmt.Errorf("Index not supported")
+		return "", fmt.Errorf("index not supported")
 	}
 
 	diskName := prefix + reverseString(string(diskLetters[:i]))
@@ -177,11 +177,11 @@ const maxSCSIDevices = 65535
 // consistent SCSI addressing. Hence we limit to 255.
 func GetSCSIIdLun(index int) (int, int, error) {
 	if index < 0 {
-		return -1, -1, fmt.Errorf("Index cannot be negative")
+		return -1, -1, fmt.Errorf("index cannot be negative")
 	}
 
 	if index > maxSCSIDevices {
-		return -1, -1, fmt.Errorf("Index cannot be greater than %d, maximum of %d devices are supported", maxSCSIDevices, maxSCSIDevices)
+		return -1, -1, fmt.Errorf("index cannot be greater than %d, maximum of %d devices are supported", maxSCSIDevices, maxSCSIDevices)
 	}
 
 	return index / 256, index % 256, nil
@@ -368,7 +368,7 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 				return nil
 			}
 
-			return fmt.Errorf("Failed to send initial signal %v to process %v: %v", initialSignal, pid, err)
+			return fmt.Errorf("failed to send initial signal %v to process %v: %v", initialSignal, pid, err)
 		}
 	}
 
@@ -381,7 +381,7 @@ func WaitLocalProcess(pid int, timeoutSecs uint, initialSignal syscall.Signal, l
 				logger.WithField("pid", pid).Warnf("process already finished")
 				return nil
 			}
-			return fmt.Errorf("Failed to stop process %v: %s", pid, err)
+			return fmt.Errorf("failed to stop process %v: %s", pid, err)
 		}
 
 		for {

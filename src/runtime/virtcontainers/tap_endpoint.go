@@ -84,7 +84,7 @@ func (endpoint *TapEndpoint) SetProperties(properties NetworkInfo) {
 
 // Attach for tap endpoint adds the tap interface to the hypervisor.
 func (endpoint *TapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
-	return fmt.Errorf("TapEndpoint does not support Attach, if you're using docker please use --net none")
+	return fmt.Errorf("tapEndpoint does not support Attach, if you're using docker please use --net none")
 }
 
 // Detach for the tap endpoint tears down the tap
@@ -175,13 +175,13 @@ func tapNetwork(endpoint *TapEndpoint, numCPUs uint32, disableVhostNet bool) err
 
 	tapLink, fds, err := createLink(netHandle, endpoint.TapInterface.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
 	if err != nil {
-		return fmt.Errorf("Could not create TAP interface: %s", err)
+		return fmt.Errorf("could not create TAP interface: %s", err)
 	}
 	endpoint.TapInterface.VMFds = fds
 	if !disableVhostNet {
 		vhostFds, err := createVhostFds(int(numCPUs))
 		if err != nil {
-			return fmt.Errorf("Could not setup vhost fds %s : %s", endpoint.TapInterface.Name, err)
+			return fmt.Errorf("could not setup vhost fds %s : %s", endpoint.TapInterface.Name, err)
 		}
 		endpoint.TapInterface.VhostFds = vhostFds
 	}
@@ -194,10 +194,10 @@ func tapNetwork(endpoint *TapEndpoint, numCPUs uint32, disableVhostNet bool) err
 	// to see traffic from this MAC address and not another one.
 	endpoint.TapInterface.TAPIface.HardAddr = linkAttrs.HardwareAddr.String()
 	if err := netHandle.LinkSetMTU(tapLink, linkAttrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", linkAttrs.MTU, err)
+		return fmt.Errorf("could not set TAP MTU %d: %s", linkAttrs.MTU, err)
 	}
 	if err := netHandle.LinkSetUp(tapLink); err != nil {
-		return fmt.Errorf("Could not enable TAP %s: %s", endpoint.TapInterface.Name, err)
+		return fmt.Errorf("could not enable TAP %s: %s", endpoint.TapInterface.Name, err)
 	}
 	return nil
 }
@@ -210,13 +210,13 @@ func unTapNetwork(name string) error {
 	defer netHandle.Close()
 	tapLink, err := getLinkByName(netHandle, name, &netlink.Tuntap{})
 	if err != nil {
-		return fmt.Errorf("Could not get TAP interface: %s", err)
+		return fmt.Errorf("could not get TAP interface: %s", err)
 	}
 	if err := netHandle.LinkSetDown(tapLink); err != nil {
-		return fmt.Errorf("Could not disable TAP %s: %s", name, err)
+		return fmt.Errorf("could not disable TAP %s: %s", name, err)
 	}
 	if err := netHandle.LinkDel(tapLink); err != nil {
-		return fmt.Errorf("Could not remove TAP %s: %s", name, err)
+		return fmt.Errorf("could not remove TAP %s: %s", name, err)
 	}
 	return nil
 }

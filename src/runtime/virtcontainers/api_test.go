@@ -244,7 +244,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 
 	s, ok := sandbox.(*Sandbox)
 	if !ok {
-		return nil, "", fmt.Errorf("Could not get Sandbox")
+		return nil, "", fmt.Errorf("could not get Sandbox")
 	}
 	sandboxDir = filepath.Join(s.store.RunStoragePath(), sandbox.ID())
 	_, err = os.Stat(sandboxDir)

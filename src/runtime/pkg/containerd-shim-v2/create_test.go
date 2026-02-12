@@ -312,11 +312,11 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 	var hotPlugVFIO config.PCIePort
 	var coldPlugVFIO config.PCIePort
 	if dir == "" {
-		return "", fmt.Errorf("BUG: need directory")
+		return "", fmt.Errorf("bug: need directory")
 	}
 
 	if hypervisor == "" {
-		return "", fmt.Errorf("BUG: need hypervisor")
+		return "", fmt.Errorf("bug: need hypervisor")
 	}
 
 	hypervisorPath := path.Join(dir, "hypervisor")

@@ -41,12 +41,12 @@ func MockRunVMStoragePath() string {
 func MockFSInit(rootPath string) (persistapi.PersistDriver, error) {
 	driver, err := Init()
 	if err != nil {
-		return nil, fmt.Errorf("Could not create Mock FS driver: %v", err)
+		return nil, fmt.Errorf("could not create Mock FS driver: %v", err)
 	}
 
 	fsDriver, ok := driver.(*FS)
 	if !ok {
-		return nil, fmt.Errorf("Could not create Mock FS driver")
+		return nil, fmt.Errorf("could not create Mock FS driver")
 	}
 
 	fsDriver.storageRootPath = rootPath

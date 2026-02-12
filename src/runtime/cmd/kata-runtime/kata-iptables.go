@@ -114,7 +114,7 @@ var setIPTablesCommand = cli.Command{
 		}
 
 		if err = shimclient.DoPut(sandboxID, defaultTimeout, url, "application/octet-stream", buf); err != nil {
-			return fmt.Errorf("Error observed when making iptables-set request(%s): %s", iptablesFile, err)
+			return fmt.Errorf("error observed when making iptables-set request(%s): %s", iptablesFile, err)
 		}
 
 		return nil

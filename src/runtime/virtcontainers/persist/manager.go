@@ -66,5 +66,5 @@ func GetDriver() (persistapi.PersistDriver, error) {
 		return f()
 	}
 
-	return nil, fmt.Errorf("Could not find a FS driver")
+	return nil, fmt.Errorf("could not find a FS driver")
 }

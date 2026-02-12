@@ -105,7 +105,7 @@ func Generate() UUID {
 
 	_, err := io.ReadFull(rand.Reader, u[:])
 	if err != nil {
-		panic(fmt.Errorf("Unable to read random data : %v", err))
+		panic(fmt.Errorf("unable to read random data : %v", err))
 	}
 
 	u[6] = (u[6] & 0x0f) | 0x40

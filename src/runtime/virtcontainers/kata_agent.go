@@ -92,7 +92,7 @@ var (
 	defaultRequestTimeout            = 60 * time.Second
 	remoteRequestTimeout             = 300 * time.Second
 	customRequestTimeoutKey          = customRequestTimeoutKeyType(struct{}{})
-	errorMissingOCISpec              = errors.New("Missing OCI specification")
+	errorMissingOCISpec              = errors.New("missing OCI specification")
 	defaultKataHostSharedDir         = "/run/kata-containers/shared/sandboxes/"
 	defaultKataGuestSharedDir        = "/run/kata-containers/shared/containers/"
 	defaultKataGuestNydusRootDir     = "/run/kata-containers/shared/"
@@ -405,7 +405,7 @@ func (k *kataAgent) agentURL() (string, error) {
 	case types.MockHybridVSock:
 		return s.String(), nil
 	default:
-		return "", fmt.Errorf("Invalid socket type")
+		return "", fmt.Errorf("invalid socket type")
 	}
 }
 
@@ -730,7 +730,7 @@ func (k *kataAgent) listInterfaces(ctx context.Context) ([]*pbTypes.Interface, e
 	}
 	resultInterfaces, ok := resultingInterfaces.(*grpc.Interfaces)
 	if !ok {
-		return nil, fmt.Errorf("Unexpected type %T for interfaces", resultingInterfaces)
+		return nil, fmt.Errorf("unexpected type %T for interfaces", resultingInterfaces)
 	}
 	return resultInterfaces.Interfaces, nil
 }
@@ -746,7 +746,7 @@ func (k *kataAgent) listRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	}
 	resultRoutes, ok := resultingRoutes.(*grpc.Routes)
 	if !ok {
-		return nil, fmt.Errorf("Unexpected type %T for routes", resultingRoutes)
+		return nil, fmt.Errorf("unexpected type %T for routes", resultingRoutes)
 	}
 	return resultRoutes.Routes, nil
 }
@@ -767,7 +767,7 @@ func (k *kataAgent) setAgentURL() error {
 func (k *kataAgent) reuseAgent(agent agent) error {
 	a, ok := agent.(*kataAgent)
 	if !ok {
-		return fmt.Errorf("Bug: get a wrong type of agent")
+		return fmt.Errorf("bug: get a wrong type of agent")
 	}
 
 	k.installReqFunc(a.client)
@@ -788,7 +788,7 @@ func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
 		if m.Destination == GuestDNSFile {
 			content, err := os.ReadFile(m.Source)
 			if err != nil {
-				return nil, fmt.Errorf("Could not read file %s: %s", m.Source, err)
+				return nil, fmt.Errorf("could not read file %s: %s", m.Source, err)
 			}
 			dns := strings.Split(string(content), "\n")
 			return dns, nil
@@ -1320,7 +1320,7 @@ func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Cont
 				hostBDF := ep.(*VfioEndpoint).HostBDF
 				pciPath := sandbox.GetVfioDeviceGuestPciPath(hostBDF)
 				if pciPath.IsNil() {
-					return fmt.Errorf("PCI path for VFIO interface '%s' not found", ep.Name())
+					return fmt.Errorf("pci path for VFIO interface '%s' not found", ep.Name())
 				}
 				ep.SetPciPath(pciPath)
 				endpoints = append(endpoints, ep)
@@ -1468,17 +1468,17 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	sharedPidNs := k.handlePidNamespace(grpcSpec, sandbox)
 
 	if !sandbox.config.DisableGuestSeccomp && !sandbox.seccompSupported {
-		return nil, fmt.Errorf("Seccomp profiles are passed to the virtual machine, but the Kata agent does not support seccomp")
+		return nil, fmt.Errorf("seccomp profiles are passed to the virtual machine, but the Kata agent does not support seccomp")
 	}
 
 	passSeccomp := !sandbox.config.DisableGuestSeccomp && sandbox.seccompSupported
 
 	// Currently, guest SELinux can be enabled only when SELinux is enabled on the host side.
 	if !sandbox.config.HypervisorConfig.DisableGuestSeLinux && !selinux.GetEnabled() {
-		return nil, fmt.Errorf("Guest SELinux is enabled, but SELinux is disabled on the host side")
+		return nil, fmt.Errorf("guest SELinux is enabled, but SELinux is disabled on the host side")
 	}
 	if sandbox.config.HypervisorConfig.DisableGuestSeLinux && sandbox.config.GuestSeLinuxLabel != "" {
-		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
+		return nil, fmt.Errorf("custom SELinux security policy is provided, but guest SELinux is disabled")
 	}
 
 	// We need to constrain the spec to make sure we're not
@@ -1553,7 +1553,7 @@ func (k *kataAgent) handleHugepages(mounts []specs.Mount, hugepageLimits []specs
 			//Find the pagesize from the mountpoint options
 			pagesizeOpt := getPagesizeFromOpt(fsOptions)
 			if pagesizeOpt == "" {
-				return nil, fmt.Errorf("No pagesize option found in filesystem mount options")
+				return nil, fmt.Errorf("no pagesize option found in filesystem mount options")
 			}
 			pageSize, err := units.RAMInBytes(pagesizeOpt)
 			if err != nil {
@@ -1699,7 +1699,7 @@ func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 		vol.Driver = kataSCSIDevType
 		vol.Source = blockDrive.SCSIAddr
 	default:
-		return nil, fmt.Errorf("Unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
+		return nil, fmt.Errorf("unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
 	}
 	return vol, nil
 }
@@ -1750,7 +1750,7 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 		}
 
 		if image_ref == "" {
-			return nil, fmt.Errorf("Failed to get image name from annotations")
+			return nil, fmt.Errorf("failed to get image name from annotations")
 		}
 	}
 	virtualVolumeInfo.Source = image_ref
@@ -1855,7 +1855,7 @@ func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage
 	device := c.sandbox.devManager.GetDeviceByID(id)
 	if device == nil {
 		k.Logger().WithField("device", id).Error("failed to find device by id")
-		return nil, fmt.Errorf("Failed to find device by id (id=%s)", id)
+		return nil, fmt.Errorf("failed to find device by id (id=%s)", id)
 	}
 
 	var err error
@@ -1865,7 +1865,7 @@ func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage
 	case config.VhostUserBlk:
 		vol, err = k.handleVhostUserBlkVolume(c, m, device)
 	default:
-		return nil, fmt.Errorf("Unknown device type")
+		return nil, fmt.Errorf("unknown device type")
 	}
 
 	return vol, err
@@ -2145,7 +2145,7 @@ func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Cont
 
 func (k *kataAgent) connect(ctx context.Context) error {
 	if k.dead {
-		return errors.New("Dead agent")
+		return errors.New("dead agent")
 	}
 	// lockless quick pass
 	if k.client != nil {
@@ -2203,7 +2203,7 @@ func (k *kataAgent) check(ctx context.Context) error {
 		if err.Error() == context.DeadlineExceeded.Error() {
 			return status.Errorf(codes.DeadlineExceeded, "CheckRequest timed out")
 		}
-		err = fmt.Errorf("Failed to Check if grpc server is working: %s", err)
+		err = fmt.Errorf("failed to Check if grpc server is working: %s", err)
 	}
 	return err
 }
@@ -2426,13 +2426,13 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 
 	if k.reqHandlers == nil {
 		k.Unlock()
-		return nil, errors.New("Client has already disconnected")
+		return nil, errors.New("client has already disconnected")
 	}
 
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
 		k.Unlock()
-		return nil, errors.New("Invalid request type")
+		return nil, errors.New("invalid request type")
 	}
 
 	k.Unlock()
@@ -2526,7 +2526,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 
 	err := unix.Lstat(src, &st)
 	if err != nil {
-		return fmt.Errorf("Could not get file %s information: %v", src, err)
+		return fmt.Errorf("could not get file %s information: %v", src, err)
 	}
 
 	cpReq := &grpc.CopyFileRequest{
@@ -2545,7 +2545,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 		// TODO: Support incremental file copying instead of loading whole file into memory
 		b, err = os.ReadFile(src)
 		if err != nil {
-			return fmt.Errorf("Could not read file %s: %v", src, err)
+			return fmt.Errorf("could not read file %s: %v", src, err)
 		}
 		cpReq.FileSize = int64(len(b))
 
@@ -2554,12 +2554,12 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	case unix.S_IFLNK:
 		symlink, err := os.Readlink(src)
 		if err != nil {
-			return fmt.Errorf("Could not read symlink %s: %v", src, err)
+			return fmt.Errorf("could not read symlink %s: %v", src, err)
 		}
 		cpReq.Data = []byte(symlink)
 
 	default:
-		return fmt.Errorf("Unsupported file type: %o", sflag)
+		return fmt.Errorf("unsupported file type: %o", sflag)
 	}
 
 	k.Logger().WithFields(logrus.Fields{
@@ -2592,7 +2592,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 			if err.Error() == context.DeadlineExceeded.Error() {
 				return status.Errorf(codes.DeadlineExceeded, "CopyFileRequest timed out")
 			}
-			return fmt.Errorf("Could not send CopyFile request: %v", err)
+			return fmt.Errorf("could not send CopyFile request: %v", err)
 		}
 
 		b = b[bytesToCopy:]

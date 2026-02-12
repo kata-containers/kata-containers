@@ -218,7 +218,7 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 			}
 		default:
 			deviceLogger().WithError(
-				fmt.Errorf("VFIO device type unrecognized"),
+				fmt.Errorf("vfio device type unrecognized"),
 			).Error("Failed to append device")
 			return
 		}
@@ -255,7 +255,7 @@ func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
 	default:
-		err = fmt.Errorf("Incorrect tokens found while parsing vfio details: %s", deviceFileName)
+		err = fmt.Errorf("incorrect tokens found while parsing vfio details: %s", deviceFileName)
 	}
 
 	return deviceBDF, deviceSysfsDev, vfioDeviceType, err

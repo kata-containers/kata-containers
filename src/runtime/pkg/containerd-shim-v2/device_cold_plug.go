@@ -53,7 +53,7 @@ func coldPlugDevices(ctx context.Context, s *service, ociSpec *specs.Spec) error
 	// directories where applications can write too. For instance /opt/cdi
 	_, err := config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
 	if err != nil {
-		return fmt.Errorf("CDI device injection failed: %w", err)
+		return fmt.Errorf("cdi device injection failed: %w", err)
 	}
 	return nil
 }

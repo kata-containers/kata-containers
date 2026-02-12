@@ -28,11 +28,11 @@ type CcwDevice struct {
 
 func CcwDeviceFrom(ssid int, devno string) (CcwDevice, error) {
 	if ssid < 0 || ssid > subchannelSetMax {
-		return CcwDevice{}, fmt.Errorf("Subchannel set ID %d should be in range [0..%d]", ssid, subchannelSetMax)
+		return CcwDevice{}, fmt.Errorf("subchannel set ID %d should be in range [0..%d]", ssid, subchannelSetMax)
 	}
 	v, err := strconv.ParseUint(devno, 16, 16)
 	if err != nil {
-		return CcwDevice{}, fmt.Errorf("Failed to parse 0x%v as CCW device number: %v", devno, err)
+		return CcwDevice{}, fmt.Errorf("failed to parse 0x%v as CCW device number: %v", devno, err)
 	}
 	return CcwDevice{ssid: uint8(ssid), devno: uint16(v)}, nil
 }

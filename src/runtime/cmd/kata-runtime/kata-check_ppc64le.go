@@ -90,7 +90,7 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 
 	if powerProcessor <= 8 {
 		if !isSMTOff() {
-			return fmt.Errorf("SMT is not Off. %s", failMessage)
+			return fmt.Errorf("smt is not Off. %s", failMessage)
 		}
 	}
 
@@ -103,7 +103,7 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return nil
 	}
 
-	return fmt.Errorf("ERROR: %s", failMessage)
+	return fmt.Errorf("error: %s", failMessage)
 }
 
 // kvmIsUsable determines if it will be possible to create a full virtual machine
@@ -123,7 +123,7 @@ func getPPC64leCPUInfo(cpuInfoFile string) (string, error) {
 	}
 
 	if len(strings.TrimSpace(text)) == 0 {
-		return "", fmt.Errorf("Cannot determine CPU details")
+		return "", fmt.Errorf("cannot determine CPU details")
 	}
 
 	return text, nil

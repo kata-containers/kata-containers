@@ -71,7 +71,7 @@ func CPUFacilities(cpuInfoPath string) (map[int]bool, error) {
 		return map[int]bool{}, err
 	}
 
-	return map[int]bool{}, fmt.Errorf("Couldn't find %q from %q output", facilitiesField, cpuInfoPath)
+	return map[int]bool{}, fmt.Errorf("couldn't find %q from %q output", facilitiesField, cpuInfoPath)
 }
 
 // availableGuestProtection returns seProtection (Secure Execution) if available.
@@ -82,7 +82,7 @@ func availableGuestProtection() (guestProtection, error) {
 		return noneProtection, err
 	}
 	if !facilities[seCPUFacilityBit] {
-		return noneProtection, fmt.Errorf("This CPU does not support Secure Execution")
+		return noneProtection, fmt.Errorf("this CPU does not support Secure Execution")
 	}
 
 	seCmdlinePresent, err := CheckCmdline(procKernelCmdline, seCmdlineParam, seCmdlineValues)
@@ -90,7 +90,7 @@ func availableGuestProtection() (guestProtection, error) {
 		return noneProtection, err
 	}
 	if !seCmdlinePresent {
-		return noneProtection, fmt.Errorf("Protected Virtualization is not enabled on kernel command line! "+
+		return noneProtection, fmt.Errorf("protected Virtualization is not enabled on kernel command line! "+
 			"Need %s=%s (or %s) to enable Secure Execution",
 			seCmdlineParam, seCmdlineValues[0], strings.Join(seCmdlineValues[1:], ", "))
 	}

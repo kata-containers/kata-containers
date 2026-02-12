@@ -114,7 +114,7 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return nil
 	}
 
-	return fmt.Errorf("ERROR: %s", failMessage)
+	return fmt.Errorf("error: %s", failMessage)
 
 }
 

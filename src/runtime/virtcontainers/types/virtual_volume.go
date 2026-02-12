@@ -71,15 +71,15 @@ func (d *DmVerityInfo) IsValid() error {
 	}
 
 	if d.BlockNum == 0 || d.BlockNum > uint64(^uint32(0)) {
-		return fmt.Errorf("Zero block count for DmVerity device %s", d.Hash)
+		return fmt.Errorf("zero block count for DmVerity device %s", d.Hash)
 	}
 
 	if !isValidBlockSize(d.Blocksize) || !isValidBlockSize(d.Hashsize) {
-		return fmt.Errorf("Unsupported verity block size: data_block_size = %d, hash_block_size = %d", d.Blocksize, d.Hashsize)
+		return fmt.Errorf("unsupported verity block size: data_block_size = %d, hash_block_size = %d", d.Blocksize, d.Hashsize)
 	}
 
 	if d.Offset%d.Hashsize != 0 || d.Offset < d.Blocksize*d.BlockNum {
-		return fmt.Errorf("Invalid hashvalue offset %d for DmVerity device %s", d.Offset, d.Hash)
+		return fmt.Errorf("invalid hashvalue offset %d for DmVerity device %s", d.Offset, d.Hash)
 	}
 
 	return nil
@@ -112,7 +112,7 @@ func (d *DmVerityInfo) validateHashType() error {
 	case "sha1":
 		return d.isValidHash(40, "sha1")
 	default:
-		return fmt.Errorf("Unsupported hash algorithm %s for DmVerity device %s", d.HashType, d.Hash)
+		return fmt.Errorf("unsupported hash algorithm %s for DmVerity device %s", d.HashType, d.Hash)
 	}
 }
 
@@ -123,7 +123,7 @@ func isValidBlockSize(blockSize uint64) bool {
 func (d *DmVerityInfo) isValidHash(expectedLen int, hashType string) error {
 	_, err := hex.DecodeString(d.Hash)
 	if len(d.Hash) != expectedLen || err != nil {
-		return fmt.Errorf("Invalid hash value %s:%s for DmVerity device with %s", hashType, d.Hash, hashType)
+		return fmt.Errorf("invalid hash value %s:%s for DmVerity device with %s", hashType, d.Hash, hashType)
 	}
 	return nil
 }
@@ -134,7 +134,7 @@ func ParseDmVerityInfo(option string) (*DmVerityInfo, error) {
 		return nil, errors.Wrapf(err, "DmVerityInfo json unmarshal err")
 	}
 	if err := no.IsValid(); err != nil {
-		return nil, fmt.Errorf("DmVerityInfo is not correct, %+v; error = %+v", no, err)
+		return nil, fmt.Errorf("dmVerityInfo is not correct, %+v; error = %+v", no, err)
 	}
 	return no, nil
 }
@@ -149,7 +149,7 @@ func ParseKataVirtualVolume(option string) (*KataVirtualVolume, error) {
 		return nil, errors.Wrapf(err, "KataVirtualVolume json unmarshal err")
 	}
 	if !no.IsValid() {
-		return nil, fmt.Errorf("KataVirtualVolume is not correct, %+v", no)
+		return nil, fmt.Errorf("kataVirtualVolume is not correct, %+v", no)
 	}
 
 	return no, nil

@@ -231,7 +231,7 @@ func (nd *nydusd) waitUntilNydusAPIServerReady() error {
 		if di.State == nydusdDaemonStateRunning {
 			return nil
 		}
-		return fmt.Errorf("Nydusd daemon is not running: %s", di.State)
+		return fmt.Errorf("nydusd daemon is not running: %s", di.State)
 	},
 		retry.Attempts(20),
 		retry.LastErrorOnly(true),

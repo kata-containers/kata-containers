@@ -65,7 +65,7 @@ func TestEnsureDir(t *testing.T) {
 			before: nil,
 			path:   "a/b/c",
 			err:    true,
-			msg:    "Not an absolute path",
+			msg:    "not an absolute path",
 		},
 		{
 			before: nil,
@@ -98,7 +98,7 @@ func TestEnsureDir(t *testing.T) {
 			},
 			path: fmt.Sprintf("%s/abc/file.txt", tmpdir),
 			err:  true,
-			msg:  "Not a directory",
+			msg:  "not a directory",
 		},
 	}
 

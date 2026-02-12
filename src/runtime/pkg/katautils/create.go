@@ -194,7 +194,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
-		return nil, vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
+		return nil, vc.Process{}, fmt.Errorf("bug: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
 	}
 
 	return sandbox, containers[0].Process(), nil
@@ -222,7 +222,7 @@ func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
 		}
 
 		if err := sandboxConfig.HypervisorConfig.AddKernelParam(param); err != nil {
-			return fmt.Errorf("Error enabling fips mode : %v", err)
+			return fmt.Errorf("error enabling fips mode : %v", err)
 		}
 	}
 

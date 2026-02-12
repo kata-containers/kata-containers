@@ -16,13 +16,13 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 	}
 
 	if conf.KernelPath == "" {
-		return fmt.Errorf("Missing kernel path")
+		return fmt.Errorf("missing kernel path")
 	}
 
 	if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return fmt.Errorf("Missing image and initrd path")
+		return fmt.Errorf("missing image and initrd path")
 	} else if conf.ImagePath != "" && conf.InitrdPath != "" {
-		return fmt.Errorf("Image and initrd path cannot be both set")
+		return fmt.Errorf("image and initrd path cannot be both set")
 	}
 
 	if conf.NumVCPUs == 0 {

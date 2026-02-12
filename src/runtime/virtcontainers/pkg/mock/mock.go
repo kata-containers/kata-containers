@@ -36,7 +36,7 @@ func GenerateKataMockHybridVSock() (string, error) {
 
 func RemoveKataMockHybridVSock(sockAddress string) error {
 	if !strings.HasPrefix(sockAddress, VSockPrefix) {
-		return fmt.Errorf("Invalid socket address: %s", sockAddress)
+		return fmt.Errorf("invalid socket address: %s", sockAddress)
 	}
 
 	sockPath := strings.TrimPrefix(sockAddress, VSockPrefix)
@@ -60,7 +60,7 @@ func (hv *HybridVSockTTRPCMock) ttrpcRegister(s *ttrpc.Server) {
 // Start starts the ttrpc-based mock hybrid-vsock server
 func (hv *HybridVSockTTRPCMock) Start(socketAddr string) error {
 	if socketAddr == "" {
-		return fmt.Errorf("Missing Socket Address")
+		return fmt.Errorf("missing Socket Address")
 	}
 
 	url, err := url.Parse(socketAddr)
@@ -91,7 +91,7 @@ func (hv *HybridVSockTTRPCMock) Start(socketAddr string) error {
 // Stop stops the ttrpc-based mock hybrid-vsock server
 func (hv *HybridVSockTTRPCMock) Stop() error {
 	if hv.listener == nil {
-		return fmt.Errorf("Missing mock hvbrid vsock listener")
+		return fmt.Errorf("missing mock hvbrid vsock listener")
 	}
 
 	return hv.listener.Close()

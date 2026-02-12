@@ -68,7 +68,7 @@ func RunCommand(args []string) (string, error) {
 // EnsureDir check if a directory exist, if not then create it
 func EnsureDir(path string, mode os.FileMode) error {
 	if !filepath.IsAbs(path) {
-		return fmt.Errorf("Not an absolute path: %s", path)
+		return fmt.Errorf("not an absolute path: %s", path)
 	}
 
 	if fi, err := os.Stat(path); err != nil {
@@ -80,7 +80,7 @@ func EnsureDir(path string, mode os.FileMode) error {
 			return err
 		}
 	} else if !fi.IsDir() {
-		return fmt.Errorf("Not a directory: %s", path)
+		return fmt.Errorf("not a directory: %s", path)
 	}
 
 	return nil

@@ -267,7 +267,7 @@ func (q *qemuAmd64) enableProtection() error {
 	// TODO: Add support for other x86_64 technologies
 
 	default:
-		return fmt.Errorf("This system doesn't support Confidential Computing (Guest Protection)")
+		return fmt.Errorf("this system doesn't support Confidential Computing (Guest Protection)")
 	}
 }
 
@@ -334,6 +334,6 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 		return devices, firmware, nil
 
 	default:
-		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+		return devices, "", fmt.Errorf("unsupported guest protection technology: %v", q.protection)
 	}
 }

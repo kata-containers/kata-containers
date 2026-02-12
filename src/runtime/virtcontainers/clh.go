@@ -211,7 +211,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) ([]chclient.PciDeviceInfo, e
 			return nil, err
 		}
 		if payloadn != len(payload) || oobn != len(oob) {
-			return nil, fmt.Errorf("Failed to send all the request to Cloud Hypervisor. %d bytes expect to send as payload, %d bytes expect to send as oob date,  but only %d sent as payload, and %d sent as oob", len(payload), len(oob), payloadn, oobn)
+			return nil, fmt.Errorf("failed to send all the request to Cloud Hypervisor. %d bytes expect to send as payload, %d bytes expect to send as oob date,  but only %d sent as payload, and %d sent as oob", len(payload), len(oob), payloadn, oobn)
 		}
 
 		reader := bufio.NewReader(conn)
@@ -229,7 +229,7 @@ var vmAddNetPutRequest = func(clh *cloudHypervisor) ([]chclient.PciDeviceInfo, e
 		resp.Body = io.NopCloser(bytes.NewBuffer(respBody))
 		if resp.StatusCode != 200 && resp.StatusCode != 204 {
 			clh.Logger().Errorf("vmAddNetPut failed with error '%d'. Response: %+v", resp.StatusCode, resp)
-			return nil, fmt.Errorf("Failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
+			return nil, fmt.Errorf("failed to add the network device '%+v' to Cloud Hypervisor: %v", netDevice, resp.StatusCode)
 		}
 
 		// Parse the pci info received in response
@@ -383,7 +383,7 @@ func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
 	clh.Logger().WithField("function", "setupVirtiofsDaemon").Info("Starting virtiofsDaemon")
 
 	if clh.virtiofsDaemon == nil {
-		return errors.New("Missing virtiofsDaemon configuration")
+		return errors.New("missing virtiofsDaemon configuration")
 	}
 
 	pid, err := clh.virtiofsDaemon.Start(ctx, func() {
@@ -874,12 +874,12 @@ func clhDriveIndexToID(i int) string {
 func clhPciInfoToPath(pciInfo chclient.PciDeviceInfo) (types.PciPath, error) {
 	tokens := strings.Split(pciInfo.Bdf, ":")
 	if len(tokens) != 3 || tokens[0] != "0000" || tokens[1] != "00" {
-		return types.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return types.PciPath{}, fmt.Errorf("unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
 	tokens = strings.Split(tokens[2], ".")
 	if len(tokens) != 2 || tokens[1] != "0" || len(tokens[0]) != 2 {
-		return types.PciPath{}, fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return types.PciPath{}, fmt.Errorf("unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
 	return types.PciPathFromString(tokens[0])
@@ -987,7 +987,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	clhDevice.SetIommu(clh.config.IOMMU)
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
-		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
+		return fmt.Errorf("failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
 	clh.devicesIds[device.ID] = pciInfo.GetId()
 
@@ -998,16 +998,16 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	// Bdf when bridges are present.
 	tokens := strings.Split(pciInfo.Bdf, ":")
 	if len(tokens) != 3 || tokens[0] != "0000" || tokens[1] != "00" {
-		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return fmt.Errorf("unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
 	tokens = strings.Split(tokens[2], ".")
 	if len(tokens) != 2 || tokens[1] != "0" || len(tokens[0]) != 2 {
-		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
+		return fmt.Errorf("unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
 	if device.Type == config.VFIOAPDeviceMediatedType {
-		return fmt.Errorf("VFIO device %+v is not PCI, only PCI is supported in Cloud Hypervisor", device)
+		return fmt.Errorf("vfio device %+v is not PCI, only PCI is supported in Cloud Hypervisor", device)
 	}
 
 	device.GuestPciPath, err = types.PciPathFromString(tokens[0])
@@ -1079,7 +1079,7 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")
-		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
+		return nil, fmt.Errorf("could not hot remove device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
 
@@ -1176,7 +1176,7 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
 	if _, err = cl.VmResizePut(ctx, resize); err != nil {
 		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
-		err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
+		err = fmt.Errorf("failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
 		return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
 	}
 
@@ -1199,7 +1199,7 @@ func (clh *cloudHypervisor) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (c
 	// Sanity Check
 	if reqVCPUs == 0 {
 		clh.Logger().WithField("function", "ResizeVCPUs").Debugf("Cannot resize vCPU to 0")
-		return currentVCPUs, newVCPUs, fmt.Errorf("Cannot resize vCPU to 0")
+		return currentVCPUs, newVCPUs, fmt.Errorf("cannot resize vCPU to 0")
 	}
 	if reqVCPUs > uint32(info.Config.Cpus.MaxVcpus) {
 		clh.Logger().WithFields(log.Fields{
@@ -1345,7 +1345,7 @@ func (clh *cloudHypervisor) AddDevice(ctx context.Context, devInfo interface{}, 
 		err = clh.addVolume(v)
 	default:
 		clh.Logger().WithField("function", "AddDevice").Warnf("Add device of type %v is not supported.", v)
-		return fmt.Errorf("Not implemented support for %s", v)
+		return fmt.Errorf("not implemented support for %s", v)
 	}
 
 	return err
@@ -1457,7 +1457,7 @@ func (clh *cloudHypervisor) waitVMM(timeout uint) error {
 	}
 
 	if !clhRunning {
-		return fmt.Errorf("CLH is not running")
+		return fmt.Errorf("clh is not running")
 	}
 
 	return nil
@@ -1474,7 +1474,7 @@ func (clh *cloudHypervisor) clhPath() (string, error) {
 	}
 
 	if _, err = os.Stat(p); os.IsNotExist(err) {
-		return "", fmt.Errorf("Cloud-Hypervisor path (%s) does not exist", p)
+		return "", fmt.Errorf("cloud-Hypervisor path (%s) does not exist", p)
 	}
 
 	return p, err
@@ -1623,7 +1623,7 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 		}
 
 		if time.Since(timeStart).Seconds() > float64(timeout) {
-			return false, fmt.Errorf("Failed to connect to API (timeout %ds): %s", timeout, openAPIClientError(err))
+			return false, fmt.Errorf("failed to connect to API (timeout %ds): %s", timeout, openAPIClientError(err))
 		}
 
 		time.Sleep(time.Duration(10) * time.Millisecond)
@@ -1677,7 +1677,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 	clh.Logger().Debugf("VM state after create: %#v", info)
 
 	if info.State != clhStateCreated {
-		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
+		return fmt.Errorf("vm state is not 'Created' after 'CreateVM'")
 	}
 
 	_, err = clh.vmAddNetPut()
@@ -1699,7 +1699,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 	clh.Logger().Debugf("VM state after boot: %#v", info)
 
 	if info.State != clhStateRunning {
-		return fmt.Errorf("VM state is not 'Running' after 'BootVM'")
+		return fmt.Errorf("vm state is not 'Running' after 'BootVM'")
 	}
 
 	return nil

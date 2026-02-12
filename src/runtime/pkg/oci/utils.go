@@ -316,11 +316,11 @@ func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
 	allowedDeviceTypes := []string{"c", "b", "u", "p"}
 
 	if !contains(allowedDeviceTypes, d.Type) {
-		return nil, fmt.Errorf("Unexpected Device Type %s for device %s", d.Type, d.Path)
+		return nil, fmt.Errorf("unexpected Device Type %s for device %s", d.Type, d.Path)
 	}
 
 	if d.Path == "" {
-		return nil, fmt.Errorf("Path cannot be empty for device")
+		return nil, fmt.Errorf("path cannot be empty for device")
 	}
 
 	deviceInfo := config.DeviceInfo{
@@ -412,7 +412,7 @@ func ContainerType(spec specs.Spec) (vc.ContainerType, error) {
 			}
 
 		}
-		return vc.UnknownContainerType, fmt.Errorf("Unknown container type %s", containerTypeVal)
+		return vc.UnknownContainerType, fmt.Errorf("unknown container type %s", containerTypeVal)
 	}
 
 	return vc.SingleContainer, nil
@@ -432,7 +432,7 @@ func SandboxID(spec specs.Spec) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Could not find sandbox ID")
+	return "", fmt.Errorf("could not find sandbox ID")
 }
 
 func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig, runtime RuntimeConfig) error {
@@ -578,11 +578,11 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 	if epcSize, ok := ocispec.Annotations[vcAnnotations.SGXEPC]; ok {
 		quantity, err := resource.ParseQuantity(epcSize)
 		if err != nil {
-			return fmt.Errorf("Couldn't parse EPC '%v': %v", err, epcSize)
+			return fmt.Errorf("couldn't parse EPC '%v': %v", err, epcSize)
 		}
 
 		if quantity.Format != resource.BinarySI {
-			return fmt.Errorf("Unsupported EPC format '%v': use Ki | Mi | Gi | Ti | Pi | Ei as suffix", epcSize)
+			return fmt.Errorf("unsupported EPC format '%v': use Ki | Mi | Gi | Ti | Pi | Ei as suffix", epcSize)
 		}
 
 		size, _ := quantity.AsInt64()
@@ -630,7 +630,7 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 
 				// Now add the annotation parameter
 				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
-					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
+					return fmt.Errorf("error adding kernel parameters in annotation kernel_params : %v", err)
 				}
 			}
 		}
@@ -654,7 +654,7 @@ func addHypervisorPCIePortOverride(value string) (config.PCIePort, error) {
 	}
 	port := config.PCIePort(value)
 	if port.Invalid() {
-		return config.InvalidPort, fmt.Errorf("Invalid PCIe port \"%v\" specified in annotation", value)
+		return config.InvalidPort, fmt.Errorf("invalid PCIe port \"%v\" specified in annotation", value)
 	}
 	return port, nil
 }
@@ -706,7 +706,7 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMemory).setUintWithCheck(func(memorySz uint64) error {
 		if memorySz < vc.MinHypervisorMemory && sbConfig.HypervisorType != vc.RemoteHypervisor {
-			return fmt.Errorf("Memory specified in annotation %s is less than minimum required %d, please specify a larger value", vcAnnotations.DefaultMemory, vc.MinHypervisorMemory)
+			return fmt.Errorf("memory specified in annotation %s is less than minimum required %d, please specify a larger value", vcAnnotations.DefaultMemory, vc.MinHypervisorMemory)
 		}
 		sbConfig.HypervisorConfig.MemorySize = uint32(memorySz)
 		return nil
@@ -801,7 +801,7 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultVCPUs).setFloat32WithCheck(func(vcpus float32) error {
 		if vcpus > float32(numCPUs) && sbConfig.HypervisorType != vc.RemoteHypervisor {
-			return fmt.Errorf("Number of cpus %f specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
+			return fmt.Errorf("number of cpus %f specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
 		}
 		sbConfig.HypervisorConfig.NumVCPUsF = float32(vcpus)
 		return nil
@@ -813,11 +813,11 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		max := uint32(maxVCPUs)
 
 		if max > uint32(numCPUs) && sbConfig.HypervisorType != vc.RemoteHypervisor {
-			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than the number of CPUs %d on the system", max, numCPUs)
+			return fmt.Errorf("number of cpus %d in annotation default_maxvcpus is greater than the number of CPUs %d on the system", max, numCPUs)
 		}
 
 		if sbConfig.HypervisorType == vc.QemuHypervisor && max > govmm.MaxVCPUs() && sbConfig.HypervisorType != vc.RemoteHypervisor {
-			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, govmm.MaxVCPUs())
+			return fmt.Errorf("number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, govmm.MaxVCPUs())
 		}
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
 		return nil
@@ -857,7 +857,7 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 		}
 
 		if !valid {
-			return fmt.Errorf("Invalid hypervisor block storage driver %v specified in annotation (supported drivers: %v)", value, supportedBlockDrivers)
+			return fmt.Errorf("invalid hypervisor block storage driver %v specified in annotation (supported drivers: %v)", value, supportedBlockDrivers)
 		}
 	}
 
@@ -873,7 +873,7 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 		}
 
 		if !valid {
-			return fmt.Errorf("Invalid AIO mechanism  %v specified in annotation (supported IO mechanism : %v)", value, supportedAIO)
+			return fmt.Errorf("invalid AIO mechanism  %v specified in annotation (supported IO mechanism : %v)", value, supportedAIO)
 		}
 	}
 
@@ -892,7 +892,7 @@ func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.IndepIOThreads).setUintWithCheck(func(indepiothreads uint64) error {
 		// Default indepiothreads limit is less than 50.
 		if indepiothreads == 0 || indepiothreads > 50 {
-			return fmt.Errorf("Error parsing annotation for indepiothreads, please specify numeric value less than 50")
+			return fmt.Errorf("error parsing annotation for indepiothreads, please specify numeric value less than 50")
 		}
 		sbConfig.HypervisorConfig.IndepIOThreads = uint32(indepiothreads)
 		return nil
@@ -929,7 +929,7 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 		}
 
 		if !valid {
-			return fmt.Errorf("Invalid hypervisor shared file system %v specified for annotation shared_fs, (supported file systems: %v)", value, supportedSharedFS)
+			return fmt.Errorf("invalid hypervisor shared file system %v specified for annotation shared_fs, (supported file systems: %v)", value, supportedSharedFS)
 		}
 	}
 
@@ -944,7 +944,7 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 		var parsedValue []string
 		err := json.Unmarshal([]byte(value), &parsedValue)
 		if err != nil {
-			return fmt.Errorf("Error parsing virtiofsd extra arguments: %v", err)
+			return fmt.Errorf("error parsing virtiofsd extra arguments: %v", err)
 		}
 		sbConfig.HypervisorConfig.VirtioFSExtraArgs = append(sbConfig.HypervisorConfig.VirtioFSExtraArgs, parsedValue...)
 	}
@@ -965,7 +965,7 @@ func addHypervisorVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConf
 
 	return newAnnotationConfiguration(ocispec, vcAnnotations.Msize9p).setUintWithCheck(func(msize9p uint64) error {
 		if msize9p == 0 {
-			return fmt.Errorf("Error parsing annotation for msize_9p, please specify positive numeric value")
+			return fmt.Errorf("error parsing annotation for msize_9p, please specify positive numeric value")
 		}
 		sbConfig.HypervisorConfig.Msize9p = uint32(msize9p)
 		return nil
@@ -1082,7 +1082,7 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 		for _, f := range features {
 			feature := exp.Get(f)
 			if feature == nil {
-				return fmt.Errorf("Unsupported experimental feature %s specified in annotation %v", f, vcAnnotations.Experimental)
+				return fmt.Errorf("unsupported experimental feature %s specified in annotation %v", f, vcAnnotations.Experimental)
 			}
 			sbConfig.Experimental = append(sbConfig.Experimental, *feature)
 		}
@@ -1097,7 +1097,7 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 	if value, ok := ocispec.Annotations[vcAnnotations.InterNetworkModel]; ok {
 		runtimeConfig := RuntimeConfig{}
 		if err := runtimeConfig.InterNetworkModel.SetModel(value); err != nil {
-			return fmt.Errorf("Unknown network model specified in annotation %s", vcAnnotations.InterNetworkModel)
+			return fmt.Errorf("unknown network model specified in annotation %s", vcAnnotations.InterNetworkModel)
 		}
 
 		sbConfig.NetworkConfig.InterworkingModel = runtimeConfig.InterNetworkModel
@@ -1105,7 +1105,7 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 
 	if value, ok := ocispec.Annotations[vcAnnotations.VfioMode]; ok {
 		if err := sbConfig.VfioMode.VFIOSetMode(value); err != nil {
-			return fmt.Errorf("Unknown VFIO mode \"%s\" in annotation %s",
+			return fmt.Errorf("unknown VFIO mode \"%s\" in annotation %s",
 				value, vcAnnotations.VfioMode)
 		}
 	}
@@ -1350,9 +1350,9 @@ func IsCRIOContainerManager(spec *specs.Spec) bool {
 }
 
 const (
-	errAnnotationPositiveNumericKey = "Error parsing annotation for %s: Please specify positive numeric value"
-	errAnnotationBoolKey            = "Error parsing annotation for %s: Please specify boolean value 'true|false'"
-	errAnnotationNumericKeyIsTooBig = "Error parsing annotation for %s: The number exceeds the maximum allowed for its type"
+	errAnnotationPositiveNumericKey = "error parsing annotation for %s: Please specify positive numeric value"
+	errAnnotationBoolKey            = "error parsing annotation for %s: Please specify boolean value 'true|false'"
+	errAnnotationNumericKeyIsTooBig = "error parsing annotation for %s: The number exceeds the maximum allowed for its type"
 )
 
 type annotationConfiguration struct {

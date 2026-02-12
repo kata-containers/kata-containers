@@ -119,12 +119,12 @@ func (endpoint *VhostUserEndpoint) Detach(ctx context.Context, netNsCreated bool
 
 // HotAttach for vhostuser endpoint not supported yet
 func (endpoint *VhostUserEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
-	return fmt.Errorf("VhostUserEndpoint does not support Hot attach")
+	return fmt.Errorf("vhostUserEndpoint does not support Hot attach")
 }
 
 // HotDetach for vhostuser endpoint not supported yet
 func (endpoint *VhostUserEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("VhostUserEndpoint does not support Hot detach")
+	return fmt.Errorf("vhostUserEndpoint does not support Hot detach")
 }
 
 // Create a vhostuser endpoint

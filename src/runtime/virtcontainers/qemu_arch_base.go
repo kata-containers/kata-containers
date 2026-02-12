@@ -633,7 +633,7 @@ func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQ
 			VhostFDs:      netPair.VhostFds,
 		}
 	default:
-		return govmmQemu.NetDevice{}, fmt.Errorf("Unknown type for endpoint")
+		return govmmQemu.NetDevice{}, fmt.Errorf("unknown type for endpoint")
 	}
 
 	return d, nil
@@ -642,7 +642,7 @@ func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQ
 func (q *qemuArchBase) appendNetwork(_ context.Context, devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error) {
 	d, err := genericNetwork(endpoint, q.vhost, q.nestedRun, q.networkIndex)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append network %v", err)
+		return devices, fmt.Errorf("failed to append network %v", err)
 	}
 	q.networkIndex++
 	devices = append(devices, d)
@@ -651,7 +651,7 @@ func (q *qemuArchBase) appendNetwork(_ context.Context, devices []govmmQemu.Devi
 
 func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.BlockDevice, error) {
 	if drive.File == "" || drive.ID == "" || drive.Format == "" {
-		return govmmQemu.BlockDevice{}, fmt.Errorf("Empty File, ID or Format for drive %v", drive)
+		return govmmQemu.BlockDevice{}, fmt.Errorf("empty File, ID or Format for drive %v", drive)
 	}
 
 	if len(drive.ID) > maxDevIDSize {
@@ -674,7 +674,7 @@ func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.Bloc
 func (q *qemuArchBase) appendBlockDevice(_ context.Context, devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, q.nestedRun)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append block device %v", err)
+		return devices, fmt.Errorf("failed to append block device %v", err)
 	}
 	devices = append(devices, d)
 	return devices, nil
@@ -930,7 +930,7 @@ func (q *qemuArchBase) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Devi
 		devices = append(devices, iommu)
 		return devices, nil
 	default:
-		return devices, fmt.Errorf("Machine Type %s does not support vIOMMU", q.qemuMachine.Type)
+		return devices, fmt.Errorf("machine Type %s does not support vIOMMU", q.qemuMachine.Type)
 	}
 }
 
@@ -971,7 +971,7 @@ func (q *qemuArchBase) qomGetSlot(qomPath string, qmpCh *qmpChannel) (types.PciS
 
 	slotNum, funcNum := addri>>3, addri&0x7
 	if funcNum != 0 {
-		return types.PciSlot{}, fmt.Errorf("Unexpected non-zero PCI function (%02x.%1x) on %q",
+		return types.PciSlot{}, fmt.Errorf("unexpected non-zero PCI function (%02x.%1x) on %q",
 			slotNum, funcNum, qomPath)
 	}
 
@@ -1038,7 +1038,7 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 		// path component.
 		idx := strings.LastIndex(busQOM, "/")
 		if idx == -1 {
-			return types.PciPath{}, fmt.Errorf("Bus has unexpected QOM path %s", busQOM)
+			return types.PciPath{}, fmt.Errorf("bus has unexpected QOM path %s", busQOM)
 		}
 		parentBus := busQOM[:idx]
 

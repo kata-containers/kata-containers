@@ -174,7 +174,7 @@ func (n *NetInterworkingModel) SetModel(modelName string) error {
 		*n = NetXConnectNoneModel
 		return nil
 	}
-	return fmt.Errorf("Unknown type %s", modelName)
+	return fmt.Errorf("unknown type %s", modelName)
 }
 
 // DefaultNetInterworkingModel is a package level default
@@ -350,7 +350,7 @@ func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInt
 
 	randomMacAddr, err := generateRandomPrivateMacAddr()
 	if err != nil {
-		return NetworkInterfacePair{}, fmt.Errorf("Could not generate random mac address: %s", err)
+		return NetworkInterfacePair{}, fmt.Errorf("could not generate random mac address: %s", err)
 	}
 
 	netPair := NetworkInterfacePair{

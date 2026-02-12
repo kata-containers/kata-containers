@@ -128,7 +128,7 @@ func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8)
 }
 
 func (q *qemuPPC64le) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
-	return devices, fmt.Errorf("PPC64le does not support appending a vIOMMU")
+	return devices, fmt.Errorf("ppc64le does not support appending a vIOMMU")
 }
 
 // Enables guest protection
@@ -153,7 +153,7 @@ func (q *qemuPPC64le) enableProtection() error {
 		return nil
 
 	default:
-		return fmt.Errorf("This system doesn't support Confidential Computing (Guest Protection)")
+		return fmt.Errorf("this system doesn't support Confidential Computing (Guest Protection)")
 	}
 }
 
@@ -178,6 +178,6 @@ func (q *qemuPPC64le) appendProtectionDevice(devices []govmmQemu.Device, firmwar
 		return devices, firmware, nil
 
 	default:
-		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+		return devices, "", fmt.Errorf("unsupported guest protection technology: %v", q.protection)
 	}
 }

@@ -54,7 +54,7 @@ type LinuxNetwork struct {
 // will make the constructor fail.
 func NewNetwork(configs ...*NetworkConfig) (Network, error) {
 	if len(configs) > 1 {
-		return nil, fmt.Errorf("Too many network configurations")
+		return nil, fmt.Errorf("too many network configurations")
 	}
 
 	// Empty constructor
@@ -64,7 +64,7 @@ func NewNetwork(configs ...*NetworkConfig) (Network, error) {
 
 	config := configs[0]
 	if config == nil {
-		return nil, fmt.Errorf("Missing network configuration")
+		return nil, fmt.Errorf("missing network configuration")
 	}
 
 	return &LinuxNetwork{
@@ -179,7 +179,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 				switch netInfo.Link.(*netlink.Tuntap).Mode {
 				case 0:
 					// mount /sys/class/net to get links
-					return nil, fmt.Errorf("Network device mode not determined correctly. Mount sysfs in caller")
+					return nil, fmt.Errorf("network device mode not determined correctly. Mount sysfs in caller")
 				case 1:
 					return nil, fmt.Errorf("tun networking device not yet supported")
 				case 2:
@@ -196,7 +196,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 			networkLogger().Info("ipvlan interface found")
 			endpoint, err = createIPVlanNetworkEndpoint(idx, netInfo.Iface.Name)
 		} else {
-			return nil, fmt.Errorf("Unsupported network interface: %s", netInfo.Iface.Type)
+			return nil, fmt.Errorf("unsupported network interface: %s", netInfo.Iface.Type)
 		}
 	}
 
@@ -248,7 +248,7 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, end
 		}
 	}
 	if idx == len(n.eps) {
-		return fmt.Errorf("Endpoint not found")
+		return fmt.Errorf("endpoint not found")
 	}
 
 	if endpoint.GetRxRateLimiter() {
@@ -634,11 +634,11 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 			},
 		}
 	default:
-		return nil, fds, fmt.Errorf("Unsupported link type %s", expectedLink.Type())
+		return nil, fds, fmt.Errorf("unsupported link type %s", expectedLink.Type())
 	}
 
 	if err := netHandle.LinkAdd(newLink); err != nil {
-		return nil, fds, fmt.Errorf("LinkAdd() failed for %s name %s: %s", expectedLink.Type(), name, err)
+		return nil, fds, fmt.Errorf("linkAdd() failed for %s name %s: %s", expectedLink.Type(), name, err)
 	}
 
 	tuntapLink, ok := newLink.(*netlink.Tuntap)
@@ -663,7 +663,7 @@ func getLinkForEndpoint(endpoint Endpoint, netHandle *netlink.Handle) (netlink.L
 	case *TuntapEndpoint:
 		link = &netlink.Tuntap{}
 	default:
-		return nil, fmt.Errorf("Unexpected endpointType %s", ep.Type())
+		return nil, fmt.Errorf("unexpected endpointType %s", ep.Type())
 	}
 
 	return getLinkByName(netHandle, endpoint.NetworkPair().VirtIface.Name, link)
@@ -672,7 +672,7 @@ func getLinkForEndpoint(endpoint Endpoint, netHandle *netlink.Handle) (netlink.L
 func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.Link) (netlink.Link, error) {
 	link, err := netHandle.LinkByName(name)
 	if err != nil {
-		return nil, fmt.Errorf("LinkByName() failed for %s name %s: %s", expectedLink.Type(), name, err)
+		return nil, fmt.Errorf("linkByName() failed for %s name %s: %s", expectedLink.Type(), name, err)
 	}
 
 	switch expectedLink.Type() {
@@ -697,10 +697,10 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 			return l, nil
 		}
 	default:
-		return nil, fmt.Errorf("Unsupported link type %s", expectedLink.Type())
+		return nil, fmt.Errorf("unsupported link type %s", expectedLink.Type())
 	}
 
-	return nil, fmt.Errorf("Incorrect link type %s, expecting %s", link.Type(), expectedLink.Type())
+	return nil, fmt.Errorf("incorrect link type %s, expecting %s", link.Type(), expectedLink.Type())
 }
 
 // The endpoint type should dictate how the connection needs to happen.
@@ -732,7 +732,7 @@ func xConnectVMNetwork(ctx context.Context, endpoint Endpoint, h Hypervisor) err
 		networkLogger().Info("connect TCFilter to VM network")
 		err = setupTCFiltering(ctx, endpoint, queues, disableVhostNet)
 	default:
-		err = fmt.Errorf("Invalid internetworking model")
+		err = fmt.Errorf("invalid internetworking model")
 	}
 	return err
 }
@@ -756,7 +756,7 @@ func xDisconnectVMNetwork(ctx context.Context, endpoint Endpoint) error {
 	case NetXConnectTCFilterModel:
 		err = removeTCFiltering(ctx, endpoint)
 	default:
-		err = fmt.Errorf("Invalid internetworking model")
+		err = fmt.Errorf("invalid internetworking model")
 	}
 	return err
 }
@@ -872,7 +872,7 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 		}, queues)
 
 	if err != nil {
-		return fmt.Errorf("Could not create TAP interface: %s", err)
+		return fmt.Errorf("could not create TAP interface: %s", err)
 	}
 
 	// Save the veth MAC address to the TAP so that it can later be used
@@ -884,7 +884,7 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
 
 	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", attrs.MTU, err)
+		return fmt.Errorf("could not set TAP MTU %d: %s", attrs.MTU, err)
 	}
 
 	hardAddr, err := net.ParseMAC(netPair.VirtIface.HardAddr)
@@ -892,44 +892,44 @@ func tapNetworkPair(ctx context.Context, endpoint Endpoint, queues int, disableV
 		return err
 	}
 	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
+		return fmt.Errorf("could not set MAC address %s for veth interface %s: %s",
 			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
 	}
 
 	if err := netHandle.LinkSetHardwareAddr(tapLink, tapHardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for TAP interface %s: %s",
+		return fmt.Errorf("could not set MAC address %s for TAP interface %s: %s",
 			netPair.TAPIface.HardAddr, netPair.TAPIface.Name, err)
 	}
 
 	if err := netHandle.LinkSetUp(tapLink); err != nil {
-		return fmt.Errorf("Could not enable TAP %s: %s", netPair.TAPIface.Name, err)
+		return fmt.Errorf("could not enable TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
 	// Clear the IP addresses from the veth interface to prevent ARP conflict
 	netPair.VirtIface.Addrs, err = netlink.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
-		return fmt.Errorf("Unable to obtain veth IP addresses: %s", err)
+		return fmt.Errorf("unable to obtain veth IP addresses: %s", err)
 	}
 
 	if err := clearIPs(link, netPair.VirtIface.Addrs); err != nil {
-		return fmt.Errorf("Unable to clear veth IP addresses: %s", err)
+		return fmt.Errorf("unable to clear veth IP addresses: %s", err)
 	}
 
 	if err := netHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("Could not enable veth %s: %s", netPair.VirtIface.Name, err)
+		return fmt.Errorf("could not enable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
 	// Note: The underlying interfaces need to be up prior to fd creation.
 
 	netPair.VMFds, err = createMacvtapFds(tapLink.Attrs().Index, queues)
 	if err != nil {
-		return fmt.Errorf("Could not setup macvtap fds %s: %s", netPair.TAPIface, err)
+		return fmt.Errorf("could not setup macvtap fds %s: %s", netPair.TAPIface, err)
 	}
 
 	if !disableVhostNet {
 		vhostFds, err := createVhostFds(queues)
 		if err != nil {
-			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+			return fmt.Errorf("could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 		}
 		netPair.VhostFds = vhostFds
 	}
@@ -951,14 +951,14 @@ func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disabl
 
 	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, queues)
 	if err != nil {
-		return fmt.Errorf("Could not create TAP interface: %s", err)
+		return fmt.Errorf("could not create TAP interface: %s", err)
 	}
 	netPair.VMFds = fds
 
 	if !disableVhostNet {
 		vhostFds, err := createVhostFds(queues)
 		if err != nil {
-			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+			return fmt.Errorf("could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 		}
 		netPair.VhostFds = vhostFds
 	}
@@ -981,11 +981,11 @@ func setupTCFiltering(ctx context.Context, endpoint Endpoint, queues int, disabl
 	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
 
 	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", attrs.MTU, err)
+		return fmt.Errorf("could not set TAP MTU %d: %s", attrs.MTU, err)
 	}
 
 	if err := netHandle.LinkSetUp(tapLink); err != nil {
-		return fmt.Errorf("Could not enable TAP %s: %s", netPair.TAPIface.Name, err)
+		return fmt.Errorf("could not enable TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
 	tapAttrs := tapLink.Attrs()
@@ -1025,7 +1025,7 @@ func addQdiscIngress(index int) error {
 
 	err := netlink.QdiscAdd(qdisc)
 	if err != nil {
-		return fmt.Errorf("Failed to add qdisc for network index %d : %s", index, err)
+		return fmt.Errorf("failed to add qdisc for network index %d : %s", index, err)
 	}
 
 	return nil
@@ -1056,7 +1056,7 @@ func addRedirectTCFilter(sourceIndex, destIndex int) error {
 	}
 
 	if err := netlink.FilterAdd(filter); err != nil {
-		return fmt.Errorf("Failed to add filter for index %d : %s", sourceIndex, err)
+		return fmt.Errorf("failed to add filter for index %d : %s", sourceIndex, err)
 	}
 
 	return nil
@@ -1126,11 +1126,11 @@ func untapNetworkPair(ctx context.Context, endpoint Endpoint) error {
 
 	tapLink, err := getLinkByName(netHandle, netPair.TAPIface.Name, &netlink.Macvtap{})
 	if err != nil {
-		return fmt.Errorf("Could not get TAP interface %s: %s", netPair.TAPIface.Name, err)
+		return fmt.Errorf("could not get TAP interface %s: %s", netPair.TAPIface.Name, err)
 	}
 
 	if err := netHandle.LinkDel(tapLink); err != nil {
-		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
+		return fmt.Errorf("could not remove TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
 	link, err := getLinkForEndpoint(endpoint, netHandle)
@@ -1143,12 +1143,12 @@ func untapNetworkPair(ctx context.Context, endpoint Endpoint) error {
 		return err
 	}
 	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
+		return fmt.Errorf("could not set MAC address %s for veth interface %s: %s",
 			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
 	}
 
 	if err := netHandle.LinkSetDown(link); err != nil {
-		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
+		return fmt.Errorf("could not disable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
 	// Restore the IPs that were cleared
@@ -1170,15 +1170,15 @@ func removeTCFiltering(ctx context.Context, endpoint Endpoint) error {
 
 	tapLink, err := getLinkByName(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{})
 	if err != nil {
-		return fmt.Errorf("Could not get TAP interface: %s", err)
+		return fmt.Errorf("could not get TAP interface: %s", err)
 	}
 
 	if err := netHandle.LinkSetDown(tapLink); err != nil {
-		return fmt.Errorf("Could not disable TAP %s: %s", netPair.TAPIface.Name, err)
+		return fmt.Errorf("could not disable TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
 	if err := netHandle.LinkDel(tapLink); err != nil {
-		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
+		return fmt.Errorf("could not remove TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
 	link, err := getLinkForEndpoint(endpoint, netHandle)
@@ -1195,7 +1195,7 @@ func removeTCFiltering(ctx context.Context, endpoint Endpoint) error {
 	}
 
 	if err := netHandle.LinkSetDown(link); err != nil {
-		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
+		return fmt.Errorf("could not disable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
 	return nil
@@ -1255,10 +1255,10 @@ func deleteNetNS(netNSPath string) error {
 	}
 
 	if err = unix.Unmount(netNSPath, unix.MNT_DETACH); err != nil {
-		return fmt.Errorf("Failed to unmount namespace %s: %v", netNSPath, err)
+		return fmt.Errorf("failed to unmount namespace %s: %v", netNSPath, err)
 	}
 	if err := os.RemoveAll(netNSPath); err != nil {
-		return fmt.Errorf("Failed to clean up namespace %s: %v", netNSPath, err)
+		return fmt.Errorf("failed to clean up namespace %s: %v", netNSPath, err)
 	}
 
 	return nil
@@ -1303,7 +1303,7 @@ func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
 	default:
-		return fmt.Errorf("Unsupported endpointType %s for adding rx rate limiter", ep.Type())
+		return fmt.Errorf("unsupported endpointType %s for adding rx rate limiter", ep.Type())
 	}
 
 	if err := endpoint.SetRxRateLimiter(); err != nil {
@@ -1360,7 +1360,7 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 
 	err := netlink.QdiscAdd(qdisc)
 	if err != nil {
-		return fmt.Errorf("Failed to add htb qdisc: %v", err)
+		return fmt.Errorf("failed to add htb qdisc: %v", err)
 	}
 
 	// root htb qdisc has only one direct child class (with id 1:1) to control overall rate.
@@ -1375,7 +1375,7 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 	}
 	class := netlink.NewHtbClass(classAttrs, htbClassAttrs)
 	if err := netlink.ClassAdd(class); err != nil {
-		return fmt.Errorf("Failed to add htb classid 1:1 : %v", err)
+		return fmt.Errorf("failed to add htb classid 1:1 : %v", err)
 	}
 
 	// above class has at least one default child class(1:2) for all non-privileged traffic.
@@ -1390,7 +1390,7 @@ func addHTBQdisc(linkIndex int, maxRate uint64) error {
 	}
 	class = netlink.NewHtbClass(classAttrs, htbClassAttrs)
 	if err := netlink.ClassAdd(class); err != nil {
-		return fmt.Errorf("Failed to add htb class 1:2 : %v", err)
+		return fmt.Errorf("failed to add htb class 1:2 : %v", err)
 	}
 
 	return nil
@@ -1415,7 +1415,7 @@ func addIFBDevice() (int, error) {
 	// There exists error when using netlink library to create ifb interface
 	cmd := exec.Command("ip", "link", "add", "dev", "ifb0", "type", "ifb")
 	if output, err := cmd.CombinedOutput(); err != nil {
-		return -1, fmt.Errorf("Could not create link ifb0: %v, error %v", output, err)
+		return -1, fmt.Errorf("could not create link ifb0: %v, error %v", output, err)
 	}
 
 	ifbLink, err := netlink.LinkByName("ifb0")
@@ -1424,7 +1424,7 @@ func addIFBDevice() (int, error) {
 	}
 
 	if err := netHandle.LinkSetUp(ifbLink); err != nil {
-		return -1, fmt.Errorf("Could not enable link ifb0 %v", err)
+		return -1, fmt.Errorf("could not enable link ifb0 %v", err)
 	}
 
 	return ifbLink.Attrs().Index, nil
@@ -1469,13 +1469,13 @@ func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 		case NetXConnectMacVtapModel, NetXConnectNoneModel:
 			linkName = netPair.TapInterface.TAPIface.Name
 		default:
-			return fmt.Errorf("Unsupported inter-networking model %v for adding tx rate limiter", netPair.NetInterworkingModel)
+			return fmt.Errorf("unsupported inter-networking model %v for adding tx rate limiter", netPair.NetInterworkingModel)
 		}
 
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
 	default:
-		return fmt.Errorf("Unsupported endpointType %s for adding tx rate limiter", ep.Type())
+		return fmt.Errorf("unsupported endpointType %s for adding tx rate limiter", ep.Type())
 	}
 
 	if err := endpoint.SetTxRateLimiter(); err != nil {
@@ -1517,7 +1517,7 @@ func removeHTBQdisc(linkName string) error {
 		}
 
 		if err := netlink.QdiscDel(htb); err != nil {
-			return fmt.Errorf("Failed to delete htb qdisc on link %s: %v", linkName, err)
+			return fmt.Errorf("failed to delete htb qdisc on link %s: %v", linkName, err)
 		}
 	}
 
@@ -1533,7 +1533,7 @@ func removeRxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
 	default:
-		return fmt.Errorf("Unsupported endpointType %s for removing rx rate limiter", ep.Type())
+		return fmt.Errorf("unsupported endpointType %s for removing rx rate limiter", ep.Type())
 	}
 
 	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
@@ -1565,7 +1565,7 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
 	default:
-		return fmt.Errorf("Unsupported endpointType %s for adding tx rate limiter", ep.Type())
+		return fmt.Errorf("unsupported endpointType %s for adding tx rate limiter", ep.Type())
 	}
 
 	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
@@ -1595,11 +1595,11 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 		}
 
 		if err := netHandle.LinkSetDown(ifbLink); err != nil {
-			return fmt.Errorf("Could not disable ifb interface: %v", err)
+			return fmt.Errorf("could not disable ifb interface: %v", err)
 		}
 
 		if err := netHandle.LinkDel(ifbLink); err != nil {
-			return fmt.Errorf("Could not remove ifb interface: %v", err)
+			return fmt.Errorf("could not remove ifb interface: %v", err)
 		}
 
 		return nil

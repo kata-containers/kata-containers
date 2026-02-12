@@ -278,7 +278,7 @@ func (s *Sandbox) Annotations(key string) (string, error) {
 
 	value, exist := s.config.Annotations[key]
 	if !exist {
-		return "", fmt.Errorf("Annotations key %s does not exist", key)
+		return "", fmt.Errorf("annotations key %s does not exist", key)
 	}
 
 	return value, nil
@@ -312,7 +312,7 @@ func (s *Sandbox) GetNetNs() string {
 func (s *Sandbox) GetHypervisorPid() (int, error) {
 	pids := s.hypervisor.GetPids()
 	if len(pids) == 0 || pids[0] == 0 {
-		return -1, fmt.Errorf("Invalid hypervisor PID: %+v", pids)
+		return -1, fmt.Errorf("invalid hypervisor PID: %+v", pids)
 	}
 
 	return pids[0], nil
@@ -570,7 +570,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	defer span.End()
 
 	if !sandboxConfig.valid() {
-		return nil, fmt.Errorf("Invalid sandbox configuration")
+		return nil, fmt.Errorf("invalid sandbox configuration")
 	}
 
 	// create agent instance
@@ -773,7 +773,7 @@ func (s *Sandbox) createResourceController() error {
 	resources := specs.LinuxResources{}
 
 	if s.config == nil {
-		return fmt.Errorf("Could not create %s resource controller manager: empty sandbox configuration", s.sandboxController)
+		return fmt.Errorf("could not create %s resource controller manager: empty sandbox configuration", s.sandboxController)
 	}
 
 	spec := s.GetPatchedOCISpec()
@@ -867,7 +867,7 @@ func (s *Sandbox) createResourceController() error {
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
 	s.sandboxController, err = resCtrl.NewSandboxResourceController(cgroupPath, &resources, s.config.SandboxCgroupOnly)
 	if err != nil {
-		return fmt.Errorf("Could not create the sandbox resource controller %v", err)
+		return fmt.Errorf("could not create the sandbox resource controller %v", err)
 	}
 
 	// Now that the sandbox resource controller is created, we can set the state controller paths.
@@ -961,7 +961,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 	if s.state.State != types.StateReady &&
 		s.state.State != types.StatePaused &&
 		s.state.State != types.StateStopped {
-		return fmt.Errorf("Sandbox not ready, paused or stopped, impossible to delete")
+		return fmt.Errorf("sandbox not ready, paused or stopped, impossible to delete")
 	}
 
 	for _, c := range s.containers {
@@ -1512,7 +1512,7 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 
 func (s *Sandbox) addContainer(c *Container) error {
 	if _, ok := s.containers[c.id]; ok {
-		return fmt.Errorf("Duplicated container: %s", c.id)
+		return fmt.Errorf("duplicated container: %s", c.id)
 	}
 	s.containers[c.id] = c
 
@@ -2624,7 +2624,7 @@ func (s *Sandbox) setupResourceController() error {
 	runtimePid := os.Getpid()
 	// Add the runtime to the VMM sandbox resource controller
 	if err := vmmController.AddProcess(runtimePid); err != nil {
-		return fmt.Errorf("Could not add runtime PID %d to the sandbox %s resource controller: %v", runtimePid, s.sandboxController, err)
+		return fmt.Errorf("could not add runtime PID %d to the sandbox %s resource controller: %v", runtimePid, s.sandboxController, err)
 	}
 
 	return nil

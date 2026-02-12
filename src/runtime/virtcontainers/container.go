@@ -706,7 +706,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 	defer span.End()
 
 	if !contConfig.valid() {
-		return &Container{}, fmt.Errorf("Invalid container configuration")
+		return &Container{}, fmt.Errorf("invalid container configuration")
 	}
 
 	c := &Container{
@@ -730,7 +730,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 			err = fmt.Errorf("swapiness should not bigger than 200")
 		}
 		if err != nil {
-			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwappiness, err)
+			return &Container{}, fmt.Errorf("invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwappiness, err)
 		}
 		if c.config.Resources.Memory == nil {
 			c.initConfigResourcesMemory()
@@ -740,7 +740,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 	if resourceSwapInBytesStr, ok := c.config.Annotations[vcAnnotations.ContainerResourcesSwapInBytes]; ok {
 		resourceSwapInBytesInUint, err := strconv.ParseUint(resourceSwapInBytesStr, 0, 64)
 		if err != nil {
-			return &Container{}, fmt.Errorf("Invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwapInBytes, err)
+			return &Container{}, fmt.Errorf("invalid container configuration Annotations %s %v", vcAnnotations.ContainerResourcesSwapInBytes, err)
 		}
 		if c.config.Resources.Memory == nil {
 			c.initConfigResourcesMemory()
@@ -1273,7 +1273,7 @@ func (c *Container) create(ctx context.Context) (err error) {
 func (c *Container) delete(ctx context.Context) error {
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateStopped {
-		return fmt.Errorf("Container not ready or stopped, impossible to delete")
+		return fmt.Errorf("container not ready or stopped, impossible to delete")
 	}
 
 	// Remove the container from sandbox structure
@@ -1291,11 +1291,11 @@ func (c *Container) delete(ctx context.Context) error {
 // possible.
 func (c *Container) checkSandboxRunning(cmd string) error {
 	if cmd == "" {
-		return fmt.Errorf("Cmd cannot be empty")
+		return fmt.Errorf("cmd cannot be empty")
 	}
 
 	if c.sandbox.state.State != types.StateRunning {
-		return fmt.Errorf("Sandbox not running, impossible to %s the container", cmd)
+		return fmt.Errorf("sandbox not running, impossible to %s the container", cmd)
 	}
 
 	return nil
@@ -1321,7 +1321,7 @@ func (c *Container) start(ctx context.Context) error {
 
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateStopped {
-		return fmt.Errorf("Container not ready or stopped, impossible to start")
+		return fmt.Errorf("container not ready or stopped, impossible to start")
 	}
 
 	if err := c.state.ValidTransition(c.state.State, types.StateRunning); err != nil {
@@ -1426,7 +1426,7 @@ func (c *Container) enter(ctx context.Context, cmd types.Cmd) (*Process, error) 
 
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateRunning {
-		return nil, fmt.Errorf("Container not ready or running, " +
+		return nil, fmt.Errorf("container not ready or running, " +
 			"impossible to enter")
 	}
 
@@ -1441,7 +1441,7 @@ func (c *Container) enter(ctx context.Context, cmd types.Cmd) (*Process, error) 
 func (c *Container) wait(ctx context.Context, processID string) (int32, error) {
 	if c.state.State != types.StateReady &&
 		c.state.State != types.StateRunning {
-		return 0, fmt.Errorf("Container not ready or running, " +
+		return 0, fmt.Errorf("container not ready or running, " +
 			"impossible to wait")
 	}
 
@@ -1454,11 +1454,11 @@ func (c *Container) kill(ctx context.Context, signal syscall.Signal, all bool) e
 
 func (c *Container) signalProcess(ctx context.Context, processID string, signal syscall.Signal, all bool) error {
 	if c.sandbox.state.State != types.StateReady && c.sandbox.state.State != types.StateRunning {
-		return fmt.Errorf("Sandbox not ready or running, impossible to signal the container")
+		return fmt.Errorf("sandbox not ready or running, impossible to signal the container")
 	}
 
 	if c.state.State != types.StateReady && c.state.State != types.StateRunning && c.state.State != types.StatePaused {
-		return fmt.Errorf("Container not ready, running or paused, impossible to signal the container")
+		return fmt.Errorf("container not ready, running or paused, impossible to signal the container")
 	}
 
 	// kill(2) method can return ESRCH in certain cases, which is not handled by containerd cri server in container_stop.go.
@@ -1477,7 +1477,7 @@ func (c *Container) signalProcess(ctx context.Context, processID string, signal 
 
 func (c *Container) winsizeProcess(ctx context.Context, processID string, height, width uint32) error {
 	if c.state.State != types.StateReady && c.state.State != types.StateRunning {
-		return fmt.Errorf("Container not ready or running, impossible to signal the container")
+		return fmt.Errorf("container not ready or running, impossible to signal the container")
 	}
 
 	return c.sandbox.agent.winsizeProcess(ctx, c, processID, height, width)
@@ -1485,7 +1485,7 @@ func (c *Container) winsizeProcess(ctx context.Context, processID string, height
 
 func (c *Container) ioStream(processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
 	if c.state.State != types.StateReady && c.state.State != types.StateRunning {
-		return nil, nil, nil, fmt.Errorf("Container not ready or running, impossible to signal the container")
+		return nil, nil, nil, fmt.Errorf("container not ready or running, impossible to signal the container")
 	}
 
 	stream := newIOStream(c.sandbox, c, processID)
@@ -1506,7 +1506,7 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 	}
 
 	if state := c.state.State; !(state == types.StateRunning || state == types.StateReady) {
-		return fmt.Errorf("Container(%s) not running or ready, impossible to update", state)
+		return fmt.Errorf("container(%s) not running or ready, impossible to update", state)
 	}
 
 	if c.config.Resources.CPU == nil {
@@ -1557,7 +1557,7 @@ func (c *Container) pause(ctx context.Context) error {
 	}
 
 	if c.state.State != types.StateRunning {
-		return fmt.Errorf("Container not running, impossible to pause")
+		return fmt.Errorf("container not running, impossible to pause")
 	}
 
 	if err := c.sandbox.agent.pauseContainer(ctx, c.sandbox, *c); err != nil {
@@ -1573,7 +1573,7 @@ func (c *Container) resume(ctx context.Context) error {
 	}
 
 	if c.state.State != types.StatePaused {
-		return fmt.Errorf("Container not paused, impossible to resume")
+		return fmt.Errorf("container not paused, impossible to resume")
 	}
 
 	if err := c.sandbox.agent.resumeContainer(ctx, c.sandbox, *c); err != nil {

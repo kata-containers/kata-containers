@@ -108,7 +108,7 @@ func GetVFIODeviceType(deviceFilePath string) (config.VFIODeviceType, error) {
 	//For example, 83b8f4f2-509f-382f-3c1e-e6bfe0fa1001
 	tokens = strings.Split(deviceFileName, "-")
 	if len(tokens) != 5 {
-		return config.VFIODeviceErrorType, fmt.Errorf("Incorrect tokens found while parsing VFIO details: %s", deviceFileName)
+		return config.VFIODeviceErrorType, fmt.Errorf("incorrect tokens found while parsing VFIO details: %s", deviceFileName)
 	}
 
 	deviceSysfsDev, err := GetSysfsDev(deviceFilePath)
@@ -185,13 +185,13 @@ func GetBDFFromVFIODev(major uint32, minor uint32) (string, error) {
 	devPath := fmt.Sprintf("/sys/dev/char/%d:%d", major, minor)
 	realPath, err := filepath.EvalSymlinks(devPath)
 	if err != nil {
-		return "", fmt.Errorf("Failed to resolve symlink for %s: %v", devPath, err)
+		return "", fmt.Errorf("failed to resolve symlink for %s: %v", devPath, err)
 	}
 
 	bdfRegex := regexp.MustCompile(`([0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-9a-fA-F])`)
 	matches := bdfRegex.FindAllString(realPath, -1)
 	if len(matches) == 0 {
-		return "", fmt.Errorf("No BDF found in resolved path: %s", realPath)
+		return "", fmt.Errorf("no BDF found in resolved path: %s", realPath)
 	}
 	return matches[len(matches)-1], nil
 }
@@ -205,7 +205,7 @@ func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
 	// crw------- 1 root root 237, 0 Jan 15 16:53 /dev/vfio/devices/vfio0
 	major, minor, err := GetMajorMinorFromDevPath(device.HostPath)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to get major:minor from %s: %v", device.HostPath, err)
+		return nil, fmt.Errorf("failed to get major:minor from %s: %v", device.HostPath, err)
 	}
 	// $ ls -l /sys/dev/char/237:0
 	// /sys/dev/char/237:0 -> ../../devices/pci0000:64/0000:64:00.0/0000:65:00.0/vfio-dev/vfio0
@@ -318,7 +318,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				Port:      device.Port,
 			}
 		default:
-			return nil, fmt.Errorf("Failed to append device: VFIO device type unrecognized")
+			return nil, fmt.Errorf("failed to append device: VFIO device type unrecognized")
 		}
 
 		vfioDevs = append(vfioDevs, &vfio)

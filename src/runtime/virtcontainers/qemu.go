@@ -239,7 +239,7 @@ func (q *qemu) qemuPath() (string, error) {
 	}
 
 	if _, err = os.Stat(p); os.IsNotExist(err) {
-		return "", fmt.Errorf("QEMU path (%s) does not exist", p)
+		return "", fmt.Errorf("qemu path (%s) does not exist", p)
 	}
 
 	return p, nil
@@ -647,7 +647,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	}
 
 	if q.state.UUID == "" {
-		return fmt.Errorf("UUID should not be empty")
+		return fmt.Errorf("uuid should not be empty")
 	}
 
 	qmpSockets, err := q.createQmpSocket()
@@ -846,7 +846,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		var err error
 		dev.HostPath, err = config.GetHostPath(dev, false, "")
 		if err != nil {
-			return fmt.Errorf("Cannot get host path for device: %v err: %v", dev, err)
+			return fmt.Errorf("cannot get host path for device: %v err: %v", dev, err)
 		}
 
 		var vfioDevices []*config.VFIODev
@@ -858,16 +858,16 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			q.Logger().Infof("### IOMMUFD Path: %s", dev.HostPath)
 			vfioDevices, err = drivers.GetDeviceFromVFIODev(dev)
 			if err != nil {
-				return fmt.Errorf("Cannot get VFIO device from IOMMUFD with device: %v err: %v", dev, err)
+				return fmt.Errorf("cannot get VFIO device from IOMMUFD with device: %v err: %v", dev, err)
 			}
 		} else {
 			if q.config.ConfidentialGuest {
-				return fmt.Errorf("ConfidentialGuest needs IOMMUFD - cannot use %s", dev.HostPath)
+				return fmt.Errorf("confidentialGuest needs IOMMUFD - cannot use %s", dev.HostPath)
 			}
 
 			vfioDevices, err = drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
 			if err != nil {
-				return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
+				return fmt.Errorf("cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)
 			}
 		}
 
@@ -894,7 +894,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			numOfPluggablePorts = numPCIeRootPorts
 		}
 		if numOfPluggablePorts > maxPCIeRootPort {
-			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
+			return fmt.Errorf("number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
@@ -904,7 +904,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			numOfPluggablePorts = numPCIeSwitchPorts
 		}
 		if numOfPluggablePorts > maxPCIeSwitchPort {
-			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
+			return fmt.Errorf("number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
 		}
 		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
 		return nil
@@ -965,7 +965,7 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 		if q.config.EnableVhostUserStore {
 			// Vhost-user-blk/scsi process which can improve performance, like SPDK,
 			// requires shared-on hugepage to work with Qemu.
-			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
+			return share, target, "", fmt.Errorf("vhost-user-blk/scsi requires hugepage memory")
 		}
 
 		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
@@ -1025,7 +1025,7 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 		if strings.Contains(err.Error(), "Cannot allocate memory") {
 			help = ".  Please use command \"echo 1 > /proc/sys/vm/overcommit_memory\" handle it."
 		}
-		err = fmt.Errorf("Add %dMB virtio-mem-pci fail %s%s", sizeMB, err.Error(), help)
+		err = fmt.Errorf("add %dMB virtio-mem-pci fail %s%s", sizeMB, err.Error(), help)
 	}
 
 	return err
@@ -1227,7 +1227,7 @@ func (q *qemu) waitVM(ctx context.Context, qmpConn net.Conn, timeout int) error 
 	defer span.End()
 
 	if timeout < 0 {
-		return fmt.Errorf("Invalid timeout %ds", timeout)
+		return fmt.Errorf("invalid timeout %ds", timeout)
 	}
 
 	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
@@ -1248,7 +1248,7 @@ func (q *qemu) waitVM(ctx context.Context, qmpConn net.Conn, timeout int) error 
 		}
 
 		if int(time.Since(timeStart).Seconds()) > timeout {
-			return fmt.Errorf("Failed to connect to QEMU instance (timeout %ds): %v", timeout, err)
+			return fmt.Errorf("failed to connect to QEMU instance (timeout %ds): %v", timeout, err)
 		}
 
 		time.Sleep(time.Duration(50) * time.Millisecond)
@@ -1710,7 +1710,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 			return err
 		}
 	default:
-		return fmt.Errorf("Block device %s not recognized", q.config.BlockDeviceDriver)
+		return fmt.Errorf("block device %s not recognized", q.config.BlockDeviceDriver)
 	}
 
 	return nil
@@ -1827,7 +1827,7 @@ func (q *qemu) hotplugVhostUserDevice(ctx context.Context, vAttr *config.VhostUs
 		case config.VhostUserBlk:
 			return q.hotplugAddVhostUserBlkDevice(ctx, vAttr, op, devID)
 		default:
-			return fmt.Errorf("Incorrect vhost-user device type found")
+			return fmt.Errorf("incorrect vhost-user device type found")
 		}
 	} else {
 
@@ -1878,7 +1878,7 @@ func (q *qemu) executePCIVFIODeviceAdd(device *config.VFIODev, addr string, brid
 	case config.VFIOAPDeviceMediatedType:
 		return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev, device.ID)
 	default:
-		return fmt.Errorf("Incorrect VFIO device type found")
+		return fmt.Errorf("incorrect VFIO device type found")
 	}
 }
 
@@ -1891,7 +1891,7 @@ func (q *qemu) executeVFIODeviceAdd(device *config.VFIODev) error {
 	case config.VFIOAPDeviceMediatedType:
 		return q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev, device.ID)
 	default:
-		return fmt.Errorf("Incorrect VFIO device type found")
+		return fmt.Errorf("incorrect VFIO device type found")
 	}
 }
 
@@ -1908,7 +1908,7 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 			"device-info":   string(buf),
 		}).Info("Start hot-plug VFIO device")
 
-		err = fmt.Errorf("Incorrect hot plug configuration %v for device %v found", q.state.HotPlugVFIO, device)
+		err = fmt.Errorf("incorrect hot plug configuration %v for device %v found", q.state.HotPlugVFIO, device)
 		// In case HotplugVFIOOnRootBus is true, devices are hotplugged on the root bus
 		// for pc machine type instead of bridge. This is useful for devices that require
 		// a large PCI BAR which is a currently a limitation with PCI bridges.
@@ -2184,7 +2184,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 
 	// we can only remove hotplugged vCPUs
 	if amount > hotpluggedVCPUs {
-		return 0, fmt.Errorf("Unable to remove %d CPUs, currently there are only %d hotplugged CPUs", amount, hotpluggedVCPUs)
+		return 0, fmt.Errorf("unable to remove %d CPUs, currently there are only %d hotplugged CPUs", amount, hotpluggedVCPUs)
 	}
 
 	for i := uint32(0); i < amount; i++ {
@@ -2489,7 +2489,7 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 		}
 		memoryAdded, ok := data.(int)
 		if !ok {
-			return currentMemory, addMemDevice, fmt.Errorf("Could not get the memory added, got %+v", data)
+			return currentMemory, addMemDevice, fmt.Errorf("could not get the memory added, got %+v", data)
 		}
 		currentMemory += uint32(memoryAdded)
 	case currentMemory > reqMemMB:
@@ -2509,7 +2509,7 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 		}
 		memoryRemoved, ok := data.(int)
 		if !ok {
-			return currentMemory, addMemDevice, fmt.Errorf("Could not get the memory removed, got %+v", data)
+			return currentMemory, addMemDevice, fmt.Errorf("could not get the memory removed, got %+v", data)
 		}
 		//FIXME: This is to Check memory HotplugRemoveDevice reported 0, as this is not supported.
 		// In the future if this is implemented this validation should be removed.
@@ -2775,7 +2775,7 @@ func (q *qemu) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 		}
 		vCPUsAdded, ok := data.(uint32)
 		if !ok {
-			return currentVCPUs, newVCPUs, fmt.Errorf("Could not get the vCPUs added, got %+v", data)
+			return currentVCPUs, newVCPUs, fmt.Errorf("could not get the vCPUs added, got %+v", data)
 		}
 		newVCPUs += vCPUsAdded
 	case currentVCPUs > reqVCPUs:
@@ -2787,7 +2787,7 @@ func (q *qemu) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 		}
 		vCPUsRemoved, ok := data.(uint32)
 		if !ok {
-			return currentVCPUs, newVCPUs, fmt.Errorf("Could not get the vCPUs removed, got %+v", data)
+			return currentVCPUs, newVCPUs, fmt.Errorf("could not get the vCPUs removed, got %+v", data)
 		}
 		newVCPUs -= vCPUsRemoved
 	}

@@ -110,13 +110,13 @@ func (q *qemuS390x) appendConsole(ctx context.Context, devices []govmmQemu.Devic
 	id := "serial0"
 	addr, b, err := q.addDeviceToBridge(ctx, id, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append console %v", err)
+		return devices, fmt.Errorf("failed to append console %v", err)
 	}
 
 	var devno string
 	devno, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append console %v", err)
+		return devices, fmt.Errorf("failed to append console %v", err)
 	}
 
 	serial := govmmQemu.SerialDevice{
@@ -156,15 +156,15 @@ func (q *qemuS390x) appendBlockDevice(ctx context.Context, devices []govmmQemu.D
 func (q *qemuS390x) appendCCWBlockDevice(ctx context.Context, devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, false)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
+		return devices, fmt.Errorf("failed to append blk-dev %v", err)
 	}
 	addr, b, err := q.addDeviceToBridge(ctx, drive.ID, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
+		return devices, fmt.Errorf("failed to append blk-dev %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
+		return devices, fmt.Errorf("failed to append blk-dev %v", err)
 	}
 	devices = append(devices, d)
 	return devices, nil
@@ -177,12 +177,12 @@ func (q *qemuS390x) appendVhostUserDevice(ctx context.Context, devices []govmmQe
 
 	addr, b, err := q.addDeviceToBridge(ctx, attr.DevID, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append vhost user device: %s", err)
+		return devices, fmt.Errorf("failed to append vhost user device: %s", err)
 	}
 	var devno string
 	devno, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append vhost user device: %s", err)
+		return devices, fmt.Errorf("failed to append vhost user device: %s", err)
 	}
 
 	qemuVhostUserDevice := govmmQemu.VhostUserDevice{
@@ -208,16 +208,16 @@ func (q *qemuS390x) supportGuestMemoryHotplug() bool {
 func (q *qemuS390x) appendNetwork(ctx context.Context, devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error) {
 	d, err := genericNetwork(endpoint, false, false, q.networkIndex)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append network %v", err)
+		return devices, fmt.Errorf("failed to append network %v", err)
 	}
 	q.networkIndex++
 	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append network %v", err)
+		return devices, fmt.Errorf("failed to append network %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append network %v", err)
+		return devices, fmt.Errorf("failed to append network %v", err)
 	}
 
 	devices = append(devices, d)
@@ -227,12 +227,12 @@ func (q *qemuS390x) appendNetwork(ctx context.Context, devices []govmmQemu.Devic
 func (q *qemuS390x) appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDev config.RNGDev) ([]govmmQemu.Device, error) {
 	addr, b, err := q.addDeviceToBridge(ctx, rngDev.ID, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append RNG-Device %v", err)
+		return devices, fmt.Errorf("failed to append RNG-Device %v", err)
 	}
 	var devno string
 	devno, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append RNG-Device %v", err)
+		return devices, fmt.Errorf("failed to append RNG-Device %v", err)
 	}
 
 	devices = append(devices,
@@ -253,11 +253,11 @@ func (q *qemuS390x) append9PVolume(ctx context.Context, devices []govmmQemu.Devi
 	d := generic9PVolume(volume, false)
 	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append 9p-Volume %v", err)
+		return devices, fmt.Errorf("failed to append 9p-Volume %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append 9p-Volume %v", err)
+		return devices, fmt.Errorf("failed to append 9p-Volume %v", err)
 	}
 	devices = append(devices, d)
 	return devices, nil
@@ -267,11 +267,11 @@ func (q *qemuS390x) appendSCSIController(ctx context.Context, devices []govmmQem
 	d, t := genericSCSIController(enableIOThreads, q.nestedRun)
 	addr, b, err := q.addDeviceToBridge(ctx, d.ID, types.CCW)
 	if err != nil {
-		return devices, nil, fmt.Errorf("Failed to append scsi-controller %v", err)
+		return devices, nil, fmt.Errorf("failed to append scsi-controller %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, nil, fmt.Errorf("Failed to append scsi-controller %v", err)
+		return devices, nil, fmt.Errorf("failed to append scsi-controller %v", err)
 	}
 
 	devices = append(devices, d)
@@ -283,11 +283,11 @@ func (q *qemuS390x) appendVSock(ctx context.Context, devices []govmmQemu.Device,
 	id := fmt.Sprintf("vsock-%d", vsock.ContextID)
 	addr, b, err := q.addDeviceToBridge(ctx, id, types.CCW)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append VSock: %v", err)
+		return devices, fmt.Errorf("failed to append VSock: %v", err)
 	}
 	devno, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		return devices, fmt.Errorf("Failed to append VSock: %v", err)
+		return devices, fmt.Errorf("failed to append VSock: %v", err)
 	}
 	devices = append(devices,
 		govmmQemu.VSOCKDevice{
@@ -304,7 +304,7 @@ func (q *qemuS390x) appendVSock(ctx context.Context, devices []govmmQemu.Device,
 }
 
 func (q *qemuS390x) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
-	return devices, fmt.Errorf("S390x does not support appending a vIOMMU")
+	return devices, fmt.Errorf("s390x does not support appending a vIOMMU")
 }
 
 func (q *qemuS390x) setEndpointDevicePath(endpoint Endpoint, bridgeAddr int, devAddr string) error {
@@ -332,7 +332,7 @@ func (q *qemuS390x) enableProtection() error {
 		return err
 	}
 	if protection != seProtection {
-		return fmt.Errorf("Got unexpected protection %v, only seProtection (Secure Execution) is supported", protection)
+		return fmt.Errorf("got unexpected protection %v, only seProtection (Secure Execution) is supported", protection)
 	}
 
 	q.protection = protection
@@ -361,7 +361,7 @@ func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 	case noneProtection:
 		return devices, firmware, nil
 	default:
-		return devices, firmware, fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+		return devices, firmware, fmt.Errorf("unsupported guest protection technology: %v", q.protection)
 	}
 }
 

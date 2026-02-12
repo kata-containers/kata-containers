@@ -85,7 +85,7 @@ func FindContextID() (*os.File, uint64, error) {
 	}
 
 	vsockFd.Close()
-	return nil, 0, fmt.Errorf("Could not get a unique context ID for the vsock : %s", err)
+	return nil, 0, fmt.Errorf("could not get a unique context ID for the vsock : %s", err)
 }
 
 const (
@@ -105,7 +105,7 @@ const (
 // and mount options
 func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string, fsOptions []string, err error) {
 	if mountPoint == "" {
-		err = fmt.Errorf("Mount point cannot be empty")
+		err = fmt.Errorf("mount point cannot be empty")
 		return
 	}
 
@@ -124,13 +124,13 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 
 		line, err = reader.ReadString('\n')
 		if err == io.EOF {
-			err = fmt.Errorf("Mount %s not found", mountPoint)
+			err = fmt.Errorf("mount %s not found", mountPoint)
 			return
 		}
 
 		fields := strings.Fields(line)
 		if len(fields) != fieldsPerLine {
-			err = fmt.Errorf("Incorrect no of fields (expected %d, got %d)) :%s", fieldsPerLine, len(fields), line)
+			err = fmt.Errorf("incorrect no of fields (expected %d, got %d)) :%s", fieldsPerLine, len(fields), line)
 			return
 		}
 

@@ -53,21 +53,21 @@ func cleanupContainer(ctx context.Context, sandboxID, cid, bundlePath string) er
 func validBundle(containerID, bundlePath string) (string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
-		return "", fmt.Errorf("Missing container ID")
+		return "", fmt.Errorf("missing container ID")
 	}
 
 	// bundle path MUST be provided.
 	if bundlePath == "" {
-		return "", fmt.Errorf("Missing bundle path")
+		return "", fmt.Errorf("missing bundle path")
 	}
 
 	// bundle path MUST be valid.
 	fileInfo, err := os.Stat(bundlePath)
 	if err != nil {
-		return "", fmt.Errorf("Invalid bundle path '%s': %s", bundlePath, err)
+		return "", fmt.Errorf("invalid bundle path '%s': %s", bundlePath, err)
 	}
 	if !fileInfo.IsDir() {
-		return "", fmt.Errorf("Invalid bundle path '%s', it should be a directory", bundlePath)
+		return "", fmt.Errorf("invalid bundle path '%s', it should be a directory", bundlePath)
 	}
 
 	resolved, err := katautils.ResolvePath(bundlePath)

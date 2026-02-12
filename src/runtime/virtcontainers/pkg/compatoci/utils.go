@@ -110,7 +110,7 @@ func SetLogger(logger *logrus.Entry) {
 // ContainerCapabilities return a LinuxCapabilities for virtcontainer
 func ContainerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
 	if s.Process == nil {
-		return specs.LinuxCapabilities{}, fmt.Errorf("ContainerCapabilities, Process is nil")
+		return specs.LinuxCapabilities{}, fmt.Errorf("containerCapabilities, Process is nil")
 	}
 	return containerCapabilities(s)
 }

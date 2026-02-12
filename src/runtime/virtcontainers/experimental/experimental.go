@@ -37,7 +37,7 @@ func Register(feature Feature) error {
 	}
 
 	if _, ok := supportedFeatures[feature.Name]; ok {
-		return fmt.Errorf("Feature %q had been registered before", feature.Name)
+		return fmt.Errorf("feature %q had been registered before", feature.Name)
 	}
 	supportedFeatures[feature.Name] = feature
 	return nil

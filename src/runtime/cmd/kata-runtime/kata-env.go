@@ -402,7 +402,7 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 
 func handleSettings(file *os.File, c *cli.Context) error {
 	if file == nil {
-		return errors.New("Invalid output file specified")
+		return errors.New("invalid output file specified")
 	}
 
 	configFile, ok := c.App.Metadata["configFile"].(string)

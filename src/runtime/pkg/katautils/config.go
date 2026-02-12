@@ -573,7 +573,7 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Invalid hypervisor block storage driver %v specified (supported drivers: %v)", h.BlockDeviceDriver, supportedBlockDrivers)
+	return "", fmt.Errorf("invalid hypervisor block storage driver %v specified (supported drivers: %v)", h.BlockDeviceDriver, supportedBlockDrivers)
 }
 
 func (h hypervisor) blockDeviceAIO() (string, error) {
@@ -589,7 +589,7 @@ func (h hypervisor) blockDeviceAIO() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Invalid hypervisor block storage I/O mechanism  %v specified (supported AIO: %v)", h.BlockDeviceAIO, supportedBlockAIO)
+	return "", fmt.Errorf("invalid hypervisor block storage I/O mechanism  %v specified (supported AIO: %v)", h.BlockDeviceAIO, supportedBlockAIO)
 }
 
 func (h hypervisor) extraMonitorSocket() (govmmQemu.MonitorProtocol, error) {
@@ -605,7 +605,7 @@ func (h hypervisor) extraMonitorSocket() (govmmQemu.MonitorProtocol, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Invalid hypervisor extra monitor socket %v specified (supported values: %v)", h.ExtraMonitorSocket, supportedExtraMonitor)
+	return "", fmt.Errorf("invalid hypervisor extra monitor socket %v specified (supported values: %v)", h.ExtraMonitorSocket, supportedExtraMonitor)
 }
 
 func (h hypervisor) sharedFS() (string, error) {
@@ -621,7 +621,7 @@ func (h hypervisor) sharedFS() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("Invalid hypervisor shared file system %v specified (supported file systems: %v)", h.SharedFS, supportedSharedFS)
+	return "", fmt.Errorf("invalid hypervisor shared file system %v specified (supported file systems: %v)", h.SharedFS, supportedSharedFS)
 }
 
 func (h hypervisor) msize9p() uint32 {
@@ -1093,7 +1093,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 
 	if sharedFS != config.VirtioFS && sharedFS != config.VirtioFSNydus && sharedFS != config.NoSharedFS {
 		return vc.HypervisorConfig{},
-			fmt.Errorf("Cloud Hypervisor does not support %s shared filesystem option", sharedFS)
+			fmt.Errorf("cloud Hypervisor does not support %s shared filesystem option", sharedFS)
 	}
 
 	if (sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus) && h.VirtioFSDaemon == "" {
@@ -1258,7 +1258,7 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 
 	if sharedFS != config.VirtioFS && sharedFS != config.VirtioFSNydus && sharedFS != config.NoSharedFS {
 		return vc.HypervisorConfig{},
-			fmt.Errorf("Stratovirt Hypervisor does not support %s shared filesystem option", sharedFS)
+			fmt.Errorf("stratovirt Hypervisor does not support %s shared filesystem option", sharedFS)
 	}
 
 	if (sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus) && h.VirtioFSDaemon == "" {
@@ -1624,7 +1624,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {
-			return "", config, fmt.Errorf("Unsupported experimental feature %q", f)
+			return "", config, fmt.Errorf("unsupported experimental feature %q", f)
 		}
 		config.Experimental = append(config.Experimental, *feature)
 	}
@@ -1686,7 +1686,7 @@ func decodeConfig(configPath string) (tomlConfig, string, error) {
 	}
 
 	if err != nil {
-		return tomlConf, "", fmt.Errorf("Cannot find usable config file (%v)", err)
+		return tomlConf, "", fmt.Errorf("cannot find usable config file (%v)", err)
 	}
 
 	configData, err := os.ReadFile(resolved)
@@ -1956,13 +1956,13 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 func checkFactoryConfig(config oci.RuntimeConfig) error {
 	if config.FactoryConfig.Template {
 		if config.HypervisorConfig.InitrdPath == "" {
-			return errors.New("Factory option enable_template requires an initrd image")
+			return errors.New("factory option enable_template requires an initrd image")
 		}
 	}
 
 	if config.FactoryConfig.VMCacheNumber > 0 {
 		if config.HypervisorType != vc.QemuHypervisor {
-			return errors.New("VM cache just support qemu")
+			return errors.New("vM cache just support qemu")
 		}
 	}
 

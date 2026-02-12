@@ -60,7 +60,7 @@ func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
 
 		fields := strings.Split(o[len(annotations.FileSystemLayer):], ",")
 		if len(fields) < 2 {
-			return fmt.Errorf("Missing fields in rootfs layer: %q", o)
+			return fmt.Errorf("missing fields in rootfs layer: %q", o)
 		}
 
 		spec.Mounts = append(spec.Mounts, specs.Mount{
@@ -208,7 +208,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		defer span.End()
 
 		if s.sandbox == nil {
-			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
+			return nil, fmt.Errorf("bug: Cannot start the container, since the sandbox hasn't been created")
 		}
 
 		if rootFs.Mounted, err = checkAndMount(s, r); err != nil {

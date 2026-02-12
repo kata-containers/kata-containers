@@ -292,7 +292,7 @@ func (fc *firecracker) getVersionNumber() (string, error) {
 
 	data, err := checkCMD.Output()
 	if err != nil {
-		return "", fmt.Errorf("Running checking FC version command failed: %v", err)
+		return "", fmt.Errorf("running checking FC version command failed: %v", err)
 	}
 
 	return fc.parseVersion(string(data))
@@ -317,7 +317,7 @@ func (fc *firecracker) parseVersion(data string) (string, error) {
 func (fc *firecracker) checkVersion(version string) error {
 	v, err := semver.Make(version)
 	if err != nil {
-		return fmt.Errorf("Malformed firecracker version: %v", err)
+		return fmt.Errorf("malformed firecracker version: %v", err)
 	}
 
 	if v.LT(fcMinSupportedVersion) {
@@ -333,7 +333,7 @@ func (fc *firecracker) waitVMMRunning(ctx context.Context, timeout int) error {
 	defer span.End()
 
 	if timeout < 0 {
-		return fmt.Errorf("Invalid timeout %ds", timeout)
+		return fmt.Errorf("invalid timeout %ds", timeout)
 	}
 
 	timeStart := time.Now()
@@ -343,7 +343,7 @@ func (fc *firecracker) waitVMMRunning(ctx context.Context, timeout int) error {
 		}
 
 		if int(time.Since(timeStart).Seconds()) > timeout {
-			return fmt.Errorf("Failed to connect to firecrackerinstance (timeout %ds)", timeout)
+			return fmt.Errorf("failed to connect to firecrackerinstance (timeout %ds)", timeout)
 		}
 
 		time.Sleep(time.Duration(10) * time.Millisecond)
@@ -594,7 +594,7 @@ func (fc *firecracker) fcSetLogger(ctx context.Context) error {
 	// listen to log fifo file and transfer error info
 	jailedLogFifo, err := fc.fcListenToFifo(fcLogFifo, nil)
 	if err != nil {
-		return fmt.Errorf("Failed setting log: %s", err)
+		return fmt.Errorf("failed setting log: %s", err)
 	}
 
 	fc.fcConfig.Logger = &models.Logger{
@@ -612,7 +612,7 @@ func (fc *firecracker) fcSetMetrics(ctx context.Context) error {
 	// listen to metrics file and transfer error info
 	jailedMetricsFifo, err := fc.fcListenToFifo(fcMetricsFifo, fc.updateMetrics)
 	if err != nil {
-		return fmt.Errorf("Failed setting log: %s", err)
+		return fmt.Errorf("failed setting log: %s", err)
 	}
 
 	fc.fcConfig.Metrics = &models.Metrics{
@@ -637,7 +637,7 @@ func (fc *firecracker) fcListenToFifo(fifoName string, consumer fifoConsumer) (s
 	fcFifoPath := filepath.Join(fc.vmPath, fifoName)
 	fcFifo, err := fifo.OpenFifo(context.Background(), fcFifoPath, syscall.O_CREAT|syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return "", fmt.Errorf("Failed to open/create fifo file %s", err)
+		return "", fmt.Errorf("failed to open/create fifo file %s", err)
 	}
 
 	jailedFifoPath, err := fc.fcJailResource(fcFifoPath, fifoName)
@@ -807,7 +807,7 @@ func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
 	// make sure 'others' don't have access to this socket
 	err = os.Chmod(fc.hybridSocketPath, 0640)
 	if err != nil {
-		return fmt.Errorf("Could not change socket permissions: %v", err)
+		return fmt.Errorf("could not change socket permissions: %v", err)
 	}
 
 	fc.state.set(vmReady)
@@ -1125,7 +1125,7 @@ func (fc *firecracker) HotplugAddDevice(ctx context.Context, devInfo interface{}
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Warn("HotplugAddDevice: unsupported device")
-		return nil, fmt.Errorf("Could not hot add device: unsupported device: %v, type: %v",
+		return nil, fmt.Errorf("could not hot add device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
 }
@@ -1141,7 +1141,7 @@ func (fc *firecracker) HotplugRemoveDevice(ctx context.Context, devInfo interfac
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")
-		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
+		return nil, fmt.Errorf("could not hot remove device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
 }

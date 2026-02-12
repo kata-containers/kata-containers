@@ -96,7 +96,7 @@ type device struct {
 	minor      int
 }
 
-var errMountPointNotFound = errors.New("Mount point not found")
+var errMountPointNotFound = errors.New("mount point not found")
 
 // getDeviceForPath gets the underlying device containing the file specified by path.
 // The device type constitutes the major-minor number of the device and the dest mountPoint for the device
@@ -121,7 +121,7 @@ func getDeviceForPath(path string) (device, error) {
 	var devMinor int
 
 	if path == "" {
-		return device{}, fmt.Errorf("Path cannot be empty")
+		return device{}, fmt.Errorf("path cannot be empty")
 	}
 
 	stat := syscall.Stat_t{}
@@ -225,11 +225,11 @@ func evalMountPath(source, destination string) (string, string, error) {
 
 	absSource, err := filepath.EvalSymlinks(source)
 	if err != nil {
-		return "", "", fmt.Errorf("Could not resolve symlink for source %v", source)
+		return "", "", fmt.Errorf("could not resolve symlink for source %v", source)
 	}
 
 	if err := ensureDestinationExists(absSource, destination); err != nil {
-		return "", "", fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
+		return "", "", fmt.Errorf("could not create destination mount point %v: %v", destination, err)
 	}
 
 	return absSource, destination, nil

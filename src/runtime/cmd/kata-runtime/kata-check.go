@@ -98,7 +98,7 @@ func getCPUInfo(cpuInfoFile string) (string, error) {
 
 	trimmed := strings.TrimSpace(cpus[0])
 	if trimmed == "" {
-		return "", fmt.Errorf("Cannot determine CPU details")
+		return "", fmt.Errorf("cannot determine CPU details")
 	}
 
 	return trimmed, nil
@@ -284,7 +284,7 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 
 	cpuFlags := getCPUFlags(cpuinfo)
 	if cpuFlags == "" {
-		return fmt.Errorf("Cannot find CPU flags")
+		return fmt.Errorf("cannot find CPU flags")
 	}
 
 	// Keep a track of the error count, but don't error until all tests
@@ -308,7 +308,7 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return nil
 	}
 
-	return fmt.Errorf("ERROR: %s", failMessage)
+	return fmt.Errorf("error: %s", failMessage)
 }
 
 var kataCheckCLICommand = cli.Command{
