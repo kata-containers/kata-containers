@@ -339,7 +339,7 @@ mod tests {
             }
         }
 
-        pub fn create_event_handler_context(&self) -> EventHandlerContext {
+        pub fn create_event_handler_context(&self) -> EventHandlerContext<'_> {
             const QSIZE: u16 = 256;
 
             let guest_rxvq = GuestQ::new(GuestAddress(0x0010_0000), &self.mem, QSIZE);
