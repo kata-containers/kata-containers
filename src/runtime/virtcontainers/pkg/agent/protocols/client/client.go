@@ -24,7 +24,6 @@ import (
 	otelLabel "go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	grpcStatus "google.golang.org/grpc/status"
 
 	"github.com/containerd/ttrpc"
@@ -132,7 +131,7 @@ func TraceUnaryClientInterceptor() ttrpc.UnaryClientInterceptor {
 			span.SetAttributes(otelLabel.Key("RPC_ERROR").Bool(true))
 		}
 		// err can be nil, that will return an OK response code
-		if status, _ := status.FromError(err); status != nil {
+		if status, _ := grpcStatus.FromError(err); status != nil {
 			span.SetAttributes(otelLabel.Key("RPC_CODE").Int((int)(status.Code())))
 			span.SetAttributes(otelLabel.Key("RPC_MESSAGE").String(status.Message()))
 		}

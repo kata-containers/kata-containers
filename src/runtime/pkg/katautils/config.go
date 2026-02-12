@@ -22,7 +22,6 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -1900,8 +1899,8 @@ func checkConfig(config oci.RuntimeConfig) error {
 // checkPCIeConfig ensures the PCIe configuration is valid.
 // Only allow one of the following settings for cold-plug:
 // no-port, root-port, switch-port
-func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string, hypervisorType virtcontainers.HypervisorType) error {
-	if hypervisorType != virtcontainers.QemuHypervisor && hypervisorType != virtcontainers.ClhHypervisor {
+func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string, hypervisorType vc.HypervisorType) error {
+	if hypervisorType != vc.QemuHypervisor && hypervisorType != vc.ClhHypervisor {
 		kataUtilsLogger.Warn("Advanced PCIe Topology only available for QEMU/CLH hypervisor, ignoring hot(cold)_vfio_port setting")
 		return nil
 	}
@@ -1917,7 +1916,7 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	if machineType != "q35" && machineType != "virt" {
 		return nil
 	}
-	if hypervisorType == virtcontainers.ClhHypervisor {
+	if hypervisorType == vc.ClhHypervisor {
 		if coldPlug != config.NoPort {
 			return fmt.Errorf("cold-plug not supported on CLH")
 		}

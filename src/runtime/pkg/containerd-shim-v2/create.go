@@ -40,7 +40,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
-	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"tags.cncf.io/container-device-interface/pkg/cdi"
 )
@@ -52,7 +51,7 @@ var defaultStartManagementServerFunc startManagementServerFunc = func(s *service
 	shimLog.Info("management server started")
 }
 
-func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
+func copyLayersToMounts(rootFs *virtcontainers.RootFs, spec *specs.Spec) error {
 	for _, o := range rootFs.Options {
 		if !strings.HasPrefix(o, annotations.FileSystemLayer) {
 			continue
@@ -75,7 +74,7 @@ func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
 }
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
-	rootFs := vc.RootFs{}
+	rootFs := virtcontainers.RootFs{}
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 		rootFs.Source = m.Source
@@ -108,7 +107,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	}
 
 	switch containerType {
-	case vc.PodSandbox, vc.SingleContainer:
+	case virtcontainers.PodSandbox, virtcontainers.SingleContainer:
 		if s.sandbox != nil {
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
@@ -151,7 +150,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		//   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
 		//	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
 		//	a single container.
-		if containerType == vc.PodSandbox {
+		if containerType == virtcontainers.PodSandbox {
 			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateSandboxSizing(ociSpec)
 		} else {
 			s.config.SandboxCPUs, s.config.SandboxMemMB = oci.CalculateContainerSizing(ociSpec)
@@ -203,7 +202,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			defaultStartManagementServerFunc(s, ctx, ociSpec)
 		}
 
-	case vc.PodContainer:
+	case virtcontainers.PodContainer:
 		span, ctx := katatrace.Trace(s.ctx, shimLog, "create", shimTracingTags)
 		defer span.End()
 
@@ -325,7 +324,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 			return false, nil
 		}
 
-		if vc.IsNydusRootFSType(m.Type) {
+		if virtcontainers.IsNydusRootFSType(m.Type) {
 			// if kata + nydus, do not mount
 			return false, nil
 		}
@@ -410,7 +409,7 @@ func configureNonRootHypervisor(runtimeConfig *oci.RuntimeConfig, sandboxId stri
 		}
 	}
 
-	if err = os.Mkdir(userTmpDir, vc.DirMode); err != nil {
+	if err = os.Mkdir(userTmpDir, virtcontainers.DirMode); err != nil {
 		return err
 	}
 	defer func() {

@@ -46,7 +46,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	grpcStatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -586,7 +585,7 @@ func (k *kataAgent) exec(ctx context.Context, sandbox *Sandbox, c Container, cmd
 
 	if _, err := k.sendReq(ctx, req); err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "ExecProcessRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "ExecProcessRequest timed out")
 		}
 		return nil, err
 	}
@@ -630,7 +629,7 @@ func (k *kataAgent) updateInterface(ctx context.Context, ifc *pbTypes.Interface)
 			"resulting-interface": fmt.Sprintf("%+v", resultingInterface),
 		}).WithError(err).Error("update interface request failed")
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "UpdateInterfaceRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "UpdateInterfaceRequest timed out")
 		}
 	}
 	if resultInterface, ok := resultingInterface.(*pbTypes.Interface); ok {
@@ -662,7 +661,7 @@ func (k *kataAgent) updateRoutes(ctx context.Context, routes []*pbTypes.Route) (
 				"resulting-routes": fmt.Sprintf("%+v", resultingRoutes),
 			}).WithError(err).Error("update routes request failed")
 			if err.Error() == context.DeadlineExceeded.Error() {
-				return nil, status.Errorf(codes.DeadlineExceeded, "UpdateRoutesRequest timed out")
+				return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "UpdateRoutesRequest timed out")
 			}
 		}
 		resultRoutes, ok := resultingRoutes.(*grpc.Routes)
@@ -683,7 +682,7 @@ func (k *kataAgent) updateEphemeralMounts(ctx context.Context, storages []*grpc.
 		if _, err := k.sendReq(ctx, storagesReq); err != nil {
 			k.Logger().WithError(err).Error("update mounts request failed")
 			if err.Error() == context.DeadlineExceeded.Error() {
-				return status.Errorf(codes.DeadlineExceeded, "UpdateEphemeralMountsRequest timed out")
+				return grpcStatus.Errorf(codes.DeadlineExceeded, "UpdateEphemeralMountsRequest timed out")
 			}
 			return err
 		}
@@ -708,7 +707,7 @@ func (k *kataAgent) addARPNeighbors(ctx context.Context, neighs []*pbTypes.ARPNe
 				return nil
 			}
 			if err.Error() == context.DeadlineExceeded.Error() {
-				return status.Errorf(codes.DeadlineExceeded, "AddARPNeighborsRequest timed out")
+				return grpcStatus.Errorf(codes.DeadlineExceeded, "AddARPNeighborsRequest timed out")
 			}
 			k.Logger().WithFields(logrus.Fields{
 				"arpneighbors-requested": fmt.Sprintf("%+v", neighs),
@@ -724,7 +723,7 @@ func (k *kataAgent) listInterfaces(ctx context.Context) ([]*pbTypes.Interface, e
 	resultingInterfaces, err := k.sendReq(ctx, req)
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "ListInterfacesRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "ListInterfacesRequest timed out")
 		}
 		return nil, err
 	}
@@ -740,7 +739,7 @@ func (k *kataAgent) listRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	resultingRoutes, err := k.sendReq(ctx, req)
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "ListRoutesRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "ListRoutesRequest timed out")
 		}
 		return nil, err
 	}
@@ -859,7 +858,7 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	_, err = k.sendReq(ctx, req)
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return status.Errorf(codes.DeadlineExceeded, "CreateSandboxRequest timed out")
+			return grpcStatus.Errorf(codes.DeadlineExceeded, "CreateSandboxRequest timed out")
 		}
 		return err
 	}
@@ -966,7 +965,7 @@ func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 	if _, err := k.sendReq(ctx, req); err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return status.Errorf(codes.DeadlineExceeded, "DestroySandboxRequest timed out")
+			return grpcStatus.Errorf(codes.DeadlineExceeded, "DestroySandboxRequest timed out")
 		}
 		return err
 	}
@@ -1499,7 +1498,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	if _, err = k.sendReq(ctx, req); err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "CreateContainerRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "CreateContainerRequest timed out")
 		}
 		return nil, err
 	}
@@ -1975,7 +1974,7 @@ func (k *kataAgent) startContainer(ctx context.Context, sandbox *Sandbox, c *Con
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "StartContainerRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "StartContainerRequest timed out")
 	}
 	return err
 }
@@ -1986,7 +1985,7 @@ func (k *kataAgent) stopContainer(ctx context.Context, sandbox *Sandbox, c Conta
 
 	_, err := k.sendReq(ctx, &grpc.RemoveContainerRequest{ContainerId: c.id})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "RemoveContainerRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "RemoveContainerRequest timed out")
 	}
 	return err
 }
@@ -2005,7 +2004,7 @@ func (k *kataAgent) signalProcess(ctx context.Context, c *Container, processID s
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "SignalProcessRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "SignalProcessRequest timed out")
 	}
 	return err
 }
@@ -2020,7 +2019,7 @@ func (k *kataAgent) winsizeProcess(ctx context.Context, c *Container, processID 
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "TtyWinResizeRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "TtyWinResizeRequest timed out")
 	}
 	return err
 }
@@ -2038,7 +2037,7 @@ func (k *kataAgent) updateContainer(ctx context.Context, sandbox *Sandbox, c Con
 
 	_, err = k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "UpdateContainerRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "UpdateContainerRequest timed out")
 	}
 	return err
 }
@@ -2050,7 +2049,7 @@ func (k *kataAgent) pauseContainer(ctx context.Context, sandbox *Sandbox, c Cont
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "PauseContainerRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "PauseContainerRequest timed out")
 	}
 	return err
 }
@@ -2062,7 +2061,7 @@ func (k *kataAgent) resumeContainer(ctx context.Context, sandbox *Sandbox, c Con
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "ResumeContainerRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "ResumeContainerRequest timed out")
 	}
 	return err
 }
@@ -2089,7 +2088,7 @@ func (k *kataAgent) memHotplugByProbe(ctx context.Context, addr uint64, sizeMB u
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "MemHotplugByProbeRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "MemHotplugByProbeRequest timed out")
 	}
 	return err
 }
@@ -2103,7 +2102,7 @@ func (k *kataAgent) onlineCPUMem(ctx context.Context, cpus uint32, cpuOnly bool)
 
 	_, err := k.sendReq(ctx, req)
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "OnlineCPUMemRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "OnlineCPUMemRequest timed out")
 	}
 	return err
 }
@@ -2117,7 +2116,7 @@ func (k *kataAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Cont
 
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "StatsContainerRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "StatsContainerRequest timed out")
 		}
 		return nil, err
 	}
@@ -2201,7 +2200,7 @@ func (k *kataAgent) check(ctx context.Context) error {
 	_, err := k.sendReq(ctx, &grpc.CheckRequest{})
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return status.Errorf(codes.DeadlineExceeded, "CheckRequest timed out")
+			return grpcStatus.Errorf(codes.DeadlineExceeded, "CheckRequest timed out")
 		}
 		err = fmt.Errorf("failed to Check if grpc server is working: %s", err)
 	}
@@ -2218,7 +2217,7 @@ func (k *kataAgent) waitProcess(ctx context.Context, c *Container, processID str
 	})
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return 0, status.Errorf(codes.DeadlineExceeded, "WaitProcessRequest timed out")
+			return 0, grpcStatus.Errorf(codes.DeadlineExceeded, "WaitProcessRequest timed out")
 		}
 		return 0, err
 	}
@@ -2235,7 +2234,7 @@ func (k *kataAgent) writeProcessStdin(ctx context.Context, c *Container, Process
 
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return 0, status.Errorf(codes.DeadlineExceeded, "WriteStreamRequest timed out")
+			return 0, grpcStatus.Errorf(codes.DeadlineExceeded, "WriteStreamRequest timed out")
 		}
 		return 0, err
 	}
@@ -2249,7 +2248,7 @@ func (k *kataAgent) closeProcessStdin(ctx context.Context, c *Container, Process
 		ExecId:      ProcessID,
 	})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "CloseStdinRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "CloseStdinRequest timed out")
 	}
 	return err
 }
@@ -2259,7 +2258,7 @@ func (k *kataAgent) reseedRNG(ctx context.Context, data []byte) error {
 		Data: data,
 	})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "ReseedRandomDevRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "ReseedRandomDevRequest timed out")
 	}
 	return err
 }
@@ -2267,7 +2266,7 @@ func (k *kataAgent) reseedRNG(ctx context.Context, data []byte) error {
 func (k *kataAgent) removeStaleVirtiofsShareMounts(ctx context.Context) error {
 	_, err := k.sendReq(ctx, &grpc.RemoveStaleVirtiofsShareMountsRequest{})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "removeStaleVirtiofsShareMounts timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "removeStaleVirtiofsShareMounts timed out")
 	}
 	return err
 }
@@ -2502,7 +2501,7 @@ func (k *kataAgent) getGuestDetails(ctx context.Context, req *grpc.GuestDetailsR
 	resp, err := k.sendReq(ctx, req)
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "GuestDetailsRequest request timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "GuestDetailsRequest request timed out")
 		}
 		return nil, err
 	}
@@ -2516,7 +2515,7 @@ func (k *kataAgent) setGuestDateTime(ctx context.Context, tv time.Time) error {
 		Usec: int64(tv.Nanosecond() / 1e3),
 	})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "SetGuestDateTimeRequest request timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "SetGuestDateTimeRequest request timed out")
 	}
 	return err
 }
@@ -2571,7 +2570,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 	if cpReq.FileSize == 0 {
 		_, err := k.sendReq(ctx, cpReq)
 		if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-			return status.Errorf(codes.DeadlineExceeded, "CopyFileRequest timed out")
+			return grpcStatus.Errorf(codes.DeadlineExceeded, "CopyFileRequest timed out")
 		}
 		return err
 	}
@@ -2590,7 +2589,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 
 		if _, err = k.sendReq(ctx, cpReq); err != nil {
 			if err.Error() == context.DeadlineExceeded.Error() {
-				return status.Errorf(codes.DeadlineExceeded, "CopyFileRequest timed out")
+				return grpcStatus.Errorf(codes.DeadlineExceeded, "CopyFileRequest timed out")
 			}
 			return fmt.Errorf("could not send CopyFile request: %v", err)
 		}
@@ -2609,7 +2608,7 @@ func (k *kataAgent) addSwap(ctx context.Context, PCIPath types.PciPath) error {
 
 	_, err := k.sendReq(ctx, &grpc.AddSwapRequest{PCIPath: PCIPath.ToArray()})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "AddSwapRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "AddSwapRequest timed out")
 	}
 	return err
 }
@@ -2638,7 +2637,7 @@ func (k *kataAgent) getOOMEvent(ctx context.Context) (string, error) {
 	result, err := k.sendReq(ctx, req)
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return "", status.Errorf(codes.DeadlineExceeded, "GetOOMEventRequest timed out")
+			return "", grpcStatus.Errorf(codes.DeadlineExceeded, "GetOOMEventRequest timed out")
 		}
 		return "", err
 	}
@@ -2652,7 +2651,7 @@ func (k *kataAgent) getAgentMetrics(ctx context.Context, req *grpc.GetMetricsReq
 	resp, err := k.sendReq(ctx, req)
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "GetMetricsRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "GetMetricsRequest timed out")
 		}
 		return nil, err
 	}
@@ -2664,7 +2663,7 @@ func (k *kataAgent) getIPTables(ctx context.Context, isIPv6 bool) ([]byte, error
 	resp, err := k.sendReq(ctx, &grpc.GetIPTablesRequest{IsIpv6: isIPv6})
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "GetIPTablesRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "GetIPTablesRequest timed out")
 		}
 		return nil, err
 	}
@@ -2679,7 +2678,7 @@ func (k *kataAgent) setIPTables(ctx context.Context, isIPv6 bool, data []byte) e
 	if err != nil {
 		k.Logger().WithError(err).Errorf("setIPTables request to agent failed")
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return status.Errorf(codes.DeadlineExceeded, "SetIPTablesRequest timed out")
+			return grpcStatus.Errorf(codes.DeadlineExceeded, "SetIPTablesRequest timed out")
 		}
 	}
 
@@ -2690,7 +2689,7 @@ func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath str
 	result, err := k.sendReq(ctx, &grpc.VolumeStatsRequest{VolumeGuestPath: volumeGuestPath})
 	if err != nil {
 		if err.Error() == context.DeadlineExceeded.Error() {
-			return nil, status.Errorf(codes.DeadlineExceeded, "VolumeStatsRequest timed out")
+			return nil, grpcStatus.Errorf(codes.DeadlineExceeded, "VolumeStatsRequest timed out")
 		}
 		return nil, err
 	}
@@ -2706,7 +2705,7 @@ func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath str
 func (k *kataAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
 	_, err := k.sendReq(ctx, &grpc.ResizeVolumeRequest{VolumeGuestPath: volumeGuestPath, Size: size})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "ResizeVolumeRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "ResizeVolumeRequest timed out")
 	}
 	return err
 }
@@ -2714,7 +2713,7 @@ func (k *kataAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath strin
 func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
 	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Policy: policy})
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
-		return status.Errorf(codes.DeadlineExceeded, "SetPolicyRequest timed out")
+		return grpcStatus.Errorf(codes.DeadlineExceeded, "SetPolicyRequest timed out")
 	}
 	return err
 }

@@ -20,7 +20,6 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	deviceUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
@@ -1692,7 +1691,7 @@ func (c *Container) removeDrive(ctx context.Context) (err error) {
 
 		devID := c.state.BlockDeviceID
 		err := c.sandbox.devManager.DetachDevice(ctx, devID, c.sandbox)
-		if err != nil && err != manager.ErrDeviceNotAttached {
+		if err != nil && err != deviceManager.ErrDeviceNotAttached {
 			return err
 		}
 
@@ -1703,7 +1702,7 @@ func (c *Container) removeDrive(ctx context.Context) (err error) {
 			}).WithError(err).Error("remove device failed")
 
 			// ignore the device not exist error
-			if err != manager.ErrDeviceNotExist {
+			if err != deviceManager.ErrDeviceNotExist {
 				return err
 			}
 		}
@@ -1731,7 +1730,7 @@ func (c *Container) attachDevices(ctx context.Context) error {
 func (c *Container) detachDevices(ctx context.Context) error {
 	for _, dev := range c.devices {
 		err := c.sandbox.devManager.DetachDevice(ctx, dev.ID, c.sandbox)
-		if err != nil && err != manager.ErrDeviceNotAttached {
+		if err != nil && err != deviceManager.ErrDeviceNotAttached {
 			return err
 		}
 
@@ -1742,7 +1741,7 @@ func (c *Container) detachDevices(ctx context.Context) error {
 			}).WithError(err).Error("remove device failed")
 
 			// ignore the device not exist error
-			if err != manager.ErrDeviceNotExist {
+			if err != deviceManager.ErrDeviceNotExist {
 				return err
 			}
 		}

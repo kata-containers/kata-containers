@@ -23,7 +23,6 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -694,43 +693,43 @@ func TestSandboxCreateAssets(t *testing.T) {
 		{
 			types.FirmwareAsset,
 			map[string]string{
-				annotations.FirmwarePath: filename,
-				annotations.FirmwareHash: assetContentHash,
+				vcAnnotations.FirmwarePath: filename,
+				vcAnnotations.FirmwareHash: assetContentHash,
 			},
 		},
 		{
 			types.HypervisorAsset,
 			map[string]string{
-				annotations.HypervisorPath: filename,
-				annotations.HypervisorHash: assetContentHash,
+				vcAnnotations.HypervisorPath: filename,
+				vcAnnotations.HypervisorHash: assetContentHash,
 			},
 		},
 		{
 			types.ImageAsset,
 			map[string]string{
-				annotations.ImagePath: filename,
-				annotations.ImageHash: assetContentHash,
+				vcAnnotations.ImagePath: filename,
+				vcAnnotations.ImageHash: assetContentHash,
 			},
 		},
 		{
 			types.InitrdAsset,
 			map[string]string{
-				annotations.InitrdPath: filename,
-				annotations.InitrdHash: assetContentHash,
+				vcAnnotations.InitrdPath: filename,
+				vcAnnotations.InitrdHash: assetContentHash,
 			},
 		},
 		{
 			types.JailerAsset,
 			map[string]string{
-				annotations.JailerPath: filename,
-				annotations.JailerHash: assetContentHash,
+				vcAnnotations.JailerPath: filename,
+				vcAnnotations.JailerHash: assetContentHash,
 			},
 		},
 		{
 			types.KernelAsset,
 			map[string]string{
-				annotations.KernelPath: filename,
-				annotations.KernelHash: assetContentHash,
+				vcAnnotations.KernelPath: filename,
+				vcAnnotations.KernelHash: assetContentHash,
 			},
 		},
 	}
@@ -774,7 +773,7 @@ func TestSandboxCreateAssets(t *testing.T) {
 	imagePathData := &testData{
 		assetType: types.ImageAsset,
 		annotations: map[string]string{
-			annotations.ImagePath: "rhel9-os",
+			vcAnnotations.ImagePath: "rhel9-os",
 		},
 	}
 
@@ -1413,13 +1412,13 @@ func TestSandbox_Cgroups(t *testing.T) {
 	}
 	sandboxContainer := ContainerConfig{}
 	sandboxContainer.Annotations = make(map[string]string)
-	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	sandboxContainer.Annotations[vcAnnotations.ContainerTypeKey] = string(PodSandbox)
 
 	emptyJSONLinux := ContainerConfig{
 		CustomSpec: newEmptySpec(),
 	}
 	emptyJSONLinux.Annotations = make(map[string]string)
-	emptyJSONLinux.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	emptyJSONLinux.Annotations[vcAnnotations.ContainerTypeKey] = string(PodSandbox)
 
 	cloneSpec1 := newEmptySpec()
 	cloneSpec1.Linux.CgroupsPath = "/myRuntime/myContainer"
@@ -1427,7 +1426,7 @@ func TestSandbox_Cgroups(t *testing.T) {
 		CustomSpec: cloneSpec1,
 	}
 	successfulContainer.Annotations = make(map[string]string)
-	successfulContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	successfulContainer.Annotations[vcAnnotations.ContainerTypeKey] = string(PodSandbox)
 
 	// nolint: govet
 	tests := []struct {
