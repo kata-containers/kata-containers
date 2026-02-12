@@ -343,9 +343,6 @@ download_with_cache() {
 		# Cache miss or verification failed - download from upstream
 		info "Downloading ${artifact_name} from upstream..."
 		download_upstream "${upstream_url}" "${tarball_path}" "${checksum_url}" "${gpg_sig_url}"
-
-		# Push to cache for future use (include verification files)
-		push_to_cache "${artifact_name}" "${version}" "${tarball_path}"
 	else
 		info "ORAS not available, downloading directly from upstream"
 		download_upstream "${upstream_url}" "${tarball_path}" "${checksum_url}" "${gpg_sig_url}"

@@ -123,13 +123,16 @@ cache_component() {
 	trap "rm -rf ${tmpdir}" EXIT
 
 	info "Downloading ${component} from upstream using ORAS cache helper..."
-	export PUSH_TO_REGISTRY="yes"
 	local tarball_path
 	tarball_path=$(download_component "${component}" "${tmpdir}")
 
 	if [[ ! -f "${tarball_path}" ]]; then
 		die "Failed to download ${component}"
 	fi
+
+	info "Pushing ${component} ${version} to ORAS cache..."
+	export PUSH_TO_REGISTRY="yes"
+	push_to_cache "${component}" "${version}" "${tarball_path}"
 
 	info "Successfully cached ${component} version ${version}"
 }
