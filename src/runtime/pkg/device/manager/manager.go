@@ -59,15 +59,11 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 		vhostUserReconnectTimeout: vhostUserReconnect,
 		devices:                   make(map[string]api.Device),
 	}
-	if blockDriver == config.VirtioMmio {
-		dm.blockDriver = config.VirtioMmio
-	} else if blockDriver == config.VirtioBlock {
-		dm.blockDriver = config.VirtioBlock
-	} else if blockDriver == config.Nvdimm {
-		dm.blockDriver = config.Nvdimm
-	} else if blockDriver == config.VirtioBlockCCW {
-		dm.blockDriver = config.VirtioBlockCCW
-	} else {
+
+	switch blockDriver {
+	case config.VirtioMmio, config.VirtioBlock, config.Nvdimm, config.VirtioBlockCCW:
+		dm.blockDriver = blockDriver
+	default:
 		dm.blockDriver = config.VirtioSCSI
 	}
 

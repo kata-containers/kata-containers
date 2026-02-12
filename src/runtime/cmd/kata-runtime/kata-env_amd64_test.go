@@ -56,9 +56,10 @@ func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
 	assert.NotEmpty(archRequiredKernelModules)
 
 	cpuType = getCPUtype()
-	if cpuType == cpuTypeIntel {
+	switch cpuType {
+	case cpuTypeIntel:
 		assert.Equal(archRequiredCPUFlags["vmx"], "Virtualization support")
-	} else if cpuType == cpuTypeAMD {
+	case cpuTypeAMD:
 		assert.Equal(archRequiredCPUFlags["svm"], "Virtualization support")
 	}
 

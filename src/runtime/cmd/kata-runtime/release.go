@@ -94,11 +94,12 @@ func releaseURLIsValid(url string) error {
 func getReleaseURL(currentVersion semver.Version) (url string, err error) {
 	major := currentVersion.Major
 
-	if major == 0 {
+	switch major {
+	case 0:
 		return "", fmt.Errorf("invalid current version: %v", currentVersion)
-	} else if major == 1 {
+	case 1:
 		url = kataLegacyReleaseURL
-	} else {
+	default:
 		url = kataReleaseURL
 	}
 

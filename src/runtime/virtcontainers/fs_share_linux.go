@@ -693,17 +693,17 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			f.Logger().Error("malformed block drive")
 			return nil, fmt.Errorf("malformed block drive")
 		}
-		switch {
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
+		switch f.sandbox.config.HypervisorConfig.BlockDeviceDriver {
+		case config.VirtioMmio:
 			rootfsStorage.Driver = kataMmioBlkDevType
 			rootfsStorage.Source = blockDrive.VirtPath
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
+		case config.VirtioBlockCCW:
 			rootfsStorage.Driver = kataBlkCCWDevType
 			rootfsStorage.Source = blockDrive.DevNo
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
+		case config.VirtioBlock:
 			rootfsStorage.Driver = kataBlkDevType
 			rootfsStorage.Source = blockDrive.PCIPath.String()
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
+		case config.VirtioSCSI:
 			rootfsStorage.Driver = kataSCSIDevType
 			rootfsStorage.Source = blockDrive.SCSIAddr
 		default:
