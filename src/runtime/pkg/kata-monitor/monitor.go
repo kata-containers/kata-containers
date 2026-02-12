@@ -206,14 +206,14 @@ func (km *KataMonitor) ListSandboxes(w http.ResponseWriter, r *http.Request) {
 
 func listSandboxesText(sandboxes []string, w http.ResponseWriter) {
 	for _, s := range sandboxes {
-		w.Write([]byte(fmt.Sprintf("%s\n", s)))
+		fmt.Fprintf(w, "%s\n", s)
 	}
 }
 func listSandboxesHtml(sandboxes []string, w http.ResponseWriter) {
 	w.Write([]byte("<h1>Sandbox list</h1>\n"))
 	w.Write([]byte("<ul>\n"))
 	for _, s := range sandboxes {
-		w.Write([]byte(fmt.Sprintf("<li>%s: <a href='/debug/pprof/?sandbox=%s'>pprof</a>, <a href='/metrics?sandbox=%s'>metrics</a>, <a href='/agent-url?sandbox=%s'>agent-url</a></li>\n", s, s, s, s)))
+		fmt.Fprintf(w, "<li>%s: <a href='/debug/pprof/?sandbox=%s'>pprof</a>, <a href='/metrics?sandbox=%s'>metrics</a>, <a href='/agent-url?sandbox=%s'>agent-url</a></li>\n", s, s, s, s)
 	}
 	w.Write([]byte("</ul>\n"))
 }
