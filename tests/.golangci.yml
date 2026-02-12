@@ -1,34 +1,39 @@
-# Copyright (c) 2017 Intel Corporation
-#
 # SPDX-License-Identifier: Apache-2.0
 
+
+version: "2"
 run:
   concurrency: 4
-  deadline: 600s
-
-issues:
-  exclude-dirs:
-    - vendor
-  exclude-files:
-    - ".*\\.pb\\.go$"
-
 linters:
-  disable-all: true
+  default: none
   enable:
     - gocyclo
-    - gofmt
-    - gosimple
     - govet
     - ineffassign
     - misspell
     - staticcheck
-    - typecheck
     - unused
-
-linters-settings:
-  gocyclo:
-    min_complexity: 15
-  unused:
-    check-exported: true
-  govet:
-    enable:
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - .*\.pb\.go$
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    generated: lax
+    paths:
+      - .*\.pb\.go$
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
