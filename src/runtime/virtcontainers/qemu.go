@@ -814,18 +814,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	// Deduce the right values for mem-reserve and pref-64-reserve memory regions
 	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory()
 
-	// The default OVMF MMIO aperture is too small for some PCIe devices
-	// with huge BARs so we need to increase it.
-	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
-	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
-		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
-		fwCfg := govmmQemu.FwCfg{
-			Name: "opt/ovmf/X-PciMmio64Mb",
-			Str:  pciMmio64Mb,
-		}
-		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
-	}
-
 	// Get the number of hot(cold)-pluggable ports needed from the provided
 	// VFIO devices
 	var numOfPluggablePorts uint32 = 0
