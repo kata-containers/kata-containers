@@ -1504,7 +1504,7 @@ func (c *Container) update(ctx context.Context, resources specs.LinuxResources) 
 		return err
 	}
 
-	if state := c.state.State; !(state == types.StateRunning || state == types.StateReady) {
+	if state := c.state.State; state != types.StateRunning && state != types.StateReady {
 		return fmt.Errorf("container(%s) not running or ready, impossible to update", state)
 	}
 
@@ -1682,7 +1682,7 @@ func (c *Container) plugDevice(ctx context.Context, devicePath string) error {
 
 // isDriveUsed checks if a drive has been used for container rootfs
 func (c *Container) isDriveUsed() bool {
-	return !(c.state.Fstype == "")
+	return c.state.Fstype != ""
 }
 
 func (c *Container) removeDrive(ctx context.Context) (err error) {

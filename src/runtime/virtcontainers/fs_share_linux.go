@@ -325,7 +325,8 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 				return err
 			}
 
-			if !(info.Mode().IsRegular() || info.Mode().IsDir() || (info.Mode()&os.ModeSymlink) == os.ModeSymlink) {
+			mode := info.Mode()
+			if !mode.IsRegular() && !mode.IsDir() && mode&os.ModeSymlink != os.ModeSymlink {
 				f.Logger().WithField("ignored-file", srcPath).Debug("Ignoring file as FS sharing not supported")
 				if srcPath == srcRoot {
 					// Ignore the mount if this is not a regular file (excludes socket, device, ...) as it cannot be handled by

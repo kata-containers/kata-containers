@@ -622,7 +622,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	// memory.
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
 		q.config.FileBackedMemRootDir != "" {
-		if !(q.config.BootToBeTemplate || q.config.BootFromTemplate) {
+		if !q.config.BootToBeTemplate && !q.config.BootFromTemplate {
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
 			return errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")

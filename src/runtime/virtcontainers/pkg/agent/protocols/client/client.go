@@ -456,7 +456,7 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 func RemoteSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 
 	s := strings.Split(sock, ":")
-	if !(len(s) == 2 && s[0] == RemoteSockScheme) {
+	if len(s) != 2 || s[0] != RemoteSockScheme {
 		return nil, fmt.Errorf("failed to parse remote sock: %q", sock)
 	}
 	socketPath := s[1]
