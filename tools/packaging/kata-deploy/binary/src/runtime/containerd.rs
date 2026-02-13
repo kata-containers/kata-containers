@@ -25,17 +25,31 @@ struct ContainerdRuntimeParams {
     snapshotter: Option<String>,
 }
 
+/// Plugin ID for CRI runtime in containerd config v3 (version = 3).
+const CONTAINERD_V3_RUNTIME_PLUGIN_ID: &str = "\"io.containerd.cri.v1.runtime\"";
+/// Plugin ID for CRI in containerd config v2 (version = 2).
+const CONTAINERD_V2_CRI_PLUGIN_ID: &str = "\"io.containerd.grpc.v1.cri\"";
+/// Legacy plugin key when config has no version (pre-v2).
+const CONTAINERD_LEGACY_CRI_PLUGIN_ID: &str = "cri";
+/// Plugin ID for CRI images in containerd config v3 (version = 3).
+const CONTAINERD_CRI_IMAGES_PLUGIN_ID: &str = "\"io.containerd.cri.v1.images\"";
+
 fn get_containerd_pluginid(config_file: &str) -> Result<&'static str> {
     let content = fs::read_to_string(config_file)
         .with_context(|| format!("Failed to read containerd config file: {}", config_file))?;
 
     if content.contains("version = 3") {
-        Ok("\"io.containerd.cri.v1.runtime\"")
+        Ok(CONTAINERD_V3_RUNTIME_PLUGIN_ID)
     } else if content.contains("version = 2") {
-        Ok("\"io.containerd.grpc.v1.cri\"")
+        Ok(CONTAINERD_V2_CRI_PLUGIN_ID)
     } else {
-        Ok("cri")
+        Ok(CONTAINERD_LEGACY_CRI_PLUGIN_ID)
     }
+}
+
+/// True when the containerd config is v3 (version = 3), i.e. we use the split CRI plugins.
+fn is_containerd_v3_config(pluginid: &str) -> bool {
+    pluginid == CONTAINERD_V3_RUNTIME_PLUGIN_ID
 }
 
 fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
@@ -95,6 +109,26 @@ fn write_containerd_runtime_config(
             &format!("{runtime_table}.snapshotter"),
             snapshotter,
         )?;
+        // In containerd config v3 the CRI plugin is split into runtime and images,
+        // and setting the snapshotter only on the runtime plugin is not enough for image
+        // pull/prepare.
+        //
+        // The images plugin must have runtime_platform.<runtime>.snapshotter so it
+        // uses the correct snapshotter per runtime (e.g. nydus, erofs).
+        //
+        // A PR on the containerd side is open so we can rely on the runtime plugin
+        // snapshotter alone: https://github.com/containerd/containerd/pull/12836
+        if is_containerd_v3_config(pluginid) {
+            toml_utils::set_toml_value(
+                config_file,
+                &format!(
+                    ".plugins.{}.runtime_platform.\"{}\".snapshotter",
+                    CONTAINERD_CRI_IMAGES_PLUGIN_ID,
+                    params.runtime_name
+                ),
+                snapshotter,
+            )?;
+        }
     }
 
     Ok(())
@@ -232,6 +266,7 @@ pub async fn configure_custom_containerd_runtime(
     };
 
     write_containerd_runtime_config(&configuration_file, pluginid, &params)?;
+
     Ok(())
 }
 
