@@ -1569,7 +1569,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 
 	// Sandbox is responsible to update VM resources needed by Containers
 	// Update resources after having added containers to the sandbox, since
-	// container status is requiered to know if more resources should be added.
+	// container status is required to know if more resources should be added.
 	if err = s.updateResources(ctx); err != nil {
 		return nil, err
 	}
