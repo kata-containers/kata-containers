@@ -36,6 +36,7 @@ RUN apt-get update && \
 		g++ \
 		gcc \
 		git \
+		gnupg \
 		libssl-dev \
 		make \
 		musl-tools \
