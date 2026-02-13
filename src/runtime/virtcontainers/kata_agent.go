@@ -360,15 +360,11 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 }
 
 func (k *kataAgent) handleTraceSettings(config KataAgentConfig) bool {
-	disableVMShutdown := false
-
-	if config.Trace {
-		// Agent tracing requires that the agent be able to shutdown
-		// cleanly. This is the only scenario where the agent is
-		// responsible for stopping the VM: normally this is handled
-		// by the runtime.
-		disableVMShutdown = true
-	}
+	// Agent tracing requires that the agent be able to shutdown
+	// cleanly. This is the only scenario where the agent is
+	// responsible for stopping the VM: normally this is handled
+	// by the runtime.
+	disableVMShutdown := config.Trace
 
 	return disableVMShutdown
 }

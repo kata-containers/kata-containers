@@ -1381,10 +1381,7 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 	defer span.End()
 
 	pid := clh.state.PID
-	pidRunning := true
-	if pid == 0 {
-		pidRunning = false
-	}
+	pidRunning := pid != 0
 
 	defer func() {
 		clh.Logger().Debug("Cleanup VM")
