@@ -15,7 +15,7 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 
-use containerd_shim_protos::events::task::TaskStart;
+use containerd_shim_protos::events::task::{TaskCreate, TaskStart};
 use hypervisor::{
     utils::{create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user},
     Param,
@@ -482,6 +482,7 @@ impl RuntimeHandlerManager {
                 .await
                 .context("start sandbox in task handler")?;
 
+            let bundle = container_config.bundle.clone();
             let container_id = container_config.container_id.clone();
             let shim_pid = instance
                 .container_manager
@@ -502,6 +503,19 @@ impl RuntimeHandlerManager {
                     error!(sl!(), "sandbox wait process error: {:?}", e);
                 }
             });
+
+            let msg_sender = self.inner.read().await.msg_sender.clone();
+            let event = TaskCreate {
+                container_id,
+                bundle,
+                pid,
+                ..Default::default()
+            };
+            let msg = Message::new(Action::Event(Arc::new(event)));
+            msg_sender
+                .send(msg)
+                .await
+                .context("send task create event")?;
 
             Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
