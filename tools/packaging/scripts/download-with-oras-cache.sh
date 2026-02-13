@@ -301,34 +301,38 @@ download_with_cache() {
 					if [[ "${tarball_name}" != gperf-*.tar.gz ]]; then
 						die "GPG verification is only supported for gperf (tarball gperf-*.tar.gz), got: ${tarball_name}"
 					fi
-					# GPG signature file exists - import cached key if available
+					# GPG signature file exists - import cached key and verify
 					if [[ -f "${tarball_name}.gpg-keyring" ]]; then
-						# Import GPG key from cached keyring (no internet needed)
-						gpg --import "${tarball_name}.gpg-keyring" >&2 2>/dev/null || true
-						info "Imported GPG key from cache"
-					fi
-					local key_available="no"
-					for key in "${GPERF_GPG_KEYS[@]}"; do
-						if gpg --list-keys "${key}" &>/dev/null; then
-							key_available="yes"
-							break
+						# Use a temporary GPG home so import works in CI (default keyring may be read-only).
+						# Use --homedir to avoid mutating the environment; trap guarantees cleanup on any return.
+						local gpg_home
+						gpg_home=$(mktemp -d)
+						trap '[[ -n "${gpg_home:-}" ]] && { rm -rf "${gpg_home}" || true; }' RETURN
+						if gpg --homedir "${gpg_home}" --import "${tarball_name}.gpg-keyring" >&2 2>/dev/null; then
+							info "Imported GPG key from cache"
+							if gpg --homedir "${gpg_home}" --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
+								info "GPG signature verified for cached ${artifact_name}"
+								popd > /dev/null
+								echo "${tarball_path}"
+								return 0
+							else
+								warn "GPG verification failed for cached ${artifact_name}, downloading from upstream"
+							fi
+						else
+							warn "Failed to import GPG key from cache, downloading from upstream"
 						fi
-					done
-					if [[ "${key_available}" == "yes" ]]; then
+						popd > /dev/null
+					else
+						# No cached keyring: try default keyring (e.g. developer has key installed)
+						warn "No GPG keyring in cache for ${artifact_name}, trying default keyring"
 						if gpg --verify "${tarball_name}.sig" "${tarball_name}" >&2 2>/dev/null; then
-							info "GPG signature verified for cached ${artifact_name}"
+							info "GPG signature verified for cached ${artifact_name} using default keyring"
 							popd > /dev/null
 							echo "${tarball_path}"
 							return 0
-						else
-							warn "GPG verification failed for cached ${artifact_name}, downloading from upstream"
-							popd > /dev/null
 						fi
-					else
-						# Key not available (no cached keyring and not imported locally)
-						warn "GPG key not available, cannot verify ${artifact_name}"
+						warn "GPG verification with default keyring failed for ${artifact_name}, downloading from upstream"
 						popd > /dev/null
-						# Fall through to download from upstream
 					fi
 				else
 					# No verification file, trust the cache
