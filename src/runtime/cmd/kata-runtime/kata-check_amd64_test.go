@@ -348,6 +348,15 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	defer func() {
 		os.Remove(denylistModuleConf)
+		// reload removed modules
+		for mod := range archRequiredKernelModules {
+			cmd := exec.Command(modProbeCmd, mod)
+			if output, err := cmd.CombinedOutput(); err == nil {
+				kataLog.WithField("output", string(output)).Info("module loaded")
+			} else {
+				kataLog.WithField("output", string(output)).Warn("failed to load module")
+			}
+		}
 	}()
 
 	// remove the modules to force a failure
