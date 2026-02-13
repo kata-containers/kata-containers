@@ -148,7 +148,7 @@ func findVhostUserNetSocketPath(netInfo NetworkInfo) (string, error) {
 
 	// Check for socket file existence at known location.
 	for _, addr := range netInfo.Addrs {
-		socketPath := fmt.Sprintf(hostSocketSearchPath, addr.IPNet.IP)
+		socketPath := fmt.Sprintf(hostSocketSearchPath, addr.IP)
 		if _, err := os.Stat(socketPath); err == nil {
 			return socketPath, nil
 		}

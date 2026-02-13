@@ -1770,10 +1770,10 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 		return errors.New("net Pair to be added is nil, needed to get TAP file descriptors")
 	}
 
-	if len(netPair.TapInterface.VMFds) == 0 {
+	if len(netPair.VMFds) == 0 {
 		return errors.New("The file descriptors for the network pair are not present")
 	}
-	clh.netDevicesFiles[mac] = netPair.TapInterface.VMFds
+	clh.netDevicesFiles[mac] = netPair.VMFds
 
 	netRateLimiterConfig := clh.getNetRateLimiterConfig()
 

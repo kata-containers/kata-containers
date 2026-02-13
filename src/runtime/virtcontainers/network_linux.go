@@ -293,7 +293,7 @@ func (n *LinuxNetwork) endpointAlreadyAdded(netInfo *NetworkInfo) bool {
 		}
 		pair := ep.NetworkPair()
 		// Existing virtual endpoints
-		if pair != nil && (pair.TapInterface.Name == netInfo.Iface.Name || pair.TapInterface.TAPIface.Name == netInfo.Iface.Name || pair.VirtIface.Name == netInfo.Iface.Name) {
+		if pair != nil && (pair.Name == netInfo.Iface.Name || pair.TAPIface.Name == netInfo.Iface.Name || pair.VirtIface.Name == netInfo.Iface.Name) {
 			return true
 		}
 	}
@@ -1299,7 +1299,7 @@ func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 	switch ep := endpoint.(type) {
 	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
 		netPair := endpoint.NetworkPair()
-		linkName = netPair.TapInterface.TAPIface.Name
+		linkName = netPair.TAPIface.Name
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
 	default:
@@ -1467,7 +1467,7 @@ func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 			}
 			return addHTBQdisc(link.Attrs().Index, maxRate)
 		case NetXConnectMacVtapModel, NetXConnectNoneModel:
-			linkName = netPair.TapInterface.TAPIface.Name
+			linkName = netPair.TAPIface.Name
 		default:
 			return fmt.Errorf("unsupported inter-networking model %v for adding tx rate limiter", netPair.NetInterworkingModel)
 		}
@@ -1502,7 +1502,7 @@ func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 func removeHTBQdisc(linkName string) error {
 	link, err := netlink.LinkByName(linkName)
 	if err != nil {
-		return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+		return fmt.Errorf("get link %s by name failed: %v", linkName, err)
 	}
 
 	qdiscs, err := netlink.QdiscList(link)
@@ -1529,7 +1529,7 @@ func removeRxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 	switch ep := endpoint.(type) {
 	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
 		netPair := endpoint.NetworkPair()
-		linkName = netPair.TapInterface.TAPIface.Name
+		linkName = netPair.TAPIface.Name
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
 	default:
@@ -1560,7 +1560,7 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 			}
 			return nil
 		case NetXConnectMacVtapModel, NetXConnectNoneModel:
-			linkName = netPair.TapInterface.TAPIface.Name
+			linkName = netPair.TAPIface.Name
 		}
 	case *MacvtapEndpoint, *TapEndpoint:
 		linkName = endpoint.Name()
@@ -1571,7 +1571,7 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 	if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
 		link, err := netlink.LinkByName(linkName)
 		if err != nil {
-			return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+			return fmt.Errorf("get link %s by name failed: %v", linkName, err)
 		}
 
 		if err := removeRedirectTCFilter(link); err != nil {
@@ -1591,7 +1591,7 @@ func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 		// remove ifb interface
 		ifbLink, err := netlink.LinkByName("ifb0")
 		if err != nil {
-			return fmt.Errorf("Get link %s by name failed: %v", linkName, err)
+			return fmt.Errorf("get link %s by name failed: %v", linkName, err)
 		}
 
 		if err := netHandle.LinkSetDown(ifbLink); err != nil {

@@ -937,7 +937,7 @@ func (fc *firecracker) fcAddNetDevice(ctx context.Context, endpoint Endpoint) {
 
 	// VMFds are not used by Firecracker, as it opens the tuntap
 	// device by its name.  Let's just close those.
-	for _, f := range endpoint.NetworkPair().TapInterface.VMFds {
+	for _, f := range endpoint.NetworkPair().VMFds {
 		f.Close()
 	}
 
@@ -987,7 +987,7 @@ func (fc *firecracker) fcAddNetDevice(ctx context.Context, endpoint Endpoint) {
 	ifaceCfg := &models.NetworkInterface{
 		GuestMac:      endpoint.HardwareAddr(),
 		IfaceID:       &ifaceID,
-		HostDevName:   &endpoint.NetworkPair().TapInterface.TAPIface.Name,
+		HostDevName:   &endpoint.NetworkPair().TAPIface.Name,
 		RxRateLimiter: &rxRateLimiter,
 		TxRateLimiter: &txRateLimiter,
 	}

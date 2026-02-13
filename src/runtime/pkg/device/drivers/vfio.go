@@ -139,7 +139,7 @@ func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceRece
 		}
 	}()
 
-	if device.GenericDevice.DeviceInfo.ColdPlug {
+	if device.DeviceInfo.ColdPlug {
 		// nothing to detach, device was cold plugged
 		deviceLogger().WithFields(logrus.Fields{
 			"device-group": device.DeviceInfo.HostPath,
