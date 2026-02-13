@@ -30,9 +30,9 @@ install_oras_script="${script_dir}/../kata-deploy/local-build/dockerbuild/instal
 
 # ORAS configuration
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
-# Default to upstream kata-containers org to match cached-artefacts pattern
-# Result: ghcr.io/kata-containers/cached-tarballs/<component>:<version>
-ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
+# Default to repo-scoped path: ghcr.io/<owner>/<repo>/cached-tarballs/
+# GITHUB_REPOSITORY in CI is "owner/repo" (e.g. kata-containers/kata-containers). Same as push workflow.
+ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-${GITHUB_REPOSITORY:-kata-containers/kata-containers}}"
 # Reuse PUSH_TO_REGISTRY to control cache pushing
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-no}"
 
@@ -454,7 +454,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 			echo ""
 			echo "Environment variables:"
 			echo "  ARTEFACT_REGISTRY          - Registry to use (default: ghcr.io)"
-			echo "  ARTEFACT_REPOSITORY        - Repository org/path (default: kata-containers)"
+			echo "  ARTEFACT_REPOSITORY        - Repository org/path (default: GITHUB_REPOSITORY or kata-containers/kata-containers)"
 			echo "  PUSH_TO_REGISTRY           - Set to 'yes' to push new artifacts to cache"
 			echo "  ARTEFACT_REGISTRY_USERNAME - Username for registry (required for push)"
 			echo "  ARTEFACT_REGISTRY_PASSWORD - Password for registry (required for push)"

@@ -1,6 +1,10 @@
 # Push gperf and busybox tarballs to the ORAS cache (ghcr.io) so that
 # download-with-oras-cache.sh can pull them instead of hitting upstream.
 # Runs when versions.yaml changes on main (e.g. after a PR merge) or manually.
+#
+# We use ORAS (same as kata-deploy-binaries.sh for cached-artefacts). GITHUB_TOKEN
+# can only write to the repository's package namespace, so we use
+# ARTEFACT_REPOSITORY=${{ github.repository }} (ghcr.io/owner/repo/cached-tarballs/).
 name: CI | Push ORAS tarball cache
 on:
   push:
@@ -38,6 +42,6 @@ jobs:
         run: ./tools/packaging/scripts/populate-oras-tarball-cache.sh all
         env:
           ARTEFACT_REGISTRY: ghcr.io
-          ARTEFACT_REPOSITORY: kata-containers
+          ARTEFACT_REPOSITORY: ${{ github.repository }}
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
