@@ -599,6 +599,7 @@ impl AgentPolicy {
         let mut yaml_string = String::new();
         for i in 0..self.resources.len() {
             let annotation = self.resources[i].generate_initdata_anno(self);
+            yaml_string += "---\n";
             yaml_string += &self.resources[i].serialize(&annotation);
         }
 
