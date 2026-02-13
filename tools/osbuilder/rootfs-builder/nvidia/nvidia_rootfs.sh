@@ -201,9 +201,8 @@ chisseled_compute() {
 	cp -aL "${stage_one}/${libdir}"/ld-linux-* "${libdir}"/.
 
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
-	cp -a "${stage_one}/${libdir}"/libnvidia-ml.so.*  lib/"${machine_arch}"-linux-gnu/.
+	cp -a "${stage_one}/${libdir}"/libnvidia-*        lib/"${machine_arch}"-linux-gnu/.
 	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
-	cp -a "${stage_one}/${libdir}"/libnvidia-cfg.so.* lib/"${machine_arch}"-linux-gnu/.
 
 	# basic GPU admin tools
 	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.

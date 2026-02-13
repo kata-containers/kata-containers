@@ -60,12 +60,12 @@ install_userspace_components() {
 	eval "${APT_INSTALL}" nvidia-imex nvidia-firmware    \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
-		libnvidia-nscq
+		libnvidia-nscq libnvidia-compute nvidia-settings
 
 	apt-mark hold nvidia-imex nvidia-firmware            \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
-		libnvidia-nscq
+		libnvidia-nscq libnvidia-compute nvidia-settings
 }
 
 setup_apt_repositories() {
