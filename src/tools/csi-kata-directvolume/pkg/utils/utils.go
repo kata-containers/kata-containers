@@ -79,7 +79,7 @@ func MkPathIfNotExit(path string) (*string, error) {
 		return nil, errors.New("stat path failed")
 	} else if !exist {
 		if err := os.MkdirAll(path, PERM); err != nil {
-			return nil, errors.New("mkdir all failed.")
+			return nil, errors.New("mkdir all failed")
 		}
 		klog.Infof("mkdir full path successfully")
 	}
@@ -94,7 +94,7 @@ func MakeFullPath(path string) error {
 			return errors.New("stat path failed with not exist")
 		}
 		if err := os.MkdirAll(path, PERM); err != nil {
-			return errors.New("mkdir all failed.")
+			return errors.New("mkdir all failed")
 		}
 	}
 
