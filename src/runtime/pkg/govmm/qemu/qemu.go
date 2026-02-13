@@ -496,8 +496,8 @@ type TdxQomObject struct {
 	Debug                 *bool         `json:"debug,omitempty"`
 }
 
-func (this *SocketAddress) String() string {
-	b, err := json.Marshal(*this)
+func (s *SocketAddress) String() string {
+	b, err := json.Marshal(*s)
 
 	if err != nil {
 		log.Fatalf("Unable to marshal SocketAddress object: %s", err.Error())
@@ -507,8 +507,8 @@ func (this *SocketAddress) String() string {
 	return string(b)
 }
 
-func (this *TdxQomObject) String() string {
-	b, err := json.Marshal(*this)
+func (t *TdxQomObject) String() string {
+	b, err := json.Marshal(*t)
 
 	if err != nil {
 		log.Fatalf("Unable to marshal TDX QOM object: %s", err.Error())
