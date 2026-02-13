@@ -15,7 +15,7 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 
-use containerd_shim_protos::events::task::{TaskCreate, TaskStart};
+use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskStart};
 use hypervisor::{
     utils::{create_dir_all_with_inherit_owner, create_vmm_user, remove_vmm_user},
     Param,
@@ -596,6 +596,20 @@ impl RuntimeHandlerManager {
             }
             TaskRequest::DeleteProcess(process_id) => {
                 let resp = cm.delete_process(&process_id).await.context("do delete")?;
+                if process_id.process_type == ProcessType::Container {
+                    let event = TaskDelete {
+                        id: process_id.container_id().to_string(),
+                        pid: resp.pid.pid,
+                        exit_status: resp.exit_status as u32,
+                        ..Default::default()
+                    };
+                    let msg = Message::new(Action::Event(Arc::new(event)));
+                    msg_sender
+                        .send(msg)
+                        .await
+                        .context("send task delete event")?;
+                }
+
                 Ok(TaskResponse::DeleteProcess(resp))
             }
             TaskRequest::ExecProcess(req) => {
