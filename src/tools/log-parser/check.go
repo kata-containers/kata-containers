@@ -24,7 +24,7 @@ func checkValid(value string) error {
 	}
 
 	for _, ch := range value {
-		if !(unicode.IsPrint(ch) || unicode.IsSpace(ch)) {
+		if !unicode.IsPrint(ch) && !unicode.IsSpace(ch) {
 			return fmt.Errorf("character %v (%x) in value %v not printable", ch, ch, value)
 		}
 	}
