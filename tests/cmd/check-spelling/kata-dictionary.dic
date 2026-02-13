@@ -1,4 +1,4 @@
-409
+417
 ACPI/AB
 ACS/AB
 API/AB
@@ -93,6 +93,7 @@ Mellanox/B
 Minikube/B
 MonitorTest/A
 NEMU/AB
+NFD/AB
 NIC/AB
 NVDIMM/AB
 NVIDIA/A
@@ -134,10 +135,14 @@ RBAC/AB
 RDMA/AB
 RHEL/B
 RNG/AB
+RuntimeClass/B
+RuntimeClasses/B
 Rustlang/B
 SCSI/AB
 SDK/AB
+SEL/AB
 SELinux/B
+SEV-SNP/B
 SHA/AB
 SLES/B
 SPDX/AB
@@ -153,6 +158,7 @@ Submodule/A
 Sysbench/B
 TBD/AB
 TDX
+TEE/AB
 TOC/AB
 TOML/AB
 TTY/AB
@@ -306,6 +312,8 @@ nack/AB
 namespace/ABCD
 netlink
 netns/AB
+nodeSelector/B
+nodeSelectors/B
 nv/AB
 nvidia/A
 onwards

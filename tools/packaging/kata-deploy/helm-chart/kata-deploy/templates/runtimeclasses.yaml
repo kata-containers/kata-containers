@@ -2,6 +2,11 @@
 {{- $multiInstallSuffix := .Values.env.multiInstallSuffix }}
 {{- $createDefaultRC := .Values.runtimeClasses.createDefault }}
 {{- $defaultRCName := .Values.runtimeClasses.defaultName }}
+{{- $nfdEnabled := index .Values "node-feature-discovery" "enabled" | default false }}
+{{- /* Detect if NFD is installed externally (returns namespace or empty string) */ -}}
+{{- $externalNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
+{{- /* Apply NFD TEE nodeSelectors only for TEE shims when NFD is detected (managed by us or external) */ -}}
+{{- $useShimNodeSelectors := or $nfdEnabled (ne $externalNFDNamespace "") -}}
 
 {{- /* Get enabled shims from structured config using null-aware logic */ -}}
 {{- $disableAll := .Values.shims.disableAll | default false -}}
@@ -79,9 +84,24 @@ overhead:
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
+{{- /* Apply manual nodeSelectors when present (always). Auto-inject NFD TEE labels only when NFD is detected and no manual runtimeClass.nodeSelector exists. */ -}}
+{{- $isSeShim := or (hasSuffix "-se" $shim) (hasSuffix "-se-runtime-rs" $shim) -}}
+{{- $isTeeShim := or (contains "snp" $shim) (contains "tdx" $shim) $isSeShim -}}
+{{- $isPureTeeShim := and $isTeeShim (not (contains "nvidia-gpu" $shim)) -}}
 {{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.nodeSelector }}
 {{- range $key, $value := $shimConfig.runtimeClass.nodeSelector }}
     {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- else if and $useShimNodeSelectors $isPureTeeShim }}
+{{- /* Auto-inject NFD TEE labels for pure TEE shims when NFD is detected and no manual nodeSelector in values */ -}}
+{{- if contains "snp" $shim }}
+    amd.feature.node.kubernetes.io/snp: "true"
+{{- end }}
+{{- if contains "tdx" $shim }}
+    intel.feature.node.kubernetes.io/tdx: "true"
+{{- end }}
+{{- if $isSeShim }}
+    feature.node.kubernetes.io/cpu-security.se.enabled: "true"
 {{- end }}
 {{- end }}
 {{- end }}

@@ -17,6 +17,7 @@ shims:
   disableAll: true
 
   # Enable TEE shims (qemu-snp, qemu-snp-runtime-rs, qemu-tdx, qemu-tdx-runtime-rs, qemu-se, qemu-se-runtime-rs, qemu-cca, qemu-coco-dev, qemu-coco-dev-runtime-rs)
+  # NFD TEE labels (snp, tdx, se) are auto-injected into RuntimeClasses when NFD is detected; no need to set nodeSelector here.
   qemu-snp:
     enabled: true
     supportedArches:

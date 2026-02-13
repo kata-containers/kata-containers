@@ -229,6 +229,7 @@ shims:
     agent:
       httpsProxy: ""
       noProxy: ""
+    # Optional: set runtimeClass.nodeSelector to pin TEE to specific nodes (always applied). If unset, NFD TEE labels are auto-injected when NFD is detected.
 
 # Default shim per architecture
 defaultShim:
@@ -311,8 +312,8 @@ helm install kata-deploy oci://ghcr.io/kata-containers/kata-deploy-charts/kata-d
 Includes:
 - `qemu-snp` - AMD SEV-SNP (amd64)
 - `qemu-tdx` - Intel TDX (amd64)
-- `qemu-se` - IBM Secure Execution (s390x)
-- `qemu-se-runtime-rs` - IBM Secure Execution Rust runtime (s390x)
+- `qemu-se` - IBM Secure Execution for Linux (SEL) (s390x)
+- `qemu-se-runtime-rs` - IBM Secure Execution for Linux (SEL) Rust runtime (s390x)
 - `qemu-cca` - Arm Confidential Compute Architecture (arm64)
 - `qemu-coco-dev` - Confidential Containers development (amd64, s390x)
 - `qemu-coco-dev-runtime-rs` - Confidential Containers development Rust runtime (amd64, s390x)
@@ -333,6 +334,27 @@ Includes:
 - `qemu-nvidia-gpu-tdx` - NVIDIA GPU with Intel TDX (amd64)
 
 **Note**: These example files are located in the chart directory. When installing from the OCI registry, you'll need to download them separately or clone the repository to access them.
+
+### RuntimeClass Node Selectors for TEE Shims
+
+**Manual configuration:** Any `nodeSelector` you set under `shims.<shim>.runtimeClass.nodeSelector`
+is **always applied** to that shim's RuntimeClass, whether or not NFD is present. Use this when
+you want to pin TEE workloads to specific nodes (e.g. without NFD, or with custom labels).
+
+**Auto-inject when NFD is present:** If you do *not* set a `runtimeClass.nodeSelector` for a
+TEE shim, the chart can **automatically inject** NFD-based labels when NFD is detected in the
+cluster (deployed by this chart with `node-feature-discovery.enabled=true` or found externally):
+- AMD SEV-SNP shims: `amd.feature.node.kubernetes.io/snp: "true"`
+- Intel TDX shims: `intel.feature.node.kubernetes.io/tdx: "true"`
+- IBM Secure Execution for Linux (SEL) shims (s390x): `feature.node.kubernetes.io/cpu-security.se.enabled: "true"`
+
+The chart uses Helm's `lookup` function to detect NFD (by looking for the
+`node-feature-discovery-worker` DaemonSet). Auto-inject only runs when NFD is detected and
+no manual `runtimeClass.nodeSelector` is set for that shim.
+
+**Note**: NFD detection requires cluster access. During `helm template` (dry-run without a
+cluster), external NFD is not seen, so auto-injected labels are not added. Manual
+`runtimeClass.nodeSelector` values are still applied in all cases.
 
 ## `RuntimeClass` Management
 
