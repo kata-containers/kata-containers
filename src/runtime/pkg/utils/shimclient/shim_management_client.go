@@ -47,8 +47,8 @@ func buildUnixSocketClient(socketAddr string, timeout time.Duration) (*http.Clie
 	return client, nil
 }
 
-func DoGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]byte, error) {
-	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
+func DoGet(sandboxID string, timeout time.Duration, urlPath string) ([]byte, error) {
+	client, err := BuildShimClient(sandboxID, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +71,8 @@ func DoGet(sandboxID string, timeoutInSeconds time.Duration, urlPath string) ([]
 }
 
 // DoPut will make a PUT request to the shim endpoint that handles the given sandbox ID
-func DoPut(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentType string, payload []byte) error {
-	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
+func DoPut(sandboxID string, timeout time.Duration, urlPath, contentType string, payload []byte) error {
+	client, err := BuildShimClient(sandboxID, timeout)
 	if err != nil {
 		return err
 	}
@@ -103,8 +103,8 @@ func DoPut(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentTyp
 }
 
 // DoPost will make a POST request to the shim endpoint that handles the given sandbox ID
-func DoPost(sandboxID string, timeoutInSeconds time.Duration, urlPath, contentType string, payload []byte) error {
-	client, err := BuildShimClient(sandboxID, timeoutInSeconds)
+func DoPost(sandboxID string, timeout time.Duration, urlPath, contentType string, payload []byte) error {
+	client, err := BuildShimClient(sandboxID, timeout)
 	if err != nil {
 		return err
 	}
