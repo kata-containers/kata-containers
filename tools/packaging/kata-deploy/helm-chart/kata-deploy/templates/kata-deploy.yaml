@@ -22,26 +22,26 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
 {{- if .Values.env.multiInstallSuffix }}
-  name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+  name: {{ include "kata-deploy.name" . }}-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-  name: {{ .Chart.Name }}
+  name: {{ include "kata-deploy.name" . }}
 {{- end }}
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:
 {{- if .Values.env.multiInstallSuffix }}
-      name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+      name: {{ include "kata-deploy.name" . }}-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-      name: {{ .Chart.Name }}
+      name: {{ include "kata-deploy.name" . }}
 {{- end }}
   template:
     metadata:
       labels:
 {{- if .Values.env.multiInstallSuffix }}
-        name: {{ .Chart.Name }}-{{ .Values.env.multiInstallSuffix }}
+        name: {{ include "kata-deploy.name" . }}-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-        name: {{ .Chart.Name }}
+        name: {{ include "kata-deploy.name" . }}
 {{- end }}
     spec:
 {{- with .Values.imagePullSecrets }}
@@ -49,9 +49,9 @@ spec:
 {{- toYaml . | nindent 6 }}
 {{- end }}
 {{- if .Values.env.multiInstallSuffix }}
-      serviceAccountName: {{ .Chart.Name }}-sa-{{ .Values.env.multiInstallSuffix }}
+      serviceAccountName: {{ include "kata-deploy.name" . }}-sa-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-      serviceAccountName: {{ .Chart.Name }}-sa
+      serviceAccountName: {{ include "kata-deploy.name" . }}-sa
 {{- end }}
 {{- with .Values.nodeSelector }}
       nodeSelector:
@@ -323,9 +323,9 @@ spec:
       - name: custom-configs
         configMap:
 {{- if .Values.env.multiInstallSuffix }}
-          name: {{ .Chart.Name }}-custom-configs-{{ .Values.env.multiInstallSuffix }}
+          name: {{ include "kata-deploy.name" . }}-custom-configs-{{ .Values.env.multiInstallSuffix }}
 {{- else }}
-          name: {{ .Chart.Name }}-custom-configs
+          name: {{ include "kata-deploy.name" . }}-custom-configs
 {{- end }}
 {{- end }}
 {{- with .Values.updateStrategy }}
