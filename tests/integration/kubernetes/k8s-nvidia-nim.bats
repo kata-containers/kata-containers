@@ -113,6 +113,27 @@ setup_langchain_flow() {
     [[ "$(pip show beautifulsoup4 2>/dev/null | awk '/^Version:/{print $2}')" = "4.13.4" ]] || pip install beautifulsoup4==4.13.4
 }
 
+# Create Docker config for genpolicy so it can authenticate to nvcr.io when
+# pulling image manifests (avoids "UnauthorizedError" from genpolicy's registry pull).
+# Genpolicy (src/tools/genpolicy) uses docker_credential::get_credential() in
+# src/tools/genpolicy/src/registry.rs build_auth(). The docker_credential crate
+# reads config from DOCKER_CONFIG (directory) + "/config.json", so we set
+# DOCKER_CONFIG to a directory containing config.json with nvcr.io auth.
+setup_genpolicy_registry_auth() {
+	if [[ -z "${NGC_API_KEY:-}" ]]; then
+		return
+	fi
+	local auth_dir
+	auth_dir="${BATS_SUITE_TMPDIR}/.docker-genpolicy"
+	mkdir -p "${auth_dir}"
+	# Docker config format: auths -> registry -> auth (base64 of "user:password")
+	echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" \
+		> "${auth_dir}/config.json"
+	export DOCKER_CONFIG="${auth_dir}"
+	# REGISTRY_AUTH_FILE (containers-auth.json format) is the same structure for auths
+	export REGISTRY_AUTH_FILE="${auth_dir}/config.json"
+}
+
 # Create initdata TOML file for genpolicy with CDH configuration.
 # This file is used by genpolicy via --initdata-path. Genpolicy will add the
 # generated policy.rego to it and set it as the cc_init_data annotation.
@@ -222,6 +243,9 @@ setup_file() {
     add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
     if [ "${TEE}" = "true" ]; then
+        # So genpolicy can pull nvcr.io image manifests when generating policy (avoids UnauthorizedError).
+        setup_genpolicy_registry_auth
+
         setup_kbs_credentials
         # Overwrite the empty default-initdata.toml with our CDH configuration.
         # This must happen AFTER create_tmp_policy_settings_dir() copies the empty
