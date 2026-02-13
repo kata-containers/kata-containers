@@ -504,7 +504,6 @@ pub struct VfioNvidiaDevices {
     /// depends on `vfio_mode` in `configuration.toml`:
     /// - `vfio_mode=guest-kernel` => `vfio-pci-gk`
     /// - `vfio_mode=vfio`         => `vfio-pci`
-    #[serde(default)]
     pub gpu_device_types: Vec<String>,
 
     /// Allowlist of K8s extended resource names that should be treated as NVIDIA
@@ -755,16 +754,6 @@ impl AgentPolicy {
             .get_nvidia_pgpu_count(&self.config.settings.devices.vfio.nvidia.pgpu_resource_keys)
         {
             if nvidia_pgpu_count > 0 {
-                let vfio_gpu_device_type = self
-                    .config
-                    .settings
-                    .devices
-                    .vfio
-                    .nvidia
-                    .gpu_device_types
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| "vfio-pci-gk".to_string());
                 for _ in 0..nvidia_pgpu_count {
                     let mut device = agent::Device::new();
                     // The actual device number <device_path><device_number> is assigned at
@@ -774,7 +763,6 @@ impl AgentPolicy {
                     // number with the number from the provided CDI annotations.
                     device
                         .set_container_path(self.config.settings.devices.vfio.device_path.clone());
-                    device.set_type(vfio_gpu_device_type.clone());
                     device.set_vm_path("".to_string());
                     devices.push(device);
                 }
