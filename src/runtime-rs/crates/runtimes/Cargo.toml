@@ -11,6 +11,7 @@ lazy_static = { workspace = true }
 netns-rs = { workspace = true }
 slog = { workspace = true }
 slog-scope = { workspace = true }
+containerd-shim-protos = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
