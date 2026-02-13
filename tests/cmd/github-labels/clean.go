@@ -8,8 +8,8 @@ package main
 import "strings"
 
 func cleanString(s string) string {
-	result := strings.Replace(s, "\n", " ", -1)
-	result = strings.Replace(result, "\t", "\\t", -1)
+	result := strings.ReplaceAll(s, "\n", " ")
+	result = strings.ReplaceAll(result, "\t", "\\t")
 	result = strings.TrimSpace(result)
 
 	return result
