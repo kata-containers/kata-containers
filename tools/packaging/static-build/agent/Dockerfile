@@ -30,6 +30,7 @@ RUN apt-get update && \
 		curl \
 		g++ \
 		gcc \
+		gnupg \
 		libprotobuf-dev \
 		libssl-dev \
 		make \
