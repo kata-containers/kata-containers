@@ -1143,7 +1143,7 @@ func TestParseAnnotationBoolConfiguration(t *testing.T) {
 			ocispec := specs.Spec{
 				Annotations: map[string]string{tc.annotationKey: annotaionValue},
 			}
-			var val bool = false
+			val := false
 
 			err := newAnnotationConfiguration(ocispec, tc.annotationKey).setBool(func(v bool) {
 				val = v

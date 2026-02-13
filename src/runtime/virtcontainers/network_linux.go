@@ -240,7 +240,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 }
 
 func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, endpoint Endpoint, hotplug bool) error {
-	var idx int = len(n.eps)
+	idx := len(n.eps)
 	for i, val := range n.eps {
 		if val.HardwareAddr() == endpoint.HardwareAddr() {
 			idx = i
