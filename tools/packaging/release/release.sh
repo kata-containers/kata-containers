@@ -144,15 +144,16 @@ function _publish_multiarch_manifest()
 	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
 	_check_required_env_var "KATA_DEPLOY_REGISTRIES"
 
+	# Per-arch tags may be image indexes (image + attestations). Use buildx imagetools create
+	# so we can merge them; legacy "docker manifest create" rejects manifest list sources.
+	# imagetools create pushes the new manifest list to --tag by default (no separate push).
 	for registry in "${REGISTRIES[@]}"; do
 		for tag in "${IMAGE_TAGS[@]}"; do
-			docker manifest create ${registry}:${tag} \
-				--amend ${registry}:${tag}-amd64 \
-				--amend ${registry}:${tag}-arm64 \
-				--amend ${registry}:${tag}-s390x \
-				--amend ${registry}:${tag}-ppc64le
-
-			docker manifest push ${registry}:${tag}
+			docker buildx imagetools create --tag "${registry}:${tag}" \
+				"${registry}:${tag}-amd64" \
+				"${registry}:${tag}-arm64" \
+				"${registry}:${tag}-s390x" \
+				"${registry}:${tag}-ppc64le"
 		done
 	done
 }

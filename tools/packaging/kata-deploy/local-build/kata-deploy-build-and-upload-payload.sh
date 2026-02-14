@@ -23,23 +23,21 @@ pushd ${KATA_DEPLOY_DIR}
 
 arch=$(uname -m)
 [ "$arch" = "x86_64" ] && arch="amd64"
+# Single platform so each job pushes one architecture; attestations (provenance/SBOM)
+# are kept by default, making the tag an image index (manifest list).
+PLATFORM="linux/${arch}"
 IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-${arch}"
 
-echo "Building the image"
-docker build --tag ${IMAGE_TAG} .
-
-echo "Pushing the image to the registry"
-docker push ${IMAGE_TAG}
+echo "Building the image (with provenance and SBOM attestations)"
+docker buildx build --platform "${PLATFORM}" \
+	--tag "${IMAGE_TAG}" --push .
 
 if [ -n "${TAG}" ]; then
 	ADDITIONAL_TAG="${REGISTRY}:${TAG}"
 
 	echo "Building the ${ADDITIONAL_TAG} image"
-
-	docker build --tag ${ADDITIONAL_TAG} .
-
-	echo "Pushing the image ${ADDITIONAL_TAG} to the registry"
-	docker push ${ADDITIONAL_TAG}
+	docker buildx build --platform "${PLATFORM}" \
+		--tag "${ADDITIONAL_TAG}" --push .
 fi
 
 popd
