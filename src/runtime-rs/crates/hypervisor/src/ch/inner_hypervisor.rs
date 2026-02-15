@@ -1104,7 +1104,7 @@ fn get_guest_protection() -> Result<GuestProtection> {
     Ok(guest_protection)
 }
 
-// Return a TID/VCPU map from a specified /proc/{pid} path.
+// Return a VCPU/TID map from a specified /proc/{pid} path.
 fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
     const VCPU_STR: &str = "vcpu";
 
@@ -1147,7 +1147,7 @@ fn get_ch_vcpu_tids(proc_path: &str) -> Result<HashMap<u32, u32>> {
             .parse::<u32>()
             .map_err(|e| anyhow!(e).context("Invalid vcpu id."))?;
 
-        vcpus.insert(tid, vcpu_id);
+        vcpus.insert(vcpu_id, tid);
     }
 
     if vcpus.is_empty() {
