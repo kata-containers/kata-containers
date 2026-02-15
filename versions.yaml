@@ -309,7 +309,7 @@ externals:
     # version older than them.
     version: "v1.7.25"
     lts: "v1.7"
-    active: "v2.1"
+    active: "v2.2"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
