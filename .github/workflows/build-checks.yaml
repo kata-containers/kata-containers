@@ -97,8 +97,10 @@ jobs:
       - name: Install golang
         if: contains(matrix.component.needs, 'golang')
         run: |
-          ./tests/install_go.sh -f -p
-          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          if ! command -v go; then
+            ./tests/install_go.sh -f -p
+            echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          fi
       - name: Setup rust
         if: contains(matrix.component.needs, 'rust')
         run: |
