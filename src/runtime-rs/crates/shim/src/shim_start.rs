@@ -46,10 +46,21 @@ impl ShimExecutor {
             ContainerType::PodSandbox | ContainerType::SingleContainer => {
                 let address = self.socket_address(&self.args.id)?;
                 let socket = new_listener(&address)?;
-                let child_pid = self.create_shim_process(socket)?;
-                self.write_pid_file(&bundle_path, child_pid)?;
-                self.write_address(&bundle_path, &address)?;
-                Ok(address)
+
+                // Ensure socket is cleaned up if any subsequent operation fails.
+                // This prevents stale socket files from accumulating when the shim
+                // fails to start (e.g., due to missing Kata dependency files).
+                let result = (|| -> Result<PathBuf> {
+                    let child_pid = self.create_shim_process(socket)?;
+                    self.write_pid_file(&bundle_path, child_pid)?;
+                    self.write_address(&bundle_path, &address)?;
+                    Ok(address.clone())
+                })();
+
+                if result.is_err() {
+                    remove_socket(&address);
+                }
+                result
             }
             ContainerType::PodContainer => {
                 let sid = id
@@ -122,6 +133,21 @@ fn new_listener(address: &Path) -> Result<UnixListener> {
     UnixListener::bind(file_path).context("bind address")
 }
 
+/// Removes the socket file associated with the given address.
+/// This is used to clean up socket files when shim startup fails after
+/// the socket has been created, preventing stale socket file accumulation.
+fn remove_socket(address: &Path) {
+    // The address format is "unix:///run/containerd/s/<hash>"
+    // We need to strip the "unix://" prefix to get the actual file path
+    // This matches the approach in shim_delete.rs do_cleanup()
+    if let Ok(trim_path) = address.strip_prefix("unix://") {
+        let file_path = Path::new("/").join(trim_path);
+        if fs::metadata(&file_path).is_ok() {
+            let _ = fs::remove_file(&file_path);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -168,6 +194,78 @@ mod tests {
         std::fs::remove_file(path).ok();
 
         let _ = new_listener(Path::new(&uds_path)).unwrap();
+        std::fs::remove_file(path).ok();
+    }
+
+    #[test]
+    #[serial]
+    fn test_remove_socket() {
+        let path = "/tmp/test_socket_cleanup";
+        let uds_path = format!("unix://{}", path);
+        std::fs::remove_file(path).ok();
+
+        let _listener = new_listener(Path::new(&uds_path)).unwrap();
+        assert!(std::fs::metadata(path).is_ok());
+
+        remove_socket(Path::new(&uds_path));
+        assert!(std::fs::metadata(path).is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_remove_socket_nonexistent() {
+        let path = "/tmp/nonexistent_socket_12345";
+        let uds_path = format!("unix://{}", path);
+        std::fs::remove_file(path).ok();
+
+        // should not panic
+        remove_socket(Path::new(&uds_path));
+    }
+
+    // Test for GitHub issue #12497: socket cleanup on shim startup failure
+    #[test]
+    #[serial]
+    fn test_socket_cleanup_on_failure() {
+        let path = "/tmp/test_socket_cleanup_on_failure";
+        let uds_path = format!("unix://{}", path);
+        let address = Path::new(&uds_path);
+        std::fs::remove_file(path).ok();
+
+        let socket = new_listener(address).unwrap();
+        assert!(std::fs::metadata(path).is_ok());
+
+        // simulate the IIFE pattern used in do_start() with a failure
+        let result: Result<()> = (|| -> Result<()> {
+            drop(socket);
+            Err(anyhow!("simulated failure"))
+        })();
+
+        if result.is_err() {
+            remove_socket(address);
+        }
+
+        assert!(std::fs::metadata(path).is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_socket_not_removed_on_success() {
+        let path = "/tmp/test_socket_persist_on_success";
+        let uds_path = format!("unix://{}", path);
+        let address = Path::new(&uds_path);
+        std::fs::remove_file(path).ok();
+
+        let _socket = new_listener(address).unwrap();
+        assert!(std::fs::metadata(path).is_ok());
+
+        let result: Result<()> = Ok(());
+
+        if result.is_err() {
+            remove_socket(address);
+        }
+
+        // socket should still exist on success
+        assert!(std::fs::metadata(path).is_ok());
         std::fs::remove_file(path).ok();
     }
 }
