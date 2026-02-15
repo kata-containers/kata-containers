@@ -6,8 +6,6 @@ on:
         required: true
         type: string
     secrets:
-      CI_HKD_PATH:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
@@ -20,7 +18,6 @@ jobs:
       push-to-registry: yes
       stage: release
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
     permissions:
       contents: read

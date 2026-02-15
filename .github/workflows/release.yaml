@@ -62,7 +62,6 @@ jobs:
     with:
       target-arch: s390x
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-ppc64le:
