@@ -140,42 +140,35 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vmm:
-          - qemu-coco-dev
-          - qemu-coco-dev-runtime-rs
-        snapshotter:
-          - nydus
-        pull-type:
-          - guest-pull
-        include:
-          - pull-type: experimental-force-guest-pull
-            vmm: qemu-coco-dev
-            snapshotter: ""
-    runs-on: ubuntu-22.04
+        environment: [
+          { vmm: qemu-coco-dev, snapshotter: nydus, pull_type: guest-pull },
+          { vmm: qemu-coco-dev-runtime-rs, snapshotter: nydus, pull_type: guest-pull },
+          { vmm: qemu-coco-dev, snapshotter: "", pull_type: experimental-force-guest-pull },
+        ]
+    runs-on: ubuntu-24.04
     permissions:
-      id-token: write # Used for OIDC access to log into Azure
+      contents: read
     environment: ci
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       GH_PR_NUMBER: ${{ inputs.pr-number }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       # Some tests rely on that variable to run (or not)
       KBS: "true"
       # Set the KBS ingress handler (empty string disables handling)
-      KBS_INGRESS: "aks"
+      KBS_INGRESS: "nodeport"
       KUBERNETES: "vanilla"
-      PULL_TYPE: ${{ matrix.pull-type }}
+      PULL_TYPE: ${{ matrix.environment.pull_type }}
       AUTHENTICATED_IMAGE_USER: ${{ vars.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
-      SNAPSHOTTER: ${{ matrix.snapshotter }}
-      EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.pull-type == 'experimental-force-guest-pull' && matrix.vmm || '' }}
-      # Caution: current ingress controller used to expose the KBS service
-      # requires much vCPUs, lefting only a few for the tests. Depending on the
-      # host type chose it will result on the creation of a cluster with
-      # insufficient resources.
+      SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
+      EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.environment.pull_type == 'experimental-force-guest-pull' && matrix.environment.vmm || '' }}
       K8S_TEST_HOST_TYPE: "all"
+      CONTAINER_ENGINE: "containerd"
+      CONTAINER_ENGINE_VERSION: "active"
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -198,39 +191,37 @@ jobs:
       - name: Install kata-tools
         run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-tools-artifacts
 
-      - name: Log into the Azure account
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
-        with:
-          client-id: ${{ secrets.AZ_APPID }}
-          tenant-id: ${{ secrets.AZ_TENANT_ID }}
-          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+      - name: Remove unnecessary directories to free up space
+        run: |
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf /usr/lib/jvm
+          sudo rm -rf /usr/share/swift
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/local/julia*
+          sudo rm -rf /opt/az
+          sudo rm -rf /usr/local/share/chromium
+          sudo rm -rf /opt/microsoft
+          sudo rm -rf /opt/google
+          sudo rm -rf /usr/lib/firefox
 
-      - name: Create AKS cluster
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # v3.0.2
-        with:
-          timeout_minutes: 15
-          max_attempts: 20
-          retry_on: error
-          retry_wait_seconds: 10
-          command: bash tests/integration/kubernetes/gha-run.sh create-cluster
+      - name: Deploy kubernetes
+        timeout-minutes: 15
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
-      - name: Install `kubectl`
-        uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4.0.1
-        with:
-          version: 'latest'
-
-      - name: Download credentials for the Kubernetes CLI to use them
-        run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
-
       - name: Deploy Kata
         timeout-minutes: 20
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
         env:
-          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ env.SNAPSHOTTER == 'nydus' }}
-          AUTO_GENERATE_POLICY: ${{ env.PULL_TYPE == 'experimental-force-guest-pull' && 'no' || 'yes' }}
+          USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ matrix.environment.snapshotter == 'nydus' }}
+          AUTO_GENERATE_POLICY: ${{ matrix.environment.pull_type == 'experimental-force-guest-pull' && 'no' || 'yes' }}
 
       - name: Deploy CoCo KBS
         timeout-minutes: 10
@@ -252,18 +243,20 @@ jobs:
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh report-tests
 
-      - name: Refresh OIDC token in case access token expired
-        if: always()
-        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
-        with:
-          client-id: ${{ secrets.AZ_APPID }}
-          tenant-id: ${{ secrets.AZ_TENANT_ID }}
-          subscription-id: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-
-      - name: Delete AKS cluster
+      - name: Delete kata-deploy
         if: always()
         timeout-minutes: 15
-        run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup
+
+      - name: Delete CoCo KBS
+        if: always()
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
+      - name: Delete CSI driver
+        if: always()
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   # Generate jobs for testing CoCo on non-TEE environments with erofs-snapshotter
   run-k8s-tests-coco-nontee-with-erofs-snapshotter:

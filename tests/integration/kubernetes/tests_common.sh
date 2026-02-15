@@ -171,6 +171,15 @@ adapt_common_policy_settings_for_nvidia_gpu() {
 	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
+# Adapt OCI version in policy settings to match containerd version.
+# containerd 2.2.x (active) vendors v1.3.0.
+adapt_common_policy_settings_for_containerd_version() {
+	local settings_dir=${1}
+
+	info "Adapting common policy settings for containerd's latest release"
+	jq '.kata_config.oci_version = "1.3.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
 	local settings_dir=$1
@@ -178,6 +187,7 @@ adapt_common_policy_settings() {
 	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
 	is_aks_cluster && adapt_common_policy_settings_for_aks "${settings_dir}"
 	is_nvidia_gpu_platform && adapt_common_policy_settings_for_nvidia_gpu "${settings_dir}"
+	[[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] && adapt_common_policy_settings_for_containerd_version "${settings_dir}"
 
 	case "${KATA_HOST_OS}" in
 		"cbl-mariner")
