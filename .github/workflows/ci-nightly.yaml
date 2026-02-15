@@ -23,7 +23,7 @@ jobs:
       tag: ${{ github.sha }}-nightly
       target-branch: ${{ github.ref_name }}
     secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ vars.AUTHENTICATED_IMAGE_PASSWORD }}
       AZ_APPID: ${{ secrets.AZ_APPID }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
