@@ -20,7 +20,6 @@ readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/bui
 script_dir="$(dirname "$(readlink -f "$0")")"
 readonly SCRIPT_DIR="${script_dir}/nvidia"
 
-KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-}
 AGENT_POLICY="${AGENT_POLICY:-no}"
 
 NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:?NVIDIA_GPU_STACK must be set}
