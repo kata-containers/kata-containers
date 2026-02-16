@@ -778,24 +778,22 @@ mod tests {
         assert_eq!(agent_debug, "false");
     }
 
-    #[test]
-    fn test_toml_value_types() {
+    #[rstest]
+    #[case("test.string_value", "test_string", "test_string")]
+    #[case("test.bool_value", "true", "true")]
+    #[case("test.int_value", "42", "42")]
+    fn test_toml_value_types(
+        #[case] path: &str,
+        #[case] value: &str,
+        #[case] expected: &str,
+    ) {
         let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(path, "").unwrap();
+        let file_path = file.path();
+        std::fs::write(file_path, "").unwrap();
 
-        // Test different value types
-        set_toml_value(path, "test.string_value", "test_string").unwrap();
-        set_toml_value(path, "test.bool_value", "true").unwrap();
-        set_toml_value(path, "test.int_value", "42").unwrap();
-
-        let string_val = get_toml_value(path, "test.string_value").unwrap();
-        let bool_val = get_toml_value(path, "test.bool_value").unwrap();
-        let int_val = get_toml_value(path, "test.int_value").unwrap();
-
-        assert_eq!(string_val, "test_string");
-        assert_eq!(bool_val, "true");
-        assert_eq!(int_val, "42");
+        set_toml_value(file_path, path, value).unwrap();
+        let got = get_toml_value(file_path, path).unwrap();
+        assert_eq!(got, expected);
     }
 
     #[test]
@@ -1307,17 +1305,20 @@ kernel_params = "console=hvc0"
             .contains("Failed to read TOML file"));
     }
 
-    #[test]
-    fn test_get_toml_value_invalid_toml() {
+    #[rstest]
+    #[case("get")]
+    #[case("set")]
+    fn test_invalid_toml(#[case] op: &str) {
         let temp_file = NamedTempFile::new().unwrap();
         let temp_path = temp_file.path();
-
-        // Write invalid TOML
         std::fs::write(temp_path, "this is not [ valid toml {").unwrap();
 
-        let result = get_toml_value(temp_path, "some.path");
-        assert!(result.is_err(), "Should fail parsing invalid TOML");
-        // Just verify it's an error, don't check specific message
+        let result = match op {
+            "get" => get_toml_value(temp_path, "some.path").map(drop),
+            "set" => set_toml_value(temp_path, "some.path", "\"value\""),
+            _ => panic!("unknown op"),
+        };
+        assert!(result.is_err(), "Should fail parsing invalid TOML (op={})", op);
     }
 
     #[test]
@@ -1343,18 +1344,6 @@ kernel_params = "console=hvc0"
     }
 
     #[test]
-    fn test_set_toml_value_invalid_toml() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path();
-
-        // Write invalid TOML
-        std::fs::write(temp_path, "this is not [ valid toml {").unwrap();
-
-        let result = set_toml_value(temp_path, "some.path", "\"value\"");
-        assert!(result.is_err(), "Should fail parsing invalid TOML");
-    }
-
-    #[test]
     fn test_append_to_toml_array_nonexistent_file() {
         let result = append_to_toml_array(
             Path::new("/nonexistent/file.toml"),
@@ -1364,30 +1353,25 @@ kernel_params = "console=hvc0"
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_append_to_toml_array_not_an_array() {
+    #[rstest]
+    #[case("append")]
+    #[case("get")]
+    fn test_toml_array_not_an_array(#[case] op: &str) {
         let temp_file = NamedTempFile::new().unwrap();
         let temp_path = temp_file.path();
-
-        // Write TOML with a string, not an array
         std::fs::write(temp_path, "[section]\nkey = \"value\"").unwrap();
 
-        let result = append_to_toml_array(temp_path, "section.key", "\"item\"");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not an array"));
-    }
-
-    #[test]
-    fn test_get_toml_array_not_an_array() {
-        let temp_file = NamedTempFile::new().unwrap();
-        let temp_path = temp_file.path();
-
-        // Write TOML with a string, not an array
-        std::fs::write(temp_path, "[section]\nkey = \"value\"").unwrap();
-
-        let result = get_toml_array(temp_path, "section.key");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not an array"));
+        let result = match op {
+            "append" => append_to_toml_array(temp_path, "section.key", "\"item\"").map(drop),
+            "get" => get_toml_array(temp_path, "section.key").map(drop),
+            _ => panic!("unknown op"),
+        };
+        assert!(result.is_err(), "op={}", op);
+        assert!(
+            result.unwrap_err().to_string().contains("not an array"),
+            "op={}",
+            op
+        );
     }
 
     #[test]
