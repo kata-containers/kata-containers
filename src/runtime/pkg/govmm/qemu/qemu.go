@@ -520,7 +520,13 @@ func (this *TdxQomObject) String() string {
 
 func getQgsSocketAddress(portNum uint32) SocketAddress {
 	if portNum == 0 {
-		return SocketAddress{Type: "unix", Path: qgsSocketPath}
+		// Check if the Unix socket exists
+		if _, err := os.Stat(qgsSocketPath); err == nil {
+			return SocketAddress{Type: "unix", Path: qgsSocketPath}
+		}
+		// Fall back to port 4050 with vsock for backwards compatibility
+		log.Printf("Warning: QGS socket %s not found, falling back to vsock port 4050", qgsSocketPath)
+		portNum = 4050
 	}
 
 	return SocketAddress{Type: "vsock", Cid: fmt.Sprint(VsockHostCid), Port: fmt.Sprint(portNum)}
