@@ -139,10 +139,23 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 
 var (
 	tdxObjectVsock = `-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}`
-	tdxObjectUnix  = `-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}}`
 )
 
 func TestTdxQuoteSocket(t *testing.T) {
+	// Create a temp socket file so the unix path is always exercised.
+	dir := t.TempDir()
+	origPath := qgsSocketPath
+	qgsSocketPath = dir + "/qgs.socket"
+	defer func() { qgsSocketPath = origPath }()
+
+	f, err := os.Create(qgsSocketPath)
+	if err != nil {
+		t.Fatalf("failed to create temp socket file: %v", err)
+	}
+	f.Close()
+
+	tdxObjectUnix := fmt.Sprintf(`-object {"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type":"unix","path":"%s"}}`, qgsSocketPath)
+
 	object := Object{
 		Type:     TDXGuest,
 		ID:       "tdx",
@@ -151,10 +164,15 @@ func TestTdxQuoteSocket(t *testing.T) {
 		QgsPort:  0,
 	}
 
+	// port=0 with socket present: use Unix socket
 	testAppend(object, tdxObjectUnix, t)
 
-	object.QgsPort = 4050
+	// port=0 without socket present: fall back to vsock port 4050
+	qgsSocketPath = dir + "/missing.socket"
+	testAppend(object, tdxObjectVsock, t)
 
+	// Explicit vsock port
+	object.QgsPort = 4050
 	testAppend(object, tdxObjectVsock, t)
 }
 
