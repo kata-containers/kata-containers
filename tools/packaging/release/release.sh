@@ -144,9 +144,10 @@ function _publish_multiarch_manifest()
 	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
 	_check_required_env_var "KATA_DEPLOY_REGISTRIES"
 
-	# Per-arch tags may be image indexes (image + attestations). Use buildx imagetools create
-	# so we can merge them; legacy "docker manifest create" rejects manifest list sources.
-	# imagetools create pushes the new manifest list to --tag by default (no separate push).
+	# Per-arch images are built without provenance/SBOM so each tag is a single image manifest;
+	# quay.io rejects pushing multi-arch manifest lists that include attestation manifests
+	# ("manifest invalid"), so we do not enable them for this workflow.
+	# imagetools create pushes to --tag by default.
 	for registry in "${REGISTRIES[@]}"; do
 		for tag in "${IMAGE_TAGS[@]}"; do
 			docker buildx imagetools create --tag "${registry}:${tag}" \
