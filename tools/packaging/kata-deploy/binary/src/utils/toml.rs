@@ -65,17 +65,23 @@ fn split_non_toml_header(content: &str) -> (&str, &str) {
 
 /// Write a TOML file with an optional non-TOML header (e.g. K3s template line).
 /// Ensures the header ends with a newline before the TOML body.
+/// Trims leading newlines from the serialized document to avoid many blank lines
+/// when the file was initially empty (e.g. containerd drop-in).
 fn write_toml_with_header(
     file_path: &Path,
     header: &str,
     doc: &DocumentMut,
 ) -> Result<()> {
-    let normalized_header = if header.ends_with('\n') {
+    let normalized_header = if header.is_empty() {
+        String::new()
+    } else if header.ends_with('\n') {
         header.to_string()
     } else {
         format!("{header}\n")
     };
-    std::fs::write(file_path, format!("{}{}", normalized_header, doc.to_string()))
+    let body = doc.to_string();
+    let body_trimmed = body.trim_start_matches('\n');
+    std::fs::write(file_path, format!("{}{}", normalized_header, body_trimmed))
         .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
     Ok(())
 }
@@ -607,6 +613,37 @@ mod tests {
         .unwrap();
         let content = std::fs::read_to_string(path).unwrap();
         assert!(content.contains("runtime_type"));
+    }
+
+    #[rstest]
+    #[case("", "")]
+    #[case("{{ template \"base\" . }}\n", "{{ template \"base\" . }}\n")]
+    fn test_set_toml_value_empty_file_no_leading_newlines(
+        #[case] initial_content: &str,
+        #[case] expected_prefix: &str,
+    ) {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, initial_content).unwrap();
+
+        set_toml_value(
+            path,
+            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.runtime_type",
+            "\"io.containerd.kata-qemu.v2\"",
+        )
+        .unwrap();
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.starts_with(expected_prefix), "header/prefix must be preserved");
+        let body_start = content.strip_prefix(expected_prefix).unwrap();
+        assert!(
+            !body_start.starts_with('\n'),
+            "written TOML body must not start with newline(s) after header, got {} leading newlines",
+            body_start.chars().take_while(|&c| c == '\n').count()
+        );
+        assert!(
+            body_start.trim_start().starts_with('['),
+            "body should start with a TOML table"
+        );
     }
 
     #[test]

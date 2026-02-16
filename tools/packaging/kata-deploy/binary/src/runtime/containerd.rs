@@ -636,6 +636,33 @@ mod tests {
         }
     }
 
+    /// Written containerd config (e.g. drop-in) must not start with blank lines when written to an initially empty file.
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID)]
+    fn test_write_containerd_runtime_config_empty_file_no_leading_newlines(
+        #[case] pluginid: &str,
+    ) {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "").unwrap();
+
+        let params = make_params("kata-qemu", Some("\"nydus\""));
+        write_containerd_runtime_config(path, pluginid, &params).unwrap();
+
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(
+            !content.starts_with('\n'),
+            "containerd config must not start with newline(s), got {} leading newlines (pluginid={})",
+            content.chars().take_while(|&c| c == '\n').count(),
+            pluginid
+        );
+        assert!(
+            content.trim_start().starts_with('['),
+            "config should start with a TOML table"
+        );
+    }
+
     #[rstest]
     #[case("containerd://1.6.28", true, false, Some("kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"))]
     #[case("containerd://1.6.28", false, true, None)]
