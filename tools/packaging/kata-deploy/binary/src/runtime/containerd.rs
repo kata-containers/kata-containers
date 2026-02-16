@@ -113,7 +113,7 @@ fn write_containerd_runtime_config(
         // and setting the snapshotter only on the runtime plugin is not enough for image
         // pull/prepare.
         //
-        // The images plugin must have runtime_platform.<runtime>.snapshotter so it
+        // The images plugin must have runtime_platforms.<runtime>.snapshotter so it
         // uses the correct snapshotter per runtime (e.g. nydus, erofs).
         //
         // A PR on the containerd side is open so we can rely on the runtime plugin
@@ -122,7 +122,7 @@ fn write_containerd_runtime_config(
             toml_utils::set_toml_value(
                 config_file,
                 &format!(
-                    ".plugins.{}.runtime_platform.\"{}\".snapshotter",
+                    ".plugins.{}.runtime_platforms.\"{}\".snapshotter",
                     CONTAINERD_CRI_IMAGES_PLUGIN_ID,
                     params.runtime_name
                 ),
@@ -569,6 +569,72 @@ pub fn snapshotter_handler_mapping_validation_check(config: &Config) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::toml as toml_utils;
+    use rstest::rstest;
+    use std::path::Path;
+    use tempfile::NamedTempFile;
+
+    fn make_params(
+        runtime_name: &str,
+        snapshotter: Option<&str>,
+    ) -> ContainerdRuntimeParams {
+        ContainerdRuntimeParams {
+            runtime_name: runtime_name.to_string(),
+            runtime_path: "\"/opt/kata/bin/kata-runtime\"".to_string(),
+            config_path: "\"/opt/kata/share/defaults/kata-containers/configuration-qemu.toml\""
+                .to_string(),
+            pod_annotations: "[\"io.katacontainers.*\"]",
+            snapshotter: snapshotter.map(|s| s.to_string()),
+        }
+    }
+
+    /// CRI images runtime_platforms snapshotter is set only for v3 config when a snapshotter is configured.
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID, Some("\"nydus\""), "kata-qemu", true)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID, Some("\"nydus\""), "kata-qemu", false)]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID, None, "kata-qemu", false)]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID, Some("\"erofs\""), "kata-clh", true)]
+    fn test_write_containerd_runtime_config_cri_images_runtime_platforms_snapshotter(
+        #[case] pluginid: &str,
+        #[case] snapshotter: Option<&str>,
+        #[case] runtime_name: &str,
+        #[case] expect_runtime_platforms_set: bool,
+    ) {
+        let file = NamedTempFile::new().unwrap();
+        let path = file.path();
+        std::fs::write(path, "").unwrap();
+
+        let params = make_params(runtime_name, snapshotter);
+        write_containerd_runtime_config(path, pluginid, &params).unwrap();
+
+        let images_snapshotter_path = format!(
+            ".plugins.\"io.containerd.cri.v1.images\".runtime_platforms.\"{}\".snapshotter",
+            runtime_name
+        );
+        let result = toml_utils::get_toml_value(Path::new(path), &images_snapshotter_path);
+
+        if expect_runtime_platforms_set {
+            let value = result.unwrap_or_else(|e| {
+                panic!(
+                    "expected CRI images runtime_platforms.{} snapshotter to be set: {}",
+                    runtime_name, e
+                )
+            });
+            assert_eq!(
+                value,
+                snapshotter.unwrap().trim_matches('"'),
+                "runtime_platforms snapshotter value"
+            );
+        } else {
+            assert!(
+                result.is_err(),
+                "expected CRI images runtime_platforms.{} snapshotter not to be set for pluginid={:?} snapshotter={:?}",
+                runtime_name,
+                pluginid,
+                snapshotter
+            );
+        }
+    }
 
     #[test]
     fn test_check_containerd_snapshotter_version_support_1_6_with_mapping() {
