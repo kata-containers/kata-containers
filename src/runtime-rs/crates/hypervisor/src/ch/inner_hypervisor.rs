@@ -1613,4 +1613,65 @@ mod tests {
             assert!(actual_error == expected_error, "{}", msg);
         }
     }
+
+    #[actix_rt::test]
+    async fn test_get_ch_vcpu_tids_mapping() {
+        let tmp_dir = Builder::new().prefix("fake-proc-pid").tempdir().unwrap();
+        let task_dir = tmp_dir.path().join("task");
+        fs::create_dir_all(&task_dir).unwrap();
+
+        #[derive(Debug)]
+        struct ThreadInfo<'a> {
+            tid: &'a str,
+            comm: &'a str,
+        }
+
+        let threads = &[
+            // Non-vcpu thread, should be skipped.
+            ThreadInfo {
+                tid: "1000",
+                comm: "main_thread\n",
+            },
+            ThreadInfo {
+                tid: "2001",
+                comm: "vcpu0\n",
+            },
+            ThreadInfo {
+                tid: "2002",
+                comm: "vcpu1\n",
+            },
+            ThreadInfo {
+                tid: "2003",
+                comm: "vcpu2\n",
+            },
+        ];
+
+        for t in threads {
+            let tid_dir = task_dir.join(t.tid);
+            fs::create_dir_all(&tid_dir).unwrap();
+            fs::write(tid_dir.join("comm"), t.comm).unwrap();
+        }
+
+        let proc_path = tmp_dir.path().to_str().unwrap();
+        let result = get_ch_vcpu_tids(proc_path);
+
+        let msg = format!("result: {result:?}");
+
+        if std::env::var("DEBUG").is_ok() {
+            println!("DEBUG: {msg}");
+        }
+
+        let vcpus = result.unwrap();
+
+        // The mapping must be vcpu_id -> tid.
+        assert_eq!(vcpus.len(), 3, "non-vcpu threads should be excluded");
+        assert_eq!(vcpus[&0], 2001, "vcpu 0 should map to tid 2001");
+        assert_eq!(vcpus[&1], 2002, "vcpu 1 should map to tid 2002");
+        assert_eq!(vcpus[&2], 2003, "vcpu 2 should map to tid 2003");
+
+        assert!(
+            !vcpus.contains_key(&1000),
+            "non-vcpu thread should not be in the map"
+        );
+    }
 }

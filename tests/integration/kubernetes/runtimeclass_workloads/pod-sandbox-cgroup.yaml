@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2026 Chiranjeevi Uddanti
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sandbox-cgroup-pod
+  annotations:
+    io.katacontainers.config.runtime.sandbox_cgroup_only: "false"
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+  - image: quay.io/prometheus/busybox:latest
+    name: sandbox-cgroup-test
