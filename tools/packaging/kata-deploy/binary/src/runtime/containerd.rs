@@ -636,101 +636,73 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_1_6_with_mapping() {
-        // Version 1.6 with snapshotter mapping should fail
-        let result = check_containerd_snapshotter_version_support("containerd://1.6.28", true);
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"));
-    }
-
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_1_6_without_mapping() {
-        // Version 1.6 without snapshotter mapping should pass (no mapping means no check needed)
-        let result = check_containerd_snapshotter_version_support("containerd://1.6.28", false);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_1_7_with_mapping() {
-        // Version 1.7 with snapshotter mapping should pass
-        let result = check_containerd_snapshotter_version_support("containerd://1.7.15", true);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_2_0_with_mapping() {
-        // Version 2.0 with snapshotter mapping should pass
-        let result = check_containerd_snapshotter_version_support("containerd://2.0.0", true);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_without_prefix() {
-        // Version without containerd:// prefix should still work
-        let result = check_containerd_snapshotter_version_support("1.6.28", true);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_1_6_variants() {
-        // Test various 1.6.x versions
-        assert!(check_containerd_snapshotter_version_support("containerd://1.6.0", true).is_err());
-        assert!(check_containerd_snapshotter_version_support("containerd://1.6.28", true).is_err());
-        assert!(check_containerd_snapshotter_version_support("containerd://1.6.999", true).is_err());
-    }
-
-    #[test]
-    fn test_check_containerd_snapshotter_version_support_1_7_variants() {
-        // Test various 1.7+ versions should pass
-        assert!(check_containerd_snapshotter_version_support("containerd://1.7.0", true).is_ok());
-        assert!(check_containerd_snapshotter_version_support("containerd://1.7.15", true).is_ok());
-        assert!(check_containerd_snapshotter_version_support("containerd://1.8.0", true).is_ok());
-    }
-
-    #[test]
-    fn test_check_containerd_erofs_version_support() {
-        // Versions that should pass (2.2.0+)
-        let passing_versions = [
-            "containerd://2.2.0",
-            "containerd://2.2.0-rc.1",
-            "containerd://2.2.1",
-            "containerd://2.3.0",
-            "containerd://3.0.0",
-            "containerd://2.3.0-beta.0",
-            "2.2.0", // without prefix
-        ];
-        for version in passing_versions {
-            assert!(
-                check_containerd_erofs_version_support(version).is_ok(),
-                "Expected {} to pass",
-                version
-            );
+    #[rstest]
+    #[case("containerd://1.6.28", true, false, Some("kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"))]
+    #[case("containerd://1.6.28", false, true, None)]
+    #[case("containerd://1.6.0", true, false, None)]
+    #[case("containerd://1.6.999", true, false, None)]
+    #[case("containerd://1.7.0", true, true, None)]
+    #[case("containerd://1.7.15", true, true, None)]
+    #[case("containerd://1.8.0", true, true, None)]
+    #[case("containerd://2.0.0", true, true, None)]
+    #[case("1.6.28", true, false, None)]
+    fn test_check_containerd_snapshotter_version_support(
+        #[case] version: &str,
+        #[case] has_mapping: bool,
+        #[case] expect_ok: bool,
+        #[case] expected_error_substring: Option<&str>,
+    ) {
+        let result = check_containerd_snapshotter_version_support(version, has_mapping);
+        if expect_ok {
+            assert!(result.is_ok(), "expected ok for version={} has_mapping={}", version, has_mapping);
+        } else {
+            assert!(result.is_err(), "expected err for version={} has_mapping={}", version, has_mapping);
+            if let Some(sub) = expected_error_substring {
+                assert!(
+                    result.unwrap_err().to_string().contains(sub),
+                    "error should contain {:?}",
+                    sub
+                );
+            }
         }
+    }
 
-        // Versions that should fail (< 2.2.0)
-        let failing_versions = [
-            ("containerd://2.1.0", "containerd must be 2.2.0 or newer"),
-            ("containerd://2.1.5-rc.1", "containerd must be 2.2.0 or newer"),
-            ("containerd://2.0.0", "containerd must be 2.2.0 or newer"),
-            ("containerd://1.7.0", "containerd must be 2.2.0 or newer"),
-            ("containerd://1.6.28", "containerd must be 2.2.0 or newer"),
-            ("2.1.0", "containerd must be 2.2.0 or newer"), // without prefix
-            ("invalid", "Invalid containerd version format"),
-            ("containerd://abc.2.0", "Failed to parse major version"),
-        ];
-        for (version, expected_error) in failing_versions {
-            let result = check_containerd_erofs_version_support(version);
-            assert!(result.is_err(), "Expected {} to fail", version);
-            assert!(
-                result.unwrap_err().to_string().contains(expected_error),
-                "Expected error for {} to contain '{}'",
-                version,
-                expected_error
-            );
-        }
+    #[rstest]
+    #[case("containerd://2.2.0")]
+    #[case("containerd://2.2.0-rc.1")]
+    #[case("containerd://2.2.1")]
+    #[case("containerd://2.3.0")]
+    #[case("containerd://3.0.0")]
+    #[case("containerd://2.3.0-beta.0")]
+    #[case("2.2.0")]
+    fn test_check_containerd_erofs_version_support_passing(#[case] version: &str) {
+        assert!(
+            check_containerd_erofs_version_support(version).is_ok(),
+            "Expected {} to pass",
+            version
+        );
+    }
+
+    #[rstest]
+    #[case("containerd://2.1.0", "containerd must be 2.2.0 or newer")]
+    #[case("containerd://2.1.5-rc.1", "containerd must be 2.2.0 or newer")]
+    #[case("containerd://2.0.0", "containerd must be 2.2.0 or newer")]
+    #[case("containerd://1.7.0", "containerd must be 2.2.0 or newer")]
+    #[case("containerd://1.6.28", "containerd must be 2.2.0 or newer")]
+    #[case("2.1.0", "containerd must be 2.2.0 or newer")]
+    #[case("invalid", "Invalid containerd version format")]
+    #[case("containerd://abc.2.0", "Failed to parse major version")]
+    fn test_check_containerd_erofs_version_support_failing(
+        #[case] version: &str,
+        #[case] expected_error: &str,
+    ) {
+        let result = check_containerd_erofs_version_support(version);
+        assert!(result.is_err(), "Expected {} to fail", version);
+        assert!(
+            result.unwrap_err().to_string().contains(expected_error),
+            "Expected error for {} to contain '{}'",
+            version,
+            expected_error
+        );
     }
 }
