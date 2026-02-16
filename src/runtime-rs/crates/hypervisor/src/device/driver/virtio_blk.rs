@@ -95,6 +95,9 @@ pub struct BlockConfig {
     /// scsi_addr is of the format SCSI-Id:LUN
     pub scsi_addr: Option<String>,
 
+    /// CCW device address for virtio-blk-ccw on s390x (e.g., "0.0.0005")
+    pub ccw_addr: Option<String>,
+
     /// device attach count
     pub attach_count: u64,
 

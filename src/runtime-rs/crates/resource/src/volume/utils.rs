@@ -16,7 +16,8 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{get_mount_options, get_mount_path};
 use kata_types::device::{
-    DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE, DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
+    DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
+    DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
 };
 use oci_spec::runtime as oci;
 
@@ -102,6 +103,13 @@ pub async fn handle_block_volume(
                     scsi_addr.to_string()
                 } else {
                     return Err(anyhow!("block driver is scsi but no scsi address exists"));
+                }
+            }
+            KATA_CCW_DEV_TYPE => {
+                if let Some(ccw_addr) = device.config.ccw_addr {
+                    ccw_addr.to_string()
+                } else {
+                    return Err(anyhow!("block driver is ccw but no ccw address exists"));
                 }
             }
             _ => device.config.virt_path,
