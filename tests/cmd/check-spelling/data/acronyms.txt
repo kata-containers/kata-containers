@@ -52,7 +52,10 @@ mem/B	# For terms like "virtio-mem"
 memdisk/B
 MDEV/AB
 NEMU/AB
+NFD/AB		# Node Feature Discovery
 NIC/AB
+nodeSelector/B	# Kubernetes RuntimeClass scheduling field
+nodeSelectors/B
 nv/AB		# NVIDIA abbreviation (lowercase)
 NVDIMM/AB
 OCI/AB
@@ -74,15 +77,20 @@ QEMU/AB
 RBAC/AB
 RDMA/AB
 RNG/AB
+RuntimeClass/B	# Kubernetes resource (node.k8s.io)
+RuntimeClasses/B
 SaaS/B  # Software as a Service
 SCSI/AB
 SDK/AB
 seccomp # secure computing mode
 SHA/AB
+SEL/AB		# IBM Secure Execution for Linux
 SPDX/AB
 SRIOV/AB
+SEV-SNP/B	# AMD Secure Encrypted Virtualization - Secure Nested Paging
 SVG/AB
 TBD/AB
+TEE/AB		# Trusted Execution Environment
 TOC/AB
 TOML/AB
 TTY/AB

@@ -1,9 +1,68 @@
+{{- /*
+  Render a single RuntimeClass. Params (dict): root (.), shim, config, shimConfig,
+  nameOverride (optional; if set, use as metadata.name for default RC), useShimNodeSelectors.
+*/ -}}
+{{- define "kata-deploy.runtimeclass" -}}
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+{{- if .root.Values.env.multiInstallSuffix }}
+  name: kata-{{ .shim }}-{{ .root.Values.env.multiInstallSuffix }}
+{{- else if .nameOverride }}
+  name: {{ .nameOverride }}
+{{- else }}
+  name: kata-{{ .shim }}
+{{- end }}
+  labels:
+    app.kubernetes.io/managed-by: kata-deploy
+{{- if .root.Values.env.multiInstallSuffix }}
+    kata-deploy/instance: {{ .root.Values.env.multiInstallSuffix | quote }}
+{{- else }}
+    kata-deploy/instance: "default"
+{{- end }}
+{{- if .root.Values.env.multiInstallSuffix }}
+handler: kata-{{ .shim }}-{{ .root.Values.env.multiInstallSuffix }}
+{{- else }}
+handler: kata-{{ .shim }}
+{{- end }}
+overhead:
+  podFixed:
+    memory: {{ .config.memory | quote }}
+    cpu: {{ .config.cpu | quote }}
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+{{- /* TEE shims: snp, tdx, -se, -se-runtime-rs (SE = IBM Secure Execution / SEL) */ -}}
+{{- $isTeeShim := or (contains "snp" .shim) (contains "tdx" .shim) (hasSuffix "-se" .shim) (hasSuffix "-se-runtime-rs" .shim) -}}
+{{- $isPureTeeShim := and $isTeeShim (not (contains "nvidia-gpu" .shim)) -}}
+{{- if or (and .shimConfig.runtimeClass .shimConfig.runtimeClass.nodeSelector) (and .useShimNodeSelectors $isPureTeeShim) }}
+{{- if and .shimConfig.runtimeClass .shimConfig.runtimeClass.nodeSelector }}
+{{- range $key, $value := .shimConfig.runtimeClass.nodeSelector }}
+    {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- else }}
+{{- if contains "snp" .shim }}
+    amd.feature.node.kubernetes.io/snp: "true"
+{{- end }}
+{{- if contains "tdx" .shim }}
+    intel.feature.node.kubernetes.io/tdx: "true"
+{{- end }}
+{{- if or (hasSuffix "-se" .shim) (hasSuffix "-se-runtime-rs" .shim) }}
+    feature.node.kubernetes.io/cpu-security.se.enabled: "true"
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- if .Values.runtimeClasses.enabled }}
 {{- $multiInstallSuffix := .Values.env.multiInstallSuffix }}
 {{- $createDefaultRC := .Values.runtimeClasses.createDefault }}
 {{- $defaultRCName := .Values.runtimeClasses.defaultName }}
+{{- $nfdEnabled := index .Values "node-feature-discovery" "enabled" | default false }}
+{{- $externalNFDNamespace := include "kata-deploy.detectExistingNFD" . | trim -}}
+{{- $useShimNodeSelectors := or $nfdEnabled (ne $externalNFDNamespace "") -}}
 
-{{- /* Get enabled shims from structured config using null-aware logic */ -}}
 {{- $disableAll := .Values.shims.disableAll | default false -}}
 {{- $enabledShims := list -}}
 {{- range $shimName, $shimConfig := .Values.shims -}}
@@ -22,7 +81,6 @@
 {{- end -}}
 {{- end -}}
 
-{{- /* Define runtime class configurations with their overhead settings and node selectors */ -}}
 {{- $runtimeClassConfigs := dict
   "clh" (dict "memory" "130Mi" "cpu" "250m")
   "cloud-hypervisor" (dict "memory" "130Mi" "cpu" "250m")
@@ -46,69 +104,16 @@
   "remote" (dict "memory" "120Mi" "cpu" "250m")
 }}
 
-{{- /* Create RuntimeClass for each enabled shim */ -}}
+{{- /* Create RuntimeClass for each enabled shim; when default RC is requested, emit it by reusing the same template with nameOverride */ -}}
+{{- $defaultShim := index .Values.defaultShim "amd64" | default (index .Values.defaultShim "arm64") | default (index .Values.defaultShim "s390x") | default (index .Values.defaultShim "ppc64le") }}
 {{- range $shim := $enabledShims }}
 {{- $config := index $runtimeClassConfigs $shim }}
 {{- $shimConfig := index $.Values.shims $shim }}
 {{- if $config }}
----
-kind: RuntimeClass
-apiVersion: node.k8s.io/v1
-metadata:
-{{- if $multiInstallSuffix }}
-  name: kata-{{ $shim }}-{{ $multiInstallSuffix }}
-{{- else }}
-  name: kata-{{ $shim }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $config "shimConfig" $shimConfig "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{- if and $createDefaultRC (not $multiInstallSuffix) (eq $shim $defaultShim) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $config "shimConfig" $shimConfig "nameOverride" $defaultRCName "useShimNodeSelectors" $useShimNodeSelectors) }}
 {{- end }}
-  labels:
-    app.kubernetes.io/managed-by: kata-deploy
-{{- if $multiInstallSuffix }}
-    kata-deploy/instance: {{ $multiInstallSuffix | quote }}
-{{- else }}
-    kata-deploy/instance: "default"
-{{- end }}
-{{- if $multiInstallSuffix }}
-handler: kata-{{ $shim }}-{{ $multiInstallSuffix }}
-{{- else }}
-handler: kata-{{ $shim }}
-{{- end }}
-overhead:
-  podFixed:
-    memory: {{ $config.memory | quote }}
-    cpu: {{ $config.cpu | quote }}
-scheduling:
-  nodeSelector:
-    katacontainers.io/kata-runtime: "true"
-{{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.nodeSelector }}
-{{- range $key, $value := $shimConfig.runtimeClass.nodeSelector }}
-    {{ $key }}: {{ $value | quote }}
-{{- end }}
-{{- end }}
-{{- end }}
-{{- end }}
-
-{{- /* Create default RuntimeClass if requested */ -}}
-{{- if and $createDefaultRC (not $multiInstallSuffix) }}
-{{- /* Get default shim from structured config - use amd64 as the primary reference */ -}}
-{{- $defaultShim := index .Values.defaultShim "amd64" | default (index .Values.defaultShim "arm64") | default (index .Values.defaultShim "s390x") | default (index .Values.defaultShim "ppc64le") }}
-{{- $defaultConfig := index $runtimeClassConfigs $defaultShim }}
-{{- if and $defaultShim $defaultConfig }}
----
-kind: RuntimeClass
-apiVersion: node.k8s.io/v1
-metadata:
-  name: {{ $defaultRCName }}
-  labels:
-    app.kubernetes.io/managed-by: kata-deploy
-    kata-deploy/instance: "default"
-handler: kata-{{ $defaultShim }}
-overhead:
-  podFixed:
-    memory: {{ $defaultConfig.memory | quote }}
-    cpu: {{ $defaultConfig.cpu | quote }}
-scheduling:
-  nodeSelector:
-    katacontainers.io/kata-runtime: "true"
 {{- end }}
 {{- end }}
 {{- end }}
