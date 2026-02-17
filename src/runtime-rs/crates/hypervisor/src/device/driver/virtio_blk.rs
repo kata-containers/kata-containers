@@ -13,17 +13,17 @@ use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+pub use kata_types::device::{
+    DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_MMIO_TYPE as KATA_MMIO_BLK_DEV_TYPE,
+    DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE, DRIVER_NVDIMM_TYPE as KATA_NVDIMM_DEV_TYPE,
+    DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
+};
 
 /// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
 pub const VIRTIO_BLOCK_PCI: &str = "virtio-blk-pci";
 pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
 pub const VIRTIO_BLOCK_CCW: &str = "virtio-blk-ccw";
 pub const VIRTIO_PMEM: &str = "virtio-pmem";
-pub const KATA_MMIO_BLK_DEV_TYPE: &str = "mmioblk";
-pub const KATA_BLK_DEV_TYPE: &str = "blk";
-pub const KATA_CCW_DEV_TYPE: &str = "blk-ccw";
-pub const KATA_NVDIMM_DEV_TYPE: &str = "nvdimm";
-pub const KATA_SCSI_DEV_TYPE: &str = "scsi";
 
 #[derive(Clone, Copy, Debug, Default)]
 pub enum BlockDeviceAio {

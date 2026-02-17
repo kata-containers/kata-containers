@@ -10,6 +10,7 @@ use crate::qemu::qmp::get_qmp_socket_path;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, selinux,
     HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
 };
 
 use crate::utils::{
@@ -133,18 +134,18 @@ impl QemuInner {
                         continue;
                     }
                     match block_dev.config.driver_option.as_str() {
-                        "nvdimm" => cmdline.add_nvdimm(
+                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "blk-ccw" | "blk" | "scsi" => cmdline.add_block_device(
+                        KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
                             block_dev
                                 .config
                                 .is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
-                            block_dev.config.driver_option.as_str() == "scsi",
+                            block_dev.config.driver_option.as_str() == KATA_SCSI_DEV_TYPE,
                         )?,
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
