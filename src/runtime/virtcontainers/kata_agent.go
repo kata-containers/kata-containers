@@ -1019,33 +1019,32 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 	}
 
 	// Pass SELinux label for the container process to the agent.
-	if grpcSpec.Process.SelinuxLabel != "" {
-		if !disableGuestSeLinux {
-			k.Logger().Info("SELinux label will be applied to the container process inside guest")
+	if !disableGuestSeLinux {
 
-			var label string
-			if guestSeLinuxLabel != "" {
-				label = guestSeLinuxLabel
-			} else {
-				label = grpcSpec.Process.SelinuxLabel
-			}
-
-			processContext, err := selinux.NewContext(label)
-			if err != nil {
-				return err
-			}
-
-			// Change the type from KVM to container because the type passed from the high-level
-			// runtime is for KVM process.
-			if guestSeLinuxLabel == "" {
-				processContext["type"] = defaultSeLinuxContainerType
-			}
-			grpcSpec.Process.SelinuxLabel = processContext.Get()
+		var label string
+		if guestSeLinuxLabel != "" {
+			label = guestSeLinuxLabel
 		} else {
-			k.Logger().Info("Empty SELinux label for the process and the mount because guest SELinux is disabled")
-			grpcSpec.Process.SelinuxLabel = ""
-			grpcSpec.Linux.MountLabel = ""
+			label = grpcSpec.Process.SelinuxLabel
 		}
+
+		processContext, err := selinux.NewContext(label)
+		if err != nil {
+			return err
+		}
+
+		// Change the type from KVM to container because the type passed from the high-level
+		// runtime is for KVM process.
+		if guestSeLinuxLabel == "" {
+			processContext["type"] = defaultSeLinuxContainerType
+		}
+		grpcSpec.Process.SelinuxLabel = processContext.Get()
+		k.Logger().Info("SELinux label will be applied to the container process inside guest: ",
+			grpcSpec.Process.SelinuxLabel)
+	} else {
+		k.Logger().Info("Empty SELinux label for the process and the mount because guest SELinux is disabled")
+		grpcSpec.Process.SelinuxLabel = ""
+		grpcSpec.Linux.MountLabel = ""
 	}
 
 	// By now only CPU constraints are supported
@@ -1473,10 +1472,6 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	passSeccomp := !sandbox.config.DisableGuestSeccomp && sandbox.seccompSupported
 
-	// Currently, guest SELinux can be enabled only when SELinux is enabled on the host side.
-	if !sandbox.config.HypervisorConfig.DisableGuestSeLinux && !selinux.GetEnabled() {
-		return nil, fmt.Errorf("Guest SELinux is enabled, but SELinux is disabled on the host side")
-	}
 	if sandbox.config.HypervisorConfig.DisableGuestSeLinux && sandbox.config.GuestSeLinuxLabel != "" {
 		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
 	}

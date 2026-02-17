@@ -55,6 +55,7 @@ readonly dax_alignment=2
 AGENT_INIT=${AGENT_INIT:-no}
 SELINUX=${SELINUX:-no}
 SELINUXFS="/sys/fs/selinux"
+SELINUX_ENFORCING=${SELINUX_ENFORCING:-yes}
 
 # shellcheck source=../scripts/lib.sh
 source "${lib_file}"
@@ -85,6 +86,10 @@ Extra environment variables:
 	                Make sure that selinuxfs is mounted to /sys/fs/selinux on the host
 	                and the rootfs is built with SELINUX=yes.
 	                DEFAULT value: "no"
+	SELINUX_ENFORCING:
+					If set to "yes", the image will be configured to enforce SELinux.
+					If set to "no", permissive (non-enforcing but logging) mode will be set.
+					DEFAULT value: "yes"
 
 Following diagram shows how the resulting image will look like
 
@@ -172,6 +177,7 @@ build_with_container() {
 		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 		   --env SELINUX="${SELINUX}" \
+		   --env SELINUX_ENFORCING="${SELINUX_ENFORCING}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
 		   --env TARGET_ARCH="${TARGET_ARCH}" \
@@ -414,6 +420,17 @@ create_disk() {
 	OK "Partitions created"
 }
 
+setup_selinux_agent() {
+	local mount_dir="$1"
+	# need to check the distro since policies vary
+	if [ -f ${mount_dir}/etc/os-release ]; then
+		local DISTRO=`sed -n 's/^NAME=\(.*\)$/\1/p' < ${mount_dir}/etc/os-release`
+		if [ "${DISTRO}" == "\"Ubuntu\"" ]; then
+			chroot "${mount_dir}" /usr/bin/chcon "system_u:system_r:dockerd_t:s0" /usr/bin/kata-agent
+		fi
+	fi
+}
+
 setup_selinux() {
 		local mount_dir="$1"
 		local agent_bin="$2"
@@ -426,14 +443,21 @@ setup_selinux() {
 			info "Labeling rootfs for SELinux"
 			selinuxfs_path="${mount_dir}${SELINUXFS}"
 			mkdir -p "$selinuxfs_path"
-			if mountpoint $SELINUXFS > /dev/null && \
-				chroot "${mount_dir}" command -v restorecon > /dev/null; then
+			if mountpoint $SELINUXFS > /dev/null; then
 				mount -t selinuxfs selinuxfs "$selinuxfs_path"
-				chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
+				chroot "${mount_dir}" /usr/sbin/restorecon -RF -e ${SELINUXFS} /
+				setup_selinux_agent ${mount_dir}
 				umount "${selinuxfs_path}"
 			else
 				die "Could not label the rootfs. Make sure that SELinux is enabled on the host \
   and the rootfs is built with SELINUX=yes"
+			fi
+			if [ "${SELINUX_ENFORCING}" == "yes" ]; then
+				info "Setting SELinux to enforcing"
+				sed -i 's/^SELINUX=permissive$/SELINUX=enforcing/' ${mount_dir}/etc/selinux/config
+			else
+				info "WARNING: Setting SELinux to permissive"
+				sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' ${mount_dir}/etc/selinux/config
 			fi
 		fi
 }
