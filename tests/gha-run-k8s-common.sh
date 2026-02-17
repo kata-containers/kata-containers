@@ -127,7 +127,6 @@ function create_cluster() {
 		--node-count 1
 		--generate-ssh-keys
 		--tags "${tags[@]}")
-	[[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && aks_create+=( --os-sku AzureLinux --workload-runtime KataVmIsolation)
 	"${aks_create[@]}"
 }
 
