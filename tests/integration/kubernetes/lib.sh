@@ -194,8 +194,15 @@ assert_pod_fail() {
 		echo "Waiting for a container to fail"
 		sleep "${sleep_time}"
 		elapsed_time=$((elapsed_time+sleep_time))
-		if [[ $(kubectl get pod "${pod_name}" \
-			-o jsonpath='{.status.containerStatuses[0].state.waiting.reason}') = *BackOff* ]]; then
+		waiting_reason=$(kubectl get pod "${pod_name}" \
+			-o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)
+		terminated_reason=$(kubectl get pod "${pod_name}" \
+			-o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' 2>/dev/null || true)
+		# BackOff/CrashLoopBackOff = container repeatedly failed; RunContainerError = e.g. image pull in guest failed
+		if [[ "${waiting_reason}" == *BackOff* ]] || [[ "${waiting_reason}" == *RunContainerError* ]]; then
+			return 0
+		fi
+		if [[ "${terminated_reason}" == "StartError" ]] || [[ "${terminated_reason}" == "Error" ]]; then
 			return 0
 		fi
 		if [[ "${elapsed_time}" -gt "${duration}" ]]; then
