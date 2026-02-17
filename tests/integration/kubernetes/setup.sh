@@ -102,13 +102,8 @@ add_annotations_to_yaml() {
 add_cbl_mariner_annotation_to_yaml() {
 	local -r yaml_file="$1"
 
-	local -r mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
-	local -r mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
-
 	local -r mariner_annotation_image="io.katacontainers.config.hypervisor.image"
 	local -r mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
-
-	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
 	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_image}" "${mariner_image_path}"
 }
 
