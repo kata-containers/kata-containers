@@ -83,14 +83,6 @@ github.com/cilium/ebpf/internal/sysenc
 github.com/cilium/ebpf/internal/tracefs
 github.com/cilium/ebpf/internal/unix
 github.com/cilium/ebpf/link
-# github.com/container-orchestrated-devices/container-device-interface v0.6.0
-## explicit; go 1.17
-github.com/container-orchestrated-devices/container-device-interface/internal/multierror
-github.com/container-orchestrated-devices/container-device-interface/internal/validation
-github.com/container-orchestrated-devices/container-device-interface/internal/validation/k8s
-github.com/container-orchestrated-devices/container-device-interface/pkg/cdi
-github.com/container-orchestrated-devices/container-device-interface/pkg/parser
-github.com/container-orchestrated-devices/container-device-interface/specs-go
 # github.com/containerd/cgroups v1.1.0
 ## explicit; go 1.17
 github.com/containerd/cgroups
