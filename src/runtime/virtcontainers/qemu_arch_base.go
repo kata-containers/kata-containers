@@ -63,7 +63,8 @@ type qemuArch interface {
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus.
 	// numNUMANodes > 1 restructures the topology so vCPUs are grouped by socket per NUMA node.
-	cpuTopology(vcpus, maxvcpus uint32, numNUMANodes uint32) govmmQemu.SMP
+	// When confidentialGuest is true, CPU hotplug is disabled by setting MaxCPUs to 0.
+	cpuTopology(vcpus, maxvcpus uint32, numNUMANodes uint32, confidentialGuest bool) govmmQemu.SMP
 
 	// cpuModel returns the CPU model for the machine type
 	cpuModel() string
@@ -325,29 +326,43 @@ func (q *qemuArchBase) bridges(number uint32) {
 	}
 }
 
-func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32, numNUMANodes uint32) govmmQemu.SMP {
+func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32, numNUMANodes uint32, confidentialGuest bool) govmmQemu.SMP {
+	var smp govmmQemu.SMP
+
 	if numNUMANodes > 1 {
 		coresPerSocket := (maxvcpus + numNUMANodes - 1) / numNUMANodes
 		if coresPerSocket == 0 {
 			coresPerSocket = 1
 		}
 		smpMaxCPUs := numNUMANodes * coresPerSocket * defaultThreads
-		return govmmQemu.SMP{
+		smp = govmmQemu.SMP{
 			CPUs:    vcpus,
 			Sockets: numNUMANodes,
 			Cores:   coresPerSocket,
 			Threads: defaultThreads,
 			MaxCPUs: smpMaxCPUs,
 		}
+	} else {
+		smp = govmmQemu.SMP{
+			CPUs:    vcpus,
+			Sockets: maxvcpus,
+			Cores:   defaultCores,
+			Threads: defaultThreads,
+			MaxCPUs: maxvcpus,
+		}
 	}
 
-	return govmmQemu.SMP{
-		CPUs:    vcpus,
-		Sockets: maxvcpus,
-		Cores:   defaultCores,
-		Threads: defaultThreads,
-		MaxCPUs: maxvcpus,
+	// Disable CPU hotplug for confidential guests: zero MaxCPUs and Sockets so
+	// govmmQemu omits them, causing QEMU to set maxcpus=cpus. Cores is reset to
+	// defaultCores (1) so QEMU can infer a valid sockets value (cpus/cores/threads);
+	// a NUMA-derived coresPerSocket left here would violate the topology constraint.
+	if confidentialGuest {
+		smp.MaxCPUs = 0
+		smp.Sockets = 0
+		smp.Cores = defaultCores
 	}
+
+	return smp
 }
 
 func (q *qemuArchBase) cpuModel() string {

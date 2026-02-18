@@ -49,13 +49,17 @@ func newQemuConfig() HypervisorConfig {
 	}
 }
 
-func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool) {
+func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool, confidentialGuest bool) {
 	qemuConfig := newQemuConfig()
 	qemuConfig.KernelParams = kernelParams
 	assert := assert.New(t)
 
-	if debug == true {
+	if debug {
 		qemuConfig.Debug = true
+	}
+
+	if confidentialGuest {
+		qemuConfig.ConfidentialGuest = true
 	}
 
 	q := &qemu{
@@ -68,7 +72,6 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
@@ -80,8 +83,18 @@ func TestQemuKernelParameters(t *testing.T) {
 		},
 	}
 
-	testQemuKernelParameters(t, params, expectedOut, true)
-	testQemuKernelParameters(t, params, expectedOut, false)
+	t.Run("NonConfidentialGuest", func(t *testing.T) {
+		// nr_cpus is included for non-confidential guests
+		expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
+		testQemuKernelParameters(t, params, expectedOut, true, false)
+		testQemuKernelParameters(t, params, expectedOut, false, false)
+	})
+
+	t.Run("ConfidentialGuest", func(t *testing.T) {
+		// nr_cpus is omitted for confidential guests (CPU hotplug not applicable)
+		expectedOut := "panic=1 selinux=0 foo=foo bar=bar"
+		testQemuKernelParameters(t, params, expectedOut, false, true)
+	})
 }
 
 func TestQemuCreateVM(t *testing.T) {
@@ -1469,6 +1482,35 @@ func TestBuildNUMATopologyUnevenVCPUs(t *testing.T) {
 	// 3 host CPUs → 4 vCPUs (3 proportional + 1 remainder).
 	assert.Equal("0-1", nodes[0].CPUs)
 	assert.Equal("2-5", nodes[1].CPUs)
+}
+
+func TestBuildNUMATopologyUnevenVCPUsConfidentialGuest(t *testing.T) {
+	if runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64" {
+		t.Skipf("multi-NUMA not supported on %s", runtime.GOARCH)
+	}
+	assert := assert.New(t)
+	// Mirror TestBuildNUMATopologyUnevenVCPUs but with confidentialGuest=true.
+	// Without the fix, maxVCPUs=ceil(5/2)*2=6 would assign cpus=2-5 to node 1
+	// while QEMU infers maxcpus=5, making index 5 out of range.
+	// With the fix, maxVCPUs=5 and node 1 gets cpus=2-4.
+	q := &qemu{
+		config: HypervisorConfig{
+			DefaultMaxVCPUs:   5,
+			MemorySize:        1024,
+			ConfidentialGuest: true,
+			GuestNUMANodes: []types.GuestNUMANode{
+				{HostNodes: "0", HostCPUs: "0-1"},
+				{HostNodes: "1", HostCPUs: "2-4"},
+			},
+		},
+	}
+	nodes, _, err := q.buildNUMATopology()
+	assert.NoError(err)
+	assert.Len(nodes, 2)
+	// 5 vCPUs distributed proportionally: 2 host CPUs → 2 vCPUs, 3 → 3.
+	// All indices within [0, 4] — no index ≥ maxcpus(5).
+	assert.Equal("0-1", nodes[0].CPUs)
+	assert.Equal("2-4", nodes[1].CPUs)
 }
 
 func TestBuildNUMATopologyMemMisaligned(t *testing.T) {

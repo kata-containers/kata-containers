@@ -195,8 +195,10 @@ func (q *qemu) kernelParameters() string {
 	// use default parameters
 	params = append(params, defaultKernelParameters...)
 
-	// set the maximum number of vCPUs
-	params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+	// set the maximum number of vCPUs (not applicable for confidential guests)
+	if !q.config.ConfidentialGuest {
+		params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+	}
 
 	// set the SELinux params in accordance with the runtime configuration, disable_guest_selinux.
 	if q.config.DisableGuestSeLinux {
@@ -336,7 +338,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 }
 
 func (q *qemu) cpuTopology(effectiveNUMANodes uint32) govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, effectiveNUMANodes)
+	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, effectiveNUMANodes, q.config.ConfidentialGuest)
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
@@ -584,10 +586,16 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 	// NumVCPUs == DefaultMaxVCPUs (set in oci/utils.go). All boot vCPUs
 	// are present at VM start, so the per-node CPU ranges below are valid.
 	//
-	// cpuTopology() rounds MaxCPUs up to (numNUMANodes * coresPerSocket)
-	// so that QEMU's SMP topology is consistent. We must cover all CPU
-	// slots in the NUMA map, otherwise QEMU warns about CPUs not present
-	// in any NUMA node. Apply the same ceiling here.
+	// For non-confidential guests, cpuTopology() rounds MaxCPUs up to
+	// (numNUMANodes * coresPerSocket). When vCPUs don't divide evenly across
+	// nodes, the last node gets one fewer boot CPU but the extra CPU slot is
+	// still pre-assigned to that node in the NUMA map so it lands on the
+	// correct node when hotplugged. Apply the same ceiling here.
+	//
+	// For confidential guests, cpuTopology() omits maxcpus so QEMU infers
+	// maxcpus=vcpus. CPU indices in the NUMA map must stay within [0, vcpus-1];
+	// skip the ceiling and distribute exactly DefaultMaxVCPUs. An uneven vCPU
+	// count simply means one node gets one fewer CPU — no hotplug slot needed.
 	numNodes := uint32(len(numaNodes))
 	if q.config.DefaultMaxVCPUs < numNodes {
 		hvLogger.WithFields(logrus.Fields{
@@ -596,8 +604,13 @@ func (q *qemu) buildNUMATopology() ([]govmmQemu.NUMANode, []govmmQemu.NUMADist, 
 		}).Warn("DefaultMaxVCPUs < NUMA node count; skipping multi-NUMA topology")
 		return nil, nil, nil
 	}
-	coresPerSocket := (q.config.DefaultMaxVCPUs + numNodes - 1) / numNodes
-	maxVCPUs := numNodes * coresPerSocket
+	var maxVCPUs uint32
+	if q.config.ConfidentialGuest {
+		maxVCPUs = q.config.DefaultMaxVCPUs
+	} else {
+		coresPerSocket := (q.config.DefaultMaxVCPUs + numNodes - 1) / numNodes
+		maxVCPUs = numNodes * coresPerSocket
+	}
 
 	vcpusPerNode, err := utils.DistributeVCPUsProportionally(numaNodes, maxVCPUs)
 	if err != nil {
