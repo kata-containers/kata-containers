@@ -336,6 +336,19 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 		return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
 	}
 
+	// Work around the kernel bug described in [1] and [2] by aligning
+	// the memory size to a multiple of 1024 for TDX guests with >= 64
+	// Gigabyte of memory.
+	// QEMU adds a little more than 2GB to the count that's relevant
+	// for the aforementioned bug, so the mitigation is applied with a
+	// bit of a safety margin.
+	//
+	// [1]: https://lore.kernel.org/linux-efi/c2632da9-745d-46d8-901a-604008a14ac4@edgeless.systems/T/#u
+	// [2]: https://github.com/canonical/tdx/issues/421
+	if q.arch.getProtection() == tdxProtection && memMb >= 61*1024 {
+		memMb = (memMb + 1023) &^ 1023
+	}
+
 	return q.arch.memoryTopology(memMb, 0, 0), nil
 }
 
