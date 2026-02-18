@@ -291,15 +291,45 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
 
 /// Note: The src parameter is kept to allow for unit testing with temporary directories,
 /// even though in production it always uses /opt/kata-artifacts/opt/kata
+///
+/// Symlinks in the source tree are preserved at the destination (recreated as symlinks
+/// instead of copying the target file). Absolute targets under the source root are
+/// rewritten to the destination root so they remain valid.
 fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
-    for entry in WalkDir::new(src) {
+    let src_path = Path::new(src);
+    for entry in WalkDir::new(src).follow_links(false) {
         let entry = entry?;
-        let src_path = entry.path();
-        let relative_path = src_path.strip_prefix(src)?;
+        let src_path_entry = entry.path();
+        let relative_path = src_path_entry.strip_prefix(src)?;
         let dst_path = Path::new(dst).join(relative_path);
 
         if entry.file_type().is_dir() {
             fs::create_dir_all(&dst_path)?;
+        } else if entry.file_type().is_symlink() {
+            // Preserve symlinks: create a symlink at destination instead of copying the target
+            let link_target = fs::read_link(src_path_entry)
+                .with_context(|| format!("Failed to read symlink: {:?}", src_path_entry))?;
+            let new_target: std::path::PathBuf = if link_target.is_absolute() {
+                // Rewrite absolute targets that point inside the source tree
+                if let Ok(rel) = link_target.strip_prefix(src_path) {
+                    Path::new(dst).join(rel)
+                } else {
+                    link_target.into()
+                }
+            } else {
+                link_target.into()
+            };
+
+            if let Some(parent) = dst_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dst_path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            std::os::unix::fs::symlink(&new_target, &dst_path)
+                .with_context(|| format!("Failed to create symlink {:?} -> {:?}", dst_path, new_target))?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -317,7 +347,7 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
                 Err(e) => return Err(e.into()), // Other errors should be propagated
             }
 
-            fs::copy(src_path, &dst_path)?;
+            fs::copy(src_path_entry, &dst_path)?;
         }
     }
     Ok(())
@@ -888,64 +918,53 @@ async fn configure_mariner(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn test_get_hypervisor_name_qemu_variants() {
-        // Test all QEMU variants
-        assert_eq!(get_hypervisor_name("qemu").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-tdx").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-snp").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-se").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-coco-dev").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-cca").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-nvidia-gpu").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-nvidia-gpu-tdx").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-nvidia-gpu-snp").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-runtime-rs").unwrap(), "qemu");
-        assert_eq!(
-            get_hypervisor_name("qemu-coco-dev-runtime-rs").unwrap(),
-            "qemu"
-        );
-        assert_eq!(get_hypervisor_name("qemu-se-runtime-rs").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-snp-runtime-rs").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-tdx-runtime-rs").unwrap(), "qemu");
+    #[rstest]
+    #[case("qemu", "qemu")]
+    #[case("qemu-tdx", "qemu")]
+    #[case("qemu-snp", "qemu")]
+    #[case("qemu-se", "qemu")]
+    #[case("qemu-coco-dev", "qemu")]
+    #[case("qemu-cca", "qemu")]
+    #[case("qemu-nvidia-gpu", "qemu")]
+    #[case("qemu-nvidia-gpu-tdx", "qemu")]
+    #[case("qemu-nvidia-gpu-snp", "qemu")]
+    #[case("qemu-runtime-rs", "qemu")]
+    #[case("qemu-coco-dev-runtime-rs", "qemu")]
+    #[case("qemu-se-runtime-rs", "qemu")]
+    #[case("qemu-snp-runtime-rs", "qemu")]
+    #[case("qemu-tdx-runtime-rs", "qemu")]
+    fn test_get_hypervisor_name_qemu_variants(#[case] shim: &str, #[case] expected: &str) {
+        assert_eq!(get_hypervisor_name(shim).unwrap(), expected);
     }
 
-    #[test]
-    fn test_get_hypervisor_name_other_hypervisors() {
-        // Test other hypervisors
-        assert_eq!(get_hypervisor_name("clh").unwrap(), "clh");
-        assert_eq!(
-            get_hypervisor_name("cloud-hypervisor").unwrap(),
-            "cloud-hypervisor"
-        );
-        assert_eq!(get_hypervisor_name("dragonball").unwrap(), "dragonball");
-        assert_eq!(get_hypervisor_name("fc").unwrap(), "firecracker");
-        assert_eq!(get_hypervisor_name("firecracker").unwrap(), "firecracker");
-        assert_eq!(get_hypervisor_name("remote").unwrap(), "remote");
+    #[rstest]
+    #[case("clh", "clh")]
+    #[case("cloud-hypervisor", "cloud-hypervisor")]
+    #[case("dragonball", "dragonball")]
+    #[case("fc", "firecracker")]
+    #[case("firecracker", "firecracker")]
+    #[case("remote", "remote")]
+    fn test_get_hypervisor_name_other_hypervisors(#[case] shim: &str, #[case] expected: &str) {
+        assert_eq!(get_hypervisor_name(shim).unwrap(), expected);
     }
 
-    #[test]
-    fn test_get_hypervisor_name_unknown() {
-        // Test unknown shim returns error with clear message
-        let result = get_hypervisor_name("unknown-shim");
+    #[rstest]
+    #[case("")]
+    #[case("unknown-shim")]
+    #[case("custom")]
+    fn test_get_hypervisor_name_unknown(#[case] shim: &str) {
+        let result = get_hypervisor_name(shim);
         assert!(result.is_err(), "Unknown shim should return an error");
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("Unknown shim 'unknown-shim'"),
+            err_msg.contains(&format!("Unknown shim '{}'", shim)),
             "Error message should mention the unknown shim"
         );
         assert!(
             err_msg.contains("Valid shims are:"),
             "Error message should list valid shims"
-        );
-
-        let result = get_hypervisor_name("custom");
-        assert!(result.is_err(), "Custom shim should return an error");
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("Unknown shim 'custom'"),
-            "Error message should mention the custom shim"
         );
     }
 
@@ -1023,10 +1042,36 @@ mod tests {
     }
 
     #[test]
-    fn test_get_hypervisor_name_empty() {
-        let result = get_hypervisor_name("");
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Unknown shim"));
+    fn test_copy_artifacts_preserves_symlinks() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let dst_dir = tempfile::tempdir().unwrap();
+
+        // Create a real file and a symlink pointing to it
+        let real_file = src_dir.path().join("real-file.txt");
+        fs::write(&real_file, "actual content").unwrap();
+        let link_path = src_dir.path().join("link-to-real");
+        std::os::unix::fs::symlink(&real_file, &link_path).unwrap();
+
+        copy_artifacts(
+            src_dir.path().to_str().unwrap(),
+            dst_dir.path().to_str().unwrap(),
+        )
+        .unwrap();
+
+        let dst_link = dst_dir.path().join("link-to-real");
+        let dst_real = dst_dir.path().join("real-file.txt");
+        assert!(dst_real.exists(), "real file should be copied");
+        assert!(dst_link.is_symlink(), "destination should be a symlink");
+        assert_eq!(
+            fs::read_link(&dst_link).unwrap(),
+            dst_real,
+            "symlink should point to the real file in the same tree"
+        );
+        assert_eq!(
+            fs::read_to_string(&dst_link).unwrap(),
+            "actual content",
+            "following the symlink should yield the real content"
+        );
     }
+
 }
