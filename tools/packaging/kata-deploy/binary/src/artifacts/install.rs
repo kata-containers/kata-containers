@@ -291,15 +291,45 @@ fn remove_custom_runtime_configs(config: &Config) -> Result<()> {
 
 /// Note: The src parameter is kept to allow for unit testing with temporary directories,
 /// even though in production it always uses /opt/kata-artifacts/opt/kata
+///
+/// Symlinks in the source tree are preserved at the destination (recreated as symlinks
+/// instead of copying the target file). Absolute targets under the source root are
+/// rewritten to the destination root so they remain valid.
 fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
-    for entry in WalkDir::new(src) {
+    let src_path = Path::new(src);
+    for entry in WalkDir::new(src).follow_links(false) {
         let entry = entry?;
-        let src_path = entry.path();
-        let relative_path = src_path.strip_prefix(src)?;
+        let src_path_entry = entry.path();
+        let relative_path = src_path_entry.strip_prefix(src)?;
         let dst_path = Path::new(dst).join(relative_path);
 
         if entry.file_type().is_dir() {
             fs::create_dir_all(&dst_path)?;
+        } else if entry.file_type().is_symlink() {
+            // Preserve symlinks: create a symlink at destination instead of copying the target
+            let link_target = fs::read_link(src_path_entry)
+                .with_context(|| format!("Failed to read symlink: {:?}", src_path_entry))?;
+            let new_target: std::path::PathBuf = if link_target.is_absolute() {
+                // Rewrite absolute targets that point inside the source tree
+                if let Ok(rel) = link_target.strip_prefix(src_path) {
+                    Path::new(dst).join(rel)
+                } else {
+                    link_target.into()
+                }
+            } else {
+                link_target.into()
+            };
+
+            if let Some(parent) = dst_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            match fs::remove_file(&dst_path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
+            std::os::unix::fs::symlink(&new_target, &dst_path)
+                .with_context(|| format!("Failed to create symlink {:?} -> {:?}", dst_path, new_target))?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -317,7 +347,7 @@ fn copy_artifacts(src: &str, dst: &str) -> Result<()> {
                 Err(e) => return Err(e.into()), // Other errors should be propagated
             }
 
-            fs::copy(src_path, &dst_path)?;
+            fs::copy(src_path_entry, &dst_path)?;
         }
     }
     Ok(())
@@ -1020,6 +1050,39 @@ mod tests {
         let temp_dest = tempfile::tempdir().unwrap();
         let result = copy_artifacts("/nonexistent/source", temp_dest.path().to_str().unwrap());
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_copy_artifacts_preserves_symlinks() {
+        let src_dir = tempfile::tempdir().unwrap();
+        let dst_dir = tempfile::tempdir().unwrap();
+
+        // Create a real file and a symlink pointing to it
+        let real_file = src_dir.path().join("real-file.txt");
+        fs::write(&real_file, "actual content").unwrap();
+        let link_path = src_dir.path().join("link-to-real");
+        std::os::unix::fs::symlink(&real_file, &link_path).unwrap();
+
+        copy_artifacts(
+            src_dir.path().to_str().unwrap(),
+            dst_dir.path().to_str().unwrap(),
+        )
+        .unwrap();
+
+        let dst_link = dst_dir.path().join("link-to-real");
+        let dst_real = dst_dir.path().join("real-file.txt");
+        assert!(dst_real.exists(), "real file should be copied");
+        assert!(dst_link.is_symlink(), "destination should be a symlink");
+        assert_eq!(
+            fs::read_link(&dst_link).unwrap(),
+            dst_real,
+            "symlink should point to the real file in the same tree"
+        );
+        assert_eq!(
+            fs::read_to_string(&dst_link).unwrap(),
+            "actual content",
+            "following the symlink should yield the real content"
+        );
     }
 
     #[test]
