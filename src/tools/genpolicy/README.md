@@ -42,6 +42,34 @@ $ genpolicy --help
 
 For advanced command line parameters, see [`genpolicy` advanced command line parameters](genpolicy-advanced-command-line-parameters.md).
 
+# Settings directory and drop-ins
+
+You can pass a **directory** to `-j` instead of a single file. Genpolicy then loads `genpolicy-settings.json` from that directory and deep-merges all `genpolicy-settings.d/*.json` in lexicographic order. No copying of full files is needed: add or symlink only the override fragments you need.
+
+When installed, the layout under `/opt/kata/share/defaults/kata-containers/` is:
+
+- `genpolicy-settings.json` — base settings (CoCo default)
+- `genpolicy-settings.d/` — empty by default; add drop-ins here
+- `drop-in-examples/` — **example** drop-ins (scenario `10-*.json` and request/exec `99-*.json`). Copy the ones you need into your `genpolicy-settings.d/`. See `drop-in-examples/README.md`. These examples are **tested in the Kata Containers CI**.
+
+| Example drop-in | Use case |
+|-----------------|----------|
+| (none; base only) | CoCo guests, default OCI version |
+| `10-non-coco-drop-in.json` | Non-CoCo (qemu/clh): UpdateEphemeralMountsRequest, watchable configMap, virtio-fs, guest_pull=false |
+| `10-non-coco-aks-drop-in.json` | Non-CoCo on AKS: same + pause UID/GID=0, AKS pause image and id_policy v2 |
+| `10-cbl-mariner-drop-in.json` | CoCo on CBL-Mariner (OCI 1.2.0) |
+| `10-nvidia-gpu-drop-in.json` | CoCo with NVIDIA GPU (OCI 1.2.1) |
+| `10-non-coco-cbl-mariner-drop-in.json` | Non-CoCo on CBL-Mariner |
+| `10-non-coco-aks-cbl-mariner-drop-in.json` | Non-CoCo AKS on CBL-Mariner |
+
+Example:
+
+```bash
+# Copy the example drop-in you need into your .d dir, then run with -j pointing at that dir
+cp /opt/kata/share/defaults/kata-containers/drop-in-examples/10-nvidia-gpu-drop-in.json \
+   /opt/kata/share/defaults/kata-containers/genpolicy-settings.d/
+genpolicy -j /opt/kata/share/defaults/kata-containers -y pod.yaml
+```
 
 # Supported Kubernetes `YAML` file types
 

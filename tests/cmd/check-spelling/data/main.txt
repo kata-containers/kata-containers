@@ -20,6 +20,7 @@ chroot		# Unix change root command
 codebase
 commandline
 config/AB
+configMap/B	# Kubernetes ConfigMap
 crypto		# Cryptography
 cryptoprocessor/AB
 DaemonSet/AB

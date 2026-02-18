@@ -102,6 +102,8 @@ By default, the `genpolicy` input files [`rules.rego`](rules.rego) and [`genpoli
 $ genpolicy -p /tmp/rules.rego -j /tmp/genpolicy-settings.json -y test.yaml
 ```
 
+You can also pass a directory to `-j`: genpolicy loads `genpolicy-settings.json` and deep-merges all `genpolicy-settings.d/*.json` from that directory. The example drop-ins under `drop-in-examples/` are tested in the Kata Containers CI (see main [README](README.md#settings-directory-and-drop-ins)).
+
 # Silently ignore unsupported input `YAML` fields
 
 As described by the [Kubernetes docs](https://kubernetes.io/docs/reference/), K8s supports a very large number of fields in `YAML` files. `genpolicy` supports just a subset of these fields (hopefully the most commonly used fields!). The `genpolicy` authors reviewed the `YAML` fields that are supported as inputs to this tool, and evaluated the impact of each field for confidential containers. Some other input fields were not evaluated and/or don't make much sense when present in an input `YAML` file. By default, when `genpolicy` encounters an unsupported field in its input `YAML` file, the application returns an error.
