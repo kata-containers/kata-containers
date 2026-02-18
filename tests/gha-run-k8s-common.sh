@@ -95,6 +95,7 @@ function create_cluster() {
 	local short_sha
 	local tags
 	local rg
+	local aks_create
 
 	# First ensure it didn't fail to get cleaned up from a previous run.
 	delete_cluster "${test_type}" || true
@@ -117,19 +118,17 @@ function create_cluster() {
 	# Required by e.g. AKS App Routing for KBS installation.
 	az extension add --name aks-preview
 
-	# Adding a double quote on the last line ends up causing issues
-	# ine the cbl-mariner installation.  Because of that, let's just
-	# disable the warning for this specific case.
-	# shellcheck disable=SC2046
-	az aks create \
-		-g "${rg}" \
-		--node-resource-group "node-${rg}" \
-		-n "$(_print_cluster_name "${test_type}")" \
-		-s "$(_print_instance_type)" \
-		--node-count 1 \
-		--generate-ssh-keys \
-		--tags "${tags[@]}" \
-		$([[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && echo "--os-sku AzureLinux --workload-runtime KataVmIsolation")
+	# Create the cluster.
+	aks_create=(az aks create
+		-g "${rg}"
+		--node-resource-group "node-${rg}"
+		-n "$(_print_cluster_name "${test_type}")"
+		-s "$(_print_instance_type)"
+		--node-count 1
+		--generate-ssh-keys
+		--tags "${tags[@]}")
+	[[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && aks_create+=( --os-sku AzureLinux --workload-runtime KataVmIsolation)
+	"${aks_create[@]}"
 }
 
 function install_bats() {
