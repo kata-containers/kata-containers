@@ -918,64 +918,53 @@ async fn configure_mariner(config: &Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
-    #[test]
-    fn test_get_hypervisor_name_qemu_variants() {
-        // Test all QEMU variants
-        assert_eq!(get_hypervisor_name("qemu").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-tdx").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-snp").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-se").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-coco-dev").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-cca").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-nvidia-gpu").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-nvidia-gpu-tdx").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-nvidia-gpu-snp").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-runtime-rs").unwrap(), "qemu");
-        assert_eq!(
-            get_hypervisor_name("qemu-coco-dev-runtime-rs").unwrap(),
-            "qemu"
-        );
-        assert_eq!(get_hypervisor_name("qemu-se-runtime-rs").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-snp-runtime-rs").unwrap(), "qemu");
-        assert_eq!(get_hypervisor_name("qemu-tdx-runtime-rs").unwrap(), "qemu");
+    #[rstest]
+    #[case("qemu", "qemu")]
+    #[case("qemu-tdx", "qemu")]
+    #[case("qemu-snp", "qemu")]
+    #[case("qemu-se", "qemu")]
+    #[case("qemu-coco-dev", "qemu")]
+    #[case("qemu-cca", "qemu")]
+    #[case("qemu-nvidia-gpu", "qemu")]
+    #[case("qemu-nvidia-gpu-tdx", "qemu")]
+    #[case("qemu-nvidia-gpu-snp", "qemu")]
+    #[case("qemu-runtime-rs", "qemu")]
+    #[case("qemu-coco-dev-runtime-rs", "qemu")]
+    #[case("qemu-se-runtime-rs", "qemu")]
+    #[case("qemu-snp-runtime-rs", "qemu")]
+    #[case("qemu-tdx-runtime-rs", "qemu")]
+    fn test_get_hypervisor_name_qemu_variants(#[case] shim: &str, #[case] expected: &str) {
+        assert_eq!(get_hypervisor_name(shim).unwrap(), expected);
     }
 
-    #[test]
-    fn test_get_hypervisor_name_other_hypervisors() {
-        // Test other hypervisors
-        assert_eq!(get_hypervisor_name("clh").unwrap(), "clh");
-        assert_eq!(
-            get_hypervisor_name("cloud-hypervisor").unwrap(),
-            "cloud-hypervisor"
-        );
-        assert_eq!(get_hypervisor_name("dragonball").unwrap(), "dragonball");
-        assert_eq!(get_hypervisor_name("fc").unwrap(), "firecracker");
-        assert_eq!(get_hypervisor_name("firecracker").unwrap(), "firecracker");
-        assert_eq!(get_hypervisor_name("remote").unwrap(), "remote");
+    #[rstest]
+    #[case("clh", "clh")]
+    #[case("cloud-hypervisor", "cloud-hypervisor")]
+    #[case("dragonball", "dragonball")]
+    #[case("fc", "firecracker")]
+    #[case("firecracker", "firecracker")]
+    #[case("remote", "remote")]
+    fn test_get_hypervisor_name_other_hypervisors(#[case] shim: &str, #[case] expected: &str) {
+        assert_eq!(get_hypervisor_name(shim).unwrap(), expected);
     }
 
-    #[test]
-    fn test_get_hypervisor_name_unknown() {
-        // Test unknown shim returns error with clear message
-        let result = get_hypervisor_name("unknown-shim");
+    #[rstest]
+    #[case("")]
+    #[case("unknown-shim")]
+    #[case("custom")]
+    fn test_get_hypervisor_name_unknown(#[case] shim: &str) {
+        let result = get_hypervisor_name(shim);
         assert!(result.is_err(), "Unknown shim should return an error");
         let err_msg = result.unwrap_err().to_string();
         assert!(
-            err_msg.contains("Unknown shim 'unknown-shim'"),
+            err_msg.contains(&format!("Unknown shim '{}'", shim)),
             "Error message should mention the unknown shim"
         );
         assert!(
             err_msg.contains("Valid shims are:"),
             "Error message should list valid shims"
-        );
-
-        let result = get_hypervisor_name("custom");
-        assert!(result.is_err(), "Custom shim should return an error");
-        let err_msg = result.unwrap_err().to_string();
-        assert!(
-            err_msg.contains("Unknown shim 'custom'"),
-            "Error message should mention the custom shim"
         );
     }
 
@@ -1085,11 +1074,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_get_hypervisor_name_empty() {
-        let result = get_hypervisor_name("");
-        assert!(result.is_err());
-        let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("Unknown shim"));
-    }
 }
