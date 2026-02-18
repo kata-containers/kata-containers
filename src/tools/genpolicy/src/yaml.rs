@@ -304,7 +304,6 @@ pub fn get_container_mounts_and_storages(
                             storages,
                             volume,
                             volume_mount,
-                            &podSpec.securityContext,
                         );
                     }
                 }

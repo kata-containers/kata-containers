@@ -1160,7 +1160,7 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
     print("mount_source_allows 2: regex3 =", regex3)
 
-    regex4 := replace(regex3, "$(sandbox-id)", sandbox_id)
+    regex4 := replace(regex3, "$(bundle-id)", "[a-z0-9]{64}")
     print("mount_source_allows 2: regex4 =", regex4)
     regex.match(regex4, i_mount.source)
 
