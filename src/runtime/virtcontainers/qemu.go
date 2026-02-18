@@ -193,8 +193,10 @@ func (q *qemu) kernelParameters() string {
 	// use default parameters
 	params = append(params, defaultKernelParameters...)
 
-	// set the maximum number of vCPUs
-	params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+	// set the maximum number of vCPUs (not applicable for confidential guests)
+	if !q.config.ConfidentialGuest {
+		params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+	}
 
 	// set the SELinux params in accordance with the runtime configuration, disable_guest_selinux.
 	if q.config.DisableGuestSeLinux {
@@ -326,7 +328,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 }
 
 func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs)
+	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, q.config.ConfidentialGuest)
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {

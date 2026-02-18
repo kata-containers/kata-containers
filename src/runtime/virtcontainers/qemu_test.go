@@ -47,13 +47,17 @@ func newQemuConfig() HypervisorConfig {
 	}
 }
 
-func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool) {
+func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool, confidentialGuest bool) {
 	qemuConfig := newQemuConfig()
 	qemuConfig.KernelParams = kernelParams
 	assert := assert.New(t)
 
-	if debug == true {
+	if debug {
 		qemuConfig.Debug = true
+	}
+
+	if confidentialGuest {
+		qemuConfig.ConfidentialGuest = true
 	}
 
 	q := &qemu{
@@ -66,7 +70,6 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
@@ -78,8 +81,18 @@ func TestQemuKernelParameters(t *testing.T) {
 		},
 	}
 
-	testQemuKernelParameters(t, params, expectedOut, true)
-	testQemuKernelParameters(t, params, expectedOut, false)
+	t.Run("NonConfidentialGuest", func(t *testing.T) {
+		// nr_cpus is included for non-confidential guests
+		expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d selinux=0 foo=foo bar=bar", govmm.MaxVCPUs())
+		testQemuKernelParameters(t, params, expectedOut, true, false)
+		testQemuKernelParameters(t, params, expectedOut, false, false)
+	})
+
+	t.Run("ConfidentialGuest", func(t *testing.T) {
+		// nr_cpus is omitted for confidential guests (CPU hotplug not applicable)
+		expectedOut := "panic=1 selinux=0 foo=foo bar=bar"
+		testQemuKernelParameters(t, params, expectedOut, false, true)
+	})
 }
 
 func TestQemuCreateVM(t *testing.T) {
