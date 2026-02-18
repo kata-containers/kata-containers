@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2026 IBM Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: configmap-volume-test-pod
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: test-container
+    image: quay.io/prometheus/busybox:latest
+    command: ["sh", "-c", "while true; do sleep 10; done"]
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+  volumes:
+  - name: config-volume
+    configMap:
+      name: test-configmap
+  restartPolicy: Never
