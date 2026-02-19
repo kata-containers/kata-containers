@@ -27,8 +27,6 @@ on:
         required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
-      KBUILD_SIGN_PIN:
-        required: true
 
 permissions: {}
 
@@ -44,8 +42,6 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets:
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
@@ -119,7 +115,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
       tarball-suffix: -${{ inputs.tag }}
     secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ vars.AUTHENTICATED_IMAGE_PASSWORD }}
       AZ_APPID: ${{ secrets.AZ_APPID }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}

@@ -35,7 +35,6 @@ jobs:
       target-arch: amd64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-and-push-assets-arm64:
     needs: release
@@ -49,7 +48,6 @@ jobs:
       target-arch: arm64
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-and-push-assets-s390x:
     needs: release
@@ -62,7 +60,6 @@ jobs:
     with:
       target-arch: s390x
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-and-push-assets-ppc64le:

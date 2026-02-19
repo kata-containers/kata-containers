@@ -24,7 +24,6 @@ jobs:
       target-branch: ${{ github.ref_name }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-assets-arm64:
     permissions:
@@ -39,7 +38,6 @@ jobs:
       target-branch: ${{ github.ref_name }}
     secrets:
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   build-assets-s390x:
     permissions:
@@ -53,7 +51,6 @@ jobs:
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
     secrets:
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-assets-ppc64le:

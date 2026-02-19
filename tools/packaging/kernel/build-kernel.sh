@@ -31,7 +31,6 @@ readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.con
 # xPU vendor
 readonly VENDOR_INTEL="intel"
 readonly VENDOR_NVIDIA="nvidia"
-readonly KBUILD_SIGN_PIN=${KBUILD_SIGN_PIN:-""}
 readonly KERNEL_DEBUG_ENABLED=${KERNEL_DEBUG_ENABLED:-"no"}
 
 #Path to kernel directory
@@ -313,13 +312,6 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${tmpfs_configs}"
 	fi
 
-	if [[ "${KBUILD_SIGN_PIN}" != "" ]]; then
-		info "Enabling config for module signing"
-		local sign_configs
-		sign_configs="$(ls ${common_path}/signing/module_signing.conf)"
-		all_configs="${all_configs} ${sign_configs}"
-	fi
-
 	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
 		info "Enable kernel debug"
 		local debug_configs="$(ls ${common_path}/common/debug.conf)"
@@ -542,16 +534,6 @@ build_kernel_headers() {
 	if [ "$linux_headers" == "rpm" ]; then
 		make -j $(nproc) rpm-pkg ARCH="${arch_target}"
 	fi
-	# If we encrypt the key earlier it will break the kernel_headers build.
-	# At this stage the kernel has created the certs/signing_key.pem
-	# encrypt it for later usage in another job or out-of-tree build
-	# only encrypt if we have KBUILD_SIGN_PIN set
-	local key="certs/signing_key.pem"
-	if [ -n "${KBUILD_SIGN_PIN}" ]; then
-		[ -e "${key}" ] || die "${key} missing but KBUILD_SIGN_PIN is set"
-		openssl rsa -aes256 -in ${key} -out ${key} -passout env:KBUILD_SIGN_PIN
-	fi
-
 	popd >>/dev/null
 }
 

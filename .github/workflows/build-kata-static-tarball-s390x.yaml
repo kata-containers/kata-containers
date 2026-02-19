@@ -21,8 +21,6 @@ on:
         type: string
         default: ""
     secrets:
-      CI_HKD_PATH:
-        required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
 
@@ -197,60 +195,11 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  build-asset-boot-image-se:
-    name: build-asset-boot-image-se
-    runs-on: s390x
-    needs: [build-asset, build-asset-rootfs]
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: get-artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
-        with:
-          pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
-          path: kata-artifacts
-          merge-multiple: true
-
-      - name: Place a host key document
-        run: |
-          mkdir -p "host-key-document"
-          cp "${CI_HKD_PATH}" "host-key-document"
-        env:
-          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
-
-      - name: Build boot-image-se
-        run: |
-          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "boot-image-se"
-          make boot-image-se-tarball
-          build_dir=$(readlink -f build)
-          sudo cp -r "${build_dir}" "kata-build"
-          sudo chown -R "$(id -u)":"$(id -g)" "kata-build"
-        env:
-          HKD_PATH: "host-key-document"
-
-      - name: store-artifact boot-image-se
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
-          path: kata-build/kata-static-boot-image-se.tar.zst
-          retention-days: 1
-          if-no-files-found: error
-
   # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
     name: remove-rootfs-binary-artifacts
     runs-on: ubuntu-22.04
-    needs: [build-asset-rootfs, build-asset-boot-image-se]
+    needs: [build-asset-rootfs]
     strategy:
       matrix:
         asset:
@@ -331,7 +280,6 @@ jobs:
     needs:
       - build-asset
       - build-asset-rootfs
-      - build-asset-boot-image-se
       - build-asset-shim-v2
     permissions:
       contents: read

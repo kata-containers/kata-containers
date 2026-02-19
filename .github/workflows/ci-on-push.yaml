@@ -43,12 +43,10 @@ jobs:
       target-branch: ${{ github.event.pull_request.base.ref }}
       skip-test: ${{ needs.skipper.outputs.skip_test }}
     secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ vars.AUTHENTICATED_IMAGE_PASSWORD }}
       AZ_APPID: ${{ secrets.AZ_APPID }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-      CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
       NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}

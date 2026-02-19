@@ -29,15 +29,11 @@ on:
        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
-      CI_HKD_PATH:
-        required: true
       ITA_KEY:
         required: true
       QUAY_DEPLOYER_PASSWORD:
         required: true
       NGC_API_KEY:
-        required: true
-      KBUILD_SIGN_PIN:
         required: true
 
 permissions: {}
@@ -54,8 +50,6 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets:
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
@@ -86,8 +80,6 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-    secrets:
-      KBUILD_SIGN_PIN: ${{ secrets.KBUILD_SIGN_PIN }}
 
   publish-kata-deploy-payload-arm64:
     needs: build-kata-static-tarball-arm64
@@ -119,7 +111,6 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
     secrets:
-      CI_HKD_PATH: ${{ secrets.ci_hkd_path }}
       QUAY_DEPLOYER_PASSWORD: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
   build-kata-static-tarball-ppc64le:
@@ -344,7 +335,7 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
     secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ vars.AUTHENTICATED_IMAGE_PASSWORD }}
       AZ_APPID: ${{ secrets.AZ_APPID }}
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
@@ -362,7 +353,7 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
     secrets:
-      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ vars.AUTHENTICATED_IMAGE_PASSWORD }}
 
   run-k8s-tests-on-ppc64le:
     if: ${{ inputs.skip-test != 'yes' }}
