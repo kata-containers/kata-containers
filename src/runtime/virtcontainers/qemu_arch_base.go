@@ -63,7 +63,7 @@ type qemuArch interface {
 	bridges(number uint32)
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
-	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
+	cpuTopology(vcpus, maxvcpus uint32, confidentialGuest bool) govmmQemu.SMP
 
 	// cpuModel returns the CPU model for the machine type
 	cpuModel() string
@@ -329,7 +329,12 @@ func (q *qemuArchBase) bridges(number uint32) {
 	}
 }
 
-func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP {
+func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32, confidentialGuest bool) govmmQemu.SMP {
+	// When confidential guest is enabled, disable CPU hotplug by setting MaxCPUs to 0
+	if confidentialGuest {
+		maxvcpus = 0
+	}
+
 	smp := govmmQemu.SMP{
 		CPUs:    vcpus,
 		Sockets: maxvcpus,
