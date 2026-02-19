@@ -69,9 +69,9 @@ The kata agent will translate the parameters in the `linux.resources` of `config
 
 ```shell
 // system.rs
-zbus-xmlgen --system org.freedesktop.systemd1 /org/freedesktop/systemd1
+zbus-xmlgen system org.freedesktop.systemd1 /org/freedesktop/systemd1 -o system.rs
 // session.rs
-zbus-xmlgen --session org.freedesktop.systemd1 /org/freedesktop/systemd1
+zbus-xmlgen session org.freedesktop.systemd1 /org/freedesktop/systemd1 -o session.rs
 ```
 
 The current implementation of `cgroups/systemd` uses `system.rs` while `session.rs` could be used to build rootless containers in the future.
@@ -81,4 +81,3 @@ The current implementation of `cgroups/systemd` uses `system.rs` while `session.
 - [runc - systemd cgroup driver](https://github.com/opencontainers/runc/blob/main/docs/systemd.md)
 
 - [systemd.resource-control  — Resource control unit settings](https://www.freedesktop.org/software/systemd/man/systemd.resource-control.html)
-
