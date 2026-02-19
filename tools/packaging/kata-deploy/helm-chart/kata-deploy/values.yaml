@@ -275,6 +275,7 @@ shims:
     enabled: false
     supportedArches:
       - amd64
+      - ppc64le
       - s390x
     allowedHypervisorAnnotations: []
     containerd:
