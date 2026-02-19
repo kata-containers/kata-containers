@@ -39,6 +39,9 @@ on:
         required: true
       KBUILD_SIGN_PIN:
         required: true
+      SLACK_WEBHOOK_URL:
+        required: true
+
 
 permissions: {}
 
@@ -349,6 +352,7 @@ jobs:
       AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
       AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
       ITA_KEY: ${{ secrets.ITA_KEY }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   run-k8s-tests-on-zvsi:
     if: ${{ inputs.skip-test != 'yes' }}

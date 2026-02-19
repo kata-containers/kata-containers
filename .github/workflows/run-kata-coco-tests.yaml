@@ -35,6 +35,8 @@ on:
         required: true
       ITA_KEY:
         required: true
+      SLACK_WEBHOOK_URL:
+        required: true
 
 permissions: {}
 
@@ -115,8 +117,27 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Report tests
+        id: report-tests
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh report-tests
+        run: |
+          OUTPUT=$(bash tests/integration/kubernetes/gha-run.sh report-tests 2>&1)
+          echo "$OUTPUT"
+          
+          # Extract summary
+          SUMMARY=$(echo "$OUTPUT" | grep -A 2 '^SUMMARY' | tail -2)
+          {
+            echo "summary<<EOF"
+            echo "$SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          
+          # Extract failed tests
+          FAILED=$(echo "$OUTPUT" | grep "not_ok" | sed 's/^[[:space:]]*not_ok //' || echo "")
+          {
+            echo "failed<<EOF"
+            echo "$FAILED"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Delete kata-deploy
         if: always()
@@ -133,6 +154,45 @@ jobs:
       - name: Delete CSI driver
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
+
+      - name: Extract failed tests and notify Slack
+        if: failure() && matrix.runner == 'sev-snp'
+        env:
+          PR_NUMBER: ${{ inputs.pr-number }}
+          GITHUB_SERVER: ${{ github.server_url }}
+          GITHUB_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          STEP_SUMMARY: ${{ steps.report-tests.outputs.summary }}
+          STEP_FAILED: ${{ steps.report-tests.outputs.failed }}
+        run: |
+          # Get summary and failed tests from previous step or re-parse
+          if [ -n "${STEP_SUMMARY}" ]; then
+            SUMMARY="${STEP_SUMMARY}"
+            FAILED="${STEP_FAILED}"
+          else
+            # Fallback: re-run report to get the data
+            OUTPUT=$(bash tests/integration/kubernetes/gha-run.sh report-tests 2>&1)
+            SUMMARY=$(echo "$OUTPUT" | grep -A 2 '^SUMMARY' | tail -2)
+            FAILED=$(echo "$OUTPUT" | grep "not_ok" | sed 's/^[[:space:]]*not_ok //')
+          fi
+          
+          # Get current date in Austin, Texas CST/CDT
+          CURRENT_DATE=$(TZ='America/Chicago' date +"%Y-%m-%d %H:%M:%S %Z")
+          
+          # Create a simple text message
+          MESSAGE="<@U05T16SPZ0W> SEV-SNP Test Failed\n\n"
+          MESSAGE+="*PR Number:* #${PR_NUMBER}\n"
+          MESSAGE+="*Date:* ${CURRENT_DATE}\n\n"
+          MESSAGE+="*Summary:*\n\`\`\`\n${SUMMARY}\n\`\`\`\n\n"
+          MESSAGE+="*Failed Tests:*\n\`\`\`\n${FAILED}\n\`\`\`\n\n"
+          MESSAGE+="<${GITHUB_SERVER}/${GITHUB_REPO}/actions/runs/${RUN_ID}|View Full Logs>"
+          
+          # Send to Slack
+          curl -X POST "${SLACK_WEBHOOK}" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --arg msg "$MESSAGE" '{text: $msg}')"
+
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
