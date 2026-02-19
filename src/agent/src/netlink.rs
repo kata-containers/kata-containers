@@ -994,6 +994,7 @@ mod tests {
     #[tokio::test]
     #[serial(arp_neighbor_tests)]
     async fn list_routes() {
+        skip_if_not_root!();
         clean_env_for_test_add_one_arp_neighbor(TEST_DUMMY_INTERFACE, TEST_ARP_IP);
         let devices: Vec<Interface> = Handle::new().unwrap().list_interfaces().await.unwrap();
         let all = Handle::new()
