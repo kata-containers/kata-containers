@@ -149,7 +149,10 @@ github_get_latest_release()
 	#   so attempt to perform a semver sort manually.
 	# - Pre-releases are excluded via the select() call.
 	local latest
-	latest=$(curl -sL "$url" |\
+    local auth_header=()
+    [ -n "${GITHUB_TOKEN}" ] && auth_header=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+
+	latest=$(curl -sL "${auth_header[@]}" "$url" |\
 		jq -r '.[].tag_name | select(contains("-") | not)' |\
 		sort -t '.' -V |\
 		tail -1 || true)
@@ -233,8 +236,10 @@ github_get_release_file_url()
 	esac
 
 	local download_url
+    local auth_header=()
+    [ -n "${GITHUB_TOKEN}" ] && auth_header=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
 
-	download_url=$(curl -sL "$url" |\
+	download_url=$(curl "${auth_header[@]}" -sL "$url" |\
 		jq --arg version "$version" \
 		-r '.[] |
 			select( (.tag_name == $version) or (.tag_name == "v" + $version) ) |
@@ -824,7 +829,7 @@ install_kata()
 	fi
 
 	if [[ "${file}" == *.tar.zst ]]; then
-		sudo tar --zstd -xvf "${file}"
+		zstd -cd < "${file}" | sudo tar -C / -xvf -
 	else
 		sudo tar -C / -xvf "${file}"
 	fi
