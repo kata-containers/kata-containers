@@ -16,7 +16,9 @@ import (
 )
 
 var (
-	ErrCgroupMode = errors.New("cgroup controller type error")
+	ErrCgroupMode      = errors.New("cgroup controller type error")
+	VirtualDeviceMajor = 254
+	VirtualDeviceMinor = 254
 )
 
 func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
@@ -35,16 +37,19 @@ func DeviceToCgroupDeviceRule(device string) (*devices.Rule, error) {
 	switch devType {
 	case unix.S_IFCHR:
 		deviceRule.Type = 'c'
+		deviceRule.Major = int64(unix.Major(uint64(st.Rdev)))
+		deviceRule.Minor = int64(unix.Minor(uint64(st.Rdev)))
 	case unix.S_IFBLK:
 		deviceRule.Type = 'b'
+		deviceRule.Major = int64(unix.Major(uint64(st.Rdev)))
+		deviceRule.Minor = int64(unix.Minor(uint64(st.Rdev)))
+	case unix.S_IFREG:
+		deviceRule.Type = 'b'
+		deviceRule.Major = int64(VirtualDeviceMajor)
+		deviceRule.Minor = int64(VirtualDeviceMinor)
 	default:
-		return nil, fmt.Errorf("unsupported device type: %v", devType)
+		return nil, fmt.Errorf("unsupported type %v for device: %v", devType, device)
 	}
-
-	major := int64(unix.Major(uint64(st.Rdev)))
-	minor := int64(unix.Minor(uint64(st.Rdev)))
-	deviceRule.Major = major
-	deviceRule.Minor = minor
 
 	return &deviceRule, nil
 }
