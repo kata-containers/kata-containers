@@ -1627,47 +1627,84 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) ([]*grpc.Storag
 	return epheStorages, nil
 }
 
+// indirection points for unit tests (override in *_test.go).
+var (
+	getKubeletEmptyDirSubpathInfoFn = GetKubeletEmptyDirSubpathInfo
+	ensureLocalSubPathExistsFn      = ensureLocalSubPathExists
+)
+
 // handleLocalStorage handles local storage within the VM
 // by creating a directory in the VM from the source of the mount point.
 func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, rootfsSuffix string) ([]*grpc.Storage, error) {
 	var localStorages []*grpc.Storage
 	for idx, mnt := range mounts {
-		if mnt.Type == KataLocalDevType {
-			origin_src := mounts[idx].Source
-			stat := syscall.Stat_t{}
-			err := syscall.Stat(origin_src, &stat)
-			if err != nil {
-				k.Logger().WithError(err).Errorf("failed to stat %s", origin_src)
+		if mnt.Type != KataLocalDevType {
+			continue
+		}
+		origin_src := mounts[idx].Source
+		subPathInfo := getKubeletEmptyDirSubpathInfoFn(mnt.Source)
+		if subPathInfo != nil {
+			// base dir of kata guest-local emptyDir for this volume
+			guestPath := filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, subPathInfo.VolumeName)
+
+			if subPathInfo.SubPath != "" {
+				guestPath = filepath.Join(guestPath, subPathInfo.SubPath)
+			}
+
+			k.Logger().WithFields(logrus.Fields{
+				"original-source": origin_src,
+				"volume-name":     subPathInfo.VolumeName,
+				"sub-path":        subPathInfo.SubPath,
+				"guest-path":      guestPath,
+			}).Debug("Mapping emptyDir subPath to existing guest-local volume")
+
+			// Make sure the subPath exists in kata's local emptyDir so mount won't fail
+			// and initContainer writes will be visible.
+			if err := ensureLocalSubPathExistsFn(guestPath, mnt.Source); err != nil {
 				return nil, err
 			}
 
-			dir_options := localDirOptions
-
-			// if volume's gid isn't root group(default group), this means there's
-			// an specific fsGroup is set on this local volume, then it should pass
-			// to guest.
-			if stat.Gid != 0 {
-				dir_options = append(dir_options, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
-			}
-
-			// Set the mount source path to a the desired directory point in the VM.
-			// In this case it is located in the sandbox directory.
-			// We rely on the fact that the first container in the VM has the same ID as the sandbox ID.
-			// In Kubernetes, this is usually the pause container and we depend on it existing for
-			// local directories to work.
-			mounts[idx].Source = filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mnt.Source))
-
-			// Create a storage struct so that the kata agent is able to create the
-			// directory inside the VM.
-			localStorage := &grpc.Storage{
-				Driver:     KataLocalDevType,
-				Source:     KataLocalDevType,
-				Fstype:     KataLocalDevType,
-				MountPoint: mounts[idx].Source,
-				Options:    dir_options,
-			}
-			localStorages = append(localStorages, localStorage)
+			// Critical: replace the mount source.
+			mounts[idx].Source = guestPath
+			// We don't add to localStorages because we don't need to create a new
+			// storage - we're using the existing emptyDir volume that was already
+			// created when the first container (init container) mounted it.
+			continue
 		}
+
+		stat := syscall.Stat_t{}
+		err := syscall.Stat(origin_src, &stat)
+		if err != nil {
+			k.Logger().WithError(err).Errorf("failed to stat %s", origin_src)
+			return nil, err
+		}
+
+		dir_options := localDirOptions
+
+		// if volume's gid isn't root group(default group), this means there's
+		// an specific fsGroup is set on this local volume, then it should pass
+		// to guest.
+		if stat.Gid != 0 {
+			dir_options = append(dir_options, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
+		}
+
+		// Set the mount source path to a the desired directory point in the VM.
+		// In this case it is located in the sandbox directory.
+		// We rely on the fact that the first container in the VM has the same ID as the sandbox ID.
+		// In Kubernetes, this is usually the pause container and we depend on it existing for
+		// local directories to work.
+		mounts[idx].Source = filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mnt.Source))
+
+		// Create a storage struct so that the kata agent is able to create the
+		// directory inside the VM.
+		localStorage := &grpc.Storage{
+			Driver:     KataLocalDevType,
+			Source:     KataLocalDevType,
+			Fstype:     KataLocalDevType,
+			MountPoint: mounts[idx].Source,
+			Options:    dir_options,
+		}
+		localStorages = append(localStorages, localStorage)
 	}
 	return localStorages, nil
 }
@@ -2771,4 +2808,34 @@ func parseErofsRootFsOptions(options []string) ([]string, string) {
 		}
 	}
 	return lowerdirs, upperdir
+}
+
+// ensureLocalSubPathExists makes sure the rewritten local subPath exists.
+// It mirrors kubelet behavior enough for emptyDir: create dir (or file) if needed.
+func ensureLocalSubPathExists(localPath string, srcMountPoint string) error {
+	fi, err := os.Lstat(srcMountPoint)
+	if err != nil {
+		return err
+	}
+
+	if fi.IsDir() {
+		return os.MkdirAll(localPath, 0o755)
+	}
+
+	// File-like subPath
+	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+		return err
+	}
+
+	if _, err := os.Lstat(localPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	f, err := os.OpenFile(localPath, os.O_CREATE|os.O_EXCL, fi.Mode()&0o777)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }

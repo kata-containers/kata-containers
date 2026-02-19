@@ -23,13 +23,7 @@ pub fn get_policy_mounts(
     yaml_container: &pod::Container,
     is_pause_container: bool,
 ) {
-    if let Some(volumeMounts) = &yaml_container.volumeMounts {
-        for volumeMount in volumeMounts {
-            if volumeMount.subPath.is_some() {
-                panic!("Kata Containers doesn't support volumeMounts.subPath - see https://github.com/kata-containers/runtime/issues/2812");
-            }
-        }
-    }
+    // NOTE: volumeMounts.subPath is supported for some volume types (e.g. emptyDir).
 
     let c_settings = settings.get_container_settings(is_pause_container);
     let settings_mounts = &c_settings.Mounts;
@@ -159,7 +153,12 @@ fn get_empty_dir_mount_and_storage(
 ) {
     debug!("Settings emptyDir: {:?}", settings_empty_dir);
 
-    if yaml_mount.subPathExpr.is_none() {
+    // NOTE:
+    // Kata runtime may omit `storages` for emptyDir subPath(/subPathExpr) mounts because it maps
+    // them back to an already materialized guest-local emptyDir volume (OCI mount only).
+    // Keep policy strict by matching the runtime: only generate a Storage entry when mounting
+    // the volume root (no subPath/subPathExpr).
+    if yaml_mount.subPathExpr.is_none() && yaml_mount.subPath.is_none() {
         let mut options = settings_empty_dir.options.clone();
         if let Some(gid) = pod_security_context.as_ref().and_then(|sc| sc.fsGroup) {
             // This matches the runtime behavior of only setting the fsgid if the mountpoint GID is not 0.
@@ -184,15 +183,22 @@ fn get_empty_dir_mount_and_storage(
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
         format!("{}{name}$", &settings.volumes.configMap.mount_source)
+    } else if let Some(sp) = &yaml_mount.subPath {
+        format!(
+            "{}{}/{}$",
+            &settings_empty_dir.mount_source, &yaml_mount.name, sp
+        )
     } else {
         format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name)
     };
 
-    let mount_type = if yaml_mount.subPathExpr.is_some() {
-        "bind"
-    } else {
-        &settings_empty_dir.mount_type
-    };
+    // NOTE:
+    // For emptyDir volumes, runtime rewrites Kubernetes `subPath` mounts back to an existing
+    // guest-local emptyDir path (see shim log: "Mapping emptyDir subPath to existing guest-local volume")
+    // and reports the OCI mount type as `local` (not `bind`).
+    // If we generate `bind` here, the agent policy will reject the real CreateContainerRequest
+    // because the runtime sends type_="local".
+    let mount_type = settings_empty_dir.mount_type.as_str();
 
     let access = match yaml_mount.readOnly {
         Some(true) => {

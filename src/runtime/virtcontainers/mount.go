@@ -6,9 +6,12 @@
 package virtcontainers
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -435,4 +438,225 @@ func HasOptionPrefix(options []string, prefix string) bool {
 		}
 	}
 	return false
+}
+
+// KubeletEmptyDirSubpathInfo describes a kubelet-managed subPath bind mount
+// that ultimately points into an emptyDir volume on the host.
+type KubeletEmptyDirSubpathInfo struct {
+	// VolumeName is the k8s volume name under volume-subpaths/<vol>/...
+	VolumeName string
+
+	// SubPath is the path *inside* the emptyDir volume root.
+	// Example: "app-logs" or "a/b/c". Empty means volume root.
+	SubPath string
+
+	// TargetPath is the resolved host path the bind mount points to
+	// (e.g. /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~empty-dir/<vol>/<subpath>).
+	TargetPath string
+}
+
+// indirection points for unit tests (override in *_test.go).
+var (
+	findMountSourceForMountPointFn = findMountSourceForMountPoint
+	resolveMountSourcePathFn       = resolveMountSourcePath
+)
+
+// IsKubeletEmptyDirSubpath returns true when mountPoint is a kubelet volume-subpaths mount
+// and the bind-mount ultimately targets an emptyDir volume path.
+// It returns false when mountPoint is not such a mount.
+func IsKubeletEmptyDirSubpath(mountPoint string) bool {
+	info := GetKubeletEmptyDirSubpathInfo(mountPoint)
+	return info != nil
+}
+
+// GetKubeletEmptyDirSubpathInfo returns nil, when mountPoint is not a kubelet emptyDir subPath mount.
+func GetKubeletEmptyDirSubpathInfo(mountPoint string) *KubeletEmptyDirSubpathInfo {
+	volName, ok := parseKubeletVolumeSubpathsMountPoint(mountPoint)
+	if !ok {
+		return nil
+	}
+
+	src, err := findMountSourceForMountPointFn(mountPoint)
+	if err != nil {
+		mountLogger().WithError(err).Debug("Failed to find mountSource for mountPoint")
+		return nil
+	}
+
+	target, err := resolveMountSourcePathFn(src)
+	if err != nil {
+		mountLogger().WithError(err).Debug("Failed to resolve mountSource path")
+		return nil
+	}
+
+	_, subRel, ok := splitKubeletEmptyDirTarget(target, volName)
+	if !ok {
+		// It's a kubelet subPath mount, but not for emptyDir (could be other volume types).
+		return nil
+	}
+
+	subRel, err = sanitizeSubRel(subRel)
+	if err != nil {
+		mountLogger().WithError(err).Debug("Failed to sanitize subRel")
+		return nil
+	}
+
+	return &KubeletEmptyDirSubpathInfo{
+		VolumeName: volName,
+		SubPath:    subRel,
+		TargetPath: target,
+	}
+}
+
+// parseKubeletVolumeSubpathsMountPoint extracts <vol-name> from
+// .../pods/<uid>/volume-subpaths/<vol-name>/<container-name>/<index>
+func parseKubeletVolumeSubpathsMountPoint(p string) (string, bool) {
+	// Fast path to avoid any heavy work.
+	if !strings.Contains(p, string(filepath.Separator)+"volume-subpaths"+string(filepath.Separator)) {
+		return "", false
+	}
+
+	elems := splitPathElems(p)
+	for i := 0; i < len(elems)-1; i++ {
+		if elems[i] == "volume-subpaths" {
+			vol := elems[i+1]
+			if vol == "" {
+				return "", false
+			}
+			return vol, true
+		}
+	}
+	return "", false
+}
+
+// splitKubeletEmptyDirTarget checks whether targetAbs contains
+// .../volumes/kubernetes.io~empty-dir/<volumeName>/...
+// and if so returns (volumeRootAbs, subRel, true).
+func splitKubeletEmptyDirTarget(targetAbs, volumeName string) (string, string, bool) {
+	targetAbs = filepath.Clean(targetAbs)
+	if !filepath.IsAbs(targetAbs) {
+		// kubelet paths should be absolute; if not, treat as non-match.
+		return "", "", false
+	}
+
+	elems := splitPathElems(targetAbs)
+	for i := 0; i+2 < len(elems); i++ {
+		if elems[i] == "volumes" && elems[i+1] == "kubernetes.io~empty-dir" && elems[i+2] == volumeName {
+			volRoot := string(filepath.Separator) + filepath.Join(elems[:i+3]...)
+			subRel := ""
+			if i+3 < len(elems) {
+				subRel = filepath.Join(elems[i+3:]...)
+			}
+			if subRel == "." {
+				subRel = ""
+			}
+			return volRoot, subRel, true
+		}
+	}
+	return "", "", false
+}
+
+func sanitizeSubRel(subRel string) (string, error) {
+	if subRel == "" {
+		return "", nil
+	}
+	cleaned := filepath.Clean(subRel)
+	if cleaned == "." {
+		return "", nil
+	}
+	if filepath.IsAbs(cleaned) {
+		return "", fmt.Errorf("invalid subPath (absolute): %q", subRel)
+	}
+	if cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid subPath (traversal): %q", subRel)
+	}
+	return cleaned, nil
+}
+
+func splitPathElems(p string) []string {
+	p = filepath.Clean(p)
+	p = strings.TrimPrefix(p, string(filepath.Separator))
+	if p == "" {
+		return nil
+	}
+	return strings.Split(p, string(filepath.Separator))
+}
+
+// findMountSourceForMountPoint reads /proc/self/mountinfo and returns the mount source
+func findMountSourceForMountPoint(mountPoint string) (string, error) {
+	data, err := os.ReadFile("/proc/self/mountinfo")
+	if err != nil {
+		return "", err
+	}
+	return findMountSourceForMountPointFromData(mountPoint, data)
+}
+
+func findMountSourceForMountPointFromData(mountPoint string, data []byte) (string, error) {
+	mp, err := filepath.EvalSymlinks(mountPoint)
+	if err != nil {
+		return "", fmt.Errorf("mountpoint %q EvalSymlinks err: %v", mountPoint, err)
+	}
+
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	for sc.Scan() {
+		line := sc.Text()
+		parts := strings.SplitN(line, " - ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		left := strings.Fields(parts[0])
+		if len(left) < 5 {
+			continue
+		}
+
+		mountpointField := unescapeMountinfoField(left[4])
+		if filepath.Clean(mountpointField) != mp {
+			continue
+		}
+
+		return unescapeMountinfoField(left[3]), nil
+	}
+
+	if err := sc.Err(); err != nil {
+		return "", err
+	}
+	return "", fmt.Errorf("mountpoint %q not found in /proc/self/mountinfo", mp)
+}
+
+// unescapeMountinfoField converts mountinfo octal escapes (e.g. "\040") back to bytes.
+func unescapeMountinfoField(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+
+	for i := 0; i < len(s); {
+		if s[i] == '\\' && i+3 < len(s) {
+			if v, err := strconv.ParseInt(s[i+1:i+4], 8, 8); err == nil {
+				b.WriteByte(byte(v))
+				i += 4
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+
+	return b.String()
+}
+
+// resolveMountSourcePath resolves sources like /proc/<pid>/fd/<fd> to the real path.
+func resolveMountSourcePath(source string) (string, error) {
+	src := filepath.Clean(source)
+
+	// kubelet subPath bind mounts typically use /proc/<kubeletpid>/fd/<fd> as source.
+	if strings.HasPrefix(src, "/proc/") && strings.Contains(src, "/fd/") {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return "", err
+		}
+		// Sometimes readlink may include " (deleted)" suffix.
+		target = strings.TrimSuffix(target, " (deleted)")
+		return filepath.Clean(target), nil
+	}
+
+	return src, nil
 }

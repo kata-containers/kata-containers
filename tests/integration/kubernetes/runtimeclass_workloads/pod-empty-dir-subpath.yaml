@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sharevol-kata
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+
+  volumes:
+    - name: workdir-logs
+      emptyDir: {}
+
+  initContainers:
+    - name: init-write
+      image: quay.io/prometheus/busybox:latest
+      command: ["sh", "-c"]
+      args:
+        - |
+          set -eux
+          mkdir -p /home/work/workdir/app-logs
+          echo "from-init" > /home/work/workdir/app-logs/999.log
+          ls -la /home/work/workdir/app-logs
+      volumeMounts:
+        - name: workdir-logs
+          mountPath: /home/work/workdir
+
+  containers:
+    - name: main
+      image: quay.io/prometheus/busybox:latest
+      command: ["sh", "-c"]
+      args:
+        - |
+          set -eux
+          echo "main: ls -la /home/work/workdir"
+          ls -la /home/work/workdir
+          echo "main: cat /home/work/workdir/999.log"
+          cat /home/work/workdir/999.log
+          grep -q "from-init" /home/work/workdir/999.log
+          echo "subpath-ok"
+      volumeMounts:
+        - name: workdir-logs
+          mountPath: /home/work/workdir
+          subPath: app-logs
