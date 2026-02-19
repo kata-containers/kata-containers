@@ -651,14 +651,6 @@ install_cached_kernel_tarball_component() {
 		|| return 1
 
 	case ${kernel_name} in
-		"kernel")
-			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
-				local modules_dir
-				modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
-				mkdir -p "${modules_dir}" || true
-				tar --strip-components=1 --zstd -xvf "${workdir}/kata-static-${kernel_name}-modules.tar.zst" -C "${modules_dir}" || return 1
-			fi
-			;;
 		"kernel-nvidia-gpu"*"")
 			local modules_dir
 			modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
@@ -694,14 +686,6 @@ install_kernel_helper() {
 	fi
 
 	case ${kernel_name} in
-		kernel)
-			# Main kernel on x86_64/s390x is built with -x (TEE); produce modules tarball for rootfs
-			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
-				local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
-				local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
-				extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
-			fi
-			;;
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental|kernel*-confidential)
 			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
 			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
@@ -1410,22 +1394,6 @@ handle_build() {
 	tar --zstd -tvf "${final_tarball_path}"
 
 	case ${build_target} in
-		kernel)
-			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
-				local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
-				if [[ ! -f "${modules_final_tarball_path}" ]]; then
-					local modules_dir
-					modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
-					parent_dir=$(dirname "${modules_dir}")
-					parent_dir_basename=$(basename "${parent_dir}")
-					pushd "${parent_dir}"
-					rm -f "${parent_dir_basename}"/build
-					tar --zstd -cvf "${modules_final_tarball_path}" "."
-					popd
-				fi
-				tar --zstd -tvf "${modules_final_tarball_path}"
-			fi
-			;;
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
 			if [[ ! -f "${modules_final_tarball_path}" ]]; then
