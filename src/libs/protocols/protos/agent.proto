@@ -39,6 +39,7 @@ service AgentService {
 	rpc PauseContainer(PauseContainerRequest) returns (google.protobuf.Empty);
 	rpc ResumeContainer(ResumeContainerRequest) returns (google.protobuf.Empty);
 	rpc RemoveStaleVirtiofsShareMounts(RemoveStaleVirtiofsShareMountsRequest) returns (google.protobuf.Empty);
+	rpc ReadContainerTerminationMessage(ReadContainerTerminationMessageRequest) returns (ReadContainerTerminationMessageResponse);
 
 	// stdio
 	rpc WriteStdin(WriteStreamRequest) returns (WriteStreamResponse);
@@ -329,6 +330,17 @@ message DestroySandboxRequest {
 }
 
 message RemoveStaleVirtiofsShareMountsRequest {}
+
+message ReadContainerTerminationMessageRequest {
+	string container_id = 1;
+	// Container relative path to the termination message
+	string path = 2;
+}
+
+message ReadContainerTerminationMessageResponse {
+	// Contents of the termination message
+	string contents = 1;
+}
 
 message Interfaces {
 	repeated types.Interface Interfaces = 1;

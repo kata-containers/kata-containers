@@ -139,6 +139,9 @@ type agent interface {
 	// resumeContainer will resume a paused container
 	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
+	// readTerminationMessage will read the container termination message file in the guest
+	readTerminationMessage(ctx context.Context, c *Container, path string) (string, error)
+
 	// removeStaleVirtiofsShareMounts will tell the agent to remove stale virtiofs share mounts in the guest.
 	removeStaleVirtiofsShareMounts(ctx context.Context) error
 

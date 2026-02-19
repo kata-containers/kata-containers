@@ -141,6 +141,11 @@ func (n *mockAgent) waitProcess(ctx context.Context, c *Container, processID str
 	return 0, nil
 }
 
+// readTerminationMessage will read the container termination message file in the guest
+func (k *mockAgent) readTerminationMessage(ctx context.Context, c *Container, path string) (string, error) {
+	return "", nil
+}
+
 // removeStaleVirtiofsShareMounts is the Noop agent removeStaleVirtiofsShareMounts implementation. It does nothing.
 func (n *mockAgent) removeStaleVirtiofsShareMounts(ctx context.Context) error {
 	return nil
