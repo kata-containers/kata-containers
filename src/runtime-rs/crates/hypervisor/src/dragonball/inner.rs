@@ -150,6 +150,7 @@ impl DragonballInner {
                 &self.config.boot_info.kernel_verity_params,
                 &rootfs_driver,
                 &self.config.boot_info.rootfs_type,
+                true,
             )?;
             kernel_params.append(&mut rootfs_params);
         }

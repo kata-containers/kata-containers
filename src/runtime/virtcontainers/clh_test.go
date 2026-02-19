@@ -69,6 +69,7 @@ func newClhConfig() (HypervisorConfig, error) {
 		NetRateLimiterOpsMaxRate:      int64(0),
 		NetRateLimiterOpsOneTimeBurst: int64(0),
 		HotPlugVFIO:                   config.NoPort,
+		DisableImageNvdimm:            true,
 	}, nil
 }
 

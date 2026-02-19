@@ -108,12 +108,8 @@ add_cbl_mariner_annotation_to_yaml() {
 	local -r mariner_annotation_image="io.katacontainers.config.hypervisor.image"
 	local -r mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
 
-	local -r mariner_annotation_disable_image_nvdimm="io.katacontainers.config.hypervisor.disable_image_nvdimm"
-	local -r mariner_disable_image_nvdimm=true
-
 	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
 	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_image}" "${mariner_image_path}"
-	add_annotations_to_yaml "${yaml_file}" "${mariner_annotation_disable_image_nvdimm}" "${mariner_disable_image_nvdimm}"
 }
 
 add_cbl_mariner_specific_annotations() {

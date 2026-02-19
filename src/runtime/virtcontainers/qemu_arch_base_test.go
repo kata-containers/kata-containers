@@ -332,6 +332,38 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 	assert.Equal(expectedOut, devices)
 }
 
+func TestQemuArchBaseAppendNvdimmImage(t *testing.T) {
+	var devices []govmmQemu.Device
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+
+	image, err := os.CreateTemp("", "img")
+	assert.NoError(err)
+	defer image.Close()
+	defer os.Remove(image.Name())
+
+	imageStat, err := image.Stat()
+	assert.NoError(err)
+
+	devices, err = qemuArchBase.appendNvdimmImage(devices, image.Name())
+	assert.NoError(err)
+	assert.Len(devices, 1)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.Object{
+			Driver:   govmmQemu.NVDIMM,
+			Type:     govmmQemu.MemoryBackendFile,
+			DeviceID: "nv0",
+			ID:       "mem0",
+			MemPath:  image.Name(),
+			Size:     (uint64)(imageStat.Size()),
+			ReadOnly: true,
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
+}
+
 func TestQemuArchBaseAppendBridges(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
