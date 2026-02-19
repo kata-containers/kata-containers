@@ -2360,9 +2360,14 @@ func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, erro
 			// update its size to occupy the entire sandbox's memory
 			if mount.Type == KataEphemeralDevType {
 				sizeLimited := false
-				for _, opt := range mount.Options {
-					if strings.HasPrefix(opt, "size") {
-						sizeLimited = true
+				// check if custom spec has size option for this mount
+				for _, customSpecMount := range c.config.CustomSpec.Mounts {
+					if customSpecMount.Destination == mount.Destination {
+						for _, opt := range customSpecMount.Options {
+							if strings.HasPrefix(opt, "size") {
+								sizeLimited = true
+							}
+						}
 					}
 				}
 				if sizeLimited { // do not resize sizeLimited emptyDirs
