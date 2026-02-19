@@ -1,0 +1,41 @@
+name: 'Stale issues with activity before a fixed date'
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Date of stale cut-off. All issues not updated since this date will be marked as stale. Format: YYYY-MM-DD e.g. 2022-10-09"
+        default: "2022-10-09"
+        required: false
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stale:
+    name: stale
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write # Needed to manage caches for state persistence across runs
+      issues: write # Needed to add/remove labels, post comments, or close issues
+    steps:
+      - name: Calculate the age to stale
+        run: |
+          echo AGE=$(( ( $(date +%s) - $(date -d "${DATE:-2022-10-09}" +%s) ) / 86400 )) >> "$GITHUB_ENV"
+        env:
+          DATE: ${{ inputs.date }}
+
+
+      - name: Run the stale action
+        uses: actions/stale@5bef64f19d7facfb25b37b414482c7164d639639 # v9.1.0
+        with:
+          stale-pr-message: 'This issue has had no activity for at least ${AGE} days. Please comment on the issue, or it will be closed in 30 days'
+          days-before-pr-stale: -1
+          days-before-pr-close: -1
+          days-before-issue-stale: ${AGE}
+          days-before-issue-close: 30
