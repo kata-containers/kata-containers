@@ -256,29 +256,8 @@ struct Memory {
 
 impl Memory {
     fn new(config: &HypervisorConfig) -> Memory {
-        // Move this to QemuConfig::adjust_config()?
-
-        let mut mem_size = config.memory_info.default_memory as u64;
-        let mut max_mem_size = config.memory_info.default_maxmemory as u64;
-
-        if let Ok(sysinfo) = nix::sys::sysinfo::sysinfo() {
-            let host_memory = sysinfo.ram_total() >> 20;
-
-            if mem_size > host_memory {
-                info!(sl!(), "'default_memory' given in configuration.toml is greater than host memory, adjusting to host memory");
-                mem_size = host_memory
-            }
-
-            if max_mem_size == 0 || max_mem_size > host_memory {
-                max_mem_size = host_memory
-            }
-        } else {
-            warn!(sl!(), "Failed to get host memory size, cannot verify or adjust configuration.toml's 'default_maxmemory'");
-
-            if max_mem_size == 0 {
-                max_mem_size = mem_size;
-            };
-        }
+        let mem_size = config.memory_info.default_memory as u64;
+        let max_mem_size = config.memory_info.default_maxmemory as u64;
 
         // Memory sizes are given in megabytes in configuration.toml so we
         // need to convert them to bytes for storage.
@@ -298,6 +277,18 @@ impl Memory {
             }
         }
         self.memory_backend_file = Some(mem_file.clone());
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_maxmem_size(&mut self, max_size: u64) -> &mut Self {
+        self.max_size = max_size;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_num_slots(&mut self, num_slots: u32) -> &mut Self {
+        self.num_slots = num_slots;
         self
     }
 }
@@ -1876,6 +1867,7 @@ struct ObjectSevSnpGuest {
     reduced_phys_bits: u32,
     kernel_hashes: bool,
     host_data: Option<String>,
+    policy: u32,
     is_snp: bool,
 }
 
@@ -1887,8 +1879,14 @@ impl ObjectSevSnpGuest {
             reduced_phys_bits,
             kernel_hashes: true,
             host_data,
+            policy: 0x30000,
             is_snp,
         }
+    }
+
+    fn set_policy(&mut self, policy: u32) -> &mut Self {
+        self.policy = policy;
+        self
     }
 }
 
@@ -1912,6 +1910,7 @@ impl ToQemuParams for ObjectSevSnpGuest {
                 "kernel-hashes={}",
                 if self.kernel_hashes { "on" } else { "off" }
             ));
+            params.push(format!("policy=0x{:x}", self.policy));
             if let Some(host_data) = &self.host_data {
                 params.push(format!("host-data={host_data}"))
             }
@@ -2561,13 +2560,19 @@ impl<'a> QemuCmdLine<'a> {
         firmware: &str,
         host_data: &Option<String>,
     ) {
-        let sev_snp_object =
+        // For SEV-SNP, memory overcommit is not supported. we only set the memory size.
+        self.memory.set_maxmem_size(0).set_num_slots(0);
+
+        let mut sev_snp_object =
             ObjectSevSnpGuest::new(true, cbitpos, phys_addr_reduction, host_data.clone());
+        sev_snp_object.set_policy(self.config.security_info.snp_guest_policy);
+
         self.devices.push(Box::new(sev_snp_object));
 
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
+            .set_kernel_irqchip("split")
             .set_confidential_guest_support("snp")
             .set_nvdimm(false);
 

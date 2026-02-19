@@ -30,6 +30,7 @@ sysinfo = "0.34.2"
 sha2 = "0.10.8"
 flate2 = "1.1"
 hex = "0.4"
+nix = "0.26.4"
 
 oci-spec = { version = "0.8.1", features = ["runtime"] }
 

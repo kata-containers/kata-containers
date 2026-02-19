@@ -865,11 +865,11 @@ mod tests {
             0
         );
         let config: [u8; 8] = [0; 8];
-        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
+        let _ = VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
             &mut dev, 0, &config,
         );
         let mut data: [u8; 8] = [1; 8];
-        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
+        let _ = VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
             &mut dev, 0, &mut data,
         );
         assert_eq!(config, data);
