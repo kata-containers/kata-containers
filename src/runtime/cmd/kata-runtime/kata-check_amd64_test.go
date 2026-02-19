@@ -55,18 +55,17 @@ func TestCCCheckCLIFunction(t *testing.T) {
 	var moduleData []testModuleData
 
 	cpuType = getCPUtype()
-	if cpuType == cpuTypeIntel {
+	moduleData = []testModuleData{}
+
+	switch cpuType {
+	case cpuTypeIntel:
 		cpuData = []testCPUData{
 			{archGenuineIntel, "lm vmx sse4_1", false},
 		}
-
-		moduleData = []testModuleData{}
-	} else if cpuType == cpuTypeAMD {
+	case cpuTypeAMD:
 		cpuData = []testCPUData{
 			{archAuthenticAMD, "lm svm sse4_1", false},
 		}
-
-		moduleData = []testModuleData{}
 	}
 
 	genericCheckCLIFunction(t, cpuData, moduleData)
@@ -276,7 +275,8 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 	var moduleData []testModuleData
 	cpuType = getCPUtype()
 
-	if cpuType == cpuTypeIntel {
+	switch cpuType {
+	case cpuTypeIntel:
 		cpuData = []testCPUData{
 			{"", "", true},
 			{"Intel", "", true},
@@ -292,7 +292,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 			{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), "Y", false},
 			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), "Y", false},
 		}
-	} else if cpuType == cpuTypeAMD {
+	case cpuTypeAMD:
 		cpuData = []testCPUData{
 			{"", "", true},
 			{"AMD", "", true},
@@ -340,7 +340,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		// Write the following into the denylist file
 		// blacklist <mod>
 		// install <mod> /bin/false
-		_, err = denylistFile.WriteString(fmt.Sprintf("blacklist %s\ninstall %s /bin/false\n", mod, mod))
+		_, err = fmt.Fprintf(denylistFile, "blacklist %s\ninstall %s /bin/false\n", mod, mod)
 		assert.Nil(err)
 	}
 	denylistFile.Close()
@@ -505,9 +505,10 @@ func TestSetCPUtype(t *testing.T) {
 	assert.NotEmpty(archRequiredKernelModules)
 
 	cpuType = getCPUtype()
-	if cpuType == cpuTypeIntel {
+	switch cpuType {
+	case cpuTypeIntel:
 		assert.Equal(archRequiredCPUFlags["vmx"], "Virtualization support")
-	} else if cpuType == cpuTypeAMD {
+	case cpuTypeAMD:
 		assert.Equal(archRequiredCPUFlags["svm"], "Virtualization support")
 	}
 

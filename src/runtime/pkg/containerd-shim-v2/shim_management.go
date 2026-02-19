@@ -373,7 +373,7 @@ func ClientSocketAddress(id string) (string, error) {
 	if _, err := os.Stat(socketPath); err != nil {
 		socketPath = SocketPathRust(id)
 		if _, err := os.Stat(socketPath); err != nil {
-			return "", fmt.Errorf("It fails to stat both %s and %s with error %v.", SocketPathGo(id), SocketPathRust(id), err)
+			return "", fmt.Errorf("it fails to stat both %s and %s with error %v", SocketPathGo(id), SocketPathRust(id), err)
 		}
 	}
 

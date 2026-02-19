@@ -98,8 +98,8 @@ func getKernelVersion() (string, error) {
 // These kernel version can't be parsed by the current lib and lead to panic
 // therefore the '+' should be removed.
 func fixKernelVersion(version string) string {
-	version = strings.Replace(version, "_", "-", -1)
-	return strings.Replace(version, "+", "", -1)
+	version = strings.ReplaceAll(version, "_", "-")
+	return strings.ReplaceAll(version, "+", "")
 }
 
 // handleKernelVersion checks that the current kernel version is compatible with

@@ -23,7 +23,6 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/fs"
 
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -73,7 +72,7 @@ func testCreateSandbox(t *testing.T, id string,
 	ctx := WithNewAgentFunc(context.Background(), newMockAgent)
 	sandbox, err := createSandbox(ctx, sconfig, nil)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create sandbox: %s", err)
+		return nil, fmt.Errorf("could not create sandbox: %s", err)
 	}
 
 	if err := sandbox.agent.startSandbox(context.Background(), sandbox); err != nil {
@@ -85,11 +84,11 @@ func testCreateSandbox(t *testing.T, id string,
 	}
 
 	if sandbox.id == "" {
-		return sandbox, fmt.Errorf("Invalid empty sandbox ID")
+		return sandbox, fmt.Errorf("invalid empty sandbox ID")
 	}
 
 	if id != "" && sandbox.id != id {
-		return sandbox, fmt.Errorf("Invalid ID %s vs %s", id, sandbox.id)
+		return sandbox, fmt.Errorf("invalid ID %s vs %s", id, sandbox.id)
 	}
 
 	return sandbox, nil
@@ -267,11 +266,11 @@ func TestCreateSandboxEmptyID(t *testing.T) {
 
 func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState types.SandboxState, c *Container, initialContainerState types.ContainerState) error {
 	if p.state.State != initialSandboxState.State {
-		return fmt.Errorf("Expected sandbox state %v, got %v", initialSandboxState.State, p.state.State)
+		return fmt.Errorf("expected sandbox state %v, got %v", initialSandboxState.State, p.state.State)
 	}
 
 	if c.state.State != initialContainerState.State {
-		return fmt.Errorf("Expected container state %v, got %v", initialContainerState.State, c.state.State)
+		return fmt.Errorf("expected container state %v, got %v", initialContainerState.State, c.state.State)
 	}
 
 	return nil
@@ -283,7 +282,7 @@ func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxSta
 	assert.NoError(t, err)
 	// Check the in-memory state is correct
 	if p.state.State != newSandboxState.State {
-		return fmt.Errorf("Expected state %v, got %v", newSandboxState.State, p.state.State)
+		return fmt.Errorf("expected state %v, got %v", newSandboxState.State, p.state.State)
 	}
 
 	return nil
@@ -296,7 +295,7 @@ func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Containe
 
 	// Check the in-memory state is correct
 	if c.state.State != newContainerState.State {
-		return fmt.Errorf("Expected state %v, got %v", newContainerState.State, c.state.State)
+		return fmt.Errorf("expected state %v, got %v", newContainerState.State, c.state.State)
 	}
 
 	return nil
@@ -305,7 +304,7 @@ func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Containe
 func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.SandboxState) error {
 	// Check on-disk state is correct
 	if p.state.State != sandboxState.State {
-		return fmt.Errorf("Expected state %v, got %v", sandboxState.State, p.state.State)
+		return fmt.Errorf("expected state %v, got %v", sandboxState.State, p.state.State)
 	}
 
 	return nil
@@ -314,7 +313,7 @@ func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.SandboxState) er
 func testCheckContainerOnDiskState(c *Container, containerState types.ContainerState) error {
 	// Check on-disk state is correct
 	if c.state.State != containerState.State {
-		return fmt.Errorf("Expected state %v, got %v", containerState.State, c.state.State)
+		return fmt.Errorf("expected state %v, got %v", containerState.State, c.state.State)
 	}
 
 	return nil
@@ -694,43 +693,43 @@ func TestSandboxCreateAssets(t *testing.T) {
 		{
 			types.FirmwareAsset,
 			map[string]string{
-				annotations.FirmwarePath: filename,
-				annotations.FirmwareHash: assetContentHash,
+				vcAnnotations.FirmwarePath: filename,
+				vcAnnotations.FirmwareHash: assetContentHash,
 			},
 		},
 		{
 			types.HypervisorAsset,
 			map[string]string{
-				annotations.HypervisorPath: filename,
-				annotations.HypervisorHash: assetContentHash,
+				vcAnnotations.HypervisorPath: filename,
+				vcAnnotations.HypervisorHash: assetContentHash,
 			},
 		},
 		{
 			types.ImageAsset,
 			map[string]string{
-				annotations.ImagePath: filename,
-				annotations.ImageHash: assetContentHash,
+				vcAnnotations.ImagePath: filename,
+				vcAnnotations.ImageHash: assetContentHash,
 			},
 		},
 		{
 			types.InitrdAsset,
 			map[string]string{
-				annotations.InitrdPath: filename,
-				annotations.InitrdHash: assetContentHash,
+				vcAnnotations.InitrdPath: filename,
+				vcAnnotations.InitrdHash: assetContentHash,
 			},
 		},
 		{
 			types.JailerAsset,
 			map[string]string{
-				annotations.JailerPath: filename,
-				annotations.JailerHash: assetContentHash,
+				vcAnnotations.JailerPath: filename,
+				vcAnnotations.JailerHash: assetContentHash,
 			},
 		},
 		{
 			types.KernelAsset,
 			map[string]string{
-				annotations.KernelPath: filename,
-				annotations.KernelHash: assetContentHash,
+				vcAnnotations.KernelPath: filename,
+				vcAnnotations.KernelHash: assetContentHash,
 			},
 		},
 	}
@@ -774,7 +773,7 @@ func TestSandboxCreateAssets(t *testing.T) {
 	imagePathData := &testData{
 		assetType: types.ImageAsset,
 		annotations: map[string]string{
-			annotations.ImagePath: "rhel9-os",
+			vcAnnotations.ImagePath: "rhel9-os",
 		},
 	}
 
@@ -1413,13 +1412,13 @@ func TestSandbox_Cgroups(t *testing.T) {
 	}
 	sandboxContainer := ContainerConfig{}
 	sandboxContainer.Annotations = make(map[string]string)
-	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	sandboxContainer.Annotations[vcAnnotations.ContainerTypeKey] = string(PodSandbox)
 
 	emptyJSONLinux := ContainerConfig{
 		CustomSpec: newEmptySpec(),
 	}
 	emptyJSONLinux.Annotations = make(map[string]string)
-	emptyJSONLinux.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	emptyJSONLinux.Annotations[vcAnnotations.ContainerTypeKey] = string(PodSandbox)
 
 	cloneSpec1 := newEmptySpec()
 	cloneSpec1.Linux.CgroupsPath = "/myRuntime/myContainer"
@@ -1427,7 +1426,7 @@ func TestSandbox_Cgroups(t *testing.T) {
 		CustomSpec: cloneSpec1,
 	}
 	successfulContainer.Annotations = make(map[string]string)
-	successfulContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	successfulContainer.Annotations[vcAnnotations.ContainerTypeKey] = string(PodSandbox)
 
 	// nolint: govet
 	tests := []struct {

@@ -192,7 +192,7 @@ func main() {
 
 		if context.GlobalString("metricsdir") == "" {
 			log.Error("Must supply metricsdir argument")
-			return errors.New("Must supply metricsdir argument")
+			return errors.New("must supply metricsdir argument")
 		}
 
 		baseFilePath = context.GlobalString("basefile")

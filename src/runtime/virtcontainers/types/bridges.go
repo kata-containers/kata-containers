@@ -79,7 +79,7 @@ func (b *Bridge) AddDevice(ctx context.Context, ID string) (uint32, error) {
 	}
 
 	if addr == 0 {
-		return 0, fmt.Errorf("Unable to hot plug device on bridge: there are no empty slots")
+		return 0, fmt.Errorf("unable to hot plug device on bridge: there are no empty slots")
 	}
 
 	// save address and device
@@ -97,13 +97,13 @@ func (b *Bridge) RemoveDevice(ID string) error {
 		}
 	}
 
-	return fmt.Errorf("Unable to hot unplug device %s: not present on bridge", ID)
+	return fmt.Errorf("unable to hot unplug device %s: not present on bridge", ID)
 }
 
 // AddressFormatCCW returns the address format for the device number. The channel subsystem-ID 0xfe is reserved to the virtual channel and the address format is in the form fe.n.dddd, where n is subchannel set ID and ddd the device number. More details at https://www.ibm.com/support/knowledgecenter/en/linuxonibm/com.ibm.linux.z.ldva/ldva_t_configuringSCSIdevices.html
 func (b *Bridge) AddressFormatCCW(addr string) (string, error) {
 	if b.Type != CCW {
-		return "", fmt.Errorf("Expected bridge type %T, got %T (%+v)", CCW, b.Type, b)
+		return "", fmt.Errorf("expected bridge type %T, got %T (%+v)", CCW, b.Type, b)
 	}
 
 	return fmt.Sprintf("fe.%x.%s", b.Addr, addr), nil
@@ -112,7 +112,7 @@ func (b *Bridge) AddressFormatCCW(addr string) (string, error) {
 // AddressFormatCCWForVirtServer returns the address format for the virtual server. The address format is in the form of 0.n.dddd
 func (b *Bridge) AddressFormatCCWForVirtServer(addr string) (string, error) {
 	if b.Type != CCW {
-		return "", fmt.Errorf("Wrong bridge type")
+		return "", fmt.Errorf("wrong bridge type")
 	}
 	return fmt.Sprintf("0.%x.%s", b.Addr, addr), nil
 }

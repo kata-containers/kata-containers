@@ -91,7 +91,7 @@ func TestFCCheckVersion(t *testing.T) {
 	err = fc.checkVersion(v)
 	assert.Error(err)
 	b = err.Error()
-	assert.True(strings.Contains(b, "Malformed firecracker version:")) // sanity
+	assert.True(strings.Contains(b, "malformed firecracker version:")) // sanity
 }
 
 func TestFCGetVersionNumber(t *testing.T) {

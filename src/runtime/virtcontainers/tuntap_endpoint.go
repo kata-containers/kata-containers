@@ -170,7 +170,7 @@ func createTuntapNetworkEndpoint(idx int, ifName string, hwName net.HardwareAddr
 			Name: fmt.Sprintf("eth%d", idx),
 			TAPIface: NetworkInterface{
 				Name:     fmt.Sprintf("tap%d_kata", idx),
-				HardAddr: fmt.Sprintf("%s", hwName), //nolint:gosimple
+				HardAddr: hwName.String(),
 			},
 		},
 		EndpointType: TuntapEndpointType,
@@ -192,7 +192,7 @@ func tuntapNetwork(endpoint *TuntapEndpoint, numCPUs uint32, disableVhostNet boo
 
 	tapLink, _, err := createLink(netHandle, endpoint.TuntapInterface.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
 	if err != nil {
-		return fmt.Errorf("Could not create TAP interface: %s", err)
+		return fmt.Errorf("could not create TAP interface: %s", err)
 	}
 	linkAttrs := endpoint.Properties().Iface.LinkAttrs
 
@@ -203,10 +203,10 @@ func tuntapNetwork(endpoint *TuntapEndpoint, numCPUs uint32, disableVhostNet boo
 	// to see traffic from this MAC address and not another one.
 	endpoint.TuntapInterface.TAPIface.HardAddr = linkAttrs.HardwareAddr.String()
 	if err := netHandle.LinkSetMTU(tapLink, linkAttrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", linkAttrs.MTU, err)
+		return fmt.Errorf("could not set TAP MTU %d: %s", linkAttrs.MTU, err)
 	}
 	if err := netHandle.LinkSetUp(tapLink); err != nil {
-		return fmt.Errorf("Could not enable TAP %s: %s", endpoint.TuntapInterface.Name, err)
+		return fmt.Errorf("could not enable TAP %s: %s", endpoint.TuntapInterface.Name, err)
 	}
 	return nil
 }
@@ -219,13 +219,13 @@ func unTuntapNetwork(name string) error {
 	defer netHandle.Close()
 	tapLink, err := getLinkByName(netHandle, name, &netlink.Tuntap{})
 	if err != nil {
-		return fmt.Errorf("Could not get TAP interface: %s", err)
+		return fmt.Errorf("could not get TAP interface: %s", err)
 	}
 	if err := netHandle.LinkSetDown(tapLink); err != nil {
-		return fmt.Errorf("Could not disable TAP %s: %s", name, err)
+		return fmt.Errorf("could not disable TAP %s: %s", name, err)
 	}
 	if err := netHandle.LinkDel(tapLink); err != nil {
-		return fmt.Errorf("Could not remove TAP %s: %s", name, err)
+		return fmt.Errorf("could not remove TAP %s: %s", name, err)
 	}
 	return nil
 

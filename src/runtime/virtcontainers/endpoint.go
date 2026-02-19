@@ -107,7 +107,7 @@ func (endpointType *EndpointType) Set(value string) error {
 		*endpointType = VfioEndpointType
 		return nil
 	default:
-		return fmt.Errorf("Unknown endpoint type %s", value)
+		return fmt.Errorf("unknown endpoint type %s", value)
 	}
 }
 

@@ -366,7 +366,7 @@ func (m *VFIOModeType) VFIOSetMode(modeName string) error {
 		*m = VFIOModeGuestKernel
 		return nil
 	}
-	return fmt.Errorf("Unknown VFIO mode %s", modeName)
+	return fmt.Errorf("unknown VFIO mode %s", modeName)
 }
 
 // VFIODeviceType indicates VFIO device type
@@ -500,7 +500,7 @@ var GetVhostUserNodeStatFunc = GetVhostUserNodeStat
 // We need to find the actual device path on the host based on the major-minor numbers of the device.
 func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStorePath string) (string, error) {
 	if devInfo.ContainerPath == "" {
-		return "", fmt.Errorf("Empty path provided for device")
+		return "", fmt.Errorf("empty path provided for device")
 	}
 
 	if devInfo.Major == -1 {
@@ -621,7 +621,7 @@ func getVhostUserDevName(dirname string, majorNum, minorNum uint32) (string, err
 		}
 	}
 
-	return "", fmt.Errorf("Required device node (%d:%d) doesn't exist under directory %s",
+	return "", fmt.Errorf("required device node (%d:%d) doesn't exist under directory %s",
 		majorNum, minorNum, dirname)
 }
 
@@ -724,11 +724,11 @@ func injectDevices(cdiSpecDirs []string, spec *specs.Spec, devices []string) err
 	}
 
 	if err := registry.Refresh(); err != nil {
-		return fmt.Errorf("CDI registry refresh failed: %w", err)
+		return fmt.Errorf("cdi registry refresh failed: %w", err)
 	}
 
 	if _, err := registry.InjectDevices(spec, devices...); err != nil {
-		return fmt.Errorf("CDI device injection failed: %w", err)
+		return fmt.Errorf("cdi device injection failed: %w", err)
 	}
 
 	return nil

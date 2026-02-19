@@ -187,7 +187,7 @@ func TestBindMountInvalidPgtypes(t *testing.T) {
 	assert.NoError(err)
 
 	err = bindMount(context.Background(), source, dest, false, "foo")
-	expectedErr := fmt.Sprintf("Wrong propagation type %s", "foo")
+	expectedErr := fmt.Sprintf("wrong propagation type %s", "foo")
 	assert.EqualError(err, expectedErr)
 }
 

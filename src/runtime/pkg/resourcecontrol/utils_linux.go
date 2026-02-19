@@ -120,7 +120,7 @@ func getSliceAndUnit(cgroupPath string) (string, string, error) {
 		return parts[0], fmt.Sprintf("%s-%s.scope", parts[1], parts[2]), nil
 	}
 
-	return "", "", fmt.Errorf("Path: %s is not valid systemd's cgroups path", cgroupPath)
+	return "", "", fmt.Errorf("path: %s is not valid systemd's cgroups path", cgroupPath)
 }
 
 func IsCgroupV1() (bool, error) {

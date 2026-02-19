@@ -45,7 +45,7 @@ func New(ctx context.Context, config vc.VMConfig, templatePath string) (base.Fac
 
 	err := t.checkTemplateVM()
 	if err == nil {
-		return nil, fmt.Errorf("There is already a VM template in %s", templatePath)
+		return nil, fmt.Errorf("there is already a VM template in %s", templatePath)
 	}
 
 	err = t.prepareTemplateFiles()

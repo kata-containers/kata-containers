@@ -39,7 +39,7 @@ func PciSlotFromString(s string) (PciSlot, error) {
 
 func PciSlotFromInt(v int) (PciSlot, error) {
 	if v < 0 || v > maxPciSlot {
-		return PciSlot{}, fmt.Errorf("PCI slot 0x%x should be in range [0..0x%x]", v, maxPciSlot)
+		return PciSlot{}, fmt.Errorf("pci slot 0x%x should be in range [0..0x%x]", v, maxPciSlot)
 	}
 	return PciSlot{slot: uint8(v)}, nil
 }
@@ -102,7 +102,7 @@ func PciPathFromString(s string) (PciPath, error) {
 
 func PciPathFromSlots(slots ...PciSlot) (PciPath, error) {
 	if len(slots) == 0 {
-		return PciPath{}, fmt.Errorf("PCI path needs at least one component")
+		return PciPath{}, fmt.Errorf("pci path needs at least one component")
 	}
 	return PciPath{slots: slots}, nil
 }

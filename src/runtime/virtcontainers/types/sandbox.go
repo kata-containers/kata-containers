@@ -97,7 +97,7 @@ func (state *StateString) valid() bool {
 
 func (state *StateString) validTransition(oldState StateString, newState StateString) error {
 	if *state != oldState {
-		return fmt.Errorf("Invalid state %v (Expecting %v)", state, oldState)
+		return fmt.Errorf("invalid state %v (Expecting %v)", state, oldState)
 	}
 
 	switch *state {
@@ -122,7 +122,7 @@ func (state *StateString) validTransition(oldState StateString, newState StateSt
 		}
 	}
 
-	return fmt.Errorf("Can not move from %v to %v",
+	return fmt.Errorf("can not move from %v to %v",
 		state, newState)
 }
 
@@ -153,12 +153,12 @@ func (v *Volumes) Set(volStr string) error {
 		volArgs := strings.Split(vol, volDelimiter)
 
 		if len(volArgs) != expectedVolLen {
-			return fmt.Errorf("Wrong string format: %s, expecting only %v parameters separated with %q",
+			return fmt.Errorf("wrong string format: %s, expecting only %v parameters separated with %q",
 				vol, expectedVolLen, volDelimiter)
 		}
 
 		if volArgs[0] == "" || volArgs[1] == "" {
-			return fmt.Errorf("Volume parameters cannot be empty")
+			return fmt.Errorf("volume parameters cannot be empty")
 		}
 
 		volume := Volume{
@@ -257,12 +257,12 @@ func (s *Sockets) Set(sockStr string) error {
 		sockArgs := strings.Split(sock, sockDelimiter)
 
 		if len(sockArgs) != expectedSockCount {
-			return fmt.Errorf("Wrong string format: %s, expecting only %v parameters separated with %q", sock, expectedSockCount, sockDelimiter)
+			return fmt.Errorf("wrong string format: %s, expecting only %v parameters separated with %q", sock, expectedSockCount, sockDelimiter)
 		}
 
 		for _, a := range sockArgs {
 			if a == "" {
-				return fmt.Errorf("Socket parameters cannot be empty")
+				return fmt.Errorf("socket parameters cannot be empty")
 			}
 		}
 

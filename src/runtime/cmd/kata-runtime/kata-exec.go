@@ -165,7 +165,7 @@ func getConn(sandboxID string, port uint64) (net.Conn, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Failure from %s shim-monitor: %d", sandboxID, resp.StatusCode)
+		return nil, fmt.Errorf("failure from %s shim-monitor: %d", sandboxID, resp.StatusCode)
 	}
 
 	defer resp.Body.Close()
@@ -186,7 +186,7 @@ func getConn(sandboxID string, port uint64) (net.Conn, error) {
 		// vsock://31513974:1024
 		cidAndPort := strings.Split(addr.Host, ":")
 		if len(cidAndPort) != 2 {
-			return nil, fmt.Errorf("Invalid vsock scheme: %s", sock)
+			return nil, fmt.Errorf("invalid vsock scheme: %s", sock)
 		}
 		shimAddr := fmt.Sprintf("%s:%s:%d", clientUtils.VSockSocketScheme, cidAndPort[0], port)
 		return clientUtils.VsockDialer(shimAddr, defaultTimeout)
@@ -195,7 +195,7 @@ func getConn(sandboxID string, port uint64) (net.Conn, error) {
 		// addr: hvsock:///run/vc/firecracker/340b412c97bf1375cdda56bfa8f18c8a/root/kata.hvsock:1024
 		hvsocket := strings.Split(addr.Path, ":")
 		if len(hvsocket) != 2 {
-			return nil, fmt.Errorf("Invalid hybrid vsock scheme: %s", sock)
+			return nil, fmt.Errorf("invalid hybrid vsock scheme: %s", sock)
 		}
 
 		// hvsock:///run/vc/firecracker/340b412c97bf1375cdda56bfa8f18c8a/root/kata.hvsock

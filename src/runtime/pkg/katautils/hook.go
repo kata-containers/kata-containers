@@ -94,7 +94,7 @@ func runHook(ctx context.Context, spec specs.Spec, hook specs.Hook, cid, bundleP
 				return err
 			}
 
-			return fmt.Errorf("Hook timeout")
+			return fmt.Errorf("hook timeout")
 		}
 	}
 

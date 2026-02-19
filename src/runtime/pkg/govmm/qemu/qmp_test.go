@@ -1650,7 +1650,7 @@ func TestExecCommandFailed(t *testing.T) {
 		t.Fatalf("expected error but got nil")
 	}
 
-	expectedString := "QMP command failed: " + errDesc
+	expectedString := "qmp command failed: " + errDesc
 	if err.Error() != expectedString {
 		t.Fatalf("expected '%v' but got '%v'", expectedString, err)
 	}
@@ -1678,7 +1678,7 @@ func TestExecCommandFailedWithInnerError(t *testing.T) {
 		t.Fatalf("expected error but got nil")
 	}
 
-	expectedString := "QMP command failed: "
+	expectedString := "qmp command failed: "
 	if err.Error() != expectedString {
 		t.Fatalf("expected '%v' but got '%v'", expectedString, err)
 	}

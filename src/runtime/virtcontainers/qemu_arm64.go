@@ -115,7 +115,7 @@ func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *gov
 }
 
 func (q *qemuArm64) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
-	return devices, fmt.Errorf("Arm64 architecture does not support vIOMMU")
+	return devices, fmt.Errorf("arm64 architecture does not support vIOMMU")
 }
 
 func (q *qemuArm64) append9PVolume(_ context.Context, devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
@@ -149,7 +149,7 @@ func (q *qemuArm64) enableProtection() error {
 		return err
 	}
 	if q.protection != ccaProtection {
-		return fmt.Errorf("Configured confidential guest but kvm does not support")
+		return fmt.Errorf("configured confidential guest but kvm does not support")
 	}
 	logger := hvLogger.WithFields(logrus.Fields{
 		"subsystem":               "qemuArm64",
@@ -186,7 +186,7 @@ func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 	case noneProtection:
 		return devices, firmware, nil
 	default:
-		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
+		return devices, "", fmt.Errorf("unsupported guest protection technology: %v", q.protection)
 	}
 }
 

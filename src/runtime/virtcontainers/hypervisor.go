@@ -173,7 +173,7 @@ func GetKernelRootParams(rootfstype string, disableNvdimm bool, dax bool, kernel
 	}
 
 	if disableNvdimm && dax {
-		return []Param{}, fmt.Errorf("Virtio-Blk does not support DAX")
+		return []Param{}, fmt.Errorf("virtio-Blk does not support DAX")
 	}
 
 	kernelRootParams := []Param{}
@@ -397,7 +397,7 @@ func (hType *HypervisorType) Set(value string) error {
 		*hType = MockHypervisor
 		return nil
 	default:
-		return fmt.Errorf("Unknown hypervisor type %s", value)
+		return fmt.Errorf("unknown hypervisor type %s", value)
 	}
 }
 
@@ -876,16 +876,16 @@ type VcpuThreadIDs struct {
 
 func (conf *HypervisorConfig) CheckTemplateConfig() error {
 	if conf.BootToBeTemplate && conf.BootFromTemplate {
-		return fmt.Errorf("Cannot set both 'to be' and 'from' vm tempate")
+		return fmt.Errorf("cannot set both 'to be' and 'from' vm tempate")
 	}
 
 	if conf.BootToBeTemplate || conf.BootFromTemplate {
 		if conf.MemoryPath == "" {
-			return fmt.Errorf("Missing MemoryPath for vm template")
+			return fmt.Errorf("missing MemoryPath for vm template")
 		}
 
 		if conf.BootFromTemplate && conf.DevicesStatePath == "" {
-			return fmt.Errorf("Missing DevicesStatePath to Load from vm template")
+			return fmt.Errorf("missing DevicesStatePath to Load from vm template")
 		}
 	}
 
@@ -896,7 +896,7 @@ func (conf *HypervisorConfig) CheckTemplateConfig() error {
 // hypervisor configuration.
 func (conf *HypervisorConfig) AddKernelParam(p Param) error {
 	if p.Key == "" {
-		return fmt.Errorf("Empty kernel parameter")
+		return fmt.Errorf("empty kernel parameter")
 	}
 
 	conf.KernelParams = append(conf.KernelParams, p)
@@ -911,7 +911,7 @@ func (conf *HypervisorConfig) AddCustomAsset(a *types.Asset) error {
 	}
 
 	if !a.Valid() {
-		return fmt.Errorf("Invalid %s at %s", a.Type(), a.Path())
+		return fmt.Errorf("invalid %s at %s", a.Type(), a.Path())
 	}
 
 	hvLogger.Debugf("Using custom %v asset %s", a.Type(), a.Path())
@@ -996,7 +996,7 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 	case types.FirmwareVolumeAsset:
 		return conf.FirmwareVolumePath, nil
 	default:
-		return "", fmt.Errorf("Unknown asset type %v", t)
+		return "", fmt.Errorf("unknown asset type %v", t)
 	}
 }
 
@@ -1194,7 +1194,7 @@ func CPUFlags(cpuInfoPath string) (map[string]bool, error) {
 		return map[string]bool{}, err
 	}
 
-	return map[string]bool{}, fmt.Errorf("Couldn't find %q from %q output", flagsField, cpuInfoPath)
+	return map[string]bool{}, fmt.Errorf("couldn't find %q from %q output", flagsField, cpuInfoPath)
 }
 
 // RunningOnVMM checks if the system is running inside a VM.

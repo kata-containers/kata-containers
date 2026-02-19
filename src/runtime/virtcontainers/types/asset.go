@@ -96,7 +96,7 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.FirmwareVolumePath, annotations.FirmwareVolumeHash, nil
 	}
 
-	return "", "", fmt.Errorf("Wrong asset type %s", t)
+	return "", "", fmt.Errorf("wrong asset type %s", t)
 }
 
 // Asset represents a virtcontainers asset.
@@ -143,7 +143,7 @@ func (a *Asset) Hash(hashType string) (string, error) {
 	}
 
 	if len(bytes) == 0 {
-		return "", fmt.Errorf("Empty asset file at %s", a.path)
+		return "", fmt.Errorf("empty asset file at %s", a.path)
 	}
 
 	// Build the asset hash and convert it to a string.
@@ -156,7 +156,7 @@ func (a *Asset) Hash(hashType string) (string, error) {
 		hex.Encode(hashEncoded, hashComputed[:])
 		hash = string(hashEncoded[:])
 	default:
-		return "", fmt.Errorf("Invalid hash type %s", hashType)
+		return "", fmt.Errorf("invalid hash type %s", hashType)
 	}
 
 	a.computedHash = hash
@@ -172,7 +172,7 @@ func NewAsset(anno map[string]string, t AssetType) (*Asset, error) {
 	}
 
 	if pathAnnotation == "" || hashAnnotation == "" {
-		return nil, fmt.Errorf("Missing annotation paths for %s", t)
+		return nil, fmt.Errorf("missing annotation paths for %s", t)
 	}
 
 	path, ok := anno[pathAnnotation]
@@ -204,7 +204,7 @@ func NewAsset(anno map[string]string, t AssetType) (*Asset, error) {
 
 	// If our computed asset hash does not match the passed annotation, we must exit.
 	if hashComputed != hash {
-		return nil, fmt.Errorf("Invalid hash for %s: computed %s, expecting %s]", a.path, hashComputed, hash)
+		return nil, fmt.Errorf("invalid hash for %s: computed %s, expecting %s]", a.path, hashComputed, hash)
 	}
 
 	return a, nil

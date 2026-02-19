@@ -64,7 +64,7 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 		return err
 	}
 	if isHostNs {
-		return fmt.Errorf("Host networking requested, not supported by runtime")
+		return fmt.Errorf("host networking requested, not supported by runtime")
 	}
 
 	return nil
@@ -145,7 +145,7 @@ func hostNetworkingRequested(configNetNs string) (bool, error) {
 		if _, err = filepath.EvalSymlinks(configNetNs); err != nil {
 			nsPath = err.(*os.PathError).Path
 		} else {
-			return false, fmt.Errorf("Net namespace path %s is not a symlink", configNetNs)
+			return false, fmt.Errorf("net namespace path %s is not a symlink", configNetNs)
 		}
 
 		_, evalNS = filepath.Split(nsPath)
@@ -159,7 +159,7 @@ func hostNetworkingRequested(configNetNs string) (bool, error) {
 	if _, err = filepath.EvalSymlinks(currentNS); err != nil {
 		currentNsPath = err.(*os.PathError).Path
 	} else {
-		return false, fmt.Errorf("Unexpected: Current network namespace path is not a symlink")
+		return false, fmt.Errorf("unexpected: Current network namespace path is not a symlink")
 	}
 
 	_, evalCurrentNS := filepath.Split(currentNsPath)

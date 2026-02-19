@@ -1,3 +1,8 @@
+// Copyright (c) 2024 Kata Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 package types
 
 import (

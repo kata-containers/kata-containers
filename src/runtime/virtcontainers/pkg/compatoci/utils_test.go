@@ -186,7 +186,7 @@ func TestParseConfigJSON(t *testing.T) {
 	var ociSpec compatOCISpec
 	var configByte []byte
 
-	ociSpec.Spec.Version = "1.0.0"
+	ociSpec.Version = "1.0.0"
 	ociSpec.Process = &compatOCIProcess{}
 	ociSpec.Process.Capabilities = map[string]interface{}{
 		"bounding":    []interface{}{"CAP_KILL"},

@@ -196,7 +196,7 @@ func indexPageText(w http.ResponseWriter, r *http.Request) {
 	formatter := fmt.Sprintf("%%-%ds: %%s\n", spacing)
 
 	for _, endpoint := range endpoints {
-		w.Write([]byte(fmt.Sprintf(formatter, endpoint.path, endpoint.desc)))
+		fmt.Fprintf(w, formatter, endpoint.path, endpoint.desc)
 	}
 }
 

@@ -139,7 +139,7 @@ func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceRece
 		}
 	}()
 
-	if device.GenericDevice.DeviceInfo.ColdPlug {
+	if device.DeviceInfo.ColdPlug {
 		// nothing to detach, device was cold plugged
 		deviceLogger().WithFields(logrus.Fields{
 			"device-group": device.DeviceInfo.HostPath,
@@ -218,7 +218,7 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 			}
 		default:
 			deviceLogger().WithError(
-				fmt.Errorf("VFIO device type unrecognized"),
+				fmt.Errorf("vfio device type unrecognized"),
 			).Error("Failed to append device")
 			return
 		}
@@ -255,7 +255,7 @@ func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
 	default:
-		err = fmt.Errorf("Incorrect tokens found while parsing vfio details: %s", deviceFileName)
+		err = fmt.Errorf("incorrect tokens found while parsing vfio details: %s", deviceFileName)
 	}
 
 	return deviceBDF, deviceSysfsDev, vfioDeviceType, err
@@ -264,7 +264,7 @@ func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 // getMediatedBDF returns the BDF of a VF
 // Expected input string format is /sys/devices/pci0000:d7/BDF0/BDF1/.../MDEVBDF/UUID
 func getMediatedBDF(deviceSysfsDev string) string {
-	tokens := strings.SplitN(deviceSysfsDev, "/", -1)
+	tokens := strings.Split(deviceSysfsDev, "/")
 	if len(tokens) < 4 {
 		return ""
 	}

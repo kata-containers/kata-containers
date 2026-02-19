@@ -358,7 +358,7 @@ func addExpFeatures(clictx *cli.Context, runtimeConfig oci.RuntimeConfig) error 
 // function called when an invalid command is specified which causes the
 // runtime to error.
 func commandNotFound(c *cli.Context, command string) {
-	err := fmt.Errorf("Invalid command %q", command)
+	err := fmt.Errorf("invalid command %q", command)
 	fatal(err)
 }
 

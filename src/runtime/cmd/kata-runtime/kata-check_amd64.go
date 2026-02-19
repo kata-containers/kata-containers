@@ -63,7 +63,7 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 	cpuType = getCPUtype()
 
 	if cpuType == cpuTypeUnknown {
-		return fmt.Errorf("Unknow CPU Type")
+		return fmt.Errorf("unknown CPU Type")
 	} else if cpuType == cpuTypeIntel {
 		var kvmIntelParams map[string]string
 		onVMM, err := vc.RunningOnVMM(procCPUInfo)

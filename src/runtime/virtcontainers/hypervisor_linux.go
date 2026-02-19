@@ -43,6 +43,6 @@ func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
-		return nil, fmt.Errorf("Unknown hypervisor type %s", hType)
+		return nil, fmt.Errorf("unknown hypervisor type %s", hType)
 	}
 }

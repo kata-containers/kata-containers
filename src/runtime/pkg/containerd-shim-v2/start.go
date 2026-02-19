@@ -25,12 +25,12 @@ func startContainer(ctx context.Context, s *service, c *container) (retErr error
 	}()
 	// start a container
 	if c.cType == "" {
-		err := fmt.Errorf("Bug, the container %s type is empty", c.id)
+		err := fmt.Errorf("bug, the container %s type is empty", c.id)
 		return err
 	}
 
 	if s.sandbox == nil {
-		err := fmt.Errorf("Bug, the sandbox hasn't been created for this container %s", c.id)
+		err := fmt.Errorf("bug, the sandbox hasn't been created for this container %s", c.id)
 		return err
 	}
 

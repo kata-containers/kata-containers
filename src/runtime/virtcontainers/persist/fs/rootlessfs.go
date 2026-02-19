@@ -24,12 +24,12 @@ type RootlessFS struct {
 func RootlessInit() (persistapi.PersistDriver, error) {
 	driver, err := Init()
 	if err != nil {
-		return nil, fmt.Errorf("Could not create Rootless FS driver: %v", err)
+		return nil, fmt.Errorf("could not create Rootless FS driver: %v", err)
 	}
 
 	fsDriver, ok := driver.(*FS)
 	if !ok {
-		return nil, fmt.Errorf("Could not create Rootless FS driver")
+		return nil, fmt.Errorf("could not create Rootless FS driver")
 	}
 
 	// XDG_RUNTIME_DIR defines the base directory relative to

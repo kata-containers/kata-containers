@@ -65,11 +65,11 @@ func createConfig(configPath string, fileData string) error {
 // loadConfiguration().
 func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntimeConfig, err error) {
 	if dir == "" {
-		return testConfig, fmt.Errorf("BUG: need directory")
+		return testConfig, fmt.Errorf("bug: need directory")
 	}
 
 	if hypervisor == "" {
-		return testConfig, fmt.Errorf("BUG: need hypervisor")
+		return testConfig, fmt.Errorf("bug: need hypervisor")
 	}
 	var hotPlugVFIO config.PCIePort
 	var coldPlugVFIO config.PCIePort
@@ -1478,7 +1478,7 @@ func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 	}
 
 	err := updateRuntimeConfig("", tomlConf, &config)
-	assert.EqualError(err, "Empty kernel parameter")
+	assert.EqualError(err, "empty kernel parameter")
 }
 
 func TestCheckHypervisorConfig(t *testing.T) {

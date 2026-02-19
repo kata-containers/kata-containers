@@ -45,15 +45,15 @@ func bindMount(ctx context.Context, source, destination string, readonly bool, p
 	span.SetAttributes(otelLabel.String("source_after_eval", absSource))
 
 	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND, ""); err != nil {
-		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
+		return fmt.Errorf("could not bind mount %v to %v: %v", absSource, destination, err)
 	}
 
 	if pgtype, exist := propagationTypes[pgtypes]; exist {
 		if err := syscall.Mount("none", destination, "", pgtype, ""); err != nil {
-			return fmt.Errorf("Could not make mount point %v %s: %v", destination, pgtypes, err)
+			return fmt.Errorf("could not make mount point %v %s: %v", destination, pgtypes, err)
 		}
 	} else {
-		return fmt.Errorf("Wrong propagation type %s", pgtypes)
+		return fmt.Errorf("wrong propagation type %s", pgtypes)
 	}
 
 	// For readonly bind mounts, we need to remount with the readonly flag.
@@ -77,7 +77,7 @@ func remount(ctx context.Context, mountflags uintptr, src string) error {
 
 	absSrc, err := filepath.EvalSymlinks(src)
 	if err != nil {
-		return fmt.Errorf("Could not resolve symlink for %s", src)
+		return fmt.Errorf("could not resolve symlink for %s", src)
 	}
 	span.SetAttributes(otelLabel.String("source_after_eval", absSrc))
 

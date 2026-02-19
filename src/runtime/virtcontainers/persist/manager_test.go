@@ -70,9 +70,7 @@ func TestGetDriver(t *testing.T) {
 	supportedDrivers = nil
 	fsd, err = GetDriver()
 	assert.Nil(fsd)
-	assert.NotNil(err)
-	b := err.Error()
-	assert.True(strings.Contains(b, "Could not find a FS driver"))
+	assert.ErrorContains(err, "could not find a FS driver")
 	supportedDrivers = supportedDriversBU
 
 	// testing case when mock driver is activated

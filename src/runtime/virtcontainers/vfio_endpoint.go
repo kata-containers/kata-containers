@@ -86,11 +86,11 @@ func (endpoint *VfioEndpoint) Detach(ctx context.Context, netNsCreated bool, net
 }
 
 func (endpoint *VfioEndpoint) HotAttach(context.Context, *Sandbox) error {
-	return fmt.Errorf("VfioEndpoint does not support Hot attach")
+	return fmt.Errorf("vfioEndpoint does not support Hot attach")
 }
 
 func (endpoint *VfioEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("VfioEndpoint does not support Hot detach")
+	return fmt.Errorf("vfioEndpoint does not support Hot detach")
 }
 
 func (endpoint *VfioEndpoint) save() persistapi.NetworkEndpoint {

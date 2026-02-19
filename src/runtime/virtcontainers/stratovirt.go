@@ -541,10 +541,10 @@ func (s *stratovirt) appendNetwork(ctx context.Context, devices []VirtioDev, end
 	devices = append(devices, netDevice{
 		devType:  "tap",
 		id:       name,
-		ifname:   endpoint.NetworkPair().TapInterface.TAPIface.Name,
+		ifname:   endpoint.NetworkPair().TAPIface.Name,
 		netdev:   name,
 		deviceID: name,
-		FDs:      endpoint.NetworkPair().TapInterface.VMFds,
+		FDs:      endpoint.NetworkPair().VMFds,
 		mac:      endpoint.HardwareAddr(),
 		driver:   mmioBus,
 	})
@@ -683,7 +683,7 @@ func (s *stratovirt) binPath() (string, error) {
 	}
 
 	if _, err = os.Stat(path); os.IsNotExist(err) {
-		return "", fmt.Errorf("StratoVirt path (%s) does not exist", path)
+		return "", fmt.Errorf("stratoVirt path (%s) does not exist", path)
 	}
 	return path, nil
 }
@@ -718,7 +718,7 @@ func (s *stratovirt) waitVM(ctx context.Context, timeout int) error {
 	defer span.End()
 
 	if timeout < 0 {
-		return fmt.Errorf("Invalid timeout %ds", timeout)
+		return fmt.Errorf("invalid timeout %ds", timeout)
 	}
 
 	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
@@ -739,7 +739,7 @@ func (s *stratovirt) waitVM(ctx context.Context, timeout int) error {
 		}
 
 		if int(time.Since(timeStart).Seconds()) > timeout {
-			return fmt.Errorf("Failed to connect StratoVirt instance (timeout %ds): %v", timeout, err)
+			return fmt.Errorf("failed to connect StratoVirt instance (timeout %ds): %v", timeout, err)
 		}
 
 		time.Sleep(time.Duration(50) * time.Millisecond)
@@ -836,7 +836,7 @@ func (s *stratovirt) setupMmioSlot(Name string, isPut bool) (int, error) {
 	if strings.HasPrefix(Name, "vd") {
 		charStr := strings.TrimPrefix(Name, "vd")
 		if charStr == Name {
-			return 0, fmt.Errorf("Could not parse idx from Name %q", Name)
+			return 0, fmt.Errorf("could not parse idx from Name %q", Name)
 		}
 
 		char := []rune(charStr)
@@ -1130,7 +1130,7 @@ func (s *stratovirt) AddDevice(ctx context.Context, devInfo interface{}, devType
 		s.fds = append(s.fds, v.VhostFd)
 		s.svConfig.devices = s.appendVhostVsock(ctx, s.svConfig.devices, v)
 	case Endpoint:
-		s.fds = append(s.fds, v.NetworkPair().TapInterface.VMFds...)
+		s.fds = append(s.fds, v.NetworkPair().VMFds...)
 		s.svConfig.devices = s.appendNetwork(ctx, s.svConfig.devices, v)
 	case config.BlockDrive:
 		s.svConfig.devices = s.appendBlock(ctx, s.svConfig.devices)
@@ -1151,7 +1151,7 @@ func (s *stratovirt) HotplugAddDevice(ctx context.Context, devInfo interface{}, 
 	case BlockDev:
 		return nil, s.hotplugBlk(ctx, devInfo.(*config.BlockDrive), AddDevice)
 	default:
-		return nil, fmt.Errorf("Hotplug add device: unsupported device type '%v'", devType)
+		return nil, fmt.Errorf("hotplug add device: unsupported device type '%v'", devType)
 	}
 }
 
@@ -1163,7 +1163,7 @@ func (s *stratovirt) HotplugRemoveDevice(ctx context.Context, devInfo interface{
 	case BlockDev:
 		return nil, s.hotplugBlk(ctx, devInfo.(*config.BlockDrive), RemoveDevice)
 	default:
-		return nil, fmt.Errorf("Hotplug remove device: unsupported device type '%v'", devType)
+		return nil, fmt.Errorf("hotplug remove device: unsupported device type '%v'", devType)
 	}
 }
 
@@ -1279,7 +1279,7 @@ func (s *stratovirt) toGrpc(ctx context.Context) ([]byte, error) {
 
 func (s *stratovirt) Check() error {
 	if s.stopped.Load() {
-		return fmt.Errorf("StratoVirt is not running")
+		return fmt.Errorf("stratoVirt is not running")
 	}
 
 	if err := s.qmpSetup(); err != nil {

@@ -347,7 +347,7 @@ func (q *QMP) finaliseCommandWithResponse(cmdEl *list.Element, cmdQueue *list.Li
 		if succeeded {
 			cmd.res <- qmpResult{response: response}
 		} else {
-			cmd.res <- qmpResult{err: fmt.Errorf("QMP command failed: %v", response)}
+			cmd.res <- qmpResult{err: fmt.Errorf("qmp command failed: %v", response)}
 		}
 	}
 	if cmdQueue.Len() > 0 {

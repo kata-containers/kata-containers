@@ -54,7 +54,7 @@ const (
 
 	msgNoReleases        = "No releases available"
 	msgNoNewerRelease    = "No newer release available"
-	errNoNetChecksAsRoot = "No network checks allowed running as super user"
+	errNoNetChecksAsRoot = "no network checks allowed running as super user"
 )
 
 func (c ReleaseCmd) Valid() bool {
@@ -68,7 +68,7 @@ func (c ReleaseCmd) Valid() bool {
 
 func downloadURLIsValid(url string) error {
 	if url == "" {
-		return errors.New("URL cannot be blank")
+		return errors.New("url cannot be blank")
 	}
 
 	if strings.HasPrefix(url, kataDownloadURL) ||
@@ -76,29 +76,30 @@ func downloadURLIsValid(url string) error {
 		return nil
 	}
 
-	return fmt.Errorf("Download URL %q is not valid", url)
+	return fmt.Errorf("download URL %q is not valid", url)
 }
 
 func releaseURLIsValid(url string) error {
 	if url == "" {
-		return errors.New("URL cannot be blank")
+		return errors.New("url cannot be blank")
 	}
 
 	if url == kataReleaseURL || url == kataLegacyReleaseURL {
 		return nil
 	}
 
-	return fmt.Errorf("Release URL %q is not valid", url)
+	return fmt.Errorf("release URL %q is not valid", url)
 }
 
 func getReleaseURL(currentVersion semver.Version) (url string, err error) {
 	major := currentVersion.Major
 
-	if major == 0 {
+	switch major {
+	case 0:
 		return "", fmt.Errorf("invalid current version: %v", currentVersion)
-	} else if major == 1 {
+	case 1:
 		url = kataLegacyReleaseURL
-	} else {
+	default:
 		url = kataReleaseURL
 	}
 
@@ -182,7 +183,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	}
 
 	if filename == "" {
-		return "", details, fmt.Errorf("Release %q asset missing filename", version)
+		return "", details, fmt.Errorf("release %q asset missing filename", version)
 	}
 
 	key = "created_at"
@@ -193,7 +194,7 @@ func makeRelease(release map[string]interface{}) (version string, details releas
 	}
 
 	if createDate == "" {
-		return "", details, fmt.Errorf("Release %q asset missing creation date", version)
+		return "", details, fmt.Errorf("release %q asset missing creation date", version)
 	}
 
 	details = releaseDetails{
@@ -336,7 +337,7 @@ func getNewReleaseType(current semver.Version, latest semver.Version) (string, e
 			desc = "major"
 		}
 	} else {
-		return "", fmt.Errorf("BUG: unhandled scenario: current version: %s, latest version: %s", current, latest)
+		return "", fmt.Errorf("bug: unhandled scenario: current version: %s, latest version: %s", current, latest)
 	}
 
 	return desc, nil
@@ -361,7 +362,7 @@ func listReleases(output *os.File, current semver.Version, versions []semver.Ver
 	for _, version := range versions {
 		details, ok := releases[version.String()]
 		if !ok {
-			return fmt.Errorf("Release %v has no details", version)
+			return fmt.Errorf("release %v has no details", version)
 		}
 
 		fmt.Fprintf(output, "%s;%s;%s\n", version, details.date, details.url)
@@ -379,7 +380,7 @@ func HandleReleaseVersions(cmd ReleaseCmd, currentVersion string, includeAll boo
 
 	currentSemver, err := semver.Make(currentVersion)
 	if err != nil {
-		return fmt.Errorf("BUG: Current version of %s (%s) has invalid SemVer version: %v", katautils.NAME, currentVersion, err)
+		return fmt.Errorf("bug: Current version of %s (%s) has invalid SemVer version: %v", katautils.NAME, currentVersion, err)
 	}
 
 	releaseURL, err := getReleaseURL(currentSemver)
@@ -413,7 +414,7 @@ func HandleReleaseVersions(cmd ReleaseCmd, currentVersion string, includeAll boo
 
 	details, ok := releases[newest.String()]
 	if !ok {
-		return fmt.Errorf("Release %v has no details", newest)
+		return fmt.Errorf("release %v has no details", newest)
 	}
 
 	return showLatestRelease(output, currentSemver, details)

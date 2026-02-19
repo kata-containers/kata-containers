@@ -74,13 +74,13 @@ func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 
 	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.HypervisorConfig().NumVCPUs()))
 	if err != nil {
-		return fmt.Errorf("Could not setup macvtap fds %s: %s", endpoint.EndpointProperties.Iface.Name, err)
+		return fmt.Errorf("could not setup macvtap fds %s: %s", endpoint.EndpointProperties.Iface.Name, err)
 	}
 
 	if !h.HypervisorConfig().DisableVhostNet {
 		vhostFds, err := createVhostFds(int(h.HypervisorConfig().NumVCPUs()))
 		if err != nil {
-			return fmt.Errorf("Could not setup vhost fds %s : %s", endpoint.EndpointProperties.Iface.Name, err)
+			return fmt.Errorf("could not setup vhost fds %s : %s", endpoint.EndpointProperties.Iface.Name, err)
 		}
 		endpoint.VhostFds = vhostFds
 	}
@@ -95,12 +95,12 @@ func (endpoint *MacvtapEndpoint) Detach(ctx context.Context, netNsCreated bool, 
 
 // HotAttach for macvtap endpoint not supported yet
 func (endpoint *MacvtapEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
-	return fmt.Errorf("MacvtapEndpoint does not support Hot attach")
+	return fmt.Errorf("macvtapEndpoint does not support Hot attach")
 }
 
 // HotDetach for macvtap endpoint not supported yet
 func (endpoint *MacvtapEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("MacvtapEndpoint does not support Hot detach")
+	return fmt.Errorf("macvtapEndpoint does not support Hot detach")
 }
 
 // PciPath returns the PCI path of the endpoint.

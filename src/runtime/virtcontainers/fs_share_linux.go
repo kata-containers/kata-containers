@@ -96,7 +96,7 @@ type FilesystemShare struct {
 func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, fmt.Errorf("Creating watcher returned error %w", err)
+		return nil, fmt.Errorf("creating watcher returned error %w", err)
 	}
 
 	kubernetesRootDir := resolveRootDir()
@@ -136,7 +136,7 @@ func (f *FilesystemShare) prepareBindMounts(ctx context.Context) error {
 	sandboxMountDir := filepath.Join(getMountPath(f.sandbox.ID()), sandboxMountsDir)
 	sandboxShareDir := filepath.Join(GetSharePath(f.sandbox.ID()), sandboxMountsDir)
 	if err := os.MkdirAll(sandboxMountDir, DirMode); err != nil {
-		return fmt.Errorf("Creating sandbox shared mount directory: %v: %w", sandboxMountDir, err)
+		return fmt.Errorf("creating sandbox shared mount directory: %v: %w", sandboxMountDir, err)
 	}
 	var mountedList []string
 	defer func() {
@@ -157,7 +157,7 @@ func (f *FilesystemShare) prepareBindMounts(ctx context.Context) error {
 		mountDest := filepath.Join(sandboxMountDir, filepath.Base(m))
 		// bind-mount each sandbox mount that's defined into the sandbox mounts dir
 		if err := bindMount(ctx, m, mountDest, true, "private"); err != nil {
-			return fmt.Errorf("Mounting sandbox directory: %v to %v: %w", m, mountDest, err)
+			return fmt.Errorf("mounting sandbox directory: %v to %v: %w", m, mountDest, err)
 		}
 		mountedList = append(mountedList, mountDest)
 
@@ -325,7 +325,8 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 				return err
 			}
 
-			if !(info.Mode().IsRegular() || info.Mode().IsDir() || (info.Mode()&os.ModeSymlink) == os.ModeSymlink) {
+			mode := info.Mode()
+			if !mode.IsRegular() && !mode.IsDir() && mode&os.ModeSymlink != os.ModeSymlink {
 				f.Logger().WithField("ignored-file", srcPath).Debug("Ignoring file as FS sharing not supported")
 				if srcPath == srcRoot {
 					// Ignore the mount if this is not a regular file (excludes socket, device, ...) as it cannot be handled by
@@ -693,21 +694,21 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			f.Logger().Error("malformed block drive")
 			return nil, fmt.Errorf("malformed block drive")
 		}
-		switch {
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
+		switch f.sandbox.config.HypervisorConfig.BlockDeviceDriver {
+		case config.VirtioMmio:
 			rootfsStorage.Driver = kataMmioBlkDevType
 			rootfsStorage.Source = blockDrive.VirtPath
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
+		case config.VirtioBlockCCW:
 			rootfsStorage.Driver = kataBlkCCWDevType
 			rootfsStorage.Source = blockDrive.DevNo
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
+		case config.VirtioBlock:
 			rootfsStorage.Driver = kataBlkDevType
 			rootfsStorage.Source = blockDrive.PCIPath.String()
-		case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
+		case config.VirtioSCSI:
 			rootfsStorage.Driver = kataSCSIDevType
 			rootfsStorage.Source = blockDrive.SCSIAddr
 		default:
-			return nil, fmt.Errorf("Unknown block device driver: %s", f.sandbox.config.HypervisorConfig.BlockDeviceDriver)
+			return nil, fmt.Errorf("unknown block device driver: %s", f.sandbox.config.HypervisorConfig.BlockDeviceDriver)
 		}
 
 		// We can't use filepath.Dir(rootfsGuestPath) (The rootfs parent) because
@@ -831,7 +832,7 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 		select {
 		case event, ok := <-f.watcher.Events:
 			if !ok {
-				return fmt.Errorf("StartFileEventWatcher: watcher events channel closed")
+				return fmt.Errorf("startFileEventWatcher: watcher events channel closed")
 			}
 			f.Logger().Infof("StartFileEventWatcher: got an event %s %s", event.Op, event.Name)
 			if event.Op&fsnotify.Remove == fsnotify.Remove {
@@ -907,7 +908,7 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 			}
 		case err, ok := <-f.watcher.Errors:
 			if !ok {
-				return fmt.Errorf("StartFileEventWatcher: watcher error channel closed")
+				return fmt.Errorf("startFileEventWatcher: watcher error channel closed")
 			}
 			// We continue explicitly here to avoid exiting the watcher loop
 			f.Logger().Infof("StartFileEventWatcher: got an error event (%v)", err)

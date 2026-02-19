@@ -129,7 +129,7 @@ func (le LogEntry) Check(ignoreMissingFields bool) error {
 		return fmt.Errorf("missing line number: %+v", le)
 	}
 
-	if le.Time == (time.Time{}) {
+	if le.Time.IsZero() {
 		return fmt.Errorf("missing timestamp: %+v", le)
 	}
 

@@ -14,7 +14,7 @@ import (
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 )
 
-var endpointNotSupported error = errors.New("Unsupported endpoint on Darwin")
+var endpointNotSupported error = errors.New("unsupported endpoint on Darwin")
 
 // DarwinNetwork represents a sandbox networking setup.
 type DarwinNetwork struct {
