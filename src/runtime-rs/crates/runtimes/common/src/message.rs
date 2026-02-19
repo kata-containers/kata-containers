@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
+use containerd_shim_protos::events::task::{TaskCreate, TaskDelete, TaskExit, TaskOOM, TaskStart};
 use containerd_shim_protos::protobuf::Message as ProtobufMessage;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
@@ -49,9 +49,15 @@ impl Message {
 
 const TASK_OOM_EVENT_TOPIC: &str = "/tasks/oom";
 const TASK_EXIT_EVENT_TOPIC: &str = "/tasks/exit";
+const TASK_START_EVENT_TOPIC: &str = "/tasks/start";
+const TASK_CREATE_EVENT_TOPIC: &str = "/tasks/create";
+const TASK_DELETE_EVENT_TOPIC: &str = "/tasks/delete";
 
 const TASK_OOM_EVENT_URL: &str = "containerd.events.TaskOOM";
 const TASK_EXIT_EVENT_URL: &str = "containerd.events.TaskExit";
+const TASK_START_EVENT_URL: &str = "containerd.events.TaskStart";
+const TASK_CREATE_EVENT_URL: &str = "containerd.events.TaskCreate";
+const TASK_DELETE_EVENT_URL: &str = "containerd.events.TaskDelete";
 
 pub trait Event: std::fmt::Debug + Send {
     fn r#type(&self) -> String;
@@ -84,5 +90,47 @@ impl Event for TaskExit {
 
     fn value(&self) -> Result<Vec<u8>> {
         self.write_to_bytes().context("get exit value")
+    }
+}
+
+impl Event for TaskStart {
+    fn r#type(&self) -> String {
+        TASK_START_EVENT_TOPIC.to_string()
+    }
+
+    fn type_url(&self) -> String {
+        TASK_START_EVENT_URL.to_string()
+    }
+
+    fn value(&self) -> Result<Vec<u8>> {
+        self.write_to_bytes().context("get start value")
+    }
+}
+
+impl Event for TaskCreate {
+    fn r#type(&self) -> String {
+        TASK_CREATE_EVENT_TOPIC.to_string()
+    }
+
+    fn type_url(&self) -> String {
+        TASK_CREATE_EVENT_URL.to_string()
+    }
+
+    fn value(&self) -> Result<Vec<u8>> {
+        self.write_to_bytes().context("get create value")
+    }
+}
+
+impl Event for TaskDelete {
+    fn r#type(&self) -> String {
+        TASK_DELETE_EVENT_TOPIC.to_string()
+    }
+
+    fn type_url(&self) -> String {
+        TASK_DELETE_EVENT_URL.to_string()
+    }
+
+    fn value(&self) -> Result<Vec<u8>> {
+        self.write_to_bytes().context("get delete value")
     }
 }

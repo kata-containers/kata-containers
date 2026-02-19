@@ -4031,6 +4031,7 @@ dependencies = [
  "agent",
  "anyhow",
  "common",
+ "containerd-shim-protos",
  "hyper",
  "hyperlocal",
  "hypervisor",
