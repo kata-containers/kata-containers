@@ -121,6 +121,7 @@ mod tests {
             version: false,
             yaml_file: workdir.join("pod.yaml").to_str().map(|s| s.to_string()),
             initdata: kata_types::initdata::InitData::new("sha256", "0.1.0"),
+            max_pull_attempts: 1,
         };
 
         // The container repos/network calls can be unreliable, so retry
