@@ -2,7 +2,7 @@
 //!
 //! This module will do the following things if a proper initdata device with initdata exists.
 //! 1. Parse the initdata block device and extract the config files to [`INITDATA_PATH`].
-//! 2. Return the initdata and the policy (if any).
+//! 2. Return the initdata, the policy (if any) and the guest components debug flag (defaults to `false`).
 
 // Copyright (c) 2025 Alibaba Cloud
 //
@@ -27,6 +27,7 @@ pub const INITDATA_PATH: &str = "/run/confidential-containers/initdata";
 const AA_CONFIG_KEY: &str = "aa.toml";
 const CDH_CONFIG_KEY: &str = "cdh.toml";
 const POLICY_KEY: &str = "policy.rego";
+const DEBUG_FLAG: &str = "debug";
 
 /// The path of initdata toml
 pub const INITDATA_TOML_PATH: &str = concatcp!(INITDATA_PATH, "/initdata.toml");
@@ -123,6 +124,7 @@ pub async fn read_initdata(device_path: &str) -> Result<Vec<u8>> {
 pub struct InitdataReturnValue {
     pub _digest: Vec<u8>,
     pub _policy: Option<String>,
+    pub debug: bool,
 }
 
 pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataReturnValue>> {
@@ -173,11 +175,17 @@ pub async fn initialize_initdata(logger: &Logger) -> Result<Option<InitdataRetur
         info!(logger, "write CDH config from initdata");
     }
 
+    let debug = initdata
+        .get_coco_data(DEBUG_FLAG)
+        .map(|s| s == "true")
+        .unwrap_or(false);
+
     debug!(logger, "Initdata digest: {}", STANDARD.encode(&_digest));
 
     let res = InitdataReturnValue {
         _digest,
         _policy: initdata.get_coco_data(POLICY_KEY).cloned(),
+        debug,
     };
 
     Ok(Some(res))
