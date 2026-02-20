@@ -12,12 +12,10 @@ DEBUG="${DEBUG:-}"
 [[ -n "${DEBUG}" ]] && set -x
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck disable=SC1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
-# shellcheck disable=1091
+# shellcheck disable=SC1091
 source "${kubernetes_dir}/confidential_kbs.sh"
-# shellcheck disable=2154
-tools_dir="${repo_root_dir}/tools"
-kata_tarball_dir="${2:-kata-artifacts}"
 
 export DOCKER_REGISTRY="${DOCKER_REGISTRY:-quay.io}"
 export DOCKER_REPO="${DOCKER_REPO:-kata-containers/kata-deploy-ci}"
@@ -584,7 +582,7 @@ function main() {
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
 		deploy-coco-kbs) deploy_coco_kbs ;;
-		deploy-k8s) deploy_k8s ${CONTAINER_ENGINE:-} ${CONTAINER_ENGINE_VERSION:-};;
+		deploy-k8s) deploy_k8s "${CONTAINER_ENGINE:-}" "${CONTAINER_ENGINE_VERSION:-}";;
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools "${2:-}" ;;
 		install-kbs-client) install_kbs_client ;;
