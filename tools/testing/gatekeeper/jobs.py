@@ -47,6 +47,11 @@ if os.environ.get("DEBUG_INPUT", "") == "":
     DEBUG_INPUT = None
 else:
     DEBUG_INPUT = os.path.abspath(os.environ["DEBUG_INPUT"])
+_GH_SUMMARY_URL = (
+    f"{os.environ.get('GITHUB_SERVER_URL')}/"
+    f"{os.environ.get('GITHUB_REPOSITORY')}/actions/runs/"
+    f"{os.environ.get('GITHUB_RUN_ID')}#summary"
+)
 
 
 class Checker:
@@ -135,12 +140,13 @@ class Checker:
         warn = []
         for name, job in self.results.items():
             status = self._job_status(job)
+            url = job.get("html_url", "")
             if status == RUNNING:
-                warn.append(f"WARN: {name} - Still running")
+                warn.append(f"WARN: {name} - Still running {url}")
             elif status == PASS:
-                good.append(f"PASS: {name} - success")
+                good.append(f"PASS: {name} - success {url}")
             else:
-                bad.append(f"FAIL: {name} - Not passed - {status}")
+                bad.append(f"FAIL: {name} - Not passed - {status} {url}")
         out = '\n'.join(sorted(good) + sorted(warn) + sorted(bad))
         stat = self.status()
         if stat == RUNNING:
@@ -153,6 +159,53 @@ class Checker:
         else:
             status = "Not all required jobs passed!"
         return f"{out}\n\n{status}"
+
+    def write_step_summary(self):
+        """Write WARN/FAIL results to GitHub Step Summary if available"""
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if not summary_path:
+            return
+
+        lines = []
+        passing = []
+        failing = []
+        running = []
+
+        for name, job in self.results.items():
+            status = self._job_status(job)
+            url = job.get("html_url", "")
+            if status == RUNNING:
+                running.append(f"[{name}]({url})" if url else name)
+            elif status == PASS:
+                passing.append(f"[{name}]({url})" if url else name)
+            else:
+                link = f"[{name}]({url})" if url else name
+                failing.append(f"{link}\t{status}")
+
+        lines.append("## Failing checks")
+        lines.append("\t")
+        for failure in failing:
+            lines.append(f"🔴 {failure}")
+        lines.append("")
+        lines.append("## In progress checks")
+        lines.append("\t")
+        for run in running:
+            lines.append(f"🔶 {run}")
+        lines.append("")
+        lines.append("## Successful checks")
+        lines.append("\t")
+        for success in passing:
+            lines.append(f"🟢 {success}")
+        lines.append("")
+        lines.append("## Summary")
+        lines.append("\t")
+        lines.append(f"Total: {len(self.results)} "
+                     f"Passed: {len(passing)}, "
+                     f"Failed: {len(failing)}, Running: {len(running)}")
+
+        with open(summary_path, "w", encoding="utf8") as summary:
+            summary.write("\n".join(lines) + "\n")
+        print(f"Human-readable summary: {_GH_SUMMARY_URL}")
 
     def fetch_json_from_url(self, url, task, params=None):
         """Fetches URL and reports json output"""
@@ -220,6 +273,7 @@ class Checker:
             for job in jobs:
                 self.record(run["name"], job)
         print(self)
+        self.write_step_summary()
         return self.status()
 
     def wait_for_required_tests(self):
