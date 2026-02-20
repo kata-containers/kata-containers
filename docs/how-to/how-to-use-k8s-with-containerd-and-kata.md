@@ -49,6 +49,8 @@ In order to allow Kubelet to use containerd (using the CRI interface), configure
   EOF
   ```
 
+  For Kata Containers (and especially CoCo / Confidential Containers tests), use at least `--runtime-request-timeout=600s` (10m) so CRI CreateContainerRequest does not time out.
+
 - Inform systemd about the new configuration
 
   ```bash
