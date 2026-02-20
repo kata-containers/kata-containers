@@ -149,13 +149,7 @@ chisseled_nvswitch() {
 	cp -a "${stage_one}"/usr/share/nvidia/nvswitch	usr/share/nvidia/.
 
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
-
 	cp -a "${stage_one}/${libdir}"/libnvidia-nscq.so.* lib/"${machine_arch}"-linux-gnu/.
-
-	# Logs will be redirected to console(stderr)
-	# if the specified log file can't be opened or the path is empty.
-	# LOG_FILE_NAME=/var/log/fabricmanager.log -> setting to empty for stderr -> kmsg
-	sed -i 's|^LOG_FILE_NAME=.*|LOG_FILE_NAME=|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 
 	# NVLINK SubnetManager dependencies
 	local nvlsm=usr/share/nvidia/nvlsm
@@ -164,6 +158,8 @@ chisseled_nvswitch() {
 	cp -a "${stage_one}"/opt/nvidia/nvlsm/lib/libgrpc_mgr.so	lib/.
 	cp -a "${stage_one}"/opt/nvidia/nvlsm/sbin/nvlsm			sbin/.
 	cp -a "${stage_one}/${nvlsm}"/*.conf						"${nvlsm}"/.
+	# Redirect all the logs to syslog instead of logging to file
+	sed -i 's|^LOG_USE_SYSLOG=.*|LOG_USE_SYSLOG=1|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 }
 
 chisseled_dcgm() {
@@ -243,6 +239,7 @@ chisseled_init() {
 		 usr/bin etc/modprobe.d etc/ssl/certs
 
 	ln -sf ../run var/run
+	ln -sf ../run var/log
 
 	# Needed for various RUST static builds with LIBC=gnu
 	libdir=lib/"${machine_arch}"-linux-gnu
