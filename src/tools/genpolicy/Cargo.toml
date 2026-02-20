@@ -23,18 +23,7 @@ base64 = "0.21.0"
 serde = { version = "1.0.159", features = ["derive"] }
 regex = "1.10.5"
 
-# Newer serde_yaml versions are using unsafe-libyaml instead of yaml-rust,
-# and incorrectly change on serialization:
-#
-# value: "yes"
-#
-# to:
-#
-# value: yes
-#
-# In YAML, the value yes without quotes is reserved for boolean,
-# and confuses kubectl, that expects a string value.
-serde_yaml = "0.8"
+serde_yaml = { package = "yaml_serde", version = "0.10" }
 
 # Container repository.
 anyhow = "1.0.32"
