@@ -395,8 +395,27 @@ EOF
    	sudo apt-get -y install kubeadm kubelet kubectl --allow-downgrades
    	sudo apt-mark hold kubeadm kubelet kubectl
 
-	# Deploy k8s using kubeadm
-   	sudo kubeadm init --pod-network-cidr=10.244.0.0/16
+	# Deploy k8s using kubeadm with CreateContainerRequest (CRI) timeout set to 600s,
+	# mainly for CoCo (Confidential Containers) tests (attestation, policy, image pull, VM start).
+	local kubeadm_config
+	kubeadm_config="$(mktemp --tmpdir kubeadm-config.XXXXXX.yaml)"
+	cat <<EOF | tee "${kubeadm_config}"
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: InitConfiguration
+nodeRegistration:
+  criSocket: "/run/containerd/containerd.sock"
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+kind: ClusterConfiguration
+networking:
+  podSubnet: "10.244.0.0/16"
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+runtimeRequestTimeout: "600s"
+EOF
+	sudo kubeadm init --config "${kubeadm_config}"
+	rm -f "${kubeadm_config}"
 	mkdir -p $HOME/.kube
 	sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 	sudo chown $(id -u):$(id -g) $HOME/.kube/config
