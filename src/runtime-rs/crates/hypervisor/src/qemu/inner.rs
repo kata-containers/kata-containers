@@ -610,8 +610,10 @@ impl QemuInner {
         todo!()
     }
 
-    pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
-        todo!()
+    pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
+        let mut caps = Capabilities::default();
+
+        caps.set(flag)
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {

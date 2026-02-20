@@ -147,7 +147,7 @@ impl Tap {
 
         // ioctl is safe since we call it with a valid tap fd and check the return
         // value.
-        let ret = unsafe { ioctl_with_mut_ref(&tuntap, TUNSETIFF(), ifr) };
+        let ret = unsafe { ioctl_with_mut_ref(&tuntap, libc::TUNSETIFF as libc::c_ulong, ifr) };
         if ret < 0 {
             return Err(Error::CreateTap(IoError::last_os_error()));
         }
