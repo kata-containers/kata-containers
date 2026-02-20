@@ -279,14 +279,14 @@ impl ContainerInner {
             return Ok(());
         }
 
-        let mut process_id: agent::ContainerProcessID = process.clone().into();
-        if all {
-            // force signal init process
-            process_id.exec_id.clear();
-        };
+        let process_id: agent::ContainerProcessID = process.clone().into();
 
         self.agent
-            .signal_process(agent::SignalProcessRequest { process_id, signal })
+            .signal_process(agent::SignalProcessRequest {
+                process_id,
+                signal,
+                all,
+            })
             .await
             .map_err(convert_agent_error)?;
 

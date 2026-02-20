@@ -1993,14 +1993,11 @@ func (k *kataAgent) stopContainer(ctx context.Context, sandbox *Sandbox, c Conta
 
 func (k *kataAgent) signalProcess(ctx context.Context, c *Container, processID string, signal syscall.Signal, all bool) error {
 	execID := processID
-	if all {
-		// kata agent uses empty execId to signal all processes in a container
-		execID = ""
-	}
 	req := &grpc.SignalProcessRequest{
 		ContainerId: c.id,
 		ExecId:      execID,
 		Signal:      uint32(signal),
+		All:         all,
 	}
 
 	_, err := k.sendReq(ctx, req)

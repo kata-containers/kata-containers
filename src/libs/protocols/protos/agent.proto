@@ -142,10 +142,11 @@ message SignalProcessRequest {
 	string container_id = 1;
 
 	// Special case for SignalProcess(): exec_id can be empty(""),
-	// which means to send the signal to all the processes including their descendants.
+	// which means to send the signal to the container's init process.
 	// Other APIs with exec_id should treat empty exec_id as an invalid request.
 	string exec_id = 2;
 	uint32 signal = 3;
+	bool all = 4;
 }
 
 message WaitProcessRequest {
