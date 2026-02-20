@@ -9,14 +9,18 @@ acpi
 ACS/AB
 API/AB
 api/AB		# when used in links like "api.github.com"
+AKS/AB		# Azure Kubernetes Service
+aks/AB
 AUFS # Another Union FS
 AWS/AB
 BDF/AB
 CFS/AB
 ci/AB
+clh/AB		# Cloud Hypervisor
 CLI/AB
 CNI/AB
 CNM/AB
+CoCo/AB		# Confidential Containers
 CPUID/AB
 CRI/AB
 CVE/AB
@@ -74,6 +78,7 @@ PSS/AB
 QA/AB
 QAT/AB
 QEMU/AB
+qemu/AB
 RBAC/AB
 RDMA/AB
 RNG/AB
@@ -95,6 +100,7 @@ TOC/AB
 TOML/AB
 TTY/AB
 UI/AB
+UpdateEphemeralMountsRequest/B	# Kata agent API
 UTS/AB
 UUID/AB
 util/A
