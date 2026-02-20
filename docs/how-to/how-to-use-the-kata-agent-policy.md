@@ -91,7 +91,7 @@ The Kata Agent is responsible for enforcing the Policy, working together with [`
 
 For relatively simple uses cases, users can write the Policy text using the [`Rego` policy language documentation](https://www.openpolicyagent.org/docs/latest/policy-language/) as reference.
 
-See [Policy contents](#policy-contents) for additional information.
+See [Policy contents](#creating-the-policy-document) for additional information.
 
 ## Using auto-generated Policy
 
@@ -99,7 +99,28 @@ The [`genpolicy`](../../src/tools/genpolicy/) application can be used to generat
 
 **Warning** Users should review carefully the automatically-generated Policy, and modify the Policy file if needed to match better their use case, before using this Policy.
 
-See the [`genpolicy` documentation](../../src/tools/genpolicy/README.md) and the [Policy contents examples](#policy-contents) for additional information.
+> **Important — User / Group / Supplementary groups for Policy and genpolicy**
+>
+> For pods that rely on specific user, group, or supplementary group IDs (for example when using **nydus guest-pull** or other features that depend on these IDs), the user **must** set them explicitly in the pod spec. The policy cannot infer them; if they are omitted, the generated policy and runtime behavior may not match your needs.
+>
+> Set `securityContext` with at least:
+> - `runAsUser` — primary user ID
+> - `runAsGroup` — primary group ID
+> - `supplementalGroups` — list of additional group IDs (if needed)
+>
+> Example:
+>
+> ```yaml
+> # Explicit user/group/supplementary groups to support nydus guest-pull
+> securityContext:
+>   runAsUser: 0
+>   runAsGroup: 0
+>   supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
+> ```
+>
+> See also the [genpolicy README](../../src/tools/genpolicy/README.md).
+
+See the [`genpolicy` documentation](../../src/tools/genpolicy/README.md) and the [Policy contents examples](#creating-the-policy-document) for additional information.
 
 ## Policy contents
 
