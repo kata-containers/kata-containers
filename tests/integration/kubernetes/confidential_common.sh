@@ -237,6 +237,60 @@ function create_coco_pod_yaml_with_annotations() {
 	fi
 }
 
+# Sealed secrets (signed JWS ES256). Pre-created with guest-components secret CLI; see
+# https://github.com/confidential-containers/guest-components/blob/main/confidential-data-hub/docs/SEALED_SECRET.md
+# Tests provision the signing public key to KBS and use these pre-created sealed secret strings.
+#
+# To regenerate the signing key and sealed secrets:
+# Install required dependencies, clone guest-components repository and change to guest-components/confidential-data-hub
+# Create private and public JWK, for example:
+# python3 -c "
+# from jwcrypto import jwk
+# k = jwk.JWK.generate(kty='EC', crv='P-256', alg='ES256', use='sig', kid='sealed-secret-test-key')
+# with open('signing-key-private.jwk', 'w') as f:
+#     f.write(k.export_private())
+# with open('signing-key-public.jwk', 'w') as f:
+#     f.write(k.export_public())
+# print('Created signing-key-private.jwk and signing-key-public.jwk')
+# "
+#
+# Build the secret CLI:
+# cargo build -p confidential-data-hub --bin secret
+#
+# Create the sealed secret test secret:
+# cargo run -p confidential-data-hub --bin secret -q -- seal \
+#   --signing-kid "kbs:///default/signing-key/sealed-secret" \
+#   --signing-jwk-path ./signing-key-private.jwk \
+#   vault --resource-uri "kbs:///default/sealed-secret/test" --provider kbs
+#
+# Create the NIM test instruct secret:
+# cargo run -p confidential-data-hub --bin secret -q -- seal \
+#   --signing-kid "kbs:///default/signing-key/sealed-secret" \
+#   --signing-jwk-path ./signing-key-private.jwk \
+#   vault --resource-uri "kbs:///default/ngc-api-key/instruct" --provider kbs
+#
+# Create the NIM test embedqa secret:
+# cargo run -p confidential-data-hub --bin secret -q -- seal \
+#   --signing-kid "kbs:///default/signing-key/sealed-secret" \
+#   --signing-jwk-path ./signing-key-private.jwk \
+#   vault --resource-uri "kbs:///default/ngc-api-key/embedqa" --provider kbs
+#
+# Public JWK (no private key) used to verify the pre-created sealed secrets. Must match the key pair
+# that was used to sign SEALED_SECRET_PRECREATED_*.
+SEALED_SECRET_SIGNING_PUBLIC_JWK='{"alg":"ES256","crv":"P-256","kid":"sealed-secret-test-key","kty":"EC","use":"sig","x":"4jH376AuwTUCIx65AJ_56D7SZzWf7sGcEA7_Csq21UM","y":"rjdceysnSa5ZfzWOPGCURMUuHndxBAGUu4ISTIVN0yA"}'
+
+# Pre-created sealed secret for k8s-sealed-secret.bats (points to kbs:///default/sealed-secret/test)
+export SEALED_SECRET_PRECREATED_TEST="sealed.eyJiNjQiOnRydWUsImFsZyI6IkVTMjU2Iiwia2lkIjoia2JzOi8vL2RlZmF1bHQvc2lnbmluZy1rZXkvc2VhbGVkLXNlY3JldCJ9.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvc2VhbGVkLXNlY3JldC90ZXN0IiwicHJvdmlkZXIiOiJrYnMiLCJwcm92aWRlcl9zZXR0aW5ncyI6e30sImFubm90YXRpb25zIjp7fX0.ZI2fTv5ramHqHQa9DKBFD5hlJ_Mjf6cEIcpsNGshpyhEiKklML0abfH600TD7LAFHf53oDIJmEcVsDtJ20UafQ"
+
+# Pre-created sealed secrets for k8s-nvidia-nim.bats (point to kbs:///default/ngc-api-key/instruct and embedqa)
+export SEALED_SECRET_PRECREATED_NIM_INSTRUCT="sealed.eyJiNjQiOnRydWUsImFsZyI6IkVTMjU2Iiwia2lkIjoia2JzOi8vL2RlZmF1bHQvc2lnbmluZy1rZXkvc2VhbGVkLXNlY3JldCJ9.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvbmdjLWFwaS1rZXkvaW5zdHJ1Y3QiLCJwcm92aWRlciI6ImticyIsInByb3ZpZGVyX3NldHRpbmdzIjp7fSwiYW5ub3RhdGlvbnMiOnt9fQ.wpqvVFUaQymqgf54h70shZWDpk2NLW305wALz09YF0GKFBKBQiQB2sRwvn9Jk_rSju3YGLYxPO2Ub8qUbiMCuA"
+export SEALED_SECRET_PRECREATED_NIM_EMBEDQA="sealed.eyJiNjQiOnRydWUsImFsZyI6IkVTMjU2Iiwia2lkIjoia2JzOi8vL2RlZmF1bHQvc2lnbmluZy1rZXkvc2VhbGVkLXNlY3JldCJ9.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvbmdjLWFwaS1rZXkvZW1iZWRxYSIsInByb3ZpZGVyIjoia2JzIiwicHJvdmlkZXJfc2V0dGluZ3MiOnt9LCJhbm5vdGF0aW9ucyI6e319.4C1uqtVXi_qZT8vh_yZ4KpsRdgr2s4hU6ElKj18Hq1DJi_Iji61yuKsS6S1jWdb7drdoKKACvMD6RmCd85SJOQ"
+
+# Provision the signing public key to KBS so CDH can verify the pre-created sealed secrets.
+function setup_sealed_secret_signing_public_key() {
+	kbs_set_resource "default" "signing-key" "sealed-secret" "${SEALED_SECRET_SIGNING_PUBLIC_JWK}"
+}
+
 function get_initdata_with_cdh_image_section() {
 	CDH_IMAGE_SECTION=${1:-""}
 
