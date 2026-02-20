@@ -10,6 +10,7 @@ use crate::qemu::qmp::get_qmp_socket_path;
 use crate::{
     device::driver::ProtectionDeviceConfig, hypervisor_persist::HypervisorState, selinux,
     HypervisorConfig, MemoryConfig, VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+    KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, KATA_SCSI_DEV_TYPE,
 };
 
 use crate::utils::{
@@ -21,7 +22,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::netns::NetnsGuard;
 use kata_types::build_path;
-use kata_types::config::hypervisor::RootlessUser;
+use kata_types::config::hypervisor::{RootlessUser, VIRTIO_BLK_CCW};
 use kata_types::rootless::is_rootless;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -133,18 +134,18 @@ impl QemuInner {
                         continue;
                     }
                     match block_dev.config.driver_option.as_str() {
-                        "nvdimm" => cmdline.add_nvdimm(
+                        KATA_NVDIMM_DEV_TYPE => cmdline.add_nvdimm(
                             &block_dev.config.path_on_host,
                             block_dev.config.is_readonly,
                         )?,
-                        "ccw" | "blk" | "scsi" => cmdline.add_block_device(
+                        KATA_CCW_DEV_TYPE | KATA_BLK_DEV_TYPE | KATA_SCSI_DEV_TYPE => cmdline.add_block_device(
                             block_dev.device_id.as_str(),
                             &block_dev.config.path_on_host,
                             block_dev
                                 .config
                                 .is_direct
                                 .unwrap_or(self.config.blockdev_info.block_device_cache_direct),
-                            block_dev.config.driver_option.as_str() == "scsi",
+                            block_dev.config.driver_option.as_str() == KATA_SCSI_DEV_TYPE,
                         )?,
                         unsupported => {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
@@ -285,7 +286,12 @@ impl QemuInner {
         let qmp_socket_path = get_qmp_socket_path(self.id.as_str());
 
         match Qmp::new(&qmp_socket_path) {
-            Ok(qmp) => self.qmp = Some(qmp),
+            Ok(mut qmp) => {
+                if let Some(subchannel) = cmdline.take_ccw_subchannel() {
+                    qmp.set_ccw_subchannel(subchannel);
+                }
+                self.qmp = Some(qmp);
+            }
             Err(e) => {
                 error!(sl!(), "couldn't initialise QMP: {:?}", e);
                 return Err(e);
@@ -842,9 +848,10 @@ impl QemuInner {
                 qmp.hotplug_network_device(&netdev, &virtio_net_device)?
             }
             DeviceType::Block(mut block_device) => {
-                let (pci_path, scsi_addr) = qmp
+                let block_driver = &self.config.blockdev_info.block_device_driver;
+                let (pci_path, addr_str) = qmp
                     .hotplug_block_device(
-                        &self.config.blockdev_info.block_device_driver,
+                        block_driver,
                         block_device.config.index,
                         &block_device.config.path_on_host,
                         &block_device.config.blkdev_aio.to_string(),
@@ -857,8 +864,12 @@ impl QemuInner {
                 if pci_path.is_some() {
                     block_device.config.pci_path = pci_path;
                 }
-                if scsi_addr.is_some() {
-                    block_device.config.scsi_addr = scsi_addr;
+                if let Some(addr) = addr_str {
+                    if block_driver == VIRTIO_BLK_CCW {
+                        block_device.config.ccw_addr = Some(addr);
+                    } else {
+                        block_device.config.scsi_addr = Some(addr);
+                    }
                 }
 
                 return Ok(DeviceType::Block(block_device));

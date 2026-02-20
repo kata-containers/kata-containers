@@ -392,7 +392,7 @@ impl ToQemuParams for Cpu {
 /// Error type for CCW Subchannel operations
 #[derive(Debug)]
 #[allow(dead_code)]
-enum CcwError {
+pub enum CcwError {
     DeviceAlreadyExists(String), // Error when trying to add an existing device
     #[allow(dead_code)]
     DeviceNotFound(String), // Error when trying to remove a nonexistent device
@@ -423,7 +423,7 @@ impl CcwSubChannel {
     /// # Returns
     /// - `Result<u32, CcwError>`: slot index of the added device
     ///   or an error if the device already exists
-    fn add_device(&mut self, dev_id: &str) -> Result<u32, CcwError> {
+    pub fn add_device(&mut self, dev_id: &str) -> Result<u32, CcwError> {
         if self.devices.contains_key(dev_id) {
             Err(CcwError::DeviceAlreadyExists(dev_id.to_owned()))
         } else {
@@ -442,8 +442,7 @@ impl CcwSubChannel {
     /// # Returns
     /// - `Result<(), CcwError>`: Ok(()) if the device was removed
     ///   or an error if the device was not found
-    #[allow(dead_code)]
-    fn remove_device(&mut self, dev_id: &str) -> Result<(), CcwError> {
+    pub fn remove_device(&mut self, dev_id: &str) -> Result<(), CcwError> {
         if self.devices.remove(dev_id).is_some() {
             Ok(())
         } else {
@@ -451,15 +450,28 @@ impl CcwSubChannel {
         }
     }
 
-    /// Formats the CCW address for a given slot
+    /// Formats the CCW address for a given slot.
+    /// Uses the 0xfe channel subsystem ID used by QEMU.
     ///
     /// # Arguments
     /// - `slot`: slot index
     ///
     /// # Returns
     /// - `String`: formatted CCW address (e.g. `fe.0.0000`)
-    fn address_format_ccw(&self, slot: u32) -> String {
+    pub fn address_format_ccw(&self, slot: u32) -> String {
         format!("fe.{:x}.{:04x}", self.addr, slot)
+    }
+
+    /// Formats the guest-visible CCW address for a given slot.
+    /// Uses channel subsystem ID 0 (guest perspective).
+    ///
+    /// # Arguments
+    /// - `slot`: slot index
+    ///
+    /// # Returns
+    /// - `String`: formatted guest-visible CCW address (e.g. `0.0.0000`)
+    pub fn address_format_ccw_for_virt_server(&self, slot: u32) -> String {
+        format!("0.{:x}.{:04x}", self.addr, slot)
     }
 
     /// Sets the address of the subchannel.
@@ -2272,6 +2284,12 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_seccomp_sandbox(seccomp_sandbox);
         }
         Ok(qemu_cmd_line)
+    }
+
+    /// Takes ownership of the CCW subchannel, leaving `None` in its place.
+    /// Used to transfer boot-time CCW state to Qmp for hotplug allocation.
+    pub fn take_ccw_subchannel(&mut self) -> Option<CcwSubChannel> {
+        self.ccw_subchannel.take()
     }
 
     fn add_monitor(&mut self, proto: &str) -> Result<()> {

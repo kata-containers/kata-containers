@@ -10,8 +10,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "$(uname -m)" == "s390x" ] && [ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
-	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ]  && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
 	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
 	setup_common || die "setup_common failed"
@@ -93,8 +91,6 @@ setup() {
 }
 
 teardown() {
-	[ "$(uname -m)" == "s390x" ] && [ "${KATA_HYPERVISOR}" == "qemu-runtime-rs" ] && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
-	[ "${KATA_HYPERVISOR}" == "qemu-se-runtime-rs" ]  && skip "See: https://github.com/kata-containers/kata-containers/pull/12105#issuecomment-3551916090"
 	( [ "${KATA_HYPERVISOR}" == "fc" ] || [ "${KATA_HYPERVISOR}" == "stratovirt" ] ) && skip "See: https://github.com/kata-containers/kata-containers/issues/10873"
 
 	 # Debugging information

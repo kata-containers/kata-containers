@@ -100,7 +100,13 @@ impl BlockRootfs {
                 VIRTIO_BLK_MMIO => {
                     storage.source = device.config.virt_path;
                 }
-                VIRTIO_SCSI | VIRTIO_BLK_CCW | VIRTIO_PMEM => {
+                VIRTIO_BLK_CCW => {
+                    storage.source = device
+                        .config
+                        .ccw_addr
+                        .ok_or_else(|| anyhow!("CCW address missing for ccw block device"))?;
+                }
+                VIRTIO_SCSI | VIRTIO_PMEM => {
                     return Err(anyhow!(
                         "Complete support for block driver {} has not been implemented yet",
                         block_driver

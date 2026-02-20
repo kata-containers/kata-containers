@@ -15,15 +15,16 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{get_mount_options, get_mount_path};
+use kata_types::device::{
+    DRIVER_BLK_CCW_TYPE as KATA_CCW_DEV_TYPE, DRIVER_BLK_PCI_TYPE as KATA_BLK_DEV_TYPE,
+    DRIVER_SCSI_TYPE as KATA_SCSI_DEV_TYPE,
+};
 use oci_spec::runtime as oci;
 
 use hypervisor::device::DeviceType;
 
 pub const DEFAULT_VOLUME_FS_TYPE: &str = "ext4";
 pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
-
-pub const KATA_BLK_DEV_TYPE: &str = "blk";
-pub const KATA_SCSI_DEV_TYPE: &str = "scsi";
 
 pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
     let file_name = src
@@ -102,6 +103,13 @@ pub async fn handle_block_volume(
                     scsi_addr.to_string()
                 } else {
                     return Err(anyhow!("block driver is scsi but no scsi address exists"));
+                }
+            }
+            KATA_CCW_DEV_TYPE => {
+                if let Some(ccw_addr) = device.config.ccw_addr {
+                    ccw_addr.to_string()
+                } else {
+                    return Err(anyhow!("block driver is ccw but no ccw address exists"));
                 }
             }
             _ => device.config.virt_path,

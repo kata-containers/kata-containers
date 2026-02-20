@@ -4,12 +4,12 @@
 //
 
 use crate::device::pci_path::PciPath;
-use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
+use crate::qemu::cmdline_generator::{CcwSubChannel, DeviceVirtioNet, Netdev, QMP_SOCKET_FILE};
 use crate::utils::get_jailer_root;
 use crate::VcpuThreadIds;
 
 use anyhow::{anyhow, Context, Result};
-use kata_types::config::hypervisor::VIRTIO_SCSI;
+use kata_types::config::hypervisor::{VIRTIO_BLK_CCW, VIRTIO_SCSI};
 use kata_types::rootless::is_rootless;
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use qapi_qmp::{
@@ -50,6 +50,11 @@ pub struct Qmp {
     // blocks seem ever to be onlined in the guest by kata-agent.
     // Store as u64 to keep up the convention of bytes being represented as u64.
     guest_memory_block_size: u64,
+
+    // CCW subchannel for s390x device address management.
+    // Transferred from QemuCmdLine after boot so that hotplug allocations
+    // continue from where boot-time allocations left off.
+    ccw_subchannel: Option<CcwSubChannel>,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -76,6 +81,7 @@ impl Qmp {
                     stream,
                 )),
                 guest_memory_block_size: 0,
+                ccw_subchannel: None,
             };
 
             let info = qmp.qmp.handshake().context("qmp handshake failed")?;
@@ -100,6 +106,10 @@ impl Qmp {
 
         Err(last_err.unwrap_or_else(|| anyhow!("QMP init timed out")))
             .with_context(|| format!("timed out waiting for QMP ready: {}", qmp_sock_path))
+    }
+
+    pub fn set_ccw_subchannel(&mut self, subchannel: CcwSubChannel) {
+        self.ccw_subchannel = Some(subchannel);
     }
 
     pub fn set_ignore_shared_memory_capability(&mut self) -> Result<()> {
@@ -605,6 +615,13 @@ impl Qmp {
     /// {"execute":"device_add","arguments":{"driver":"scsi-hd","drive":"virtio-scsi0","id":"scsi_device_0","bus":"virtio-scsi1.0"}}
     /// {"return": {}}
     ///
+    /// Hotplug virtio-blk-ccw block device on s390x
+    /// # virtio-blk-ccw0
+    /// {"execute":"blockdev_add", "arguments": {"file":"/path/to/block.image","format":"qcow2","id":"virtio-blk-ccw0"}}
+    /// {"return": {}}
+    /// {"execute":"device_add","arguments":{"driver":"virtio-blk-ccw","id":"virtio-blk-ccw0","drive":"virtio-blk-ccw0","devno":"fe.0.0005","share-rw":true}}
+    /// {"return": {}}
+    ///
     #[allow(clippy::too_many_arguments)]
     pub fn hotplug_block_device(
         &mut self,
@@ -711,6 +728,14 @@ impl Qmp {
             blkdev_add_args.insert("lun".to_string(), lun.into());
             blkdev_add_args.insert("share-rw".to_string(), true.into());
 
+            info!(
+                sl!(),
+                "hotplug_block_device(): device_add arguments: bus: {}, id: {}, driver: {}, blkdev_add_args: {:#?}",
+                "scsi0.0",
+                node_name,
+                "scsi-hd",
+                blkdev_add_args
+            );
             self.qmp
                 .execute(&qmp::device_add {
                     bus: Some("scsi0.0".to_string()),
@@ -727,11 +752,60 @@ impl Qmp {
             );
 
             Ok((None, Some(scsi_addr)))
+        } else if block_driver == VIRTIO_BLK_CCW {
+            let subchannel = self
+                .ccw_subchannel
+                .as_mut()
+                .ok_or_else(|| anyhow!("CCW subchannel not available for virtio-blk-ccw hotplug"))?;
+
+            let slot = subchannel
+                .add_device(&node_name)
+                .map_err(|e| anyhow!("CCW subchannel add_device failed: {:?}", e))?;
+            let devno = subchannel.address_format_ccw(slot);
+            let ccw_addr = subchannel.address_format_ccw_for_virt_server(slot);
+
+            blkdev_add_args.insert("devno".to_owned(), devno.clone().into());
+            blkdev_add_args.insert("share-rw".to_string(), true.into());
+
+            info!(
+                sl!(),
+                "hotplug_block_device(): CCW device_add: id: {}, driver: {}, blkdev_add_args: {:#?}, ccw_addr: {}",
+                node_name,
+                block_driver,
+                blkdev_add_args,
+                ccw_addr
+            );
+            let device_add_result = self.qmp.execute(&qmp::device_add {
+                bus: None,
+                id: Some(node_name.clone()),
+                driver: block_driver.to_string(),
+                arguments: blkdev_add_args,
+            });
+            if let Err(e) = device_add_result {
+                // Roll back CCW subchannel state if QMP device_add fails
+                let _ = subchannel.remove_device(&node_name);
+                return Err(anyhow!("device_add {:?}", e));
+            }
+
+            info!(
+                sl!(),
+                "hotplug CCW block device return ccw address: {:?}", &ccw_addr
+            );
+
+            Ok((None, Some(ccw_addr)))
         } else {
             let (bus, slot) = self.find_free_slot()?;
             blkdev_add_args.insert("addr".to_owned(), format!("{slot:02}").into());
             blkdev_add_args.insert("share-rw".to_string(), true.into());
 
+            info!(
+                sl!(),
+                "hotplug_block_device(): device_add arguments: bus: {}, id: {}, driver: {}, blkdev_add_args: {:#?}",
+                bus,
+                node_name,
+                block_driver,
+                blkdev_add_args
+            );
             self.qmp
                 .execute(&qmp::device_add {
                     bus: Some(bus),
