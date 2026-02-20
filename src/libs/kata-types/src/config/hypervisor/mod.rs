@@ -752,8 +752,26 @@ pub struct DeviceInfo {
     pub default_bridges: u32,
 
     /// Enable hotplugging on root bus for devices with large PCI bars.
+
+    /// Configure how VFIO devices are hot-plugged into the PCIe topology.
+    /// Supported values include:
+    ///   - "root-port": attach the device to a PCIe root port (recommended)
+    ///   - "pci-bridge": attach to a PCI bridge
+    ///   - "none": disable VFIO hot-plug support
+    ///
+    /// If unset, the runtime will choose a default hot-plug method.
     #[serde(default)]
-    pub hotplug_vfio_on_root_bus: bool,
+    pub hot_plug_vfio: Option<String>,
+
+    /// Configure how VFIO devices are cold-plugged at VM boot.
+    /// Supported values include:
+    ///   - "root-port": attach the device to a PCIe root port during VM creation
+    ///   - "pci-bridge": attach to a PCI bridge
+    ///   - "none": disable VFIO cold-plugging
+    ///
+    /// If unset, the runtime will choose a default cold-plug method.
+    #[serde(default)]
+    pub cold_plug_vfio: Option<String>,
 
     /// Number of PCIe root ports to create during VM creation.
     ///

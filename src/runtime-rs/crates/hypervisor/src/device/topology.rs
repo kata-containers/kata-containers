@@ -333,7 +333,9 @@ pub struct PCIeTopology {
     pub bridges: u32,
     pub pcie_root_ports: u32,
     pub pcie_switch_ports: u32,
-    pub hotplug_vfio_on_root_bus: bool,
+    // pub hotplug_vfio_on_root_bus: bool,
+    pub hot_plug_vfio: PCIePort, // parsed from option<String>
+    pub cold_plug_vfio: PCIePort, // parsed from option<String>
     // pcie_port_devices keeps track of the devices attached to different types of PCI ports.
     pub pcie_port_devices: HashMap<u32, TopologyPortDevice>,
 }
@@ -354,13 +356,32 @@ impl PCIeTopology {
         let total_rp = topo_config.device_info.pcie_root_port;
         let total_swp = topo_config.device_info.pcie_switch_port;
 
+        let hot_plug = match topo_config.device_info.hot_plug_vfio.as_deref() {
+            Some("root-port") => PCIePort::RootPort,
+            Some("switch-port") => PCIePort::SwitchPort,
+            _ => PCIePort::NoPort,
+        };
+        
+        let cold_plug = match topo_config.device_info.cold_plug_vfio.as_deref() {
+            Some("root-port") => PCIePort::RootPort,
+            Some("switch-port") => PCIePort::SwitchPort,
+            _ => PCIePort::NoPort,
+        };
+
+        if hot_plug != PCIePort::NoPort && cold_plug != PCIePort::NoPort {
+            return Err(anyhow!(
+                "hot_plug_vfio and cold_plug_vfio cannot both be set"
+            ));
+        }
+        
         Some(Self {
             hypervisor_name: topo_config.hypervisor_name.to_owned(),
             root_complex,
             bridges: topo_config.device_info.default_bridges,
             pcie_root_ports: total_rp,
             pcie_switch_ports: total_swp,
-            hotplug_vfio_on_root_bus: topo_config.device_info.hotplug_vfio_on_root_bus,
+            hot_plug_vfio: hot_plug,
+            cold_plug_vfio: cold_plug,
             pcie_port_devices: HashMap::new(),
         })
     }
