@@ -233,7 +233,7 @@ jobs:
       matrix:
         asset:
           - shim-v2-go
-          # Add `shim-v2-rust` here once it builds on ppc64le.
+          - shim-v2-rust
     concurrency:
       group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ toJSON(matrix) }}
       cancel-in-progress: true

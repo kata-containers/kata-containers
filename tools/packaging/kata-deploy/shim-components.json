@@ -13,7 +13,8 @@
     "qemu-runtime-rs": {
       "x86_64":  ["shim-v2-rust", "qemu", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd"],
       "aarch64": ["shim-v2-rust", "qemu", "virtiofsd", "nydus", "kernel", "kernel-debug", "rootfs-image", "rootfs-initrd", "ovmf"],
-      "s390x":   ["shim-v2-rust", "qemu", "virtiofsd", "kernel", "rootfs-image", "rootfs-initrd"]
+      "s390x":   ["shim-v2-rust", "qemu", "virtiofsd", "kernel", "rootfs-image", "rootfs-initrd"],
+      "ppc64le": ["shim-v2-rust", "qemu", "virtiofsd", "kernel", "rootfs-initrd"]
     },
     "qemu-snp": {
       "x86_64": ["shim-v2-go", "qemu-snp-experimental", "kernel", "rootfs-image-confidential", "ovmf-sev"]
