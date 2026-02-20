@@ -462,6 +462,7 @@ jobs:
       matrix:
         params: [
           { containerd_version: active, vmm: qemu },
+          { containerd_version: active, vmm: qemu-runtime-rs },
          ]
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
