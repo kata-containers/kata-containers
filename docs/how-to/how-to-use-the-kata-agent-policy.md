@@ -91,7 +91,7 @@ The Kata Agent is responsible for enforcing the Policy, working together with [`
 
 For relatively simple uses cases, users can write the Policy text using the [`Rego` policy language documentation](https://www.openpolicyagent.org/docs/latest/policy-language/) as reference.
 
-See [Policy contents](#policy-contents) for additional information.
+See [Policy contents](#creating-the-policy-document) for additional information.
 
 ## Using auto-generated Policy
 
@@ -99,7 +99,37 @@ The [`genpolicy`](../../src/tools/genpolicy/) application can be used to generat
 
 **Warning** Users should review carefully the automatically-generated Policy, and modify the Policy file if needed to match better their use case, before using this Policy.
 
-See the [`genpolicy` documentation](../../src/tools/genpolicy/README.md) and the [Policy contents examples](#policy-contents) for additional information.
+> **Important — User / Group / Supplementary groups for Policy and genpolicy**
+>
+> When using policy or genpolicy, set user/group IDs explicitly in the pod spec when they matter
+> for your workload or when using features like **nydus guest-pull**.
+> If omitted, the generated policy may not match runtime behavior and policy checks can fail
+> even when the container does not strictly depend on a particular UID/GID.
+> Two main reasons: (1) With nydus guest-pull, image layers may be unavailable to containerd,
+> so image config (including user/group) is not applied. (2) Defaults for these fields can differ:
+> containerd uses default values from the OCI spec when available, while genpolicy uses its
+> own defaults (zero for all three) when the pod spec does not set them.
+>
+> Set `securityContext` explicitly. Use **pod-level** `spec.securityContext` (or
+> `spec.podSecurityContext` where applicable) and/or **container-level**
+> `spec.containers[].securityContext`. Include at least:
+> - `runAsUser` — primary user ID
+> - `runAsGroup` — primary group ID
+> - `fsGroup` — volume group ownership (often reflected as a supplemental group)
+> - `supplementalGroups` — list of additional group IDs (if needed)
+>
+> Example for an image which embeds the following values in its `/etc/group` file:
+>
+> ```yaml
+> # Explicit user/group/supplementary groups to support nydus guest-pull
+> securityContext:
+>   runAsUser: 0
+>   runAsGroup: 0
+>   supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
+> ```
+
+See the [`genpolicy` documentation](../../src/tools/genpolicy/README.md) and the
+[Policy contents examples](#creating-the-policy-document) for additional information.
 
 ## Policy contents
 
