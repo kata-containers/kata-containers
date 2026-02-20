@@ -248,6 +248,49 @@ func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
 	return vfioDevs, nil
 }
 
+func getAllPCIBarSize(sysfsDevPath string) (uint64, error) {
+    resourcePath := filepath.Join(sysfsDevPath, "resource")
+
+    // Read the file content
+    // Format is: start end flags
+    // 0x0000008780000000 0x000000879fffffff 0x000000000014220c
+    content, err := os.ReadFile(resourcePath)
+    if err != nil {
+        return 0, err
+    }
+
+    var totalSize uint64
+    lines := strings.Split(string(content), "\n")
+
+    for _, line := range lines {
+        if line == "" {
+            continue
+        }
+        parts := strings.Fields(line)
+        if len(parts) < 3 {
+            continue
+        }
+
+        // Parse hex strings
+        start, err1 := strconv.ParseUint(strings.TrimPrefix(parts[0], "0x"), 16, 64)
+        end, err2 := strconv.ParseUint(strings.TrimPrefix(parts[1], "0x"), 16, 64)
+
+        if err1 != nil || err2 != nil {
+            continue
+        }
+
+        // Calculate size.
+        // If start is 0, it usually means the BAR is unimplemented or empty, so skip it.
+        // Valid BARs: (end - start) + 1
+        if start != 0 && end >= start {
+            size := (end - start) + 1
+            totalSize += size
+        }
+    }
+
+    return totalSize, nil
+}
+
 // GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group
 // We can reuse this function at various levels, sandbox, container.
 func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODev, error) {
@@ -255,6 +298,11 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 	vfioDevs := []*config.VFIODev{}
 
 	vfioGroup := filepath.Base(device.HostPath)
+	//If CDI is used as its mandated, HostPath == "" but ContainerPath is == to value in CDI
+	if vfioGroup == "" || vfioGroup == "." {
+		vfioGroup = filepath.Base(device.ContainerPath)
+	}
+
 	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
 
 	deviceFiles, err := os.ReadDir(iommuDevicesPath)
@@ -272,6 +320,11 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
 
 		var vfio config.VFIODev
+
+		totalBarSize, err := getAllPCIBarSize(deviceSysfsDev)
+		if err != nil {
+			return nil, err
+		}
 
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
@@ -303,6 +356,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				DeviceID: deviceID,
 				Port:     device.Port,
 				HostPath: device.HostPath,
+				TotalBarSize: totalBarSize,
 			}
 
 		case config.VFIOAPDeviceMediatedType:
@@ -316,6 +370,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				Type:      config.VFIOAPDeviceMediatedType,
 				APDevices: devices,
 				Port:      device.Port,
+				TotalBarSize: totalBarSize,
 			}
 		default:
 			return nil, fmt.Errorf("Failed to append device: VFIO device type unrecognized")
