@@ -78,19 +78,11 @@ func (s *stdinStream) Close() error {
 }
 
 func (s *stdoutStream) Read(data []byte) (n int, err error) {
-	if s.closed {
-		return 0, errors.New("stream closed")
-	}
-
 	// can not pass context to Read(), so use background context
 	return s.sandbox.agent.readProcessStdout(context.Background(), s.container, s.process, data)
 }
 
 func (s *stderrStream) Read(data []byte) (n int, err error) {
-	if s.closed {
-		return 0, errors.New("stream closed")
-	}
-
 	// can not pass context to Read(), so use background context
 	return s.sandbox.agent.readProcessStderr(context.Background(), s.container, s.process, data)
 }
