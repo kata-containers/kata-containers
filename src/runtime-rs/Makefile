@@ -1091,6 +1091,11 @@ install-runtime: runtime
 install-configs: $(CONFIGS)
 	$(foreach f,$(CONFIGS),$(call INSTALL_FILE,$f,$(dir $(CONFIG_PATH)))) \
 	ln -sf $(DEFAULT_HYPERVISOR_CONFIG) $(DESTDIR)/$(CONFIG_PATH)
+ifeq ($(ARCH),powerpc64le)
+	for f in $(DESTDIR)$(dir $(CONFIG_PATH))*.toml; do \
+		[ -f "$$f" ] && sed -i 's|^image = .*|initrd = "$(PREFIX)/share/kata-containers/kata-containers-initrd.img"|' "$$f"; \
+	done
+endif
 
 .PHONY: \
 	help \
