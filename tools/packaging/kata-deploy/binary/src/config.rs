@@ -1117,7 +1117,7 @@ fn get_default_shims_for_arch(arch: &str) -> &'static str {
         "x86_64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu qemu-nvidia-gpu-runtime-rs qemu-nvidia-gpu-snp qemu-nvidia-gpu-snp-runtime-rs qemu-nvidia-gpu-tdx qemu-nvidia-gpu-tdx-runtime-rs qemu-snp qemu-snp-runtime-rs qemu-tdx qemu-tdx-runtime-rs",
         "aarch64" => "clh clh-runtime-rs dragonball fc qemu qemu-coco-dev-runtime-rs qemu-runtime-rs qemu-nvidia-cpu qemu-nvidia-cpu-runtime-rs qemu-nvidia-gpu",
         "s390x" => "qemu qemu-runtime-rs qemu-se qemu-se-runtime-rs qemu-coco-dev qemu-coco-dev-runtime-rs",
-        "ppc64le" => "qemu",
+        "ppc64le" => "qemu qemu-runtime-rs",
         _ => "qemu", // Fallback to qemu for unknown architectures
     }
 }
@@ -1126,13 +1126,11 @@ fn get_default_shims_for_arch(arch: &str) -> &'static str {
 ///
 /// Since the Kata Containers 4.0 release, the Rust runtime (runtime-rs,
 /// "qemu-runtime-rs") is the default wherever a runtime-rs build exists.
-/// ppc64le has no runtime-rs build yet, so it keeps the Go runtime ("qemu").
 /// This only acts as a fallback: the Helm chart normally provides DEFAULT_SHIM
 /// explicitly via values.yaml (`defaultShim`).
 fn get_default_shim_for_arch(arch: &str) -> &'static str {
     match arch {
-        "x86_64" | "aarch64" | "s390x" => "qemu-runtime-rs",
-        "ppc64le" => "qemu",
+        "x86_64" | "aarch64" | "s390x" | "ppc64le" => "qemu-runtime-rs",
         _ => "qemu", // Fallback to the Go runtime for unknown architectures
     }
 }
@@ -1286,7 +1284,7 @@ mod tests {
     #[case("x86_64", "qemu-runtime-rs")]
     #[case("aarch64", "qemu-runtime-rs")]
     #[case("s390x", "qemu-runtime-rs")]
-    #[case("ppc64le", "qemu")]
+    #[case("ppc64le", "qemu-runtime-rs")]
     #[case("riscv64", "qemu")]
     fn test_get_default_shim_for_arch(#[case] arch: &str, #[case] expected: &str) {
         assert_eq!(get_default_shim_for_arch(arch), expected);
