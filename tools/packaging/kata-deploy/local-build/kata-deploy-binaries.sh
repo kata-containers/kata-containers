@@ -43,6 +43,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 ARCH=${ARCH:-$(uname -m)}
 BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+CONFIDENTIAL_GUEST=${CONFIDENTIAL_GUEST:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
@@ -452,6 +453,7 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
+	export CONFIDENTIAL_GUEST="yes"
 	if [ "${ARCH}" == "s390x" ]; then
 		export MEASURED_ROOTFS="no"
 	else
@@ -563,6 +565,7 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
+	export CONFIDENTIAL_GUEST="yes"
 	export MEASURED_ROOTFS="no"
 	install_initrd "confidential"
 }
@@ -609,6 +612,7 @@ install_initrd_nvidia_gpu() {
 
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
+	export CONFIDENTIAL_GUEST="yes"
 	export AGENT_POLICY
 	export MEASURED_ROOTFS="yes"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
@@ -619,6 +623,7 @@ install_image_nvidia_gpu_confidential() {
 
 # Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
+	export CONFIDENTIAL_GUEST="yes"
 	export AGENT_POLICY
 	export MEASURED_ROOTFS="no"
 	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
@@ -726,10 +731,12 @@ install_kernel() {
 	local extra_cmd=""
 	case "${ARCH}" in
 		s390x)
+			export CONFIDENTIAL_GUEST="yes"
 			export MEASURED_ROOTFS="no"
 			extra_cmd="-x"
 			;;
 		x86_64)
+			export CONFIDENTIAL_GUEST="yes"
 			export MEASURED_ROOTFS="yes"
 			extra_cmd="-x"
 			;;
@@ -741,6 +748,7 @@ install_kernel() {
 }
 
 install_kernel_cca_confidential() {
+	export CONFIDENTIAL_GUEST="yes"
 	export MEASURED_ROOTFS="yes"
 
 	install_kernel_helper \
@@ -765,6 +773,7 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
+	export CONFIDENTIAL_GUEST="yes"
 	export MEASURED_ROOTFS="yes"
 	install_kernel_helper \
 		"assets.kernel.nvidia" \
