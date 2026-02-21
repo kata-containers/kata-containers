@@ -52,7 +52,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
@@ -98,7 +98,7 @@ jobs:
           echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
 
       # for pushing attestations to the registry
-      - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           registry: ghcr.io
@@ -146,7 +146,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
@@ -273,7 +273,7 @@ jobs:
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: quay.io
           username: ${{ vars.QUAY_DEPLOYER_USERNAME }}
