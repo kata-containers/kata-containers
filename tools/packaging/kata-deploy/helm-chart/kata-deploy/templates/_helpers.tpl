@@ -141,11 +141,21 @@ Uses null-based defaults for disableAll support:
 {{- end -}}
 
 {{/*
-Get default shim for a specific architecture from structured config
+Get default shim for a specific architecture from structured config.
+Returns the configured default shim only if it is actually enabled and
+supports the requested architecture. Returns empty string otherwise so
+that callers can skip setting the env var rather than propagating a
+bogus value that would cause kata-deploy to fail at runtime.
 */}}
 {{- define "kata-deploy.getDefaultShimForArch" -}}
 {{- $arch := .arch -}}
-{{- index .root.Values.defaultShim $arch -}}
+{{- $defaultShim := index .root.Values.defaultShim $arch -}}
+{{- if $defaultShim -}}
+{{- $enabledShims := include "kata-deploy.getEnabledShimsForArch" (dict "root" .root "arch" $arch) | trim | splitList " " -}}
+{{- if has $defaultShim $enabledShims -}}
+{{- $defaultShim -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
