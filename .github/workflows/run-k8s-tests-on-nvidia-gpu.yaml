@@ -49,6 +49,8 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.environment.vmm }}
       KUBERNETES: kubeadm
       KBS: ${{ matrix.environment.name == 'nvidia-gpu-snp' && 'true' || 'false' }}
+      SNAPSHOTTER: ${{ matrix.environment.name == 'nvidia-gpu-snp' && 'nydus' || '' }}
+      USE_EXPERIMENTAL_SNAPSHOTTER_SETUP: ${{ matrix.environment.name == 'nvidia-gpu-snp' && 'true' || 'false' }}
       K8S_TEST_HOST_TYPE: baremetal
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
