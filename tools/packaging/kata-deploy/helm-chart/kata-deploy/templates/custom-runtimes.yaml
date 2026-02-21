@@ -28,7 +28,7 @@ data:
 {{- end }}
 {{- end }}
 {{- if $handler }}
-    {{ $handler }}:{{ $runtime.baseConfig }}:{{ $runtime.containerd.snapshotter | default "" }}:{{ $runtime.crio.pullType | default "" }}
+    {{ $handler }}:{{ $runtime.baseConfig }}:{{ dig "containerd" "snapshotter" "" $runtime }}:{{ dig "crio" "pullType" "" $runtime }}
 {{- end }}
 {{- end }}
 {{- /* Generate drop-in files for each runtime */ -}}
