@@ -11,6 +11,13 @@ metadata:
   labels:
     app: openvpn-client
 spec:
+  # Explicit user/group/supplementary groups to support nydus guest-pull.
+  # See issue https://github.com/kata-containers/kata-containers/issues/11162 and
+  # other references to this issue in the genpolicy source folder.
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
   containers:
   - name: openvpn-client
     image: quay.io/kata-containers/alpine:3.22.1-openvpn
