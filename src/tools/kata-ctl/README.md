@@ -45,6 +45,27 @@ Containers, run:
 $ kata-ctl check all
 ```
 
+### The `env` command
+
+The `env` command displays comprehensive information about the currently applied Kata
+configuration, including details about the host system, runtime, hypervisor, agent,
+and kernel configuration. This is useful for troubleshooting and understanding the
+execution context.
+
+Usage:
+```bash
+# Display environment info in TOML format (default)
+$ kata-ctl env
+
+# Display environment info in JSON format
+$ kata-ctl env --json
+
+# Save environment info to a file
+$ kata-ctl env --json --file /tmp/kata-env.json
+```
+
+The kata-ctl env command provides equivalent functionality to the legacy kata-runtime env command, displaying configuration for the Rust-based runtime-rs.
+
 ### Full details
 
 For a usage statement, run:

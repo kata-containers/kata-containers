@@ -3,6 +3,31 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+// Environment info command: displays the currently applied Kata configuration.
+//
+// This module provides the `env` command for the Rust-based runtime-rs (kata-ctl).
+// It loads the active TomlConfig from the system's default configuration file
+// (as determined by kata-types::config::TomlConfig::load_from_default()) and
+// displays comprehensive information about the host, runtime, hypervisor,
+// agent, and kernel configuration.
+//
+// The command mirrors the legacy `kata-runtime env` for feature parity and supports
+// both JSON and TOML output formats.
+//
+// Usage:
+//   kata-ctl env [--json] [--file <path>]
+//
+// Examples:
+//   # Display environment info in TOML format
+//   kata-ctl env
+//
+//   # Display environment info in JSON format
+//   kata-ctl env --json
+//
+//   # Save environment info to a file
+//   kata-ctl env --json --file /tmp/kata-env.json
+//
+
 // Contains checks that are not architecture-specific
 
 use crate::arch::arch_specific;
@@ -309,11 +334,20 @@ pub fn get_runtime_info(toml_config: &TomlConfig) -> Result<RuntimeInfo> {
         };
     }
 
+    // Convert experimental features Vec to string representation
+    // for compatibility with both legacy and runtime-rs configs
+    let experimental_features: Vec<String> = toml_config
+        .runtime
+        .experimental
+        .iter()
+        .map(|e| format!("{:?}", e))
+        .collect();
+
     Ok(RuntimeInfo {
         // TODO: Needs to be implemented: https://github.com/kata-containers/kata-containers/issues/6518
         path: String::from("not implemented yet. See: https://github.com/kata-containers/kata-containers/issues/6518"),
         version,
-        experimental: toml_config.runtime.experimental.clone(),
+        experimental: experimental_features,
         // TODO: See https://github.com/kata-containers/kata-containers/issues/6667
         guest_selinux_label: String::from("not implemented yet: See https://github.com/kata-containers/kata-containers/issues/6667"),
         debug: toml_config.runtime.debug,
@@ -493,4 +527,105 @@ pub fn handle_env(env_args: EnvArgument) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_meta_info() {
+        let meta = get_meta_info();
+        assert!(!meta.version.is_empty());
+        assert!(meta.version.contains("kata-ctl"));
+    }
+
+    #[test]
+    fn test_get_memory_info() {
+        let result = get_memory_info();
+        assert!(result.is_ok());
+        let mem_info = result.unwrap();
+        assert!(mem_info.total > 0);
+    }
+
+    #[test]
+    fn test_get_host_info() {
+        let result = get_host_info();
+        assert!(result.is_ok());
+        let host_info = result.unwrap();
+        assert!(!host_info.kernel.is_empty());
+        assert!(!host_info.architecture.is_empty());
+        assert!(host_info.cpu.cpus > 0);
+    }
+
+    #[test]
+    fn test_get_command_version_empty_path() {
+        // Empty path should return "unknown"
+        let result = get_command_version("");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "unknown");
+    }
+
+    #[test]
+    fn test_serialization_formats() {
+        // Test that EnvInfo can be serialized to both JSON and TOML
+        let env_info = EnvInfo {
+            kernel: KernelInfo {
+                path: "/boot/kernel".to_string(),
+                parameters: "console=ttyS0".to_string(),
+            },
+            meta: MetaInfo {
+                version: "0.0.1-kata-ctl".to_string(),
+            },
+            image: ImageInfo {
+                path: "/opt/kata/share/kata-containers/kata-image.img".to_string(),
+            },
+            ..Default::default()
+        };
+
+        // Test JSON serialization
+        let json_result = serde_json::to_string_pretty(&env_info);
+        assert!(json_result.is_ok());
+        let json = json_result.unwrap();
+        assert!(json.contains("kernel"));
+        assert!(json.contains("meta"));
+
+        // Test TOML serialization
+        let toml_result = toml::to_string(&env_info);
+        assert!(toml_result.is_ok());
+        let toml_str = toml_result.unwrap();
+        assert!(toml_str.contains("kernel"));
+        assert!(toml_str.contains("meta"));
+    }
+
+    #[test]
+    fn test_hypervisor_info_structure() {
+        // Verify HypervisorInfo structure can be created and serialized
+        let hyp_info = HypervisorInfo {
+            machine_type: "q35".to_string(),
+            version: "7.0.0".to_string(),
+            path: "/usr/bin/qemu-system-x86_64".to_string(),
+            block_device_driver: "virtio".to_string(),
+            ..Default::default()
+        };
+
+        let json_result = serde_json::to_string(&hyp_info);
+        assert!(json_result.is_ok());
+    }
+
+    #[test]
+    fn test_runtime_info_structure() {
+        // Verify RuntimeInfo structure with experimental features
+        let runtime_info = RuntimeInfo {
+            debug: true,
+            trace: false,
+            experimental: vec!["Feature1".to_string(), "Feature2".to_string()],
+            ..Default::default()
+        };
+
+        let json_result = serde_json::to_string(&runtime_info);
+        assert!(json_result.is_ok());
+        let json = json_result.unwrap();
+        assert!(json.contains("Feature1"));
+    }
 }

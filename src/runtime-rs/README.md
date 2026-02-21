@@ -120,6 +120,24 @@ See the
 See the
 [debugging section of the developer guide](../../docs/Developer-Guide.md#troubleshoot-kata-containers).
 
+For diagnosing runtime configuration, use the `kata-ctl env` command:
+
+```bash
+# Display the currently applied Kata configuration in JSON format
+kata-ctl env --json
+
+# Display configuration details in TOML format
+kata-ctl env
+
+# Save configuration to a file for analysis
+kata-ctl env --json --file /tmp/kata-config.json
+```
+
+The `kata-ctl env` command provides comprehensive information about the active runtime,
+hypervisor, agent, and host system configuration, which is invaluable for troubleshooting
+and understanding the execution context. See the [`kata-ctl` README](../../tools/kata-ctl/README.md#the-env-command)
+for more details.
+
 An [experimental alternative binary](crates/shim-ctl/README.md) is available that removes containerd dependencies and makes it easier to run the shim proper outside of the runtime's usual deployment environment (i.e. on a developer machine).
 
 ## Limitations
