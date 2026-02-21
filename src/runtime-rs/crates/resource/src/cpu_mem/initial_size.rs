@@ -8,8 +8,8 @@ use std::{collections::HashMap, convert::TryFrom};
 
 use anyhow::{Context, Result};
 use kata_types::{
-    annotations::Annotation, config::TomlConfig, container::ContainerType,
-    cpu::LinuxContainerCpuResources, k8s::container_type,
+    annotations::Annotation, config::TomlConfig, container::ContainerType, cpu::CpuSet,
+    k8s::container_type,
 };
 use oci_spec::runtime as oci;
 
@@ -23,32 +23,34 @@ struct InitialSize {
 }
 
 const MIB: i64 = 1024 * 1024;
+const SHARES_PER_CPU: u64 = 1024;
+
+fn initial_size_from_sandbox_annotation(
+    annotation: &Annotation,
+    cpu_set: Option<&str>,
+) -> InitialSize {
+    // Since we are *adding* our result to the config, a value of 0 will cause no change.
+    // If the annotation is not assigned (but static resource management is), upper layers
+    // may still provide CPUSet/CPU shares via the spec.
+    let period = annotation.get_sandbox_cpu_period();
+    let quota = annotation.get_sandbox_cpu_quota();
+    let shares = annotation.get_sandbox_cpu_shares();
+    let vcpu = calculate_vcpus(period, quota, shares, cpu_set);
+    let mem_mb = convert_memory_to_mb(annotation.get_sandbox_mem());
+
+    InitialSize {
+        vcpu,
+        mem_mb,
+        orig_toml_default_mem: 0,
+    }
+}
 
 // generate initial resource(vcpu and memory in MiB) from annotations
 impl TryFrom<&HashMap<String, String>> for InitialSize {
     type Error = anyhow::Error;
     fn try_from(an: &HashMap<String, String>) -> Result<Self> {
-        let mut vcpu: f32 = 0.0;
-
         let annotation = Annotation::new(an.clone());
-        let (period, quota, memory) =
-            get_sizing_info(annotation).context("failed to get sizing info")?;
-        let mut cpu = oci::LinuxCpu::default();
-        cpu.set_period(Some(period));
-        cpu.set_quota(Some(quota));
-
-        // although it may not be actually a linux container, we are only using the calculation inside
-        // LinuxContainerCpuResources::try_from to generate our vcpu number
-        if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
-            vcpu = get_nr_vcpu(&cpu_resource);
-        }
-        let mem_mb = convert_memory_to_mb(memory);
-
-        Ok(Self {
-            vcpu,
-            mem_mb,
-            orig_toml_default_mem: 0,
-        })
+        Ok(initial_size_from_sandbox_annotation(&annotation, None))
     }
 }
 
@@ -56,49 +58,60 @@ impl TryFrom<&HashMap<String, String>> for InitialSize {
 impl TryFrom<&oci::Spec> for InitialSize {
     type Error = anyhow::Error;
     fn try_from(spec: &oci::Spec) -> Result<Self> {
-        let mut vcpu: f32 = 0.0;
-        let mut mem_mb: u32 = 0;
-        match container_type(spec) {
+        let initial_size = match container_type(spec) {
             // podsandbox, from annotation
             ContainerType::PodSandbox => {
                 let spec_annos = spec.annotations().clone().unwrap_or_default();
-                return InitialSize::try_from(&spec_annos);
-            }
-            // single container, from container spec
-            _ => {
-                if let Some(resource) = spec
+                let annotation = Annotation::new(spec_annos);
+                let cpu_set = spec
                     .linux()
                     .as_ref()
                     .and_then(|linux| linux.resources().as_ref())
-                {
-                    // cpu resource
-                    if let Some(Ok(cpu_resource)) = resource
-                        .cpu()
-                        .as_ref()
-                        .map(LinuxContainerCpuResources::try_from)
-                    {
-                        vcpu = get_nr_vcpu(&cpu_resource);
-                    }
+                    .and_then(|resources| resources.cpu().as_ref())
+                    .and_then(|cpu| cpu.cpus().as_deref())
+                    .filter(|s| !s.is_empty());
 
-                    // memory resource
-                    mem_mb = resource
-                        .memory()
-                        .as_ref()
-                        .and_then(|mem| mem.limit())
-                        .map(convert_memory_to_mb)
-                        .unwrap_or(0);
+                initial_size_from_sandbox_annotation(&annotation, cpu_set)
+            }
+            // single container, from container spec
+            _ => {
+                let resource = spec
+                    .linux()
+                    .as_ref()
+                    .and_then(|linux| linux.resources().as_ref());
+
+                let vcpu = resource
+                    .and_then(|r| r.cpu().as_ref())
+                    .map(|cpu| {
+                        let period = cpu.period().unwrap_or(0);
+                        let quota = cpu.quota().unwrap_or(-1);
+                        let shares = cpu.shares().unwrap_or(0);
+                        let cpu_set = cpu.cpus().as_deref().filter(|s| !s.is_empty());
+
+                        calculate_vcpus(period, quota, shares, cpu_set)
+                    })
+                    .unwrap_or(0.0);
+
+                let mem_mb = resource
+                    .and_then(|r| r.memory().as_ref())
+                    .and_then(|mem| mem.limit())
+                    .map(convert_memory_to_mb)
+                    .unwrap_or(0);
+
+                InitialSize {
+                    vcpu,
+                    mem_mb,
+                    orig_toml_default_mem: 0,
                 }
             }
-        }
+        };
         info!(
             sl!(),
-            "(from PodSandbox's annotation / SingleContainer's spec) initial size: vcpu={}, mem_mb={}", vcpu, mem_mb
+            "(from PodSandbox's annotation / SingleContainer's spec) initial size: vcpu={}, mem_mb={}",
+            initial_size.vcpu,
+            initial_size.mem_mb
         );
-        Ok(Self {
-            vcpu,
-            mem_mb,
-            orig_toml_default_mem: 0,
-        })
+        Ok(initial_size)
     }
 }
 
@@ -142,7 +155,18 @@ impl InitialSizeManager {
 
         if self.resource.vcpu > 0.0 {
             info!(sl!(), "resource with vcpu {}", self.resource.vcpu);
+            if config.runtime.static_sandbox_resource_mgmt {
+                hv.cpu_info.default_vcpus += self.resource.vcpu;
+                // Ensure the hypervisor max vCPU limit can accommodate the new boot vCPU count,
+                // but do not shrink an existing higher default_maxvcpus (and preserve 0 as
+                // a hypervisor-specific "use default" value).
+                let boot_vcpus = hv.cpu_info.default_vcpus.ceil() as u32;
+                if hv.cpu_info.default_maxvcpus != 0 {
+                    hv.cpu_info.default_maxvcpus = hv.cpu_info.default_maxvcpus.max(boot_vcpus);
+                }
+            }
         }
+
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
         if self.resource.mem_mb > 0 {
             // since the memory overhead introduced by kata-agent and system components
@@ -160,12 +184,26 @@ impl InitialSizeManager {
     }
 }
 
-fn get_nr_vcpu(resource: &LinuxContainerCpuResources) -> f32 {
-    if let Some(v) = resource.get_vcpus() {
-        v as f32
-    } else {
-        0.0
+fn calculate_vcpus(period: u64, quota: i64, shares: u64, cpu_set: Option<&str>) -> f32 {
+    if quota >= 0 && period > 0 {
+        return quota as f32 / period as f32;
     }
+
+    // If quota is unconstrained and shares are provided, use shares as an approximation
+    // of the requested CPUs (1024 shares per CPU in Kubernetes). This avoids sizing the
+    // VM to the whole CPUSet for best-effort/burstable cases.
+    if shares > 0 {
+        return if shares >= SHARES_PER_CPU {
+            shares as f32 / SHARES_PER_CPU as f32
+        } else {
+            0.0
+        };
+    }
+
+    cpu_set
+        .and_then(|s| s.parse::<CpuSet>().ok())
+        .map(|set| set.len() as f32)
+        .unwrap_or(0.0)
 }
 
 fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
@@ -181,22 +219,11 @@ fn convert_memory_to_mb(memory_in_byte: i64) -> u32 {
     mem_size
 }
 
-// from the upper layer runtime's annotation (e.g. crio, k8s), get the *cpu quota,
-// cpu period and memory limit* for a sandbox/container
-fn get_sizing_info(annotation: Annotation) -> Result<(u64, i64, i64)> {
-    // since we are *adding* our result to the config, a value of 0 will cause no change
-    // and if the annotation is not assigned (but static resource management is), we will
-    // log a *warning* to fill that with zero value
-    let period = annotation.get_sandbox_cpu_period();
-    let quota = annotation.get_sandbox_cpu_quota();
-    let memory = annotation.get_sandbox_mem();
-    Ok((period, quota, memory))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use kata_types::annotations::cri_containerd;
+    use kata_types::config::hypervisor::Hypervisor;
     use oci_spec::runtime::{LinuxBuilder, LinuxMemory, LinuxMemoryBuilder, LinuxResourcesBuilder};
     use std::collections::HashMap;
     #[derive(Clone)]
@@ -365,5 +392,122 @@ mod tests {
                 i, d.desc, d.result.mem_mb,
             );
         }
+    }
+
+    #[test]
+    fn test_initial_size_sandbox_uses_shares_when_quota_unconstrained() {
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(HashMap::from([
+            (
+                cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                cri_containerd::SANDBOX.to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_PERIOD_KEY.to_string(),
+                "100000".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_QUOTA_KEY.to_string(),
+                "-1".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                "51200".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                format!("{}", 512 * MIB),
+            ),
+        ])));
+
+        let initial_size = InitialSize::try_from(&spec).unwrap();
+        assert_eq!(initial_size.vcpu.ceil(), 50.0);
+        assert_eq!(initial_size.mem_mb, 512);
+    }
+
+    #[test]
+    fn test_initial_size_container_uses_shares_and_ignores_cpuset_for_best_effort() {
+        let mut spec = oci::Spec::default();
+        spec.set_annotations(Some(HashMap::from([(
+            cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+            cri_containerd::CONTAINER.to_string(),
+        )])));
+
+        let mut linux_cpu = oci::LinuxCpu::default();
+        linux_cpu.set_quota(Some(-1));
+        linux_cpu.set_period(Some(100000));
+        linux_cpu.set_shares(Some(2));
+        linux_cpu.set_cpus(Some("0-63".to_string()));
+
+        let linux = LinuxBuilder::default()
+            .resources(
+                LinuxResourcesBuilder::default()
+                    .cpu(linux_cpu)
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+        spec.set_linux(Some(linux));
+
+        let initial_size = InitialSize::try_from(&spec).unwrap();
+        assert_eq!(initial_size.vcpu.ceil(), 0.0);
+    }
+
+    #[test]
+    fn test_setup_config_updates_boot_vcpus_for_static_resource_mgmt() {
+        let mut config = TomlConfig::default();
+        config.runtime.hypervisor_name = "qemu".to_string();
+        config.runtime.static_sandbox_resource_mgmt = true;
+
+        let mut hv = Hypervisor::default();
+        hv.cpu_info.default_vcpus = 1.0;
+        hv.cpu_info.default_maxvcpus = 1;
+        hv.memory_info.default_memory = 2048;
+        config.hypervisor.insert("qemu".to_string(), hv);
+
+        let annos = HashMap::from([
+            (
+                cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+                "2048".to_string(),
+            ),
+            (
+                cri_containerd::SANDBOX_MEM_KEY.to_string(),
+                format!("{}", 512 * MIB),
+            ),
+        ]);
+
+        let mut mgr = InitialSizeManager::new_from(&annos).unwrap();
+        mgr.setup_config(&mut config).unwrap();
+
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus.ceil(), 3.0);
+        assert_eq!(hv.cpu_info.default_maxvcpus, 3);
+        assert_eq!(hv.memory_info.default_memory, 2048 + 512);
+    }
+
+    #[test]
+    fn test_setup_config_does_not_reduce_default_maxvcpus() {
+        let mut config = TomlConfig::default();
+        config.runtime.hypervisor_name = "qemu".to_string();
+        config.runtime.static_sandbox_resource_mgmt = true;
+
+        let mut hv = Hypervisor::default();
+        hv.cpu_info.default_vcpus = 1.0;
+        hv.cpu_info.default_maxvcpus = 240;
+        hv.memory_info.default_memory = 2048;
+        config.hypervisor.insert("qemu".to_string(), hv);
+
+        let annos = HashMap::from([(
+            cri_containerd::SANDBOX_CPU_SHARE_KEY.to_string(),
+            "2048".to_string(),
+        )]);
+
+        let mut mgr = InitialSizeManager::new_from(&annos).unwrap();
+        mgr.setup_config(&mut config).unwrap();
+
+        let hv = config.hypervisor.get("qemu").unwrap();
+        assert_eq!(hv.cpu_info.default_vcpus.ceil(), 3.0);
+        assert_eq!(hv.cpu_info.default_maxvcpus, 240);
     }
 }

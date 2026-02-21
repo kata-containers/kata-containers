@@ -41,6 +41,7 @@ import (
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations/dockershim"
+	vcpuset "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	vcutils "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -1417,6 +1418,8 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 	var memory, quota int64
 	var period uint64
 	var err error
+	var shares uint64
+	var cpuSet string
 
 	if spec == nil || spec.Annotations == nil {
 		return 0, 0
@@ -1446,6 +1449,15 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
+	annotation, ok = spec.Annotations[ctrAnnotations.SandboxCPUShares]
+	if ok {
+		shares, err = strconv.ParseUint(annotation, 10, 64)
+		if err != nil {
+			ociLog.Warningf("sandbox-sizing: failure to parse SandboxCPUShares: %s", annotation)
+			shares = 0
+		}
+	}
+
 	annotation, ok = spec.Annotations[ctrAnnotations.SandboxMem]
 	if ok {
 		memory, err = strconv.ParseInt(annotation, 10, 64)
@@ -1455,7 +1467,11 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 		}
 	}
 
-	return calculateVMResources(period, quota, memory)
+	if spec.Linux != nil && spec.Linux.Resources != nil && spec.Linux.Resources.CPU != nil {
+		cpuSet = spec.Linux.Resources.CPU.Cpus
+	}
+
+	return calculateVMResources(period, quota, shares, cpuSet, memory)
 }
 
 // CalculateContainerSizing will calculate the number of CPUs and amount of memory that is needed
@@ -1463,6 +1479,8 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32)
 func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
 	var period uint64
+	var shares uint64
+	var cpuSet string
 
 	if spec == nil || spec.Linux == nil || spec.Linux.Resources == nil {
 		return 0, 0
@@ -1474,16 +1492,40 @@ func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint3
 		quota = *resources.CPU.Quota
 		period = *resources.CPU.Period
 	}
+	if resources.CPU != nil {
+		cpuSet = resources.CPU.Cpus
+		if resources.CPU.Shares != nil {
+			shares = *resources.CPU.Shares
+		}
+	}
 
 	if resources.Memory != nil && resources.Memory.Limit != nil {
 		memory = *resources.Memory.Limit
 	}
 
-	return calculateVMResources(period, quota, memory)
+	return calculateVMResources(period, quota, shares, cpuSet, memory)
 }
 
-func calculateVMResources(period uint64, quota int64, memory int64) (numCPU float32, memSizeMB uint32) {
+func calculateVMResources(period uint64, quota int64, shares uint64, cpuSet string, memory int64) (numCPU float32, memSizeMB uint32) {
 	numCPU = vcutils.CalculateCPUsF(quota, period)
+	if numCPU == 0 {
+		// If quota is unconstrained and CPU shares are provided, use shares as an approximation
+		// of the requested CPUs. This avoids sizing the VM to the full shared/default CPUSet
+		// in best-effort/burstable cases.
+		if shares != 0 {
+			// Kubernetes uses a minimum share value of 2 for best-effort pods. Treat shares
+			// below 1 CPU as 0 for VM sizing, relying on the runtime's base CPU allocation.
+			// Without this, we'll be booting 2 vCPUs for a BestEffort pod.
+			if shares >= 1024 {
+				numCPU = float32(shares) / 1024
+			}
+		} else {
+			set, err := vcpuset.Parse(cpuSet)
+			if err == nil {
+				numCPU = float32(set.Size())
+			}
+		}
+	}
 
 	if memory < 0 {
 		// While spec allows for a negative value to indicate unconstrained, we don't

@@ -17,7 +17,9 @@ use crate::config::TomlConfig;
 use crate::initdata::add_hypervisor_initdata_overrides;
 use crate::sl;
 
-use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
+use self::cri_containerd::{
+    SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_CPU_SHARE_KEY, SANDBOX_MEM_KEY,
+};
 
 /// CRI-containerd specific annotations.
 pub mod cri_containerd;
@@ -439,6 +441,14 @@ impl Annotation {
     pub fn get_sandbox_cpu_period(&self) -> u64 {
         let value = self
             .get_value::<u64>(SANDBOX_CPU_PERIOD_KEY)
+            .unwrap_or(Some(0));
+        value.unwrap_or(0)
+    }
+
+    /// Get the annotation of cpu shares for sandbox
+    pub fn get_sandbox_cpu_shares(&self) -> u64 {
+        let value = self
+            .get_value::<u64>(SANDBOX_CPU_SHARE_KEY)
             .unwrap_or(Some(0));
         value.unwrap_or(0)
     }

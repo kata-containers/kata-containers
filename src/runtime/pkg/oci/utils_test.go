@@ -1174,6 +1174,24 @@ func getCtrResourceSpec(memory, quota int64, period uint64) *specs.Spec {
 
 }
 
+func getCtrResourceSpecWithCPUSet(memory, quota int64, period uint64, cpuSet string) *specs.Spec {
+	spec := getCtrResourceSpec(memory, quota, period)
+	spec.Linux.Resources.CPU.Cpus = cpuSet
+	return spec
+}
+
+func getCtrResourceSpecWithShares(memory, quota int64, period uint64, shares uint64) *specs.Spec {
+	spec := getCtrResourceSpec(memory, quota, period)
+	spec.Linux.Resources.CPU.Shares = &shares
+	return spec
+}
+
+func getCtrResourceSpecWithSharesAndCPUSet(memory, quota int64, period uint64, shares uint64, cpuSet string) *specs.Spec {
+	spec := getCtrResourceSpecWithShares(memory, quota, period, shares)
+	spec.Linux.Resources.CPU.Cpus = cpuSet
+	return spec
+}
+
 func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	spec := specs.Spec{
 		Annotations: make(map[string]string),
@@ -1183,6 +1201,36 @@ func makeSizingAnnotations(memory, quota, period string) *specs.Spec {
 	spec.Annotations[ctrAnnotations.SandboxMem] = memory
 
 	return &spec
+}
+
+func makeSizingAnnotationsWithShares(memory, quota, period, shares string) *specs.Spec {
+	spec := makeSizingAnnotations(memory, quota, period)
+	spec.Annotations[ctrAnnotations.SandboxCPUShares] = shares
+	return spec
+}
+
+func makeSizingAnnotationsWithCPUSet(memory, quota, period, cpuSet string) *specs.Spec {
+	spec := makeSizingAnnotations(memory, quota, period)
+	spec.Linux = &specs.Linux{
+		Resources: &specs.LinuxResources{
+			CPU: &specs.LinuxCPU{
+				Cpus: cpuSet,
+			},
+		},
+	}
+	return spec
+}
+
+func makeSizingAnnotationsWithSharesAndCPUSet(memory, quota, period, shares, cpuSet string) *specs.Spec {
+	spec := makeSizingAnnotationsWithShares(memory, quota, period, shares)
+	spec.Linux = &specs.Linux{
+		Resources: &specs.LinuxResources{
+			CPU: &specs.LinuxCPU{
+				Cpus: cpuSet,
+			},
+		},
+	}
+	return spec
 }
 
 func TestCalculateContainerSizing(t *testing.T) {
@@ -1239,6 +1287,26 @@ func TestCalculateContainerSizing(t *testing.T) {
 			spec:        getCtrResourceSpec(-1, 10, 1),
 			expectedCPU: 10,
 			expectedMem: 0,
+		},
+		{
+			spec:        getCtrResourceSpecWithCPUSet(1024*1024, -1, 100000, "2-19,32-63"),
+			expectedCPU: 50,
+			expectedMem: 1,
+		},
+		{
+			spec:        getCtrResourceSpecWithShares(1024*1024, -1, 100000, 51200),
+			expectedCPU: 50,
+			expectedMem: 1,
+		},
+		{
+			spec:        getCtrResourceSpecWithShares(1024*1024, -1, 100000, 2),
+			expectedCPU: 0,
+			expectedMem: 1,
+		},
+		{
+			spec:        getCtrResourceSpecWithSharesAndCPUSet(1024*1024, -1, 100000, 2048, "0-63"),
+			expectedCPU: 2,
+			expectedMem: 1,
 		},
 	}
 
@@ -1297,6 +1365,26 @@ func TestCalculateSandboxSizing(t *testing.T) {
 			spec:        makeSizingAnnotations("4294967296", "400", "100"),
 			expectedCPU: 4,
 			expectedMem: 4096,
+		},
+		{
+			spec:        makeSizingAnnotationsWithCPUSet("1048576", "-1", "100000", "2-19,32-63"),
+			expectedCPU: 50,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeSizingAnnotationsWithShares("1048576", "-1", "100000", "51200"),
+			expectedCPU: 50,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeSizingAnnotationsWithShares("1048576", "-1", "100000", "2"),
+			expectedCPU: 0,
+			expectedMem: 1,
+		},
+		{
+			spec:        makeSizingAnnotationsWithSharesAndCPUSet("1048576", "-1", "100000", "2048", "0-63"),
+			expectedCPU: 2,
+			expectedMem: 1,
 		},
 	}
 
