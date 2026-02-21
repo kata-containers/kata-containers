@@ -55,7 +55,7 @@ setup() {
 	echo "Pod $pod_config file:"
 	cat $pod_config
 
-	assert_pod_container_creating "$pod_config"
+	assert_pod_fail "$pod_config"
 	assert_logs_contain "$node" kata "${node_start_time}" "verity: .* metadata block .* is corrupted"
 }
 
