@@ -811,21 +811,6 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	// into a PCIe Root Port or PCIe Switch.
 	// For more details, please see https://github.com/qemu/qemu/blob/master/docs/pcie.txt
 
-	// Deduce the right values for mem-reserve and pref-64-reserve memory regions
-	memSize32bit, memSize64bit := q.arch.getBARsMaxAddressableMemory()
-
-	// The default OVMF MMIO aperture is too small for some PCIe devices
-	// with huge BARs so we need to increase it.
-	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
-	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
-		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
-		fwCfg := govmmQemu.FwCfg{
-			Name: "opt/ovmf/X-PciMmio64Mb",
-			Str:  pciMmio64Mb,
-		}
-		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
-	}
-
 	// Get the number of hot(cold)-pluggable ports needed from the provided
 	// VFIO devices
 	var numOfPluggablePorts uint32 = 0
@@ -896,7 +881,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeRootPort {
 			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts)
 		return nil
 	}
 	if vfioOnSwitchPort {
@@ -906,12 +891,12 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if numOfPluggablePorts > maxPCIeSwitchPort {
 			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
 		}
-		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts)
 		return nil
 	}
 	// If both Root Port and Switch Port are not enabled, check if QemuVirt need add pcie root port.
 	if machineType == QemuVirt {
-		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts)
 	}
 	return nil
 }
@@ -2624,7 +2609,7 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 }
 
 // genericAppendPCIeRootPort appends to devices the given pcie-root-port
-func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string) []govmmQemu.Device {
 	var (
 		bus           string
 		chassis       string
@@ -2650,8 +2635,6 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 				Slot:          strconv.FormatUint(uint64(i), 10),
 				Multifunction: multiFunction,
 				Addr:          addr,
-				MemReserve:    fmt.Sprintf("%dB", memSize32bit),
-				Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 			},
 		)
 	}
@@ -2680,7 +2663,7 @@ func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machin
 //          -------------           --------------
 */
 // genericAppendPCIeSwitch adds a PCIe Swtich
-func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, machineType string, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, machineType string) []govmmQemu.Device {
 
 	// Q35, Virt have the correct PCIe support,
 	// hence ignore all other machines
@@ -2697,8 +2680,6 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 		Slot:          strconv.FormatUint(uint64(0), 10),
 		Multifunction: false,
 		Addr:          "0",
-		MemReserve:    fmt.Sprintf("%dB", memSize32bit),
-		Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 	}
 
 	devices = append(devices, pcieRootPort)
@@ -2722,8 +2703,6 @@ func genericAppendPCIeSwitchPort(devices []govmmQemu.Device, number uint32, mach
 			Bus:     pcieSwitchUpstreamPort.ID,
 			Chassis: fmt.Sprintf("%d", nextChassis),
 			Slot:    strconv.FormatUint(uint64(i), 10),
-			// TODO: MemReserve:    fmt.Sprintf("%dB", memSize32bit),
-			// TODO: Pref64Reserve: fmt.Sprintf("%dB", memSize64bit),
 		}
 		devices = append(devices, pcieSwitchDownstreamPort)
 	}
