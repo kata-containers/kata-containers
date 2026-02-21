@@ -309,6 +309,44 @@ compress_rootfs() {
 	chmod +x "${libdir}"/ld-linux-*
 }
 
+copy_cdh_runtime_deps() {
+	local libdir="lib/${machine_arch}-linux-gnu"
+
+	# Shared libraries required by /usr/local/bin/confidential-data-hub.
+	# Note: libcryptsetup loads some optional helpers (e.g. libpopt/libssh) only
+	# when specific features are used. The current CDH path (LUKS2 + mkfs.ext4)
+	# does not require those optional libs.
+	cp -a "${stage_one}/${libdir}"/libcryptsetup.so.12*    "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libuuid.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libdevmapper.so.1.02.1* "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libselinux.so.1*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libpcre2-8.so.0*        "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libudev.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcap.so.2*            "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcrypto.so.3*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libz.so.1*              "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libzstd.so.1*           "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libjson-c.so.5*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libblkid.so.1*          "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libargon2.so.1*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libgcc_s.so.1*          "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libm.so.6*              "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libc.so.6*              "${libdir}/."
+
+	# e2fsprogs (mkfs.ext4) runtime libs
+	cp -a "${stage_one}/${libdir}"/libext2fs.so.2*         "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libe2p.so.2*            "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libss.so.2*             "${libdir}/."
+	cp -a "${stage_one}/${libdir}"/libcom_err.so.2*        "${libdir}/."
+
+	# mkfs.ext4 and dd are used by CDH secure_mount
+	mkdir -p sbin etc usr/bin bin
+	cp -a "${stage_one}/sbin/mke2fs" sbin/.
+	cp -a "${stage_one}/sbin/mkfs.ext4" sbin/.
+	cp -a "${stage_one}/etc/mke2fs.conf" etc/.
+	cp -a "${stage_one}/usr/bin/dd" bin/.
+}
+
 coco_guest_components() {
 	if [[ "${type}" != "confidential" ]]; then
 		return
@@ -331,7 +369,7 @@ coco_guest_components() {
 	cp -a "${stage_one}/${pause_dir}"/config.json  "${pause_dir}/."
 	cp -a "${stage_one}/${pause_dir}"/rootfs/pause "${pause_dir}/rootfs/."
 
-	info "TODO: nvidia: luks-encrypt-storage is a bash script, we do not have a shell!"
+	copy_cdh_runtime_deps
 }
 
 setup_nvidia_gpu_rootfs_stage_two() {

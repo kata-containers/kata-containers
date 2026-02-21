@@ -54,27 +54,8 @@ NGC_API_KEY_BASE64=$(
 )
 export NGC_API_KEY_BASE64
 
-# Sealed secret format for TEE pods (vault type pointing to KBS resource)
-# Format: sealed.<base64url JWS header>.<base64url payload>.<base64url signature>
-# IMPORTANT: JWS uses base64url encoding WITHOUT padding (no trailing '=')
-# We use tr to convert standard base64 (+/) to base64url (-_) and remove padding (=)
-# For vault type, header and signature can be placeholders since the payload
-# contains the KBS resource path where the actual secret is stored.
-#
-# Vault type sealed secret payload for instruct pod:
-# {
-#   "version": "0.1.0",
-#   "type": "vault",
-#   "name": "kbs:///default/ngc-api-key/instruct",
-#   "provider": "kbs",
-#   "provider_settings": {},
-#   "annotations": {}
-# }
-NGC_API_KEY_SEALED_SECRET_INSTRUCT_PAYLOAD=$(
-    echo -n '{"version":"0.1.0","type":"vault","name":"kbs:///default/ngc-api-key/instruct","provider":"kbs","provider_settings":{},"annotations":{}}' |
-    base64 -w0 | tr '+/' '-_' | tr -d '='
-)
-NGC_API_KEY_SEALED_SECRET_INSTRUCT="sealed.fakejwsheader.${NGC_API_KEY_SEALED_SECRET_INSTRUCT_PAYLOAD}.fakesignature"
+# pre-created signed sealed secrets for TEE pods (from confidential_common.sh)
+NGC_API_KEY_SEALED_SECRET_INSTRUCT="${SEALED_SECRET_PRECREATED_NIM_INSTRUCT}"
 export NGC_API_KEY_SEALED_SECRET_INSTRUCT
 
 # Base64 encode the sealed secret for use in Kubernetes Secret data field
@@ -82,20 +63,7 @@ export NGC_API_KEY_SEALED_SECRET_INSTRUCT
 NGC_API_KEY_SEALED_SECRET_INSTRUCT_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_INSTRUCT}" | base64 -w0)
 export NGC_API_KEY_SEALED_SECRET_INSTRUCT_BASE64
 
-# Vault type sealed secret payload for embedqa pod:
-# {
-#   "version": "0.1.0",
-#   "type": "vault",
-#   "name": "kbs:///default/ngc-api-key/embedqa",
-#   "provider": "kbs",
-#   "provider_settings": {},
-#   "annotations": {}
-# }
-NGC_API_KEY_SEALED_SECRET_EMBEDQA_PAYLOAD=$(
-    echo -n '{"version":"0.1.0","type":"vault","name":"kbs:///default/ngc-api-key/embedqa","provider":"kbs","provider_settings":{},"annotations":{}}' |
-    base64 -w0 | tr '+/' '-_' | tr -d '='
-)
-NGC_API_KEY_SEALED_SECRET_EMBEDQA="sealed.fakejwsheader.${NGC_API_KEY_SEALED_SECRET_EMBEDQA_PAYLOAD}.fakesignature"
+NGC_API_KEY_SEALED_SECRET_EMBEDQA="${SEALED_SECRET_PRECREATED_NIM_EMBEDQA}"
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA
 
 NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_EMBEDQA}" | base64 -w0)
@@ -247,6 +215,8 @@ setup_file() {
         setup_genpolicy_registry_auth
 
         setup_kbs_credentials
+        # provision signing public key to KBS so that CDH can verify pre-created, signed secret.
+        setup_sealed_secret_signing_public_key
         # Overwrite the empty default-initdata.toml with our CDH configuration.
         # This must happen AFTER create_tmp_policy_settings_dir() copies the empty
         # file and BEFORE auto_generate_policy() runs.
