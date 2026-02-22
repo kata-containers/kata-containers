@@ -116,6 +116,9 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			wg.Done()
 			shimLog.Debug("stdin io stream copy exited")
 		}()
+	} else {
+		//If there's no stdin, then close the stdin in kata-agent
+		stdinPipe.Close()
 	}
 
 	if tty.io.Stdout() != nil {
