@@ -1113,5 +1113,429 @@
       "storages": [],
       "string_user": null
     }
+  },
+  {
+    "description": "Valid: Hot-plug - 2 GPUs with properly correlated VFIO devices and CDI annotations (vfio-pci)",
+    "allowed": true,
+    "kind": "CreateContainerRequest",
+    "request": {
+      "type": "CreateContainer",
+      "OCI": {
+        "Annotations": {
+          "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
+          "cdi.k8s.io/vfio2": "nvidia.com/gpu=1",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "gpu-container",
+          "io.kubernetes.cri.container-type": "container",
+          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
+          "io.kubernetes.cri.sandbox-id": "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+          "io.kubernetes.cri.sandbox-name": "gpu-test-pod",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.sandbox-uid": "12345678-1234-1234-1234-123456789012"
+        },
+        "Hooks": null,
+        "Hostname": "",
+        "Linux": {
+          "CgroupsPath": "kubepods-burstable-pod12345678_1234_1234_1234_123456789012.slice:cri-containerd:gpu-container",
+          "Devices": [],
+          "GIDMappings": [],
+          "IntelRdt": null,
+          "MaskedPaths": ["/proc/asound", "/proc/acpi", "/proc/kcore", "/proc/keys", "/proc/latency_stats", "/proc/timer_list", "/proc/timer_stats", "/proc/sched_debug", "/proc/scsi", "/sys/firmware", "/sys/devices/virtual/powercap"],
+          "MountLabel": "",
+          "Namespaces": [
+            {"Path": "", "Type": "ipc"},
+            {"Path": "", "Type": "uts"},
+            {"Path": "", "Type": "mount"}
+          ],
+          "ReadonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"],
+          "Resources": {
+            "BlockIO": null,
+            "CPU": {"Cpus": "", "Mems": "", "Period": 100000, "Quota": 0, "RealtimePeriod": 0, "RealtimeRuntime": 0, "Shares": 2},
+            "Devices": [],
+            "HugepageLimits": [],
+            "Memory": {"DisableOOMKiller": false, "Kernel": 0, "KernelTCP": 0, "Limit": 0, "Reservation": 0, "Swap": 0, "Swappiness": 0},
+            "Network": null,
+            "Pids": null
+          },
+          "RootfsPropagation": "",
+          "Seccomp": null,
+          "Sysctl": {},
+          "UIDMappings": []
+        },
+        "Mounts": [
+          {"destination": "/proc", "options": ["nosuid", "noexec", "nodev"], "source": "proc", "type_": "proc"},
+          {"destination": "/dev", "options": ["nosuid", "strictatime", "mode=755", "size=65536k"], "source": "tmpfs", "type_": "tmpfs"},
+          {"destination": "/dev/shm", "options": ["rbind"], "source": "/run/kata-containers/sandbox/shm", "type_": "bind"}
+        ],
+        "Process": {
+          "ApparmorProfile": "cri-containerd.apparmor.d",
+          "Args": ["/pause"],
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Effective": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Inheritable": [],
+            "Permitted": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"]
+          },
+          "ConsoleSize": null,
+          "Cwd": "/",
+          "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOSTNAME=gpu-test-pod"],
+          "NoNewPrivileges": false,
+          "OOMScoreAdj": 1000,
+          "Rlimits": [],
+          "SelinuxLabel": "",
+          "Terminal": false,
+          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+        },
+        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Solaris": null,
+        "Version": "1.1.0",
+        "Windows": null
+      },
+      "container_id": "gpu-container",
+      "devices": [
+        {
+          "container_path": "/dev/vfio/devices/vfio1",
+          "id": "vfio1",
+          "options": ["0000:65:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        },
+        {
+          "container_path": "/dev/vfio/devices/vfio2",
+          "id": "vfio2",
+          "options": ["0000:66:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        }
+      ],
+      "exec_id": "gpu-container",
+      "sandbox_pidns": false,
+      "shared_mounts": [],
+      "stderr_port": 0,
+      "stdin_port": 0,
+      "stdout_port": 0,
+      "storages": [],
+      "string_user": null
+    }
+  },
+  {
+    "description": "Invalid: Hot-plug - CDI annotation number doesn't match VFIO device number (vfio-pci)",
+    "allowed": false,
+    "kind": "CreateContainerRequest",
+    "request": {
+      "type": "CreateContainer",
+      "OCI": {
+        "Annotations": {
+          "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
+          "cdi.k8s.io/vfio3": "nvidia.com/gpu=2",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "gpu-container",
+          "io.kubernetes.cri.container-type": "container",
+          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
+          "io.kubernetes.cri.sandbox-id": "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+          "io.kubernetes.cri.sandbox-name": "gpu-test-pod",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.sandbox-uid": "12345678-1234-1234-1234-123456789012"
+        },
+        "Hooks": null,
+        "Hostname": "",
+        "Linux": {
+          "CgroupsPath": "kubepods-burstable-pod12345678_1234_1234_1234_123456789012.slice:cri-containerd:gpu-container",
+          "Devices": [],
+          "GIDMappings": [],
+          "IntelRdt": null,
+          "MaskedPaths": ["/proc/asound", "/proc/acpi", "/proc/kcore", "/proc/keys", "/proc/latency_stats", "/proc/timer_list", "/proc/timer_stats", "/proc/sched_debug", "/proc/scsi", "/sys/firmware", "/sys/devices/virtual/powercap"],
+          "MountLabel": "",
+          "Namespaces": [
+            {"Path": "", "Type": "ipc"},
+            {"Path": "", "Type": "uts"},
+            {"Path": "", "Type": "mount"}
+          ],
+          "ReadonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"],
+          "Resources": {
+            "BlockIO": null,
+            "CPU": {"Cpus": "", "Mems": "", "Period": 100000, "Quota": 0, "RealtimePeriod": 0, "RealtimeRuntime": 0, "Shares": 2},
+            "Devices": [],
+            "HugepageLimits": [],
+            "Memory": {"DisableOOMKiller": false, "Kernel": 0, "KernelTCP": 0, "Limit": 0, "Reservation": 0, "Swap": 0, "Swappiness": 0},
+            "Network": null,
+            "Pids": null
+          },
+          "RootfsPropagation": "",
+          "Seccomp": null,
+          "Sysctl": {},
+          "UIDMappings": []
+        },
+        "Mounts": [
+          {"destination": "/proc", "options": ["nosuid", "noexec", "nodev"], "source": "proc", "type_": "proc"},
+          {"destination": "/dev", "options": ["nosuid", "strictatime", "mode=755", "size=65536k"], "source": "tmpfs", "type_": "tmpfs"},
+          {"destination": "/dev/shm", "options": ["rbind"], "source": "/run/kata-containers/sandbox/shm", "type_": "bind"}
+        ],
+        "Process": {
+          "ApparmorProfile": "cri-containerd.apparmor.d",
+          "Args": ["/pause"],
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Effective": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Inheritable": [],
+            "Permitted": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"]
+          },
+          "ConsoleSize": null,
+          "Cwd": "/",
+          "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOSTNAME=gpu-test-pod"],
+          "NoNewPrivileges": false,
+          "OOMScoreAdj": 1000,
+          "Rlimits": [],
+          "SelinuxLabel": "",
+          "Terminal": false,
+          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+        },
+        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Solaris": null,
+        "Version": "1.1.0",
+        "Windows": null
+      },
+      "container_id": "gpu-container",
+      "devices": [
+        {
+          "container_path": "/dev/vfio/devices/vfio1",
+          "id": "vfio1",
+          "options": ["0000:65:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        },
+        {
+          "container_path": "/dev/vfio/devices/vfio2",
+          "id": "vfio2",
+          "options": ["0000:66:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        }
+      ],
+      "exec_id": "gpu-container",
+      "sandbox_pidns": false,
+      "shared_mounts": [],
+      "stderr_port": 0,
+      "stdin_port": 0,
+      "stdout_port": 0,
+      "storages": [],
+      "string_user": null
+    }
+  },
+  {
+    "description": "Invalid: Hot-plug - CDI annotation with non-numeric suffix (vfio-pci)",
+    "allowed": false,
+    "kind": "CreateContainerRequest",
+    "request": {
+      "type": "CreateContainer",
+      "OCI": {
+        "Annotations": {
+          "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
+          "cdi.k8s.io/vfioABC": "nvidia.com/gpu=1",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "gpu-container",
+          "io.kubernetes.cri.container-type": "container",
+          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
+          "io.kubernetes.cri.sandbox-id": "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+          "io.kubernetes.cri.sandbox-name": "gpu-test-pod",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.sandbox-uid": "12345678-1234-1234-1234-123456789012"
+        },
+        "Hooks": null,
+        "Hostname": "",
+        "Linux": {
+          "CgroupsPath": "kubepods-burstable-pod12345678_1234_1234_1234_123456789012.slice:cri-containerd:gpu-container",
+          "Devices": [],
+          "GIDMappings": [],
+          "IntelRdt": null,
+          "MaskedPaths": ["/proc/asound", "/proc/acpi", "/proc/kcore", "/proc/keys", "/proc/latency_stats", "/proc/timer_list", "/proc/timer_stats", "/proc/sched_debug", "/proc/scsi", "/sys/firmware", "/sys/devices/virtual/powercap"],
+          "MountLabel": "",
+          "Namespaces": [
+            {"Path": "", "Type": "ipc"},
+            {"Path": "", "Type": "uts"},
+            {"Path": "", "Type": "mount"}
+          ],
+          "ReadonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"],
+          "Resources": {
+            "BlockIO": null,
+            "CPU": {"Cpus": "", "Mems": "", "Period": 100000, "Quota": 0, "RealtimePeriod": 0, "RealtimeRuntime": 0, "Shares": 2},
+            "Devices": [],
+            "HugepageLimits": [],
+            "Memory": {"DisableOOMKiller": false, "Kernel": 0, "KernelTCP": 0, "Limit": 0, "Reservation": 0, "Swap": 0, "Swappiness": 0},
+            "Network": null,
+            "Pids": null
+          },
+          "RootfsPropagation": "",
+          "Seccomp": null,
+          "Sysctl": {},
+          "UIDMappings": []
+        },
+        "Mounts": [
+          {"destination": "/proc", "options": ["nosuid", "noexec", "nodev"], "source": "proc", "type_": "proc"},
+          {"destination": "/dev", "options": ["nosuid", "strictatime", "mode=755", "size=65536k"], "source": "tmpfs", "type_": "tmpfs"},
+          {"destination": "/dev/shm", "options": ["rbind"], "source": "/run/kata-containers/sandbox/shm", "type_": "bind"}
+        ],
+        "Process": {
+          "ApparmorProfile": "cri-containerd.apparmor.d",
+          "Args": ["/pause"],
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Effective": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Inheritable": [],
+            "Permitted": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"]
+          },
+          "ConsoleSize": null,
+          "Cwd": "/",
+          "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOSTNAME=gpu-test-pod"],
+          "NoNewPrivileges": false,
+          "OOMScoreAdj": 1000,
+          "Rlimits": [],
+          "SelinuxLabel": "",
+          "Terminal": false,
+          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+        },
+        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Solaris": null,
+        "Version": "1.1.0",
+        "Windows": null
+      },
+      "container_id": "gpu-container",
+      "devices": [
+        {
+          "container_path": "/dev/vfio/devices/vfio1",
+          "id": "vfio1",
+          "options": ["0000:65:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        },
+        {
+          "container_path": "/dev/vfio/devices/vfio2",
+          "id": "vfio2",
+          "options": ["0000:66:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        }
+      ],
+      "exec_id": "gpu-container",
+      "sandbox_pidns": false,
+      "shared_mounts": [],
+      "stderr_port": 0,
+      "stdin_port": 0,
+      "stdout_port": 0,
+      "storages": [],
+      "string_user": null
+    }
+  },
+  {
+    "description": "Invalid: Hot-plug - 2 GPUs with duplicate VFIO device numbers (same container_path) (vfio-pci)",
+    "allowed": false,
+    "kind": "CreateContainerRequest",
+    "request": {
+      "type": "CreateContainer",
+      "OCI": {
+        "Annotations": {
+          "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
+          "cdi.k8s.io/vfio2": "nvidia.com/gpu=1",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.container_type": "pod_container",
+          "io.kubernetes.cri.container-name": "gpu-container",
+          "io.kubernetes.cri.container-type": "container",
+          "io.kubernetes.cri.image-name": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
+          "io.kubernetes.cri.sandbox-id": "abcd1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab",
+          "io.kubernetes.cri.sandbox-name": "gpu-test-pod",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.sandbox-uid": "12345678-1234-1234-1234-123456789012"
+        },
+        "Hooks": null,
+        "Hostname": "",
+        "Linux": {
+          "CgroupsPath": "kubepods-burstable-pod12345678_1234_1234_1234_123456789012.slice:cri-containerd:gpu-container",
+          "Devices": [],
+          "GIDMappings": [],
+          "IntelRdt": null,
+          "MaskedPaths": ["/proc/asound", "/proc/acpi", "/proc/kcore", "/proc/keys", "/proc/latency_stats", "/proc/timer_list", "/proc/timer_stats", "/proc/sched_debug", "/proc/scsi", "/sys/firmware", "/sys/devices/virtual/powercap"],
+          "MountLabel": "",
+          "Namespaces": [
+            {"Path": "", "Type": "ipc"},
+            {"Path": "", "Type": "uts"},
+            {"Path": "", "Type": "mount"}
+          ],
+          "ReadonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"],
+          "Resources": {
+            "BlockIO": null,
+            "CPU": {"Cpus": "", "Mems": "", "Period": 100000, "Quota": 0, "RealtimePeriod": 0, "RealtimeRuntime": 0, "Shares": 2},
+            "Devices": [],
+            "HugepageLimits": [],
+            "Memory": {"DisableOOMKiller": false, "Kernel": 0, "KernelTCP": 0, "Limit": 0, "Reservation": 0, "Swap": 0, "Swappiness": 0},
+            "Network": null,
+            "Pids": null
+          },
+          "RootfsPropagation": "",
+          "Seccomp": null,
+          "Sysctl": {},
+          "UIDMappings": []
+        },
+        "Mounts": [
+          {"destination": "/proc", "options": ["nosuid", "noexec", "nodev"], "source": "proc", "type_": "proc"},
+          {"destination": "/dev", "options": ["nosuid", "strictatime", "mode=755", "size=65536k"], "source": "tmpfs", "type_": "tmpfs"},
+          {"destination": "/dev/shm", "options": ["rbind"], "source": "/run/kata-containers/sandbox/shm", "type_": "bind"}
+        ],
+        "Process": {
+          "ApparmorProfile": "cri-containerd.apparmor.d",
+          "Args": ["/pause"],
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Effective": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"],
+            "Inheritable": [],
+            "Permitted": ["CAP_CHOWN", "CAP_DAC_OVERRIDE", "CAP_FSETID", "CAP_FOWNER", "CAP_MKNOD", "CAP_NET_RAW", "CAP_SETGID", "CAP_SETUID", "CAP_SETFCAP", "CAP_SETPCAP", "CAP_NET_BIND_SERVICE", "CAP_SYS_CHROOT", "CAP_KILL", "CAP_AUDIT_WRITE"]
+          },
+          "ConsoleSize": null,
+          "Cwd": "/",
+          "Env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOSTNAME=gpu-test-pod"],
+          "NoNewPrivileges": false,
+          "OOMScoreAdj": 1000,
+          "Rlimits": [],
+          "SelinuxLabel": "",
+          "Terminal": false,
+          "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
+        },
+        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Solaris": null,
+        "Version": "1.1.0",
+        "Windows": null
+      },
+      "container_id": "gpu-container",
+      "devices": [
+        {
+          "container_path": "/dev/vfio/devices/vfio1",
+          "id": "vfio1",
+          "options": ["0000:65:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        },
+        {
+          "container_path": "/dev/vfio/devices/vfio1",
+          "id": "vfio1",
+          "options": ["0000:66:00.0=06/00"],
+          "type_": "vfio-pci",
+          "vm_path": ""
+        }
+      ],
+      "exec_id": "gpu-container",
+      "sandbox_pidns": false,
+      "shared_mounts": [],
+      "stderr_port": 0,
+      "stdin_port": 0,
+      "stdout_port": 0,
+      "storages": [],
+      "string_user": null
+    }
   }
 ]

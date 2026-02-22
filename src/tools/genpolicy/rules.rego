@@ -522,7 +522,9 @@ allow_vfio_device(p_vfio_devices, i_vfio_device) if {
 
     i_vfio_device.id == concat("", ["vfio", suffix])
 
-    i_vfio_device.type_ == p_device.type_
+    allowed_types := policy_data.devices.vfio.nvidia.gpu_device_types
+    some allowed_type in allowed_types
+    i_vfio_device.type_ == allowed_type
 
     i_vfio_device.vm_path == p_device.vm_path
 
