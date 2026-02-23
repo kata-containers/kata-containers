@@ -165,6 +165,7 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       SNAPSHOTTER: ${{ matrix.environment.snapshotter }}
       EXPERIMENTAL_FORCE_GUEST_PULL: ${{ matrix.environment.pull_type == 'experimental-force-guest-pull' && matrix.environment.vmm || '' }}
+      AUTO_GENERATE_POLICY: "yes"
       K8S_TEST_HOST_TYPE: "all"
       CONTAINER_ENGINE: "containerd"
       CONTAINER_ENGINE_VERSION: "active"
@@ -221,7 +222,6 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
         env:
           USE_EXPERIMENTAL_SETUP_SNAPSHOTTER: ${{ matrix.environment.snapshotter == 'nydus' }}
-          AUTO_GENERATE_POLICY: ${{ matrix.environment.pull_type == 'experimental-force-guest-pull' && 'no' || 'yes' }}
 
       - name: Deploy CoCo KBS
         timeout-minutes: 10
