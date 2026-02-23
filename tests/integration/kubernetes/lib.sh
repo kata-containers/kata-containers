@@ -205,6 +205,23 @@ assert_pod_fail() {
 		if [[ "${terminated_reason}" == "StartError" ]] || [[ "${terminated_reason}" == "Error" ]]; then
 			return 0
 		fi
+		# Sandbox failure (e.g. kernel or early init crash): pod stays Pending, failure only in events.
+		# Only treat events as failure when the pod is still Pending (e.g. ContainerCreating).
+		local pod_phase
+		pod_phase=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+		if [[ "${pod_phase}" == "Pending" ]]; then
+			local namespace
+			namespace=$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.namespace}' 2>/dev/null || true)
+			if [[ -n "${namespace}" ]]; then
+				local events_reasons
+				events_reasons=$(kubectl get events -n "${namespace}" \
+					--field-selector "involvedObject.name=${pod_name},involvedObject.kind=Pod" \
+					-o jsonpath='{.items[*].reason}' 2>/dev/null || true)
+				if echo "${events_reasons}" | grep -qE "FailedCreatePodSandBox|Killing"; then
+					return 0
+				fi
+			fi
+		fi
 		if [[ "${elapsed_time}" -gt "${duration}" ]]; then
 			echo "The container does not get into a failing state" >&2
 			break
