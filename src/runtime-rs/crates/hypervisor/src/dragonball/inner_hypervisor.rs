@@ -83,7 +83,13 @@ impl DragonballInner {
     }
 
     pub(crate) async fn save_vm(&self) -> Result<()> {
-        todo!()
+        let snapshot_path = format!("{}/snapshot", self.vm_path);
+        info!(sl!(), "saving VM snapshot to {}", snapshot_path);
+        self.vmm_instance
+            .create_snapshot(&snapshot_path)
+            .context("create VM snapshot")?;
+        info!(sl!(), "VM snapshot saved to {}", snapshot_path);
+        Ok(())
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {

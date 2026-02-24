@@ -119,7 +119,7 @@ impl Default for CpuTopology {
 }
 
 /// Configuration information for virtual machine instance.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VmConfigInfo {
     /// Number of vcpu to start.
     pub vcpu_count: u8,
@@ -788,6 +788,82 @@ impl Vm {
 
         info!(self.logger, "VM started");
         Ok(())
+    }
+
+    /// Checkpoint the VMM configuration and guest memory to `snapshot_path`.
+    ///
+    /// vCPUs are paused for the duration of the memory dump to produce a
+    /// consistent snapshot, then resumed automatically.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SnapshotError`](crate::snapshot::SnapshotError) if the
+    /// snapshot directory cannot be created, if memory has not been initialised,
+    /// or if writing the snapshot files fails.
+    pub fn create_snapshot(
+        &mut self,
+        snapshot_path: &str,
+    ) -> std::result::Result<(), crate::snapshot::SnapshotError> {
+        use crate::snapshot::{create_snapshot_files, SnapshotError};
+
+        info!(self.logger, "VM: creating snapshot at {}", snapshot_path);
+
+        // Pause all vCPUs so the memory dump is consistent.
+        self.pause_all_vcpus_with_downtime()
+            .map_err(SnapshotError::VcpuPause)?;
+
+        let result = (|| {
+            let vm_as = self
+                .vm_as()
+                .ok_or(SnapshotError::GuestMemoryNotInitialized)?;
+            create_snapshot_files(snapshot_path, vm_as, &self.vm_config)
+        })();
+
+        // Always resume vCPUs, even if the snapshot failed.
+        self.resume_all_vcpus_with_downtime()
+            .map_err(SnapshotError::VcpuResume)?;
+
+        result?;
+        info!(self.logger, "VM: snapshot created at {}", snapshot_path);
+        Ok(())
+    }
+
+    /// Restore guest memory from a snapshot stored at `snapshot_path`.
+    ///
+    /// Guest memory **must** have been initialised (via [`init_guest_memory`])
+    /// before calling this function. The memory contents are overwritten with
+    /// the snapshot data; the VMM configuration is not changed.
+    ///
+    /// Returns the [`MicrovmState`](crate::snapshot::MicrovmState) recorded in
+    /// the snapshot so the caller can inspect the saved VM configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SnapshotError`](crate::snapshot::SnapshotError) if the
+    /// snapshot files cannot be read or if the memory cannot be restored.
+    pub fn restore_from_snapshot(
+        &mut self,
+        snapshot_path: &str,
+    ) -> std::result::Result<crate::snapshot::MicrovmState, crate::snapshot::SnapshotError> {
+        use crate::snapshot::{load_vmm_state, restore_snapshot_memory, SnapshotError};
+
+        info!(
+            self.logger,
+            "VM: restoring memory from snapshot at {}", snapshot_path
+        );
+
+        let state = load_vmm_state(snapshot_path)?;
+
+        let vm_as = self
+            .vm_as()
+            .ok_or(SnapshotError::GuestMemoryNotInitialized)?;
+        restore_snapshot_memory(snapshot_path, vm_as)?;
+
+        info!(
+            self.logger,
+            "VM: memory restored from snapshot at {}", snapshot_path
+        );
+        Ok(state)
     }
 }
 

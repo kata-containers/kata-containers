@@ -16,6 +16,7 @@ use tracing::instrument;
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
+pub use crate::snapshot::SnapshotConfig;
 use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
@@ -162,6 +163,10 @@ pub enum VmmActionError {
     /// The action 'RemoveHostDevice' failed because of vcpu manager internal error.
     #[error("remove host device error: {0}")]
     RemoveHostDevice(#[source] VcpuManagerError),
+
+    /// Snapshot / restore operation failed.
+    #[error("snapshot error: {0}")]
+    Snapshot(#[source] crate::snapshot::SnapshotError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -275,6 +280,14 @@ pub enum VmmAction {
     #[cfg(feature = "host-device")]
     /// Add a VFIO assignment host device or update that already exists
     RemoveHostDevice(String),
+
+    /// Create a snapshot of the VMM configuration and guest memory.
+    /// vCPUs are paused for the duration of the memory dump.
+    CreateSnapshot(SnapshotConfig),
+
+    /// Restore guest memory from a previously created snapshot.
+    /// Guest memory must already be initialised before sending this action.
+    LoadSnapshot(SnapshotConfig),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -419,6 +432,8 @@ impl VmmService {
             }
             #[cfg(feature = "host-device")]
             VmmAction::RemoveHostDevice(hostdev_cfg) => self.remove_vfio_device(vmm, &hostdev_cfg),
+            VmmAction::CreateSnapshot(cfg) => self.create_snapshot(vmm, cfg),
+            VmmAction::LoadSnapshot(cfg) => self.load_snapshot(vmm, cfg),
         };
 
         debug!("send vmm response: {response:?}");
@@ -1084,6 +1099,20 @@ impl VmmService {
             .insert_or_update_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Balloon)
+    }
+
+    fn create_snapshot(&mut self, vmm: &mut Vmm, cfg: SnapshotConfig) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+        vm.create_snapshot(&cfg.snapshot_path)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Snapshot)
+    }
+
+    fn load_snapshot(&mut self, vmm: &mut Vmm, cfg: SnapshotConfig) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+        vm.restore_from_snapshot(&cfg.snapshot_path)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::Snapshot)
     }
 }
 

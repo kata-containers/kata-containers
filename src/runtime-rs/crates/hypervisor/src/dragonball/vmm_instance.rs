@@ -18,8 +18,9 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
-        InstanceInfo, InstanceState, NetworkInterfaceConfig, VcpuResizeInfo, VmmAction,
-        VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
+        InstanceInfo, InstanceState, NetworkInterfaceConfig, SnapshotConfig, VcpuResizeInfo,
+        VmmAction, VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService,
+        VsockDeviceConfigInfo,
     },
     device_manager::{
         balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
@@ -350,6 +351,30 @@ impl VmmInstance {
 
     pub fn resume(&self) -> Result<()> {
         todo!()
+    }
+
+    /// Create a snapshot of the VMM configuration and guest memory.
+    ///
+    /// vCPUs are paused for the duration of the memory dump to ensure a
+    /// consistent snapshot, then automatically resumed.
+    pub fn create_snapshot(&self, snapshot_path: &str) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::CreateSnapshot(SnapshotConfig {
+            snapshot_path: snapshot_path.to_string(),
+        })))
+        .context("Failed to create snapshot")?;
+        Ok(())
+    }
+
+    /// Restore guest memory from a previously created snapshot.
+    ///
+    /// The VM must be initialised (guest memory allocated) before calling
+    /// this method.
+    pub fn load_snapshot(&self, snapshot_path: &str) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::LoadSnapshot(SnapshotConfig {
+            snapshot_path: snapshot_path.to_string(),
+        })))
+        .context("Failed to load snapshot")?;
+        Ok(())
     }
 
     pub fn pid(&self) -> u32 {
