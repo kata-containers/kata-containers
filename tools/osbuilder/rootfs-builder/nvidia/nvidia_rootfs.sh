@@ -240,6 +240,7 @@ chisseled_init() {
 
 	ln -sf ../run var/run
 	ln -sf ../run var/log
+	ln -sf ../run var/cache
 
 	# Needed for various RUST static builds with LIBC=gnu
 	libdir=lib/"${machine_arch}"-linux-gnu
