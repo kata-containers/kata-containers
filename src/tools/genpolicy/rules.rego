@@ -51,11 +51,32 @@ default WriteStreamRequest := false
 # them and inspect OPA logs for the root cause of a failure.
 default AllowRequestsFailingPolicy := false
 
-# Constants
+# Constants (containerd keys; CRI-O uses different keys, see *_CRIO below)
 S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
 S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
+S_NAME_KEY_CRIO = "io.kubernetes.cri-o.SandboxName"
+S_NAMESPACE_KEY_CRIO = "io.kubernetes.cri-o.Namespace"
+SANDBOX_ID_KEY = "io.kubernetes.cri.sandbox-id"
+SANDBOX_ID_KEY_CRIO = "io.kubernetes.cri-o.SandboxID"
+C_TYPE_KEY = "io.kubernetes.cri.container-type"
+C_TYPE_KEY_CRIO = "io.kubernetes.cri-o.ContainerType"
+CONTAINER_NAME_KEY = "io.kubernetes.cri.container-name"
+CONTAINER_NAME_KEY_CRIO = "io.kubernetes.cri-o.ContainerName"
+IMAGE_NAME_KEY = "io.kubernetes.cri.image-name"
+IMAGE_NAME_KEY_CRIO = "io.kubernetes.cri-o.ImageName"
+SANDBOX_LOG_DIR_KEY = "io.kubernetes.cri.sandbox-log-directory"
+SANDBOX_LOG_DIR_KEY_CRIO = "io.kubernetes.cri-o.LogPath"
 CDI_VFIO_ANNOTATION_PREFIX = "cdi.k8s.io/vfio"
 VFIO_PCI_ADDRESS_REGEX = "^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\\.[0-7]=[0-9a-fA-F]{2}/[0-9a-fA-F]{2}$"
+
+# Get annotation value from input OCI: accept either CRI (containerd) or CRI-O key.
+get_input_anno(i_oci, cri_key, crio_key) := v if {
+    v := i_oci.Annotations[cri_key]
+}
+get_input_anno(i_oci, cri_key, crio_key) := v if {
+    not i_oci.Annotations[cri_key]
+    v := i_oci.Annotations[crio_key]
+}
 
 CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # Check if the input request should be rejected even before checking the
@@ -69,8 +90,8 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
     # array of possible state operations
     ops_builder := []
 
-    # check sandbox name
-    sandbox_name = i_oci.Annotations[S_NAME_KEY]
+    # check sandbox name (containerd or CRI-O)
+    sandbox_name := get_input_anno(i_oci, S_NAME_KEY, S_NAME_KEY_CRIO)
     add_sandbox_name_to_state := state_allows("sandbox_name", sandbox_name)
     ops_builder1 := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
 
@@ -85,9 +106,9 @@ CreateContainerRequest := {"ops": ops, "allowed": true} if {
 
     p_oci := p_container.OCI
 
-    # check namespace
+    # check namespace (containerd or CRI-O)
     p_namespace := p_oci.Annotations[S_NAMESPACE_KEY]
-    i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
+    i_namespace := get_input_anno(i_oci, S_NAMESPACE_KEY, S_NAMESPACE_KEY_CRIO)
     print("CreateContainerRequest: p_namespace =", p_namespace, "i_namespace =", i_namespace)
     add_namespace_to_state := allow_namespace(p_namespace, i_namespace)
     ops_builder2 := concat_op_if_not_null(ops_builder1, add_namespace_to_state)
@@ -249,8 +270,12 @@ allow_anno_key_value(i_key, i_value, p_container) if {
     print("allow_anno_key_value 1: i key =", i_key)
 
     startswith(i_key, "io.kubernetes.cri.")
-
     print("allow_anno_key_value 1: true")
+}
+allow_anno_key_value(i_key, i_value, p_container) if {
+    print("allow_anno_key_value 1b: i key =", i_key)
+    startswith(i_key, "io.kubernetes.cri-o.")
+    print("allow_anno_key_value 1b: true")
 }
 allow_anno_key_value(i_key, i_value, p_container) if {
     print("allow_anno_key_value 2: i key =", i_key)
@@ -272,17 +297,17 @@ allow_anno_key_value(i_key, i_value, p_container) if {
     print("allow_anno_key_value 3: true")
 }
 
-# Get the value of the S_NAME_KEY annotation and
-# correlate it with other annotations and process fields.
+# Get the value of the sandbox name/namespace annotations (containerd or CRI-O) and
+# correlate with other annotations and process fields.
 allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
     print("allow_by_anno 1: start")
 
     not p_oci.Annotations[S_NAME_KEY]
 
-    i_s_name := i_oci.Annotations[S_NAME_KEY]
+    i_s_name := get_input_anno(i_oci, S_NAME_KEY, S_NAME_KEY_CRIO)
     print("allow_by_anno 1: i_s_name =", i_s_name)
 
-    i_s_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
+    i_s_namespace := get_input_anno(i_oci, S_NAMESPACE_KEY, S_NAMESPACE_KEY_CRIO)
     print("allow_by_anno 1: i_s_namespace =", i_s_namespace)
 
     allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name, i_s_namespace)
@@ -293,12 +318,12 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
     print("allow_by_anno 2: start")
 
     p_s_name := p_oci.Annotations[S_NAME_KEY]
-    i_s_name := i_oci.Annotations[S_NAME_KEY]
+    i_s_name := get_input_anno(i_oci, S_NAME_KEY, S_NAME_KEY_CRIO)
     print("allow_by_anno 2: i_s_name =", i_s_name, "p_s_name =", p_s_name)
 
     allow_sandbox_name(p_s_name, i_s_name)
 
-    i_s_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
+    i_s_namespace := get_input_anno(i_oci, S_NAMESPACE_KEY, S_NAMESPACE_KEY_CRIO)
     print("allow_by_anno 2: i_s_namespace =", i_s_namespace)
 
     allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name, i_s_namespace)
@@ -309,7 +334,7 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) if {
 allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name, s_namespace) if {
     print("allow_by_sandbox_name: start")
 
-    i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
+    i_namespace := get_input_anno(i_oci, S_NAMESPACE_KEY, S_NAMESPACE_KEY_CRIO)
 
     allow_by_container_types(p_oci, i_oci, s_name, i_namespace)
     allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages)
@@ -325,18 +350,14 @@ allow_sandbox_name(p_s_name, i_s_name) if {
     print("allow_sandbox_name: true")
 }
 
-# Check that the "io.kubernetes.cri.container-type" and
-# "io.katacontainers.pkg.oci.container_type" annotations designate the
-# expected type - either a "sandbox" or a "container". Then, validate
-# other annotations based on the actual "sandbox" or "container" value
-# from the input container.
+# Check that the container-type annotation (containerd or CRI-O) and
+# "io.katacontainers.pkg.oci.container_type" designate the expected type -
+# either "sandbox" or "container". Then validate other annotations accordingly.
 allow_by_container_types(p_oci, i_oci, s_name, s_namespace) if {
-    print("allow_by_container_types: checking io.kubernetes.cri.container-type")
+    print("allow_by_container_types: checking container-type")
 
-    c_type := "io.kubernetes.cri.container-type"
-
-    p_cri_type := p_oci.Annotations[c_type]
-    i_cri_type := i_oci.Annotations[c_type]
+    p_cri_type := p_oci.Annotations[C_TYPE_KEY]
+    i_cri_type := get_input_anno(i_oci, C_TYPE_KEY, C_TYPE_KEY_CRIO)
     print("allow_by_container_types: p_cri_type =", p_cri_type, "i_cri_type =", i_cri_type)
     p_cri_type == i_cri_type
 
@@ -375,42 +396,52 @@ allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) if {
     print("allow_by_container_type 2: true")
 }
 
-# "io.kubernetes.cri.container-name" annotation
+# Container name: sandbox has none; container must match (containerd or CRI-O key).
 allow_sandbox_container_name(p_oci, i_oci) if {
     print("allow_sandbox_container_name: start")
-
-    container_annotation_missing(p_oci, i_oci, "io.kubernetes.cri.container-name")
-
+    container_annotation_missing_cri_crio(p_oci, i_oci, CONTAINER_NAME_KEY, CONTAINER_NAME_KEY_CRIO)
     print("allow_sandbox_container_name: true")
 }
 
 allow_container_name(p_oci, i_oci) if {
     print("allow_container_name: start")
-
-    allow_container_annotation(p_oci, i_oci, "io.kubernetes.cri.container-name")
-
+    allow_container_annotation_cri_crio(p_oci, i_oci, CONTAINER_NAME_KEY, CONTAINER_NAME_KEY_CRIO)
     print("allow_container_name: true")
 }
 
 container_annotation_missing(p_oci, i_oci, key) if {
     print("container_annotation_missing:", key)
-
     not p_oci.Annotations[key]
     not i_oci.Annotations[key]
-
     print("container_annotation_missing: true")
+}
+
+# Both policy and input lack the annotation (input checked for both CRI and CRI-O keys).
+container_annotation_missing_cri_crio(p_oci, i_oci, cri_key, crio_key) if {
+    print("container_annotation_missing_cri_crio:", cri_key)
+    not p_oci.Annotations[cri_key]
+    not i_oci.Annotations[cri_key]
+    not i_oci.Annotations[crio_key]
+    print("container_annotation_missing_cri_crio: true")
 }
 
 allow_container_annotation(p_oci, i_oci, key) if {
     print("allow_container_annotation: key =", key)
-
     p_value := p_oci.Annotations[key]
     i_value := i_oci.Annotations[key]
     print("allow_container_annotation: p_value =", p_value, "i_value =", i_value)
-
     p_value == i_value
-
     print("allow_container_annotation: true")
+}
+
+# Policy uses CRI key; input may have CRI or CRI-O key.
+allow_container_annotation_cri_crio(p_oci, i_oci, cri_key, crio_key) if {
+    print("allow_container_annotation_cri_crio: cri_key =", cri_key)
+    p_value := p_oci.Annotations[cri_key]
+    i_value := get_input_anno(i_oci, cri_key, crio_key)
+    print("allow_container_annotation_cri_crio: p_value =", p_value, "i_value =", i_value)
+    p_value == i_value
+    print("allow_container_annotation_cri_crio: true")
 }
 
 # "nerdctl/network-namespace" annotation
@@ -439,18 +470,16 @@ allow_net_namespace(p_oci, i_oci) if {
     print("allow_net_namespace: true")
 }
 
-# "io.kubernetes.cri.sandbox-log-directory" annotation
+# Sandbox log directory (containerd or CRI-O: cri-o uses LogPath)
 allow_sandbox_log_directory(p_oci, i_oci, s_name, s_namespace) if {
     print("allow_sandbox_log_directory: start")
 
-    key := "io.kubernetes.cri.sandbox-log-directory"
-
-    p_dir := p_oci.Annotations[key]
+    p_dir := p_oci.Annotations[SANDBOX_LOG_DIR_KEY]
     regex1 := replace(p_dir, "$(sandbox-name)", s_name)
     regex2 := replace(regex1, "$(sandbox-namespace)", s_namespace)
     print("allow_sandbox_log_directory: regex2 =", regex2)
 
-    i_dir := i_oci.Annotations[key]
+    i_dir := get_input_anno(i_oci, SANDBOX_LOG_DIR_KEY, SANDBOX_LOG_DIR_KEY_CRIO)
     print("allow_sandbox_log_directory: i_dir =", i_dir)
 
     regex.match(regex2, i_dir)
@@ -460,12 +489,9 @@ allow_sandbox_log_directory(p_oci, i_oci, s_name, s_namespace) if {
 
 allow_log_directory(p_oci, i_oci) if {
     print("allow_log_directory: start")
-
-    key := "io.kubernetes.cri.sandbox-log-directory"
-
-    not p_oci.Annotations[key]
-    not i_oci.Annotations[key]
-
+    not p_oci.Annotations[SANDBOX_LOG_DIR_KEY]
+    not i_oci.Annotations[SANDBOX_LOG_DIR_KEY]
+    not i_oci.Annotations[SANDBOX_LOG_DIR_KEY_CRIO]
     print("allow_log_directory: true")
 }
 
@@ -776,21 +802,24 @@ allow_linux_sysctl(p_linux, i_linux) if {
     print("allow_linux_sysctl 2: true")
 }
 
-# Check the consistency of the input "io.katacontainers.pkg.oci.bundle_path"
-# and io.kubernetes.cri.sandbox-id" values with other fields.
+# Check sandbox_id and derive bundle_id from guest root path (CRI-agnostic: works for containerd and CRI-O).
+# Bundle path on the host is runtime-specific; root path in the guest is stable, so we extract bundle_id from it.
 allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
     print("allow_by_bundle_or_sandbox_id: start")
 
-    bundle_path := i_oci.Annotations["io.katacontainers.pkg.oci.bundle_path"]
-    bundle_id := replace(bundle_path, "/run/containerd/io.containerd.runtime.v2.task/k8s.io/", "")
-
-    key := "io.kubernetes.cri.sandbox-id"
-
-    p_regex := p_oci.Annotations[key]
-    sandbox_id := i_oci.Annotations[key]
-
+    p_regex := p_oci.Annotations[SANDBOX_ID_KEY]
+    sandbox_id := get_input_anno(i_oci, SANDBOX_ID_KEY, SANDBOX_ID_KEY_CRIO)
     print("allow_by_bundle_or_sandbox_id: sandbox_id =", sandbox_id, "regex =", p_regex)
     regex.match(p_regex, sandbox_id)
+
+    # Derive bundle_id from guest root path (e.g. /run/kata-containers/<bundle_id>/rootfs).
+    # Match 64-char hex (real runtimes) or any single path segment (e.g. test data: bundle-id, gpu-container, dummy).
+    i_root := i_oci.Root.Path
+    p_root_pattern1 := p_oci.Root.Path
+    p_root_pattern2 := replace(p_root_pattern1, "$(root_path)", policy_data.common.root_path)
+    p_root_pattern3 := replace(p_root_pattern2, "$(bundle-id)", "([0-9a-f]{64}|[^/]+)")
+    print("allow_by_bundle_or_sandbox_id: i_root =", i_root, "regex =", p_root_pattern3)
+    bundle_id := regex.find_all_string_submatch_n(p_root_pattern3, i_root, 1)[0][1]
 
     allow_root_path(p_oci, i_oci, bundle_id)
 
