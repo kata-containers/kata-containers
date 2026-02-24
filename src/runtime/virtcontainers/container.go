@@ -1208,6 +1208,10 @@ func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation)
 				// exit handling IOMMUFD device
 				return nil
 			}
+			// If we have a path of form /dev/vfio/devices/vfio<NUM>,
+			// the legacy VFIO codepath can't work with it, so rather
+			// than falling through, we should check the next sibling.
+			continue
 		}
 		// Legacy VFIO group device (/dev/vfio/<GROUP_NUM>), extract BDF from sysfs
 		vfioGroup := filepath.Base(devPath)
