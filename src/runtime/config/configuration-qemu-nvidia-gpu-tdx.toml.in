@@ -576,7 +576,7 @@ debug_console_enabled = false
 
 # Agent connection dialing timeout value in seconds
 # (default: 90)
-dial_timeout = 90
+dial_timeout = 1200
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
