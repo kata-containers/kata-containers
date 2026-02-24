@@ -397,13 +397,19 @@ EOF
 
 	# Deploy k8s using kubeadm with CreateContainerRequest (CRI) timeout set to 600s,
 	# mainly for CoCo (Confidential Containers) tests (attestation, policy, image pull, VM start).
+	local cri_socket
+	case "${CONTAINER_ENGINE:-containerd}" in
+		crio) cri_socket="/var/run/crio/crio.sock" ;;
+		containerd) cri_socket="/run/containerd/containerd.sock" ;;
+		*) cri_socket="/run/containerd/containerd.sock" ;;
+	esac
 	local kubeadm_config
 	kubeadm_config="$(mktemp --tmpdir kubeadm-config.XXXXXX.yaml)"
 	cat <<EOF | tee "${kubeadm_config}"
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 nodeRegistration:
-  criSocket: "/run/containerd/containerd.sock"
+  criSocket: "${cri_socket}"
 ---
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
@@ -427,8 +433,29 @@ EOF
 	kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 }
 
-# container_engine: containerd (only containerd is supported for now, support for crio is welcome)
-# container_engine_version: major.minor (and then we'll install the latest patch release matching that major.minor)
+# Try to install CRI-O for the given k8s-matching version (major.minor); if the repo/package
+# is not available yet (k8s released before CRI-O), try previous minor (x.y-1).
+function try_install_crio_for_k8s() {
+	local version="${1}"
+	local major minor
+	major="${version%%.*}"
+	minor="${version##*.}"
+
+	if install_crio "${version}"; then
+		return 0
+	fi
+	if [[ "${minor}" -gt 0 ]]; then
+		minor=$((minor - 1))
+		echo "CRI-O v${version} not available yet, trying v${major}.${minor}"
+		install_crio "${major}.${minor}"
+	else
+		echo "CRI-O v${version} failed and no fallback (minor would be < 0)" >&2
+		return 1
+	fi
+}
+
+# container_engine: containerd or crio
+# container_engine_version: for containerd: major.minor or lts/active; for crio: major.minor (e.g. 1.31) or active
 function deploy_vanilla_k8s() {
 	container_engine="${1}"
 	container_engine_version="${2}"
@@ -436,10 +463,18 @@ function deploy_vanilla_k8s() {
 	[[ -z "${container_engine}" ]] && die "container_engine is required"
 	[[ -z "${container_engine_version}" ]] && die "container_engine_version is required"
 
+	# Export so do_deploy_k8s can pick the right CRI socket
+	export CONTAINER_ENGINE="${container_engine}"
+
 	# Resolve lts/active to the actual version from versions.yaml (e.g. v1.7, v2.1)
-	case "${container_engine_version}" in
+		case "${container_engine_version}" in
 		lts|active)
-			container_engine_version=$(get_from_kata_deps ".externals.containerd.${container_engine_version}")
+			if [[ "${container_engine}" == "containerd" ]]; then
+				container_engine_version=$(get_from_kata_deps ".externals.containerd.${container_engine_version}")
+			else
+				# CRI-O version matches k8s: use latest k8s stable major.minor (e.g. 1.31)
+				container_engine_version=$(curl -Ls https://dl.k8s.io/release/stable.txt | sed -e 's/^v//' | cut -d. -f-2)
+			fi
 			;;
 		*) ;;
 	esac
@@ -453,6 +488,11 @@ function deploy_vanilla_k8s() {
 			install_cri_containerd "${container_engine_version}"
 			sudo mkdir -p /etc/containerd
 			containerd config default | sed -e 's/SystemdCgroup = false/SystemdCgroup = true/' | sudo tee /etc/containerd/config.toml
+			;;
+		crio)
+			# CRI-O version is major.minor (e.g. 1.31) for download.opensuse.org/isv:cri-o:stable
+			# If k8s was released before CRI-O, try previous minor (x.y-1)
+			try_install_crio_for_k8s "${container_engine_version}"
 			;;
 		*) die "${container_engine} is not a container engine supported by this script" ;;
 	esac

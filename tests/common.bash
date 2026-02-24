@@ -810,16 +810,17 @@ function install_nydus_snapshotter() {
 	rm -f "${tarball_name}"
 }
 
-# version: the CRI-O version to be installe
+# version: the CRI-O version to be installed (major.minor, e.g. 1.35)
+# Repo: https://github.com/cri-o/packaging (OpenSUSE Build Service, not pkgs.k8s.io)
 function install_crio() {
 	local version=${1}
 
 	sudo mkdir -p /etc/apt/keyrings
 	sudo mkdir -p /etc/apt/sources.list.d
 
-	curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/Release.key | \
+	curl -fsSL https://download.opensuse.org/repositories/isv:/cri-o:/stable:/v${version}/deb/Release.key | \
 		sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
-	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/ /" | \
+	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://download.opensuse.org/repositories/isv:/cri-o:/stable:/v${version}/deb/ /" | \
 		sudo tee /etc/apt/sources.list.d/cri-o.list
 
 	sudo apt update

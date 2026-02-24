@@ -11,14 +11,15 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 export KBS="${KBS:-false}"
 export SNAPSHOTTER="${SNAPSHOTTER:-}"
 export EXPERIMENTAL_FORCE_GUEST_PULL="${EXPERIMENTAL_FORCE_GUEST_PULL:-}"
+export PULL_TYPE="${PULL_TYPE:-}"
 
 setup() {
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ]; then
-        skip "Either SNAPSHOTTER=nydus or EXPERIMENTAL_FORCE_GUEST_PULL must be set for this test"
+    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ] && [ "${PULL_TYPE}" != "guest-pull" ]; then
+        skip "Either SNAPSHOTTER=nydus, EXPERIMENTAL_FORCE_GUEST_PULL, or PULL_TYPE=guest-pull must be set for this test"
     fi
 
     tag_suffix=""
@@ -243,8 +244,8 @@ teardown() {
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
 
-    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ]; then
-        skip "Either SNAPSHOTTER=nydus or EXPERIMENTAL_FORCE_GUEST_PULL must be set for this test"
+    if [ "${SNAPSHOTTER}" != "nydus" ] && [ -z "${EXPERIMENTAL_FORCE_GUEST_PULL}" ] && [ "${PULL_TYPE}" != "guest-pull" ]; then
+        skip "Either SNAPSHOTTER=nydus, EXPERIMENTAL_FORCE_GUEST_PULL, or PULL_TYPE=guest-pull must be set for this test"
     fi
 
     teardown_common "${node}" "${node_start_time:-}"
