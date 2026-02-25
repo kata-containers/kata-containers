@@ -61,6 +61,7 @@ Minikube/B
 MITRE/B
 musl/B
 Netlify/B
+nydus/B		# Nydus image, container image format (e.g. guest-pull)
 Nginx/B
 OpenCensus/B
 OpenPGP/B

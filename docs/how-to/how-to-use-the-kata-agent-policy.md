@@ -99,6 +99,9 @@ The [`genpolicy`](../../src/tools/genpolicy/) application can be used to generat
 
 **Warning** Users should review carefully the automatically-generated Policy, and modify the Policy file if needed to match better their use case, before using this Policy.
 
+**Important — User / Group / Supplemental groups for Policy and genpolicy**
+When using features like **nydus guest-pull**, set user/group IDs explicitly in the pod spec, as described in [Limitations](../Limitations.md#guest-pulled-container-images).
+
 See the [`genpolicy` documentation](../../src/tools/genpolicy/README.md) and the [Policy contents examples](#policy-contents) for additional information.
 
 ## Policy contents

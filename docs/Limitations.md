@@ -227,6 +227,35 @@ Importantly, the default behavior to pass the host devices to a
 privileged container is not supported in Kata Containers and needs to be
 disabled, see [Privileged Kata Containers](how-to/privileged.md).
 
+## Guest pulled container images
+
+When using features like **nydus guest-pull**, set user/group IDs explicitly in the pod spec.
+If the ID values are omitted:
+
+- Your workload might be executed with unexpected user/group ID values, because image layers
+  may be unavailable to containerd, so image config (including user/group) is not applied.
+- If using policy or genpolicy, the generated policy may detect these unexpected values and
+  reject the creation of workload containers.
+
+Set `securityContext` explicitly. Use **pod-level** `spec.securityContext` (for Pods) or
+`spec.template.spec.securityContext` (for controllers like Deployments) and/or **container-level**
+`spec.containers[].securityContext`. Include at least:
+- `runAsUser` — primary user ID
+- `runAsGroup` — primary group ID
+- `fsGroup` — volume group ownership (often reflected as a supplemental group)
+- `supplementalGroups` — list of additional group IDs (if needed)
+
+Example:
+
+ ```yaml
+ # Explicit user/group/supplementary groups to support nydus guest-pull
+ securityContext:
+   runAsUser: 0
+   runAsGroup: 0
+   fsGroup: 0
+   supplementalGroups: [1, 2, 3, 4, 6, 10, 11, 20, 26, 27]
+ ```
+
 # Appendices
 
 ## The constraints challenge
