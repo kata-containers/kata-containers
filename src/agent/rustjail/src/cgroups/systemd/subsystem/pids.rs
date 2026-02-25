@@ -38,7 +38,7 @@ impl Pids {
             u64::MAX
         };
 
-        properties.push(("TasksMax", Value::U64(limit)));
+        properties.push(&("TasksMax", &Value::U64(limit)));
         Ok(())
     }
 }
