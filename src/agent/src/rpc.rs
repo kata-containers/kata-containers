@@ -2333,6 +2333,10 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
                     ("sourceType".to_string(), "empty".to_string()),
                     ("targetType".to_string(), "fileSystem".to_string()),
                     ("filesystemType".to_string(), "ext4".to_string()),
+                    (
+                        "mkfsOpts".to_string(),
+                        "-E lazy_journal_init".to_string(),
+                    ),
                     ("encryptionType".to_string(), "luks2".to_string()),
                     (
                         "dataIntegrity".to_string(),
