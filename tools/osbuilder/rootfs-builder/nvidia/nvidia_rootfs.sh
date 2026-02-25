@@ -210,7 +210,16 @@ chisseled_compute() {
 
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
 	cp -a "${stage_one}/${libdir}"/libnvidia-ml.so.*  lib/"${machine_arch}"-linux-gnu/.
-	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
+	# Copy libcuda.so.${driver_version} and link libcuda.so.1 to it
+	local driver_version="" libcuda_real="" libcuda_so_name="" dest_lib
+	dest_lib="lib/${machine_arch}-linux-gnu"
+	[[ "${NVIDIA_GPU_STACK}" =~ driver=([^,]+) ]] || die "NVIDIA_GPU_STACK must contain driver=VERSION (e.g. driver=550)"
+	driver_version="${BASH_REMATCH[1]}"
+	libcuda_real=$(find "${stage_one}/${libdir}" -maxdepth 1 -name "libcuda.so.${driver_version}*" -type f 2>/dev/null | head -1)
+	[[ -n "${libcuda_real}" ]] || die "could not find libcuda.so.${driver_version}* in ${stage_one}/${libdir}"
+	libcuda_so_name=$(basename "${libcuda_real}")
+	cp -a "${libcuda_real}" "${dest_lib}/."
+	ln -sf "${libcuda_so_name}" "${dest_lib}/libcuda.so.1"
 	cp -a "${stage_one}/${libdir}"/libnvidia-cfg.so.* lib/"${machine_arch}"-linux-gnu/.
 
 	# basic GPU admin tools
