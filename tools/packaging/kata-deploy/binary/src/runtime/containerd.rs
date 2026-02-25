@@ -33,8 +33,11 @@ const CONTAINERD_V2_CRI_PLUGIN_ID: &str = "\"io.containerd.grpc.v1.cri\"";
 const CONTAINERD_LEGACY_CRI_PLUGIN_ID: &str = "cri";
 /// Plugin ID for CRI images in containerd config v3 (version = 3).
 const CONTAINERD_CRI_IMAGES_PLUGIN_ID: &str = "\"io.containerd.cri.v1.images\"";
+/// Plugin table for CRI containerd in v2 (disable_snapshot_annotations lives here).
+const CONTAINERD_CRI_CONTAINERD_TABLE_V2: &str = "\"io.containerd.grpc.v1.cri\".containerd";
 
-fn get_containerd_pluginid(config_file: &str) -> Result<&'static str> {
+/// Reads config and returns the CRI plugin ID used for *runtime* config (runtimes, snapshotter-per-runtime).
+pub(crate) fn get_containerd_pluginid(config_file: &str) -> Result<&'static str> {
     let content = fs::read_to_string(config_file)
         .with_context(|| format!("Failed to read containerd config file: {}", config_file))?;
 
@@ -50,6 +53,24 @@ fn get_containerd_pluginid(config_file: &str) -> Result<&'static str> {
 /// True when the containerd config is v3 (version = 3), i.e. we use the split CRI plugins.
 fn is_containerd_v3_config(pluginid: &str) -> bool {
     pluginid == CONTAINERD_V3_RUNTIME_PLUGIN_ID
+}
+
+/// Maps the runtime plugin ID (from get_containerd_pluginid) to the plugin table where
+/// disable_snapshot_annotations lives. In v3 that's the *images* plugin; in v2 the CRI .containerd subtable.
+pub(crate) fn pluginid_for_snapshotter_annotations(
+    runtime_plugin_id: &str,
+    config_file: &str,
+) -> Result<&'static str> {
+    if runtime_plugin_id == CONTAINERD_V3_RUNTIME_PLUGIN_ID {
+        Ok(CONTAINERD_CRI_IMAGES_PLUGIN_ID)
+    } else if runtime_plugin_id == CONTAINERD_V2_CRI_PLUGIN_ID {
+        Ok(CONTAINERD_CRI_CONTAINERD_TABLE_V2)
+    } else {
+        anyhow::bail!(
+            "Containerd config {} has no \"version = 2\" or \"version = 3\"; cannot determine CRI plugin for snapshotter config",
+            config_file
+        )
+    }
 }
 
 fn get_containerd_output_path(paths: &ContainerdPaths) -> PathBuf {
@@ -632,6 +653,40 @@ mod tests {
                 runtime_name,
                 pluginid,
                 snapshotter
+            );
+        }
+    }
+
+    /// pluginid_for_snapshotter_annotations maps runtime plugin id to the table where disable_snapshot_annotations lives.
+    #[rstest]
+    #[case(CONTAINERD_V3_RUNTIME_PLUGIN_ID, CONTAINERD_CRI_IMAGES_PLUGIN_ID, false)]
+    #[case(CONTAINERD_V2_CRI_PLUGIN_ID, CONTAINERD_CRI_CONTAINERD_TABLE_V2, false)]
+    #[case(CONTAINERD_LEGACY_CRI_PLUGIN_ID, "", true)]
+    fn test_pluginid_for_snapshotter_annotations(
+        #[case] runtime_plugin_id: &str,
+        #[case] expected_plugin_id: &str,
+        #[case] expect_err: bool,
+    ) {
+        let config_file = "/etc/containerd/config.toml";
+        let result = pluginid_for_snapshotter_annotations(runtime_plugin_id, config_file);
+        if expect_err {
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string().contains(config_file),
+                "error should mention config file: {}",
+                err
+            );
+            assert!(
+                err.to_string().contains("version = 2") || err.to_string().contains("version = 3"),
+                "error should mention version: {}",
+                err
+            );
+        } else {
+            assert_eq!(
+                result.unwrap(),
+                expected_plugin_id,
+                "runtime_plugin_id={}",
+                runtime_plugin_id
             );
         }
     }

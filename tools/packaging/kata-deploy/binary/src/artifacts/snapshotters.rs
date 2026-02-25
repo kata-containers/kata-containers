@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::Config;
+use crate::runtime::containerd;
 use crate::utils;
 use crate::utils::toml as toml_utils;
 use anyhow::Result;
@@ -88,15 +89,12 @@ pub async fn configure_snapshotter(
     // Get all paths and drop-in capability in one call
     let paths = config.get_containerd_paths(runtime).await?;
 
-    // Read containerd version from config_file to determine pluginid
-    let pluginid = if fs::read_to_string(&paths.config_file)
-        .unwrap_or_default()
-        .contains("version = 3")
-    {
-        "\"io.containerd.cri.v1.images\""
-    } else {
-        "\"io.containerd.grpc.v1.cri\".containerd"
+    // Runtime plugin id (from paths or by reading config), then map to table where disable_snapshot_annotations lives.
+    let runtime_plugin_id = match &paths.plugin_id {
+        Some(id) => id.as_str(),
+        None => containerd::get_containerd_pluginid(&paths.config_file)?,
     };
+    let pluginid = containerd::pluginid_for_snapshotter_annotations(runtime_plugin_id, &paths.config_file)?;
 
     let configuration_file: std::path::PathBuf = if paths.use_drop_in {
         // Only add /host prefix if path is not in /etc/containerd (which is mounted from host)
