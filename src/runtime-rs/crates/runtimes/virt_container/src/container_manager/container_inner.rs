@@ -7,7 +7,7 @@
 use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use common::{
-    error::Error,
+    error::{is_no_such_process_error, Error},
     types::{ContainerID, ContainerProcess, ProcessExitStatus, ProcessStatus, ProcessType},
 };
 use hypervisor::device::device_manager::DeviceManager;
@@ -245,12 +245,20 @@ impl ContainerInner {
         // send kill signal to container
         // ignore the error of sending signal, since the process would
         // have been killed and exited yet.
-        self.signal_process(process, Signal::SIGKILL as u32, false)
+        match self
+            .signal_process(process, Signal::SIGKILL as u32, false)
             .await
-            .map_err(|e| {
-                warn!(logger, "failed to signal kill. {:?}", e);
-            })
-            .ok();
+        {
+            Ok(_) => Ok(()),
+            Err(e) if is_no_such_process_error(&e) => {
+                info!(
+                    sl!(),
+                    "signal_process: init process is already gone, treat it as stopped"
+                );
+                Ok(())
+            }
+            Err(e) => Err(anyhow!("failed to send kill signal to process. {:?}", e)),
+        }?;
 
         match process.process_type {
             ProcessType::Container => self
