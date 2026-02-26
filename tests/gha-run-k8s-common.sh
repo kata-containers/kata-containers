@@ -235,6 +235,20 @@ function deploy_k0s() {
 	k0s config create | sudo tee /etc/k0s/k0s.yaml
 	sudo sed -i -e "s/metricsPort: 8080/metricsPort: 9999/g" /etc/k0s/k0s.yaml
 
+	# Set CRI runtime-request-timeout to 10m (same as kubeadm) for CoCo and long-running create requests.
+	# Use a fragment file and eval-all so mikefarah/yq v4 (used in CI) handles the nested structure correctly.
+	ensure_yq
+	worker_profiles_fragment=$(mktemp)
+	cat <<-'WORKER_PROFILES' > "${worker_profiles_fragment}"
+	- name: default
+	  values:
+	    apiVersion: kubelet.config.k8s.io/v1beta1
+	    kind: KubeletConfiguration
+	    runtimeRequestTimeout: 10m
+	WORKER_PROFILES
+	sudo cat /etc/k0s/k0s.yaml | yq eval-all 'select(fileIndex==0).spec.workerProfiles = select(fileIndex==1) | select(fileIndex==0)' - "${worker_profiles_fragment}" | sudo tee /etc/k0s/k0s.yaml
+	rm -f "${worker_profiles_fragment}"
+
 	sudo k0s start
 
 	# This is an arbitrary value that came up from local tests
@@ -254,7 +268,8 @@ function deploy_k0s() {
 }
 
 function deploy_k3s() {
-	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
+	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --kubelet-arg runtime-request-timeout=600s
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
@@ -319,6 +334,10 @@ function create_cluster_kcli() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
+	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	sudo mkdir -p /etc/rancher/rke2
+	printf '%s\n' 'kubelet-arg:' '  - --runtime-request-timeout=600s' | sudo tee /etc/rancher/rke2/config.yaml
+
 	sudo systemctl enable --now rke2-server.service
 
 	# This is an arbitrary value that came up from local tests
@@ -334,6 +353,10 @@ function deploy_rke2() {
 
 function deploy_microk8s() {
 	sudo snap install microk8s --classic
+	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	echo '--runtime-request-timeout=600s' | sudo tee -a /var/snap/microk8s/current/args/kubelet
+	sudo microk8s stop
+	sudo microk8s start
 	sudo usermod -a -G microk8s "${USER}"
 	mkdir -p ~/.kube
 	# As we want to call microk8s with sudo, we're safe to ignore SC2024 here
