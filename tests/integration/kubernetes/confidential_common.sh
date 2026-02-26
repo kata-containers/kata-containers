@@ -116,12 +116,16 @@ function is_confidential_gpu_hardware() {
 	return 1
 }
 
+# create_loop_device creates a loop device backed by a file.
+# $1: loop file path (default: /tmp/trusted-image-storage.img)
+# $2: size in MB (default: 2500, i.e. ~2.5Gi; use 30720 for ~30Gi)
 function create_loop_device(){
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
+	local size_mb="${2:-2500}"
 	local node="$(get_one_kata_node)"
 	cleanup_loop_device "$loop_file"
 
-	exec_host "$node" "dd if=/dev/zero of=$loop_file bs=1M count=2500"
+	exec_host "$node" "dd if=/dev/zero of=$loop_file bs=1M count=$size_mb"
 	exec_host "$node" "losetup -fP $loop_file >/dev/null 2>&1"
 	local device=$(exec_host "$node" losetup -j $loop_file | awk -F'[: ]' '{print $1}')
 
