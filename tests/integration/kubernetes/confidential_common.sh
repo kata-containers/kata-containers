@@ -118,7 +118,7 @@ function is_confidential_gpu_hardware() {
 
 # create_loop_device creates a loop device backed by a file.
 # $1: loop file path (default: /tmp/trusted-image-storage.img)
-# $2: size in MB (default: 2500, i.e. ~2.5Gi; use 30720 for ~30Gi)
+# $2: size in MiB, i.e. dd bs=1M count=... (default: 2500, ~2.4Gi)
 function create_loop_device(){
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
 	local size_mb="${2:-2500}"
