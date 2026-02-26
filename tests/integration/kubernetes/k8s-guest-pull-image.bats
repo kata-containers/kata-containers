@@ -97,7 +97,10 @@ setup() {
 
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXXXXX.yaml")
     local_device=$(create_loop_device)
-    LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
+    PV_NAME=trusted-block-pv PVC_NAME=trusted-pvc \
+        PV_STORAGE_CAPACITY=10Gi PVC_STORAGE_REQUEST=1Gi \
+        LOCAL_DEVICE="$local_device" NODE_NAME="$node" \
+        envsubst < "$storage_config_template" > "$storage_config"
 
     # For debug sake
     echo "Trusted storage $storage_config file:"
@@ -142,7 +145,10 @@ setup() {
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXXXXX.yaml")
     local_device=$(create_loop_device)
-    LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
+    PV_NAME=trusted-block-pv PVC_NAME=trusted-pvc \
+        PV_STORAGE_CAPACITY=10Gi PVC_STORAGE_REQUEST=1Gi \
+        LOCAL_DEVICE="$local_device" NODE_NAME="$node" \
+        envsubst < "$storage_config_template" > "$storage_config"
 
     # For debug sake
     echo "Trusted storage $storage_config file:"
@@ -193,7 +199,10 @@ setup() {
     fi
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXXXXX.yaml")
     local_device=$(create_loop_device)
-    LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
+    PV_NAME=trusted-block-pv PVC_NAME=trusted-pvc \
+        PV_STORAGE_CAPACITY=10Gi PVC_STORAGE_REQUEST=1Gi \
+        LOCAL_DEVICE="$local_device" NODE_NAME="$node" \
+        envsubst < "$storage_config_template" > "$storage_config"
 
     # For debug sake
     echo "Trusted storage $storage_config file:"
