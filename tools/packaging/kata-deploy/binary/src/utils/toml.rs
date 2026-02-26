@@ -50,38 +50,11 @@ fn parse_toml_path(path: &str) -> Result<Vec<String>> {
     Ok(parts)
 }
 
-/// K3s/RKE2 containerd config templates start with a Go template directive that
-/// is not valid TOML. This helper strips it before parsing and returns it so we
-/// can prepend it back when writing.
-fn split_non_toml_header(content: &str) -> (&str, &str) {
-    if content.starts_with("{{") {
-        if let Some(pos) = content.find('\n') {
-            return (&content[..=pos], &content[pos + 1..]);
-        }
-        return (content, "");
-    }
-    ("", content)
-}
-
-/// Write a TOML file with an optional non-TOML header (e.g. K3s template line).
-/// Ensures the header ends with a newline before the TOML body.
-/// Trims leading newlines from the serialized document to avoid many blank lines
-/// when the file was initially empty (e.g. containerd drop-in).
-fn write_toml_with_header(
-    file_path: &Path,
-    header: &str,
-    doc: &DocumentMut,
-) -> Result<()> {
-    let normalized_header = if header.is_empty() {
-        String::new()
-    } else if header.ends_with('\n') {
-        header.to_string()
-    } else {
-        format!("{header}\n")
-    };
+/// Write a TOML document to a file. Trims leading newlines from the serialized
+/// output to avoid unnecessary blank lines when the document was initially empty.
+fn write_toml_file(file_path: &Path, doc: &DocumentMut) -> Result<()> {
     let body = doc.to_string();
-    let body_trimmed = body.trim_start_matches('\n');
-    std::fs::write(file_path, format!("{}{}", normalized_header, body_trimmed))
+    std::fs::write(file_path, body.trim_start_matches('\n'))
         .with_context(|| format!("Failed to write TOML file: {file_path:?}"))?;
     Ok(())
 }
@@ -91,8 +64,7 @@ pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let (header, toml_content) = split_non_toml_header(&content);
-    let mut doc = toml_content
+    let mut doc = content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -120,7 +92,7 @@ pub fn set_toml_value(file_path: &Path, path: &str, value: &str) -> Result<()> {
         }
     }
 
-    write_toml_with_header(file_path, header, &doc)?;
+    write_toml_file(file_path, &doc)?;
 
     Ok(())
 }
@@ -130,8 +102,7 @@ pub fn get_toml_value(file_path: &Path, path: &str) -> Result<String> {
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let (_header, toml_content) = split_non_toml_header(&content);
-    let doc = toml_content
+    let doc = content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -198,8 +169,7 @@ pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let (header, toml_content) = split_non_toml_header(&content);
-    let mut doc = toml_content
+    let mut doc = content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -252,7 +222,7 @@ pub fn append_to_toml_array(file_path: &Path, path: &str, value: &str) -> Result
         }
     }
 
-    write_toml_with_header(file_path, header, &doc)?;
+    write_toml_file(file_path, &doc)?;
 
     Ok(())
 }
@@ -262,8 +232,7 @@ pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Resu
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let (header, toml_content) = split_non_toml_header(&content);
-    let mut doc = toml_content
+    let mut doc = content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -303,7 +272,7 @@ pub fn remove_from_toml_array(file_path: &Path, path: &str, value: &str) -> Resu
         }
     }
 
-    write_toml_with_header(file_path, header, &doc)?;
+    write_toml_file(file_path, &doc)?;
 
     Ok(())
 }
@@ -313,8 +282,7 @@ pub fn get_toml_array(file_path: &Path, path: &str) -> Result<Vec<String>> {
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let (_header, toml_content) = split_non_toml_header(&content);
-    let doc = toml_content
+    let doc = content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -357,8 +325,7 @@ pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result
     let content = std::fs::read_to_string(file_path)
         .with_context(|| format!("Failed to read TOML file: {file_path:?}"))?;
 
-    let (header, toml_content) = split_non_toml_header(&content);
-    let mut doc = toml_content
+    let mut doc = content
         .parse::<DocumentMut>()
         .context("Failed to parse TOML")?;
 
@@ -387,7 +354,7 @@ pub fn set_toml_array(file_path: &Path, path: &str, values: &[String]) -> Result
         }
     }
 
-    write_toml_with_header(file_path, header, &doc)?;
+    write_toml_file(file_path, &doc)?;
 
     Ok(())
 }
@@ -435,170 +402,6 @@ mod tests {
     use rstest::rstest;
     use tempfile::NamedTempFile;
 
-    // --- split_non_toml_header ---
-
-    #[rstest]
-    #[case("", "", "")]
-    #[case("key = \"value\"\n", "", "key = \"value\"\n")]
-    #[case("[plugins]\nfoo = 1\n", "", "[plugins]\nfoo = 1\n")]
-    #[case(
-        "{{ template \"base\" . }}\n",
-        "{{ template \"base\" . }}\n",
-        ""
-    )]
-    #[case(
-        "{{ template \"base\" . }}\n[plugins]\nfoo = 1\n",
-        "{{ template \"base\" . }}\n",
-        "[plugins]\nfoo = 1\n"
-    )]
-    #[case(
-        "{{ template \"base\" . }}\n\n[debug]\nlevel = \"debug\"\n",
-        "{{ template \"base\" . }}\n",
-        "\n[debug]\nlevel = \"debug\"\n"
-    )]
-    // No trailing newline after the template line
-    #[case("{{ template \"base\" . }}", "{{ template \"base\" . }}", "")]
-    fn test_split_non_toml_header(
-        #[case] input: &str,
-        #[case] expected_header: &str,
-        #[case] expected_toml: &str,
-    ) {
-        let (header, toml) = split_non_toml_header(input);
-        assert_eq!(header, expected_header, "header mismatch for input: {:?}", input);
-        assert_eq!(toml, expected_toml, "toml mismatch for input: {:?}", input);
-    }
-
-    // --- TOML operations on files with K3s/RKE2 base template header ---
-
-    #[rstest]
-    fn test_set_toml_value_with_k3s_header() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
-
-        set_toml_value(
-            path,
-            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.runtime_type",
-            "\"io.containerd.kata-qemu.v2\"",
-        )
-        .unwrap();
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with("{{ template \"base\" . }}\n"), "header must be preserved");
-        assert!(content.contains("runtime_type"), "value must be written");
-
-        let value = get_toml_value(
-            path,
-            ".plugins.\"io.containerd.cri.v1.runtime\".containerd.runtimes.kata-qemu.runtime_type",
-        )
-        .unwrap();
-        assert_eq!(value, "io.containerd.kata-qemu.v2");
-    }
-
-    #[rstest]
-    fn test_set_toml_value_with_k3s_header_idempotent() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
-
-        for _ in 0..3 {
-            set_toml_value(path, ".debug.level", "\"debug\"").unwrap();
-        }
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert_eq!(
-            content.matches("{{ template \"base\" . }}").count(),
-            1,
-            "header must appear exactly once"
-        );
-        let value = get_toml_value(path, ".debug.level").unwrap();
-        assert_eq!(value, "debug");
-    }
-
-    #[rstest]
-    fn test_append_to_toml_array_with_k3s_header() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(path, "{{ template \"base\" . }}\nimports = []\n").unwrap();
-
-        append_to_toml_array(path, ".imports", "\"/etc/containerd/conf.d/kata.toml\"").unwrap();
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with("{{ template \"base\" . }}\n"));
-        assert!(content.contains("/etc/containerd/conf.d/kata.toml"));
-    }
-
-    #[rstest]
-    fn test_remove_from_toml_array_with_k3s_header() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(
-            path,
-            "{{ template \"base\" . }}\nimports = [\"/path/a\", \"/path/b\"]\n",
-        )
-        .unwrap();
-
-        remove_from_toml_array(path, ".imports", "\"/path/a\"").unwrap();
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with("{{ template \"base\" . }}\n"));
-        assert!(!content.contains("/path/a"));
-        assert!(content.contains("/path/b"));
-    }
-
-    #[rstest]
-    fn test_set_toml_array_with_k3s_header() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
-
-        set_toml_array(
-            path,
-            ".imports",
-            &["/path/one".to_string(), "/path/two".to_string()],
-        )
-        .unwrap();
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with("{{ template \"base\" . }}\n"));
-        let values = get_toml_array(path, ".imports").unwrap();
-        assert_eq!(values, vec!["/path/one", "/path/two"]);
-    }
-
-    #[rstest]
-    fn test_multiple_runtimes_with_k3s_header() {
-        let file = NamedTempFile::new().unwrap();
-        let path = file.path();
-        std::fs::write(path, "{{ template \"base\" . }}\n").unwrap();
-
-        let pluginid = "\"io.containerd.cri.v1.runtime\"";
-        for shim in &["kata-qemu", "kata-clh"] {
-            let table = format!(".plugins.{pluginid}.containerd.runtimes.{shim}");
-            set_toml_value(
-                path,
-                &format!("{table}.runtime_type"),
-                &format!("\"io.containerd.{shim}.v2\""),
-            )
-            .unwrap();
-            set_toml_value(path, &format!("{table}.privileged_without_host_devices"), "true")
-                .unwrap();
-        }
-
-        let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with("{{ template \"base\" . }}\n"));
-        assert!(content.contains("kata-qemu"));
-        assert!(content.contains("kata-clh"));
-
-        for shim in &["kata-qemu", "kata-clh"] {
-            let rt = get_toml_value(
-                path,
-                &format!(".plugins.{pluginid}.containerd.runtimes.{shim}.runtime_type"),
-            )
-            .unwrap();
-            assert_eq!(rt, format!("io.containerd.{shim}.v2"));
-        }
-    }
-
     #[test]
     fn test_set_toml_value() {
         let file = NamedTempFile::new().unwrap();
@@ -616,12 +419,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case("", "")]
-    #[case("{{ template \"base\" . }}\n", "{{ template \"base\" . }}\n")]
-    fn test_set_toml_value_empty_file_no_leading_newlines(
-        #[case] initial_content: &str,
-        #[case] expected_prefix: &str,
-    ) {
+    #[case("")]
+    #[case("\n")]
+    fn test_set_toml_value_empty_file_no_leading_newlines(#[case] initial_content: &str) {
         let file = NamedTempFile::new().unwrap();
         let path = file.path();
         std::fs::write(path, initial_content).unwrap();
@@ -633,15 +433,12 @@ mod tests {
         )
         .unwrap();
         let content = std::fs::read_to_string(path).unwrap();
-        assert!(content.starts_with(expected_prefix), "header/prefix must be preserved");
-        let body_start = content.strip_prefix(expected_prefix).unwrap();
         assert!(
-            !body_start.starts_with('\n'),
-            "written TOML body must not start with newline(s) after header, got {} leading newlines",
-            body_start.chars().take_while(|&c| c == '\n').count()
+            !content.starts_with('\n'),
+            "written TOML must not start with newline(s)"
         );
         assert!(
-            body_start.trim_start().starts_with('['),
+            content.trim_start().starts_with('['),
             "body should start with a TOML table"
         );
     }

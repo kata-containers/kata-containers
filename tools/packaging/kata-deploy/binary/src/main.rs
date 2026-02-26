@@ -187,6 +187,15 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
         None => {}
     }
 
+    if let Some(snapshotters) = config.experimental_setup_snapshotter.as_ref() {
+        runtime::containerd::check_k3s_rke2_snapshotter_with_existing_template(
+            runtime,
+            config,
+            snapshotters,
+        )
+        .await?;
+    }
+
     runtime::containerd::setup_containerd_config_files(runtime, config).await?;
 
     artifacts::install_artifacts(config).await?;

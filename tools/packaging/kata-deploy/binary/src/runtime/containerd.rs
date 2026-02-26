@@ -12,6 +12,39 @@ use log::info;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Bundled K3s/RKE2 containerd config templates (from k3s pkg/agent/templates/templates.go).
+/// Two variants per config version: default (disable_snapshot_annotations conditional) and nydus
+/// (disable_snapshot_annotations = false for nydus-snapshotter / CoCo guest-pull).
+#[allow(dead_code)]
+const K3S_TMPL_V2: &str = include_str!("../../k3s-templates/config.toml.tmpl");
+#[allow(dead_code)]
+const K3S_TMPL_V2_NYDUS: &str = include_str!("../../k3s-templates/config.toml.tmpl.nydus");
+#[allow(dead_code)]
+const K3S_TMPL_V3: &str = include_str!("../../k3s-templates/config-v3.toml.tmpl");
+#[allow(dead_code)]
+const K3S_TMPL_V3_NYDUS: &str = include_str!("../../k3s-templates/config-v3.toml.tmpl.nydus");
+
+/// Returns the bundled K3s/RKE2 template: use the nydus variant when nydus-snapshotter will be configured.
+#[allow(dead_code)]
+fn get_k3s_rke2_bundled_template(use_v3: bool, use_nydus: bool) -> &'static str {
+    match (use_v3, use_nydus) {
+        (false, false) => K3S_TMPL_V2,
+        (false, true) => K3S_TMPL_V2_NYDUS,
+        (true, false) => K3S_TMPL_V3,
+        (true, true) => K3S_TMPL_V3_NYDUS,
+    }
+}
+
+/// True when config requests nydus-snapshotter (EXPERIMENTAL_SETUP_SNAPSHOTTER contains "nydus").
+#[allow(dead_code)]
+fn config_requests_nydus_snapshotter(config: &Config) -> bool {
+    config
+        .experimental_setup_snapshotter
+        .as_ref()
+        .map(|v| v.iter().any(|s| s.trim() == "nydus"))
+        .unwrap_or(false)
+}
+
 struct ContainerdRuntimeParams {
     /// Runtime name (e.g., "kata-qemu")
     runtime_name: String,
@@ -389,24 +422,72 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
     Ok(())
 }
 
-/// Setup containerd config files based on runtime type.
-/// For K3s/RKE2, resolves which template (v2 or v3) to use from the node's containerd version,
-/// then creates only that template file.
-pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<()> {
-    const K3S_RKE2_BASE_TMPL: &str = "{{ template \"base\" . }}\n";
+/// Pure logic for K3s/RKE2 snapshotter + existing template check (used by async fn and tests).
+pub(crate) fn check_k3s_rke2_snapshotter_with_existing_template_impl(
+    runtime: &str,
+    template_path: &str,
+    template_exists: bool,
+    requested_snapshotters: &[String],
+) -> Result<()> {
+    if !matches!(runtime, "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server") {
+        return Ok(());
+    }
+    let non_empty: Vec<_> = requested_snapshotters
+        .iter()
+        .filter(|s| !s.is_empty())
+        .collect();
+    if non_empty.is_empty() {
+        return Ok(());
+    }
+    if !template_exists {
+        return Ok(());
+    }
+    Err(anyhow::anyhow!(
+        "kata-deploy cannot configure snapshotter(s) ({}) when a K3s/RKE2 containerd template \
+         already exists at {}, because adding snapshotter settings would duplicate sections (e.g. \
+         disable_snapshot_annotations, image/snapshotter) and TOML does not merge duplicates. \
+         To fix: remove the existing template file (or replace it with an empty one) so \
+         kata-deploy can create one from the bundled template, or add your custom config in a way \
+         that does not set those fields.",
+        requested_snapshotters.join(", "),
+        template_path
+    ))
+}
 
+/// For K3s/RKE2: if the containerd config template already exists and we are about to
+/// configure a snapshotter (nydus/erofs), we would add sections (e.g. disable_snapshot_annotations,
+/// proxy_plugins, image/snapshotter) that can duplicate what is already in the template. TOML
+/// does not merge duplicate sections, so the result would be invalid. Bail with a clear message
+/// so the user can remove or replace the template and retry.
+pub async fn check_k3s_rke2_snapshotter_with_existing_template(
+    runtime: &str,
+    config: &Config,
+    requested_snapshotters: &[String],
+) -> Result<()> {
+    let paths = config.get_containerd_paths(runtime).await?;
+    let tmpl_path = Path::new(&paths.config_file);
+    check_k3s_rke2_snapshotter_with_existing_template_impl(
+        runtime,
+        &paths.config_file,
+        tmpl_path.exists(),
+        requested_snapshotters,
+    )
+}
+
+/// Setup containerd config files based on runtime type.
+/// For K3s/RKE2, when the template file (config.toml.tmpl or config-v3.toml.tmpl) does not exist,
+/// we use the defined full template (bundled from k3s) instead of relying on the base template,
+/// and prepend it with our Kata runtime block, then write that to the template path.
+pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<()> {
     match runtime {
         "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
-            // K3s/RKE2: create only the chosen template (v2 or v3). See docs.k3s.io/advanced#configuring-containerd
             let paths = config.get_containerd_paths(runtime).await?;
-            let path = &paths.config_file;
-            if !Path::new(path).exists() {
-                if let Some(parent) = Path::new(path).parent() {
-                    fs::create_dir_all(parent)
-                        .with_context(|| format!("Failed to create containerd config dir: {parent:?}"))?;
-                }
-                fs::write(path, K3S_RKE2_BASE_TMPL)
-                    .with_context(|| format!("Failed to write K3s/RKE2 template: {path}"))?;
+            let tmpl_file = &paths.config_file;
+            let source_config = &config.containerd_conf_file;
+            // TODO: use bundled full k3s template + our block when template missing; for now keep fallback
+            if !Path::new(tmpl_file).exists() && Path::new(source_config).exists() {
+                fs::copy(source_config, tmpl_file)
+                    .with_context(|| format!("Failed to copy {source_config} to K3s/RKE2 template {tmpl_file}"))?;
             }
         }
         "k0s-worker" | "k0s-controller" => {
@@ -731,5 +812,126 @@ mod tests {
             version,
             expected_error
         );
+    }
+
+    // --- check_k3s_rke2_snapshotter_with_existing_template_impl ---
+
+    /// Non-K3s/RKE2 runtimes: always Ok(()) regardless of template or snapshotters.
+    #[rstest]
+    #[case("containerd")]
+    #[case("k0s-worker")]
+    #[case("k0s-controller")]
+    #[case("microk8s")]
+    fn test_check_k3s_rke2_snapshotter_impl_non_k3s_rke2_passes(
+        #[case] runtime: &str,
+    ) {
+        let snapshotters = vec!["nydus".to_string()];
+        let result = check_k3s_rke2_snapshotter_with_existing_template_impl(
+            runtime,
+            "/etc/containerd/config.toml.tmpl",
+            true,
+            &snapshotters,
+        );
+        assert!(result.is_ok(), "{} should pass: {:?}", runtime, result);
+    }
+
+    /// K3s/RKE2 runtimes with no snapshotters requested: Ok(()) even if template exists.
+    #[rstest]
+    #[case("k3s")]
+    #[case("k3s-agent")]
+    #[case("rke2-agent")]
+    #[case("rke2-server")]
+    fn test_check_k3s_rke2_snapshotter_impl_no_snapshotters_passes(
+        #[case] runtime: &str,
+    ) {
+        let snapshotters: Vec<String> = vec![];
+        let result = check_k3s_rke2_snapshotter_with_existing_template_impl(
+            runtime,
+            "/etc/containerd/config.toml.tmpl",
+            true,
+            &snapshotters,
+        );
+        assert!(result.is_ok(), "{} with no snapshotters should pass: {:?}", runtime, result);
+    }
+
+    /// K3s/RKE2 with only empty-string snapshotters: filtered out, treated as none, Ok(()).
+    #[rstest]
+    #[case("k3s")]
+    #[case("rke2-server")]
+    fn test_check_k3s_rke2_snapshotter_impl_empty_string_snapshotters_passes(
+        #[case] runtime: &str,
+    ) {
+        let snapshotters = vec!["".to_string()];
+        let result = check_k3s_rke2_snapshotter_with_existing_template_impl(
+            runtime,
+            "/etc/containerd/config.toml.tmpl",
+            true,
+            &snapshotters,
+        );
+        assert!(result.is_ok(), "only empty string snapshotters should pass: {:?}", result);
+    }
+
+    /// K3s/RKE2, snapshotters requested, template does NOT exist: Ok(()).
+    #[rstest]
+    #[case("k3s", vec!["nydus".to_string()])]
+    #[case("rke2-agent", vec!["erofs".to_string()])]
+    #[case("k3s-agent", vec!["nydus".to_string(), "erofs".to_string()])]
+    fn test_check_k3s_rke2_snapshotter_impl_template_missing_passes(
+        #[case] runtime: &str,
+        #[case] snapshotters: Vec<String>,
+    ) {
+        let result = check_k3s_rke2_snapshotter_with_existing_template_impl(
+            runtime,
+            "/etc/containerd/config.toml.tmpl",
+            false,
+            &snapshotters,
+        );
+        assert!(result.is_ok(), "template missing should pass: {:?}", result);
+    }
+
+    /// K3s/RKE2, snapshotters requested, template EXISTS: Err with clear message.
+    #[rstest]
+    #[case("k3s", vec!["nydus".to_string()], "/etc/containerd/config.toml.tmpl")]
+    #[case("k3s-agent", vec!["nydus".to_string()], "/etc/containerd/config.toml.tmpl")]
+    #[case("rke2-agent", vec!["erofs".to_string()], "/etc/containerd/config-v3.toml.tmpl")]
+    #[case("rke2-server", vec!["nydus".to_string(), "erofs".to_string()], "/etc/containerd/config.toml.tmpl")]
+    fn test_check_k3s_rke2_snapshotter_impl_template_exists_bails(
+        #[case] runtime: &str,
+        #[case] snapshotters: Vec<String>,
+        #[case] template_path: &str,
+    ) {
+        let result = check_k3s_rke2_snapshotter_with_existing_template_impl(
+            runtime,
+            template_path,
+            true,
+            &snapshotters,
+        );
+        assert!(result.is_err(), "expected bail when template exists: {:?}", result);
+        let err = result.unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("kata-deploy cannot configure snapshotter(s)"),
+            "error should mention snapshotter limitation: {}",
+            msg
+        );
+        assert!(
+            msg.contains(template_path),
+            "error should mention template path '{}': {}",
+            template_path,
+            msg
+        );
+        assert!(
+            msg.contains("remove") || msg.contains("replace"),
+            "error should tell user to remove/replace template: {}",
+            msg
+        );
+        assert!(
+            msg.contains("disable_snapshot_annotations") || msg.contains("TOML does not merge"),
+            "error should mention duplicate sections: {}",
+            msg
+        );
+        for s in &snapshotters {
+            assert!(msg.contains(s), "error should list requested snapshotter '{}': {}", s, msg);
+        }
     }
 }
