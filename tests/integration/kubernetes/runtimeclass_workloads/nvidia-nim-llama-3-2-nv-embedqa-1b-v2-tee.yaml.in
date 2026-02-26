@@ -79,7 +79,22 @@ spec:
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "48Gi"
+        memory: "24Gi"
+    # Container data storage
+    volumeMounts:
+      - name: nim-trusted-cache
+        mountPath: /opt/nim/.cache
+    # Container image layer storage
+    volumeDevices:
+      - devicePath: /dev/trusted_store
+        name: trusted-storage
+  volumes:
+  - name: nim-trusted-cache
+    emptyDir:
+      sizeLimit: 10Gi
+  - name: trusted-storage
+    persistentVolumeClaim:
+      claimName: trusted-pvc-embedqa
 ---
 apiVersion: v1
 kind: Secret
