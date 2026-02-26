@@ -272,6 +272,28 @@ impl Memory {
             if max_mem_size == 0 || max_mem_size > host_memory {
                 max_mem_size = host_memory
             }
+
+            if cfg!(all(target_arch = "powerpc64", target_endian = "little")) {
+                const PPC64_MEM_BLOCK_SIZE: u64 = 256;
+
+                if !mem_size.is_multiple_of(PPC64_MEM_BLOCK_SIZE) {
+                    let old_mem_size = mem_size;
+                    mem_size = (mem_size / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE;
+                    info!(sl!(), "PowerPC: Aligned default_memory from {}MB to {}MB", old_mem_size, mem_size);
+                }
+
+                if !max_mem_size.is_multiple_of(PPC64_MEM_BLOCK_SIZE) {
+                    let old_max_mem_size = max_mem_size;
+                    max_mem_size = (max_mem_size / PPC64_MEM_BLOCK_SIZE) * PPC64_MEM_BLOCK_SIZE;
+                    info!(sl!(), "PowerPC: Aligned default_maxmemory from {}MB to {}MB", old_max_mem_size, max_mem_size);
+                }
+
+                if max_mem_size < mem_size {
+                    max_mem_size = mem_size;
+                }
+
+                info!(sl!(), "PowerPC memory alignment applied: mem_size={}MB, max_mem_size={}MB", mem_size, max_mem_size);
+            }
         } else {
             warn!(sl!(), "Failed to get host memory size, cannot verify or adjust configuration.toml's 'default_maxmemory'");
 
