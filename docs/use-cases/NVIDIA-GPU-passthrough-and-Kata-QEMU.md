@@ -47,14 +47,12 @@ responsibilities are:
   and non-CC mode (see the
   [NVIDIA/k8s-cc-manager](https://github.com/NVIDIA/k8s-cc-manager)
   repository).
-- **nvidia-kata-manager:** Creating host-side CDI specifications for GPU
-  passthrough, resulting in the file `/var/run/cdi/nvidia.yaml`, containing
-  `kind: nvidia.com/pgpu` (see the
-  [NVIDIA/k8s-kata-manager](https://github.com/NVIDIA/k8s-kata-manager)
-  repository).
 - **nvidia-sandbox-device-plugin** (see the
   [NVIDIA/sandbox-device-plugin](https://github.com/NVIDIA/sandbox-device-plugin)
   repository):
+  - Creating host-side CDI specifications for GPU passthrough,
+    resulting in the file `/var/run/cdi/nvidia.yaml`, containing
+    `kind: nvidia.com/pgpu`
   - Allocating GPUs during pod deployment.
   - Discovering NVIDIA GPUs, their capabilities, and advertising these to
     the Kubernetes control plane (allocatable resources as type
@@ -291,7 +289,7 @@ $ deploy_k8s
 #### GPU Operator
 
 Assuming you have the helm tools installed, deploy the latest version of the
-GPU Operator as a helm chart (minimum version: `v25.10.0`):
+GPU Operator as a helm chart (minimum version: `v26.3.0`):
 
 ```bash
 $ helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
@@ -300,21 +298,7 @@ $ helm install --wait --generate-name \
     nvidia/gpu-operator \
     --set sandboxWorkloads.enabled=true \
     --set sandboxWorkloads.defaultWorkload=vm-passthrough \
-    --set kataManager.enabled=true \
-    --set kataManager.config.runtimeClasses=null \
-    --set kataManager.repository=nvcr.io/nvidia/cloud-native \
-    --set kataManager.image=k8s-kata-manager \
-    --set kataManager.version=v0.2.4 \
-    --set ccManager.enabled=true \
-    --set ccManager.defaultMode=on \
-    --set ccManager.repository=nvcr.io/nvidia/cloud-native \
-    --set ccManager.image=k8s-cc-manager \
-    --set ccManager.version=v0.2.0 \
-    --set sandboxDevicePlugin.repository=nvcr.io/nvidia/cloud-native \
-    --set sandboxDevicePlugin.image=nvidia-sandbox-device-plugin \
-    --set sandboxDevicePlugin.version=v0.0.1 \
-    --set 'sandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \
-    --set 'sandboxDevicePlugin.env[0].value=pgpu' \
+    --set sandboxWorkloads.mode=kata \
     --set nfd.enabled=true \
     --set nfd.nodefeaturerules=true
 ```
