@@ -47,7 +47,7 @@ openssl = { version = "0.10.73", features = ["vendored"] }
 serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 tempfile = "3.19.1"
-tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 
 # OCI container specs.
 oci-spec = { version = "0.8.1", features = ["runtime"] }
