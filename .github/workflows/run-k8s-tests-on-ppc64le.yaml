@@ -57,10 +57,24 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: Install golang
+      - name: Install yq
         run: |
-          ./tests/install_go.sh -f -p
-          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+
+      - name: Read properties from versions.yaml
+        run: |
+          go_version="$(yq '.languages.golang.version' versions.yaml)"
+          [ -n "$go_version" ]
+          echo "GO_VERSION=${go_version}" >> "$GITHUB_ENV"
+
+      - name: Setup Golang version ${{ env.GO_VERSION }}
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          # Setup-go doesn't work properly with ppc64le: https://github.com/actions/setup-go/issues/648
+          architecture: 'ppc64le'
 
       - name: Prepare the runner for k8s test suite
         run: bash "${HOME}/scripts/k8s_cluster_prepare.sh"
