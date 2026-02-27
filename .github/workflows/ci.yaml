@@ -204,7 +204,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker build and push
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           tags: ghcr.io/kata-containers/test-images:unencrypted-${{ inputs.pr-number }}
           push: true
@@ -259,7 +259,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker build and push
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           tags: ghcr.io/kata-containers/csi-kata-directvolume:${{ inputs.pr-number }}
           push: true
