@@ -1,0 +1,20 @@
+# /etc/systemd/system/guest-services.target
+[Unit]
+Description=Guest Components Target
+Documentation=https://github.com/kata-containers/kata-containers
+Requires=initdata-processor.service
+After=initdata-processor.service
+
+# target is for four guest components
+Wants=guest-services-imagepull.service
+Wants=guest-services-sealedsecrets.service
+Wants=guest-services-securemount.service
+Wants=guest-services-getresource.service
+
+Requires=guest-services-imagepull.service
+Requires=guest-services-sealedsecrets.service
+Requires=guest-services-securemount.service
+Requires=guest-services-getresource.service
+
+[Install]
+WantedBy=kata-guest-os.target

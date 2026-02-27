@@ -71,7 +71,6 @@ use crate::metrics::get_metrics;
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
-use crate::passfd_io;
 use crate::pci;
 use crate::random;
 use crate::sandbox::{Sandbox, SandboxError};
@@ -80,6 +79,7 @@ use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 use crate::{confidential_data_hub, linux_abi::*};
+use crate::{passfd_io, skip_if_cdh_client_uninitialized};
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -2308,9 +2308,8 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
 }
 
 async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
-    if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
-    }
+    skip_if_cdh_client_uninitialized!(());
+
     let linux = oci
         .linux()
         .as_ref()
@@ -2348,9 +2347,8 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
 }
 
 async fn cdh_handler_sealed_secrets(oci: &mut Spec) -> Result<()> {
-    if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
-    }
+    skip_if_cdh_client_uninitialized!(());
+
     let process = oci
         .process_mut()
         .as_mut()
