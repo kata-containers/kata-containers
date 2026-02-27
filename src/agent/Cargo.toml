@@ -27,7 +27,7 @@ regex = "1.10.5"
 serial_test = "0.10.0"
 url = "2.5.0"
 derivative = "2.2.0"
-const_format = "0.2.30"
+const_format = "0.2.35"
 
 # Async helpers
 async-trait = "0.1.50"
