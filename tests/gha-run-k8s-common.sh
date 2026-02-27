@@ -220,9 +220,9 @@ function deploy_k0s() {
 	fi
 
 	# In this case we explicitly want word splitting when calling k0s
-	# with extra parameters.
+	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.
 	# shellcheck disable=SC2086
-	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
+	sudo k0s install controller --single --logging=containerd=debug,etcd=info,konnectivity-server=1,kube-apiserver=1,kube-controller-manager=1,kube-scheduler=1,kubelet=1 ${KUBERNETES_EXTRA_PARAMS:-}
 
 	# kube-router decided to use :8080 for its metrics, and this seems
 	# to be a change that affected k0s 1.30.0+, leading to kube-router
