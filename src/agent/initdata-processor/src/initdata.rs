@@ -1,5 +1,5 @@
 use std::{
-    io::{Read as _, Seek as _},
+    io::{ErrorKind, Read as _, Seek as _},
     os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
 };
@@ -12,21 +12,18 @@ pub const INITDATA_MAGIC_NUMBER: &[u8] = b"initdata";
 
 const INITDATA_PATH_BY_ID: &str = "/dev/disk/by-id/virtio-initdata";
 
-fn is_initdata_device(logger: &Logger, path: &Path) -> Result<bool> {
-    let metadata = std::fs::metadata(path).context(format!("stat'ing file {path:?}"))?;
-
-    if !metadata.file_type().is_block_device() {
-        return Ok(false);
-    }
-
-    info!(logger, "Initdata find a potential device: `{path:?}`");
-
+fn is_initdata_device(path: &Path) -> Result<bool> {
     let mut file = std::fs::File::open(path).context(format!("opening device {path:?}"))?;
 
     let mut magic = [0; 8];
-    file.read_exact(&mut magic)
-        .context(format!("reading from device {path:?}"))?;
-    Ok(magic == INITDATA_MAGIC_NUMBER)
+    match file.read_exact(&mut magic) {
+        Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+            // Device is shorter than magic, thus it's not an initdata device.
+            Ok(false)
+        }
+        Err(e) => Err(e).context(format!("reading from device {path:?}")),
+        Ok(()) => Ok(magic == INITDATA_MAGIC_NUMBER),
+    }
 }
 
 /// Locates the initdata device within /dev.
@@ -34,6 +31,7 @@ pub fn locate_device(logger: &Logger) -> Result<Option<PathBuf>> {
     // On systems with udev, the device should be available under a by-id symlink.
     let mut device_candidates = vec![INITDATA_PATH_BY_ID.into()];
 
+    let mut errors = Vec::new();
     // Otherwise, we iterate over all devices and try to find a matching candidate.
     for entry in std::fs::read_dir("/dev")? {
         let entry = entry?;
@@ -42,12 +40,27 @@ pub fn locate_device(logger: &Logger) -> Result<Option<PathBuf>> {
         if !entry.file_name().to_string_lossy().starts_with("vd") {
             continue;
         }
-        device_candidates.push(entry.path());
+
+        match std::fs::metadata(entry.path()).context(format!("stat'ing file {:?}", entry.path())) {
+            Ok(metadata) => {
+                if metadata.file_type().is_block_device() {
+                    info!(
+                        logger,
+                        "Found a potential initdata device: {:?}",
+                        entry.path()
+                    );
+                    device_candidates.push(entry.path());
+                }
+            }
+            Err(e) => {
+                errors.push(e);
+                continue;
+            }
+        }
     }
 
-    let mut errors = Vec::new();
     for path in device_candidates {
-        match is_initdata_device(logger, &path) {
+        match is_initdata_device(&path) {
             Ok(true) => return Ok(Some(path)),
             Ok(false) => continue,
             Err(e) => {
@@ -99,3 +112,28 @@ impl std::fmt::Display for MultiError {
 }
 
 impl std::error::Error for MultiError {}
+
+#[cfg(test)]
+mod tests {
+    use super::is_initdata_device;
+
+    #[test]
+    fn test_is_initdata_device() {
+        let dir = tempfile::tempdir().expect("should be able to create a temp dir");
+
+        let result = is_initdata_device(&dir.path().join("does-not-exist"));
+        assert!(result.is_err());
+
+        let file_path = dir.path().join("not-initdata");
+        std::fs::write(&file_path, "hello").expect("should be able to write a temp file");
+        let is_initdata =
+            is_initdata_device(&file_path).expect("reading this file should not fail");
+        assert!(!is_initdata);
+
+        let file_path = dir.path().join("initdata");
+        std::fs::write(&file_path, b"initdata").expect("should be able to write a temp file");
+        let is_initdata =
+            is_initdata_device(&file_path).expect("reading this file should not fail");
+        assert!(is_initdata);
+    }
+}
