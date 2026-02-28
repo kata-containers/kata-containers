@@ -12,58 +12,44 @@ pub const INITDATA_MAGIC_NUMBER: &[u8] = b"initdata";
 
 const INITDATA_PATH_BY_ID: &str = "/dev/disk/by-id/virtio-initdata";
 
-/// It's designed to be run in a separate tokio task to check if a the potential device is the initdata device.
-fn check_initdata_device(logger: &Logger, path: PathBuf) -> Result<Option<PathBuf>> {
-    let metadata = std::fs::metadata(&path).context(format!("stat'ing file {path:?}"))?;
+fn is_initdata_device(logger: &Logger, path: &Path) -> Result<bool> {
+    let metadata = std::fs::metadata(path).context(format!("stat'ing file {path:?}"))?;
 
     if !metadata.file_type().is_block_device() {
-        return Ok(None);
+        return Ok(false);
     }
 
     info!(logger, "Initdata find a potential device: `{path:?}`");
 
-    let mut file = std::fs::File::open(&path).context(format!("opening device {path:?}"))?;
+    let mut file = std::fs::File::open(path).context(format!("opening device {path:?}"))?;
 
     let mut magic = [0; 8];
     file.read_exact(&mut magic)
         .context(format!("reading from device {path:?}"))?;
-    let result = if magic == INITDATA_MAGIC_NUMBER {
-        Some(path)
-    } else {
-        None
-    };
-    Ok(result)
+    Ok(magic == INITDATA_MAGIC_NUMBER)
 }
 
 /// Locates the initdata device within /dev.
 pub fn locate_device(logger: &Logger) -> Result<Option<PathBuf>> {
     // On systems with udev, the device should be available under a by-id symlink.
-    match check_initdata_device(logger, INITDATA_PATH_BY_ID.into()) {
-        Ok(_) => return Ok(Some(INITDATA_PATH_BY_ID.into())),
-        Err(e) => {
-            info!(
-                logger,
-                "Could not find udev symlink for initdata device: {:?}", e
-            )
-        }
-    }
+    let mut device_candidates = vec![INITDATA_PATH_BY_ID.into()];
 
     // Otherwise, we iterate over all devices and try to find a matching candidate.
-    let dev_dir = Path::new("/dev");
-    let read_dir = std::fs::read_dir(dev_dir)?;
-
-    let mut errors = Vec::new();
-    for entry in read_dir {
+    for entry in std::fs::read_dir("/dev")? {
         let entry = entry?;
 
         // Just check the file starting with 'vd'
         if !entry.file_name().to_string_lossy().starts_with("vd") {
             continue;
         }
+        device_candidates.push(entry.path());
+    }
 
-        match check_initdata_device(logger, entry.path()) {
-            Ok(Some(path)) => return Ok(Some(path)),
-            Ok(None) => continue,
+    let mut errors = Vec::new();
+    for path in device_candidates {
+        match is_initdata_device(logger, &path) {
+            Ok(true) => return Ok(Some(path)),
+            Ok(false) => continue,
             Err(e) => {
                 errors.push(e);
                 continue;
