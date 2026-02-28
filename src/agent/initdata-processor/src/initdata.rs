@@ -77,7 +77,7 @@ pub fn locate_device(logger: &Logger) -> Result<Option<PathBuf>> {
 }
 
 /// Open and decompresses data from the initdata device.
-pub fn read_initdata(device_path: &PathBuf) -> Result<Vec<u8>> {
+pub fn read_initdata(device_path: &Path) -> Result<Vec<u8>> {
     let initdata_device = std::fs::File::open(device_path)?;
     let mut buf_reader = std::io::BufReader::new(initdata_device);
     // skip the magic number "initdata" with 8 bytes
@@ -115,6 +115,12 @@ impl std::error::Error for MultiError {}
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write as _;
+
+    use flate2::{write::GzEncoder, Compression};
+
+    use crate::initdata::{read_initdata, INITDATA_MAGIC_NUMBER};
+
     use super::is_initdata_device;
 
     #[test]
@@ -135,5 +141,45 @@ mod tests {
         let is_initdata =
             is_initdata_device(&file_path).expect("reading this file should not fail");
         assert!(is_initdata);
+    }
+
+    #[test]
+    fn test_read_initdata() {
+        let dir = tempfile::tempdir().expect("should be able to create a temp dir");
+
+        let result = read_initdata(&dir.path().join("does-not-exist"));
+        assert!(result.is_err());
+
+        let file_path = dir.path().join("not-initdata");
+        std::fs::write(&file_path, "hello").expect("should be able to write a temp file");
+        let result = read_initdata(&file_path);
+        assert!(result.is_err());
+
+        let expected_content = br#"
+        algorithm = "sha384"
+        version = "0.1.0"
+        "#
+        .to_vec();
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        encoder
+            .write_all(expected_content.as_slice())
+            .expect("should be able to write into memory");
+        encoder
+            .try_finish()
+            .expect("should be able to flush to memory");
+
+        let mut raw_content = Vec::new();
+        raw_content.extend_from_slice(INITDATA_MAGIC_NUMBER);
+        raw_content.extend_from_slice(&(encoder.get_ref().len() as u64).to_le_bytes());
+        raw_content.extend(encoder.get_ref());
+        // Add some garbage.
+        raw_content.extend_from_slice(&[0u8; 256]);
+
+        let file_path = dir.path().join("initdata.toml.gz");
+        std::fs::write(&file_path, raw_content).expect("should be able to write a temp file");
+
+        let content = read_initdata(&file_path).expect("reading valid initdata should succeed");
+        assert_eq!(expected_content, content);
     }
 }
