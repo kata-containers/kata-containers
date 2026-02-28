@@ -11,19 +11,20 @@ use slog::{info, o, warn, Drain, Logger};
 use crate::initdata::{locate_device, read_initdata};
 use kata_types::initdata::InitData;
 
+const DEV_DIR: &str = "/dev";
 const MEASURED_CFG_DIR: &str = "/run/measured-cfg";
 
 #[derive(Debug)]
 struct InitDataProcessor {
-    device_path: PathBuf,
+    dev_path: PathBuf,
     config_path: PathBuf,
     logger: Logger,
 }
 
 impl InitDataProcessor {
-    pub fn new(device_path: PathBuf, logger: Logger) -> Self {
+    pub fn new(logger: Logger) -> Self {
         Self {
-            device_path,
+            dev_path: PathBuf::from(DEV_DIR),
             config_path: PathBuf::from(MEASURED_CFG_DIR),
             logger,
         }
@@ -31,6 +32,11 @@ impl InitDataProcessor {
 
     pub fn with_config_path(mut self, dir: impl Into<PathBuf>) -> Self {
         self.config_path = dir.into();
+        self
+    }
+
+    pub fn with_dev_path(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.dev_path = dir.into();
         self
     }
 
@@ -109,12 +115,17 @@ impl InitDataProcessor {
         info!(self.logger, "Starting initdata processing");
 
         // 1. Locate and parse initdata.
+        let initdata_device_opt = locate_device(&self.dev_path, &self.logger)?;
+        let initdata_device = match initdata_device_opt {
+            Some(device) => device,
+            None => return Ok(()),
+        };
         info!(
             self.logger,
-            "Reading initdata from device: {:?}", self.device_path
+            "Reading initdata from device: {:?}", initdata_device
         );
         let initdata_content =
-            read_initdata(&self.device_path).context("Failed to read initdata: {e:?}")?;
+            read_initdata(&initdata_device).context("Failed to read initdata: {e:?}")?;
 
         let initdata: InitData =
             toml::from_slice(&initdata_content).context("parse initdata failed")?;
@@ -147,15 +158,10 @@ fn create_logger() -> Logger {
 
 fn main() -> Result<()> {
     let logger = create_logger();
-    let initdata_device_opt = locate_device(&logger)?;
-    let initdata_device = match initdata_device_opt {
-        Some(device) => device,
-        None => return Ok(()),
-    };
 
     // Parse command line arguments.
     let args: Vec<String> = std::env::args().collect();
-    let mut processor = InitDataProcessor::new(initdata_device, logger);
+    let mut processor = InitDataProcessor::new(logger);
 
     // Simple command line argument parsing.
     let mut i = 1;
@@ -169,12 +175,18 @@ fn main() -> Result<()> {
                     return Err(anyhow::anyhow!("--config-path requires a path argument"));
                 }
             }
+            "--dev-path" => {
+                if i + 1 < args.len() {
+                    processor = processor.with_dev_path(&args[i + 1]);
+                    i += 2;
+                } else {
+                    return Err(anyhow::anyhow!("--dev-path requires a path argument"));
+                }
+            }
             _ => return Err(anyhow::anyhow!("Unknown argument: {}", args[i])),
         }
     }
 
     // Execute the processing.
-    processor.process().context("Initdata processing failed")?;
-
-    Ok(())
+    processor.process().context("Initdata processing failed")
 }

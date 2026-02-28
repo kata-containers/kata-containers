@@ -27,13 +27,13 @@ fn is_initdata_device(path: &Path) -> Result<bool> {
 }
 
 /// Locates the initdata device within /dev.
-pub fn locate_device(logger: &Logger) -> Result<Option<PathBuf>> {
+pub fn locate_device(path: &Path, logger: &Logger) -> Result<Option<PathBuf>> {
     // On systems with udev, the device should be available under a by-id symlink.
     let mut device_candidates = vec![INITDATA_PATH_BY_ID.into()];
 
     let mut errors = Vec::new();
     // Otherwise, we iterate over all devices and try to find a matching candidate.
-    for entry in std::fs::read_dir("/dev")? {
+    for entry in std::fs::read_dir(path).context(format!("read_dir({path:?})"))? {
         let entry = entry?;
 
         // Just check the file starting with 'vd'
