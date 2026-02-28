@@ -17,8 +17,6 @@ kata-types = { path = "../../libs/kata-types" }
 
 anyhow = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
 futures = { workspace = true }
 
 [dev-dependencies]
