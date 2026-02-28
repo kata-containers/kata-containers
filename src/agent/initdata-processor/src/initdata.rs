@@ -121,7 +121,7 @@ struct MultiError {
 impl std::fmt::Display for MultiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for err in &self.errors {
-            writeln!(f, "{err}")?;
+            writeln!(f, "{err:?}")?;
         }
         Ok(())
     }
