@@ -1,6 +1,6 @@
 mod initdata;
 
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use slog::{info, o, warn, Drain, Logger};
 
-use crate::initdata::{locate_device_concurrently, read_initdata};
+use crate::initdata::{locate_device, read_initdata};
 use kata_types::initdata::InitData;
 
 const MEASURED_CFG_DIR: &str = "/run/measured-cfg";
@@ -35,29 +35,29 @@ impl InitDataProcessor {
     }
 
     /// Writes configurations.
-    async fn write_config_files(&self, initdata: &InitData) -> Result<()> {
+    fn write_config_files(&self, initdata: &InitData) -> Result<()> {
         info!(
             self.logger,
             "Writing configuration files to: {:?}", self.config_path
         );
 
-        if tokio::fs::try_exists(&self.config_path).await? {
-            tokio::fs::remove_dir_all(&self.config_path).await?;
+        if std::fs::exists(&self.config_path)? {
+            std::fs::remove_dir_all(&self.config_path)?;
         }
 
         // Create the config_path.
-        fs::create_dir_all(&self.config_path).context(format!(
+        std::fs::create_dir_all(&self.config_path).context(format!(
             "Failed to create config path: {:?}",
             self.config_path
         ))?;
 
-        // Set directory permissions (700).
+        // Set directory permissions.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&self.config_path)?.permissions();
+            let mut perms = std::fs::metadata(&self.config_path)?.permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&self.config_path, perms)?;
+            std::fs::set_permissions(&self.config_path, perms)?;
         }
 
         let mut written_files = 0;
@@ -74,7 +74,6 @@ impl InitDataProcessor {
             // TODO(burgerdev): support subdirectories
 
             self.write_file(&file_path, value.as_bytes())
-                .await
                 .context(format!("Failed to write config file for key: {}", key))?;
 
             written_files += 1;
@@ -87,7 +86,7 @@ impl InitDataProcessor {
         Ok(())
     }
 
-    async fn write_file(&self, path: &Path, content: &[u8]) -> Result<()> {
+    fn write_file(&self, path: &Path, content: &[u8]) -> Result<()> {
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -106,7 +105,7 @@ impl InitDataProcessor {
     }
 
     /// The complete workflow for processing initdata.
-    pub async fn process(&self) -> Result<()> {
+    pub fn process(&self) -> Result<()> {
         info!(self.logger, "Starting initdata processing");
 
         // 1. Locate and parse initdata.
@@ -114,9 +113,8 @@ impl InitDataProcessor {
             self.logger,
             "Reading initdata from device: {:?}", self.device_path
         );
-        let initdata_content = read_initdata(&self.device_path)
-            .await
-            .context("Failed to read initdata: {e:?}")?;
+        let initdata_content =
+            read_initdata(&self.device_path).context("Failed to read initdata: {e:?}")?;
 
         let initdata: InitData =
             toml::from_slice(&initdata_content).context("parse initdata failed")?;
@@ -132,8 +130,8 @@ impl InitDataProcessor {
         // 3. Write config files.
         let mut initdata_path = self.config_path.clone();
         initdata_path.add_extension(".json");
-        self.write_file(&initdata_path, &initdata_content).await?;
-        self.write_config_files(&initdata).await?;
+        self.write_file(&initdata_path, &initdata_content)?;
+        self.write_config_files(&initdata)?;
 
         info!(self.logger, "Initdata processing completed successfully");
         Ok(())
@@ -147,10 +145,9 @@ fn create_logger() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let logger = create_logger();
-    let initdata_device_opt = locate_device_concurrently(&logger).await?;
+    let initdata_device_opt = locate_device(&logger)?;
     let initdata_device = match initdata_device_opt {
         Some(device) => device,
         None => return Ok(()),
@@ -177,10 +174,7 @@ async fn main() -> Result<()> {
     }
 
     // Execute the processing.
-    processor
-        .process()
-        .await
-        .context("Initdata processing failed")?;
+    processor.process().context("Initdata processing failed")?;
 
     Ok(())
 }
