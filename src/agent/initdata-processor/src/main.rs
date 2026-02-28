@@ -6,9 +6,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use slog::{o, Drain, Logger};
-use tracing::{error, info, warn, Level};
-use tracing_subscriber::fmt::format::FmtSpan;
+use slog::{info, o, warn, Drain, Logger};
 
 use crate::initdata::{locate_device_concurrently, read_initdata};
 use kata_types::initdata::InitData;
@@ -19,13 +17,15 @@ const MEASURED_CFG_DIR: &str = "/run/measured-cfg";
 struct InitDataProcessor {
     device_path: PathBuf,
     config_path: PathBuf,
+    logger: Logger,
 }
 
 impl InitDataProcessor {
-    pub fn new(device_path: PathBuf) -> Self {
+    pub fn new(device_path: PathBuf, logger: Logger) -> Self {
         Self {
             device_path,
             config_path: PathBuf::from(MEASURED_CFG_DIR),
+            logger,
         }
     }
 
@@ -36,7 +36,10 @@ impl InitDataProcessor {
 
     /// Writes configurations.
     async fn write_config_files(&self, initdata: &InitData) -> Result<()> {
-        info!("Writing configuration files to: {:?}", self.config_path);
+        info!(
+            self.logger,
+            "Writing configuration files to: {:?}", self.config_path
+        );
 
         if tokio::fs::try_exists(&self.config_path).await? {
             tokio::fs::remove_dir_all(&self.config_path).await?;
@@ -65,7 +68,7 @@ impl InitDataProcessor {
 
             // Security check: Ensure file path is within the directory.
             if !file_path.starts_with(&self.config_path) {
-                warn!("Skipping potentially dangerous key: {}", key);
+                warn!(self.logger, "Skipping potentially dangerous key: {}", key);
                 continue;
             }
             // TODO(burgerdev): support subdirectories
@@ -77,7 +80,10 @@ impl InitDataProcessor {
             written_files += 1;
         }
 
-        info!("Successfully wrote {} configuration files", written_files);
+        info!(
+            self.logger,
+            "Successfully wrote {} configuration files", written_files
+        );
         Ok(())
     }
 
@@ -101,10 +107,13 @@ impl InitDataProcessor {
 
     /// The complete workflow for processing initdata.
     pub async fn process(&self) -> Result<()> {
-        info!("Starting initdata processing");
+        info!(self.logger, "Starting initdata processing");
 
         // 1. Locate and parse initdata.
-        info!("Reading initdata from device: {:?}", self.device_path);
+        info!(
+            self.logger,
+            "Reading initdata from device: {:?}", self.device_path
+        );
         let initdata_content = read_initdata(&self.device_path)
             .await
             .context("Failed to read initdata: {e:?}")?;
@@ -113,6 +122,7 @@ impl InitDataProcessor {
             toml::from_slice(&initdata_content).context("parse initdata failed")?;
 
         info!(
+            self.logger,
             "Successfully parsed initdata with {} entries",
             initdata.data().len()
         );
@@ -125,7 +135,7 @@ impl InitDataProcessor {
         self.write_file(&initdata_path, &initdata_content).await?;
         self.write_config_files(&initdata).await?;
 
-        info!("Initdata processing completed successfully");
+        info!(self.logger, "Initdata processing completed successfully");
         Ok(())
     }
 }
@@ -139,17 +149,6 @@ fn create_logger() -> Logger {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    std::panic::set_hook(Box::new(|panic_info| {
-        error!(panic.info = %panic_info, "A task panicked");
-    }));
-
-    // Initialize the tracing subscriber to configure the logging format.
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .with_span_events(FmtSpan::CLOSE)
-        .with_target(true)
-        .init();
-
     let logger = create_logger();
     let initdata_device_opt = locate_device_concurrently(&logger).await?;
     let initdata_device = match initdata_device_opt {
@@ -159,7 +158,7 @@ async fn main() -> Result<()> {
 
     // Parse command line arguments.
     let args: Vec<String> = std::env::args().collect();
-    let mut processor = InitDataProcessor::new(initdata_device);
+    let mut processor = InitDataProcessor::new(initdata_device, logger);
 
     // Simple command line argument parsing.
     let mut i = 1;
