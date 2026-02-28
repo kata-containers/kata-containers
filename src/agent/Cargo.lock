@@ -1836,14 +1836,12 @@ name = "initdata-processor"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-compression",
- "futures",
+ "flate2",
  "kata-types",
  "slog",
  "slog-async",
  "slog-term",
  "tempfile",
- "tokio",
  "toml",
 ]
 
