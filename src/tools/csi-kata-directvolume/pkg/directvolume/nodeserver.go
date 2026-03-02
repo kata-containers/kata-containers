@@ -98,7 +98,7 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 	klog.Infof("target %v\nfstype %v\ndevice %v\nreadonly %v\nvolumeID %v\n",
 		targetPath, fsType, devicePath, readOnly, volumeID)
 
-	options := []string{"bind"}
+	options := []string{}
 	if readOnly {
 		options = append(options, "ro")
 	} else {
