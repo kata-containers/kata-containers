@@ -205,7 +205,7 @@ pub fn setup_mptable<M: GuestMemory>(
         return Err(Error::AddressOverflow);
     }
 
-    mem.read_from(base_mp, &mut io::repeat(0), mp_size)
+    mem.read_volatile_from(base_mp, &mut io::repeat(0), mp_size)
         .map_err(|_| Error::Clear)?;
 
     {
@@ -466,7 +466,7 @@ mod tests {
         }
 
         let mut sum = Sum(0);
-        mem.write_to(mpc_offset, &mut sum, mpc_table.0.length as usize)
+        mem.write_volatile_to(mpc_offset, &mut sum, mpc_table.0.length as usize)
             .unwrap();
         assert_eq!(sum.0, 0);
     }
