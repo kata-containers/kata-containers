@@ -22,7 +22,7 @@ slog = { workspace = true }
 slog-scope = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "fs", "process", "io-util"] }
-vmm-sys-util = "0.11.0"
+vmm-sys-util = "0.15.0"
 rand = { workspace = true }
 path-clean = "1.0.1"
 lazy_static = { workspace = true }
