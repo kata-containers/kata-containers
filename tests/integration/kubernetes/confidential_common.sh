@@ -290,6 +290,45 @@ export SEALED_SECRET_PRECREATED_TEST="sealed.eyJiNjQiOnRydWUsImFsZyI6IkVTMjU2Iiw
 export SEALED_SECRET_PRECREATED_NIM_INSTRUCT="sealed.eyJiNjQiOnRydWUsImFsZyI6IkVTMjU2Iiwia2lkIjoia2JzOi8vL2RlZmF1bHQvc2lnbmluZy1rZXkvc2VhbGVkLXNlY3JldCJ9.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvbmdjLWFwaS1rZXkvaW5zdHJ1Y3QiLCJwcm92aWRlciI6ImticyIsInByb3ZpZGVyX3NldHRpbmdzIjp7fSwiYW5ub3RhdGlvbnMiOnt9fQ.wpqvVFUaQymqgf54h70shZWDpk2NLW305wALz09YF0GKFBKBQiQB2sRwvn9Jk_rSju3YGLYxPO2Ub8qUbiMCuA"
 export SEALED_SECRET_PRECREATED_NIM_EMBEDQA="sealed.eyJiNjQiOnRydWUsImFsZyI6IkVTMjU2Iiwia2lkIjoia2JzOi8vL2RlZmF1bHQvc2lnbmluZy1rZXkvc2VhbGVkLXNlY3JldCJ9.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvbmdjLWFwaS1rZXkvZW1iZWRxYSIsInByb3ZpZGVyIjoia2JzIiwicHJvdmlkZXJfc2V0dGluZ3MiOnt9LCJhbm5vdGF0aW9ucyI6e319.4C1uqtVXi_qZT8vh_yZ4KpsRdgr2s4hU6ElKj18Hq1DJi_Iji61yuKsS6S1jWdb7drdoKKACvMD6RmCd85SJOQ"
 
+# Set up KBS with image security policy requiring cosign signatures using the NVIDIA
+# container signing public key. When initdata includes image_security_policy_uri
+# pointing to this policy, the guest will verify image signatures when it pulls the image.
+# Note: keyPath-only sigstoreSigned does not require Rekor per spec; if the guest fails
+# with "signature not found in transparency log", the in-guest verifier may need to
+# support key-only verification (host-side: cosign verify --key <pubkey> --insecure-ignore-tlog <image>).
+function setup_kbs_nim_image_policy() {
+	local policy_json public_key
+	# Cosign public key for nvcr.io images. Source: NVIDIA NGC Catalog API.
+	# See https://docs.nvidia.com/ngc/latest/ngc-catalog-user-guide.html#finding-nvidia-s-public-key
+	public_key=$(curl -sSL "https://api.ngc.nvidia.com/v2/catalog/containers/public-key")
+	policy_json=$(cat << EOF
+{
+    "default": [{"type": "reject"}],
+    "transports": {
+        "docker": {
+            "nvcr.io/nim/meta": [
+                {
+                    "type": "sigstoreSigned",
+                    "keyPath": "kbs:///default/cosign-public-key/nim",
+                    "signedIdentity": {"type": "matchRepository"}
+                }
+            ],
+            "nvcr.io/nim/nvidia": [
+                {
+                    "type": "sigstoreSigned",
+                    "keyPath": "kbs:///default/cosign-public-key/nim",
+                    "signedIdentity": {"type": "matchRepository"}
+                }
+            ]
+        }
+    }
+}
+EOF
+	)
+	kbs_set_resource "default" "security-policy" "nim" "${policy_json}"
+	kbs_set_resource "default" "cosign-public-key" "nim" "${public_key}"
+}
+
 # Provision the signing public key to KBS so CDH can verify the pre-created sealed secrets.
 function setup_sealed_secret_signing_public_key() {
 	kbs_set_resource "default" "signing-key" "sealed-secret" "${SEALED_SECRET_SIGNING_PUBLIC_JWK}"

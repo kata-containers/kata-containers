@@ -112,6 +112,7 @@ url = "${cc_kbs_address}"
 [image]
 max_concurrent_layer_downloads_per_image = 1
 authenticated_registry_credentials_uri = "kbs:///default/credentials/nvcr"
+image_security_policy_uri = "kbs:///default/security-policy/nim"
 '''
 EOF
 }
@@ -134,6 +135,9 @@ setup_kbs_credentials() {
     # The sealed secrets in the pod YAML point to these KBS resource paths.
     kbs_set_resource "default" "ngc-api-key" "instruct" "${NGC_API_KEY}"
     kbs_set_resource "default" "ngc-api-key" "embedqa" "${NGC_API_KEY}"
+
+    # Enforce signed images for nvcr.io/nim (instruct and embedqa) in the guest.
+    setup_kbs_nim_image_policy
 }
 
 create_inference_pod() {

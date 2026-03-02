@@ -96,6 +96,8 @@ setup_kbs_credentials() {
     kbs_set_gpu0_resource_policy
     kbs_set_resource_base64 "default" "credentials" "nvcr" "${KBS_AUTH_CONFIG_JSON}"
     kbs_set_resource "default" "ngc-api-key" "instruct" "${NGC_API_KEY}"
+
+    setup_kbs_nim_image_policy
 }
 
 # CDH initdata for guest-pull: KBS URL, registry credentials URI, and allow-all policy.
@@ -125,6 +127,7 @@ url = "${cc_kbs_address}"
 
 [image]
 authenticated_registry_credentials_uri = "kbs:///default/credentials/nvcr"
+image_security_policy_uri = "kbs:///default/security-policy/nim"
 '''
 
 "policy.rego" = '''
