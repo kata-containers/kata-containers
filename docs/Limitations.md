@@ -187,9 +187,10 @@ different compared to `runc` containers:
 into the guest and exposes it directly to the container.
 
 **Mounting guest devices**: When the source path of a hostPath volume is
-under `/dev`, and the path either corresponds to a host device or is not
-accessible by the Kata shim, the Kata agent bind mounts the source path
-directly from the *guest* filesystem into the container.
+under `/dev` (or `/dev` itself), and the path corresponds to a
+non-regular file (i.e., a device, directory, or any other special file)
+or is not accessible by the Kata shim, the Kata agent bind mounts the
+source path directly from the *guest* filesystem into the container.
 
 [runtime-config]: /src/runtime/README.md#configuration
 [k8s-hostpath]: https://kubernetes.io/docs/concepts/storage/volumes/#hostpath
