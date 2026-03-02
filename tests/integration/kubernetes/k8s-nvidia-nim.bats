@@ -101,6 +101,17 @@ export NGC_API_KEY_SEALED_SECRET_EMBEDQA
 NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_EMBEDQA}" | base64 -w0)
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64
 
+# Cosign (sigstore) public key for nvcr.io/nim images. Used in KBS for guest image verification.
+NVIDIA_CONTAINER_SIGNING_PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEnwIGDZDTo4DAeUL875OHGOUvXK57
+veyY59f5+2gESsj31R7Zs0VqbTfhF3RG9HNiYCaO+Q2NMLKm4X3iCDqitg==
+-----END PUBLIC KEY-----'
+export NVIDIA_CONTAINER_SIGNING_PUBLIC_KEY
+
+# KBS resource path for the NIM image security policy (used in initdata cdh.toml).
+NIM_SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/nim"
+export NIM_SECURITY_POLICY_KBS_URI
+
 setup_langchain_flow() {
     # shellcheck disable=SC1091  # Sourcing virtual environment activation script
     source "${HOME}"/.cicd/venv/bin/activate
@@ -134,6 +145,42 @@ setup_genpolicy_registry_auth() {
 	export REGISTRY_AUTH_FILE="${auth_dir}/config.json"
 }
 
+# Set up KBS with image security policy requiring cosign signatures using the NVIDIA
+# container signing public key. When initdata includes image_security_policy_uri
+# pointing to this policy, the guest will verify image signatures when it pulls the image.
+# Note: keyPath-only sigstoreSigned does not require Rekor per spec; if the guest fails
+# with "signature not found in transparency log", the in-guest verifier may need to
+# support key-only verification (host-side: cosign verify --key <pubkey> --insecure-ignore-tlog <image>).
+setup_kbs_nim_image_policy() {
+	local policy_json
+	policy_json=$(cat << EOF
+{
+    "default": [{"type": "reject"}],
+    "transports": {
+        "docker": {
+            "nvcr.io/nim/meta": [
+                {
+                    "type": "sigstoreSigned",
+                    "keyPath": "kbs:///default/cosign-public-key/nim",
+                    "signedIdentity": {"type": "matchRepository"}
+                }
+            ],
+            "nvcr.io/nim/nvidia": [
+                {
+                    "type": "sigstoreSigned",
+                    "keyPath": "kbs:///default/cosign-public-key/nim",
+                    "signedIdentity": {"type": "matchRepository"}
+                }
+            ]
+        }
+    }
+}
+EOF
+	)
+	kbs_set_resource "default" "security-policy" "nim" "${policy_json}"
+	kbs_set_resource "default" "cosign-public-key" "nim" "${NVIDIA_CONTAINER_SIGNING_PUBLIC_KEY}"
+}
+
 # Create initdata TOML file for genpolicy with CDH configuration.
 # This file is used by genpolicy via --initdata-path. Genpolicy will add the
 # generated policy.rego to it and set it as the cc_init_data annotation.
@@ -162,6 +209,7 @@ url = "${cc_kbs_address}"
 
 [image]
 authenticated_registry_credentials_uri = "kbs:///default/credentials/nvcr"
+image_security_policy_uri = "${NIM_SECURITY_POLICY_KBS_URI}"
 '''
 EOF
 }
@@ -184,6 +232,9 @@ setup_kbs_credentials() {
     # The sealed secrets in the pod YAML point to these KBS resource paths.
     kbs_set_resource "default" "ngc-api-key" "instruct" "${NGC_API_KEY}"
     kbs_set_resource "default" "ngc-api-key" "embedqa" "${NGC_API_KEY}"
+
+    # Enforce signed images for nvcr.io/nim (instruct and embedqa) in the guest.
+    setup_kbs_nim_image_policy
 }
 
 create_inference_pod() {
