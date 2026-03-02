@@ -666,7 +666,7 @@ impl Vm {
 
         // Load the image into memory
         vm_memory
-            .read_from(GuestAddress(address), image, size)
+            .read_volatile_from(GuestAddress(address), image, size)
             .map_err(|_| LoadInitrd)?;
 
         Ok(InitrdConfig {

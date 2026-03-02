@@ -1,7 +1,6 @@
 // Copyright (C) 2022 Alibaba Cloud. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{Read, Write};
 use std::sync::atomic::Ordering;
 
 use vm_memory::bitmap::{Bitmap, BS};
@@ -9,7 +8,7 @@ use vm_memory::mmap::NewBitmap;
 use vm_memory::volatile_memory::compute_offset;
 use vm_memory::{
     guest_memory, volatile_memory, Address, AtomicAccess, Bytes, FileOffset, GuestAddress,
-    GuestMemoryRegion, GuestUsize, MemoryRegionAddress, VolatileSlice,
+    GuestMemoryRegion, GuestUsize, MemoryRegionAddress, ReadVolatile, VolatileSlice, WriteVolatile,
 };
 
 /// Guest memory region for virtio-fs DAX window.
@@ -73,67 +72,67 @@ impl<B: Bitmap> Bytes<MemoryRegionAddress> for GuestRegionRaw<B> {
             .map_err(Into::into)
     }
 
-    fn read_from<F>(
+    fn read_volatile_from<F>(
         &self,
         addr: MemoryRegionAddress,
         src: &mut F,
         count: usize,
     ) -> guest_memory::Result<usize>
     where
-        F: Read,
+        F: ReadVolatile,
     {
         let maddr = addr.raw_value() as usize;
         self.as_volatile_slice()
             .unwrap()
-            .read_from::<F>(maddr, src, count)
+            .read_volatile_from::<F>(maddr, src, count)
             .map_err(Into::into)
     }
 
-    fn read_exact_from<F>(
+    fn read_exact_volatile_from<F>(
         &self,
         addr: MemoryRegionAddress,
         src: &mut F,
         count: usize,
     ) -> guest_memory::Result<()>
     where
-        F: Read,
+        F: ReadVolatile,
     {
         let maddr = addr.raw_value() as usize;
         self.as_volatile_slice()
             .unwrap()
-            .read_exact_from::<F>(maddr, src, count)
+            .read_exact_volatile_from::<F>(maddr, src, count)
             .map_err(Into::into)
     }
 
-    fn write_to<F>(
+    fn write_volatile_to<F>(
         &self,
         addr: MemoryRegionAddress,
         dst: &mut F,
         count: usize,
     ) -> guest_memory::Result<usize>
     where
-        F: Write,
+        F: WriteVolatile,
     {
         let maddr = addr.raw_value() as usize;
         self.as_volatile_slice()
             .unwrap()
-            .write_to::<F>(maddr, dst, count)
+            .write_volatile_to::<F>(maddr, dst, count)
             .map_err(Into::into)
     }
 
-    fn write_all_to<F>(
+    fn write_all_volatile_to<F>(
         &self,
         addr: MemoryRegionAddress,
         dst: &mut F,
         count: usize,
     ) -> guest_memory::Result<()>
     where
-        F: Write,
+        F: WriteVolatile,
     {
         let maddr = addr.raw_value() as usize;
         self.as_volatile_slice()
             .unwrap()
-            .write_all_to::<F>(maddr, dst, count)
+            .write_all_volatile_to::<F>(maddr, dst, count)
             .map_err(Into::into)
     }
 
@@ -170,8 +169,8 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionRaw<B> {
         self.guest_base
     }
 
-    fn bitmap(&self) -> &Self::B {
-        &self.bitmap
+    fn bitmap(&self) -> BS<'_, Self::B> {
+        self.bitmap.slice_at(0)
     }
 
     fn get_host_address(&self, addr: MemoryRegionAddress) -> guest_memory::Result<*mut u8> {
@@ -184,18 +183,6 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionRaw<B> {
 
     fn file_offset(&self) -> Option<&FileOffset> {
         None
-    }
-
-    unsafe fn as_slice(&self) -> Option<&[u8]> {
-        // This is safe because we mapped the area at addr ourselves, so this slice will not
-        // overflow. However, it is possible to alias.
-        Some(std::slice::from_raw_parts(self.addr, self.size))
-    }
-
-    unsafe fn as_mut_slice(&self) -> Option<&mut [u8]> {
-        // This is safe because we mapped the area at addr ourselves, so this slice will not
-        // overflow. However, it is possible to alias.
-        Some(std::slice::from_raw_parts_mut(self.addr, self.size))
     }
 
     fn get_slice(
@@ -216,6 +203,7 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionRaw<B> {
                 (self.addr as usize + offset) as *mut _,
                 count,
                 self.bitmap.slice_at(offset),
+                None,
             )
         })
     }
@@ -223,6 +211,26 @@ impl<B: Bitmap> GuestMemoryRegion for GuestRegionRaw<B> {
     #[cfg(target_os = "linux")]
     fn is_hugetlbfs(&self) -> Option<bool> {
         None
+    }
+}
+
+impl<B: Bitmap> GuestRegionRaw<B> {
+    /// Returns a slice corresponding to the region.
+    ///
+    /// # Safety
+    /// This is safe because we mapped the area at addr ourselves, so this slice will not
+    /// overflow. However, it is possible to alias.
+    pub unsafe fn as_slice(&self) -> Option<&[u8]> {
+        Some(std::slice::from_raw_parts(self.addr, self.size))
+    }
+
+    /// Returns a mutable slice corresponding to the region.
+    ///
+    /// # Safety
+    /// This is safe because we mapped the area at addr ourselves, so this slice will not
+    /// overflow. However, it is possible to alias.
+    pub unsafe fn as_mut_slice(&self) -> Option<&mut [u8]> {
+        Some(std::slice::from_raw_parts_mut(self.addr, self.size))
     }
 }
 
@@ -348,7 +356,7 @@ mod tests {
             unsafe { GuestRegionRaw::<()>::new(GuestAddress(0x10_0000), &mut buf as *mut _, 1024) };
 
         let s = m.get_slice(MemoryRegionAddress(2), 3).unwrap();
-        assert_eq!(s.as_ptr(), &mut buf[2] as *mut _);
+        assert_eq!(s.ptr_guard().as_ptr(), &buf[2] as *const _);
     }
 
     /*
@@ -600,7 +608,7 @@ mod tests {
                 File::open(Path::new("c:\\Windows\\system32\\ntoskrnl.exe")).unwrap()
             };
             gm.write_obj(!0u32, addr).unwrap();
-            gm.read_exact_from(addr, &mut file, mem::size_of::<u32>())
+            gm.read_exact_volatile_from(addr, &mut file, mem::size_of::<u32>())
                 .unwrap();
             let value: u32 = gm.read_obj(addr).unwrap();
             if cfg!(unix) {
@@ -610,7 +618,7 @@ mod tests {
             }
 
             let mut sink = Vec::new();
-            gm.write_all_to(addr, &mut sink, mem::size_of::<u32>())
+            gm.write_all_volatile_to(addr, &mut sink, mem::size_of::<u32>())
                 .unwrap();
             if cfg!(unix) {
                 assert_eq!(sink, vec![0; mem::size_of::<u32>()]);
