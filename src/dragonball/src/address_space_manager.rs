@@ -124,6 +124,10 @@ pub enum AddressManagerError {
     #[error("address manager failed to create guest memory object")]
     CreateGuestMemory(#[source] vm_memory::GuestMemoryError),
 
+    /// Failed to insert/manage guest memory region collection
+    #[error("address manager failed to manage guest memory region collection")]
+    GuestRegionCollection(#[source] vm_memory::GuestRegionCollectionError),
+
     /// Failure in initializing guest memory.
     #[error("address manager failed to initialize guest memory")]
     GuestMemoryNotInitialized,
@@ -328,9 +332,7 @@ impl AddressSpaceMgr {
 
             vm_memory = vm_memory
                 .insert_region(mmap_reg.clone())
-                .map_err(|_e| AddressManagerError::CreateGuestMemory(
-                    vm_memory::GuestMemoryError::InvalidGuestAddress(vm_memory::GuestAddress(0)),
-                ))?;
+                .map_err(AddressManagerError::GuestRegionCollection)?;
             self.map_to_kvm(res_mgr, &param, reg, mmap_reg)?;
         }
 
@@ -491,8 +493,8 @@ impl AddressSpaceMgr {
         }
 
         let reg = GuestRegionImpl::new(mmap_reg, region.start_addr())
-            .ok_or_else(|| AddressManagerError::CreateGuestMemory(
-                vm_memory::GuestMemoryError::InvalidGuestAddress(region.start_addr()),
+            .ok_or(AddressManagerError::GuestRegionCollection(
+                vm_memory::GuestRegionCollectionError::NoMemoryRegion,
             ))?;
         Ok(Arc::new(reg))
     }
