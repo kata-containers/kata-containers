@@ -30,7 +30,7 @@ on:
       AZ_APPID:
         required: true
       AZ_TENANT_ID:
-       required: true
+        required: true
       AZ_SUBSCRIPTION_ID:
         required: true
       CI_HKD_PATH:
@@ -45,6 +45,10 @@ on:
         required: true
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -387,7 +391,10 @@ jobs:
           { containerd_version: active, vmm: qemu             },
           { containerd_version: active, vmm: cloud-hypervisor },
           { containerd_version: active, vmm: qemu-runtime-rs  },
-         ]
+        ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm }}-${{ matrix.params.containerd_version}}
+      cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -405,9 +412,12 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          { containerd_version: active, vmm: qemu            },
-          { containerd_version: active, vmm: qemu-runtime-rs },
-         ]
+          {containerd_version: active, vmm: qemu},
+          {containerd_version: active, vmm: qemu-runtime-rs},
+        ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
+      cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -425,8 +435,11 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          { containerd_version: active, vmm: qemu },
-         ]
+          {containerd_version: active, vmm: qemu},
+        ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-cri-tests-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
+      cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
@@ -444,8 +457,11 @@ jobs:
       fail-fast: false
       matrix:
         params: [
-          { containerd_version: active, vmm: qemu },
-         ]
+          {containerd_version: active, vmm: qemu},
+        ]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
+      cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
