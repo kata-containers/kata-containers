@@ -33,7 +33,8 @@ pub struct Settings {
 /// Volume settings loaded from genpolicy-settings.json.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Volumes {
-    pub emptyDir: EmptyDirVolume,
+    pub emptyDir_sandbox_local: EmptyDirVolume,
+    pub emptyDir_bundle_bind: EmptyDirVolume,
     pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
     pub image_volume: ImageVolume,
@@ -79,6 +80,12 @@ pub struct ImageVolume {
 pub struct KataConfig {
     pub oci_version: String,
     pub enable_configmap_secret_storages: bool,
+
+    /// Supported values:
+    ///
+    /// "sandbox-local" - For Kata Containers using disable_guest_empty_dir = false.
+    /// "host-bundle" - For Kata Containers using disable_guest_empty_dir = true.
+    pub emptydir_type: String,
 }
 
 /// Drop-ins in genpolicy-settings.d/ must be RFC 6902 JSON Patch documents (JSON array of
