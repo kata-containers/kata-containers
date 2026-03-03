@@ -558,14 +558,14 @@ impl MemRegionFactory for MemoryRegionFactory {
 
         // All value should be valid.
         let memory_region = Arc::new(
-            GuestRegionMmap::new(mmap_region, guest_addr).map_err(VirtioError::InsertMmap)?,
+            GuestRegionMmap::new(mmap_region, guest_addr).ok_or(VirtioError::InsertMmap)?,
         );
 
         let vm_as_new = self
             .vm_as
             .memory()
             .insert_region(memory_region.clone())
-            .map_err(VirtioError::InsertMmap)?;
+            .map_err(|_| VirtioError::InsertMmap)?;
         self.vm_as.lock().unwrap().replace(vm_as_new);
         self.address_space.insert_region(region).map_err(|e| {
             error!(self.logger, "failed to insert address space region: {}", e);
