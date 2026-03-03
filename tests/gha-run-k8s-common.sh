@@ -37,6 +37,32 @@ TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 
+# Wait for the Kubernetes API to recover after kata-deploy uninstall, then
+# retry the uninstall to purge any stale helm release state. On k3s/rke2,
+# the SIGTERM cleanup restarts the CRI runtime which takes down the API.
+# Arguments:
+#   $1 - helm release name
+#   $2 - helm namespace
+wait_for_api_and_retry_uninstall() {
+	local release_name="${1}"
+	local namespace="${2}"
+
+	local api_wait=0
+	local api_timeout=300
+	while [ "$api_wait" -lt "$api_timeout" ]; do
+		if kubectl get nodes --request-timeout=5s &>/dev/null; then
+			echo "Kubernetes API is available after uninstall"
+			break
+		fi
+		echo "Waiting for API to recover after uninstall... (${api_wait}s/${api_timeout}s)"
+		sleep 5
+		api_wait=$((api_wait + 5))
+	done
+
+	helm uninstall "${release_name}" -n "${namespace}" \
+		--ignore-not-found --wait --timeout 5m || true
+}
+
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
 		small)
