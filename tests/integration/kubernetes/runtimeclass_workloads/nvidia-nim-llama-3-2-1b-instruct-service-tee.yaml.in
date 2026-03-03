@@ -1,0 +1,52 @@
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+---
+apiVersion: apps.nvidia.com/v1alpha1
+kind: NIMService
+metadata:
+  name: ${NIM_SERVICE_NAME}
+spec:
+  image:
+    repository: nvcr.io/nim/meta/llama-3.2-1b-instruct
+    tag: "1.12.0"
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - ngc-secret-llama-3-2-1b
+  authSecret: ngc-api-key-sealed-llama-3-2-1b
+  storage:
+    emptyDir:
+      sizeLimit: 10Gi
+  replicas: 1
+  resources:
+    limits:
+      nvidia.com/pgpu: "1"
+      cpu: "8"
+      memory: "64Gi"
+  expose:
+    service:
+      type: ClusterIP
+      port: 8000
+  runtimeClassName: kata
+  userID: 0
+  groupID: 0
+  annotations:
+    io.katacontainers.config.hypervisor.kernel_params: "agent.guest_components_procs=confidential-data-hub agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
+    io.katacontainers.config.hypervisor.cc_init_data: "${NIM_INITDATA_BASE64}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-secret-llama-3-2-1b
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: ${DOCKER_CONFIG_JSON}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ngc-api-key-sealed-llama-3-2-1b
+type: Opaque
+data:
+  NGC_API_KEY: "${NGC_API_KEY_SEALED_SECRET_LLAMA_3_2_1B_BASE64}"
