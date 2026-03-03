@@ -1,0 +1,18 @@
+# https://lukasgeiter.github.io/mkdocs-awesome-nav/
+nav:
+  - Home: index.md
+  - Getting Started:
+    - prerequisites.md
+    - installation.md
+    - Configuration:
+        - helm-configuration.md
+        - runtime-configuration.md
+  - Platform Support:
+    - hypervisors.md
+  - Guides:
+    - Use Cases:
+      - NVIDIA GPU Passthrough: use-cases/NVIDIA-GPU-passthrough-and-Kata-QEMU.md
+      - NVIDIA vGPU: use-cases/NVIDIA-GPU-passthrough-and-Kata.md
+      - Intel Discrete GPU: use-cases/Intel-Discrete-GPU-passthrough-and-Kata.md
+  - Misc:
+    - Architecture: design/architecture/
