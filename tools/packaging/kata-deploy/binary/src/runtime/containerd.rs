@@ -388,13 +388,22 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
     let paths = config.get_containerd_paths(runtime).await?;
 
     if paths.use_drop_in {
-        // Remove drop-in from imports array (if imports are used)
+        // Remove drop-in from imports array (if we added it; K3s/RKE2 have imports_file = None)
         if let Some(imports_file) = &paths.imports_file {
             toml_utils::remove_from_toml_array(
                 Path::new(imports_file),
                 ".imports",
                 &format!("\"{}\"", paths.drop_in_file),
             )?;
+        }
+        // Remove the drop-in file
+        let drop_in_path = if paths.drop_in_file.starts_with("/etc/containerd/") {
+            Path::new(&paths.drop_in_file).to_path_buf()
+        } else {
+            Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
+        };
+        if drop_in_path.exists() {
+            fs::remove_file(&drop_in_path)?;
         }
         return Ok(());
     }
@@ -411,23 +420,26 @@ pub async fn cleanup_containerd(config: &Config, runtime: &str) -> Result<()> {
 }
 
 /// Setup containerd config files based on runtime type.
-/// For K3s/RKE2, resolves which template (v2 or v3) to use from the node's containerd version,
-/// then creates only that template file.
+/// For K3s/RKE2, we only run when the rendered config already has the drop-in import
+/// (get_containerd_paths bails otherwise). We create the drop-in dir and empty file.
 pub async fn setup_containerd_config_files(runtime: &str, config: &Config) -> Result<()> {
-    const K3S_RKE2_BASE_TMPL: &str = "{{ template \"base\" . }}\n";
-
     match runtime {
         "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
-            // K3s/RKE2: create only the chosen template (v2 or v3). See docs.k3s.io/advanced#configuring-containerd
+            // K3s/RKE2: rendered config must already import the drop-in dir (checked in get_containerd_paths).
+            // Create the drop-in dir and empty file only.
             let paths = config.get_containerd_paths(runtime).await?;
-            let path = &paths.config_file;
-            if !Path::new(path).exists() {
-                if let Some(parent) = Path::new(path).parent() {
-                    fs::create_dir_all(parent)
-                        .with_context(|| format!("Failed to create containerd config dir: {parent:?}"))?;
-                }
-                fs::write(path, K3S_RKE2_BASE_TMPL)
-                    .with_context(|| format!("Failed to write K3s/RKE2 template: {path}"))?;
+            let drop_in_path = if paths.drop_in_file.starts_with("/etc/containerd/") {
+                Path::new(&paths.drop_in_file).to_path_buf()
+            } else {
+                Path::new("/host").join(paths.drop_in_file.trim_start_matches('/'))
+            };
+            if let Some(parent) = drop_in_path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("Failed to create K3s/RKE2 drop-in dir: {parent:?}"))?;
+            }
+            if !drop_in_path.exists() {
+                fs::write(&drop_in_path, "")
+                    .with_context(|| format!("Failed to create K3s/RKE2 drop-in file: {drop_in_path:?}"))?;
             }
         }
         "k0s-worker" | "k0s-controller" => {
