@@ -77,15 +77,15 @@ In our case, there will be a variety of resources, and every resource has severa
 
 ## Roadmap
 
-- Stage 1 (June): provide basic features (current delivered)
-- Stage 2 (September): support common features
+- Stage 1: provide basic features
+- Stage 2: support common features
 - Stage 3: support full features
 
 | **Class**                  | **Sub-Class**       | **Development Stage** | **Status** |
 | -------------------------- | ------------------- | --------------------- |------------|
 | Service                    | task service        | Stage 1               |  ✅        |
-|                            | extend service      | Stage 3               |  🚫        |
-|                            | image service       | Stage 3               |  🚫        |
+|                            | extend service      | Stage 3               |  ✅        |
+|                            | image service       | Stage 3               |  ✅        |
 | Runtime handler            | `Virt-Container`    | Stage 1               |  ✅        |
 | Endpoint                   | VETH Endpoint       | Stage 1               |  ✅        |
 |                            | Physical Endpoint   | Stage 2               |  ✅        |
@@ -93,18 +93,18 @@ In our case, there will be a variety of resources, and every resource has severa
 |                            | `Tuntap` Endpoint   | Stage 2               |  ✅        |
 |                            | `IPVlan` Endpoint   | Stage 2               |  ✅        |
 |                            | `MacVlan` Endpoint  | Stage 2               |  ✅        |
-|                            | MACVTAP Endpoint    | Stage 3               |  🚫        |
-|                            | `VhostUserEndpoint` | Stage 3               |  🚫        |
-| Network Interworking Model | Tc filter           | Stage 1               |  ✅        |
-|                            | `MacVtap`           | Stage 3               |  🚧        |
+|                            | MACVTAP Endpoint    | Stage 3               |  ✅        |
+|                            | `VhostUserEndpoint` | Stage 3               |  ✅        |
+| Network Interworking Model | Tc filter            | Stage 1               |  ✅        |
+|                            | `MacVtap`           | Stage 3               |  ✅        |
 | Storage                    | Virtio-fs           | Stage 1               |  ✅        |
-|                            | `nydus`             | Stage 2               |  🚧        |
-|                            | `device mapper`     | Stage 2               |  🚫        |
-| `Cgroup V2`                |                     | Stage 2               |  🚧        |
-| Hypervisor                 | `Dragonball`        | Stage 1               |  🚧        |
-|                            | QEMU                | Stage 2               |  🚫        |
-|                            | Cloud Hypervisor    | Stage 3               |  🚫        |
-|                            | Firecracker         | Stage 3               |  🚫        |
+|                            | `nydus`             | Stage 2               |  ✅        |
+|                            | `device mapper`     | Stage 2               |  ✅        |
+| `Cgroup V2`                |                     | Stage 2               |  ✅        |
+| Hypervisor                 | `Dragonball`        | Stage 1               |  ✅        |
+|                            | QEMU                | Stage 2               |  ✅        |
+|                            | Cloud Hypervisor    | Stage 3               |  ✅        |
+|                            | Firecracker         | Stage 3               |  ✅        |
 
 ## FAQ
 
@@ -131,9 +131,9 @@ In our case, there will be a variety of resources, and every resource has severa
 
   The `Dragonball` could work as an external hypervisor. However, stability and performance is challenging in this case. Built in VMM could optimise the container overhead, and it's easy to maintain stability.
 
-  `runD` is the `containerd-shim-v2` counterpart of `runC` and can run a pod/containers. `Dragonball` is a `microvm`/VMM that is designed to run container workloads. Instead of `microvm`/VMM, we sometimes refer to it as secure sandbox.
+  `runD(Runtime-rs + Dragonball)` is the `containerd-shim-v2` counterpart of `runC` and can run a pod/containers. `Dragonball` is a `microvm`/VMM that is designed to run container workloads. Instead of `microvm`/VMM, we sometimes refer to it as secure sandbox.
 
-- QEMU, Cloud Hypervisor and Firecracker support are planned, but how that would work. Are they working in separate process?
+- QEMU, Cloud Hypervisor and Firecracker have been supported, but how that would work. Are they working in separate process?
 
   Yes. They are unable to work as built in VMM.
 
