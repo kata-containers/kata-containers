@@ -40,10 +40,24 @@ Copyright &copy; 2026 Kata Containers
 # can be defined using TOML syntax.
 #
 # Read more: https://zensical.org/docs/setup/navigation/
-# nav = [
-#   { "Get started" = "index.md" },
-#   { "Markdown in 5min" = "markdown.md" },
-# ]
+nav = [
+    {"Home" = "index.md"},
+    {"Getting Started" = [
+        {"containerd" = "containerd.md"},
+        {"Installation" = "installation.md"},
+        {"Configuration" = [
+            {"Helm" = "helm-configuration.md"},
+            {"Runtime" = "runtime-configuration.md"}
+        ]}
+    ]},
+    {"Platform Support" = [
+        {"Hypervisors" = "hypervisors.md"}
+    ]},
+    {"Architecture" = [
+        "design/architecture/README.md",
+        {"Background" = "design/architecture/background.md"}
+    ]},
+]
 
 # With the "extra_css" option you can add your own CSS styling to customize
 # your Zensical project according to your needs. You can add any number of
@@ -211,7 +225,7 @@ features = [
     # When tabs are enabled, top-level sections are rendered in a menu layer
     # below the header for viewports above 1220px, but remain as-is on mobile.
     # https://zensical.org/docs/setup/navigation/#navigation-tabs
-    #"navigation.tabs",
+    "navigation.tabs",
 
     # When sticky tabs are enabled, navigation tabs will lock below the header
     # and always remain visible when scrolling down.
@@ -315,4 +329,8 @@ line_spans = "__span"
 pygments_lang_class = true
 [project.markdown_extensions.pymdownx.inlinehilite]
 [project.markdown_extensions.pymdownx.snippets]
+[project.markdown_extensions.footnotes]
 [project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" }
+]
