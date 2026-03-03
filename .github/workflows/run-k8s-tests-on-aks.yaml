@@ -48,6 +48,12 @@ jobs:
             instance-type: small
             genpolicy-pull-method: oci-distribution
           - host_os: cbl-mariner
+            vmm: cloud-hypervisor
+            instance-type: small
+          - host_os: cbl-mariner
+            vmm: cloud-hypervisor
+            instance-type: normal
+          - host_os: cbl-mariner
             vmm: clh
             instance-type: small
             genpolicy-pull-method: containerd
