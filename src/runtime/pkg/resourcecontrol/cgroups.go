@@ -186,13 +186,15 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 	}, nil
 }
 
-func NewSandboxResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (ResourceController, error) {
+func NewSandboxResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool, needsHypervisorDevices bool) (ResourceController, error) {
 	sandboxResources := *resources
-	sandboxDevices, err := sandboxDevices()
-	if err != nil {
-		return nil, err
+	if needsHypervisorDevices {
+		sandboxDevs, err := sandboxDevices()
+		if err != nil {
+			return nil, err
+		}
+		sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevs...)
 	}
-	sandboxResources.Devices = append(sandboxResources.Devices, sandboxDevices...)
 
 	// Currently we know to handle systemd cgroup path only when it's the only cgroup (no overhead group), hence,
 	// if sandboxCgroupOnly is not true we treat it as cgroupfs path as it used to be, although it may be incorrect.
