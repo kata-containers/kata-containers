@@ -9,7 +9,7 @@ metadata:
 {{- end }}
   namespace: {{ .Release.Namespace }}
   annotations:
-    # Keep so DaemonSet pods retain API access during uninstall (preStop cleanup).
+    # Keep so DaemonSet pods retain API access during uninstall (SIGTERM cleanup).
     helm.sh/resource-policy: keep
 ---
 kind: ClusterRole

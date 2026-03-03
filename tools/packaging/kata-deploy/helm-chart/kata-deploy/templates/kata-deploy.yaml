@@ -129,8 +129,10 @@ spec:
                 - "riscv64"
 {{- end }}
       hostPID: true
-      # Allow preStop (cleanup on uninstall) to complete before force-kill
-      terminationGracePeriodSeconds: 120
+      # Allow SIGTERM cleanup (uninstall) to complete before force-kill.
+      # Cleanup restarts the CRI runtime and waits for the node to become
+      # ready again, which can take several minutes on k3s/rke2.
+      terminationGracePeriodSeconds: 600
       containers:
       - name: kube-kata
         image: {{ include "kata-deploy.image" . }}
@@ -304,11 +306,6 @@ spec:
           mountPath: /custom-configs/
           readOnly: true
 {{- end }}
-        # On uninstall, each DaemonSet pod runs cleanup for its node before exiting.
-        lifecycle:
-          preStop:
-            exec:
-              command: ["/usr/bin/kata-deploy", "cleanup"]
       volumes:
       - name: crio-conf
         hostPath:
