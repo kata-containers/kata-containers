@@ -189,7 +189,7 @@ pub struct VcpuResizeInfo {
 #[derive(Default)]
 pub(crate) struct VcpuInfo {
     pub(crate) vcpu: Option<Vcpu>,
-    vcpu_fd: Option<Arc<VcpuFd>>,
+    vcpu_fd: Option<VcpuFd>,
     handle: Option<VcpuHandle>,
     tid: u32,
 }
@@ -541,17 +541,13 @@ impl VcpuManager {
         }
         // We will reuse the kvm's vcpufd after first creation, for we can't
         // create vcpufd with same id in one kvm instance.
-        let kvm_vcpu = match &self.vcpu_infos[cpu_index as usize].vcpu_fd {
-            Some(vcpu_fd) => vcpu_fd.clone(),
+        let kvm_vcpu = match self.vcpu_infos[cpu_index as usize].vcpu_fd.take() {
+            Some(vcpu_fd) => vcpu_fd,
             None => {
-                let vcpu_fd = Arc::new(
-                    self.vm_fd
-                        .create_vcpu(cpu_index as u64)
-                        .map_err(VcpuError::VcpuFd)
-                        .map_err(VcpuManagerError::Vcpu)?,
-                );
-                self.vcpu_infos[cpu_index as usize].vcpu_fd = Some(vcpu_fd.clone());
-                vcpu_fd
+                self.vm_fd
+                    .create_vcpu(cpu_index as u64)
+                    .map_err(VcpuError::VcpuFd)
+                    .map_err(VcpuManagerError::Vcpu)?
             }
         };
 
@@ -777,7 +773,7 @@ impl VcpuManager {
     fn create_vcpu_arch(
         &self,
         cpu_index: u8,
-        vcpu_fd: Arc<VcpuFd>,
+        vcpu_fd: VcpuFd,
         request_ts: TimestampUs,
     ) -> Result<Vcpu> {
         // It's safe to unwrap because guest_kernel always exist until vcpu manager done
@@ -806,7 +802,7 @@ impl VcpuManager {
     fn create_vcpu_arch(
         &self,
         cpu_index: u8,
-        vcpu_fd: Arc<VcpuFd>,
+        vcpu_fd: VcpuFd,
         request_ts: TimestampUs,
     ) -> Result<Vcpu> {
         Vcpu::new_aarch64(
