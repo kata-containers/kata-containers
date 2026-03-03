@@ -14,7 +14,7 @@ According to the proposal, it requires to use the `kata-ctl direct-volume` comma
 
 And then with the help of method [get_volume_mount_info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L95), get information from JSON file: `(mountinfo.json)` and parse them into structure [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70) which is used to save device-related information.
 
-We only fill the `mountinfo.json`, such as `device` ,`volume_type`, `fs_type`, `metadata` and `options`, which correspond to the fields in [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70), to describe a device.
+We only fill the `mountinfo.json`, such as `device` ,`volume-type`, `fstype`, `metadata` and `options`, which correspond to the fields in [Direct Volume Info](https://github.com/kata-containers/kata-containers/blob/099b4b0d0e3db31b9054e7240715f0d7f51f9a1c/src/libs/kata-types/src/mount.rs#L70), to describe a device.
 
 The JSON file `mountinfo.json` placed in a sub-path `/kubelet/kata-test-vol-001/volume001` which under fixed path `/run/kata-containers/shared/direct-volumes/`.
 And the full path looks like: `/run/kata-containers/shared/direct-volumes/kubelet/kata-test-vol-001/volume001`, But for some security reasons. it is
@@ -47,18 +47,18 @@ $ sudo mkfs.ext4 /tmp/stor/rawdisk01.20g
 ```json
 {
   "device": "/tmp/stor/rawdisk01.20g",
-  "volume_type": "directvol",
-  "fs_type": "ext4",
+  "volume-type": "directvol",
+  "fstype": "ext4",
   "metadata":"{}",
   "options": []
 }
 ```
 
 ```bash
-$ sudo kata-ctl direct-volume add /kubelet/kata-direct-vol-002/directvol002 "{\"device\": \"/tmp/stor/rawdisk01.20g\", \"volume_type\": \"directvol\", \"fs_type\": \"ext4\", \"metadata\":"{}", \"options\": []}"
+$ sudo kata-ctl direct-volume add /kubelet/kata-direct-vol-002/directvol002 "{\"device\": \"/tmp/stor/rawdisk01.20g\", \"volume-type\": \"directvol\", \"fstype\": \"ext4\", \"metadata\":"{}", \"options\": []}"
 $# /kubelet/kata-direct-vol-002/directvol002 <==> /run/kata-containers/shared/direct-volumes/W1lMa2F0ZXQva2F0YS10a2F0DAxvbC0wMDEvdm9sdW1lMDAx
 $ cat W1lMa2F0ZXQva2F0YS10a2F0DAxvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
-{"volume_type":"directvol","device":"/tmp/stor/rawdisk01.20g","fs_type":"ext4","metadata":{},"options":[]}
+{"volume-type":"directvol","device":"/tmp/stor/rawdisk01.20g","fstype":"ext4","metadata":{},"options":[]}
 ```
 
 #### Run a Kata container with direct block device volume
@@ -99,8 +99,8 @@ First, configure the `mountinfo.json`, as below:
 ```json
 {
   "device": "45:00.1",
-  "volume_type": "vfiovol",
-  "fs_type": "ext4",
+  "volume-type": "vfiovol",
+  "fstype": "ext4",
   "metadata":"{}",
   "options": []
 }
@@ -111,8 +111,8 @@ First, configure the `mountinfo.json`, as below:
 ```json
 {
   "device": "0000:45:00.1",
-  "volume_type": "vfiovol",
-  "fs_type": "ext4",
+  "volume-type": "vfiovol",
+  "fstype": "ext4",
   "metadata":"{}",
   "options": []
 }
@@ -123,8 +123,8 @@ First, configure the `mountinfo.json`, as below:
 ```json
 {
   "device": "/dev/vfio/110",
-  "volume_type": "vfiovol",
-  "fs_type": "ext4",
+  "volume-type": "vfiovol",
+  "fstype": "ext4",
   "metadata":"{}",
   "options": []
 }
@@ -133,10 +133,10 @@ First, configure the `mountinfo.json`, as below:
 Second, run kata-containers with device(`/dev/vfio/110`) as an example:
 
 ```bash
-$ sudo kata-ctl direct-volume add /kubelet/kata-vfio-vol-003/vfiovol003 "{\"device\": \"/dev/vfio/110\", \"volume_type\": \"vfiovol\", \"fs_type\": \"ext4\", \"metadata\":"{}", \"options\": []}"
+$ sudo kata-ctl direct-volume add /kubelet/kata-vfio-vol-003/vfiovol003 "{\"device\": \"/dev/vfio/110\", \"volume-type\": \"vfiovol\", \"fstype\": \"ext4\", \"metadata\":"{}", \"options\": []}"
 $ # /kubelet/kata-vfio-vol-003/directvol003 <==> /run/kata-containers/shared/direct-volumes/F0va22F0ZvaS12F0YS10a2F0DAxvbC0F0ZXvdm9sdF0Z0YSx
 $ cat F0va22F0ZvaS12F0YS10a2F0DAxvbC0F0ZXvdm9sdF0Z0YSx/mountInfo.json
-{"volume_type":"vfiovol","device":"/dev/vfio/110","fs_type":"ext4","metadata":{},"options":[]}
+{"volume-type":"vfiovol","device":"/dev/vfio/110","fstype":"ext4","metadata":{},"options":[]}
 ```
 
 #### Run a Kata container with VFIO block device based volume
@@ -194,8 +194,8 @@ Second, fill fields in `mountinfo.json`, it looks like as below:
 ```json
 {
   "device": "/tmp/vhu-targets/vhost-blk-rawdisk01.sock",
-  "volume_type": "spdkvol",
-  "fs_type": "ext4",
+  "volume-type": "spdkvol",
+  "fstype": "ext4",
   "metadata":"{}",
   "options": []
 }
@@ -205,10 +205,10 @@ Third, with the help of `kata-ctl direct-volume` to add block device to generate
 
 ```bash
 $ # kata-ctl direct-volume add
-$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 "{\"device\": \"/tmp/vhu-targets/vhost-blk-rawdisk01.sock\", \"volume_type\":\"spdkvol\", \"fs_type\": \"ext4\", \"metadata\":"{}", \"options\": []}"
+$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 "{\"device\": \"/tmp/vhu-targets/vhost-blk-rawdisk01.sock\", \"volume-type\":\"spdkvol\", \"fstype\": \"ext4\", \"metadata\":"{}", \"options\": []}"
 $ # /kubelet/kata-test-vol-001/volume001 <==> /run/kata-containers/shared/direct-volumes/L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx
 $ cat L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
-$ {"volume_type":"spdkvol","device":"/tmp/vhu-targets/vhost-blk-rawdisk01.sock","fs_type":"ext4","metadata":{},"options":[]}
+$ {"volume-type":"spdkvol","device":"/tmp/vhu-targets/vhost-blk-rawdisk01.sock","fstype":"ext4","metadata":{},"options":[]}
 ```
 
 As `/run/kata-containers/shared/direct-volumes/` is a fixed path , we will be able to run a kata pod with `--mount` and set
