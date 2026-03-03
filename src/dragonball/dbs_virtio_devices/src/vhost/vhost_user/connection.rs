@@ -10,10 +10,10 @@ use dbs_utils::epoll_manager::{EventOps, EventSet, Events};
 use log::*;
 use vhost_rs::vhost_user::message::{VhostUserProtocolFeatures, VhostUserVringAddrFlags};
 use vhost_rs::vhost_user::{
-    Error as VhostUserError, Listener as VhostUserListener, Master, VhostUserMaster,
+    Error as VhostUserError, Frontend, Listener as VhostUserListener, VhostUserFrontend,
 };
 use vhost_rs::{Error as VhostError, VhostBackend, VhostUserMemoryRegionInfo, VringConfigData};
-use virtio_bindings::bindings::virtio_net::VIRTIO_F_RING_PACKED;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_RING_PACKED;
 use virtio_queue::QueueT;
 use vm_memory::{
     Address, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryRegion, MemoryRegionAddress,
@@ -50,7 +50,7 @@ impl Listener {
     }
 
     // Wait for an incoming connection until success.
-    pub fn accept(&self) -> VirtioResult<(Master, u64)> {
+    pub fn accept(&self) -> VirtioResult<(Frontend, u64)> {
         loop {
             match self.try_accept() {
                 Ok(Some((master, mut feature))) => {
@@ -65,14 +65,14 @@ impl Listener {
         }
     }
 
-    pub fn try_accept(&self) -> VirtioResult<Option<(Master, u64)>> {
+    pub fn try_accept(&self) -> VirtioResult<Option<(Frontend, u64)>> {
         let sock = match self.listener.accept() {
             Ok(Some(conn)) => conn,
             Ok(None) => return Ok(None),
             Err(e) => return Err(e.into()),
         };
 
-        let mut master = Master::from_stream(sock, 1);
+        let mut master = Frontend::from_stream(sock, 1);
         info!("{}: try to get virtio features from slave.", self.name);
         match Endpoint::initialize(&mut master) {
             Ok(Some(features)) => Ok(Some((master, features))),
@@ -159,8 +159,8 @@ impl<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion> EndpointParam<'_, A
 /// Caller needs to ensure mutual exclusive access to the object.
 pub(super) struct Endpoint {
     /// Underlying vhost-user communication endpoint.
-    conn: Option<Master>,
-    old: Option<Master>,
+    conn: Option<Frontend>,
+    old: Option<Frontend>,
     /// Token to register epoll event for the underlying socket.
     slot: u32,
     /// Identifier string for logs.
@@ -168,7 +168,7 @@ pub(super) struct Endpoint {
 }
 
 impl Endpoint {
-    pub fn new(master: Master, slot: u32, name: String) -> Self {
+    pub fn new(master: Frontend, slot: u32, name: String) -> Self {
         Endpoint {
             conn: Some(master),
             old: None,
@@ -186,7 +186,7 @@ impl Endpoint {
     /// * - Ok(Some(avial_features)): virtio features from the slave
     /// * - Ok(None): underlying communicaiton channel gets broken during negotiation
     /// * - Err(e): error conditions
-    fn initialize(master: &mut Master) -> VirtioResult<Option<u64>> {
+    fn initialize(master: &mut Frontend) -> VirtioResult<Option<u64>> {
         // 1. Seems that some vhost-user slaves depend on the get_features request to driver its
         // internal state machine.
         // N.B. it's really TDD, we just found it works in this way. Any spec about this?
@@ -242,7 +242,7 @@ impl Endpoint {
     pub fn negotiate<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>(
         &mut self,
         config: &EndpointParam<AS, Q, R>,
-        mut old: Option<&mut Master>,
+        mut old: Option<&mut Frontend>,
     ) -> VirtioResult<()> {
         let guard = config.virtio_config.lock_guest_memory();
         let mem = guard.deref();
@@ -286,19 +286,19 @@ impl Endpoint {
         );
 
         // Setup slave channel if SLAVE_REQ protocol feature is set
-        if protocol_features.contains(VhostUserProtocolFeatures::SLAVE_REQ) {
+        if protocol_features.contains(VhostUserProtocolFeatures::BACKEND_REQ) {
             match config.slave_req_fd {
-                Some(fd) => master.set_slave_request_fd(&fd)?,
+                Some(fd) => master.set_backend_request_fd(&fd)?,
                 None => {
                     error!(
-                        "{}: Protocol feature SLAVE_REQ is set but not slave channel fd",
+                        "{}: Protocol feature BACKEND_REQ is set but not slave channel fd",
                         self.name
                     );
                     return Err(VhostError::VhostUserProtocol(VhostUserError::InvalidParam).into());
                 }
             }
         } else {
-            info!("{}: has no SLAVE_REQ protocol feature set", self.name);
+            info!("{}: has no BACKEND_REQ protocol feature set", self.name);
         }
 
         // 6. check number of queues supported
@@ -454,7 +454,7 @@ impl Endpoint {
     /// Restore communication with the vhost-user slave on reconnect.
     pub fn reconnect<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>(
         &mut self,
-        master: Master,
+        master: Frontend,
         config: &EndpointParam<AS, Q, R>,
         ops: &mut EventOps,
     ) -> VirtioResult<()> {
@@ -515,7 +515,11 @@ impl Endpoint {
     }
 
     /// Deregister the underlying socket from the epoll controller.
-    pub fn deregister_epoll_event(&self, master: &Master, ops: &mut EventOps) -> VirtioResult<()> {
+    pub fn deregister_epoll_event(
+        &self,
+        master: &Frontend,
+        ops: &mut EventOps,
+    ) -> VirtioResult<()> {
         info!(
             "{}: unregister epoll event for fd {}.",
             self.name,
@@ -529,7 +533,7 @@ impl Endpoint {
         .map_err(VirtioError::EpollMgr)
     }
 
-    pub fn set_master(&mut self, master: Master) {
+    pub fn set_master(&mut self, master: Frontend) {
         self.conn = Some(master);
     }
 }

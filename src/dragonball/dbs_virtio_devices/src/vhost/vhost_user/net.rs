@@ -12,7 +12,7 @@ use dbs_utils::epoll_manager::{EpollManager, EventOps, Events, MutEventSubscribe
 use dbs_utils::net::MacAddr;
 use log::{debug, error, info, trace, warn};
 use vhost_rs::vhost_user::{
-    Error as VhostUserError, Master, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
+    Error as VhostUserError, Frontend, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
 };
 use vhost_rs::Error as VhostError;
 use virtio_bindings::bindings::virtio_net::{
@@ -59,7 +59,7 @@ struct VhostUserNetDevice {
 
 impl VhostUserNetDevice {
     fn new(
-        master: Master,
+        master: Frontend,
         mut avail_features: u64,
         listener: Listener,
         guest_mac: Option<&MacAddr>,

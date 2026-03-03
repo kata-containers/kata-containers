@@ -26,6 +26,7 @@ use vhost_rs::vhost_user::message::VhostUserVringAddrFlags;
 #[cfg(not(test))]
 use vhost_rs::VhostBackend;
 use vhost_rs::{VhostUserMemoryRegionInfo, VringConfigData};
+use virtio_bindings::bindings::virtio_config::{VIRTIO_F_NOTIFY_ON_EMPTY, VIRTIO_F_VERSION_1};
 use virtio_bindings::bindings::virtio_net::*;
 use virtio_bindings::bindings::virtio_ring::*;
 use virtio_queue::{DescriptorChain, QueueT};
