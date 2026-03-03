@@ -10,7 +10,6 @@
 
 use libc::c_char;
 use std::collections::HashMap;
-use std::io;
 use std::mem;
 use std::result;
 use std::slice;
@@ -381,6 +380,7 @@ pub fn setup_mptable<M: GuestMemory>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
     use vm_memory::{Bytes, GuestMemoryMmap};
 
     fn table_entry_size(type_: u8) -> usize {

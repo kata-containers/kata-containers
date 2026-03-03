@@ -328,7 +328,7 @@ impl AddressSpaceMgr {
 
             vm_memory = vm_memory
                 .insert_region(mmap_reg.clone())
-                .map_err(|e| AddressManagerError::CreateGuestMemory(
+                .map_err(|_e| AddressManagerError::CreateGuestMemory(
                     vm_memory::GuestMemoryError::InvalidGuestAddress(vm_memory::GuestAddress(0)),
                 ))?;
             self.map_to_kvm(res_mgr, &param, reg, mmap_reg)?;
