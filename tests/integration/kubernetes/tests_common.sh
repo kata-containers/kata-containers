@@ -352,7 +352,9 @@ hard_coded_policy_tests_enabled() {
 		fi
 	done
 
-	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" ]]; then
+	# https://github.com/kata-containers/kata-containers/issues/12720
+	if [[ "${enabled}" == "no" && "${KATA_HOST_OS}" == "cbl-mariner" && \
+	 	  "${KATA_HYPERVISOR}" == "clh" ]]; then
 		enabled="yes"
 	fi
 

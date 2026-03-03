@@ -80,6 +80,8 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, containerd)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, clh, small, oci-distribution)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, cloud-hypervisor, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (cbl-mariner, cloud-hypervisor, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh, lts)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (clh, active)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-free-runner / run-k8s-tests (dragonball, lts)
