@@ -69,6 +69,8 @@ jobs:
         uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6.2.0
         with:
           go-version: ${{ env.GO_VERSION }}
+          # Setup-go doesn't work properly with ppc64le: https://github.com/actions/setup-go/issues/648
+          architecture: ${{ inputs.arch == 'ppc64le' && 'ppc64le' || '' }}
 
       - name: Install dependencies
         timeout-minutes: 15
