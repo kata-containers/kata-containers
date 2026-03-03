@@ -1,0 +1,118 @@
+[gha-run.sh:577] INFO: Exporting AUTO_GENERATE_POLICY=
+yq is already installed in correct version
+Deleting test namespace kata-containers-k8s-tests
+namespace/kata-containers-k8s-tests created
+Context "k8s-5f7810d691cce9b14b3adc763b60dbcdf0c9b677" modified.
+~/repos/microsoft-kata-containers/tests/integration/kubernetes ~/repos/microsoft-kata-containers/tests/integration/kubernetes
+yq is already installed in correct version
+[setup.sh:136] INFO: Not adding io.containerd.cri.runtime-handler annotation for default pull type
+yq is already installed in correct version
+[run_kubernetes_tests.sh:1050] INFO: Running tests with bats version: Bats 1.10.0. Save outputs to /home/saulparedes/repos/microsoft-kata-containers/tests/integration/kubernetes/reports/2026-03-20-09:49:14
+[run_kubernetes_tests.sh:1057] INFO: Executing k8s-pod-quota.bats
+1..1
+not ok 1 Pod quota in 97296ms
+# (in test file k8s-pod-quota.bats, line 34)
+#   `kubectl wait --for=condition=Available --timeout=$timeout \' failed
+# No resources found in kata-containers-k8s-tests namespace.
+# [bats-exec-test:68] INFO: k8s configured to use runtimeclass
+# namespace/test-quota-ns created
+# resourcequota/pod-quota created
+#     pods: "2"
+#     pods: "2"
+# Warning: [azurepolicy-k8sazurev2customcontainerallow-db27d7bfaf0671f6e28a] Container image quay.io/prometheus/busybox:latest for container pod-quota-demo has not been allowed.
+# deployment.apps/deploymenttest created
+# error: timed out waiting for the condition on deployments/deploymenttest
+# Name:                deploymenttest-58f4c7f4df-pr4dx
+# Namespace:           kata-containers-k8s-tests
+# Priority:            0
+# Runtime Class Name:  kata
+# Service Account:     default
+# Node:                <none>
+# Labels:              pod-template-hash=58f4c7f4df
+#                      purpose=quota-demo
+# Annotations:         <none>
+# Status:              Pending
+# IP:
+# IPs:                 <none>
+# Controlled By:       ReplicaSet/deploymenttest-58f4c7f4df
+# Containers:
+#   pod-quota-demo:
+#     Image:      quay.io/prometheus/busybox:latest
+#     Port:       <none>
+#     Host Port:  <none>
+#     Command:
+#       tail
+#       -f
+#       /dev/null
+#     Environment:  <none>
+#     Mounts:
+#       /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-vb6tn (ro)
+# Conditions:
+#   Type           Status
+#   PodScheduled   False
+# Volumes:
+#   kube-api-access-vb6tn:
+#     Type:                    Projected (a volume that contains injected data from multiple sources)
+#     TokenExpirationSeconds:  3607
+#     ConfigMapName:           kube-root-ca.crt
+#     Optional:                false
+#     DownwardAPI:             true
+# QoS Class:                   BestEffort
+# Node-Selectors:              katacontainers.io/kata-runtime=true
+# Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+#                              node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+# Events:
+#   Type     Reason            Age   From               Message
+#   ----     ------            ----  ----               -------
+#   Warning  FailedScheduling  90s   default-scheduler  0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.
+#
+#
+# Name:                deploymenttest-58f4c7f4df-ttg6p
+# Namespace:           kata-containers-k8s-tests
+# Priority:            0
+# Runtime Class Name:  kata
+# Service Account:     default
+# Node:                <none>
+# Labels:              pod-template-hash=58f4c7f4df
+#                      purpose=quota-demo
+# Annotations:         <none>
+# Status:              Pending
+# IP:
+# IPs:                 <none>
+# Controlled By:       ReplicaSet/deploymenttest-58f4c7f4df
+# Containers:
+#   pod-quota-demo:
+#     Image:      quay.io/prometheus/busybox:latest
+#     Port:       <none>
+#     Host Port:  <none>
+#     Command:
+#       tail
+#       -f
+#       /dev/null
+#     Environment:  <none>
+#     Mounts:
+#       /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-7jtjj (ro)
+# Conditions:
+#   Type           Status
+#   PodScheduled   False
+# Volumes:
+#   kube-api-access-7jtjj:
+#     Type:                    Projected (a volume that contains injected data from multiple sources)
+#     TokenExpirationSeconds:  3607
+#     ConfigMapName:           kube-root-ca.crt
+#     Optional:                false
+#     DownwardAPI:             true
+# QoS Class:                   BestEffort
+# Node-Selectors:              katacontainers.io/kata-runtime=true
+# Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+#                              node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+# Events:
+#   Type     Reason            Age   From               Message
+#   ----     ------            ----  ----               -------
+#   Warning  FailedScheduling  90s   default-scheduler  0/1 nodes are available: 1 Insufficient cpu. preemption: 0/1 nodes are available: 1 No preemption victims found for incoming pod.
+# pod "deploymenttest-58f4c7f4df-pr4dx" deleted from kata-containers-k8s-tests namespace
+# pod "deploymenttest-58f4c7f4df-ttg6p" deleted from kata-containers-k8s-tests namespace
+# Journal LOG starts at 2026-03-20 16:49:20, ends at 2026-03-20 16:50:54
+# DEBUG: system logs of node 'aks-nodepool1-13261232-vmss000000' since test start time (2026-03-20 16:49:20)
+[run_kubernetes_tests.sh:1074] ERROR: Tests FAILED from suites: k8s-pod-quota.bats
+pod "custom-node-debugger-98d14f1" deleted from kube-system namespace
