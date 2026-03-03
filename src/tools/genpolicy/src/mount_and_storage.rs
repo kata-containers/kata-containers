@@ -114,16 +114,12 @@ pub fn get_mount_and_storage(
 
     if let Some(emptyDir) = &yaml_volume.emptyDir {
         let settings_volumes = &settings.volumes;
-        let mut volume: Option<&settings::EmptyDirVolume> = None;
+        let mut volume = &settings_volumes.emptyDir;
 
         if let Some(medium) = &emptyDir.medium {
             if medium == "Memory" {
-                volume = Some(&settings_volumes.emptyDir_memory);
+                volume = &settings_volumes.emptyDir_memory;
             }
-        }
-
-        if volume.is_none() {
-            volume = Some(&settings_volumes.emptyDir);
         }
 
         get_empty_dir_mount_and_storage(
@@ -131,7 +127,7 @@ pub fn get_mount_and_storage(
             p_mounts,
             storages,
             yaml_mount,
-            volume.unwrap(),
+            volume,
             pod_security_context,
         );
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
