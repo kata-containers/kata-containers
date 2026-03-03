@@ -1,0 +1,91 @@
+site_name: "Kata Containers Docs"
+site_description: "Developer and user documentation for the Kata Containers project."
+site_author: "Kata Containers Community"
+
+repo_url: "https://github.com/kata-containers/kata-containers"
+site_url: "https://kata-containers.github.io/kata-containers"
+edit_uri: "edit/main/docs/"
+repo_name: kata-containers
+
+theme:
+    name: materialx
+    favicon: "assets/images/favicon.svg"
+    logo: "assets/images/favicon.svg"
+    topbar_style: glass
+    palette:
+      - media: "(prefers-color-scheme)"
+        toggle:
+            icon: material/brightness-auto
+            name: Switch to light mode
+      - media: "(prefers-color-scheme: light)"
+        scheme: default
+        primary: blue
+        accent: light blue
+        toggle:
+            icon: material/weather-sunny
+            name: Switch to dark mode
+      - media: "(prefers-color-scheme: dark)"
+        scheme: slate
+        primary: cyan
+        accent: cyan
+        toggle:
+            icon: material/brightness-4
+            name: Switch to system preference
+    features:
+        - content.action.edit
+        - content.action.view
+        - content.code.annotate
+        - content.code.copy
+        - content.code.select
+        - content.footnote.tooltips
+        - content.tabs.link
+        - content.tooltips
+        - navigation.expand
+        - navigation.indexes
+        - navigation.path
+        - navigation.sections
+        - navigation.tabs
+        - navigation.tracking
+        - navigation.top
+        - navigation.instant
+        - navigation.instant.prefetch
+        - navigation.instant.progress
+        - toc.follow
+markdown_extensions:
+    - abbr
+    - admonition
+    - attr_list
+    - def_list
+    - footnotes
+    - md_in_html
+    - pymdownx.arithmatex:
+        generic: true
+    - pymdownx.emoji:
+        emoji_index: !!python/name:material.extensions.emoji.twemoji
+        emoji_generator: !!python/name:material.extensions.emoji.to_svg
+    - pymdownx.details
+    - pymdownx.highlight:
+        anchor_linenums: true
+        line_spans: __span
+        pygments_lang_class: true
+        auto_title: true
+    - pymdownx.inlinehilite
+    - pymdownx.keys
+    - pymdownx.magiclink
+    - pymdownx.superfences:
+        custom_fences:
+            - name: mermaid
+              class: mermaid
+              format: !!python/name:pymdownx.superfences.fence_code_format
+    - pymdownx.inlinehilite
+    - pymdownx.tabbed:
+        alternate_style: true
+    - pymdownx.tilde
+    - pymdownx.caret
+    - pymdownx.mark
+    - toc:
+        permalink: true
+
+plugins:
+    - search
+    - awesome-nav
