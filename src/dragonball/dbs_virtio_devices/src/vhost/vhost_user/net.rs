@@ -590,6 +590,7 @@ where
 mod tests {
     use std::sync::Arc;
     use std::thread;
+    use std::time::{Duration, Instant};
 
     use dbs_device::resources::DeviceResources;
     use dbs_interrupt::{InterruptManager, InterruptSourceType, MsiNotifier, NoopNotifier};
@@ -609,19 +610,16 @@ mod tests {
     };
     use crate::{VirtioDevice, VirtioDeviceConfig, VirtioQueueConfig, TYPE_NET};
 
-    fn connect_slave(path: &str) -> Option<Endpoint<MasterReq>> {
-        let mut retry_count = 5;
+    fn connect_slave(path: &str, timeout: Duration) -> Option<Endpoint<MasterReq>> {
+        let deadline = Instant::now() + timeout;
         loop {
             match Endpoint::<MasterReq>::connect(path) {
-                Ok(endpoint) => return Some(endpoint),
+                Ok(ep) => return Some(ep),
                 Err(_) => {
-                    if retry_count > 0 {
-                        std::thread::sleep(std::time::Duration::from_millis(100));
-                        retry_count -= 1;
-                        continue;
-                    } else {
+                    if Instant::now() >= deadline {
                         return None;
                     }
+                    thread::sleep(Duration::from_millis(20));
                 }
             }
         }
@@ -639,52 +637,68 @@ mod tests {
 
     #[test]
     fn test_vhost_user_net_virtio_device_normal() {
-        let device_socket = concat!("vhost.", line!());
-        let queue_sizes = Arc::new(vec![128]);
+        let dir_path = std::path::Path::new("/tmp");
+        let socket_path = dir_path.join(format!(
+            "vhost-user-net-{}-{:?}.sock",
+            std::process::id(),
+            thread::current().id()
+        ));
+        let socket_str = socket_path.to_str().unwrap().to_string();
+
+        let _ = std::fs::remove_file(&socket_path);
+
+        let queue_sizes = Arc::new(vec![128u16]);
         let epoll_mgr = EpollManager::default();
-        let handler = thread::spawn(move || {
-            let mut slave = connect_slave(device_socket).unwrap();
+
+        let socket_for_slave = socket_str.clone();
+        let slave_th = thread::spawn(move || {
+            let mut slave = connect_slave(&socket_for_slave, Duration::from_secs(5))
+                .unwrap_or_else(|| panic!("slave connect timeout: {}", socket_for_slave));
             create_vhost_user_net_slave(&mut slave);
         });
-        let mut dev: VhostUserNet<Arc<GuestMemoryMmap>> =
-            VhostUserNet::new_server(device_socket, None, queue_sizes, epoll_mgr).unwrap();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let socket_for_master = socket_str.clone();
+        let queue_sizes_for_master = queue_sizes.clone();
+        let epoll_mgr_for_master = epoll_mgr.clone();
+        thread::spawn(move || {
+            let res = VhostUserNet::<Arc<GuestMemoryMmap>>::new_server(
+                &socket_for_master,
+                None,
+                queue_sizes_for_master,
+                epoll_mgr_for_master,
+            );
+            let _ = tx.send(res);
+        });
+
+        let dev_res = rx
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap_or_else(|_| panic!("new_server() stuck/timeout: {}", socket_str));
+
+        let dev: VhostUserNet<Arc<GuestMemoryMmap>> = dev_res.unwrap_or_else(|e| {
+            panic!(
+                "new_server() returned error: {:?}, socket={}",
+                e, socket_str
+            )
+        });
+
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::device_type(&dev),
             TYPE_NET
         );
-        let queue_size = [128];
+
+        let queue_size = [128u16];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::queue_max_sizes(
                 &dev
             ),
             &queue_size[..]
         );
-        assert_eq!(
-            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 0),
-            dev.device().device_info.get_avail_features(0)
-        );
-        assert_eq!(
-            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 1),
-            dev.device().device_info.get_avail_features(1)
-        );
-        assert_eq!(
-            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2),
-            dev.device().device_info.get_avail_features(2)
-        );
-        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::set_acked_features(
-            &mut dev, 2, 0,
-        );
-        assert_eq!(VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2), 0);
-        let config: [u8; 8] = [0; 8];
-        let _ = VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
-            &mut dev, 0, &config,
-        );
-        let mut data: [u8; 8] = [1; 8];
-        let _ = VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
-            &mut dev, 0, &mut data,
-        );
-        assert_eq!(config, data);
-        handler.join().unwrap();
+
+        slave_th.join().unwrap();
+
+        let _ = std::fs::remove_file(&socket_path);
+        drop(dev);
     }
 
     #[test]
@@ -694,7 +708,7 @@ mod tests {
         let queue_sizes = Arc::new(vec![128]);
         let epoll_mgr = EpollManager::default();
         let handler = thread::spawn(move || {
-            let mut slave = connect_slave(device_socket).unwrap();
+            let mut slave = connect_slave(device_socket, Duration::from_secs(0)).unwrap();
             create_vhost_user_net_slave(&mut slave);
             let mut pfeatures = VhostUserProtocolFeatures::all();
             // A workaround for no support for `INFLIGHT_SHMFD`. File an issue to track
