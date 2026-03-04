@@ -8,6 +8,7 @@ required_tests:
   - Cargo Crates Check Runner / cargo-deny-runner
   - GHA security analysis / zizmor
   - Lint GHA workflows / run-actionlint
+  - EditorConfig checker / editorconfig-checker
 
 required_regexps:
   # Always required regexps
