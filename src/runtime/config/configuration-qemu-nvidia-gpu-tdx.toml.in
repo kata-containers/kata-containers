@@ -693,6 +693,7 @@ vfio_mode = "@DEFVFIOMODE@"
 # If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
 # be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
 disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
+emptydir_mode = "@DEFEMPTYDIRMODE_COCO@"
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
