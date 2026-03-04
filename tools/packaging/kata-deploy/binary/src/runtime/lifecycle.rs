@@ -12,6 +12,14 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 pub async fn wait_till_node_is_ready(config: &Config) -> Result<()> {
+    wait_till_node_is_ready_timeout(config, None).await
+}
+
+pub async fn wait_till_node_is_ready_timeout(
+    config: &Config,
+    timeout_secs: Option<u64>,
+) -> Result<()> {
+    let start = std::time::Instant::now();
     let mut check_count = 0;
     loop {
         check_count += 1;
@@ -33,6 +41,16 @@ pub async fn wait_till_node_is_ready(config: &Config) -> Result<()> {
         if ready == "True" {
             info!("Node {} is ready", config.node_name);
             return Ok(());
+        }
+
+        if let Some(timeout) = timeout_secs {
+            if start.elapsed().as_secs() >= timeout {
+                return Err(anyhow::anyhow!(
+                    "Timed out after {}s waiting for node {} to become ready",
+                    timeout,
+                    config.node_name
+                ));
+            }
         }
 
         info!("wait_till_node_is_ready: Node not ready yet, sleeping 2 seconds...");

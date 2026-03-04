@@ -29,13 +29,39 @@ HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
 HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
 HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${HELM_EXPERIMENTAL_FORCE_GUEST_PULL:-}"
 HELM_VERIFY_DEPLOYMENT="${HELM_VERIFY_DEPLOYMENT:-false}"
-KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-600}"
+KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-900}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+
+# Wait for the Kubernetes API to recover after kata-deploy uninstall, then
+# retry the uninstall to purge any stale helm release state. On k3s/rke2,
+# the SIGTERM cleanup restarts the CRI runtime which takes down the API.
+# Arguments:
+#   $1 - helm release name
+#   $2 - helm namespace
+wait_for_api_and_retry_uninstall() {
+	local release_name="${1}"
+	local namespace="${2}"
+
+	local api_wait=0
+	local api_timeout=300
+	while [ "$api_wait" -lt "$api_timeout" ]; do
+		if kubectl get nodes --request-timeout=5s &>/dev/null; then
+			echo "Kubernetes API is available after uninstall"
+			break
+		fi
+		echo "Waiting for API to recover after uninstall... (${api_wait}s/${api_timeout}s)"
+		sleep 5
+		api_wait=$((api_wait + 5))
+	done
+
+	helm uninstall "${release_name}" -n "${namespace}" \
+		--ignore-not-found --wait --timeout 5m || true
+}
 
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
@@ -267,12 +293,45 @@ function deploy_k0s() {
 	sudo chown "${USER}":"${USER}" ~/.kube/config
 }
 
+# If the rendered containerd config (v3) does not import the drop-in dir, write
+# the full V3 template (from tests/containerd-config-v3.tmpl) with the given
+# import path and restart the service.
+# Args: containerd_dir (e.g. /var/lib/rancher/k3s/agent/etc/containerd), service_name (e.g. k3s or rke2-server).
+function _setup_containerd_v3_template_if_needed() {
+	local containerd_dir="$1"
+	local service_name="$2"
+	local template_file="${tests_dir}/containerd-config-v3.tmpl"
+	local rendered_v3="${containerd_dir}/config-v3.toml"
+	local imports_path="${containerd_dir}/config-v3.toml.d/*.toml"
+	if sudo test -f "${rendered_v3}" && sudo grep -q 'config-v3\.toml\.d' "${rendered_v3}" 2>/dev/null; then
+		return 0
+	fi
+	if [[ ! -f "${template_file}" ]]; then
+		echo "Template not found: ${template_file}" >&2
+		return 1
+	fi
+	sudo mkdir -p "${containerd_dir}/config-v3.toml.d"
+	sed "s|__CONTAINERD_IMPORTS_PATH__|${imports_path}|g" "${template_file}" | sudo tee "${containerd_dir}/config-v3.toml.tmpl" > /dev/null
+	sudo systemctl restart "${service_name}"
+}
+
+function setup_k3s_containerd_v3_template_if_needed() {
+	_setup_containerd_v3_template_if_needed "/var/lib/rancher/k3s/agent/etc/containerd" "k3s"
+}
+
+function setup_rke2_containerd_v3_template_if_needed() {
+	_setup_containerd_v3_template_if_needed "/var/lib/rancher/rke2/agent/etc/containerd" "rke2-server"
+}
+
 function deploy_k3s() {
 	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
 	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --kubelet-arg runtime-request-timeout=600s
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
+
+	# If rendered config does not import the drop-in dir, write full V3 template so kata-deploy can use it.
+	setup_k3s_containerd_v3_template_if_needed
 
 	# Download the kubectl binary into /usr/bin and remove /usr/local/bin/kubectl
 	#
@@ -342,6 +401,9 @@ function deploy_rke2() {
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
+
+	# If rendered config does not import the drop-in dir, write full V3 template so kata-deploy can use it.
+	setup_rke2_containerd_v3_template_if_needed
 
 	# Link the kubectl binary into /usr/bin
 	sudo ln -sf /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl

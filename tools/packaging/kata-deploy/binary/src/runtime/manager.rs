@@ -27,16 +27,9 @@ const CONTAINERD_BASED_RUNTIMES: &[&str] = &[
 
 /// Runtimes that don't support containerd drop-in configuration files.
 ///
-/// K3s and RKE2 generate the final config from a template (config.toml.tmpl or
-/// config-v3.toml.tmpl); they do not merge drop-in files when rendering, so we
-/// must write the Kata runtime block directly into the template.
-const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &[
-    "crio",
-    "k3s",
-    "k3s-agent",
-    "rke2-agent",
-    "rke2-server",
-];
+/// K3s/RKE2 can use drop-in when the rendered config already imports the
+/// versioned drop-in dir; we check that in get_containerd_paths and bail otherwise.
+const RUNTIMES_WITHOUT_CONTAINERD_DROP_IN_SUPPORT: &[&str] = &["crio"];
 
 fn is_containerd_based(runtime: &str) -> bool {
     CONTAINERD_BASED_RUNTIMES.contains(&runtime)
@@ -151,33 +144,39 @@ pub async fn configure_cri_runtime(config: &Config, runtime: &str) -> Result<()>
     Ok(())
 }
 
-pub async fn cleanup_cri_runtime(config: &Config, runtime: &str) -> Result<()> {
+/// Remove CRI runtime configuration (containerd/crio config files) without restarting.
+pub async fn cleanup_cri_runtime_config(config: &Config, runtime: &str) -> Result<()> {
     log::info!(
-        "cleanup_cri_runtime: Starting cleanup for runtime={}",
+        "cleanup_cri_runtime_config: Starting cleanup for runtime={}",
         runtime
     );
 
     if runtime == "crio" {
-        log::info!("cleanup_cri_runtime: Cleaning up crio");
+        log::info!("cleanup_cri_runtime_config: Cleaning up crio");
         crio::cleanup_crio(config).await?;
-        log::info!("cleanup_cri_runtime: Successfully cleaned up crio");
+        log::info!("cleanup_cri_runtime_config: Successfully cleaned up crio");
     } else if is_containerd_based(runtime) {
-        log::info!("cleanup_cri_runtime: Cleaning up containerd");
+        log::info!("cleanup_cri_runtime_config: Cleaning up containerd");
         containerd::cleanup_containerd(config, runtime).await?;
-        log::info!("cleanup_cri_runtime: Successfully cleaned up containerd");
+        log::info!("cleanup_cri_runtime_config: Successfully cleaned up containerd");
     } else {
         return Err(anyhow::anyhow!("Unsupported runtime: {runtime}"));
     }
 
-    if config.helm_post_delete_hook {
-        log::info!("cleanup_cri_runtime: Helm post-delete hook, restarting runtime");
-        lifecycle::restart_cri_runtime(config, runtime).await?;
-        log::info!("cleanup_cri_runtime: Successfully restarted runtime");
-    } else {
-        log::info!("cleanup_cri_runtime: Not a Helm post-delete hook, skipping runtime restart");
-    }
+    log::info!("cleanup_cri_runtime_config: Cleanup completed");
+    Ok(())
+}
 
-    log::info!("cleanup_cri_runtime: Cleanup completed");
+/// Restart the CRI runtime and wait for the node to become ready.
+pub async fn restart_and_wait_for_ready(config: &Config, runtime: &str) -> Result<()> {
+    log::info!("restart_and_wait_for_ready: Restarting runtime");
+    lifecycle::restart_cri_runtime(config, runtime).await?;
+    log::info!("restart_and_wait_for_ready: Successfully restarted runtime");
+
+    log::info!("restart_and_wait_for_ready: Waiting for node to become ready (timeout: 300s)");
+    lifecycle::wait_till_node_is_ready_timeout(config, Some(300)).await?;
+    log::info!("restart_and_wait_for_ready: Node is ready");
+
     Ok(())
 }
 
