@@ -110,9 +110,14 @@ scheduling:
 {{- $config := index $runtimeClassConfigs $shim }}
 {{- $shimConfig := index $.Values.shims $shim }}
 {{- if $config }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $config "shimConfig" $shimConfig "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{- /* Allow per-shim overrides of pod overhead via .shims.<name>.runtimeClass.overhead */ -}}
+{{- $effectiveConfig := deepCopy $config }}
+{{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.overhead }}
+{{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
+{{- end }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
 {{- if and $createDefaultRC (not $multiInstallSuffix) (eq $shim $defaultShim) }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $config "shimConfig" $shimConfig "nameOverride" $defaultRCName "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" $defaultRCName "useShimNodeSelectors" $useShimNodeSelectors) }}
 {{- end }}
 {{- end }}
 {{- end }}
