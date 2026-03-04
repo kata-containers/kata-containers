@@ -124,6 +124,17 @@ impl ConfigPlugin for QemuConfig {
                 ));
             }
 
+            // CoCo guest hardening: virtio-mmio transport is not hardened for confidential
+            // computing; only virtio-pci is. Ensure we never use virtio-blk-mmio for rootfs.
+            if qemu.security_info.confidential_guest
+                && qemu.boot_info.vm_rootfs_driver == VIRTIO_BLK_MMIO
+            {
+                return Err(std::io::Error::other(
+                    "Confidential guests must not use virtio-blk-mmio (use virtio-blk-pci); \
+                     virtio-mmio is not hardened for CoCo",
+                ));
+            }
+
             if qemu.boot_info.kernel.is_empty() {
                 return Err(std::io::Error::other(
                     "Guest kernel image for qemu is empty",
