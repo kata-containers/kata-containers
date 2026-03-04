@@ -326,7 +326,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 }
 
 func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs)
+	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs, q.config.ConfidentialGuest)
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {

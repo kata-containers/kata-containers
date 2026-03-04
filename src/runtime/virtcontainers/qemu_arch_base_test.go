@@ -181,16 +181,32 @@ func TestQemuArchBaseCPUTopology(t *testing.T) {
 	qemuArchBase := newQemuArchBase()
 	vcpus := uint32(2)
 
-	expectedSMP := govmmQemu.SMP{
-		CPUs:    vcpus,
-		Sockets: defaultMaxVCPUs,
-		Cores:   defaultCores,
-		Threads: defaultThreads,
-		MaxCPUs: defaultMaxVCPUs,
-	}
+	t.Run("NonConfidentialGuest", func(t *testing.T) {
+		expectedSMP := govmmQemu.SMP{
+			CPUs:    vcpus,
+			Sockets: defaultMaxVCPUs,
+			Cores:   defaultCores,
+			Threads: defaultThreads,
+			MaxCPUs: defaultMaxVCPUs,
+		}
 
-	smp := qemuArchBase.cpuTopology(vcpus, defaultMaxVCPUs)
-	assert.Equal(expectedSMP, smp)
+		smp := qemuArchBase.cpuTopology(vcpus, defaultMaxVCPUs, false)
+		assert.Equal(expectedSMP, smp)
+	})
+
+	t.Run("ConfidentialGuest", func(t *testing.T) {
+		// When confidential guest is enabled, MaxCPUs should be 0 (disables CPU hotplug)
+		expectedSMP := govmmQemu.SMP{
+			CPUs:    vcpus,
+			Sockets: 0,
+			Cores:   defaultCores,
+			Threads: defaultThreads,
+			MaxCPUs: 0,
+		}
+
+		smp := qemuArchBase.cpuTopology(vcpus, defaultMaxVCPUs, true)
+		assert.Equal(expectedSMP, smp)
+	})
 }
 
 func TestQemuArchBaseCPUModel(t *testing.T) {
