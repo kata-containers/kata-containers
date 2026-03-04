@@ -203,7 +203,10 @@
             "anno_key_regex": "^cdi\\.k8s\\.io/vfio[0-9]+$",
             "nvidia": {
                 "gpu_anno_value_regex": "^nvidia\\.com/gpu=[0-9]+$",
-                "gpu_gk_device_type": "vfio-pci-gk",
+                "gpu_device_types": [
+                    "vfio-pci-gk",
+                    "vfio-pci"
+                ],
                 "pgpu_resource_keys": [
                     "nvidia.com/pgpu"
                 ]

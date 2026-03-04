@@ -498,9 +498,13 @@ pub struct VfioNvidiaDevices {
     #[serde(skip_serializing)]
     pub gpu_anno_value_regex: String,
 
-    /// Device type for NVIDIA GPU VFIO devices (gk variant).
-    #[serde(skip_serializing)]
-    pub gpu_gk_device_type: String,
+    /// Allowed device types for NVIDIA GPU VFIO devices.
+    ///
+    /// Policy enforcement needs this allowlist because the agent device type
+    /// depends on `vfio_mode` in `configuration.toml`:
+    /// - `vfio_mode=guest-kernel` => `vfio-pci-gk`
+    /// - `vfio_mode=vfio`         => `vfio-pci`
+    pub gpu_device_types: Vec<String>,
 
     /// Allowlist of K8s extended resource names that should be treated as NVIDIA
     /// passthrough GPU (pGPU) requests when generating policy.
@@ -763,15 +767,6 @@ impl AgentPolicy {
                     // number with the number from the provided CDI annotations.
                     device
                         .set_container_path(self.config.settings.devices.vfio.device_path.clone());
-                    device.set_type(
-                        self.config
-                            .settings
-                            .devices
-                            .vfio
-                            .nvidia
-                            .gpu_gk_device_type
-                            .clone(),
-                    );
                     device.set_vm_path("".to_string());
                     devices.push(device);
                 }
