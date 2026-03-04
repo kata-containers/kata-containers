@@ -13,6 +13,7 @@ use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_CH_VCPUS;
 use crate::config::default::MIN_CH_MEMORY_SIZE_MB;
 
+use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{resolve_path, validate_path};
 
@@ -101,6 +102,16 @@ impl ConfigPlugin for CloudHypervisorConfig {
             if !ch.valid_jailer_paths.is_empty() {
                 return Err(std::io::Error::other(
                     "Valid CH jailer path list should be empty",
+                ));
+            }
+
+            // CoCo guest hardening: virtio-mmio is not hardened for confidential computing.
+            if ch.security_info.confidential_guest
+                && ch.boot_info.vm_rootfs_driver == VIRTIO_BLK_MMIO
+            {
+                return Err(std::io::Error::other(
+                    "Confidential guests must not use virtio-blk-mmio (use virtio-blk-pci); \
+                     virtio-mmio is not hardened for CoCo",
                 ));
             }
 
