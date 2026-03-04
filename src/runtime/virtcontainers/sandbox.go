@@ -870,7 +870,12 @@ func (s *Sandbox) createResourceController() error {
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
-	s.sandboxController, err = resCtrl.NewSandboxResourceController(cgroupPath, &resources, s.config.SandboxCgroupOnly)
+	s.sandboxController, err = resCtrl.NewSandboxResourceController(
+		cgroupPath,
+		&resources,
+		s.config.SandboxCgroupOnly,
+		s.config.HypervisorType != RemoteHypervisor,
+	)
 	if err != nil {
 		return fmt.Errorf("Could not create the sandbox resource controller %v", err)
 	}

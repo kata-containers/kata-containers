@@ -1483,6 +1483,19 @@ func TestSandbox_Cgroups(t *testing.T) {
 			false,
 			true,
 		},
+		{
+			"sandbox, remote hypervisor (no kvm required)",
+			&Sandbox{
+				config: &SandboxConfig{
+					HypervisorType: RemoteHypervisor,
+					Containers: []ContainerConfig{
+						successfulContainer,
+					},
+				},
+			},
+			false,
+			true,
+		},
 	}
 	for _, tt := range tests {
 		if tt.needRoot && os.Getuid() != 0 {
