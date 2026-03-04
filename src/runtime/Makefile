@@ -486,11 +486,7 @@ ifneq (,$(QEMUCMD))
     DEFAULTVFIOPORT_NV = root-port
     DEFAULTPCIEROOTPORT_NV = 8
 
-    # Disable the devtmpfs mount in guest. NVRC does this, and later kata-agent
-    # attempts this as well in a non-failing manner. Otherwise, NVRC fails when
-    # using an image and /dev is already mounted.
     KERNELPARAMS_NV = "cgroup_no_v1=all"
-    KERNELPARAMS_NV += "devtmpfs.mount=0"
     KERNELPARAMS_NV += "pci=realloc"
     KERNELPARAMS_NV += "pci=nocrs"
     KERNELPARAMS_NV += "pci=assign-busses"
