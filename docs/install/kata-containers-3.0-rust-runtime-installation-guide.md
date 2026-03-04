@@ -85,10 +85,10 @@ After running the command above, the default config file `configuration.toml` wi
 
 ### Install Shim Without Builtin Dragonball VMM
 
-By default, runtime-rs includes the `Dragonball` VMM. To build without the built-in `Dragonball` hypervisor, use `make USE_BUILDIN_DB=false`:
+By default, runtime-rs includes the `Dragonball` VMM. To build without the built-in `Dragonball` hypervisor, use `make USE_BUILTIN_DB=false`:
 ```bash
 $ cd kata-containers/src/runtime-rs
-$ make USE_BUILDIN_DB=false
+$ make USE_BUILTIN_DB=false
 ```
 After building, specify the desired hypervisor during installation using `HYPERVISOR`. For example, to use `qemu` or `cloud-hypervisor`:
 
