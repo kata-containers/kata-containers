@@ -18,7 +18,7 @@ setup() {
     pod_name="trusted-ephemeral-data-storage"
     mountpoint="/mnt/temp-encrypted"
 
-    host_df="$(exec_host "${node}" df -P -B1 /var/lib/kubelet | tail -n +2)"
+    host_df="$(exec_host "${node}" df -P -B1 "$(get_kubelet_data_dir)" | tail -n +2)"
     host_capacity_bytes="$(echo "${host_df}" | awk '{print $3}')"
 
     yaml_file="${pod_config_dir}/pod-trusted-ephemeral-data-storage.yaml"
