@@ -115,6 +115,14 @@ is_k3s_or_rke2() {
 	esac
 }
 
+# Return the kubelet data directory, which varies by Kubernetes distribution.
+get_kubelet_data_dir() {
+	case "${KUBERNETES:-}" in
+		k0s) echo "/var/lib/k0s/kubelet" ;;
+		*) echo "/var/lib/kubelet" ;;
+	esac
+}
+
 is_runtime_rs() {
 	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
 }
@@ -162,6 +170,7 @@ install_genpolicy_drop_ins() {
 # genpolicy-settings.json and genpolicy-settings.d/*.json (drop-ins).
 create_common_genpolicy_settings() {
 	declare -r genpolicy_settings_dir="$1"
+	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
 
 	auto_generate_policy_enabled || return 0
 
