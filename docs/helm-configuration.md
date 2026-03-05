@@ -55,7 +55,7 @@ customRuntimes:
   runtimes:
     my-gpu-runtime:
       baseConfig: "qemu-nvidia-gpu"  # Required: existing config to use as base
-      dropIn: |                       # Optional: overrides via config.d mechanism
+      dropIn: |                      # Optional: overrides via config.d mechanism
         [hypervisor.qemu]
         default_memory = 1024
         default_vcpus = 4
@@ -259,11 +259,9 @@ default_memory = 4096
 EOF
 ```
 
-## Legacy Configuration Format
+### Parameters
 
 The structured configuration format described above is available as of Kata Containers v3.23.0. The legacy format is described below.
-
-### Parameters
 
 | Key | Description | Default |
 |-----|-------------|---------|
@@ -314,19 +312,3 @@ The structured configuration format described above is available as of Kata Cont
 | `env._experimentalForceGuestPull_s390x` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for s390x (if set, overrides `_experimentalForceGuestPull`) | `""` |
 | `env._experimentalForceGuestPull_ppc64le` | Enables `experimental_force_guest_pull` for the shim(s) specified as the value for ppc64le (if set, overrides `_experimentalForceGuestPull`) | `""` |
 
-### Migration to Structured Format
-
-The legacy `env.*` configuration format is **deprecated** as of v3.23.0 and will be removed in 2 releases. Users are encouraged to migrate to the new structured format.
-
-**Deprecated fields** (will be removed in 2 releases):
-- `env.shims`, `env.shims_x86_64`, `env.shims_aarch64`, `env.shims_s390x`, `env.shims_ppc64le`
-- `env.defaultShim`, `env.defaultShim_x86_64`, `env.defaultShim_aarch64`, `env.defaultShim_s390x`, `env.defaultShim_ppc64le`
-- `env.allowedHypervisorAnnotations`
-- `env.snapshotterHandlerMapping`, `env.snapshotterHandlerMapping_x86_64`, etc.
-- `env.pullTypeMapping`, `env.pullTypeMapping_x86_64`, etc.
-- `env.agentHttpsProxy`, `env.agentNoProxy`
-- `env._experimentalSetupSnapshotter`
-- `env._experimentalForceGuestPull`, `env._experimentalForceGuestPull_x86_64`, etc.
-- `env.debug`
-
-The chart maintains full backward compatibility with the legacy `env.*` format. If legacy values are set, they take precedence over the new structured format. This allows for gradual migration.

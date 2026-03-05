@@ -1,6 +1,6 @@
 # containerd
 
-Kata requires a [CRI]-compatible container runtimes. containerd is commonly used for Kata. We recommend installing containerd using your platform's package distribution mechanism. We recommend the latest version of containerd v2.[^1]
+Kata requires a [CRI]-compatible container runtime. containerd is commonly used for Kata. We recommend installing containerd using your platform's package distribution mechanism. We recommend at least the latest version of containerd v2.1.x.[^1]
 
 
 ## Debian/Ubuntu

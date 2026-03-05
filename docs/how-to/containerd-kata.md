@@ -1,7 +1,3 @@
----
-title: "Foo"
----
-
 # How to use Kata Containers and Containerd
 
 This document covers the installation and configuration of [containerd](https://containerd.io/)
