@@ -704,11 +704,21 @@ mod tests {
     #[test]
     fn test_vhost_user_net_virtio_device_activate() {
         skip_if_kvm_unaccessable!();
-        let device_socket = concat!("vhost.", line!());
-        let queue_sizes = Arc::new(vec![128]);
+        let dir_path = std::path::Path::new("/tmp");
+        let socket_path = dir_path.join(format!(
+            "vhost-user-net-{}-{:?}.sock",
+            std::process::id(),
+            thread::current().id()
+        ));
+        let socket_str = socket_path.to_str().unwrap().to_string();
+        let _ = std::fs::remove_file(&socket_path);
+
+        let queue_sizes = Arc::new(vec![128u16]);
         let epoll_mgr = EpollManager::default();
-        let handler = thread::spawn(move || {
-            let mut slave = connect_slave(device_socket, Duration::from_secs(0)).unwrap();
+        let socket_for_slave = socket_str.clone();
+        let slave_th = thread::spawn(move || {
+            let mut slave = connect_slave(&socket_for_slave, Duration::from_secs(10))
+                .unwrap_or_else(|| panic!("slave connect timeout: {}", socket_for_slave));
             create_vhost_user_net_slave(&mut slave);
             let mut pfeatures = VhostUserProtocolFeatures::all();
             // A workaround for no support for `INFLIGHT_SHMFD`. File an issue to track
@@ -716,8 +726,30 @@ mod tests {
             pfeatures -= VhostUserProtocolFeatures::INFLIGHT_SHMFD;
             negotiate_slave(&mut slave, pfeatures, true, 1);
         });
-        let mut dev: VhostUserNet<Arc<GuestMemoryMmap>> =
-            VhostUserNet::new_server(device_socket, None, queue_sizes, epoll_mgr).unwrap();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        let socket_for_master = socket_str.clone();
+        let queue_sizes_for_master = queue_sizes.clone();
+        let epoll_mgr_for_master = epoll_mgr.clone();
+        thread::spawn(move || {
+            let res = VhostUserNet::<Arc<GuestMemoryMmap>>::new_server(
+                &socket_for_master,
+                None,
+                queue_sizes_for_master,
+                epoll_mgr_for_master,
+            );
+            let _ = tx.send(res);
+        });
+        let mut dev: VhostUserNet<Arc<GuestMemoryMmap>> = rx
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap_or_else(|_| panic!("new_server() stuck/timeout: {}", socket_str))
+            .unwrap_or_else(|e| {
+                panic!(
+                    "new_server() returned error: {:?}, socket={}",
+                    e, socket_str
+                )
+            });
+
         // invalid queue size
         {
             let kvm = Kvm::new().unwrap();
@@ -774,6 +806,9 @@ mod tests {
                 );
             dev.activate(config).unwrap();
         }
-        handler.join().unwrap();
+        slave_th.join().unwrap();
+
+        let _ = std::fs::remove_file(&socket_path);
+        drop(dev);
     }
 }
