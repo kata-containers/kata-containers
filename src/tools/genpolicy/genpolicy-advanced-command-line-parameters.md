@@ -86,20 +86,22 @@ To print the `base64` encoded Policy, in addition to adding it into the `YAML` f
 $ genpolicy -b -y test.yaml
 ```
 
-# Use a custom `genpolicy` settings file
+# Use a custom `genpolicy` settings file or directory
 
-The default `genpolicy` settings file is `./genpolicy-settings.json`. Users can specify in the command line a different settings file by using the `-j` parameter - e.g.,
+The default is `./genpolicy-settings.json`. With the `-j` parameter you can pass either a settings file or a **directory**. If you pass a directory, `genpolicy` loads `genpolicy-settings.json` from it and applies all `genpolicy-settings.d/*.json` drop-ins (sorted by name) as RFC 6902 JSON Patches.
 
 ```bash
 $ genpolicy -j my-settings.json -y test.yaml
+$ genpolicy -j /path/to/settings-dir -y test.yaml
 ```
 
 # Use a custom path to `genpolicy` input files
 
-By default, the `genpolicy` input files [`rules.rego`](rules.rego) and [`genpolicy-settings.json`](genpolicy-settings.json) must be present in the current directory - otherwise `genpolicy` returns an error. Users can specify different paths to these two files, using the `-p` and `-j` command line parameters - e.g.,
+By default, the `genpolicy` input files [`rules.rego`](rules.rego) and [`genpolicy-settings.json`](genpolicy-settings.json) must be present in the current directory - otherwise `genpolicy` returns an error. You can pass a different file or directory with `-j` and a different rules file with `-p` - e.g.,
 
 ```bash
 $ genpolicy -p /tmp/rules.rego -j /tmp/genpolicy-settings.json -y test.yaml
+$ genpolicy -p /tmp/rules.rego -j /tmp/settings-dir -y test.yaml
 ```
 
 # Silently ignore unsupported input `YAML` fields

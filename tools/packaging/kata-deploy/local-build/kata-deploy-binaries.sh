@@ -1213,6 +1213,16 @@ install_tools_helper() {
 		mkdir -p "${defaults_path}"
 		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
 		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
+		mkdir -p "${defaults_path}/genpolicy-settings.d"
+		# Scenario drop-in examples (10-*.json base, 20-*.json overlays). Do not ship test drop-ins (99-*).
+		drop_in_examples="${repo_root_dir}/src/tools/${tool}/drop-in-examples"
+		if [[ -d "${drop_in_examples}" ]]; then
+			mkdir -p "${defaults_path}/drop-in-examples"
+			for f in "${drop_in_examples}"/10-*.json "${drop_in_examples}"/20-*.json; do
+				[[ -e "${f}" ]] && install -D --mode 0644 "${f}" "${defaults_path}/drop-in-examples/$(basename "${f}")"
+			done
+			[[ -f "${drop_in_examples}/README.md" ]] && install -D --mode 0644 "${drop_in_examples}/README.md" "${defaults_path}/drop-in-examples/README.md"
+		fi
 		binary_permissions="0755"
 	else
 		binary_permissions="$default_binary_permissions"

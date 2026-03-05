@@ -1,0 +1,62 @@
+[
+  {
+    "op": "replace",
+    "path": "/cluster_config/guest_pull",
+    "value": false
+  },
+  {
+    "op": "replace",
+    "path": "/common/root_path",
+    "value": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"
+  },
+  {
+    "op": "replace",
+    "path": "/kata_config/enable_configmap_secret_storages",
+    "value": true
+  },
+  {
+    "op": "replace",
+    "path": "/request_defaults/UpdateEphemeralMountsRequest",
+    "value": true
+  },
+  {
+    "op": "replace",
+    "path": "/sandbox/storages",
+    "value": [
+      {
+        "driver": "ephemeral",
+        "driver_options": [],
+        "fs_group": null,
+        "fstype": "tmpfs",
+        "mount_point": "/run/kata-containers/sandbox/shm",
+        "options": [
+          "noexec",
+          "nosuid",
+          "nodev",
+          "mode=1777",
+          "size=67108864"
+        ],
+        "source": "shm"
+      },
+      {
+        "driver": "virtio-fs",
+        "driver_options": [],
+        "fs_group": null,
+        "fstype": "virtiofs",
+        "mount_point": "/run/kata-containers/shared/containers/",
+        "options": [],
+        "source": "kataShared"
+      }
+    ]
+  },
+  {
+    "op": "replace",
+    "path": "/volumes/configMap/driver",
+    "value": "watchable-bind"
+  },
+  {
+    "op": "replace",
+    "path": "/volumes/configMap/mount_point",
+    "value": "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-"
+  }
+]

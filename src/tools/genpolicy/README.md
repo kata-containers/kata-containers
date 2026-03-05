@@ -47,6 +47,13 @@ For advanced command line parameters, see [`genpolicy` advanced command line par
 
 `genpolicy` has support for automatic Policy generation based on Kubernetes `DaemonSet`, `Deployment`, `Job`, `Pod`, `ReplicaSet`, `ReplicationController`, and `StatefulSet` input `YAML` files.
 
+# Settings directory and drop-ins
+
+You can pass a **directory** to `-j` instead of a single file. In that case `genpolicy` loads `genpolicy-settings.json` from that directory and applies all `genpolicy-settings.d/*.json` files (sorted by name) in order. Each drop-in must be an [RFC 6902 JSON Patch](https://datatracker.ietf.org/doc/html/rfc6902): a JSON array of operations (`add`, `remove`, `replace`, `move`, `copy`, `test`). This gives precise control (e.g. array indices) and optional `test` for assertions.
+
+- **`genpolicy-settings.d/`** — empty by default; add your drop-in JSON Patch files here.
+- **`drop-in-examples/`** — example scenario drop-ins (`10-*.json` platform base, `20-*.json` overlays), each a JSON Patch array. Copy the ones you need into your own `genpolicy-settings.d/`. See the [drop-in examples documentation](drop-in-examples/README.md). These examples are tested in Kata Containers CI.
+
 # Policy details
 
 See [auto-generated Policy details](genpolicy-auto-generated-policy-details.md).

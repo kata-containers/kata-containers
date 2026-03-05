@@ -113,118 +113,42 @@ is_k3s_or_rke2() {
 	esac
 }
 
-adapt_common_policy_settings_for_non_coco() {
-	local settings_dir=$1
+# Copy the right combination of drop-ins from drop-in-examples/ into
+# genpolicy-settings.d/. Drop-ins are layered: 10-* for platform base,
+# 20-* for OCI version and other overlays.
+install_genpolicy_drop_ins() {
+	local -r settings_d="$1"
+	local -r examples_dir="$2"
 
-	info "Adapting common policy settings from ${settings_dir} for non-CoCo guest"
+	# 10-* platform base
+	if ! is_coco_platform; then
+		if is_aks_cluster && [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
+			cp "${examples_dir}/10-non-coco-aks-cbl-mariner-drop-in.json" "${settings_d}/"
+		elif is_aks_cluster; then
+			cp "${examples_dir}/10-non-coco-aks-drop-in.json" "${settings_d}/"
+		else
+			cp "${examples_dir}/10-non-coco-drop-in.json" "${settings_d}/"
+		fi
+	fi
 
-	# Using UpdateEphemeralMountsRequest - instead of CopyFileRequest.
-	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
+	# 20-* OCI version overlay
+	if [[ "${KATA_HOST_OS:-}" == "cbl-mariner" ]]; then
+		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
+	elif is_k3s_or_rke2 || is_nvidia_gpu_platform; then
+		cp "${examples_dir}/20-oci-1.2.1-drop-in.json" "${settings_d}/"
+	elif [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
+	fi
 
-	# Using a different path to container container root.
-	jq '.common.root_path = "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	# Using CreateContainer Storage input structs for configMap & secret volumes - instead of using CopyFile like CoCo.
-	jq '.kata_config.enable_configmap_secret_storages = true' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	# Using watchable binds for configMap volumes - instead of CopyFileRequest.
-	jq '.volumes.configMap.mount_point = "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-" | .volumes.configMap.driver = "watchable-bind"' \
-		"${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	# Using a Storage input struct for paths shared with the Host using virtio-fs.
-	jq '.sandbox.storages += [{"driver":"virtio-fs","driver_options":[],"fs_group":null,"fstype":"virtiofs","mount_point":"/run/kata-containers/shared/containers/","options":[],"source":"kataShared"}]' \
-		"${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	# Disable guest pull.
-	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
+	# 20-* experimental force guest pull overlay
+	if [[ "${PULL_TYPE:-}" == "experimental-force-guest-pull" ]]; then
+		cp "${examples_dir}/20-experimental-force-guest-pull-drop-in.json" "${settings_d}/"
+	fi
 }
 
-# adapt common policy settings for AKS Hosts
-adapt_common_policy_settings_for_aks() {
-	info "Adapting common policy settings for AKS Hosts"
-
-	jq '.pause_container.Process.User.UID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	jq '.pause_container.Process.User.GID = 0' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	jq '.cluster_config.pause_container_image = "mcr.microsoft.com/oss/v2/kubernetes/pause:3.6"' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-
-	jq '.cluster_config.pause_container_id_policy = "v2"' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
-# adapt common policy settings for CBL-Mariner Hosts
-adapt_common_policy_settings_for_cbl_mariner() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for KATA_HOST_OS=cbl-mariner"
-	jq '.kata_config.oci_version = "1.2.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
-# Adapt common policy settings for NVIDIA GPU platforms (CI runners use containerd 2.x).
-adapt_common_policy_settings_for_nvidia_gpu() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for NVIDIA GPU platform (${KATA_HYPERVISOR})"
-	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
-# Adapt OCI version in policy settings to match containerd version.
-# containerd 2.2.x (active) vendors v1.3.0.
-adapt_common_policy_settings_for_containerd_version() {
-	local settings_dir=${1}
-
-	info "Adapting common policy settings for containerd's latest release"
-	jq '.kata_config.oci_version = "1.3.0"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
-# k3s/rke2 use containerd that expects OCI bundle 1.2.1; otherwise autogenerated policy tests fail.
-# (Tested with: k3s v1.34.4+k3s1, rke2 v1.34.4+rke2r1.)
-adapt_common_policy_settings_for_k3s_rke2() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for k3s/rke2 (OCI bundle 1.2.1)"
-	jq '.kata_config.oci_version = "1.2.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
-# When using experimental-force-guest-pull, genpolicy must not use guest_pull (we pull via oci-distribution for policy generation).
-adapt_common_policy_settings_for_experimental_force_guest_pull() {
-	local settings_dir=$1
-
-	info "Adapting common policy settings for experimental-force-guest-pull: disable guest_pull"
-	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
-	mv temp.json "${settings_dir}/genpolicy-settings.json"
-}
-
-# adapt common policy settings for various platforms
-adapt_common_policy_settings() {
-	local settings_dir=$1
-
-	is_coco_platform || adapt_common_policy_settings_for_non_coco "${settings_dir}"
-	is_aks_cluster && adapt_common_policy_settings_for_aks "${settings_dir}"
-	is_nvidia_gpu_platform && adapt_common_policy_settings_for_nvidia_gpu "${settings_dir}"
-	[[ -n "${CONTAINER_ENGINE_VERSION:-}" ]] && adapt_common_policy_settings_for_containerd_version "${settings_dir}"
-	is_k3s_or_rke2 && adapt_common_policy_settings_for_k3s_rke2 "${settings_dir}"
-	[[ "${PULL_TYPE:-}" == "experimental-force-guest-pull" ]] && adapt_common_policy_settings_for_experimental_force_guest_pull "${settings_dir}"
-
-	case "${KATA_HOST_OS}" in
-		"cbl-mariner")
-			adapt_common_policy_settings_for_cbl_mariner "${settings_dir}"
-			;;
-	esac
-}
-
-# If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
-# and change these settings to use Kata CI cluster's default namespace.
+# If auto-generated policy testing is enabled, make a copy of the genpolicy settings
+# and set up the scenario drop-ins. genpolicy is run with -j <dir> so it loads
+# genpolicy-settings.json and genpolicy-settings.d/*.json (drop-ins).
 create_common_genpolicy_settings() {
 	declare -r genpolicy_settings_dir="$1"
 	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
@@ -234,11 +158,14 @@ create_common_genpolicy_settings() {
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
 
-	adapt_common_policy_settings "${genpolicy_settings_dir}"
+	mkdir -p "${genpolicy_settings_dir}/genpolicy-settings.d"
+	install_genpolicy_drop_ins \
+		"${genpolicy_settings_dir}/genpolicy-settings.d" \
+		"${default_genpolicy_settings_dir}/drop-in-examples"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
-# described above into a temporary directory that will be used by the current test case.
+# (including genpolicy-settings.d/) into a temporary directory for the current test case.
 create_tmp_policy_settings_dir() {
 	declare -r common_settings_dir="$1"
 
@@ -248,6 +175,9 @@ create_tmp_policy_settings_dir() {
 	cp "${common_settings_dir}/rules.rego" "${tmp_settings_dir}"
 	cp "${common_settings_dir}/genpolicy-settings.json" "${tmp_settings_dir}"
 	cp "${common_settings_dir}/default-initdata.toml" "${tmp_settings_dir}"
+	if [[ -d "${common_settings_dir}/genpolicy-settings.d" ]]; then
+		cp -r "${common_settings_dir}/genpolicy-settings.d" "${tmp_settings_dir}/"
+	fi
 
 	echo "${tmp_settings_dir}"
 }
@@ -285,7 +215,7 @@ auto_generate_policy_no_added_flags() {
 	auto_generate_policy_enabled || return 0
 	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
-	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
+	genpolicy_command+=" -j ${settings_dir}"
 
 	if [[ -n "${config_map_yaml_file}" ]]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
@@ -308,29 +238,31 @@ auto_generate_policy_no_added_flags() {
 	return 1
 }
 
+# 99-test-overrides.json is an RFC 6902 JSON Patch (array of ops). We append to it.
+
 # Change genpolicy settings to allow "kubectl exec" to execute a command
-# and to read console output from a test pod.
+# and to read console output from a test pod. Appends an "add" op to 99-test-overrides.json.
 add_exec_to_policy_settings() {
 	auto_generate_policy_enabled || return 0
 
 	local -r settings_dir="$1"
 	shift
 
-	# Create a JSON array of strings containing all the args of the command to be allowed.
+	local drop_in_dir="${settings_dir}/genpolicy-settings.d"
+	mkdir -p "${drop_in_dir}"
+	local overrides_file="${drop_in_dir}/99-test-overrides.json"
+	[[ -f "${overrides_file}" ]] || echo '[]' > "${overrides_file}"
+
 	local exec_args
 	exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
-
-	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
-	local jq_command=".request_defaults.ExecProcessRequest.allowed_commands |= . + [${exec_args}]"
-	info "${settings_dir}/genpolicy-settings.json: executing jq command: ${jq_command}"
-	jq "${jq_command}" \
-		"${settings_dir}/genpolicy-settings.json" > \
-		"${settings_dir}/new-genpolicy-settings.json"
-	mv "${settings_dir}/new-genpolicy-settings.json" \
-		"${settings_dir}/genpolicy-settings.json"
+	info "Adding exec allowed_commands to ${overrides_file}: ${exec_args}"
+	jq --argjson args "${exec_args}" \
+		'. + [{"op":"add","path":"/request_defaults/ExecProcessRequest/allowed_commands/-","value":$args}]' \
+		"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
 }
 
 # Change genpolicy settings to allow one or more ttrpc requests from the Host to the Guest.
+# Appends "replace" ops to 99-test-overrides.json.
 add_requests_to_policy_settings() {
 	declare -r settings_dir="$1"
 	shift
@@ -338,14 +270,15 @@ add_requests_to_policy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
-	for request in "${requests[@]}"
-	do
-		info "${settings_dir}/genpolicy-settings.json: allowing ${request}"
-		jq ".request_defaults.${request} |= true" \
-			"${settings_dir}"/genpolicy-settings.json > \
-			"${settings_dir}"/new-genpolicy-settings.json
-		mv "${settings_dir}"/new-genpolicy-settings.json \
-			"${settings_dir}"/genpolicy-settings.json
+	local drop_in_dir="${settings_dir}/genpolicy-settings.d"
+	mkdir -p "${drop_in_dir}"
+	local overrides_file="${drop_in_dir}/99-test-overrides.json"
+	[[ -f "${overrides_file}" ]] || echo '[]' > "${overrides_file}"
+
+	for request in "${requests[@]}"; do
+		info "Allowing ${request} in ${overrides_file}"
+		jq --arg req "${request}" '. + [{"op":"replace","path":("/request_defaults/" + $req),"value":true}]' \
+			"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
 	done
 }
 
