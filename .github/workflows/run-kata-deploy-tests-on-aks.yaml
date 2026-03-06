@@ -48,7 +48,7 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}-${{ matrix.host_os }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm }}-${{ matrix.host_os }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     environment: ci

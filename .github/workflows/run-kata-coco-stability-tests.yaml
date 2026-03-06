@@ -52,7 +52,7 @@ jobs:
         pull-type:
           - guest-pull
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm}}-${{ matrix.snapshotter}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.vmm}}-${{ matrix.snapshotter}}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     permissions:

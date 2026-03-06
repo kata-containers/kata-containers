@@ -31,7 +31,7 @@ jobs:
         containerd_version: ['active']
         vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
       cancel-in-progress: true
     # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
     if: false
@@ -97,7 +97,7 @@ jobs:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'qemu-runtime-rs']
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
@@ -146,7 +146,7 @@ jobs:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu', 'dragonball', 'qemu-runtime-rs']
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
@@ -202,7 +202,7 @@ jobs:
           - clh # cloud-hypervisor
           - qemu
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}
       cancel-in-progress: true
     # TODO: enable me when https://github.com/kata-containers/kata-containers/issues/9763 is fixed
     # TODO: Transition to free runner (see #9940).
@@ -250,7 +250,7 @@ jobs:
           - clh
           - qemu
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}
       cancel-in-progress: true
     # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
     # TODO: enable with qemu when https://github.com/kata-containers/kata-containers/issues/9851 is fixed
@@ -303,7 +303,7 @@ jobs:
           - cloud-hypervisor
           - qemu-runtime-rs
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.vmm}}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:

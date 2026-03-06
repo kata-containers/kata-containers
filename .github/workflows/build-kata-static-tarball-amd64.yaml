@@ -69,7 +69,7 @@ jobs:
           - asset: cloud-hypervisor-glibc
             stage: release
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}-${{ matrix.asset }}-${{ matrix.stage }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}-${{ matrix.asset }}-${{ matrix.stage }}
       cancel-in-progress: true
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
@@ -177,7 +177,7 @@ jobs:
           - rootfs-initrd
           - rootfs-initrd-confidential
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}
       cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
@@ -247,7 +247,7 @@ jobs:
           - kernel-nvidia-gpu-modules
           - pause-image
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}
       cancel-in-progress: true
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
@@ -264,7 +264,7 @@ jobs:
         asset:
           - agent
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.asset }}
       cancel-in-progress: true
     steps:
       - uses: geekyeggo/delete-artifact@f275313e70c08f6120db482d7a6b98377786765b # v5.1.0
@@ -399,7 +399,7 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-amd64-${{ matrix.asset }}
       cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io

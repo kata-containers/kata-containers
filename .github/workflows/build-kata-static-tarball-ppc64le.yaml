@@ -27,7 +27,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ppc64le
+  group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le
   cancel-in-progress: true
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ matrix.asset }}-${{ matrix.asset }}-${{ matrix.stage }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ matrix.asset }}-${{ matrix.asset }}-${{ matrix.stage }}
       cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
@@ -108,7 +108,7 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ matrix.asset }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-ppc64le-${{ matrix.asset }}
       cancel-in-progress: true
     steps:
       - name: Login to Kata Containers quay.io
