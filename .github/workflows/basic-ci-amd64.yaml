@@ -16,7 +16,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-basic-amd64
   cancel-in-progress: true
 
 jobs:

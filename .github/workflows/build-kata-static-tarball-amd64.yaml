@@ -29,7 +29,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-amd64
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-tarball-amd64
   cancel-in-progress: true
 
 jobs:

@@ -30,7 +30,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-s390x
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-tarball-s390x
   cancel-in-progress: true
 
 jobs:
