@@ -9,6 +9,8 @@ source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
+AZ_REGION="${AZ_REGION:-eastus}"
+AZ_NODEPOOL_TAGS="${AZ_NODEPOOL_TAGS:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
@@ -138,7 +140,7 @@ function create_cluster() {
 		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
-		-l eastus \
+		-l "${AZ_REGION}" \
 		-n "${rg}"
 
 	# Required by e.g. AKS App Routing for KBS installation.
@@ -154,6 +156,7 @@ function create_cluster() {
 		--generate-ssh-keys
 		--tags "${tags[@]}")
 	[[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && aks_create+=( --os-sku AzureLinux --workload-runtime KataVmIsolation)
+	[[ -n "${AZ_NODEPOOL_TAGS}" ]] && aks_create+=(--nodepool-tags "${AZ_NODEPOOL_TAGS}")
 	"${aks_create[@]}"
 }
 
@@ -610,6 +613,7 @@ function deploy_k8s() {
 
 function set_test_cluster_namespace() {
 	# Delete any spurious tests namespace that was left behind
+	echo "Deleting test namespace ${TEST_CLUSTER_NAMESPACE}"
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}" &> /dev/null || true
 
 	# Create a new namespace for the tests and switch to it
@@ -622,6 +626,7 @@ function set_default_cluster_namespace() {
 }
 
 function delete_test_cluster_namespace() {
+	echo "Deleting test namespace ${TEST_CLUSTER_NAMESPACE}"
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
 	set_default_cluster_namespace
 }

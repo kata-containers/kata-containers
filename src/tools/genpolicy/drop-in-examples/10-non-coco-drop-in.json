@@ -6,6 +6,11 @@
   },
   {
     "op": "replace",
+    "path": "/cluster_config/encrypted_emptydir",
+    "value": false
+  },
+  {
+    "op": "replace",
     "path": "/common/root_path",
     "value": "/run/kata-containers/shared/containers/$(bundle-id)/rootfs"
   },

@@ -37,6 +37,8 @@ K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
 
 AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-}"
+GENPOLICY_BINARY="${GENPOLICY_BINARY:-"/opt/kata/bin/genpolicy"}"
+GENPOLICY_SETTINGS_DIR="${GENPOLICY_SETTINGS_DIR:-"/opt/kata/share/defaults/kata-containers"}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 RUNS_ON_AKS="${RUNS_ON_AKS:-false}"
@@ -113,6 +115,18 @@ is_k3s_or_rke2() {
 	esac
 }
 
+# Return the kubelet data directory, which varies by Kubernetes distribution.
+get_kubelet_data_dir() {
+	case "${KUBERNETES:-}" in
+		k0s) echo "/var/lib/k0s/kubelet" ;;
+		*) echo "/var/lib/kubelet" ;;
+	esac
+}
+
+is_runtime_rs() {
+	[[ "${KATA_HYPERVISOR}" == *-runtime-rs ]]
+}
+
 # Copy the right combination of drop-ins from drop-in-examples/ into
 # genpolicy-settings.d/. Drop-ins are layered: 10-* for platform base,
 # 20-* for OCI version and other overlays.
@@ -144,6 +158,11 @@ install_genpolicy_drop_ins() {
 	if [[ "${PULL_TYPE:-}" == "experimental-force-guest-pull" ]]; then
 		cp "${examples_dir}/20-experimental-force-guest-pull-drop-in.json" "${settings_d}/"
 	fi
+
+	# 20-* runtime-rs overlay (disable encrypted emptyDir, not supported yet)
+	if is_runtime_rs; then
+		cp "${examples_dir}/20-runtime-rs-drop-in.json" "${settings_d}/"
+	fi
 }
 
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings
@@ -155,8 +174,8 @@ create_common_genpolicy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
-	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
-	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
+	cp "${GENPOLICY_SETTINGS_DIR}/genpolicy-settings.json" "${genpolicy_settings_dir}"
+	cp "${GENPOLICY_SETTINGS_DIR}/rules.rego" "${genpolicy_settings_dir}"
 
 	mkdir -p "${genpolicy_settings_dir}/genpolicy-settings.d"
 	install_genpolicy_drop_ins \
@@ -213,7 +232,7 @@ auto_generate_policy_no_added_flags() {
 	declare -r additional_flags="${4:-""}"
 
 	auto_generate_policy_enabled || return 0
-	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
+	local genpolicy_command="RUST_LOG=info ${GENPOLICY_BINARY} -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}"
 
@@ -279,6 +298,21 @@ add_requests_to_policy_settings() {
 		info "Allowing ${request} in ${overrides_file}"
 		jq --arg req "${request}" '. + [{"op":"replace","path":("/request_defaults/" + $req),"value":true}]' \
 			"${overrides_file}" > "${overrides_file}.tmp" && mv "${overrides_file}.tmp" "${overrides_file}"
+	done
+}
+
+# Change Rego rules to allow one or more ttrpc requests from the Host to the Guest.
+allow_requests() {
+	declare -r settings_dir="$1"
+	shift
+	declare -r requests=("$@")
+
+	auto_generate_policy_enabled || return 0
+
+	for request in "${requests[@]}"
+	do
+		info "${settings_dir}/rules.rego: allowing ${request}"
+		sed -i "s/^default \(${request}\).\+/default \1 := true/" "${settings_dir}"/rules.rego
 	done
 }
 
@@ -449,12 +483,7 @@ teardown_common() {
 	node_end_time=$(measure_node_time "${node}")
 
 	echo "Journal LOG starts at ${node_start_time:-}, ends at ${node_end_time:-}"
-
-	# Print the node journal since the test start time if a bats test is not completed
-	if [[ -n "${node_start_time}" && -z "${BATS_TEST_COMPLETED}" ]]; then
-		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
-	fi
+	print_node_journal_since_test_start "${node}" "${node_start_time}" "${BATS_TEST_COMPLETED:-}"
 }
 
 measure_node_time() {
@@ -573,6 +602,6 @@ print_node_journal_since_test_start() {
 
 	if [[ -n "${node_start_time:-}" && -z "${BATS_TEST_COMPLETED:-}" ]]; then
 		echo "DEBUG: system logs of node '${node}' since test start time (${node_start_time})"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'"${node_start_time}"'"' || true
+		exec_host "${node}" journalctl -t "kata" --since '"'"${node_start_time}"'"' -o cat || true
 	fi
 }

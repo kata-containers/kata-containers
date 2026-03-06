@@ -90,6 +90,7 @@ func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persist
 				FileMode:      dev.FileMode,
 				UID:           dev.UID,
 				GID:           dev.GID,
+				Shared:        dev.Shared,
 			})
 		}
 
@@ -337,6 +338,7 @@ func (c *Container) loadContDevices(cs persistapi.ContainerState) {
 			FileMode:      dev.FileMode,
 			UID:           dev.UID,
 			GID:           dev.GID,
+			Shared:        dev.Shared,
 		})
 	}
 }
