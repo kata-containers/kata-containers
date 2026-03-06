@@ -110,8 +110,10 @@ impl Namespace {
 
                 unshare(cf)?;
 
-                if ns_type == NamespaceType::Uts && hostname.is_some() {
-                    nix::unistd::sethostname(hostname.unwrap())?;
+                if ns_type == NamespaceType::Uts {
+                    if let Some(host) = hostname {
+                        nix::unistd::sethostname(host)?;
+                    }
                 }
                 // Bind mount the new namespace from the current thread onto the mount point to persist it.
 
