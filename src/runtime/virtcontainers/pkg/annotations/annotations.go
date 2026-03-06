@@ -10,6 +10,7 @@ const (
 	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
 	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
 	kataAnnotContainerPrefix  = kataAnnotationsPrefix + "container."
+	kataAnnotSandboxPrefix    = kataAnnotationsPrefix + "sandbox."
 
 	//
 	// OCI
