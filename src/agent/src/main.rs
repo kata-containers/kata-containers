@@ -31,7 +31,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::ErrorKind;
-use std::os::unix::fs::{self as unixfs, FileTypeExt};
+use std::os::unix::fs::{self as unixfs};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
@@ -103,7 +103,7 @@ const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SO
 
 const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
 const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
-const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
+//const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
@@ -405,16 +405,22 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
-    let initdata_return_value = initdata::initialize_initdata(logger).await?;
+    init_multi_cdh_clients().await?;
+    // TODO:
+    let initdata_return_value: Option<InitdataReturnValue> = None;
+    {
+        // TODO: will be removed
+        let _initdata_return_value = initdata::initialize_initdata(logger).await?;
 
-    let gc_procs = config.guest_components_procs;
-    if !attestation_binaries_available(logger, &gc_procs) {
-        warn!(
-            logger,
-            "attestation binaries requested for launch not available"
-        );
-    } else {
-        init_attestation_components(logger, config, &initdata_return_value).await?;
+        let gc_procs = config.guest_components_procs;
+        if !attestation_binaries_available(logger, &gc_procs) {
+            warn!(
+                logger,
+                "attestation binaries requested for launch not available"
+            );
+        } else {
+            init_attestation_components(logger, config, &initdata_return_value).await?;
+        }
     }
 
     // if policy is given via initdata, use it
@@ -569,20 +575,20 @@ async fn init_attestation_components(
 ) -> Result<()> {
     launch_guest_component_procs(logger, config, initdata_return_value).await?;
 
-    // If a CDH socket exists, initialize the CDH client and enable ocicrypt
-    match tokio::fs::metadata(CDH_SOCKET).await {
-        Ok(md) => {
-            if md.file_type().is_socket() {
-                confidential_data_hub::init_cdh_client(CDH_SOCKET_URI).await?;
-            } else {
-                debug!(logger, "File {} is not a socket", CDH_SOCKET);
-            }
-        }
-        Err(err) => warn!(
-            logger,
-            "Failed to probe CDH socket file {}: {:?}", CDH_SOCKET, err
-        ),
-    }
+    // // If a CDH socket exists, initialize the CDH client and enable ocicrypt
+    // match tokio::fs::metadata(CDH_SOCKET).await {
+    //     Ok(md) => {
+    //         if md.file_type().is_socket() {
+    //             confidential_data_hub::init_cdh_client(CDH_SOCKET_URI).await?;
+    //         } else {
+    //             debug!(logger, "File {} is not a socket", CDH_SOCKET);
+    //         }
+    //     }
+    //     Err(err) => warn!(
+    //         logger,
+    //         "Failed to probe CDH socket file {}: {:?}", CDH_SOCKET, err
+    //     ),
+    // }
 
     Ok(())
 }
@@ -703,6 +709,7 @@ fn reset_sigpipe() {
     }
 }
 
+use crate::confidential_data_hub::init_multi_cdh_clients;
 use crate::config::AgentConfig;
 use std::os::unix::io::{FromRawFd, RawFd};
 
