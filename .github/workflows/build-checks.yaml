@@ -75,7 +75,7 @@ jobs:
         instance:
           - ${{ inputs.instance }}
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${inputs.instance}-${{ matrix.component.name }}-${{ matrix.command }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${inputs.instance}-${{ matrix.component.name }}-${{ matrix.command }}
       cancel-in-progress: true
     steps:
       - name: Adjust a permission for repo

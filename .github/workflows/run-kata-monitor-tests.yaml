@@ -35,7 +35,7 @@ jobs:
           - container_engine: containerd
             vmm: qemu
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.container_engine}}-${{ matrix.vmm }}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.container_engine}}-${{ matrix.vmm }}
       cancel-in-progress: true
     runs-on: ubuntu-22.04
     env:
