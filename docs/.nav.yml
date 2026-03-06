@@ -1,0 +1,23 @@
+# https://lukasgeiter.github.io/mkdocs-awesome-nav/
+nav:
+  - Home:
+    - Welcome!: home.md
+
+  - Getting Started:
+    - containerd.md
+    - installation.md
+    - Configuration:
+        - helm-configuration.md
+        - runtime-configuration.md
+  - Platform Support:
+    - hypervisors.md
+  - Guides:
+    - Use Cases:
+      - NVIDIA GPU Passthrough: use-cases/NVIDIA-GPU-passthrough-and-Kata-QEMU.md
+      - NVIDIA vGPU: use-cases/NVIDIA-GPU-passthrough-and-Kata.md
+      - Intel SGX: use-cases/using-Intel-SGX-and-kata.md
+      - Intel Discrete GPU: use-cases/Intel-Discrete-GPU-passthrough-and-Kata.md
+      - SPDX: use-cases/using-SPDK-vhostuser-and-kata.md
+      - SRIOV: use-cases/using-SRIOV-and-kata.md
+  - Misc:
+    - Architecture: design/architecture/
