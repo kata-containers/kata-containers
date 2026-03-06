@@ -1,0 +1,31 @@
+# Normalized NVIDIA library names (one per line): basename with .so.<version>
+# collapsed to .so.
+libcuda.so
+libnvidia-allocator.so
+libnvidia-cfg.so
+libnvidia-egl-gbm.so
+libnvidia-egl-wayland.so
+libnvidia-eglcore.so
+libnvidia-encode.so
+libnvidia-fbc.so
+libnvidia-glcore.so
+libnvidia-glsi.so
+libnvidia-glvkspirv.so
+libnvidia-gpucomp.so
+libnvidia-gtk2.so
+libnvidia-gtk3.so
+libnvidia-ml.so
+libnvidia-ngx.so
+libnvidia-nscq.so
+libnvidia-nvvm.so
+libnvidia-opencl.so
+libnvidia-opticalflow.so
+libnvidia-pkcs11-openssl3.so
+libnvidia-present.so
+libnvidia-ptxjitcompiler.so
+libnvidia-rtcore.so
+libnvidia-sandboxutils.so
+libnvidia-tileiras.so
+libnvidia-tls.so
+libnvidia-vksc-core.so
+libnvidia-wayland-client.so

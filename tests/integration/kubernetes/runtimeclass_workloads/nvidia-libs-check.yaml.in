@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2026 NVIDIA Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Long-running pod with GPU for checking presence of NVIDIA libraries
+# in the guest. Used by k8s-nvidia-libs-presence.bats.
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD_NAME_NVIDIA_LIBS}
+  labels:
+    app: ${POD_NAME_NVIDIA_LIBS}
+spec:
+  runtimeClassName: kata
+  restartPolicy: Never
+  containers:
+  - name: nvidia-libs-check
+    image: "quay.io/kata-containers/ubuntu:24.04"
+    command: ["sleep", "infinity"]
+    resources:
+      limits:
+        nvidia.com/pgpu: "1"
