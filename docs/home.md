@@ -37,7 +37,7 @@ flowchart TD
     end
 ```
 
-The container process spawned inside of the VM allows us to isolate the guest kernel from the host system. This is the fundamental principal of how Kata achieves its isolation boundaries.
+The container process spawned inside of the VM allows us to isolate the guest kernel from the host system. This is the fundamental principle of how Kata achieves its isolation boundaries.
 
 ## Example
 
