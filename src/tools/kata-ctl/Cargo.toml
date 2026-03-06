@@ -57,6 +57,7 @@ quick-xml = { version = "0.28", features = ["serialize"] }
 csv = "1.2"
 serde_with = "2.3"
 chrono = { version = "0.4", features = ["serde"] }
+rstest = "0.26.1"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = [
