@@ -1,36 +1,33 @@
 # runtime-rs
 
-## Wath's runtime-rs
+## What is runtime-rs
 
-`runtime-rs` is a new component introduced in Kata Containers 3.0, it is a Rust version of runtime(shim). It like [runtime](../runtime), but they have many difference:
+`runtime-rs` is a core component introduced in Kata Containers 3.0. It is a high-performance, Rust-based implementation of the runtime (shim). While it serves a similar purpose to the original Go-based runtime, there are several key distinctions:
 
-- `runtime-rs` is written in Rust, and `runtime` is written in Go.
-- `runtime` is the default shim in Kata Containers 3.0, `runtime-rs` is still under heavy development.
-- `runtime-rs` has a completed different architecture than `runtime`, you can check at the [architecture overview](../../docs/design/architecture_3.0).
+- Implementation Language: runtime-rs is written in Rust, leveraging the language's memory safety and zero-cost abstractions, whereas the legacy runtime is written in Go.
+- Project Maturity: runtime-rs is a production-ready component of Kata Containers 3.0. It provides a modern, stable alternative to the traditional Go-based shim.
+- Architectural Redesign: runtime-rs features a completely redesigned architecture specifically optimized for the Kata Containers 3.0 framework. For a deeper understanding of these changes, please refer to the 3.0 [Architecture Overview](../../docs/design/architecture_3.0).
 
 **Note**:
 
-`runtime-rs` is still under heavy development, you should avoid using it in critical system.
+`runtime-rs` is a production-ready component and is suitable for use in critical systems. It offers a stable, memory-safe, and high-performance alternative to the traditional Go-based runtime.
 
 ## Architecture overview
 
-Also, `runtime-rs` provides the following features:
+In addition to its core functionality, runtime-rs offers the following key features:
 
-- Turn key solution with builtin `Dragonball` Sandbox, all components in one process
-- Async I/O to reduce resource consumption
-- Extensible framework for multiple services, runtimes and hypervisors
-- Lifecycle management for sandbox and container associated resources
+- Turnkey Solution: Features a built-in Dragonball sandbox, allowing all components to run efficiently within a single process.
+- Asynchronous I/O: Leverages Rust's async capabilities to significantly reduce resource consumption and improve scalability.
+- Extensible Framework: A modular design that supports multiple services, runtimes, and hypervisors.
+- Resource Lifecycle Management: Comprehensive management of resources associated with both sandboxes and containers.
 
-See the [architecture overview](../../docs/design/architecture_3.0)
-for details on the `runtime-rs` design.
+For a deep dive into the design and internal mechanisms, please refer to the Kata Containers 3.0 [Architecture Overview](../../docs/design/architecture_3.0)
 
-`runtime-rs` is a runtime written in Rust, it is composed of several crates.
-
-This picture shows the overview about the crates under this directory and the relation between crates.
+`runtime-rs` is implemented entirely in Rust and is organized into a collection of specialized crates. The following diagram illustrates the relationship between these crates and provides an overview of the project's modular structure:
 
 ![crates overview](docs/images/crate-overview.svg)
 
-Not all the features have been implemented yet, for details please check the [roadmap](../../docs/design/architecture_3.0/README.md#roadmap).
+All planned features have been fully implemented, establishing `runtime-rs` as a functionally complete and stable component within Kata Containers 3.0. For more information on the implementation details and project milestones, please check the [roadmap](../../docs/design/architecture_3.0/README.md#roadmap).
 
 ## Crates
 
