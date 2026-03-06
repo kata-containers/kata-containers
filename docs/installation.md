@@ -13,7 +13,7 @@
 
 - **Kata Release 3.12** - v3.12.0 introduced publishing the helm-chart on the
   release page for easier consumption, since v3.8.0 we shipped the helm-chart
-  via source code in the kata-containers `Github` repository.
+  via source code in the kata-containers `GitHub` repository.
 
 - CRI‑compatible runtime (containerd or CRI‑O). If one wants to use the
   `multiInstallSuffix` feature one needs at least **containerd-2.0** which
