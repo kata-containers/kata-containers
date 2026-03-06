@@ -25,7 +25,7 @@
 ### `helm install`
 
 ```sh
-# Install directly from the official ghcr.io OCI regitry
+# Install directly from the official ghcr.io OCI registry
 # update the VERSION X.YY.Z to your needs or just use the latest
 
 export VERSION=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq .tag_name | tr -d '"')
