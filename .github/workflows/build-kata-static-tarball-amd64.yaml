@@ -337,6 +337,7 @@ jobs:
   create-kata-tarball:
     name: create-kata-tarball
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     permissions:
       contents: read
