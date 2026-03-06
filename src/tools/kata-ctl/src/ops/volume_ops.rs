@@ -157,10 +157,12 @@ pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::anyhow;
     use kata_types::mount::DirectVolumeMountInfo;
+    use rstest::{fixture, rstest};
     use serial_test::serial;
-    use std::{collections::HashMap, fs, path::PathBuf};
-    use tempfile::tempdir;
+    use std::{collections::HashMap, fs};
+    use tempfile::{tempdir, TempDir};
     use test_utils::skip_if_not_root;
 
     #[test]
@@ -195,61 +197,38 @@ mod tests {
         fs::remove_dir_all(&joined_volume_path).expect("failed to cleanup test")
     }
 
-    #[test]
-    fn test_path_join() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            rootfs: &'a str,
-            volume_path: &'a str,
-            result: Result<PathBuf>,
-        }
-        // the safe_path::scoped_join requires the prefix path to exist on testing machine
-        let root_fs = tempdir().expect("failed to create tmpdir").into_path();
-        let root_fs_str = root_fs.to_str().unwrap();
+    #[fixture]
+    fn root_fs() -> TempDir {
+        tempdir().expect("failed to create tmpdir")
+    }
 
-        let relative_secret_path = "../../etc/passwd";
-        let b64_relative_secret_path =
-            base64::encode_config(relative_secret_path, base64::URL_SAFE);
+    #[rstest]
+    #[case::relative_secret_path("../../etc/passwd", "Li4vLi4vZXRjL3Bhc3N3ZA==")] // "Li4vLi4vZXRjL3Bhc3N3ZA==" is b64 encoded url of "../../etc/passwd"
+    #[case::byte_array_path("abcdddd", "YWJjZGRkZA==")] // "YWJjZGRkZA==" is the b64 url encoded string of "abcdddd"
+    fn test_path_join(
+        root_fs: TempDir,
+        #[case] volume_path: &str,
+        #[case] expected_encoded_path: &str,
+    ) {
+        let root_str = root_fs.path().to_str().unwrap();
 
-        // byte array of "abcdddd"
-        let b64_abs_path = vec![97, 98, 99, 100, 100, 100, 100];
-        // b64urlencoded string of "abcdddd"
-        let b64urlencodes_relative_path = "YWJjZGRkZA==";
+        let result = join_path(root_str, volume_path).expect("Should return Ok for valid paths");
 
-        let tests = &[
-            TestData {
-                rootfs: root_fs_str,
-                volume_path: "",
-                result: Err(anyhow!(std::io::ErrorKind::NotFound)),
-            },
-            TestData {
-                rootfs: root_fs_str,
-                volume_path: relative_secret_path,
-                result: Ok(root_fs.join(b64_relative_secret_path)),
-            },
-            TestData {
-                rootfs: root_fs_str,
-                volume_path: unsafe { std::str::from_utf8_unchecked(&b64_abs_path) },
-                result: Ok(root_fs.join(b64urlencodes_relative_path)),
-            },
-        ];
+        let expected = root_fs.path().join(expected_encoded_path);
+        assert_eq!(result, expected);
+    }
 
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{i}]: {d:?}");
-            let result = join_path(d.rootfs, d.volume_path);
-            let msg = format!("{msg}, result: {result:?}");
-            if result.is_ok() {
-                assert!(
-                    result.as_ref().unwrap() == d.result.as_ref().unwrap(),
-                    "{}",
-                    msg
-                );
-                continue;
-            }
-            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
-            let actual_error = format!("{}", result.unwrap_err());
-            assert!(actual_error == expected_error, "{}", msg);
-        }
+    #[rstest]
+    fn test_path_join_empty_path_error(root_fs: TempDir) {
+        let root_str = root_fs.path().to_str().unwrap();
+
+        let result = join_path(root_str, "");
+
+        let err = result.expect_err("Should fail for empty volume_path");
+        assert_eq!(
+            err.to_string(),
+            anyhow!(std::io::ErrorKind::NotFound).to_string()
+        );
     }
 
     #[test]
