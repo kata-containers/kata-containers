@@ -25,6 +25,7 @@ RUN apt-get update && \
 	g++ \
 	gcc \
 	git \
+	libcryptsetup-dev \
 	libssl-dev \
 	libtss2-dev \
 	make \
