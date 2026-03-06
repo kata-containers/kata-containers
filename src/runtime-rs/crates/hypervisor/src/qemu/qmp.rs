@@ -187,11 +187,21 @@ impl Qmp {
                         continue;
                     }
                     (None, _) => {
-                        warn!(sl!(), "hotpluggable vcpu {} has no socket_id for driver {}, skipping", core_id, driver);
+                        warn!(
+                            sl!(),
+                            "hotpluggable vcpu {} has no socket_id for driver {}, skipping",
+                            core_id,
+                            driver
+                        );
                         continue;
                     }
                     (_, None) => {
-                        warn!(sl!(), "hotpluggable vcpu {} has no thread_id for driver {}, skipping", core_id, driver);
+                        warn!(
+                            sl!(),
+                            "hotpluggable vcpu {} has no thread_id for driver {}, skipping",
+                            core_id,
+                            driver
+                        );
                         continue;
                     }
                 }
@@ -753,10 +763,9 @@ impl Qmp {
 
             Ok((None, Some(scsi_addr)))
         } else if block_driver == VIRTIO_BLK_CCW {
-            let subchannel = self
-                .ccw_subchannel
-                .as_mut()
-                .ok_or_else(|| anyhow!("CCW subchannel not available for virtio-blk-ccw hotplug"))?;
+            let subchannel = self.ccw_subchannel.as_mut().ok_or_else(|| {
+                anyhow!("CCW subchannel not available for virtio-blk-ccw hotplug")
+            })?;
 
             let slot = subchannel
                 .add_device(&node_name)
