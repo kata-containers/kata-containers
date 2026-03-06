@@ -11,6 +11,7 @@ name: Build checks
 jobs:
   check:
     name: check
+    timeout-minutes: 60
     runs-on: >-
       ${{
         ( contains(inputs.instance, 's390x') && matrix.component.name == 'runtime' ) && 's390x' ||
