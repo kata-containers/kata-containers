@@ -33,12 +33,145 @@ architectures:
 ### Kata Deploy Installation
 
 Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/helm-chart/README.md).
+
 ### Official packages
+
 `ToDo`
+
 ### Automatic Installation
+
 `ToDo`
+
 ### Manual Installation
-`ToDo`
+
+Given that the Kata Containers release packages are designed to be self-contained, the manual installation process is straightforward and involves downloading the appropriate release package, extracting it, and configuring containerd to use the Kata runtime-rs. Before starting, ensure that you have the following prerequisites in place:
+
+- containerd installed and running (containerd v2.2.1).
+- nerdctl installed for testing (nerdctl version 2.2.1).
+- zstd installed (to extract the release package) or a newer version of `tar` installed.
+
+Step 1: Download the Kata Containers Release
+
+First, define the version and download the static binary package tailored for your architecture.
+We fetch a "static" release containing all necessary components (kernel, rootfs, hypervisors like QEMU/Dragonball, and the runtime binaries) in a single bundle, ensuring compatibility between components.
+
+```bash
+# Define version, just an example, you can set it to the latest version or the version you want to install
+export KATA_RELEASE="3.26.0"
+
+# Download the static release package
+wget https://github.com/kata-containers/kata-containers/releases/download/${KATA_RELEASE}/kata-static-${KATA_RELEASE}-amd64.tar.zst
+```
+
+Step 2: Extract the Binaries
+
+Extract the package to a specific directory, typically `/opt/` or you can specify a different location as your preference.
+
+```bash
+# Create target directory and extract the package
+sudo tar --zstd -xvf kata-static-${KATA_RELEASE}-amd64.tar.zst -C /
+```
+
+> **Note:**
+
+> - Using the --zstd flag handles the high-compression format used by Kata releases. Extracting to the root / (with the package internal structure starting at opt/kata) places the files into /opt/kata/, keeping the installation isolated from system-managed binaries.
+
+Step 3: Create a Shim Wrapper Script
+
+To ensure containerd uses the correct configuration and hypervisor (Dragonball in this example), create a wrapper script for the Shim. This script will set the necessary environment variables and invoke the actual Shim binary.
+
+```bash
+# Create a wrapper script for the Shim
+sudo tee /usr/local/bin/containerd-shim-kata-v2 << 'EOF'
+#!/bin/bash
+KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-dragonball.toml \
+/opt/kata/runtime-rs/bin/containerd-shim-kata-v2 $@
+EOF
+
+# Grant execution permissions
+sudo chmod +x /usr/local/bin/containerd-shim-kata-v2
+```
+
+> **Note:**
+
+> - The Shim is the component that bridges containerd and the Kata Containers.
+> - By creating this wrapper, we explicitly point to the runtime-rs (Rust-based runtime) and force it to use the dragonball hypervisor configuration via the `KATA_CONF_FILE` environment variable.
+> - Placing it in `/usr/local/bin` makes it accessible in the system PATH.
+> - This approach allows us to maintain the original Shim binary in its location while ensuring that containerd uses the correct configuration when invoking the Shim.
+> - If you want to use a different hypervisor (e.g., QEMU), you can modify the `KATA_CONF_FILE` path to point to the corresponding configuration file (e.g., `/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-qemu-runtime-rs.toml`).
+
+
+Step 4: Configure Containerd
+
+Modify the containerd configuration to register Kata as a valid runtime. Edit `/etc/containerd/config.toml` and add the following under the `[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes]` section:
+
+```toml
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata]
+  runtime_type = "io.containerd.kata.v2"
+```
+
+and a more precise example with all the necessary fields:
+
+```toml
+$ cat /etc/containerd/config.toml
+version = 3
+...
+[plugins]
+  [plugins.'io.containerd.cri.v1.runtime']
+    ...
+    [plugins.'io.containerd.cri.v1.runtime'.containerd]
+      ...
+      [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes]
+        [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata]
+          runtime_type = 'io.containerd.kata.v2'
+          runtime_path = ''
+          pod_annotations = ["io.katacontainers.*"]
+          container_annotations = ["io.katacontainers.*"]
+          privileged_without_host_devices = false
+          privileged_without_host_devices_all_devices_allowed = false
+          cgroup_writable = false
+          base_runtime_spec = ''
+          cni_conf_dir = ''
+          cni_max_conf_num = 0
+          snapshotter = ''
+          sandboxer = 'podsandbox'
+          io_type = ''
+```
+
+> **Note:**
+
+> - This tells containerd that when a user requests the kata runtime, it should look for a binary named containerd-shim-kata-v2 in the system PATH to manage the container lifecycle.
+> - The `runtime_type` must match the name of the Shim binary we created in Step 3 (without the "containerd-shim-" prefix and "-v2" suffix).
+> - After making these changes, restart the containerd service to apply the new configuration.
+> - pod_annotations and container_annotations are used to specify which annotations should be passed to the runtime. In this case, we are passing all annotations that start with `"io.katacontainers."` to ensure that any relevant configuration or metadata is available to the Kata runtime when managing containers. You can adjust these annotations based on your specific needs or requirements.
+> - sandboxer is set to "podsandbox" to indicate that this runtime should be used for managing pod sandboxes, which is a common use case for Kata Containers in Kubernetes environments.
+
+
+Step 5: Verify the Installation
+
+Run a test container using nerdctl to verify that the workload is running inside a Kata.
+
+```bash
+# Run a test container with Kata runtime
+$ sudo nerdctl run --runtime io.containerd.kata.v2 --net=none --rm -it docker.io/library/fedora:42
+[root@5db05bd2aca5 /]# ls
+afs  bin  boot  dev  etc  home  lib  lib64  lost+found  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+[root@5db05bd2aca5 /]# uname -r
+6.18.5
+[root@5db05bd2aca5 /]# cat /etc/os-release
+NAME="Fedora Linux"
+VERSION="42 (Container Image)"
+RELEASE_TYPE=stable
+ID=fedora
+VERSION_ID=42
+...
+```
+
+> **Note:**
+
+> - The `--runtime io.containerd.kata.v2` flag explicitly tells nerdctl to use the Kata runtime we just configured.
+> - The `--net=none` flag is used to disable networking for the test container, which is a common practice when testing runtimes to isolate the environment and ensure that the container is running with the expected configuration.
+
 
 ## Build from source installation
 
