@@ -449,7 +449,7 @@ jobs:
           { containerd_version: active, vmm: qemu-runtime-rs  },
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm }}-${{ matrix.params.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm }}-${{ matrix.params.containerd_version}}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
@@ -472,7 +472,7 @@ jobs:
           {containerd_version: active, vmm: qemu-runtime-rs},
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
@@ -494,7 +494,7 @@ jobs:
           {containerd_version: active, vmm: qemu},
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-cri-tests-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-cri-tests-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
@@ -516,7 +516,7 @@ jobs:
           {containerd_version: active, vmm: qemu},
         ]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.params.vmm}}-${{ matrix.params.containerd_version}}
       cancel-in-progress: true
     uses: ./.github/workflows/run-cri-containerd-tests.yaml
     with:
