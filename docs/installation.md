@@ -37,8 +37,8 @@ $ helm install kata-deploy "${CHART}" --version "${VERSION}"
 $ helm show values "${CHART}" --version "${VERSION}"
 ```
 
-This creates a new Runtime Class `kata-custom` that extends the `qemu`
-configuration with your custom settings.
+This installs the `kata-deploy` DaemonSet and the default Kata `RuntimeClass`
+resources on your cluster.
 
 To see what versions of the chart are available:
 
