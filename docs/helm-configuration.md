@@ -158,9 +158,9 @@ $ helm install kata-deploy -f values.yaml "${CHART}" --version "${VERSION}"
 
 For debugging, testing and other use-case it is possible to deploy multiple
 versions of Kata on the very same node. All the needed artifacts are getting the
-`mulitInstallSuffix` appended to distinguish each installation. **BEWARE** that one
+`multiInstallSuffix` appended to distinguish each installation. **BEWARE** that one
 needs at least **containerd-2.0** since this version has drop-in conf support
-which is a prerequisite for the `mulitInstallSuffix` to work properly.
+which is a prerequisite for the `multiInstallSuffix` to work properly.
 
 ```sh
 $ helm install kata-deploy-cicd       \
