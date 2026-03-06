@@ -245,8 +245,8 @@ pub enum Error {
     #[error("set user memory region failed: {0}")]
     SetUserMemoryRegion(kvm_ioctls::Error),
     /// Inserting mmap region failed.
-    #[error("inserting mmap region failed: {0}")]
-    InsertMmap(vm_memory::mmap::Error),
+    #[error("inserting mmap region failed")]
+    InsertMmap,
     /// Failed to set madvise on guest memory region.
     #[error("failed to set madvice() on guest memory region")]
     Madvise(#[source] nix::Error),

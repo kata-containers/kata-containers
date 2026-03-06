@@ -15,7 +15,7 @@ use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 
 use libc::ifreq;
 use vmm_sys_util::ioctl::{ioctl_with_mut_ref, ioctl_with_ref, ioctl_with_val};
-use vmm_sys_util::{ioctl_ioc_nr, ioctl_iow_nr};
+use vmm_sys_util::ioctl_iow_nr;
 // As defined in the Linux UAPI:
 // https://elixir.bootlin.com/linux/v4.17/source/include/uapi/linux/if.h#L33
 pub(crate) const IFACE_NAME_MAX_LEN: usize = 16;

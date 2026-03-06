@@ -10,7 +10,6 @@
 
 use libc::c_char;
 use std::collections::HashMap;
-use std::io;
 use std::mem;
 use std::result;
 use std::slice;
@@ -205,7 +204,7 @@ pub fn setup_mptable<M: GuestMemory>(
         return Err(Error::AddressOverflow);
     }
 
-    mem.read_from(base_mp, &mut io::repeat(0), mp_size)
+    mem.write_slice(&vec![0u8; mp_size], base_mp)
         .map_err(|_| Error::Clear)?;
 
     {
@@ -381,6 +380,7 @@ pub fn setup_mptable<M: GuestMemory>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io;
     use vm_memory::{Bytes, GuestMemoryMmap};
 
     fn table_entry_size(type_: u8) -> usize {
@@ -466,7 +466,7 @@ mod tests {
         }
 
         let mut sum = Sum(0);
-        mem.write_to(mpc_offset, &mut sum, mpc_table.0.length as usize)
+        mem.write_volatile_to(mpc_offset, &mut sum, mpc_table.0.length as usize)
             .unwrap();
         assert_eq!(sum.0, 0);
     }

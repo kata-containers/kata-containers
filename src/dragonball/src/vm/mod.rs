@@ -642,7 +642,7 @@ impl Vm {
         image: &mut F,
     ) -> std::result::Result<InitrdConfig, LoadInitrdError>
     where
-        F: Read + Seek,
+        F: Read + Seek + vm_memory::ReadVolatile,
     {
         use crate::error::LoadInitrdError::*;
 
@@ -666,7 +666,7 @@ impl Vm {
 
         // Load the image into memory
         vm_memory
-            .read_from(GuestAddress(address), image, size)
+            .read_volatile_from(GuestAddress(address), image, size)
             .map_err(|_| LoadInitrd)?;
 
         Ok(InitrdConfig {
