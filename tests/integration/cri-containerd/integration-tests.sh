@@ -162,6 +162,13 @@ function err_report() {
 
 function check_daemon_setup() {
 	info "containerd(cri): Check daemon works with runc"
+	# Use podsandbox for the runc sanity check: the shim sandboxer has a known
+	# containerd-side bug where the OCI spec is not populated before NewBundle is
+	# called, so config.json is never written and containerd-shim-runc-v2 fails.
+	# See https://github.com/containerd/containerd/issues/11640
+	# This check only verifies that containerd + runc are functional before the
+	# real kata tests run, so the sandboxer choice doesn't matter here.
+	local SANDBOXER="podsandbox"
 	create_containerd_config "runc"
 
 	# containerd cri-integration will modify the passed in config file. Let's
