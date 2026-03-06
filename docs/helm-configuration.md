@@ -5,7 +5,11 @@
 The helm chart provides a comprehensive set of configuration options. You may view the parameters and their descriptions by going to the [GitHub source](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml) or by using helm:
 
 ```sh
-helm show values --version 3.27.0 oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy
+# List available kata-deploy chart versions:
+#   helm search repo kata-deploy-charts/kata-deploy --versions
+#
+# Then replace X.Y.Z below with the desired chart version:
+helm show values --version X.Y.Z oci://ghcr.io/kata-containers/kata-deploy-charts/kata-deploy
 ```
 
 ### shims
