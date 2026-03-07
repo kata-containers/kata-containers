@@ -110,6 +110,7 @@ type hypervisor struct {
 	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
 	SnpIdBlock                     string                    `toml:"snp_id_block"`
 	SnpIdAuth                      string                    `toml:"snp_id_auth"`
+	TpmSocket                      string                    `toml:"tpm_socket"`
 	SnpGuestPolicy                 *uint64                   `toml:"snp_guest_policy"`
 	MeasurementAlgo                string                    `toml:"measurement_algo"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
@@ -1158,6 +1159,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Rootless:                       h.Rootless,
 		DisableSeLinux:                 h.DisableSeLinux,
 		DisableGuestSeLinux:            h.DisableGuestSeLinux,
+		TpmSocket:                      h.TpmSocket,
 		NetRateLimiterBwMaxRate:        h.getNetRateLimiterBwMaxRate(),
 		NetRateLimiterBwOneTimeBurst:   h.getNetRateLimiterBwOneTimeBurst(),
 		NetRateLimiterOpsMaxRate:       h.getNetRateLimiterOpsMaxRate(),

@@ -179,6 +179,9 @@ const (
 	// Iommu is a sandbox annotation to specify if the VM should have a vIOMMU device
 	IOMMU = kataAnnotHypervisorPrefix + "enable_iommu"
 
+	// TpmSocket is a sandbox annotation to specify the swtpm socket path for vTPM device
+	TpmSocket = kataAnnotHypervisorPrefix + "tpm_socket"
+
 	// Enable Hypervisor Devices IOMMU_PLATFORM
 	IOMMUPlatform = kataAnnotHypervisorPrefix + "enable_iommu_platform"
 

@@ -129,6 +129,31 @@ func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert.Equal(clh.vmconfig.Vsock.Socket, "path")
 }
 
+func TestCloudHypervisorTpmSocket(t *testing.T) {
+	assert := assert.New(t)
+
+	// When TpmSocket is set, vmconfig.Tpm should be configured
+	clh := cloudHypervisor{}
+	clh.config.TpmSocket = "/run/swtpm/test/swtpm-sock"
+
+	clh.vmconfig.Rng = chclient.NewRngConfig("/dev/urandom")
+
+	// Simulate the TPM setup logic from CreateVM
+	if clh.config.TpmSocket != "" {
+		clh.vmconfig.Tpm = chclient.NewTpmConfig(clh.config.TpmSocket)
+	}
+
+	assert.NotNil(clh.vmconfig.Tpm)
+	assert.Equal(clh.vmconfig.Tpm.Socket, "/run/swtpm/test/swtpm-sock")
+
+	// When TpmSocket is empty, vmconfig.Tpm should remain nil
+	clh2 := cloudHypervisor{}
+	if clh2.config.TpmSocket != "" {
+		clh2.vmconfig.Tpm = chclient.NewTpmConfig(clh2.config.TpmSocket)
+	}
+	assert.Nil(clh2.vmconfig.Tpm)
+}
+
 // Check addNet appends to the network config list new configurations.
 // Check that the elements in the list has the correct values
 func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {

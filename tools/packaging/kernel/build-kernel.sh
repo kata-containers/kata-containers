@@ -44,6 +44,8 @@ force_setup_generate_config="false"
 gpu_vendor=""
 #DPU kernel support
 dpu_vendor=""
+#TPM kernel support
+tpm_support="false"
 #Confidential guest type
 conf_guest=""
 #
@@ -108,6 +110,7 @@ Options:
 	-h          	: Display this help.
 	-H <deb|rpm>	: Linux headers for guest fs module building.
 	-m              : Enable measured rootfs.
+	-T              : Enable TPM support for vTPM device passthrough.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-r <ref>        : Enable git mode to download kernel using ref.
@@ -302,6 +305,12 @@ get_kernel_frag_path() {
 		local cryptsetup_configs
 		cryptsetup_configs="$(ls "${common_path}"/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
+	fi
+
+	if [[ "${tpm_support}" == "true" ]]; then
+		info "Add kernel config for TPM support due to '-T'"
+		local tpm_configs="${common_path}/tpm.conf"
+		all_configs="${all_configs} ${tpm_configs}"
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -583,6 +592,10 @@ install_kata() {
 		fi
 	fi
 
+	if [[ "${tpm_support}" == "true" ]]; then
+		suffix="-tpm${suffix}"
+	fi
+
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
 	vmlinux="vmlinux-${kernel_version}-${config_version}${suffix}"
 
@@ -620,7 +633,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:dD:eEfg:hH:k:mp:r:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:r:st:Tu:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -675,6 +688,9 @@ main() {
 				;;
 			t)
 				hypervisor_target="${OPTARG}"
+				;;
+			T)
+				tpm_support="true"
 				;;
 			u)
 				kernel_url="${OPTARG}"

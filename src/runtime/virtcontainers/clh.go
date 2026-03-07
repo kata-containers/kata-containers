@@ -608,6 +608,11 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
 	clh.vmconfig.Rng.SetIommu(clh.config.IOMMU)
 
+	// vTPM: pass swtpm socket to CLH for TPM 2.0 CRB device in guest
+	if clh.config.TpmSocket != "" {
+		clh.vmconfig.Tpm = chclient.NewTpmConfig(clh.config.TpmSocket)
+	}
+
 	// set the initial root/boot disk of hypervisor
 	assetPath, assetType, err := clh.config.ImageOrInitrdAssetPath()
 	if err != nil {
