@@ -22,6 +22,9 @@ members = [
   "src/dragonball/dbs_utils",
   "src/dragonball/dbs_virtio_devices",
 
+  # genpolicy
+  "src/tools/genpolicy",
+
   # runtime-rs
   "src/runtime-rs",
   "src/runtime-rs/crates/agent",
@@ -106,6 +109,9 @@ runtime-spec = { path = "src/libs/runtime-spec" }
 safe-path = { path = "src/libs/safe-path" }
 shim-interface = { path = "src/libs/shim-interface" }
 test-utils = { path = "src/libs/test-utils" }
+
+# Local dependencies from `src/agent`
+kata-agent-policy = { path = "src/agent/policy" }
 
 # Outside dependencies
 actix-rt = "2.7.0"
