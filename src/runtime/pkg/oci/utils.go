@@ -598,6 +598,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.TpmSocket]; ok {
+		if value != "" {
+			config.HypervisorConfig.TpmSocket = value
+		}
+	}
+
 	return nil
 }
 
