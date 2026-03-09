@@ -1096,47 +1096,48 @@ is_ip_other_byte(component) if {
     number <= 255
 }
 
-# device mounts
-# allow_mount returns the policy index (p_index) if a given input mount matches a policy mount.
 allow_mount(p_oci, i_mount, i_storages, bundle_id, sandbox_id):= p_index if {
     print("-------- allow_mount 1: i_mount =", i_mount)
 
     some p_index, p_mount in p_oci.Mounts
-    some i_storage in i_storages
 
-    print("allow_mount 1: p_index =", p_index, "p_mount =", p_mount)
-    check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id)
+    print("allow_mount 1: p_mount =", p_mount)
+    check_mount(p_mount, i_mount, bundle_id, sandbox_id)
 
     print("allow_mount 1: true, p_index =", p_index)
 }
-# This rule is identical to the first one, minus the i_storage requirement:
-# - Rule 1 accepts mounts that rule 2 rejects (e.g. when i_storage.mount_point == i_mount.source).
-# - Rule 2 does NOT accept all the mounts that rule 1 rejects (because it's missing i_storage).
 allow_mount(p_oci, i_mount, i_storages, bundle_id, sandbox_id):= p_index if {
-    print("allow_mount 2: i_mount =", i_mount)
+    print("-------- allow_mount 2: i_mount =", i_mount)
 
     some p_index, p_mount in p_oci.Mounts
+    print("allow_mount 2: p_mount =", p_mount)
 
-    print("allow_mount 2: p_index =", p_index, "p_mount =", p_mount)
-    check_mount(p_mount, i_mount, null, bundle_id, sandbox_id)
-
-    print("allow_mount 2: true, p_index =", p_index)
-}
-
-check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
-    p_mount == i_mount
-    print("check_mount 1: true")
-}
-check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     p_mount.destination == i_mount.destination
     p_mount.type_ == i_mount.type_
     p_mount.options == i_mount.options
 
-    mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id)
+    some i_storage in i_storages
+    print("allow_mount 2: i_storage =", i_storage)
+
+    i_storage.mount_point == i_mount.source
+
+    print("allow_mount 2: true, p_index =", p_index)
+}
+
+check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
+    p_mount == i_mount
+    print("check_mount 1: true")
+}
+check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
+    p_mount.destination == i_mount.destination
+    p_mount.type_ == i_mount.type_
+    p_mount.options == i_mount.options
+
+    mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id)
 
     print("check_mount 2: true")
 }
-check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
+check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
     # This check passes if the policy container has RW, the input container has
     # RO and the volume type is sysfs, working around different handling of
     # privileged containers after containerd 2.0.4.
@@ -1148,12 +1149,11 @@ check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     i_options := {x | x = i_mount.options[_]} | {"rw"}
     p_options := {x | x = p_mount.options[_]} | {"ro"}
     p_options == i_options
+
     print("check_mount 3: true")
 }
 
-mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
-    p_mount.source != ""
-
+mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     print("mount_source_allows 1: regex1 =", regex1)
 
@@ -1169,9 +1169,7 @@ mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
 
     print("mount_source_allows 1: true")
 }
-mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
-    p_mount.source != ""
-
+mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     print("mount_source_allows 2: regex1 =", regex1)
 
@@ -1186,10 +1184,6 @@ mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     regex.match(regex4, i_mount.source)
 
     print("mount_source_allows 2: true")
-}
-mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
-    i_storage.mount_point == i_mount.source
-    print("mount_source_allows 3: true")
 }
 
 ######################################################################
