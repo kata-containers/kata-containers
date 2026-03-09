@@ -36,8 +36,10 @@ pub fn locate_device(path: &Path, logger: &Logger) -> Result<Option<PathBuf>> {
     for entry in std::fs::read_dir(path).context(format!("read_dir({path:?})"))? {
         let entry = entry?;
 
-        // Just check the file starting with 'vd'
-        if !entry.file_name().to_string_lossy().starts_with("vd") {
+        // Just check the file starting with 'vd' (virtio-blk) or 'sd' (virtio-scsi)
+        let file_name_osstr = entry.file_name();
+        let file_name = file_name_osstr.to_string_lossy();
+        if !file_name.starts_with("vd") && !file_name.starts_with("sd") {
             continue;
         }
 
