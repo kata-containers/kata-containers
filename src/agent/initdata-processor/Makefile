@@ -2,7 +2,7 @@
 
 PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
-SYSTEMD_DIR ?= /etc/systemd/system
+SYSTEMD_DIR ?= /usr/lib/systemd/system
 
 all: build
 
