@@ -15,6 +15,11 @@ PROJECT_URL = https://github.com/kata-containers
 PROJECT_COMPONENT = containerd-shim-kata-v2
 CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
+# This snippet finds all packages inside runtime-rs. Used for tessting.
+PACKAGES := $(shell cargo metadata --no-deps --format-version 1 | \
+                    jq -r '.packages[] | select(.manifest_path | contains("runtime-rs")) | .name')
+PACKAGE_FLAGS := $(patsubst %,-p %,$(PACKAGES))
+
 include ../../utils.mk
 
 ARCH_DIR = arch
@@ -45,9 +50,9 @@ test:
 else
 ##TARGET default: build code
 default: runtime show-header
-##TARGET test: run cargo tests
+##TARGET test: run cargo tests for runtime-rs and all its sub-crates.
 test: static-checks-build
-	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
+	@cargo test $(PACKAGE_FLAGS) --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture  --skip bindgen
 install: install-runtime install-configs
 endif
 
@@ -733,7 +738,7 @@ static-checks-build: $(GENERATED_FILES)
 $(TARGET): $(GENERATED_FILES) $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build -p runtime-rs --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed \
@@ -769,7 +774,7 @@ endif
 
 ##TARGET run: build and run agent
 run:
-	@cargo run --target $(TRIPLE)
+	@cargo run -p runtime-rs --target $(TRIPLE)
 
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
