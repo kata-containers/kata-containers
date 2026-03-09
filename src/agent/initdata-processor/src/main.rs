@@ -125,7 +125,7 @@ impl InitDataProcessor {
             "Reading initdata from device: {:?}", initdata_device
         );
         let initdata_content =
-            read_initdata(&initdata_device).context("Failed to read initdata: {e:?}")?;
+            read_initdata(&initdata_device).context("Failed to read initdata")?;
 
         let initdata: InitData =
             toml::from_slice(&initdata_content).context("parse initdata failed")?;
@@ -139,8 +139,7 @@ impl InitDataProcessor {
         // TODO(burgerdev): 2. Validate initdata.
 
         // 3. Write config files.
-        let mut initdata_path = self.config_path.clone();
-        initdata_path.add_extension(".json");
+        let initdata_path = self.config_path.join("initdata.toml");
         self.write_file(&initdata_path, &initdata_content)?;
         self.write_config_files(&initdata)?;
 
