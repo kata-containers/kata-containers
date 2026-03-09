@@ -1,31 +1,32 @@
 mod initdata;
 
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use slog::{o, Drain, Logger};
-use tracing::{error, info, warn, Level};
-use tracing_subscriber::fmt::format::FmtSpan;
+use slog::{info, o, warn, Drain, Logger};
 
-use crate::initdata::{locate_device_concurrently, read_initdata};
+use crate::initdata::{locate_device, read_initdata};
 use kata_types::initdata::InitData;
 
+const DEV_DIR: &str = "/dev";
 const MEASURED_CFG_DIR: &str = "/run/measured-cfg";
 
 #[derive(Debug)]
 struct InitDataProcessor {
-    device_path: PathBuf,
+    dev_path: PathBuf,
     config_path: PathBuf,
+    logger: Logger,
 }
 
 impl InitDataProcessor {
-    pub fn new(device_path: PathBuf) -> Self {
+    pub fn new(logger: Logger) -> Self {
         Self {
-            device_path,
+            dev_path: PathBuf::from(DEV_DIR),
             config_path: PathBuf::from(MEASURED_CFG_DIR),
+            logger,
         }
     }
 
@@ -34,27 +35,35 @@ impl InitDataProcessor {
         self
     }
 
-    /// Writes configurations.
-    async fn write_config_files(&self, initdata: &InitData) -> Result<()> {
-        info!("Writing configuration files to: {:?}", self.config_path);
+    pub fn with_dev_path(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.dev_path = dir.into();
+        self
+    }
 
-        if tokio::fs::try_exists(&self.config_path).await? {
-            tokio::fs::remove_dir_all(&self.config_path).await?;
+    /// Writes configurations.
+    fn write_config_files(&self, initdata: &InitData) -> Result<()> {
+        info!(
+            self.logger,
+            "Writing configuration files to: {:?}", self.config_path
+        );
+
+        if std::fs::exists(&self.config_path)? {
+            std::fs::remove_dir_all(&self.config_path)?;
         }
 
         // Create the config_path.
-        fs::create_dir_all(&self.config_path).context(format!(
+        std::fs::create_dir_all(&self.config_path).context(format!(
             "Failed to create config path: {:?}",
             self.config_path
         ))?;
 
-        // Set directory permissions (700).
+        // Set directory permissions.
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&self.config_path)?.permissions();
+            let mut perms = std::fs::metadata(&self.config_path)?.permissions();
             perms.set_mode(0o755);
-            fs::set_permissions(&self.config_path, perms)?;
+            std::fs::set_permissions(&self.config_path, perms)?;
         }
 
         let mut written_files = 0;
@@ -65,23 +74,25 @@ impl InitDataProcessor {
 
             // Security check: Ensure file path is within the directory.
             if !file_path.starts_with(&self.config_path) {
-                warn!("Skipping potentially dangerous key: {}", key);
+                warn!(self.logger, "Skipping potentially dangerous key: {}", key);
                 continue;
             }
             // TODO(burgerdev): support subdirectories
 
             self.write_file(&file_path, value.as_bytes())
-                .await
                 .context(format!("Failed to write config file for key: {}", key))?;
 
             written_files += 1;
         }
 
-        info!("Successfully wrote {} configuration files", written_files);
+        info!(
+            self.logger,
+            "Successfully wrote {} configuration files", written_files
+        );
         Ok(())
     }
 
-    async fn write_file(&self, path: &Path, content: &[u8]) -> Result<()> {
+    fn write_file(&self, path: &Path, content: &[u8]) -> Result<()> {
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -100,19 +111,27 @@ impl InitDataProcessor {
     }
 
     /// The complete workflow for processing initdata.
-    pub async fn process(&self) -> Result<()> {
-        info!("Starting initdata processing");
+    pub fn process(&self) -> Result<()> {
+        info!(self.logger, "Starting initdata processing");
 
         // 1. Locate and parse initdata.
-        info!("Reading initdata from device: {:?}", self.device_path);
-        let initdata_content = read_initdata(&self.device_path)
-            .await
-            .context("Failed to read initdata: {e:?}")?;
+        let initdata_device_opt = locate_device(&self.dev_path, &self.logger)?;
+        let initdata_device = match initdata_device_opt {
+            Some(device) => device,
+            None => return Ok(()),
+        };
+        info!(
+            self.logger,
+            "Reading initdata from device: {:?}", initdata_device
+        );
+        let initdata_content =
+            read_initdata(&initdata_device).context("Failed to read initdata: {e:?}")?;
 
         let initdata: InitData =
             toml::from_slice(&initdata_content).context("parse initdata failed")?;
 
         info!(
+            self.logger,
             "Successfully parsed initdata with {} entries",
             initdata.data().len()
         );
@@ -122,10 +141,10 @@ impl InitDataProcessor {
         // 3. Write config files.
         let mut initdata_path = self.config_path.clone();
         initdata_path.add_extension(".json");
-        self.write_file(&initdata_path, &initdata_content).await?;
-        self.write_config_files(&initdata).await?;
+        self.write_file(&initdata_path, &initdata_content)?;
+        self.write_config_files(&initdata)?;
 
-        info!("Initdata processing completed successfully");
+        info!(self.logger, "Initdata processing completed successfully");
         Ok(())
     }
 }
@@ -137,29 +156,12 @@ fn create_logger() -> Logger {
     slog::Logger::root(drain, o!())
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    std::panic::set_hook(Box::new(|panic_info| {
-        error!(panic.info = %panic_info, "A task panicked");
-    }));
-
-    // Initialize the tracing subscriber to configure the logging format.
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .with_span_events(FmtSpan::CLOSE)
-        .with_target(true)
-        .init();
-
+fn main() -> Result<()> {
     let logger = create_logger();
-    let initdata_device_opt = locate_device_concurrently(&logger).await?;
-    let initdata_device = match initdata_device_opt {
-        Some(device) => device,
-        None => return Ok(()),
-    };
 
     // Parse command line arguments.
     let args: Vec<String> = std::env::args().collect();
-    let mut processor = InitDataProcessor::new(initdata_device);
+    let mut processor = InitDataProcessor::new(logger);
 
     // Simple command line argument parsing.
     let mut i = 1;
@@ -173,15 +175,18 @@ async fn main() -> Result<()> {
                     return Err(anyhow::anyhow!("--config-path requires a path argument"));
                 }
             }
+            "--dev-path" => {
+                if i + 1 < args.len() {
+                    processor = processor.with_dev_path(&args[i + 1]);
+                    i += 2;
+                } else {
+                    return Err(anyhow::anyhow!("--dev-path requires a path argument"));
+                }
+            }
             _ => return Err(anyhow::anyhow!("Unknown argument: {}", args[i])),
         }
     }
 
     // Execute the processing.
-    processor
-        .process()
-        .await
-        .context("Initdata processing failed")?;
-
-    Ok(())
+    processor.process().context("Initdata processing failed")
 }
