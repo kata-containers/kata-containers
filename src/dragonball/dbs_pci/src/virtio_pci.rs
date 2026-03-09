@@ -1174,7 +1174,6 @@ pub(crate) mod tests {
     use dbs_virtio_devices::Result as VirtIoResult;
     use dbs_virtio_devices::{
         ActivateResult, VirtioDeviceConfig, VirtioDeviceInfo, VirtioSharedMemory,
-        DEVICE_ACKNOWLEDGE, DEVICE_DRIVER, DEVICE_DRIVER_OK, DEVICE_FEATURES_OK, DEVICE_INIT,
     };
 
     use dbs_address_space::{AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType};

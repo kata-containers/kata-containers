@@ -242,7 +242,7 @@ mod tests {
 
         let metrics = Arc::new(SerialDeviceMetrics::default());
 
-        let out: Arc<Mutex<Option<Box<(dyn std::io::Write + Send + 'static)>>>> =
+        let out: Arc<Mutex<Option<Box<dyn std::io::Write + Send + 'static>>>> =
             Arc::new(Mutex::new(Some(Box::new(std::io::sink()))));
         let mut serial = SerialDevice {
             serial: Serial::with_events(
