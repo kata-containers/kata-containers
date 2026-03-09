@@ -362,7 +362,7 @@ get_latest_kernel_nvidia_artefact_and_builder_image_version() {
 }
 
 get_latest_ctk_version() {
-	echo $(get_from_kata_deps ".assets.kernel.nvidia.ctk.version")
+	echo $(get_from_kata_deps ".externals.nvidia.ctk.version")
 }
 
 #Install guest image
