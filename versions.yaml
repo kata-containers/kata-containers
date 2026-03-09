@@ -468,12 +468,12 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     # When updating this, also update in go.mod files.
-    version: "1.25.7"
+    version: "1.25.8"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.25.7"
+      newest-version: "1.25.8"
 
   rust:
     description: "Rust language"
