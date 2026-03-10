@@ -103,6 +103,43 @@ k8s_create_pod() {
 	fi
 }
 
+# Creates a debugger pod if one doesn't already exist.
+#
+# Parameters:
+#	$1 - the node name
+#
+create_debugger_pod() {
+	local node="$1"
+	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
+
+	# Check if there is an existing node debugger pod and reuse it
+	# Otherwise, create a new one
+	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
+		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
+			kubectl apply -n kube-system -f - > /dev/null
+		# Wait for the newly created pod to be ready
+		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
+	fi
+
+	echo "${pod_name}"
+}
+
+# Copies a file into the host filesystem.
+#
+# Parameters:
+#	$1 - source file path on the client
+#   $2 - node
+#   $3 - destination path on the node
+#
+copy_file_to_host() {
+	local source="$1"
+	local node="$2"
+	local destination="$3"
+
+	debugger_pod="$(create_debugger_pod "${node}")"
+	kubectl cp -n kube-system "${source}" "${debugger_pod}:/host/${destination}"
+}
+
 # Runs a command in the host filesystem.
 #
 # Parameters:
@@ -114,25 +151,9 @@ exec_host() {
 	if ! kubectl get node "${node}" > /dev/null 2>&1; then
 		die "A given node ${node} is not valid"
 	fi
-	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
-	local command="${@:2}"
-	# Make 7 character hash from the node name
-	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
 
-	# Run a debug pod
-	# Check if there is an existing node debugger pod and reuse it
-	# Otherwise, create a new one
-	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
-		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
-			kubectl apply -n kube-system -f - > /dev/null
-		# Wait for the newly created pod to be ready
-		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
-		# Manually check the exit status of the previous command to handle errors explicitly
-		# since `set -e` is not enabled, allowing subsequent commands to run if needed.
-		if [ $? -ne 0 ]; then
-			return $?
-		fi
-	fi
+	local command="${@:2}"
+	local pod_name="$(create_debugger_pod "${node}")"
 
 	# Execute the command and capture the output
 	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051

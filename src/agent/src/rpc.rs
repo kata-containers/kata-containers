@@ -2308,9 +2308,6 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
 }
 
 async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
-    if !confidential_data_hub::is_cdh_client_initialized() {
-        return Ok(());
-    }
     let linux = oci
         .linux()
         .as_ref()
@@ -2320,30 +2317,44 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
         for specdev in devices.iter() {
             if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
                 let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
-                let secure_storage_integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
-                info!(
-                    sl(),
-                    "trusted_store device major:min {}, enable data integrity {}",
-                    dev_major_minor,
-                    secure_storage_integrity
-                );
-
-                let options = std::collections::HashMap::from([
-                    ("deviceId".to_string(), dev_major_minor),
-                    ("encryptType".to_string(), "LUKS".to_string()),
-                    ("dataIntegrity".to_string(), secure_storage_integrity),
-                ]);
-                confidential_data_hub::secure_mount(
-                    "BlockDevice",
-                    &options,
-                    vec![],
-                    KATA_IMAGE_WORK_DIR,
-                )
-                .await?;
+                cdh_secure_mount("BlockDevice", &dev_major_minor, "LUKS", KATA_IMAGE_WORK_DIR)
+                    .await?;
                 break;
             }
         }
     }
+    Ok(())
+}
+
+pub(crate) async fn cdh_secure_mount(
+    device_type: &str,
+    device_id: &str,
+    encrypt_type: &str,
+    mount_point: &str,
+) -> Result<()> {
+    if !confidential_data_hub::is_cdh_client_initialized() {
+        return Ok(());
+    }
+
+    let integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
+
+    info!(
+        sl(),
+        "cdh_secure_mount: device_type {}, device_id {}, encrypt_type {}, integrity {}",
+        device_type,
+        device_id,
+        encrypt_type,
+        integrity
+    );
+
+    let options = std::collections::HashMap::from([
+        ("deviceId".to_string(), device_id.to_string()),
+        ("encryptType".to_string(), encrypt_type.to_string()),
+        ("dataIntegrity".to_string(), integrity),
+    ]);
+
+    confidential_data_hub::secure_mount(device_type, &options, vec![], mount_point).await?;
+
     Ok(())
 }
 

@@ -34,6 +34,7 @@ pub struct Settings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Volumes {
     pub emptyDir: EmptyDirVolume,
+    pub emptyDir_encrypted: EmptyDirVolume,
     pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
     pub image_volume: ImageVolume,
@@ -46,9 +47,11 @@ pub struct EmptyDirVolume {
     pub mount_source: String,
     pub mount_point: String,
     pub driver: String,
+    pub driver_options: Vec<String>,
     pub fstype: String,
     pub options: Vec<String>,
     pub source: String,
+    pub shared: bool,
 }
 
 /// ConfigMap volume settings loaded from genpolicy-settings.json.

@@ -66,6 +66,16 @@ const (
 	// containers.
 	KataLocalDevType = "local"
 
+	// EmptyDirModeSharedFs is the emptydir_mode value for sharing emptyDir via shared filesystem.
+	EmptyDirModeSharedFs = "shared-fs"
+
+	// EmptyDirModeVirtioBlkEncrypted is the emptydir_mode value for encrypted virtio-blk emptyDir.
+	EmptyDirModeVirtioBlkEncrypted = "block-encrypted"
+
+	// encryptionKeyDriverOption is the driver option used to specify
+	// an encryption key for a Storage struct.
+	encryptionKeyDriverOption = "encryption_key"
+
 	// Allocating an FSGroup that owns the pod's volumes
 	fsGid = "fsgid"
 
@@ -1805,7 +1815,7 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 		if *m.FSGroup > 0 && *m.FSGroup <= math.MaxUint32 {
 			safeFsgroup = uint32(*m.FSGroup)
 		} else {
-			return nil, fmt.Errorf("m.FSGroup value was out of range: %d", m.FSGroup)
+			return nil, fmt.Errorf("m.FSGroup value was out of range: %d", *m.FSGroup)
 
 		}
 		vol.FsGroup = &grpc.FSGroup{
@@ -1813,6 +1823,13 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 			GroupChangePolicy: getFSGroupChangePolicy(m.FSGroupChangePolicy),
 		}
 	}
+
+	if m.EncryptionKey != "" {
+		option := fmt.Sprintf("%s=%s", encryptionKeyDriverOption, m.EncryptionKey)
+		vol.DriverOptions = append(vol.DriverOptions, option)
+	}
+
+	vol.Shared = m.Shared
 
 	return vol, nil
 }
@@ -1883,7 +1900,11 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 
 		// Add the block device to the list of container devices, to make sure the
 		// device is detached with detachDevices() for a container.
-		c.devices = append(c.devices, ContainerDevice{ID: id, ContainerPath: m.Destination})
+		c.devices = append(c.devices, ContainerDevice{
+			ID:            id,
+			ContainerPath: m.Destination,
+			Shared:        m.Shared,
+		})
 
 		// Create Storage structure
 		vol, err := k.createBlkStorageObject(c, m)

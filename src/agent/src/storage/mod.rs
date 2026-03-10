@@ -172,7 +172,11 @@ pub async fn add_storages(
 
     for storage in storages {
         let path = storage.mount_point.clone();
-        let state = sandbox.lock().await.add_sandbox_storage(&path).await;
+        let state = sandbox
+            .lock()
+            .await
+            .add_sandbox_storage(&path, storage.shared)
+            .await;
         if state.ref_count().await > 1 {
             if let Some(path) = state.path() {
                 if !path.is_empty() {

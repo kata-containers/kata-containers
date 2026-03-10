@@ -70,10 +70,6 @@ setup() {
 teardown() {
 	[[ "${KATA_HYPERVISOR}" == qemu-se* ]] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
-	# Debugging information
-	kubectl describe "pod/$pod_name" || true
-
-	kubectl delete pod "$pod_name" || true
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 	teardown_common "${node}" "${node_start_time:-}"
 }
