@@ -19,9 +19,8 @@ Confidential Containers.
 > **Note:**
 >
 > The current supported mode for enabling GPU workloads in the TEE scenario
-> is single GPU passthrough (one GPU per pod) on AMD64 platforms (AMD SEV-SNP
-> being the only supported TEE scenario so far with support for Intel TDX being
-> on the way).
+> is single GPU passthrough (one GPU per pod) and multi GPU passthrough
+> using PPCIE.
 
 ## Component Overview
 
@@ -230,11 +229,26 @@ NVIDIA GPU CI validation jobs. Note that, this setup:
 - uses the genpolicy tool to attach Kata agent security policies to the pod
   manifest
 - has dedicated (composite) attestation tests, a CUDA vectorAdd test, and a
-  NIM/RA test sample with secure API key release
+  NIM/RA test sample with secure API key release using sealed secrets.
 
 A similar deployment guide and scenario description can be found in NVIDIA resources
 under
 [Early Access: NVIDIA GPU Operator with Confidential Containers based on Kata](https://docs.nvidia.com/datacenter/cloud-native/gpu-operator/latest/confidential-containers.html).
+
+### Feature Set
+
+The upstream Kata Container stack supports the same set of features of other
+confidential runtime classes leaning onto the confidential containers open
+source project, with additionally enabling secure orchestration of workloads
+using confidential GPUs.
+Notable features for an end-to-end confidential deployment scenario are:
+- composite attestation using trustee and the NVIDIA Remote Attestation Service,
+short NRAS
+- generating pod agent security policies using the genpolicy tool
+- use of signed sealed secrets
+- access to authenticated registries for container image guest-pull
+- container image signature verification and encrypted container images
+- ephemeral container data and image layer storage
 
 ### Requirements
 
@@ -247,7 +261,9 @@ The requirements for the TEE scenario are:
 BIOS and VBIOS configuration is out of scope for this guide. Other resources,
 such as the documentation found on the
 [NVIDIA Trusted Computing Solutions](https://docs.nvidia.com/nvtrust/index.html)
-page and the above linked NVIDIA documentation, provide guidance on
+page, on the
+[Secure AI Compatibility Matrix](https://www.nvidia.com/en-us/data-center/solutions/confidential-computing/secure-ai-compatibility-matrix/)
+page, and on the above linked NVIDIA documentation, provide guidance on
 selecting proper hardware and on properly configuring its firmware and OS.
 
 ### Installation
@@ -256,11 +272,15 @@ selecting proper hardware and on properly configuring its firmware and OS.
 
 First, set up your Kubernetes cluster. For instance, in Kata CI, our NVIDIA
 jobs use a single-node vanilla Kubernetes cluster with a 2.x containerd
-version and Kata's current supported Kubernetes version. We set this cluster
-up using the `deploy_k8s` function from `tests/integration/kubernetes/gha-run.sh`
-as follows:
-
+version and Kata's current supported Kubernetes version. This cluster is
+being set up using the `deploy_k8s` function from the script file
+`tests/integration/kubernetes/gha-run.sh`. If you intend to run follow these
+steps, make sure you have `yq` and `helm` installed. Note that, these scripts
+query the GitHub API, so creating and declaring a personal access token
+prevents from experiencing rate limiting issues.
+You can execute the function as follows:
 ```bash
+$ export GH_TOKEN="<your-gh-pat>"
 $ export KUBERNETES="vanilla"
 $ export CONTAINER_ENGINE="containerd"
 $ export CONTAINER_ENGINE_VERSION="v2.1"
@@ -274,8 +294,11 @@ $ deploy_k8s
 > `runtimeRequestTimeout` timeout value than the two minute default timeout.
 > Using the guest-pull mechanism, pulling large images may take a significant
 > amount of time and may delay container start, possibly leading your Kubelet
-> to de-allocate your pod before it transitions from the *container created*
-> to the *container running* state.
+> to de-allocate your pod before it transitions from the *container creating*
+> to the *container running* state. The NVIDIA shim configurations use a
+> `create_container_timeout` of 1200s, which is the equivalent value on shim
+> side, controlling the time the shim allows for a container to remain in
+> *container creating* state.
 
 > **Note:**
 >
@@ -305,12 +328,18 @@ $ helm install --wait --generate-name \
 
 > **Note:**
 >
-> For heterogeneous clusters with different GPU types, you can omit
-> the `P_GPU_ALIAS` environment variable lines. This will cause the sandbox
-> device plugin to create GPU model-specific resource types (e.g.,
-> `nvidia.com/GH100_H100L_94GB`) instead of the generic `nvidia.com/pgpu`,
-> which in turn can be used by pods through respective resource limits.
-> For simplicity, this guide uses the generic alias.
+> For heterogeneous clusters with different GPU types, you can specify an
+> empty `P_GPU_ALIAS` environment variable for the sandbox device plugin:
+> `-    --set 'sandboxDevicePlugin.env[0].name=P_GPU_ALIAS' \`
+> `-    --set 'sandboxDevicePlugin.env[0].value=""' \`
+> This will cause the sandbox device plugin to create GPU model-specific
+> resource types (e.g., `nvidia.com/GH100_H100L_94GB`) instead of the
+> default 'pgpu' type, which usually results in advertising a resource of
+> type `nvidia.com/pgpu`
+> The exposed device resource types can be used for pods by specifying
+> respective resource limits.
+> For nvswitches exposed as resources fo type `nvidia.com/nvswitch, the
+> variable `NVSWITCH_ALIAS` can be utilized.
 
 > **Note:**
 >
@@ -335,8 +364,7 @@ $ helm install kata-deploy \
     --create-namespace \
     -f "https://raw.githubusercontent.com/kata-containers/kata-containers/refs/tags/${VERSION}/tools/packaging/kata-deploy/helm-chart/kata-deploy/try-kata-nvidia-gpu.values.yaml" \
     --set nfd.enabled=false \
-    --set shims.qemu-nvidia-gpu-tdx.enabled=false \
-    --wait --timeout 10m --atomic \
+    --wait --timeout 10m \
     "${CHART}" --version "${VERSION}"
 ```
 
@@ -373,18 +401,9 @@ passthrough, for the example of using all nodes for GPU passthrough, run:
 $ kubectl label nodes --all nvidia.com/gpu.workload.config=vm-passthrough --overwrite
 ```
 
-Check if the `nvidia-cc-manager` pod is running if you intend to run GPU TEE
-scenarios. If not, you need to manually label the node as CC capable. Current
-GPU Operator node feature rules do not yet recognize all CC capable GPU PCI
-IDs. Run the following command:
-
-```bash
-$ kubectl label nodes --all nvidia.com/cc.capable=true
-```
-
-After this, assure the `nvidia-cc-manager` pod is running. With the suggested
-parameters for GPU Operator deployment, the `nvidia-cc-manager` will
-automatically transition the GPU into CC mode.
+With the suggested parameters for GPU Operator deployment, the
+`nvidia-cc-manager` operand will automatically transition the GPU into CC
+mode.
 
 After deployment, you can transition your node(s) to the desired CC state,
 using either the `on` or `off` value, depending on your scenario. For the
@@ -409,9 +428,10 @@ $ lspci -nnk -d 10de:
 
 ### Run the CUDA vectorAdd sample
 
-Create the following file:
+Create the pod manifest with:
 
-```yaml
+```bash
+$ cat > cuda-vectoradd-kata.yaml.in << 'EOF'
 apiVersion: v1
 kind: Pod
 metadata:
@@ -429,6 +449,7 @@ spec:
       limits:
         nvidia.com/pgpu: "1"
         memory: 16Gi
+EOF
 ```
 
 Depending on your scenario and on the CC state, export your desired runtime
@@ -548,6 +569,3 @@ following annotation in the manifest:
 >
 > - musl-based container images (e.g., using Alpine), or distro-less
 >   containers are not supported.
-> - for the TEE scenario, only single-GPU passthrough per pod is supported,
->   so your pod resource limit must be: `nvidia.com/pgpu: "1"` (on a system
->   with multiple GPUs, you can thus pass through one GPU per pod).
