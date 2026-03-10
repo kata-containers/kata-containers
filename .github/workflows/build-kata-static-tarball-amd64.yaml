@@ -367,7 +367,6 @@ jobs:
       matrix:
         asset:
           - agent-ctl
-          - csi-kata-directvolume
           - genpolicy
           - kata-ctl
           - kata-manager
