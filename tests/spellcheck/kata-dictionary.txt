@@ -42,10 +42,15 @@ Gramine
 Mellanox
 MOFED
 NCCL
+NRAS
 NVCR
 NVLINK
+nvswitch
+nvswitches
 NVRC
 nvlib
+pgpu
+PPCIE
 Quadro
 
 # Storage & Filesystems
