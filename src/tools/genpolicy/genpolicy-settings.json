@@ -152,7 +152,7 @@
         }
     },
     "volumes": {
-        "emptyDir": {
+        "emptyDir_sandbox_local": {
             "mount_type": "local",
             "mount_source": "^$(cpath)/$(sandbox-id)/rootfs/local/",
             "mount_point": "^$(cpath)/$(sandbox-id)/rootfs/local/",
@@ -161,6 +161,19 @@
             "fstype": "local",
             "options": [
                 "mode=0777"
+            ]
+        },
+        "emptyDir_bundle_bind": {
+            "mount_type": "bind",
+            "mount_source": "$(sfprefix)",
+            "mount_point": "$(sfprefix)",
+            "driver": "local",
+            "source": "local",
+            "fstype": "bind",
+            "options": [
+                "rbind",
+                "rprivate",
+                "ro"
             ]
         },
         "emptyDir_memory": {
@@ -310,7 +323,8 @@
     },
     "kata_config": {
         "oci_version": "1.1.0",
-        "enable_configmap_secret_storages": false
+        "enable_configmap_secret_storages": false,
+        "emptydir_type": "bundle-bind"
     },
     "cluster_config": {
         "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6",
