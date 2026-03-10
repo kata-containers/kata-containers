@@ -588,7 +588,6 @@ function main() {
 		install-kata-tools) install_kata_tools "${2:-}" ;;
 		install-kbs-client) install_kbs_client ;;
 		get-cluster-credentials) get_cluster_credentials ;;
-		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
@@ -613,7 +612,6 @@ function main() {
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
-		delete-csi-driver) return 0 ;;
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
