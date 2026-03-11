@@ -35,3 +35,7 @@ spec:
             memory: 100Mi
         ports:
         - containerPort: 6379
+        env:
+          # serde_yaml versions newer than 0.8 incorrectly convert value "yes" to yes, and yes doesn't work for k8s.
+          - name: TEST_BOOLEAN_VS_STRING
+            value: "yes"
