@@ -380,7 +380,6 @@ pub fn setup_mptable<M: GuestMemory>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io;
     use vm_memory::{Bytes, GuestMemoryMmap};
 
     fn table_entry_size(type_: u8) -> usize {
@@ -452,23 +451,11 @@ mod tests {
         let mpc_offset = GuestAddress(u64::from(mpf_intel.0.physptr));
         let mpc_table: MpcTableWrapper = mem.read_obj(mpc_offset).unwrap();
 
-        struct Sum(u8);
-        impl io::Write for Sum {
-            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-                for v in buf.iter() {
-                    self.0 = self.0.wrapping_add(*v);
-                }
-                Ok(buf.len())
-            }
-            fn flush(&mut self) -> io::Result<()> {
-                Ok(())
-            }
-        }
-
-        let mut sum = Sum(0);
-        mem.write_volatile_to(mpc_offset, &mut sum, mpc_table.0.length as usize)
+        let mut buf = Vec::new();
+        mem.write_volatile_to(mpc_offset, &mut buf, mpc_table.0.length as usize)
             .unwrap();
-        assert_eq!(sum.0, 0);
+        let sum: u8 = buf.iter().fold(0u8, |acc, &v| acc.wrapping_add(v));
+        assert_eq!(sum, 0);
     }
 
     #[test]
