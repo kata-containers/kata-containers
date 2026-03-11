@@ -72,7 +72,7 @@ func IsPCIeDevice(bdf string) bool {
 }
 
 // read from /sys/bus/pci/devices/xxx/property
-func getPCIDeviceProperty(bdf string, property PCISysFsProperty) string {
+func GetPCIDeviceProperty(bdf string, property PCISysFsProperty) string {
 	if len(strings.Split(bdf, ":")) == 2 {
 		bdf = PCIDomain + ":" + bdf
 	}
@@ -220,9 +220,9 @@ func GetDeviceFromVFIODev(device config.DeviceInfo) ([]*config.VFIODev, error) {
 		return nil, err
 	}
 
-	vendorID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
-	deviceID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
-	pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
+	vendorID := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
+	deviceID := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
+	pciClass := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
 
 	i, err := extractIndex(device.HostPath)
 	if err != nil {
@@ -276,7 +276,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
 			// This is vfio-pci and vfio-mdev specific
-			pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
+			pciClass := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
 			// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
 			// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
 			// Class 0x0604 is PCI bridge, 0x0600 is Host bridge
@@ -288,8 +288,8 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				continue
 			}
 			// Fetch the PCI Vendor ID and Device ID
-			vendorID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
-			deviceID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
+			vendorID := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
+			deviceID := GetPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
 
 			// Do not directly assign to `vfio` -- need to access field still
 			vfio = config.VFIODev{
