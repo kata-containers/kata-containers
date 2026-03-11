@@ -1207,11 +1207,14 @@ install_tools_helper() {
 	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
 	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="directvolplugin"
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
-	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
+
+	local tool_build_dir="src/tools/${tool}"
+	[ ${tool} = "genpolicy" ] && tool_build_dir=target
+	binary=$(find "${repo_root_dir}/${tool_build_dir}" -type f -name "${tool_binary}")
 
 	binary_count=$(echo "${binary}" | grep -c '^' || echo "0")
-	if [[ "${binary_count}" -eq 0 ]]; then
-		die "No binary found for ${tool} (expected: ${tool_binary})."
+	if [[ "${binary}" = "" ]]; then
+		die "No binary found for ${tool} in ${repo_root_dir}/${tool_build_dir} (expected: ${tool_binary})."
 	elif [[ "${binary_count}" -gt 1 ]]; then
 		die "Multiple binaries found for ${tool} (expected single ${tool_binary}). Found:"$'\n'"${binary}"
 	fi
@@ -1246,7 +1249,7 @@ install_tools_helper() {
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="csi-kata-directvolume"
-	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+	install -D --mode "${binary_permissions}" "${binary}" "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
 install_agent_ctl() {

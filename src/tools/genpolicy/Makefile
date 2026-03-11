@@ -37,7 +37,7 @@ vendor:
 	cargo vendor
 
 test: $(GENERATED_FILES)
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --all-targets --all-features --target $(TRIPLE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test -p genpolicy --all-targets --all-features --target $(TRIPLE)
 
 install: $(GENERATED_FILES)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
