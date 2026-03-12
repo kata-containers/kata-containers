@@ -689,7 +689,11 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
         Err(CredentialRetrievalError::ConfigReadError) => {
             debug!("build_auth: Cannot read docker credentials - using anonymous access.");
         }
-        Err(CredentialRetrievalError::HelperFailure { stdout, stderr }) => {
+        Err(CredentialRetrievalError::HelperFailure {
+            helper: _,
+            stdout,
+            stderr,
+        }) => {
             if stdout == "credentials not found in native keychain\n" {
                 // On WSL, this error is generated when credentials are not
                 // available in ~/.docker/config.json.
