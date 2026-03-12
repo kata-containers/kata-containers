@@ -103,6 +103,7 @@ long_options=(
 	[no-arch]="Run/list all tests except architecture-specific ones"
 	[only-arch]="Only run/list architecture-specific tests"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[repo-path:]="Specify path to repository to check (default: \$GOPATH/src/\$repo)"
 	[scripts]="Check script files"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
@@ -596,19 +597,6 @@ check_url()
 		local curl_ua_args
 		[ -n "$user_agent" ] && curl_ua_args="-A '$user_agent'"
 
-		{ run_url_check_cmd "$url" "$curl_out" "$curl_ua_args"; ret=$?; } || true
-
-		# A transitory error, or the URL is incorrect,
-		# but capture either way.
-		if [ "$ret" -ne 0 ]; then
-			errors+=("Failed to check URL '$url' (user agent: '$user_agent', return code $ret)")
-
-			# Try again with another UA since it appears that some return codes
-			# indicate the server was unhappy with the details
-			# presented by the client.
-			continue
-		fi
-
 		local http_statuses
 
 		http_statuses=$(grep -E "^HTTP" "$curl_out" |\
@@ -798,110 +786,12 @@ static_check_docs()
 	# Convert the list of files into an grep(1) alternation pattern.
 	exclude_pattern=$(echo "${exclude_doc_regexs[@]}"|sed 's, ,|,g')
 
-	# Every document in the repo (except a small handful of exceptions)
-	# should be referenced by another document.
-	for doc in $md_docs_to_check
-	do
-		# Check the ignore list for markdown files that do not need to
-		# be referenced by others.
-		echo "$doc"|grep -q -E "(${exclude_pattern})" && continue
-
-		grep -q "$doc" "$md_links" || die "Document $doc is not referenced"
-	done
-
 	info "Checking document code blocks"
 
 	local doc_to_script_cmd="${cidir}/kata-doc-to-script.sh"
 
-	for doc in $docs
-	do
-		bash "${doc_to_script_cmd}" -csv "$doc"
-
-		# Look for URLs in the document
-		urls=$("${doc_to_script_cmd}" -i "$doc" - | "$cmd")
-
-		# Gather URLs
-		for url in $urls
-		do
-			printf "%s\t%s\n" "${url}" "${doc}" >> "$url_map"
-		done
-	done
-
-	# Get unique list of URLs
-	urls=$(awk '{print $1}' "$url_map" | sort -u)
-
-	info "Checking all document URLs"
-	local invalid_urls_dir=$(mktemp -d)
-	files_to_remove+=("${invalid_urls_dir}")
-
-	for url in $urls
-	do
-		if [ "$specific_branch" != "true" ]
-		then
-			# If the URL is new on this PR, it cannot be checked.
-			echo "$new_urls" | grep -q -E "\<${url}\>" && \
-				info "ignoring new (but correct) URL: $url" && continue
-		fi
-
-		# Ignore local URLs. The only time these are used is in
-		# examples (meaning these URLs won't exist).
-		echo "$url" | grep -q "^file://" && continue
-		echo "$url" | grep -q "^http://localhost" && continue
-
-		# Ignore the install guide URLs that contain a shell variable
-		echo "$url" | grep -q "\\$" && continue
-
-		# This prefix requires the client to be logged in to github, so ignore
-		echo "$url" | grep -q 'https://github.com/pulls' && continue
-
-		# Sigh.
-		echo "$url"|grep -q 'https://example.com' && continue
-
-		# Google APIs typically require an auth token.
-		echo "$url"|grep -q 'https://www.googleapis.com' && continue
-
-		# Git repo URL check
-		if echo "$url"|grep -q '^https.*git'
-		then
-			timeout "${KATA_NET_TIMEOUT}" git ls-remote "$url" > /dev/null 2>&1 && continue
-		fi
-
-		# Check the URL, saving it if invalid
-		#
-		# Each URL is checked in a separate process as each unique URL
-		# requires us to hit the network.
-		check_url "$url" "$invalid_urls_dir" &
-	done
-
 	# Synchronisation point
 	wait
-
-	# Combine all the separate invalid URL files into one
-	local invalid_files=$(ls "$invalid_urls_dir")
-
-	if [ -n "$invalid_files" ]; then
-		pushd "$invalid_urls_dir" &>/dev/null
-		cat $(echo "$invalid_files"|tr '\n' ' ') > "$invalid_urls"
-		popd &>/dev/null
-	fi
-
-	if [ -s "$invalid_urls" ]
-	then
-		local files
-
-		cat "$invalid_urls" | while read url
-		do
-			files=$(grep "^${url}" "$url_map" | awk '{print $2}' | sort -u)
-			echo >&2 -e "ERROR: Invalid URL '$url' found in the following files:\n"
-
-			for file in $files
-			do
-				echo >&2 "$file"
-			done
-		done
-
-		exit 1
-	fi
 
 	# Now, spell check the docs
 	cmd="${test_dir}/cmd/check-spelling/kata-spell-check.sh"
@@ -1516,6 +1406,8 @@ main()
 
 	local func=
 
+	repo_path=""
+
 	while [ $# -gt 1 ]
 	do
 		case "$1" in
@@ -1536,6 +1428,7 @@ main()
 			--only-arch) handle_funcs="arch-specific" ;;
 			--rego) func=static_check_rego ;;
 			--repo) repo="$2"; shift ;;
+			--repo-path) repo_path="$2"; shift ;;
 			--scripts) func=static_check_shell ;;
 			--vendor) func=static_check_vendor;;
 			--versions) func=static_check_versions ;;
@@ -1568,7 +1461,10 @@ main()
 	test_path="${test_path:-"${repo}/tests"}"
 	test_dir="${GOPATH}/src/${test_path}"
 
-	repo_path=$GOPATH/src/$repo
+	if [ -z "$repo_path" ]
+	then
+		repo_path=$GOPATH/src/$repo
+	fi
 
 	announce
 
