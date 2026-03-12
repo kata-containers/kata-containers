@@ -74,6 +74,8 @@ cgroupsv1
 coredump
 CPUSET
 crio
+nerdctl
+dockershim
 dentries
 hypercalls
 inodes
