@@ -1,4 +1,4 @@
-# Run Kata Containers with Kubernetes
+# How to use Kata Containers and CRI-O with Kubernetes
 
 ## Prerequisites
 This guide requires Kata Containers available on your system, install-able by following [this guide](../install/README.md).
