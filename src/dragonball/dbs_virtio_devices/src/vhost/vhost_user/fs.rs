@@ -44,6 +44,7 @@ const NUM_QUEUE_OFFSET: usize = 1;
 const MASTER_SLOT: u32 = 0;
 const SLAVE_REQ_SLOT: u32 = 1;
 
+#[allow(dead_code)]
 struct SlaveReqHandler<AS: GuestAddressSpace> {
     /// the address of memory region allocated for virtiofs
     cache_offset: u64,
@@ -63,6 +64,7 @@ struct SlaveReqHandler<AS: GuestAddressSpace> {
 
 impl<AS: GuestAddressSpace> SlaveReqHandler<AS> {
     // Make sure request is within cache range
+    #[allow(dead_code)]
     fn is_req_valid(&self, offset: u64, len: u64) -> bool {
         // TODO: do we need to validate alignment here?
         match offset.checked_add(len) {

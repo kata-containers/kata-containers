@@ -829,7 +829,8 @@ pub mod tests {
                 EmulationCase::InternalError => Ok(VcpuExit::InternalError),
                 EmulationCase::Unknown => Ok(VcpuExit::Unknown),
                 EmulationCase::SystemEvent(event_type, event_flags) => {
-                    Ok(VcpuExit::SystemEvent(*event_type, event_flags))
+                    let flags = event_flags.clone().into_boxed_slice();
+                    Ok(VcpuExit::SystemEvent(*event_type, Box::leak(flags)))
                 }
                 EmulationCase::Error(e) => Err(kvm_ioctls::Error::new(*e)),
             }
@@ -948,12 +949,14 @@ pub mod tests {
         assert!(matches!(res, Err(VcpuError::VcpuUnhandledKvmExit)));
 
         // KVM_SYSTEM_EVENT_RESET
-        *(EMULATE_RES.lock().unwrap()) = EmulationCase::SystemEvent(KVM_SYSTEM_EVENT_RESET, vec![0]);
+        *(EMULATE_RES.lock().unwrap()) =
+            EmulationCase::SystemEvent(KVM_SYSTEM_EVENT_RESET, vec![0]);
         let res = vcpu.run_emulation();
         assert!(matches!(res, Ok(VcpuEmulation::Stopped)));
 
         // KVM_SYSTEM_EVENT_SHUTDOWN
-        *(EMULATE_RES.lock().unwrap()) = EmulationCase::SystemEvent(KVM_SYSTEM_EVENT_SHUTDOWN, vec![0]);
+        *(EMULATE_RES.lock().unwrap()) =
+            EmulationCase::SystemEvent(KVM_SYSTEM_EVENT_SHUTDOWN, vec![0]);
         let res = vcpu.run_emulation();
         assert!(matches!(res, Ok(VcpuEmulation::Stopped)));
 

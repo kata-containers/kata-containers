@@ -229,6 +229,7 @@ impl<B: Bitmap> GuestRegionRaw<B> {
     /// # Safety
     /// This is safe because we mapped the area at addr ourselves, so this slice will not
     /// overflow. However, it is possible to alias.
+    #[allow(clippy::mut_from_ref)]
     pub unsafe fn as_mut_slice(&self) -> Option<&mut [u8]> {
         Some(std::slice::from_raw_parts_mut(self.addr, self.size))
     }

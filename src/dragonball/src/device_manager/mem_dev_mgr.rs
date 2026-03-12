@@ -557,9 +557,8 @@ impl MemRegionFactory for MemoryRegionFactory {
         );
 
         // All value should be valid.
-        let memory_region = Arc::new(
-            GuestRegionMmap::new(mmap_region, guest_addr).ok_or(VirtioError::InsertMmap)?,
-        );
+        let memory_region =
+            Arc::new(GuestRegionMmap::new(mmap_region, guest_addr).ok_or(VirtioError::InsertMmap)?);
 
         let vm_as_new = self
             .vm_as

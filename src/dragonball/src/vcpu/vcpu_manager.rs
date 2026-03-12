@@ -543,12 +543,11 @@ impl VcpuManager {
         // create vcpufd with same id in one kvm instance.
         let kvm_vcpu = match self.vcpu_infos[cpu_index as usize].vcpu_fd.take() {
             Some(vcpu_fd) => vcpu_fd,
-            None => {
-                self.vm_fd
-                    .create_vcpu(cpu_index as u64)
-                    .map_err(VcpuError::VcpuFd)
-                    .map_err(VcpuManagerError::Vcpu)?
-            }
+            None => self
+                .vm_fd
+                .create_vcpu(cpu_index as u64)
+                .map_err(VcpuError::VcpuFd)
+                .map_err(VcpuManagerError::Vcpu)?,
         };
 
         let mut vcpu = self.create_vcpu_arch(cpu_index, kvm_vcpu, request_ts)?;

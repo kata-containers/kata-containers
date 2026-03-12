@@ -492,10 +492,11 @@ impl AddressSpaceMgr {
             self.configure_thp_and_prealloc(&region, &mmap_reg)?;
         }
 
-        let reg = GuestRegionImpl::new(mmap_reg, region.start_addr())
-            .ok_or(AddressManagerError::GuestRegionCollection(
+        let reg = GuestRegionImpl::new(mmap_reg, region.start_addr()).ok_or(
+            AddressManagerError::GuestRegionCollection(
                 vm_memory::GuestRegionCollectionError::NoMemoryRegion,
-            ))?;
+            ),
+        )?;
         Ok(Arc::new(reg))
     }
 

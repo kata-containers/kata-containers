@@ -408,8 +408,9 @@ impl VfioDeviceMgr {
         } else {
             let kvm_dev_fd = self.get_kvm_dev_fd()?;
             let vfio_dev_fd = Arc::new(vfio_ioctls::VfioDeviceFd::new_from_kvm(kvm_dev_fd));
-            let vfio_container =
-                Arc::new(VfioContainer::new(Some(vfio_dev_fd)).map_err(VfioDeviceError::VfioIoctlError)?);
+            let vfio_container = Arc::new(
+                VfioContainer::new(Some(vfio_dev_fd)).map_err(VfioDeviceError::VfioIoctlError)?,
+            );
             self.vfio_container = Some(vfio_container.clone());
 
             Ok(vfio_container)
