@@ -19,6 +19,8 @@ paths:
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/static-checks": ["static"]
   - "^\\.github/workflows/": []
+  - "^docs/": ["static"]
+  - "^mkdocs\\.yaml$": ["static"]
   - "\\.md$": ["static"]
   # TODO: Expand filters
   # Sources
