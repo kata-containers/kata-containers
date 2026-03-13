@@ -1197,9 +1197,10 @@ func sortContainerVFIODevices(devices []config.DeviceInfo) []config.DeviceInfo {
 	return vfioDevices
 }
 
-// errNoSiblingFound is returned by siblingAnnotation when a device does not
-// match any known sibling. This is expected for devices not in the cdiDeviceKind
-// table (e.g. NVSwitches) and should be handled as a non-fatal skip by callers.
+// errNoSiblingFound is returned by siblingAnnotation when the VFIO device is
+// not of a supported CDI device type, i.e. it has no entry in the cdiDeviceKind
+// table (e.g. NVSwitches). Callers should treat this as a non-fatal "device not
+// applicable" condition rather than a sibling-matching failure.
 var errNoSiblingFound = fmt.Errorf("no suitable sibling found")
 
 // cdiDeviceKey identifies a device type by vendor ID and PCI class prefix.
