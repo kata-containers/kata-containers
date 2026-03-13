@@ -325,21 +325,30 @@ pub struct SocketAddress {
 }
 
 impl SocketAddress {
-    pub fn new(port: u32) -> Self {
+    pub fn new(mut port: u32) -> Self {
         if port == 0 {
-            Self {
-                typ: "unix".to_string(),
-                cid: "".to_string(),
-                port: "".to_string(),
-                path: QGS_SOCKET_PATH.to_string(),
+            // Check if the Unix socket exists
+            if std::path::Path::new(QGS_SOCKET_PATH).exists() {
+                return Self {
+                    typ: "unix".to_string(),
+                    cid: "".to_string(),
+                    port: "".to_string(),
+                    path: QGS_SOCKET_PATH.to_string(),
+                };
             }
-        } else {
-            Self {
-                typ: "vsock".to_string(),
-                cid: format!("{}", 2),
-                port: port.to_string(),
-                path: "".to_string(),
-            }
+            // Fall back to port 4050 with vsock for backwards compatibility
+            warn!(
+                sl!(),
+                "QGS socket {} not found, falling back to vsock port 4050", QGS_SOCKET_PATH
+            );
+            port = 4050;
+        }
+
+        Self {
+            typ: "vsock".to_string(),
+            cid: format!("{}", 2),
+            port: port.to_string(),
+            path: "".to_string(),
         }
     }
 }
@@ -455,8 +464,18 @@ mod tests {
     #[test]
     fn test_unix_address_new() {
         let socket = SocketAddress::new(0);
-        assert_eq!(socket.typ, "unix");
-        assert_eq!(socket.path, "/var/run/tdx-qgs/qgs.socket");
+
+        // The behavior depends on whether the QGS socket exists on the test system
+        // If it exists: returns Unix socket path
+        // If it doesn't exist: falls back to vsock port 4050
+        if std::path::Path::new(super::QGS_SOCKET_PATH).exists() {
+            assert_eq!(socket.typ, "unix");
+            assert_eq!(socket.path, "/var/run/tdx-qgs/qgs.socket");
+        } else {
+            assert_eq!(socket.typ, "vsock");
+            assert_eq!(socket.cid, "2");
+            assert_eq!(socket.port, "4050");
+        }
     }
 
     #[test]
@@ -470,8 +489,17 @@ mod tests {
     fn test_socket_address_serialize_deserialize() {
         let socket = SocketAddress::new(0);
         let serialized = serde_json::to_string(&socket).unwrap();
-        let expected_json = r#"{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}"#;
-        assert_eq!(expected_json, serialized);
+
+        // The behavior depends on whether the QGS socket exists on the test system
+        // If it exists: returns Unix socket path
+        // If it doesn't exist: falls back to vsock port 4050
+        if std::path::Path::new(super::QGS_SOCKET_PATH).exists() {
+            let expected_json = r#"{"type":"unix","path":"/var/run/tdx-qgs/qgs.socket"}"#;
+            assert_eq!(expected_json, serialized);
+        } else {
+            let expected_json = r#"{"type":"vsock","cid":"2","port":"4050"}"#;
+            assert_eq!(expected_json, serialized);
+        }
     }
 
     #[test]

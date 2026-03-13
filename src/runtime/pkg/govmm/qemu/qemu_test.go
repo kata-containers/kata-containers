@@ -141,10 +141,17 @@ func TestTdxQuoteSocket(t *testing.T) {
 		QgsPort:  0,
 	}
 
-	testAppend(object, tdxObjectUnix, t)
+	// Test behavior when QgsPort is 0 depends on socket existence
+	// If socket exists: use Unix socket
+	// If socket doesn't exist: fall back to vsock port 4050
+	if _, err := os.Stat(qgsSocketPath); err == nil {
+		testAppend(object, tdxObjectUnix, t)
+	} else {
+		testAppend(object, tdxObjectVsock, t)
+	}
 
+	// Test explicit vsock port
 	object.QgsPort = 4050
-
 	testAppend(object, tdxObjectVsock, t)
 }
 
