@@ -173,7 +173,7 @@
                 "encryption_key=ephemeral"
             ],
             "source": "",
-            "mount_point": "^$(spath)/$(b64_device_id)$",
+            "mount_point": "$(spath)/$(b64_device_id)",
             "fstype": "ext4",
             "options": [],
             "shared": true

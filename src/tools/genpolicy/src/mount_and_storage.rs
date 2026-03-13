@@ -168,10 +168,10 @@ fn get_empty_dir_mount_and_storage(
             source: settings_empty_dir.source.clone(),
             fstype: settings_empty_dir.fstype.clone(),
             options,
-            mount_point: if settings_empty_dir.mount_point.ends_with('$') {
-                settings_empty_dir.mount_point.clone()
-            } else {
+            mount_point: if settings_empty_dir.mount_point.ends_with('/') {
                 format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name)
+            } else {
+                settings_empty_dir.mount_point.clone()
             },
             fs_group: protobuf::MessageField::none(),
             shared: settings_empty_dir.shared,
