@@ -14,7 +14,7 @@ A typical deployment of Kata Containers will be in Kubernetes by way of a Contai
 Kubelet will interact with a CRI implementer (such as containerd or CRI-O), which will in turn interface with Kata Containers (an OCI based runtime).
 
 The CRI API, as defined at the [Kubernetes CRI-API repo](https://github.com/kubernetes/cri-api/), implies a few constructs being supported by the
-CRI implementation, and ultimately in Kata Containers. In order to support the full [API](https://github.com/kubernetes/cri-api/blob/a6f63f369f6d50e9d0886f2eda63d585fbd1ab6a/pkg/apis/runtime/v1alpha2/api.proto#L34-L110) with the CRI-implementer, Kata must provide the following constructs:
+CRI implementation, and ultimately in Kata Containers. In order to support the full [API](https://github.com/kubernetes/cri-api/blob/8692b5171ddf22a22bf5d9b1a73c1a3d0ba87790/pkg/apis/runtime/v1/api.proto#L34-L143) with the CRI-implementer, Kata must provide the following constructs:
 
 ![API to construct](./arch-images/api-to-construct.png)
 
