@@ -26,7 +26,7 @@ require (
 	github.com/docker/go-units v0.5.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-ini/ini v1.67.0
-	github.com/go-openapi/errors v0.22.1
+	github.com/go-openapi/errors v0.22.6
 	github.com/go-openapi/runtime v0.28.0
 	github.com/go-openapi/strfmt v0.23.0
 	github.com/go-openapi/swag v0.23.1
