@@ -34,7 +34,7 @@ use dbs_utils::epoll_manager::{
 use dbs_utils::metric::{IncMetric, SharedIncMetric, SharedStoreMetric, StoreMetric};
 use log::{debug, error, info, trace};
 use serde::Serialize;
-use virtio_bindings::bindings::virtio_blk::VIRTIO_F_VERSION_1;
+use virtio_bindings::bindings::virtio_config::VIRTIO_F_VERSION_1;
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{
     ByteValued, Bytes, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryRegion,

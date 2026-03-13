@@ -25,7 +25,7 @@ use vhost_rs::vhost_user::message::{
     VhostUserConfigFlags, VhostUserProtocolFeatures, VhostUserVirtioFeatures,
     VHOST_USER_CONFIG_OFFSET,
 };
-use vhost_rs::vhost_user::{Master, VhostUserMaster};
+use vhost_rs::vhost_user::{Frontend, VhostUserFrontend};
 use vhost_rs::{Error as VhostError, VhostBackend};
 use virtio_bindings::bindings::virtio_blk::{VIRTIO_BLK_F_MQ, VIRTIO_BLK_F_SEG_MAX};
 use virtio_queue::QueueT;
@@ -231,7 +231,7 @@ impl VhostUserBlockDevice {
 
         info!("vhost-user-blk: try to connect to {vhost_socket:?}");
         // Connect to the vhost-user socket.
-        let mut master = Master::connect(&vhost_socket, 1).map_err(VirtIoError::VhostError)?;
+        let mut master = Frontend::connect(&vhost_socket, 1).map_err(VirtIoError::VhostError)?;
 
         info!("vhost-user-blk: get features");
         let avail_features = master.get_features().map_err(VirtIoError::VhostError)?;
@@ -290,11 +290,11 @@ impl VhostUserBlockDevice {
         })
     }
 
-    fn reconnect_to_server(&mut self) -> VirtIoResult<Master> {
+    fn reconnect_to_server(&mut self) -> VirtIoResult<Frontend> {
         if !Path::new(self.vhost_socket.as_str()).exists() {
             return Err(VirtIoError::InternalError);
         }
-        let master = Master::connect(&self.vhost_socket, 1).map_err(VirtIoError::VhostError)?;
+        let master = Frontend::connect(&self.vhost_socket, 1).map_err(VirtIoError::VhostError)?;
 
         Ok(master)
     }
@@ -360,7 +360,7 @@ impl VhostUserBlockDevice {
             if !Path::new(self.vhost_socket.as_str()).exists() {
                 return Err(ActivateError::InternalError);
             }
-            let master = Master::connect(String::from(self.vhost_socket.as_str()), 1)
+            let master = Frontend::connect(String::from(self.vhost_socket.as_str()), 1)
                 .map_err(VirtIoError::VhostError)?;
 
             self.endpoint.set_master(master);
@@ -388,7 +388,7 @@ impl VhostUserBlockDevice {
         R: GuestMemoryRegion + Send + Sync + 'static,
     >(
         &mut self,
-        master: Master,
+        master: Frontend,
         config: EndpointParam<AS, Q, R>,
         ops: &mut EventOps,
     ) -> std::result::Result<(), VirtIoError> {

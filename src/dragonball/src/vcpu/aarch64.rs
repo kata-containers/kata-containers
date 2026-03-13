@@ -43,7 +43,7 @@ impl Vcpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new_aarch64(
         id: u8,
-        vcpu_fd: Arc<VcpuFd>,
+        vcpu_fd: VcpuFd,
         io_mgr: IoManagerCached,
         exit_evt: EventFd,
         vcpu_state_event: EventFd,

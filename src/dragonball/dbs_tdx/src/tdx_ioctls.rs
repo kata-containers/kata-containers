@@ -11,7 +11,7 @@ use kvm_bindings::{CpuId, __IncompleteArrayField, KVMIO};
 use thiserror::Error;
 use vmm_sys_util::fam::{FamStruct, FamStructWrapper};
 use vmm_sys_util::ioctl::ioctl_with_val;
-use vmm_sys_util::{generate_fam_struct_impl, ioctl_ioc_nr, ioctl_iowr_nr};
+use vmm_sys_util::{generate_fam_struct_impl, ioctl_iowr_nr};
 
 /// Tdx capability list.
 pub type TdxCaps = FamStructWrapper<TdxCapabilities>;
