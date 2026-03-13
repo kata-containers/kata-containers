@@ -1493,6 +1493,15 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
+	// Log CDI annotations that will be sent to the agent
+	if grpcSpec.Annotations != nil {
+		for key, val := range grpcSpec.Annotations {
+			if strings.HasPrefix(key, "cdi.k8s.io/") {
+				k.Logger().Debugf("CDI annotation sent to agent: %s=%s", key, val)
+			}
+		}
+	}
+
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
 		ExecId:       c.id,

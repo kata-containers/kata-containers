@@ -1243,6 +1243,10 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error
 		for i := range siblings {
 			siblings[i].Index = i
 		}
+		c.Logger().Debugf("annotateContainerWithVFIOMetadata: %d siblings built from PCIeDevicesPerPort", len(siblings))
+		for _, s := range siblings {
+			c.Logger().Debugf("  sibling: Bus=%q Path=%q BDF=%q Index=%d", s.Bus, s.Path, s.BDF, s.Index)
+		}
 
 		// Now that we have the index lets connect the /dev/vfio/<num>
 		// to the correct index
@@ -1260,7 +1264,9 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error
 		}
 
 		if devices, ok := devices.([]config.DeviceInfo); ok {
+			c.Logger().Debugf("annotateContainerWithVFIOMetadata: processing %d cold-plug DeviceInfo entries", len(devices))
 			for _, dev := range devices {
+				c.Logger().Debugf("  DeviceInfo: ContainerPath=%q HostPath=%q DevType=%q", dev.ContainerPath, dev.HostPath, dev.DevType)
 				if dev.ContainerPath == "/dev/vfio/vfio" {
 					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
 					continue
@@ -1303,7 +1309,9 @@ func (c *Container) createCDIAnnotation(devPath string, index int) {
 }
 
 func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) error {
+	c.Logger().Debugf("siblingAnnotation: trying to match devPath=%q against %d siblings", devPath, len(siblings))
 	for _, sibling := range siblings {
+		c.Logger().Debugf("siblingAnnotation: comparing devPath=%q with sibling{Path=%q, BDF=%q, Bus=%q, Index=%d}", devPath, sibling.Path, sibling.BDF, sibling.Bus, sibling.Index)
 		if sibling.Path == devPath {
 			c.createCDIAnnotation(devPath, sibling.Index)
 			return nil
@@ -1329,6 +1337,10 @@ func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation)
 				// exit handling IOMMUFD device
 				return nil
 			}
+			// IOMMUFD device didn't match this sibling's BDF, try next sibling.
+			// Must not fall through to legacy VFIO group path below, as
+			// filepath.Base(devPath) is "vfioN" (not a numeric IOMMU group).
+			continue
 		}
 		// Legacy VFIO group device (/dev/vfio/<GROUP_NUM>), extract BDF from sysfs
 		vfioGroup := filepath.Base(devPath)
