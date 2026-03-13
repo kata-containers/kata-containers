@@ -2610,6 +2610,7 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(Bios::new(firmware.to_owned())));
 
         self.machine
+            .set_kernel_irqchip("split")
             .set_confidential_guest_support("tdx")
             .set_nvdimm(false);
     }
