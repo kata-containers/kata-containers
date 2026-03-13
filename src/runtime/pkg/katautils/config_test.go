@@ -933,6 +933,17 @@ func TestNewClhHypervisorConfig(t *testing.T) {
 	if config.DiskRateLimiterOpsOneTimeBurst != 0 {
 		t.Errorf("Expected value for disk operations one time burst %v, got %v", diskRateLimiterOpsOneTimeBurst, config.DiskRateLimiterOpsOneTimeBurst)
 	}
+
+	// Test TpmSocket mapping
+	tpmSocket := "/run/swtpm/test/swtpm-sock"
+	hypervisor.TpmSocket = tpmSocket
+	config, err = newClhHypervisorConfig(hypervisor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.TpmSocket != tpmSocket {
+		t.Errorf("Expected TpmSocket %v, got %v", tpmSocket, config.TpmSocket)
+	}
 }
 
 func TestHypervisorDefaults(t *testing.T) {

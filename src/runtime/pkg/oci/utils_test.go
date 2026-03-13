@@ -654,6 +654,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.CPUFeatures] = "pmu=off"
 	ocispec.Annotations[vcAnnotations.DisableVhostNet] = "true"
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
+	ocispec.Annotations[vcAnnotations.TpmSocket] = "/run/swtpm/test/swtpm-sock"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.ColdPlugVFIO] = config.BridgePort
 	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = config.NoPort
@@ -696,6 +697,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.CPUFeatures, "pmu=off")
 	assert.Equal(sbConfig.HypervisorConfig.DisableVhostNet, true)
 	assert.Equal(sbConfig.HypervisorConfig.GuestHookPath, "/usr/bin/")
+	assert.Equal(sbConfig.HypervisorConfig.TpmSocket, "/run/swtpm/test/swtpm-sock")
 	assert.Equal(sbConfig.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(string(sbConfig.HypervisorConfig.ColdPlugVFIO), string(config.BridgePort))
 	assert.Equal(string(sbConfig.HypervisorConfig.HotPlugVFIO), string(config.NoPort))
