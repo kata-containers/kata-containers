@@ -71,7 +71,7 @@ jobs:
       GH_ITA_KEY: ${{ secrets.ITA_KEY }}
       AUTO_GENERATE_POLICY: "yes"
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -175,7 +175,7 @@ jobs:
       CONTAINER_ENGINE_VERSION: "active"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -305,7 +305,7 @@ jobs:
       K8S_TEST_HOST_TYPE: "all"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -428,7 +428,7 @@ jobs:
       AUTO_GENERATE_POLICY: "no"
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
