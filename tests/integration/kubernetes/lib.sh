@@ -226,6 +226,23 @@ assert_pod_fail() {
 		if [[ "${terminated_reason}" == "StartError" ]] || [[ "${terminated_reason}" == "Error" ]]; then
 			return 0
 		fi
+		# Sandbox failure (e.g. kernel or early init crash): pod stays Pending, failure only in events.
+		# Only treat events as failure when the pod is still Pending (e.g. ContainerCreating).
+		local pod_phase
+		pod_phase=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+		if [[ "${pod_phase}" == "Pending" ]]; then
+			local namespace
+			namespace=$(kubectl get pod "${pod_name}" -o jsonpath='{.metadata.namespace}' 2>/dev/null || true)
+			if [[ -n "${namespace}" ]]; then
+				local events_reasons
+				events_reasons=$(kubectl get events -n "${namespace}" \
+					--field-selector "involvedObject.name=${pod_name},involvedObject.kind=Pod" \
+					-o jsonpath='{.items[*].reason}' 2>/dev/null || true)
+				if echo "${events_reasons}" | grep -qE "FailedCreatePodSandBox|Killing"; then
+					return 0
+				fi
+			fi
+		fi
 		if [[ "${elapsed_time}" -gt "${duration}" ]]; then
 			echo "The container does not get into a failing state" >&2
 			break
@@ -233,46 +250,6 @@ assert_pod_fail() {
 	done
 	return 1
 
-}
-
-# Create a pod then assert it remains in ContainerCreating.
-#
-# Parameters:
-#	$1 - the pod configuration file.
-# 	$2 - the duration to wait (seconds). Defaults to 60. (optional)
-#
-assert_pod_container_creating() {
-	local container_config="$1"
-	local duration="${2:-60}"
-
-	echo "In assert_pod_container_creating: ${container_config}"
-	echo "Attempt to create the container but it should stay in creating state"
-
-	retry_kubectl_apply "${container_config}"
-	if ! pod_name=$(kubectl get pods -o jsonpath='{.items..metadata.name}'); then
-		echo "Failed to create the pod"
-		return 1
-	fi
-
-	local elapsed_time=0
-	local sleep_time=5
-	while true; do
-		sleep "${sleep_time}"
-		elapsed_time=$((elapsed_time+sleep_time))
-		reason=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null || true)
-		phase=$(kubectl get pod "${pod_name}" -o jsonpath='{.status.phase}' 2>/dev/null || true)
-		if [[ "${phase}" != "Pending" ]]; then
-			echo "Expected pod to remain Pending, got phase: ${phase}" >&2
-			return 1
-		fi
-		if [[ -n "${reason}" && "${reason}" != "ContainerCreating" ]]; then
-			echo "Expected ContainerCreating, got: ${reason}" >&2
-			return 1
-		fi
-		if [[ "${elapsed_time}" -ge "${duration}" ]]; then
-			return 0
-		fi
-	done
 }
 
 # Check the pulled rootfs on host for given node and sandbox_id
