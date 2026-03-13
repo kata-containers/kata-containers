@@ -108,7 +108,6 @@ options:
 	coco-guest-components
 	cloud-hypervisor
 	cloud-hypervisor-glibc
-	csi-kata-directvolume
 	firecracker
 	genpolicy
 	kata-ctl
@@ -1205,7 +1204,6 @@ install_tools_helper() {
 
 	tool_binary=${tool}
 	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
-	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="directvolplugin"
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
 
 	local tool_build_dir="src/tools/${tool}"
@@ -1248,7 +1246,6 @@ install_tools_helper() {
 
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="csi-kata-directvolume"
 	install -D --mode "${binary_permissions}" "${binary}" "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
@@ -1258,10 +1255,6 @@ install_agent_ctl() {
 
 install_genpolicy() {
 	install_tools_helper "genpolicy"
-}
-
-install_csi_kata_directvolume() {
-	install_tools_helper "csi-kata-directvolume"
 }
 
 install_kata_ctl() {
@@ -1337,8 +1330,6 @@ handle_build() {
 	cloud-hypervisor) install_clh ;;
 
 	cloud-hypervisor-glibc) install_clh_glibc ;;
-
-	csi-kata-directvolume) install_csi_kata_directvolume ;;
 
 	firecracker) install_firecracker ;;
 
@@ -1556,7 +1547,6 @@ main() {
 		agent-ctl
 		cloud-hypervisor
 		coco-guest-components
-		csi-kata-directvolume
 		firecracker
 		genpolicy
 		kata-ctl
