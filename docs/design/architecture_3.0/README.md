@@ -1,59 +1,67 @@
 # Kata 3.0 Architecture
+
 ## Overview
-In cloud-native scenarios, there is an increased demand for container startup speed, resource consumption, stability, and security, areas where the present Kata Containers runtime is challenged relative to other runtimes. To achieve this, we propose a solid, field-tested and secure Rust version of the kata-runtime.
 
-Also, we provide the following designs:
+In cloud-native environments, the demand for rapid container startup, minimal resource footprint, enhanced stability, and robust security continues to grow. These requirements pose challenges for existing container runtimes. To address these needs, we introduce a high-performance, secure, and production-tested Rust implementation of the Kata runtime.
 
-- Turn key solution with builtin `Dragonball` Sandbox
-- Async I/O to reduce resource consumption
-- Extensible framework for multiple services, runtimes and hypervisors
-- Lifecycle management for sandbox and container associated resources
+Our architecture features:
+
+- A "turn-key" solution featuring a built-in Dragonball Sandbox.
+- Asynchronous I/O to minimize resource overhead.
+- A highly extensible framework supporting diverse services, runtimes, and hypervisors.
+- Granular lifecycle management for both sandboxes and their associated container resources.
 
 ### Rationale for choosing Rust
 
-We chose Rust because it is designed as a system language with a focus on efficiency.
-In contrast to Go, Rust makes a variety of design trade-offs in order to obtain
-good execution performance, with innovative techniques that, in contrast to C or
-C++, provide reasonable protection against common memory errors (buffer
-overflow, invalid pointers, range errors), error checking (ensuring errors are
-dealt with), thread safety, ownership of resources, and more.
+We selected Rust because it is a systems language engineered for high efficiency and memory safety. Unlike Go, Rust facilitates specific design trade-offs that favor deterministic execution performance. It provides robust protection against common memory vulnerabilities—such as buffer overflows, invalid pointers, and range errors—through its ownership model, while enforcing strict thread safety and comprehensive error handling at compile time.
 
-These benefits were verified in our project when the Kata Containers guest agent
-was rewritten in Rust. We notably saw a significant reduction in memory usage
-with the Rust-based implementation.
+These advantages were validated when we migrated the Kata Containers guest agent to Rust, which resulted in a substantial reduction in memory consumption.
 
 
 ## Design
-### Architecture
+
+### Layered Architecture
+
 ![architecture](./images/architecture.png)
+
 ### Built-in VMM
-#### Current Kata 2.x architecture
+
+#### The Kata 2.x Architecture (Legacy)
+
 ![not_builtin_vmm](./images/not_built_in_vmm.png)
-As shown in the figure, runtime and VMM are separate processes. The runtime process forks the VMM process and interacts through the inter-process RPC. Typically, process interaction consumes more resources than peers within the process, and it will result in relatively low efficiency. At the same time, the cost of resource operation and maintenance should be considered. For example, when performing resource recovery under abnormal conditions, the exception of any process must be detected by others and activate the appropriate resource recovery process. If there are additional processes, the recovery becomes even more difficult.
-#### How To Support Built-in VMM
-We provide `Dragonball` Sandbox to enable built-in VMM by integrating VMM's function into the Rust library. We could perform VMM-related functionalities by using the library. Because runtime and VMM  are in the same process, there is a benefit in terms of message processing speed and API synchronization. It can also guarantee the consistency of the runtime and the VMM life cycle, reducing resource recovery and exception handling maintenance, as shown in the figure:
+
+In the Kata 2.x architecture, the runtime and the VMM operate as separate, decoupled processes. The runtime forks the VMM process and interacts with it via inter-process RPC. This approach introduces overhead due to context switching and cross-process communication. Furthermore, managing resources across process boundaries—especially during abnormal conditions—introduces significant complexity in error detection and recovery.
+
+#### The Built-in VMM Approach
+
+We provide the Dragonball Sandbox to enable a "built-in" VMM model, where the VMM's core functionality is integrated as a library within the Rust runtime process. This eliminates the overhead of IPC, enabling lower-latency message processing and tight API synchronization. Moreover, it ensures the runtime and VMM share a unified lifecycle, simplifying exception handling and resource cleanup.
+
 ![builtin_vmm](./images/built_in_vmm.png)
+
 ### Async Support
-#### Why Need Async
-**Async is already in stable Rust and allows us to write async code**
 
-- Async provides significantly reduced CPU and memory overhead, especially for workloads with a large amount of IO-bound tasks
-- Async is zero-cost in Rust, which means that you only pay for what you use. Specifically, you can use async without heap allocations and dynamic dispatch, which greatly improves efficiency
-- For more (see [Why Async?](https://rust-lang.github.io/async-book/01_getting_started/02_why_async.html) and [The State of Asynchronous Rust](https://rust-lang.github.io/async-book/01_getting_started/03_state_of_async_rust.html)).
+#### Why Async Rust?
 
-**There may be several problems if implementing kata-runtime with Sync Rust**
+**The Rust async ecosystem is stable and highly efficient, providing several key benefits:**
 
-- Too many threads with a new TTRPC connection
-   - TTRPC threads: reaper thread(1) + listener thread(1) + client handler(2)
-- Add 3 I/O threads with a new container
-- In Sync mode, implementing a timeout mechanism is challenging. For example, in TTRPC API interaction, the timeout mechanism is difficult to align with Golang
-#### How To Support Async
-The kata-runtime is controlled by TOKIO_RUNTIME_WORKER_THREADS to run the OS thread, which is 2 threads by default. For TTRPC and container-related threads run in the `tokio` thread in a unified manner, and related dependencies need to be switched to Async, such as Timer, File, Netlink, etc. With the help of Async, we can easily support no-block I/O and timer. Currently, we only utilize Async for kata-runtime. The built-in VMM keeps the OS thread because it can ensure that the threads are controllable.
+- Reduced Overhead: Significantly lower CPU and memory consumption, particularly for I/O-bound workloads.
+- Zero-Cost Abstractions: Rust's async model allows developers to "pay only for what they use," avoiding heap allocations and dynamic dispatch where possible.
+- For further reading, see [Why Async?](https://rust-lang.github.io/async-book/01_getting_started/02_why_async.html) and [The State of Asynchronous Rust](https://rust-lang.github.io/async-book/01_getting_started/03_state_of_async_rust.html).
 
-**For N `tokio` worker threads and M containers**
+**Limitations of Synchronous Rust in kata-runtime:**
 
-- Sync runtime(both OS thread and `tokio` task are OS thread but without `tokio` worker thread)  OS thread number:  4 + 12*M
-- Async runtime(only OS thread is OS thread) OS thread number: 2 + N
+- Thread Proliferation: Every TTRPC connection creates multiple threads (Reaper, Listener, Handler), and each container adds 3 additional I/O threads, leading to high thread count and memory pressure.
+- Timeout Complexity: Implementing reliable, cross-platform timeout mechanisms in synchronous code is difficult, especially when aligning with Golang-based components.
+
+#### Implementation
+
+The kata-runtime utilizes Tokio to manage asynchronous tasks. By offloading TTRPC and container-related I/O to a unified Tokio executor and switching dependencies (Timer, File, Netlink) to their asynchronous counterparts, we achieve non-blocking I/O. The built-in VMM remains on a dedicated OS thread to ensure control and real-time performance.
+
+**Comparison of OS Thread usage (for N tokio worker threads and M containers)**
+
+- Sync Runtime: OS thread count scales as 4 + 12*M.
+- Async Runtime: OS thread count scales as 2 + N.
+
 ```shell
 ├─ main(OS thread)
 ├─ async-logger(OS thread)
@@ -67,25 +75,30 @@ The kata-runtime is controlled by TOKIO_RUNTIME_WORKER_THREADS to run the OS thr
   ├─ container stdout io thread(M * tokio task)
   └─ container stderr io thread(M * tokio task)
 ```
+
 ### Extensible Framework
-The Kata 3.x runtime is designed with the extension of service, runtime, and hypervisor, combined with configuration to meet the needs of different scenarios. At present, the service provides a register mechanism to support multiple services. Services could interact with runtime through messages. In addition, the runtime handler handles messages from services. To meet the needs of a binary that supports multiple runtimes and hypervisors, the startup must obtain the runtime handler type and hypervisor type through configuration.
+
+The Kata Rust runtime features a modular design that supports diverse services, runtimes, and hypervisors. We utilize a registration mechanism to decouple service logic from the core runtime. At startup, the runtime resolves the required runtime handler and hypervisor types based on configuration.
 
 ![framework](./images/framework.png)
+
 ### Resource Manager
-In our case, there will be a variety of resources, and every resource has several subtypes. Especially for `Virt-Container`, every subtype of resource has different operations. And there may be dependencies, such as the share-fs rootfs and the share-fs volume will use share-fs resources to share files to the VM. Currently, network and share-fs are regarded as sandbox resources, while rootfs, volume, and cgroup are regarded as container resources. Also, we abstract a common interface for each resource and use subclass operations to evaluate the differences between different subtypes.
+
+`Virt-Container` environments involve complex resource hierarchies. We have abstracted resources into a common interface to manage subtypes (such as share-fs volumes, rootfs, and cgroup) uniformly. This allows for consistent operation, dependency tracking, and resource lifecycle management.
+
 ![resource manager](./images/resourceManager.png)
 
 ## Roadmap
 
-- Stage 1 (June): provide basic features (current delivered)
-- Stage 2 (September): support common features
-- Stage 3: support full features
+- Stage 1: Core functionality.
+- Stage 2: Feature parity with common container requirements.
+- Stage 3: Full-featured production readiness.
 
 | **Class**                  | **Sub-Class**       | **Development Stage** | **Status** |
 | -------------------------- | ------------------- | --------------------- |------------|
 | Service                    | task service        | Stage 1               |  ✅        |
-|                            | extend service      | Stage 3               |  🚫        |
-|                            | image service       | Stage 3               |  🚫        |
+|                            | extend service      | Stage 3               |  ✅        |
+|                            | image service       | Stage 3               |  ✅        |
 | Runtime handler            | `Virt-Container`    | Stage 1               |  ✅        |
 | Endpoint                   | VETH Endpoint       | Stage 1               |  ✅        |
 |                            | Physical Endpoint   | Stage 2               |  ✅        |
@@ -93,18 +106,18 @@ In our case, there will be a variety of resources, and every resource has severa
 |                            | `Tuntap` Endpoint   | Stage 2               |  ✅        |
 |                            | `IPVlan` Endpoint   | Stage 2               |  ✅        |
 |                            | `MacVlan` Endpoint  | Stage 2               |  ✅        |
-|                            | MACVTAP Endpoint    | Stage 3               |  🚫        |
-|                            | `VhostUserEndpoint` | Stage 3               |  🚫        |
-| Network Interworking Model | Tc filter           | Stage 1               |  ✅        |
-|                            | `MacVtap`           | Stage 3               |  🚧        |
+|                            | MACVTAP Endpoint    | Stage 3               |  ✅        |
+|                            | `VhostUserEndpoint` | Stage 3               |  ✅        |
+| Network Interworking Model | Tc filter            | Stage 1               |  ✅        |
+|                            | `MacVtap`           | Stage 3               |  ✅        |
 | Storage                    | Virtio-fs           | Stage 1               |  ✅        |
-|                            | `nydus`             | Stage 2               |  🚧        |
-|                            | `device mapper`     | Stage 2               |  🚫        |
-| `Cgroup V2`                |                     | Stage 2               |  🚧        |
-| Hypervisor                 | `Dragonball`        | Stage 1               |  🚧        |
-|                            | QEMU                | Stage 2               |  🚫        |
-|                            | Cloud Hypervisor    | Stage 3               |  🚫        |
-|                            | Firecracker         | Stage 3               |  🚫        |
+|                            | `nydus`             | Stage 2               |  ✅        |
+|                            | `device mapper`     | Stage 2               |  ✅        |
+| `Cgroup V2`                |                     | Stage 2               |  ✅        |
+| Hypervisor                 | `Dragonball`        | Stage 1               |  ✅        |
+|                            | QEMU                | Stage 2               |  ✅        |
+|                            | Cloud Hypervisor    | Stage 3               |  ✅        |
+|                            | Firecracker         | Stage 3               |  ✅        |
 
 ## FAQ
 
@@ -114,6 +127,7 @@ In our case, there will be a variety of resources, and every resource has severa
   1. Service is an interface, which is responsible for handling multiple services like task service, image service and etc.
   2. Message dispatcher, it is used to match multiple requests from the service module.
   3. Runtime handler is used to deal with the operation for sandbox and container.
+
 - What is the name of the Kata 3.x runtime binary?
 
   Apparently we can't use `containerd-shim-v2-kata` because it's already used. We are facing the hardest issue of "naming" again. Any suggestions are welcomed.
@@ -131,9 +145,9 @@ In our case, there will be a variety of resources, and every resource has severa
 
   The `Dragonball` could work as an external hypervisor. However, stability and performance is challenging in this case. Built in VMM could optimise the container overhead, and it's easy to maintain stability.
 
-  `runD` is the `containerd-shim-v2` counterpart of `runC` and can run a pod/containers. `Dragonball` is a `microvm`/VMM that is designed to run container workloads. Instead of `microvm`/VMM, we sometimes refer to it as secure sandbox.
+  `runD(Runtime-rs + Dragonball)` is the `containerd-shim-v2` counterpart of `runC` and can run a pod/containers. `Dragonball` is a `microvm`/VMM that is designed to run container workloads. Instead of `microvm`/VMM, we sometimes refer to it as secure sandbox.
 
-- QEMU, Cloud Hypervisor and Firecracker support are planned, but how that would work. Are they working in separate process?
+- QEMU, Cloud Hypervisor and Firecracker have been supported, but how that would work. Are they working in separate process?
 
   Yes. They are unable to work as built in VMM.
 
