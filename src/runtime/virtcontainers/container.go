@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1135,7 +1136,9 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 
 	// If we're hot-plugging this will be a no-op because at this stage
 	// no devices are attached to the root-port or switch-port
-	c.annotateContainerWithVFIOMetadata(vfioColdPlugDevices)
+	if err := c.annotateContainerWithVFIOMetadata(vfioColdPlugDevices); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1194,11 +1197,40 @@ func sortContainerVFIODevices(devices []config.DeviceInfo) []config.DeviceInfo {
 	return vfioDevices
 }
 
+// errNoSiblingFound is returned by siblingAnnotation when the VFIO device is
+// not of a supported CDI device type, i.e. it has no entry in the cdiDeviceKind
+// table (e.g. NVSwitches). Callers should treat this as a non-fatal "device not
+// applicable" condition rather than a sibling-matching failure.
+var errNoSiblingFound = fmt.Errorf("no suitable sibling found")
+
+// cdiDeviceKey identifies a device type by vendor ID and PCI class prefix.
+type cdiDeviceKey struct {
+	VendorID    string
+	ClassPrefix string
+}
+
+// cdiDeviceKind maps known device types to their CDI annotation kind.
+var cdiDeviceKind = map[cdiDeviceKey]string{
+	{VendorID: "0x10de", ClassPrefix: "0x030"}: "nvidia.com/gpu",
+}
+
+// cdiKindForDevice returns the CDI kind for a given vendor ID and PCI class,
+// or empty string and false if the device is not recognized.
+func cdiKindForDevice(vendorID, class string) (string, bool) {
+	for key, kind := range cdiDeviceKind {
+		if vendorID == key.VendorID && strings.Contains(class, key.ClassPrefix) {
+			return kind, true
+		}
+	}
+	return "", false
+}
+
 type DeviceRelation struct {
-	Bus   string
-	Path  string
-	Index int
-	BDF   string
+	Bus     string
+	Path    string
+	Index   int
+	BDF     string
+	CDIKind string
 }
 
 // Depending on the HW we might need to inject metadata into the container
@@ -1223,15 +1255,13 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error
 		// so lets first iterate over all root-port devices and then
 		// switch-port devices no special handling for bridge-port (PCI)
 		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
-			// For the NV GPU we need special handling let's use only those
-			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF})
+			if kind, ok := cdiKindForDevice(dev.VendorID, dev.Class); ok {
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF, CDIKind: kind})
 			}
 		}
 		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
-			// For the NV GPU we need special handling let's use only those
-			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
-				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF})
+			if kind, ok := cdiKindForDevice(dev.VendorID, dev.Class); ok {
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath, BDF: dev.BDF, CDIKind: kind})
 			}
 		}
 		// We need to sort the VFIO devices by bus to get the correct
@@ -1244,48 +1274,53 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error
 			siblings[i].Index = i
 		}
 
-		// Now that we have the index lets connect the /dev/vfio/<num>
-		// to the correct index
-		if devices, ok := devices.([]ContainerDevice); ok {
-			for _, dev := range devices {
-				if dev.ContainerPath == "/dev/vfio/vfio" {
-					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
-					continue
-				}
-				err := c.siblingAnnotation(dev.ContainerPath, siblings)
-				if err != nil {
-					return err
-				}
+		// Collect container paths from either hot-plug or cold-plug devices
+		var containerPaths []string
+		if devs, ok := devices.([]ContainerDevice); ok {
+			for _, dev := range devs {
+				containerPaths = append(containerPaths, dev.ContainerPath)
+			}
+		}
+		if devs, ok := devices.([]config.DeviceInfo); ok {
+			for _, dev := range devs {
+				containerPaths = append(containerPaths, dev.ContainerPath)
 			}
 		}
 
-		if devices, ok := devices.([]config.DeviceInfo); ok {
-			for _, dev := range devices {
-				if dev.ContainerPath == "/dev/vfio/vfio" {
-					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
+		// Now that we have the index lets connect the /dev/vfio/<num>
+		// to the correct index
+		for _, devPath := range containerPaths {
+			if !strings.HasPrefix(devPath, "/dev/vfio") {
+				c.Logger().Infof("skipping guest annotations for non-VFIO device %q", devPath)
+				continue
+			}
+			if devPath == "/dev/vfio/vfio" {
+				c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
+				continue
+			}
+			if err := c.siblingAnnotation(devPath, siblings); err != nil {
+				if errors.Is(err, errNoSiblingFound) {
+					c.Logger().Infof("no CDI annotation for device %s (not a known CDI device type)", devPath)
 					continue
 				}
-				err := c.siblingAnnotation(dev.ContainerPath, siblings)
-				if err != nil {
-					return err
-				}
+				return err
 			}
-
 		}
 
 	}
 	return nil
 }
 
-// createCDIAnnotation adds a container annotation mapping a VFIO device to a GPU index.
+// createCDIAnnotation adds a container annotation mapping a VFIO device to a device index.
 //
 // devPath is the path to the VFIO device, which can be in the format
 // "/dev/vfio/<num>" or "/dev/vfio/devices/vfio<num>". The function extracts
 // the device number from the path and creates an annotation with the key
-// "cdi.k8s.io/vfio<num>" and the value "nvidia.com/gpu=<index>", where
-// <num> is the device number and <index> is the provided GPU index.
+// "cdi.k8s.io/vfio<num>" and the value "<cdiKind>=<index>", where
+// <cdiKind> is the CDI device kind (e.g. "nvidia.com/gpu"),
+// <num> is the device number and <index> is the provided device index.
 // The annotation is stored in c.config.CustomSpec.Annotations.
-func (c *Container) createCDIAnnotation(devPath string, index int) {
+func (c *Container) createCDIAnnotation(devPath string, index int, cdiKind string) {
 	// We have here either /dev/vfio/<num> or /dev/vfio/devices/vfio<num>
 	baseName := filepath.Base(devPath)
 	vfioNum := baseName
@@ -1294,66 +1329,68 @@ func (c *Container) createCDIAnnotation(devPath string, index int) {
 		vfioNum = strings.TrimPrefix(baseName, "vfio")
 	}
 	annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
-	annoValue := fmt.Sprintf("nvidia.com/gpu=%d", index)
+	annoValue := fmt.Sprintf("%s=%d", cdiKind, index)
 	if c.config.CustomSpec.Annotations == nil {
 		c.config.CustomSpec.Annotations = make(map[string]string)
 	}
 	c.config.CustomSpec.Annotations[annoKey] = annoValue
-	c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
 }
 
 func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) error {
-	for _, sibling := range siblings {
-		if sibling.Path == devPath {
-			c.createCDIAnnotation(devPath, sibling.Index)
-			return nil
+	// Resolve the device's BDFs once upfront. This serves two purposes:
+	// 1. Determine if the device is a known CDI type (if not, skip it)
+	// 2. Reuse the BDFs for sibling matching without redundant sysfs reads
+	isKnownCDIDevice := false
+	var devBDFs []string
+
+	if strings.HasPrefix(filepath.Base(devPath), "vfio") {
+		// IOMMUFD device (/dev/vfio/devices/vfio<NUM>): single device per char dev
+		major, minor, err := deviceUtils.GetMajorMinorFromDevPath(devPath)
+		if err != nil {
+			return err
 		}
-		// If the sandbox has cold-plugged an IOMMUFD device and if the
-		// device-plugins sends us a /dev/vfio/<NUM> device we need to
-		// check if the IOMMUFD device and the VFIO device are the same
-		// We have the sibling.BDF we now need to extract the BDF of the
-		// devPath that is either /dev/vfio/<NUM> or
-		// /dev/vfio/devices/vfio<NUM>
-		if strings.HasPrefix(filepath.Base(devPath), "vfio") {
-			// IOMMUFD device format (/dev/vfio/devices/vfio<NUM>), extract BDF from sysfs
-			major, minor, err := deviceUtils.GetMajorMinorFromDevPath(devPath)
-			if err != nil {
-				return err
-			}
-			iommufdBDF, err := deviceUtils.GetBDFFromVFIODev(major, minor)
-			if err != nil {
-				return err
-			}
-			if sibling.BDF == iommufdBDF {
-				c.createCDIAnnotation(devPath, sibling.Index)
-				// exit handling IOMMUFD device
-				return nil
-			}
+		bdf, err := deviceUtils.GetBDFFromVFIODev(major, minor)
+		if err != nil {
+			return err
 		}
-		// Legacy VFIO group device (/dev/vfio/<GROUP_NUM>), extract BDF from sysfs
+		devBDFs = []string{bdf}
+		vendorID := deviceUtils.GetPCIDeviceProperty(bdf, deviceUtils.PCISysFsDevicesVendor)
+		class := deviceUtils.GetPCIDeviceProperty(bdf, deviceUtils.PCISysFsDevicesClass)
+		_, isKnownCDIDevice = cdiKindForDevice(vendorID, class)
+	} else {
+		// Legacy VFIO group (/dev/vfio/<GROUP>): may contain multiple devices
 		vfioGroup := filepath.Base(devPath)
 		iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
-
 		deviceFiles, err := os.ReadDir(iommuDevicesPath)
 		if err != nil {
 			return err
 		}
-		vfioBDFs := make([]string, 0)
 		for _, deviceFile := range deviceFiles {
-			// Get bdf of device eg 0000:00:1c.0
 			deviceBDF, _, _, err := deviceUtils.GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
 			if err != nil {
 				return err
 			}
-			vfioBDFs = append(vfioBDFs, deviceBDF)
+			devBDFs = append(devBDFs, deviceBDF)
+			if !isKnownCDIDevice {
+				vendorID := deviceUtils.GetPCIDeviceProperty(deviceBDF, deviceUtils.PCISysFsDevicesVendor)
+				class := deviceUtils.GetPCIDeviceProperty(deviceBDF, deviceUtils.PCISysFsDevicesClass)
+				if _, ok := cdiKindForDevice(vendorID, class); ok {
+					isKnownCDIDevice = true
+				}
+			}
 		}
-		if slices.Contains(vfioBDFs, sibling.BDF) {
-			c.createCDIAnnotation(devPath, sibling.Index)
-			// exit handling legacy VFIO device
+	}
+	if !isKnownCDIDevice {
+		return fmt.Errorf("device %s: %w", devPath, errNoSiblingFound)
+	}
+
+	for _, sibling := range siblings {
+		if sibling.Path == devPath || slices.Contains(devBDFs, sibling.BDF) {
+			c.createCDIAnnotation(devPath, sibling.Index, sibling.CDIKind)
 			return nil
 		}
 	}
-	return fmt.Errorf("failed to match device %s with any cold-plugged GPU device by path or BDF; no suitable sibling found", devPath)
+	return fmt.Errorf("device %s is a known CDI device type but failed to match any sibling by path or BDF", devPath)
 }
 
 // create creates and starts a container inside a Sandbox. It has to be
@@ -1382,7 +1419,9 @@ func (c *Container) create(ctx context.Context) (err error) {
 		return
 	}
 
-	c.annotateContainerWithVFIOMetadata(c.devices)
+	if err := c.annotateContainerWithVFIOMetadata(c.devices); err != nil {
+		return fmt.Errorf("annotating VFIO devices: %w", err)
+	}
 
 	// Deduce additional system mount info that should be handled by the agent
 	// inside the VM
