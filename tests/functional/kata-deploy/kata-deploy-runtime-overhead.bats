@@ -6,14 +6,12 @@
 #
 # Tests for kata-deploy RuntimeClass pod overhead override
 # (values.yaml: shims.<name>.runtimeClass.overhead memory/cpu).
-# Template tests require only helm; E2E tests require the variables below.
 #
-# Required environment variables (E2E only):
-#   DOCKER_REGISTRY - Container registry for kata-deploy image
-#   DOCKER_REPO     - Repository name for kata-deploy image
-#   DOCKER_TAG      - Image tag to test
-#   KATA_HYPERVISOR - Hypervisor to test (qemu, clh, etc.)
-#   KUBERNETES      - K8s distribution (microk8s, k3s, rke2, etc.)
+# This file currently contains only Helm template rendering tests and can be
+# run locally with just Helm installed.
+#
+# Note: End-to-end (E2E) kata-deploy tests live in separate *.bats files and
+# will document any additional required environment variables themselves.
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
@@ -71,12 +69,20 @@ EOF
 	helm template kata-deploy "${chart_path}" -f "${values_file}" > /tmp/rendered-overhead.yaml
 	rm -f "${values_file}"
 
-	# Assert RuntimeClass kata-qemu exists and has the overridden overhead
+	# Assert RuntimeClass kata-qemu exists
 	grep -q "name: kata-qemu" /tmp/rendered-overhead.yaml
 	grep -q "handler: kata-qemu" /tmp/rendered-overhead.yaml
 
-	# Extract the overhead block for the first RuntimeClass (kata-qemu) and check values
-	# Format in template is: overhead:\n  podFixed:\n    memory: "317Mi"\n    cpu: "137m"
-	grep -A4 "overhead:" /tmp/rendered-overhead.yaml | grep -q "memory: \"${override_memory}\""
-	grep -A4 "overhead:" /tmp/rendered-overhead.yaml | grep -q "cpu: \"${override_cpu}\""
+	# Extract the RuntimeClass document for kata-qemu specifically, then check its overhead block
+	local kata_qemu_runtimeclass_file
+	kata_qemu_runtimeclass_file=$(mktemp)
+	awk '
+		/name: kata-qemu/ { in_doc=1 }
+		in_doc && /^---/ { exit }
+		in_doc { print }
+	' /tmp/rendered-overhead.yaml > "${kata_qemu_runtimeclass_file}"
+
+	grep -A4 "overhead:" "${kata_qemu_runtimeclass_file}" | grep -q "memory: \"${override_memory}\""
+	grep -A4 "overhead:" "${kata_qemu_runtimeclass_file}" | grep -q "cpu: \"${override_cpu}\""
+	rm -f "${kata_qemu_runtimeclass_file}"
 }
