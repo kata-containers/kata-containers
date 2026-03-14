@@ -1,0 +1,189 @@
+name: Build and Release Kata Static (amd64)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub release with artifacts'
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  # Stage 1: Build components in parallel
+  build-components:
+    name: build-${{ matrix.asset }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        asset:
+          - agent
+          - firecracker
+          - kernel
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Build ${{ matrix.asset }}
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-"${KATA_ASSET}"*.tar.* kata-build/.
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+
+      - name: Upload ${{ matrix.asset }} artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset }}
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.zst
+          retention-days: 7
+          if-no-files-found: error
+
+  # Stage 2: Build rootfs image (needs agent binary embedded)
+  build-rootfs:
+    name: build-rootfs-image
+    runs-on: ubuntu-22.04
+    needs: build-components
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Download pre-built components
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: kata-artifacts-amd64-*
+          path: kata-artifacts
+          merge-multiple: true
+
+      - name: Build rootfs-image
+        run: |
+          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts rootfs-image
+          make rootfs-image-tarball
+          build_dir=$(readlink -f build)
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-rootfs-image*.tar.* kata-build/.
+        env:
+          KATA_ASSET: rootfs-image
+
+      - name: Upload rootfs-image artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-artifacts-amd64-rootfs-image
+          path: kata-build/kata-static-rootfs-image.tar.zst
+          retention-days: 7
+          if-no-files-found: error
+
+  # Stage 3: Build shim-v2 (needs rootfs for measured boot metadata)
+  build-shim:
+    name: build-shim-v2
+    runs-on: ubuntu-22.04
+    needs: [build-components, build-rootfs]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Download pre-built components
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: kata-artifacts-amd64-*
+          path: kata-artifacts
+          merge-multiple: true
+
+      - name: Build shim-v2
+        run: |
+          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts shim-v2
+          make shim-v2-tarball
+          build_dir=$(readlink -f build)
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-shim-v2*.tar.* kata-build/.
+        env:
+          KATA_ASSET: shim-v2
+          MEASURED_ROOTFS: yes
+
+      - name: Upload shim-v2 artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-artifacts-amd64-shim-v2
+          path: kata-build/kata-static-shim-v2.tar.zst
+          retention-days: 7
+          if-no-files-found: error
+
+  # Stage 4: Merge all components into final tarball and create release
+  create-tarball-and-release:
+    name: create-tarball-and-release
+    runs-on: ubuntu-22.04
+    needs: [build-components, build-rootfs, build-shim]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: kata-artifacts-amd64-*
+          path: kata-artifacts
+          merge-multiple: true
+
+      - name: Merge into kata-static tarball
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
+
+      - name: Upload final tarball
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kata-static-tarball-amd64
+          path: kata-static.tar.zst
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.create_release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(cat VERSION)
+          TAG_NAME="${GITHUB_REF_NAME:-v${VERSION}-$(git rev-parse --short HEAD)}"
+
+          # Create release
+          gh release create "${TAG_NAME}" \
+            --title "Kata Containers ${TAG_NAME} (amd64, FC-patched)" \
+            --notes "$(cat <<'NOTES'
+          ## Kata Containers - Clode Labs Fork
+
+          Custom build with Firecracker EIO fix:
+          - **kata-agent**: mount retry (100x10ms) on EIO/EINVAL/ENOMEM/ENXIO in baremount()
+          - Eliminates /dev/vdb EIO errors when booting concurrent Firecracker VMs
+
+          ### Components
+          - agent (patched)
+          - firecracker
+          - kernel
+          - rootfs-image (agent embedded)
+          - containerd-shim-kata-v2
+
+          ### Install
+          ```bash
+          tar -xf kata-static.tar.zst -C /
+          ```
+          Installs to `/opt/kata/`.
+          NOTES
+          )" \
+            kata-static.tar.zst \
+            versions.yaml
