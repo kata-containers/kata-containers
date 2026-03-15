@@ -1135,7 +1135,9 @@ func (c *Container) createDevices(ctx context.Context, contConfig *ContainerConf
 
 	// If we're hot-plugging this will be a no-op because at this stage
 	// no devices are attached to the root-port or switch-port
-	c.annotateContainerWithVFIOMetadata(vfioColdPlugDevices)
+	if err := c.annotateContainerWithVFIOMetadata(vfioColdPlugDevices); err != nil {
+		return fmt.Errorf("annotating VFIO devices: %w", err)
+	}
 
 	return nil
 }
@@ -1248,6 +1250,10 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error
 		// to the correct index
 		if devices, ok := devices.([]ContainerDevice); ok {
 			for _, dev := range devices {
+				if !strings.HasPrefix(dev.ContainerPath, "/dev/vfio") {
+					c.Logger().Infof("skipping guest annotations for non-VFIO device %q", dev.ContainerPath)
+					continue
+				}
 				if dev.ContainerPath == "/dev/vfio/vfio" {
 					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
 					continue
@@ -1261,6 +1267,10 @@ func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) error
 
 		if devices, ok := devices.([]config.DeviceInfo); ok {
 			for _, dev := range devices {
+				if !strings.HasPrefix(dev.ContainerPath, "/dev/vfio") {
+					c.Logger().Infof("skipping guest annotations for non-VFIO device %q", dev.ContainerPath)
+					continue
+				}
 				if dev.ContainerPath == "/dev/vfio/vfio" {
 					c.Logger().Infof("skipping /dev/vfio/vfio for vfio_mode=guest-kernel")
 					continue
@@ -1329,6 +1339,10 @@ func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation)
 				// exit handling IOMMUFD device
 				return nil
 			}
+			// If we have a path of form /dev/vfio/devices/vfio<NUM>,
+			// the legacy VFIO codepath can't work with it, so rather
+			// than falling through, we should check the next sibling.
+			continue
 		}
 		// Legacy VFIO group device (/dev/vfio/<GROUP_NUM>), extract BDF from sysfs
 		vfioGroup := filepath.Base(devPath)
@@ -1382,7 +1396,9 @@ func (c *Container) create(ctx context.Context) (err error) {
 		return
 	}
 
-	c.annotateContainerWithVFIOMetadata(c.devices)
+	if err = c.annotateContainerWithVFIOMetadata(c.devices); err != nil {
+		return
+	}
 
 	// Deduce additional system mount info that should be handled by the agent
 	// inside the VM
