@@ -39,6 +39,8 @@ on:
         required: true
       ITA_KEY:
         required: true
+      SLACK_WEBHOOK_URL:
+        required: false
 
 permissions: {}
 
@@ -137,6 +139,106 @@ jobs:
       - name: Delete CSI driver
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
+
+      - name: Send Slack notification
+        if: always() && matrix.runner == 'sev-snp' && secrets.SLACK_WEBHOOK_URL != ''
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          JOB_STATUS: ${{ job.status }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_SHA: ${{ inputs.commit-hash }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          VMM: ${{ matrix.vmm }}
+          RUNNER: ${{ matrix.runner }}
+        run: |
+          # Exit gracefully if webhook URL is not set
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL is not set. Skipping Slack notification."
+            exit 0
+          fi
+
+          # Determine status emoji and color
+          if [ "$JOB_STATUS" == "success" ]; then
+            STATUS_EMOJI=":white_check_mark:"
+            COLOR="#36a64f"
+            STATUS_TEXT="PASSED"
+          else
+            STATUS_EMOJI=":x:"
+            COLOR="#ff0000"
+            STATUS_TEXT="FAILED"
+          fi
+
+          # Build the message
+          MESSAGE="$STATUS_EMOJI *Kata CoCo SEV-SNP Nightly Test $STATUS_TEXT*"
+
+          # Create JSON payload
+          PAYLOAD=$(cat <<EOF
+          {
+            "attachments": [
+              {
+                "color": "$COLOR",
+                "blocks": [
+                  {
+                    "type": "header",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "$MESSAGE"
+                    }
+                  },
+                  {
+                    "type": "section",
+                    "fields": [
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Test Suite:*\nrun-k8s-tests-on-tee"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Status:*\n$STATUS_TEXT"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Runner:*\n$RUNNER"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*VMM:*\n$VMM"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*PR/Build:*\n$PR_NUMBER"
+                      },
+                      {
+                        "type": "mrkdwn",
+                        "text": "*Commit:*\n\`${COMMIT_SHA:0:8}\`"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "section",
+                    "text": {
+                      "type": "mrkdwn",
+                      "text": "<$RUN_URL|View Workflow Run Details>"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+
+          # Send to Slack with error handling
+          echo "Sending notification to Slack..."
+          if curl -X POST -H 'Content-type: application/json' --data "$PAYLOAD" --silent --show-error --fail --max-time 10 "$SLACK_WEBHOOK_URL"; then
+            echo "Slack notification sent successfully"
+          else
+            echo "Warning: Failed to send Slack notification (curl exit code: $?)"
+            exit 0  # Exit gracefully to not fail the job
+          fi
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
