@@ -470,7 +470,10 @@ impl CloudHypervisorInner {
                     net_config.id = None;
 
                     net_config.num_queues = network_queues_pairs * 2;
-                    info!(sl!(), "network device queue pairs {:?}", network_queues_pairs);
+                    info!(
+                        sl!(),
+                        "network device queue pairs {:?}", network_queues_pairs
+                    );
 
                     // we need ensure opening network device happens in netns.
                     let netns = self.netns.clone().unwrap_or_default();

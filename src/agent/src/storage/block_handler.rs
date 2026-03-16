@@ -6,7 +6,7 @@
 
 use crate::linux_abi::pcipath_from_dev_tree_path;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -17,6 +17,7 @@ use kata_types::device::{
     DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE,
 };
 use kata_types::mount::StorageDevice;
+use nix::sys::stat::{major, minor};
 use protocols::agent::Storage;
 use tracing::instrument;
 
@@ -29,9 +30,44 @@ use crate::device::block_device_handler::{
 };
 use crate::device::nvdimm_device_handler::wait_for_pmem_device;
 use crate::device::scsi_device_handler::get_scsi_device_name;
-use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
+use crate::storage::{
+    common_storage_handler, new_device, set_ownership, StorageContext, StorageHandler,
+};
+use slog::Logger;
 #[cfg(target_arch = "s390x")]
 use std::str::FromStr;
+
+fn get_device_number(dev_path: &str, metadata: Option<&fs::Metadata>) -> Result<String> {
+    let dev_id = match metadata {
+        Some(m) => m.rdev(),
+        None => {
+            let m =
+                fs::metadata(dev_path).context(format!("get metadata on file {:?}", dev_path))?;
+            m.rdev()
+        }
+    };
+    Ok(format!("{}:{}", major(dev_id), minor(dev_id)))
+}
+
+async fn handle_block_storage(
+    logger: &Logger,
+    storage: &Storage,
+    dev_num: &str,
+) -> Result<Arc<dyn StorageDevice>> {
+    let has_ephemeral_encryption = storage
+        .driver_options
+        .contains(&"encryption_key=ephemeral".to_string());
+
+    if has_ephemeral_encryption {
+        crate::rpc::cdh_secure_mount("block-device", dev_num, "luks2", &storage.mount_point)
+            .await?;
+        set_ownership(logger, storage)?;
+        new_device(storage.mount_point.clone())
+    } else {
+        let path = common_storage_handler(logger, storage)?;
+        new_device(path)
+    }
+}
 
 #[derive(Debug)]
 pub struct VirtioBlkMmioHandler {}
@@ -75,6 +111,8 @@ impl StorageHandler for VirtioBlkPciHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
+        let dev_num: String;
+
         // If hot-plugged, get the device node path based on the PCI path
         // otherwise use the virt path provided in Storage Source
         if storage.source.starts_with("/dev") {
@@ -84,15 +122,16 @@ impl StorageHandler for VirtioBlkPciHandler {
             if mode & libc::S_IFBLK == 0 {
                 return Err(anyhow!("Invalid device {}", &storage.source));
             }
+            dev_num = get_device_number(&storage.source, Some(&metadata))?;
         } else {
             let (root_complex, pcipath) = pcipath_from_dev_tree_path(&storage.source)?;
             let dev_path =
                 get_virtio_blk_pci_device_name(ctx.sandbox, root_complex, &pcipath).await?;
             storage.source = dev_path;
+            dev_num = get_device_number(&storage.source, None)?;
         }
 
-        let path = common_storage_handler(ctx.logger, &storage)?;
-        new_device(path)
+        handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
 }
 
@@ -151,10 +190,10 @@ impl StorageHandler for ScsiHandler {
     ) -> Result<Arc<dyn StorageDevice>> {
         // Retrieve the device path from SCSI address.
         let dev_path = get_scsi_device_name(ctx.sandbox, &storage.source).await?;
-        storage.source = dev_path;
+        storage.source = dev_path.clone();
 
-        let path = common_storage_handler(ctx.logger, &storage)?;
-        new_device(path)
+        let dev_num = get_device_number(&dev_path, None)?;
+        handle_block_storage(ctx.logger, &storage, &dev_num).await
     }
 }
 

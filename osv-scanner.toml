@@ -1,0 +1,8 @@
+[[IgnoredVulns]]
+# yaml-rust is unmaintained.
+# We tried the most promising alternative in https://github.com/kata-containers/kata-containers/pull/12509,
+# but its literal quoting is not conformant.
+id = "RUSTSEC-2024-0320"
+ignoreUntil = 2026-10-01 # TODO(burgerdev): revisit yml library ecosystem
+reason = "No alternative currently supports 'yes' strings correctly; genpolicy processes only trusted input."
+

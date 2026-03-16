@@ -867,56 +867,96 @@ mod tests {
             .set_read_timeout(Some(Duration::from_millis(150)))
             .is_ok());
 
-        let cond_pair = Arc::new((Mutex::new(false), Condvar::new()));
-        let cond_pair_2 = Arc::clone(&cond_pair);
-        let handler = thread::Builder::new()
-            .spawn(move || {
-                // notify handler thread start
-                let (lock, cvar) = &*cond_pair_2;
-                let mut started = lock.lock().unwrap();
-                *started = true;
+        // stage:
+        // 0 = handler started
+        // 1 = first read timed out (main can do first write now)
+        // 2 = timeout cancelled, handler is about to do 3rd blocking read
+        let stage = Arc::new((Mutex::new(0u32), Condvar::new()));
+        let stage2 = Arc::clone(&stage);
+
+        let handler = thread::spawn(move || {
+            // notify started
+            {
+                let (lock, cvar) = &*stage2;
+                let mut s = lock.lock().unwrap();
+                *s = 0;
                 cvar.notify_one();
-                drop(started);
+            }
 
-                let start_time1 = Instant::now();
-                let mut reader_buf = [0; 5];
-                // first read would timed out
-                assert_eq!(
-                    outer_stream.read_exact(&mut reader_buf).unwrap_err().kind(),
-                    ErrorKind::TimedOut
-                );
-                let end_time1 = Instant::now().duration_since(start_time1).as_millis();
-                assert!((150..250).contains(&end_time1));
+            let mut reader_buf = [0u8; 5];
 
-                // second read would ok
-                assert!(outer_stream.read_exact(&mut reader_buf).is_ok());
-                assert_eq!(reader_buf, [1, 2, 3, 4, 5]);
+            // 1) first read should timed out
+            let start_time1 = Instant::now();
+            assert_eq!(
+                outer_stream.read_exact(&mut reader_buf).unwrap_err().kind(),
+                ErrorKind::TimedOut
+            );
+            let end_time1 = start_time1.elapsed().as_millis();
+            assert!((150..300).contains(&end_time1));
 
-                // cancel the read timeout
-                let start_time2 = Instant::now();
-                outer_stream.set_read_timeout(None).unwrap();
-                assert!(outer_stream.read_exact(&mut reader_buf).is_ok());
-                let end_time2 = Instant::now().duration_since(start_time2).as_millis();
-                assert!(end_time2 >= 500);
-            })
-            .unwrap();
+            outer_stream
+                .set_read_timeout(Some(Duration::from_secs(10)))
+                .unwrap();
 
-        // wait handler thread started
-        let (lock, cvar) = &*cond_pair;
-        let mut started = lock.lock().unwrap();
-        while !*started {
-            started = cvar.wait(started).unwrap();
+            // notify main: timeout observed, now do first write
+            {
+                let (lock, cvar) = &*stage2;
+                let mut s = lock.lock().unwrap();
+                *s = 1;
+                cvar.notify_one();
+            }
+
+            // 2) second read should ok (main will write after stage==1)
+            outer_stream.read_exact(&mut reader_buf).unwrap();
+            assert_eq!(reader_buf, [1, 2, 3, 4, 5]);
+
+            // 3) cancel timeout, then do a blocking read; notify main before blocking
+            outer_stream.set_read_timeout(None).unwrap();
+            {
+                let (lock, cvar) = &*stage2;
+                let mut s = lock.lock().unwrap();
+                *s = 2;
+                cvar.notify_one();
+            }
+
+            let start_time2 = Instant::now();
+            outer_stream.read_exact(&mut reader_buf).unwrap();
+            let end_time2 = start_time2.elapsed().as_millis();
+            assert!(end_time2 >= 500);
+            assert_eq!(reader_buf, [1, 2, 3, 4, 5]);
+        });
+
+        // wait handler started (stage==0)
+        {
+            let (lock, cvar) = &*stage;
+            let mut s = lock.lock().unwrap();
+            while *s != 0 {
+                s = cvar.wait(s).unwrap();
+            }
         }
 
-        // sleep 300ms, test timeout
-        thread::sleep(Duration::from_millis(300));
-        let writer_buf = [1, 2, 3, 4, 5];
-        inner_stream.write_all(&writer_buf).unwrap();
+        // wait first timeout done (stage==1), then do first write
+        {
+            let (lock, cvar) = &*stage;
+            let mut s = lock.lock().unwrap();
+            while *s < 1 {
+                s = cvar.wait(s).unwrap();
+            }
+        }
+        inner_stream.write_all(&[1, 2, 3, 4, 5]).unwrap();
+
+        // wait handler cancelled timeout and is about to block-read (stage==2)
+        {
+            let (lock, cvar) = &*stage;
+            let mut s = lock.lock().unwrap();
+            while *s < 2 {
+                s = cvar.wait(s).unwrap();
+            }
+        }
 
         // sleep 500ms again, test cancel timeout
         thread::sleep(Duration::from_millis(500));
-        let writer_buf = [1, 2, 3, 4, 5];
-        inner_stream.write_all(&writer_buf).unwrap();
+        inner_stream.write_all(&[1, 2, 3, 4, 5]).unwrap();
 
         handler.join().unwrap();
     }

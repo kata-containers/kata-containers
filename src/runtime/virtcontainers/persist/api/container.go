@@ -31,6 +31,9 @@ type DeviceMap struct {
 
 	// GID is group ID in the container namespace
 	GID uint32
+
+	// Shared indicates whether the device is shared across containers
+	Shared bool
 }
 
 // Mount describes a container mount.

@@ -54,27 +54,8 @@ NGC_API_KEY_BASE64=$(
 )
 export NGC_API_KEY_BASE64
 
-# Sealed secret format for TEE pods (vault type pointing to KBS resource)
-# Format: sealed.<base64url JWS header>.<base64url payload>.<base64url signature>
-# IMPORTANT: JWS uses base64url encoding WITHOUT padding (no trailing '=')
-# We use tr to convert standard base64 (+/) to base64url (-_) and remove padding (=)
-# For vault type, header and signature can be placeholders since the payload
-# contains the KBS resource path where the actual secret is stored.
-#
-# Vault type sealed secret payload for instruct pod:
-# {
-#   "version": "0.1.0",
-#   "type": "vault",
-#   "name": "kbs:///default/ngc-api-key/instruct",
-#   "provider": "kbs",
-#   "provider_settings": {},
-#   "annotations": {}
-# }
-NGC_API_KEY_SEALED_SECRET_INSTRUCT_PAYLOAD=$(
-    echo -n '{"version":"0.1.0","type":"vault","name":"kbs:///default/ngc-api-key/instruct","provider":"kbs","provider_settings":{},"annotations":{}}' |
-    base64 -w0 | tr '+/' '-_' | tr -d '='
-)
-NGC_API_KEY_SEALED_SECRET_INSTRUCT="sealed.fakejwsheader.${NGC_API_KEY_SEALED_SECRET_INSTRUCT_PAYLOAD}.fakesignature"
+# pre-created signed sealed secrets for TEE pods (from confidential_common.sh)
+NGC_API_KEY_SEALED_SECRET_INSTRUCT="${SEALED_SECRET_PRECREATED_NIM_INSTRUCT}"
 export NGC_API_KEY_SEALED_SECRET_INSTRUCT
 
 # Base64 encode the sealed secret for use in Kubernetes Secret data field
@@ -82,20 +63,7 @@ export NGC_API_KEY_SEALED_SECRET_INSTRUCT
 NGC_API_KEY_SEALED_SECRET_INSTRUCT_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_INSTRUCT}" | base64 -w0)
 export NGC_API_KEY_SEALED_SECRET_INSTRUCT_BASE64
 
-# Vault type sealed secret payload for embedqa pod:
-# {
-#   "version": "0.1.0",
-#   "type": "vault",
-#   "name": "kbs:///default/ngc-api-key/embedqa",
-#   "provider": "kbs",
-#   "provider_settings": {},
-#   "annotations": {}
-# }
-NGC_API_KEY_SEALED_SECRET_EMBEDQA_PAYLOAD=$(
-    echo -n '{"version":"0.1.0","type":"vault","name":"kbs:///default/ngc-api-key/embedqa","provider":"kbs","provider_settings":{},"annotations":{}}' |
-    base64 -w0 | tr '+/' '-_' | tr -d '='
-)
-NGC_API_KEY_SEALED_SECRET_EMBEDQA="sealed.fakejwsheader.${NGC_API_KEY_SEALED_SECRET_EMBEDQA_PAYLOAD}.fakesignature"
+NGC_API_KEY_SEALED_SECRET_EMBEDQA="${SEALED_SECRET_PRECREATED_NIM_EMBEDQA}"
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA
 
 NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_EMBEDQA}" | base64 -w0)
@@ -111,27 +79,6 @@ setup_langchain_flow() {
     [[ "$(pip show faiss-gpu 2>/dev/null | awk '/^Version:/{print $2}')" = "1.7.2" ]] || pip install faiss-gpu==1.7.2
     [[ "$(pip show langchain-community 2>/dev/null | awk '/^Version:/{print $2}')" = "0.2.5" ]] || pip install langchain-community==0.2.5
     [[ "$(pip show beautifulsoup4 2>/dev/null | awk '/^Version:/{print $2}')" = "4.13.4" ]] || pip install beautifulsoup4==4.13.4
-}
-
-# Create Docker config for genpolicy so it can authenticate to nvcr.io when
-# pulling image manifests (avoids "UnauthorizedError" from genpolicy's registry pull).
-# Genpolicy (src/tools/genpolicy) uses docker_credential::get_credential() in
-# src/tools/genpolicy/src/registry.rs build_auth(). The docker_credential crate
-# reads config from DOCKER_CONFIG (directory) + "/config.json", so we set
-# DOCKER_CONFIG to a directory containing config.json with nvcr.io auth.
-setup_genpolicy_registry_auth() {
-	if [[ -z "${NGC_API_KEY:-}" ]]; then
-		return
-	fi
-	local auth_dir
-	auth_dir="${BATS_SUITE_TMPDIR}/.docker-genpolicy"
-	mkdir -p "${auth_dir}"
-	# Docker config format: auths -> registry -> auth (base64 of "user:password")
-	echo -n "{\"auths\":{\"nvcr.io\":{\"username\":\"\$oauthtoken\",\"password\":\"${NGC_API_KEY}\",\"auth\":\"$(echo -n "\$oauthtoken:${NGC_API_KEY}" | base64 -w0)\"}}}" \
-		> "${auth_dir}/config.json"
-	export DOCKER_CONFIG="${auth_dir}"
-	# REGISTRY_AUTH_FILE (containers-auth.json format) is the same structure for auths
-	export REGISTRY_AUTH_FILE="${auth_dir}/config.json"
 }
 
 # Create initdata TOML file for genpolicy with CDH configuration.
@@ -243,10 +190,9 @@ setup_file() {
     add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
     if [ "${TEE}" = "true" ]; then
-        # So genpolicy can pull nvcr.io image manifests when generating policy (avoids UnauthorizedError).
-        setup_genpolicy_registry_auth
-
         setup_kbs_credentials
+        # provision signing public key to KBS so that CDH can verify pre-created, signed secret.
+        setup_sealed_secret_signing_public_key
         # Overwrite the empty default-initdata.toml with our CDH configuration.
         # This must happen AFTER create_tmp_policy_settings_dir() copies the empty
         # file and BEFORE auto_generate_policy() runs.
