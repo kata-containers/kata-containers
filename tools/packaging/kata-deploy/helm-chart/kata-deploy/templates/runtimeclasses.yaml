@@ -96,9 +96,9 @@ scheduling:
   "qemu-snp-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
   "qemu-tdx" (dict "memory" "2048Mi" "cpu" "1.0")
   "qemu-tdx-runtime-rs" (dict "memory" "2048Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu" (dict "memory" "4096Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu-snp" (dict "memory" "20480Mi" "cpu" "1.0")
-  "qemu-nvidia-gpu-tdx" (dict "memory" "20480Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-snp" (dict "memory" "10240Mi" "cpu" "1.0")
+  "qemu-nvidia-gpu-tdx" (dict "memory" "10240Mi" "cpu" "1.0")
   "qemu-cca" (dict "memory" "2048Mi" "cpu" "1.0")
   "stratovirt" (dict "memory" "130Mi" "cpu" "250m")
   "remote" (dict "memory" "120Mi" "cpu" "250m")
@@ -110,9 +110,14 @@ scheduling:
 {{- $config := index $runtimeClassConfigs $shim }}
 {{- $shimConfig := index $.Values.shims $shim }}
 {{- if $config }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $config "shimConfig" $shimConfig "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{- /* Allow per-shim overrides of pod overhead via .shims.<name>.runtimeClass.overhead */ -}}
+{{- $effectiveConfig := deepCopy $config }}
+{{- if and $shimConfig.runtimeClass $shimConfig.runtimeClass.overhead }}
+{{- $effectiveConfig = mergeOverwrite $effectiveConfig $shimConfig.runtimeClass.overhead }}
+{{- end }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" "" "useShimNodeSelectors" $useShimNodeSelectors) }}
 {{- if and $createDefaultRC (not $multiInstallSuffix) (eq $shim $defaultShim) }}
-{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $config "shimConfig" $shimConfig "nameOverride" $defaultRCName "useShimNodeSelectors" $useShimNodeSelectors) }}
+{{ include "kata-deploy.runtimeclass" (dict "root" $ "shim" $shim "config" $effectiveConfig "shimConfig" $shimConfig "nameOverride" $defaultRCName "useShimNodeSelectors" $useShimNodeSelectors) }}
 {{- end }}
 {{- end }}
 {{- end }}

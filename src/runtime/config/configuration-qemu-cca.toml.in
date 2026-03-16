@@ -638,6 +638,18 @@ vfio_mode = "@DEFVFIOMODE@"
 # be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
 disable_guest_empty_dir = @DEFDISABLEGUESTEMPTYDIR@
 
+# Specifies how Kubernetes emptyDir volumes are handled.
+# Options:
+#
+#   - shared-fs (default)
+#     Shares the emptyDir folder with the guest using the method given
+#     by the `shared_fs` setting.
+#
+#   - block-encrypted
+#     Plugs a block device to be encrypted in the guest.
+#
+emptydir_mode = "@DEFEMPTYDIRMODE@"
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.
@@ -670,6 +682,12 @@ dan_conf = "@DEFDANCONF@"
 # the container image should be pulled in the guest, without using an external snapshotter.
 # This is an experimental feature and might be removed in the future.
 experimental_force_guest_pull = @DEFFORCEGUESTPULL@
+
+# kubelet_root_dir is the kubelet root directory used to match ConfigMap/Secret
+# volume paths for propagation. Override for distros that use a different path
+# (e.g. k0s: /var/lib/k0s/kubelet).
+kubelet_root_dir = "@DEFKUBELETROOTDIR@"
+
 # pod_resource_api_sock specifies the unix socket for the Kubelet's
 # PodResource API endpoint. If empty, kubernetes based cold plug
 # will not be attempted. In order for this feature to work, the

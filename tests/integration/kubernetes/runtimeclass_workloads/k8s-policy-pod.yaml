@@ -26,6 +26,10 @@ spec:
             configMapKeyRef:
               name: policy-configmap
               key: data-2
+        - name: TEST_DIR1
+          value: foo
+        - name: TEST_DIR2
+          value: bar
       securityContext:
         seccompProfile:
           type: RuntimeDefault
@@ -53,8 +57,15 @@ spec:
       envFrom:
       - configMapRef:
           name: policy-configmap
+      volumeMounts:
+        - name: test-volume1
+          mountPath: /test-mount1
+          subPathExpr: $(TEST_DIR1)/$(TEST_DIR2)
   topologySpreadConstraints:
     - maxSkew: 2
       topologyKey: kubernetes.io/hostname
       whenUnsatisfiable: ScheduleAnyway
   priorityClassName: test-high-priority
+  volumes:
+    - name: test-volume1
+      emptyDir: {}

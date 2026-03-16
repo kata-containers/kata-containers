@@ -1,7 +1,7 @@
 module kata-containers/csi-kata-directvolume
 
 // Keep in sync with version in versions.yaml
-go 1.24.13
+go 1.25.8
 
 // WARNING: Do NOT use `replace` directives as those break dependabot:
 // https://github.com/kata-containers/kata-containers/issues/11020
@@ -14,7 +14,7 @@ require (
 	github.com/kubernetes-csi/csi-lib-utils v0.16.0
 	github.com/pborman/uuid v1.2.1
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/net v0.50.0
+	golang.org/x/net v0.51.0
 	golang.org/x/sys v0.41.0
 	google.golang.org/grpc v1.63.2
 	k8s.io/apimachinery v0.28.2

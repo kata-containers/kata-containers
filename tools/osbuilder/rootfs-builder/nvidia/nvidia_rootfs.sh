@@ -97,7 +97,7 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	mount --make-rslave ./dev
 	mount -t proc /proc ./proc
 
-	local cuda_repo_url cuda_repo_pkg gpu_base_os_version
+	local cuda_repo_url cuda_repo_pkg gpu_base_os_version ctk_version
 	cuda_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.url")
 	cuda_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.cuda.repo.${machine_arch}.pkg")
 	gpu_base_os_version=$(get_package_version_from_kata_yaml "assets.image.architecture.x86_64.nvidia-gpu.version")
@@ -105,8 +105,10 @@ setup_nvidia_gpu_rootfs_stage_one() {
 	tools_repo_url=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.url")
 	tools_repo_pkg=$(get_package_version_from_kata_yaml "externals.nvidia.tools.repo.${machine_arch}.pkg")
 
+	ctk_version=$(get_package_version_from_kata_yaml "externals.nvidia.ctk.version")
+
 	chroot . /bin/bash -c "/nvidia_chroot.sh ${machine_arch} ${NVIDIA_GPU_STACK} \
-		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg}"
+		 ${gpu_base_os_version} ${cuda_repo_url} ${cuda_repo_pkg} ${tools_repo_url} ${tools_repo_pkg} ${ctk_version}"
 
 	umount -R ./dev
 	umount ./proc
@@ -149,13 +151,7 @@ chisseled_nvswitch() {
 	cp -a "${stage_one}"/usr/share/nvidia/nvswitch	usr/share/nvidia/.
 
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
-
 	cp -a "${stage_one}/${libdir}"/libnvidia-nscq.so.* lib/"${machine_arch}"-linux-gnu/.
-
-	# Logs will be redirected to console(stderr)
-	# if the specified log file can't be opened or the path is empty.
-	# LOG_FILE_NAME=/var/log/fabricmanager.log -> setting to empty for stderr -> kmsg
-	sed -i 's|^LOG_FILE_NAME=.*|LOG_FILE_NAME=|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 
 	# NVLINK SubnetManager dependencies
 	local nvlsm=usr/share/nvidia/nvlsm
@@ -164,6 +160,8 @@ chisseled_nvswitch() {
 	cp -a "${stage_one}"/opt/nvidia/nvlsm/lib/libgrpc_mgr.so	lib/.
 	cp -a "${stage_one}"/opt/nvidia/nvlsm/sbin/nvlsm			sbin/.
 	cp -a "${stage_one}/${nvlsm}"/*.conf						"${nvlsm}"/.
+	# Redirect all the logs to syslog instead of logging to file
+	sed -i 's|^LOG_USE_SYSLOG=.*|LOG_USE_SYSLOG=1|' usr/share/nvidia/nvswitch/fabricmanager.cfg
 }
 
 chisseled_dcgm() {
@@ -209,9 +207,8 @@ chisseled_compute() {
 	cp -aL "${stage_one}/${libdir}"/ld-linux-* "${libdir}"/.
 
 	libdir=usr/lib/"${machine_arch}"-linux-gnu
-	cp -a "${stage_one}/${libdir}"/libnvidia-ml.so.*  lib/"${machine_arch}"-linux-gnu/.
+	cp -a "${stage_one}/${libdir}"/libnv*        lib/"${machine_arch}"-linux-gnu/.
 	cp -a "${stage_one}/${libdir}"/libcuda.so.*       lib/"${machine_arch}"-linux-gnu/.
-	cp -a "${stage_one}/${libdir}"/libnvidia-cfg.so.* lib/"${machine_arch}"-linux-gnu/.
 
 	# basic GPU admin tools
 	cp -a "${stage_one}"/usr/bin/nvidia-persistenced  bin/.
@@ -243,6 +240,8 @@ chisseled_init() {
 		 usr/bin etc/modprobe.d etc/ssl/certs
 
 	ln -sf ../run var/run
+	ln -sf ../run var/log
+	ln -sf ../run var/cache
 
 	# Needed for various RUST static builds with LIBC=gnu
 	libdir=lib/"${machine_arch}"-linux-gnu

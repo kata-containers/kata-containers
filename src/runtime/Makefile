@@ -225,6 +225,8 @@ DEFENABLEANNOTATIONS := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_pa
 DEFENABLEANNOTATIONS_COCO := [\"enable_iommu\", \"virtio_fs_extra_args\", \"kernel_params\", \"kernel_verity_params\", \"default_vcpus\", \"default_memory\", \"cc_init_data\"]
 DEFDISABLEGUESTSECCOMP := true
 DEFDISABLEGUESTEMPTYDIR := false
+DEFEMPTYDIRMODE := shared-fs
+DEFEMPTYDIRMODE_COCO := block-encrypted
 #Default experimental features enabled
 DEFAULTEXPFEATURES := []
 
@@ -305,9 +307,11 @@ DEFDANCONF := /run/kata-containers/dans
 
 DEFFORCEGUESTPULL := false
 
+DEFKUBELETROOTDIR := /var/lib/kubelet
+
 # Device cold plug
 DEFPODRESOURCEAPISOCK := ""
-DEFPODRESOURCEAPISOCK_NV := "/var/lib/kubelet/pod-resources/kubelet.sock"
+DEFPODRESOURCEAPISOCK_NV := "$(DEFKUBELETROOTDIR)/pod-resources/kubelet.sock"
 
 SED = sed
 
@@ -479,16 +483,12 @@ ifneq (,$(QEMUCMD))
     KERNELPATH_CONFIDENTIAL_NV = $(KERNELDIR)/$(KERNELNAME_CONFIDENTIAL_NV)
 
     DEFAULTVCPUS_NV = 1
-    DEFAULTMEMORY_NV = 2048
+    DEFAULTMEMORY_NV = 8192
     DEFAULTTIMEOUT_NV = 1200
     DEFAULTVFIOPORT_NV = root-port
     DEFAULTPCIEROOTPORT_NV = 8
 
-    # Disable the devtmpfs mount in guest. NVRC does this, and later kata-agent
-    # attempts this as well in a non-failing manner. Otherwise, NVRC fails when
-    # using an image and /dev is already mounted.
     KERNELPARAMS_NV = "cgroup_no_v1=all"
-    KERNELPARAMS_NV += "devtmpfs.mount=0"
     KERNELPARAMS_NV += "pci=realloc"
     KERNELPARAMS_NV += "pci=nocrs"
     KERNELPARAMS_NV += "pci=assign-busses"
@@ -748,6 +748,8 @@ USER_VARS += DEFNETWORKMODEL_FC
 USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFNETWORKMODEL_STRATOVIRT
 USER_VARS += DEFDISABLEGUESTEMPTYDIR
+USER_VARS += DEFEMPTYDIRMODE
+USER_VARS += DEFEMPTYDIRMODE_COCO
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLESELINUX
 USER_VARS += DEFDISABLEGUESTSELINUX
@@ -795,6 +797,7 @@ USER_VARS += DEFSTATICRESOURCEMGMT_NV
 USER_VARS += DEFBINDMOUNTS
 USER_VARS += DEFCREATECONTAINERTIMEOUT
 USER_VARS += DEFDANCONF
+USER_VARS += DEFKUBELETROOTDIR
 USER_VARS += DEFFORCEGUESTPULL
 USER_VARS += DEFVFIOMODE
 USER_VARS += DEFVFIOMODE_SE

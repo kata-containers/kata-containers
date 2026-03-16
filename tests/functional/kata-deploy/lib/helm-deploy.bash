@@ -124,4 +124,6 @@ deploy_kata() {
 uninstall_kata() {
 	helm uninstall "${HELM_RELEASE_NAME}" -n "${HELM_NAMESPACE}" \
 		--ignore-not-found --wait --cascade foreground --timeout 10m || true
+
+	wait_for_api_and_retry_uninstall "${HELM_RELEASE_NAME}" "${HELM_NAMESPACE}"
 }

@@ -42,7 +42,7 @@ struct CommandLineOptions {
         short = 'j',
         long,
         default_value_t = String::from("genpolicy-settings.json"),
-        help = "Path to genpolicy settings file"
+        help = "Path to genpolicy settings file or directory (with genpolicy-settings.json and optional genpolicy-settings.d/*.json)"
     )]
     json_settings_path: String,
 

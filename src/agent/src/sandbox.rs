@@ -65,6 +65,12 @@ type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 pub struct StorageState {
     count: Arc<AtomicU32>,
     device: Arc<dyn StorageDevice>,
+
+    /// Whether the storage is shared across multiple containers (e.g.
+    /// block-based emptyDirs). Shared storages should not be cleaned up
+    /// when a container exits; cleanup happens only when the sandbox is
+    /// destroyed.
+    shared: bool,
 }
 
 impl Debug for StorageState {
@@ -74,22 +80,20 @@ impl Debug for StorageState {
 }
 
 impl StorageState {
-    fn new() -> Self {
+    fn new(shared: bool) -> Self {
         StorageState {
             count: Arc::new(AtomicU32::new(1)),
             device: Arc::new(StorageDeviceGeneric::default()),
-        }
-    }
-
-    pub fn from_device(device: Arc<dyn StorageDevice>) -> Self {
-        Self {
-            count: Arc::new(AtomicU32::new(1)),
-            device,
+            shared,
         }
     }
 
     pub fn path(&self) -> Option<&str> {
         self.device.path()
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.shared
     }
 
     pub async fn ref_count(&self) -> u32 {
@@ -171,8 +175,10 @@ impl Sandbox {
 
     /// Add a new storage object or increase reference count of existing one.
     /// The caller may detect new storage object by checking `StorageState.refcount == 1`.
+    /// The `shared` flag indicates if this storage is shared across multiple containers;
+    /// if true, cleanup will be skipped when containers exit.
     #[instrument]
-    pub async fn add_sandbox_storage(&mut self, path: &str) -> StorageState {
+    pub async fn add_sandbox_storage(&mut self, path: &str, shared: bool) -> StorageState {
         match self.storages.entry(path.to_string()) {
             Entry::Occupied(e) => {
                 let state = e.get().clone();
@@ -180,7 +186,7 @@ impl Sandbox {
                 state
             }
             Entry::Vacant(e) => {
-                let state = StorageState::new();
+                let state = StorageState::new(shared);
                 e.insert(state.clone());
                 state
             }
@@ -188,22 +194,32 @@ impl Sandbox {
     }
 
     /// Update the storage device associated with a path.
+    /// Preserves the existing shared flag and reference count.
     pub fn update_sandbox_storage(
         &mut self,
         path: &str,
         device: Arc<dyn StorageDevice>,
     ) -> std::result::Result<Arc<dyn StorageDevice>, Arc<dyn StorageDevice>> {
-        if !self.storages.contains_key(path) {
-            return Err(device);
+        match self.storages.get(path) {
+            None => Err(device),
+            Some(existing) => {
+                let state = StorageState {
+                    device,
+                    ..existing.clone()
+                };
+                // Safe to unwrap() because we have just ensured existence of entry via get().
+                let state = self.storages.insert(path.to_string(), state).unwrap();
+                Ok(state.device)
+            }
         }
-
-        let state = StorageState::from_device(device);
-        // Safe to unwrap() because we have just ensured existence of entry.
-        let state = self.storages.insert(path.to_string(), state).unwrap();
-        Ok(state.device)
     }
 
     /// Decrease reference count and destroy the storage object if reference count reaches zero.
+    ///
+    /// For shared storages (e.g., emptyDir volumes), cleanup is skipped even when refcount
+    /// reaches zero. The storage entry is kept in the map so subsequent containers can reuse
+    /// the already-mounted storage. Actual cleanup happens when the sandbox is destroyed.
+    ///
     /// Returns `Ok(true)` if the reference count has reached zero and the storage object has been
     /// removed.
     #[instrument]
@@ -212,6 +228,10 @@ impl Sandbox {
             None => Err(anyhow!("Sandbox storage with path {} not found", path)),
             Some(state) => {
                 if state.dec_and_test_ref_count().await {
+                    if state.is_shared() {
+                        state.count.store(1, Ordering::Release);
+                        return Ok(false);
+                    }
                     if let Some(storage) = self.storages.remove(path) {
                         storage.device.cleanup()?;
                     }
@@ -720,7 +740,7 @@ mod tests {
         let tmpdir_path = tmpdir.path().to_str().unwrap();
 
         // Add a new sandbox storage
-        let new_storage = s.add_sandbox_storage(tmpdir_path).await;
+        let new_storage = s.add_sandbox_storage(tmpdir_path, false).await;
 
         // Check the reference counter
         let ref_count = new_storage.ref_count().await;
@@ -730,7 +750,7 @@ mod tests {
         );
 
         // Use the existing sandbox storage
-        let new_storage = s.add_sandbox_storage(tmpdir_path).await;
+        let new_storage = s.add_sandbox_storage(tmpdir_path, false).await;
 
         // Since we are using existing storage, the reference counter
         // should be 2 by now.
@@ -771,7 +791,7 @@ mod tests {
 
         assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
 
-        s.add_sandbox_storage(destdir_path).await;
+        s.add_sandbox_storage(destdir_path, false).await;
         let storage = StorageDeviceGeneric::new(destdir_path.to_string());
         assert!(s
             .update_sandbox_storage(destdir_path, Arc::new(storage))
@@ -789,7 +809,7 @@ mod tests {
             let other_dir_path = other_dir.path().to_str().unwrap();
             other_dir_str = other_dir_path.to_string();
 
-            s.add_sandbox_storage(other_dir_path).await;
+            s.add_sandbox_storage(other_dir_path, false).await;
             let storage = StorageDeviceGeneric::new(other_dir_path.to_string());
             assert!(s
                 .update_sandbox_storage(other_dir_path, Arc::new(storage))
@@ -808,9 +828,9 @@ mod tests {
         let storage_path = "/tmp/testEphe";
 
         // Add a new sandbox storage
-        s.add_sandbox_storage(storage_path).await;
+        s.add_sandbox_storage(storage_path, false).await;
         // Use the existing sandbox storage
-        let state = s.add_sandbox_storage(storage_path).await;
+        let state = s.add_sandbox_storage(storage_path, false).await;
         assert!(
             state.ref_count().await > 1,
             "Expects false as the storage is not new."

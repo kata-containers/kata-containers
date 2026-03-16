@@ -50,6 +50,28 @@ snapshotter:
 #     disableAll: true
 #     qemu:
 #       enabled: true  # Only qemu is enabled
+#
+# All configurable keys per shim (all optional unless noted):
+#   shims:
+#     <shim-name>:
+#       enabled: ~                    # true | false | ~ (null = follow disableAll)
+#       supportedArches:              # list of supported architectures
+#         - amd64
+#       allowedHypervisorAnnotations: []  # hypervisor annotations to pass through
+#       containerd:
+#         snapshotter: ""             # e.g. nydus, erofs, devmapper, or "" for default
+#         forceGuestPull: false       # force guest-side image pull in containerd
+#       crio:
+#         guestPull: false            # enable guest-pull in CRI-O
+#       agent:
+#         httpsProxy: ""             # HTTPS proxy for the Kata agent
+#         noProxy: ""                # no-proxy list for the Kata agent
+#       runtimeClass:
+#         nodeSelector:              # extra node selectors added to the RuntimeClass
+#           example.io/feature: "true"
+#         overhead:                  # override pod overhead (falls back to built-in defaults)
+#           memory: "160Mi"
+#           cpu: "250m"
 shims:
   disableAll: false
 

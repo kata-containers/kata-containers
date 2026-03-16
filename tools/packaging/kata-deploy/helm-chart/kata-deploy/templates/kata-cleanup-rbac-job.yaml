@@ -1,6 +1,6 @@
 {{- /*
 Post-delete hook Job: removes the kept RBAC (ServiceAccount, ClusterRole, ClusterRoleBinding)
-so no cluster-wide leftovers remain after uninstall. Runs after the DaemonSet preStop cleanup.
+so no cluster-wide leftovers remain after uninstall. Runs after the DaemonSet SIGTERM cleanup.
 */ -}}
 apiVersion: batch/v1
 kind: Job
@@ -40,7 +40,7 @@ spec:
             - |
               set -e
               echo "Helm reports 'These resources were kept due to the resource policy' during uninstall — this is normal."
-              echo "Waiting for DaemonSet pods to finish terminating (preStop cleanup) before removing RBAC..."
+              echo "Waiting for DaemonSet pods to finish terminating (SIGTERM cleanup) before removing RBAC..."
               wait_timeout=300
               waited=0
               while [ "$waited" -lt "$wait_timeout" ]; do

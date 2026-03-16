@@ -1,0 +1,7 @@
+[
+  {
+    "op": "replace",
+    "path": "/kata_config/oci_version",
+    "value": "1.2.1"
+  }
+]

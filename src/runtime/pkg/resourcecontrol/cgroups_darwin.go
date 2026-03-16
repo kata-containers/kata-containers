@@ -21,7 +21,7 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 	return &DarwinResourceController{}, nil
 }
 
-func NewSandboxResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (ResourceController, error) {
+func NewSandboxResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool, needsHypervisorDevices bool) (ResourceController, error) {
 	return &DarwinResourceController{}, nil
 }
 

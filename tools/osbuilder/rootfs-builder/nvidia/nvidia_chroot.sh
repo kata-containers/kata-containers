@@ -24,6 +24,7 @@ cuda_repo_url="${4:?cuda_repo_url not specified}"
 cuda_repo_pkg="${5:?cuda_repo_pkg not specified}"
 tools_repo_url="${6:?tools_repo_url not specified}"
 tools_repo_pkg="${7:?tools_repo_pkg not specified}"
+ctk_version="${8:?ctk_version not specified}"
 APT_INSTALL="apt -o Dpkg::Options::='--force-confdef' -o Dpkg::Options::='--force-confold' -yqq --no-install-recommends install"
 
 export DEBIAN_FRONTEND=noninteractive
@@ -36,7 +37,7 @@ is_feature_enabled() {
 install_nvidia_ctk() {
 	echo "chroot: Installing NVIDIA GPU container runtime"
 	# Base  gives a nvidia-ctk and the nvidia-container-runtime
-	eval "${APT_INSTALL}" nvidia-container-toolkit-base=1.17.6-1
+	eval "${APT_INSTALL}" nvidia-container-toolkit-base="${ctk_version}"
 }
 
 install_nvidia_fabricmanager() {
@@ -60,12 +61,12 @@ install_userspace_components() {
 	eval "${APT_INSTALL}" nvidia-imex nvidia-firmware    \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
-		libnvidia-nscq
+		libnvidia-nscq libnvidia-compute nvidia-settings
 
 	apt-mark hold nvidia-imex nvidia-firmware            \
 		libnvidia-cfg1 libnvidia-gl libnvidia-extra      \
 		libnvidia-decode libnvidia-fbc1 libnvidia-encode \
-		libnvidia-nscq
+		libnvidia-nscq libnvidia-compute nvidia-settings
 }
 
 setup_apt_repositories() {

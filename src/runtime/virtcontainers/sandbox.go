@@ -34,6 +34,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -108,6 +109,7 @@ type SandboxStatus struct {
 	ContainersStatus []ContainerStatus
 	State            types.SandboxState
 	HypervisorConfig HypervisorConfig
+	EmptyDirMode     string
 }
 
 // SandboxStats describes a sandbox's stats
@@ -180,6 +182,10 @@ type SandboxConfig struct {
 	// DisableGuestSeccomp disable seccomp within the guest
 	DisableGuestSeccomp bool
 
+	// EmptyDirMode specifies how Kubernetes emptyDir volumes are handled.
+	// Valid values are "shared-fs" (default) or "block-encrypted".
+	EmptyDirMode string
+
 	// EnableVCPUsPinning controls whether each vCPU thread should be scheduled to a fixed CPU
 	EnableVCPUsPinning bool
 
@@ -189,6 +195,11 @@ type SandboxConfig struct {
 
 	// ForceGuestPull enforces guest pull independent of snapshotter annotations.
 	ForceGuestPull bool
+
+	// KubeletRootDir is the kubelet root directory (e.g. /var/lib/kubelet or
+	// /var/lib/k0s/kubelet for k0s). If empty, the runtime uses the default
+	// /var/lib/kubelet for matching ConfigMap/Secret volume paths.
+	KubeletRootDir string
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -221,8 +232,9 @@ type Sandbox struct {
 	store      persistapi.PersistDriver
 	fsShare    FilesystemSharer
 
-	swapDevices []*config.BlockDrive
-	volumes     []types.Volume
+	swapDevices    []*config.BlockDrive
+	volumes        []types.Volume
+	ephemeralDisks []EphemeralDisk
 
 	monitor         *monitor
 	config          *SandboxConfig
@@ -376,6 +388,7 @@ func (s *Sandbox) Status() SandboxStatus {
 		HypervisorConfig: s.config.HypervisorConfig,
 		ContainersStatus: contStatusList,
 		Annotations:      s.config.Annotations,
+		EmptyDirMode:     s.config.EmptyDirMode,
 	}
 }
 
@@ -865,7 +878,12 @@ func (s *Sandbox) createResourceController() error {
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
 	// or only the virtual CPU ones (SandboxCgroupOnly is false).
-	s.sandboxController, err = resCtrl.NewSandboxResourceController(cgroupPath, &resources, s.config.SandboxCgroupOnly)
+	s.sandboxController, err = resCtrl.NewSandboxResourceController(
+		cgroupPath,
+		&resources,
+		s.config.SandboxCgroupOnly,
+		s.config.HypervisorType != RemoteHypervisor,
+	)
 	if err != nil {
 		return fmt.Errorf("Could not create the sandbox resource controller %v", err)
 	}
@@ -988,7 +1006,29 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		s.Logger().WithError(err).Error("failed to cleanup share files")
 	}
 
+	if err := s.cleanupEphemeralDisks(); err != nil {
+		s.Logger().WithError(err).Error("failed to cleanup ephemeral disks")
+	}
+
 	return s.store.Destroy(s.id)
+}
+
+// cleanupEphemeralDisks removes ephemeral disk images and their mount info.
+func (s *Sandbox) cleanupEphemeralDisks() error {
+	if s.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+		return nil
+	}
+
+	for _, disk := range s.ephemeralDisks {
+		if err := os.Remove(disk.DiskPath); err != nil && !os.IsNotExist(err) {
+			s.Logger().WithError(err).Errorf("Failed to remove disk file: %s", disk.DiskPath)
+		}
+		if err := volume.Remove(disk.SourcePath); err != nil && !os.IsNotExist(err) {
+			s.Logger().WithError(err).Errorf("Failed to remove volume: %s", disk.SourcePath)
+		}
+	}
+
+	return nil
 }
 
 func (s *Sandbox) createNetwork(ctx context.Context) error {

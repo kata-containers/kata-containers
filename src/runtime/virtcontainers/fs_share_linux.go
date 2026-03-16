@@ -58,19 +58,20 @@ func unmountNoFollow(path string) error {
 	return syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow)
 }
 
-// Resolve the K8S root dir if it is a symbolic link
-func resolveRootDir() string {
-	rootDir, err := os.Readlink(defaultKubernetesRootDir)
-	if err != nil {
-		// Use the default root dir in case of any errors resolving the root dir symlink
-		return defaultKubernetesRootDir
+// resolveRootDirWithBase returns the resolved (followed symlink) kubelet root path.
+// If base is non-empty it is used as the root; otherwise defaultKubernetesRootDir is used.
+func resolveRootDirWithBase(base string) string {
+	if base == "" {
+		base = defaultKubernetesRootDir
 	}
-	// Make root dir an absolute path if needed
+	rootDir, err := os.Readlink(base)
+	if err != nil {
+		return base
+	}
 	if !filepath.IsAbs(rootDir) {
-		rootDir, err = filepath.Abs(filepath.Join(filepath.Dir(defaultKubernetesRootDir), rootDir))
+		rootDir, err = filepath.Abs(filepath.Join(filepath.Dir(base), rootDir))
 		if err != nil {
-			// Use the default root dir in case of any errors resolving the root dir symlink
-			return defaultKubernetesRootDir
+			return base
 		}
 	}
 	return rootDir
@@ -99,9 +100,14 @@ func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 		return nil, fmt.Errorf("Creating watcher returned error %w", err)
 	}
 
-	kubernetesRootDir := resolveRootDir()
-	configVolRegex := regexp.MustCompile("^" + kubernetesRootDir + configVolRegexString)
-	timestampDirRegex := regexp.MustCompile("^" + kubernetesRootDir + configVolRegexString + timestampDirRegexString)
+	baseRoot := ""
+	if s.config != nil {
+		baseRoot = s.config.KubeletRootDir
+	}
+	kubernetesRootDir := resolveRootDirWithBase(baseRoot)
+	quotedRoot := regexp.QuoteMeta(kubernetesRootDir)
+	configVolRegex := regexp.MustCompile("^" + quotedRoot + configVolRegexString)
+	timestampDirRegex := regexp.MustCompile("^" + quotedRoot + configVolRegexString + timestampDirRegexString)
 
 	return &FilesystemShare{
 		prepared:           false,

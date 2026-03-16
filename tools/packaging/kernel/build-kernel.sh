@@ -192,7 +192,7 @@ get_kernel() {
 	fi
 
 	if [ -f "${kernel_tarball}" ]; then
-	       	if [ -n "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+		if [ -z "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
 			info "invalid kernel tarball ${kernel_tarball} removing "
 			rm -f "${kernel_tarball}"
 		fi
@@ -611,6 +611,7 @@ install_kata() {
 	fi
 
 	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}-${config_version}${suffix}"
+	install --mode 0644 -D ./System.map "${install_path}/System.map-${kernel_version}-${config_version}${suffix}"
 
 	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${suffix}.container"
 	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"

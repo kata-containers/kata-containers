@@ -9,6 +9,8 @@ source "${tests_dir}/common.bash"
 kubernetes_dir="${tests_dir}/integration/kubernetes"
 helm_chart_dir="${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy"
 
+AZ_REGION="${AZ_REGION:-eastus}"
+AZ_NODEPOOL_TAGS="${AZ_NODEPOOL_TAGS:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 HELM_DEFAULT_INSTALLATION="${HELM_DEFAULT_INSTALLATION:-false}"
@@ -29,13 +31,39 @@ HELM_SNAPSHOTTER_HANDLER_MAPPING="${HELM_SNAPSHOTTER_HANDLER_MAPPING:-}"
 HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER="${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER:-}"
 HELM_EXPERIMENTAL_FORCE_GUEST_PULL="${HELM_EXPERIMENTAL_FORCE_GUEST_PULL:-}"
 HELM_VERIFY_DEPLOYMENT="${HELM_VERIFY_DEPLOYMENT:-false}"
-KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-600}"
+KATA_DEPLOY_WAIT_TIMEOUT="${KATA_DEPLOY_WAIT_TIMEOUT:-900}"
 KATA_HOST_OS="${KATA_HOST_OS:-}"
 KUBERNETES="${KUBERNETES:-}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-}"
 CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-containerd}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+
+# Wait for the Kubernetes API to recover after kata-deploy uninstall, then
+# retry the uninstall to purge any stale helm release state. On k3s/rke2,
+# the SIGTERM cleanup restarts the CRI runtime which takes down the API.
+# Arguments:
+#   $1 - helm release name
+#   $2 - helm namespace
+wait_for_api_and_retry_uninstall() {
+	local release_name="${1}"
+	local namespace="${2}"
+
+	local api_wait=0
+	local api_timeout=300
+	while [ "$api_wait" -lt "$api_timeout" ]; do
+		if kubectl get nodes --request-timeout=5s &>/dev/null; then
+			echo "Kubernetes API is available after uninstall"
+			break
+		fi
+		echo "Waiting for API to recover after uninstall... (${api_wait}s/${api_timeout}s)"
+		sleep 5
+		api_wait=$((api_wait + 5))
+	done
+
+	helm uninstall "${release_name}" -n "${namespace}" \
+		--ignore-not-found --wait --timeout 5m || true
+}
 
 function _print_instance_type() {
 	case "${K8S_TEST_HOST_TYPE}" in
@@ -112,7 +140,7 @@ function create_cluster() {
 		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
-		-l eastus \
+		-l "${AZ_REGION}" \
 		-n "${rg}"
 
 	# Required by e.g. AKS App Routing for KBS installation.
@@ -128,6 +156,7 @@ function create_cluster() {
 		--generate-ssh-keys
 		--tags "${tags[@]}")
 	[[ "${KATA_HOST_OS}" = "cbl-mariner" ]] && aks_create+=( --os-sku AzureLinux --workload-runtime KataVmIsolation)
+	[[ -n "${AZ_NODEPOOL_TAGS}" ]] && aks_create+=(--nodepool-tags "${AZ_NODEPOOL_TAGS}")
 	"${aks_create[@]}"
 }
 
@@ -220,9 +249,9 @@ function deploy_k0s() {
 	fi
 
 	# In this case we explicitly want word splitting when calling k0s
-	# with extra parameters.
+	# with extra parameters. For CI we set containerd=debug for kata-deploy and runtime debugging.
 	# shellcheck disable=SC2086
-	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
+	sudo k0s install controller --single --logging=containerd=debug,etcd=info,konnectivity-server=1,kube-apiserver=1,kube-controller-manager=1,kube-scheduler=1,kubelet=1 ${KUBERNETES_EXTRA_PARAMS:-}
 
 	# kube-router decided to use :8080 for its metrics, and this seems
 	# to be a change that affected k0s 1.30.0+, leading to kube-router
@@ -234,6 +263,20 @@ function deploy_k0s() {
 	sudo mkdir -p /etc/k0s
 	k0s config create | sudo tee /etc/k0s/k0s.yaml
 	sudo sed -i -e "s/metricsPort: 8080/metricsPort: 9999/g" /etc/k0s/k0s.yaml
+
+	# Set CRI runtime-request-timeout to 10m (same as kubeadm) for CoCo and long-running create requests.
+	# Use a fragment file and eval-all so mikefarah/yq v4 (used in CI) handles the nested structure correctly.
+	ensure_yq
+	worker_profiles_fragment=$(mktemp)
+	cat <<-'WORKER_PROFILES' > "${worker_profiles_fragment}"
+	- name: default
+	  values:
+	    apiVersion: kubelet.config.k8s.io/v1beta1
+	    kind: KubeletConfiguration
+	    runtimeRequestTimeout: 10m
+	WORKER_PROFILES
+	sudo cat /etc/k0s/k0s.yaml | yq eval-all 'select(fileIndex==0).spec.workerProfiles = select(fileIndex==1) | select(fileIndex==0)' - "${worker_profiles_fragment}" | sudo tee /etc/k0s/k0s.yaml
+	rm -f "${worker_profiles_fragment}"
 
 	sudo k0s start
 
@@ -253,11 +296,45 @@ function deploy_k0s() {
 	sudo chown "${USER}":"${USER}" ~/.kube/config
 }
 
+# If the rendered containerd config (v3) does not import the drop-in dir, write
+# the full V3 template (from tests/containerd-config-v3.tmpl) with the given
+# import path and restart the service.
+# Args: containerd_dir (e.g. /var/lib/rancher/k3s/agent/etc/containerd), service_name (e.g. k3s or rke2-server).
+function _setup_containerd_v3_template_if_needed() {
+	local containerd_dir="$1"
+	local service_name="$2"
+	local template_file="${tests_dir}/containerd-config-v3.tmpl"
+	local rendered_v3="${containerd_dir}/config-v3.toml"
+	local imports_path="${containerd_dir}/config-v3.toml.d/*.toml"
+	if sudo test -f "${rendered_v3}" && sudo grep -q 'config-v3\.toml\.d' "${rendered_v3}" 2>/dev/null; then
+		return 0
+	fi
+	if [[ ! -f "${template_file}" ]]; then
+		echo "Template not found: ${template_file}" >&2
+		return 1
+	fi
+	sudo mkdir -p "${containerd_dir}/config-v3.toml.d"
+	sed "s|__CONTAINERD_IMPORTS_PATH__|${imports_path}|g" "${template_file}" | sudo tee "${containerd_dir}/config-v3.toml.tmpl" > /dev/null
+	sudo systemctl restart "${service_name}"
+}
+
+function setup_k3s_containerd_v3_template_if_needed() {
+	_setup_containerd_v3_template_if_needed "/var/lib/rancher/k3s/agent/etc/containerd" "k3s"
+}
+
+function setup_rke2_containerd_v3_template_if_needed() {
+	_setup_containerd_v3_template_if_needed "/var/lib/rancher/rke2/agent/etc/containerd" "rke2-server"
+}
+
 function deploy_k3s() {
-	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
+	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 --kubelet-arg runtime-request-timeout=600s
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
+
+	# If rendered config does not import the drop-in dir, write full V3 template so kata-deploy can use it.
+	setup_k3s_containerd_v3_template_if_needed
 
 	# Download the kubectl binary into /usr/bin and remove /usr/local/bin/kubectl
 	#
@@ -319,10 +396,17 @@ function create_cluster_kcli() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
+	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	sudo mkdir -p /etc/rancher/rke2
+	printf '%s\n' 'kubelet-arg:' '  - --runtime-request-timeout=600s' | sudo tee /etc/rancher/rke2/config.yaml
+
 	sudo systemctl enable --now rke2-server.service
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
+
+	# If rendered config does not import the drop-in dir, write full V3 template so kata-deploy can use it.
+	setup_rke2_containerd_v3_template_if_needed
 
 	# Link the kubectl binary into /usr/bin
 	sudo ln -sf /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
@@ -334,6 +418,10 @@ function deploy_rke2() {
 
 function deploy_microk8s() {
 	sudo snap install microk8s --classic
+	# Set CRI runtime-request-timeout to 600s (same as kubeadm) for CoCo and long-running create requests.
+	echo '--runtime-request-timeout=600s' | sudo tee -a /var/snap/microk8s/current/args/kubelet
+	sudo microk8s stop
+	sudo microk8s start
 	sudo usermod -a -G microk8s "${USER}"
 	mkdir -p ~/.kube
 	# As we want to call microk8s with sudo, we're safe to ignore SC2024 here
@@ -525,6 +613,7 @@ function deploy_k8s() {
 
 function set_test_cluster_namespace() {
 	# Delete any spurious tests namespace that was left behind
+	echo "Deleting test namespace ${TEST_CLUSTER_NAMESPACE}"
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}" &> /dev/null || true
 
 	# Create a new namespace for the tests and switch to it
@@ -537,6 +626,7 @@ function set_default_cluster_namespace() {
 }
 
 function delete_test_cluster_namespace() {
+	echo "Deleting test namespace ${TEST_CLUSTER_NAMESPACE}"
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
 	set_default_cluster_namespace
 }

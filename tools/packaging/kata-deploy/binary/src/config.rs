@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use log::info;
 use std::env;
 use std::fs;
+use std::path::Path;
 
 use crate::k8s;
 
@@ -64,6 +65,28 @@ pub fn k3s_rke2_containerd_plugin_id(use_v3: bool) -> &'static str {
     } else {
         "\"io.containerd.grpc.v1.cri\""
     }
+}
+
+/// K3s/RKE2: drop-in directory name in the rendered config (config.toml.d or config-v3.toml.d).
+pub fn k3s_rke2_drop_in_dir_name(use_v3: bool) -> &'static str {
+    if use_v3 {
+        "config-v3.toml.d"
+    } else {
+        "config.toml.d"
+    }
+}
+
+/// Path to the rendered containerd config.
+/// K3s/RKE2 always render to config.toml regardless of which template
+/// (config.toml.tmpl or config-v3.toml.tmpl) they use.
+pub fn k3s_rke2_rendered_config_path() -> &'static str {
+    "/etc/containerd/config.toml"
+}
+
+/// Returns true if the rendered config content imports the correct drop-in dir.
+/// We only use k3s/rke2 drop-in when the distro has already configured this import.
+pub fn k3s_rke2_rendered_has_import(content: &str, use_v3: bool) -> bool {
+    content.contains(k3s_rke2_drop_in_dir_name(use_v3))
 }
 
 /// Default Kata Containers installation directory.
@@ -516,9 +539,10 @@ impl Config {
                 plugin_id: None,
             },
             "k3s" | "k3s-agent" | "rke2-agent" | "rke2-server" => {
-                // K3s/RKE2 generate config.toml from a template on each restart; we modify
-                // the template so our changes persist. Which template is chosen by containerd version
-                // (see k3s_rke2_resolve_use_v3). Refs: docs.k3s.io/advanced#configuring-containerd
+                // K3s/RKE2: we only use drop-in when the rendered config already imports the
+                // versioned drop-in dir (config.toml.d or config-v3.toml.d). If the import is
+                // missing we bail; the cluster must configure the template with the import
+                // (e.g. in tests or via a custom k3s/RKE2 setup). Refs: docs.k3s.io/advanced#configuring-containerd
                 let container_runtime_version = k8s::get_node_field(
                     self,
                     ".status.nodeInfo.containerRuntimeVersion",
@@ -529,15 +553,40 @@ impl Config {
                     &self.containerd_conf_file,
                     container_runtime_version.as_deref(),
                 )?;
-                let config_file =
-                    k3s_rke2_containerd_template_path(use_v3).to_string();
+                let config_file = k3s_rke2_containerd_template_path(use_v3).to_string();
+                let rendered_path = k3s_rke2_rendered_config_path().to_string();
+                let content = fs::read_to_string(&rendered_path).with_context(|| {
+                    format!(
+                        "K3s/RKE2: cannot read rendered config at {rendered_path}. \
+                         Ensure the containerd config dir is mounted and k3s/RKE2 has rendered the config."
+                    )
+                })?;
+                if !k3s_rke2_rendered_has_import(&content, use_v3) {
+                    anyhow::bail!(
+                        "K3s/RKE2: rendered config at {} does not import the drop-in dir '{}'. \
+                         kata-deploy requires the containerd template to include that import. \
+                         Add e.g. imports = [\".../{}/*.toml\"] to the template and restart k3s/RKE2.",
+                        rendered_path,
+                        k3s_rke2_drop_in_dir_name(use_v3),
+                        k3s_rke2_drop_in_dir_name(use_v3),
+                    );
+                }
+                let template_dir = Path::new(&config_file)
+                    .parent()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "/etc/containerd".to_string());
+                let drop_in_file = format!(
+                    "{}/{}/kata-deploy.toml",
+                    template_dir,
+                    k3s_rke2_drop_in_dir_name(use_v3),
+                );
                 let backup_file = format!("{config_file}.bak");
                 ContainerdPaths {
                     config_file: config_file.clone(),
                     backup_file,
-                    imports_file: Some(config_file),
-                    drop_in_file: self.containerd_drop_in_conf_file.clone(),
-                    use_drop_in,
+                    imports_file: None, // we do not modify the template; import is already there
+                    drop_in_file,
+                    use_drop_in: true,
                     plugin_id: Some(k3s_rke2_containerd_plugin_id(use_v3).to_string()),
                 }
             }
@@ -700,9 +749,9 @@ mod tests {
     //! will cause race conditions and test failures.
     //!
     //! Use: cargo test --bin kata-deploy -- --test-threads=1
-    //! Or:  cargo test-serial (if the cargo alias is configured)
 
     use super::*;
+    use rstest::rstest;
 
     // NOTE: These tests modify environment variables which are process-global.
     // Run with: cargo test config::tests -- --test-threads=1
@@ -818,6 +867,37 @@ mod tests {
         let result = get_arch_var("SHIMS", "default", "x86_64");
         assert_eq!(result, "test1 test2");
         cleanup_env_vars();
+    }
+
+    // --- k3s/rke2 helpers (no env vars) ---
+
+    #[rstest]
+    #[case(false, "config.toml.d")]
+    #[case(true, "config-v3.toml.d")]
+    fn test_k3s_rke2_drop_in_dir_name(#[case] use_v3: bool, #[case] expected: &str) {
+        assert_eq!(k3s_rke2_drop_in_dir_name(use_v3), expected);
+    }
+
+    #[test]
+    fn test_k3s_rke2_rendered_config_path() {
+        assert_eq!(k3s_rke2_rendered_config_path(), "/etc/containerd/config.toml");
+    }
+
+    #[rstest]
+    #[case(
+        "imports = [\"/var/lib/rancher/k3s/agent/etc/containerd/config.toml.d/*.toml\"]\n",
+        false,
+        true,
+    )]
+    #[case("version = 2\n", false, false)]
+    #[case("imports = [\"/path/config-v3.toml.d/*.toml\"]", true, true)]
+    #[case("imports = [\"/path/config.toml.d/*.toml\"]", true, false)]
+    fn test_k3s_rke2_rendered_has_import(
+        #[case] content: &str,
+        #[case] use_v3: bool,
+        #[case] expected: bool,
+    ) {
+        assert_eq!(k3s_rke2_rendered_has_import(content, use_v3), expected);
     }
 
     #[test]

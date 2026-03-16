@@ -197,10 +197,28 @@ type runtime struct {
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
+	EmptyDirMode              string   `toml:"emptydir_mode"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
 	ForceGuestPull            bool     `toml:"experimental_force_guest_pull"`
 	PodResourceAPISock        string   `toml:"pod_resource_api_sock"`
+	KubeletRootDir            string   `toml:"kubelet_root_dir"`
+}
+
+// emptyDirMode returns a valid emptydir_mode value, defaulting to shared-fs
+// if the TOML field is unset.
+func (r runtime) emptyDirMode() (string, error) {
+	if r.EmptyDirMode == "" {
+		return vc.EmptyDirModeSharedFs, nil
+	}
+
+	switch r.EmptyDirMode {
+	case vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted:
+		return r.EmptyDirMode, nil
+	default:
+		return "", fmt.Errorf("invalid emptydir_mode=%q, allowed values: %q, %q",
+			r.EmptyDirMode, vc.EmptyDirModeSharedFs, vc.EmptyDirModeVirtioBlkEncrypted)
+	}
 }
 
 type agent struct {
@@ -1389,6 +1407,16 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 	return nil
 }
 
+func updateRuntimeConfigRuntime(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+	emptyDirMode, err := tomlConf.Runtime.emptyDirMode()
+	if err != nil {
+		return fmt.Errorf("%v: %v", configPath, err)
+	}
+	config.EmptyDirMode = emptyDirMode
+
+	return nil
+}
+
 // SetKernelParams adds the user-specified kernel parameters (from the
 // configuration file) to the defaults so that the former take priority.
 func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
@@ -1450,6 +1478,10 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	}
 
 	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigRuntime(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
@@ -1642,6 +1674,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	config.ForceGuestPull = tomlConf.Runtime.ForceGuestPull
 	config.PodResourceAPISock = tomlConf.Runtime.PodResourceAPISock
+	config.KubeletRootDir = tomlConf.Runtime.KubeletRootDir
 
 	return resolved, config, nil
 }

@@ -30,7 +30,7 @@ metadata:
     "helm.sh/hook-weight": "0"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  backoffLimit: 0
+  backoffLimit: 3
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
@@ -113,7 +113,21 @@ spec:
               echo "Waiting for kata-deploy DaemonSet to be ready..."
               DAEMONSET_TIMEOUT="{{ .Values.verification.daemonsetTimeout }}"
               echo "DaemonSet timeout: ${DAEMONSET_TIMEOUT}s"
-              kubectl rollout status daemonset/"${DAEMONSET_NAME}" -n {{ .Release.Namespace }} --timeout="${DAEMONSET_TIMEOUT}s"
+              # kata-deploy restarts the CRI runtime (k3s/containerd) during install,
+              # which can cause transient API server unavailability. Retry to handle this.
+              rollout_retries=5
+              rollout_retry_delay=15
+              for rollout_attempt in $(seq 1 ${rollout_retries}); do
+                if kubectl rollout status daemonset/"${DAEMONSET_NAME}" -n {{ .Release.Namespace }} --timeout="${DAEMONSET_TIMEOUT}s" 2>&1; then
+                  break
+                fi
+                if [[ ${rollout_attempt} -eq ${rollout_retries} ]]; then
+                  echo "ERROR: DaemonSet rollout failed after ${rollout_retries} attempts"
+                  exit 1
+                fi
+                echo "API server may be restarting (attempt ${rollout_attempt}/${rollout_retries}), retrying in ${rollout_retry_delay}s..."
+                sleep ${rollout_retry_delay}
+              done
 
               # Wait for nodes to be labeled with katacontainers.io/kata-runtime=true
               # This label is set by kata-deploy when installation is complete

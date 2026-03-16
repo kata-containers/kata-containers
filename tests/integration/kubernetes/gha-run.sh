@@ -406,7 +406,9 @@ function cleanup_kata_deploy() {
 
 	# Do not return after deleting only the parent object cascade=foreground
 	# means also wait for child/dependent object deletion
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug || true
+
+	wait_for_api_and_retry_uninstall "kata-deploy" "kube-system"
 }
 
 function cleanup() {
@@ -585,7 +587,7 @@ function main() {
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools "${2:-}" ;;
 		install-kbs-client) install_kbs_client ;;
-		get-cluster-credentials) get_cluster_credentials "" ;;
+		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;

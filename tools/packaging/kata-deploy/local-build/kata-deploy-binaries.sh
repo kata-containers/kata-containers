@@ -361,6 +361,10 @@ get_latest_kernel_nvidia_artefact_and_builder_image_version() {
 	echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
 }
 
+get_latest_ctk_version() {
+	echo $(get_from_kata_deps ".externals.nvidia.ctk.version")
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -393,6 +397,7 @@ install_image() {
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_latest_ctk_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -404,6 +409,7 @@ install_image() {
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the image
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_ctk_version)"
 	fi
 
 	latest_builder_image=""
@@ -499,6 +505,7 @@ install_initrd() {
 		# measured boot is used
 		if [[ "${variant}" == "nvidia-gpu-confidential" ]]; then
 			latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+			latest_artefact+="-$(get_latest_ctk_version)"
 		else
 			latest_artefact+="-$(get_latest_kernel_artefact_and_builder_image_version)"
 		fi
@@ -509,6 +516,7 @@ install_initrd() {
 	if [[ "${variant}" == "nvidia-gpu" ]]; then
 		# If we bump the kernel we need to rebuild the initrd as well
 		latest_artefact+="-$(get_latest_kernel_nvidia_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_ctk_version)"
 	fi
 
 	latest_builder_image=""
@@ -656,14 +664,6 @@ install_cached_kernel_tarball_component() {
 		|| return 1
 
 	case ${kernel_name} in
-		"kernel")
-			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
-				local modules_dir
-				modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
-				mkdir -p "${modules_dir}" || true
-				tar --strip-components=1 --zstd -xvf "${workdir}/kata-static-${kernel_name}-modules.tar.zst" -C "${modules_dir}" || return 1
-			fi
-			;;
 		"kernel-nvidia-gpu"*"")
 			local modules_dir
 			modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
@@ -699,14 +699,6 @@ install_kernel_helper() {
 	fi
 
 	case ${kernel_name} in
-		kernel)
-			# Main kernel on x86_64/s390x is built with -x (TEE); produce modules tarball for rootfs
-			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
-				local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
-				local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
-				extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
-			fi
-			;;
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental|kernel*-confidential)
 			local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.zst"
 			local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
@@ -1215,11 +1207,14 @@ install_tools_helper() {
 	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
 	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="directvolplugin"
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
-	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
+
+	local tool_build_dir="src/tools/${tool}"
+	[ ${tool} = "genpolicy" ] && tool_build_dir=target
+	binary=$(find "${repo_root_dir}/${tool_build_dir}" -type f -name "${tool_binary}")
 
 	binary_count=$(echo "${binary}" | grep -c '^' || echo "0")
-	if [[ "${binary_count}" -eq 0 ]]; then
-		die "No binary found for ${tool} (expected: ${tool_binary})."
+	if [[ "${binary}" = "" ]]; then
+		die "No binary found for ${tool} in ${repo_root_dir}/${tool_build_dir} (expected: ${tool_binary})."
 	elif [[ "${binary_count}" -gt 1 ]]; then
 		die "Multiple binaries found for ${tool} (expected single ${tool_binary}). Found:"$'\n'"${binary}"
 	fi
@@ -1229,6 +1224,16 @@ install_tools_helper() {
 		mkdir -p "${defaults_path}"
 		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
 		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
+		mkdir -p "${defaults_path}/genpolicy-settings.d"
+		# Scenario drop-in examples (10-*.json base, 20-*.json overlays). Do not ship test drop-ins (99-*).
+		drop_in_examples="${repo_root_dir}/src/tools/${tool}/drop-in-examples"
+		if [[ -d "${drop_in_examples}" ]]; then
+			mkdir -p "${defaults_path}/drop-in-examples"
+			for f in "${drop_in_examples}"/10-*.json "${drop_in_examples}"/20-*.json; do
+				[[ -e "${f}" ]] && install -D --mode 0644 "${f}" "${defaults_path}/drop-in-examples/$(basename "${f}")"
+			done
+			[[ -f "${drop_in_examples}/README.md" ]] && install -D --mode 0644 "${drop_in_examples}/README.md" "${defaults_path}/drop-in-examples/README.md"
+		fi
 		binary_permissions="0755"
 	else
 		binary_permissions="$default_binary_permissions"
@@ -1244,7 +1249,7 @@ install_tools_helper() {
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="csi-kata-directvolume"
-	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+	install -D --mode "${binary_permissions}" "${binary}" "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
 install_agent_ctl() {
@@ -1419,22 +1424,6 @@ handle_build() {
 	tar --zstd -tvf "${final_tarball_path}"
 
 	case ${build_target} in
-		kernel)
-			if [[ "${ARCH}" == "x86_64" || "${ARCH}" == "s390x" ]]; then
-				local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
-				if [[ ! -f "${modules_final_tarball_path}" ]]; then
-					local modules_dir
-					modules_dir=$(get_kernel_modules_dir "${kernel_version}" "${kernel_kata_config_version}" "${build_target}")
-					parent_dir=$(dirname "${modules_dir}")
-					parent_dir_basename=$(basename "${parent_dir}")
-					pushd "${parent_dir}"
-					rm -f "${parent_dir_basename}"/build
-					tar --zstd -cvf "${modules_final_tarball_path}" "."
-					popd
-				fi
-				tar --zstd -tvf "${modules_final_tarball_path}"
-			fi
-			;;
 		kernel-nvidia-gpu|kernel-nvidia-gpu-dragonball-experimental)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.zst"
 			if [[ ! -f "${modules_final_tarball_path}" ]]; then

@@ -65,23 +65,42 @@ async fn main() -> Result<()> {
 
     match args.action {
         Action::Install => {
-            install(&config, &runtime).await?;
-
-            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to maintain
-            // the kata-runtime label and artifacts; exit gracefully on SIGTERM.
-            info!("Install completed, daemonset mode: waiting for SIGTERM");
             use tokio::signal::unix::{signal, SignalKind};
-            match signal(SignalKind::terminate()) {
-                Ok(mut sigterm) => {
-                    sigterm.recv().await;
-                    return Ok(());
-                }
+            let mut sigterm = match signal(SignalKind::terminate()) {
+                Ok(s) => s,
                 Err(e) => {
                     log::warn!("Failed to register SIGTERM handler: {}, sleeping forever", e);
                     std::future::pending::<()>().await;
                     return Ok(());
                 }
+            };
+
+            // Race install against SIGTERM so cleanup always runs, even if
+            // SIGTERM arrives during install (e.g. helm uninstall while the
+            // container is restarting after a failed install attempt).
+            let install_result = tokio::select! {
+                result = install(&config, &runtime) => result,
+                _ = sigterm.recv() => {
+                    info!("Received SIGTERM during install, running cleanup before exit");
+                    if let Err(e) = cleanup(&config, &runtime).await {
+                        error!("Cleanup on SIGTERM failed: {}", e);
+                    }
+                    return Ok(());
+                }
+            };
+
+            install_result?;
+
+            // DEPLOYMENT MODEL: Install runs as DaemonSet. Stay alive to maintain
+            // the kata-runtime label and artifacts. On SIGTERM (pod termination),
+            // run cleanup to undo install before exiting.
+            info!("Install completed, daemonset mode: waiting for SIGTERM");
+            sigterm.recv().await;
+            info!("Received SIGTERM, running cleanup before exit");
+            if let Err(e) = cleanup(&config, &runtime).await {
+                error!("Cleanup on SIGTERM failed: {}", e);
             }
+            return Ok(());
         }
         Action::Cleanup => {
             cleanup(&config, &runtime).await?;
@@ -189,7 +208,7 @@ async fn install(config: &config::Config, runtime: &str) -> Result<()> {
 
     runtime::containerd::setup_containerd_config_files(runtime, config).await?;
 
-    artifacts::install_artifacts(config).await?;
+    artifacts::install_artifacts(config, runtime).await?;
 
     runtime::configure_cri_runtime(config, runtime).await?;
 
@@ -244,12 +263,19 @@ async fn cleanup(config: &config::Config, runtime: &str) -> Result<()> {
     }
 
     info!("Cleaning up CRI runtime configuration");
-    runtime::cleanup_cri_runtime(config, runtime).await?;
+    runtime::cleanup_cri_runtime_config(config, runtime).await?;
     info!("Successfully cleaned up CRI runtime configuration");
 
     info!("Removing kata artifacts from host");
     artifacts::remove_artifacts(config).await?;
     info!("Successfully removed kata artifacts");
+
+    // Restart the CRI runtime last. On k3s/rke2 this restarts the entire
+    // server process, which kills this (terminating) pod. By doing it after
+    // all other cleanup, we ensure config and artifacts are already gone.
+    info!("Restarting CRI runtime");
+    runtime::restart_and_wait_for_ready(config, runtime).await?;
+    info!("CRI runtime restarted successfully");
 
     info!("Kata Containers cleanup completed successfully");
     Ok(())

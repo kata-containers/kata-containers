@@ -207,11 +207,11 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.18.12"
+    version: "v6.18.15"
     nvidia:
       description: "Linux kernel optimised for virtual machines"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.18.12"
+      version: "v6.18.15"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -234,7 +234,7 @@ externals:
   nvrc:
     # yamllint disable-line rule:line-length
     desc: "The NVRC project provides a Rust binary that implements a simple init system for microVMs"
-    version: "v0.1.1"
+    version: "v0.1.3"
     url: "https://github.com/NVIDIA/nvrc/releases/download/"
 
   nvidia:
@@ -266,6 +266,9 @@ externals:
           # yamllint disable-line rule:line-length
           url: "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/sbsa/"
           pkg: "cuda-keyring_1.1-1_all.deb"
+    ctk:
+      version: "1.18.1-1"
+      url: "https://github.com/NVIDIA/nvidia-container-toolkit"
 
   busybox:
     desc: "The Swiss Army Knife of Embedded Linux"
@@ -291,12 +294,12 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "3b2356a52e0d8a58730a1977e235a7e7f2007b5e"
+    version: "f5cb8fc1b51b652fc24e2d6b8742cf417805352e"
     # image / ita_image and image_tag / ita_image_tag must be in sync
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "3b2356a52e0d8a58730a1977e235a7e7f2007b5e"
+    image_tag: "f5cb8fc1b51b652fc24e2d6b8742cf417805352e"
     ita_image: "ghcr.io/confidential-containers/staged-images/kbs-ita-as"
-    ita_image_tag: "3b2356a52e0d8a58730a1977e235a7e7f2007b5e-x86_64"
+    ita_image_tag: "f5cb8fc1b51b652fc24e2d6b8742cf417805352e-x86_64"
     toolchain: "1.90.0"
 
   containerd:
@@ -465,12 +468,12 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     # When updating this, also update in go.mod files.
-    version: "1.24.13"
+    version: "1.25.8"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.24.13"
+      newest-version: "1.25.8"
 
   rust:
     description: "Rust language"

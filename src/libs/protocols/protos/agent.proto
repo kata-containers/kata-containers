@@ -520,6 +520,11 @@ message Storage {
 	// FSGroup consists of the group ID and group ownership change policy
 	// that the mounted volume must have its group ID changed to when specified.
 	FSGroup fs_group = 7;
+	// Shared indicates this storage is shared across multiple containers
+	// (e.g., block-based emptyDirs). When true, the agent should not clean up
+	// the storage when a container using it exits, as other containers
+	// may still need it. Cleanup will happen when the sandbox is destroyed.
+	bool shared = 8;
 }
 
 // Device represents only the devices that could have been defined through the
