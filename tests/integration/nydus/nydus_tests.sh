@@ -183,7 +183,8 @@ function run_test() {
 	pod=$(sudo -E crictl --timeout=20s runp -r kata-${KATA_HYPERVISOR} $dir_path/nydus-sandbox.yaml)
 	echo "Pod $pod created"
 	cnt=$(sudo -E crictl --timeout=20s create $pod $dir_path/nydus-container.yaml $dir_path/nydus-sandbox.yaml)
-	echo "Container $cnt created"
+	echo "XXXXXContainer $cnt created"
+
 	sudo -E crictl --timeout=20s start $cnt
 	echo "Container $cnt started"
 
@@ -203,6 +204,7 @@ function teardown() {
 	echo "Running teardown"
 	local rc=0
 
+	journalctl -x -t kata --since "10 minutes ago" || true
 	local pid
 	for bin in containerd-nydus-grpc nydusd; do
 		pid=$(pidof $bin)
