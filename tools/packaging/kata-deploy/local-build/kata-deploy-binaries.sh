@@ -607,16 +607,6 @@ install_image_nvidia_gpu() {
 	install_image "nvidia-gpu"
 }
 
-# Install NVIDIA GPU initrd
-install_initrd_nvidia_gpu() {
-	export AGENT_POLICY
-	export MEASURED_ROOTFS="no"
-	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
-	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
-	install_initrd "nvidia-gpu"
-}
-
 # Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export CONFIDENTIAL_GUEST="yes"
@@ -627,18 +617,6 @@ install_image_nvidia_gpu_confidential() {
 	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
 	install_image "nvidia-gpu-confidential"
 }
-
-# Install NVIDIA GPU confidential initrd
-install_initrd_nvidia_gpu_confidential() {
-	export CONFIDENTIAL_GUEST="yes"
-	export AGENT_POLICY
-	export MEASURED_ROOTFS="no"
-	local version=$(get_from_kata_deps .externals.nvidia.driver.version)
-	EXTRA_PKGS="apt curl ${EXTRA_PKGS}"
-	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"driver=${version},compute,dcgm,nvswitch"}
-	install_initrd "nvidia-gpu-confidential"
-}
-
 
 install_se_image() {
 	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
@@ -1383,11 +1361,7 @@ handle_build() {
 
 	rootfs-image-nvidia-gpu) install_image_nvidia_gpu ;;
 
-	rootfs-initrd-nvidia-gpu) install_initrd_nvidia_gpu ;;
-
 	rootfs-image-nvidia-gpu-confidential) install_image_nvidia_gpu_confidential ;;
-
-	rootfs-initrd-nvidia-gpu-confidential) install_initrd_nvidia_gpu_confidential ;;
 
 	rootfs-cca-confidential-image) install_image_confidential ;;
 
