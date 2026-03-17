@@ -1306,6 +1306,7 @@ allow_storage_source(p_storage, i_storage, bundle_id) if {
 allow_storage_options(p_storage, i_storage) if {
     print("allow_storage_options 1: start")
 
+    p_storage.driver != "blk"
     p_storage.driver != "overlayfs"
     p_storage.options == i_storage.options
 
@@ -1389,7 +1390,7 @@ allow_mount_point_by_device_id(p_storage, i_storage) if {
     mount3 := replace(mount2, "$(b64_device_id)", base64url.encode(i_storage.source))
     print("allow_mount_point_by_device_id: mount3 =", mount3)
 
-    regex.match(mount3, i_storage.mount_point)
+    mount3 == i_storage.mount_point
 
     print("allow_mount_point_by_device_id: true")
 }
