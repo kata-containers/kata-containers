@@ -78,7 +78,6 @@ strum_macros = "0.26.2"
 tempfile = "3.19.1"
 which = "4.3.0"
 rstest = "0.18.0"
-async-std = { version = "1.12.0", features = ["attributes"] }
 
 # Local dependencies
 kata-agent-policy = { path = "policy" }
@@ -195,7 +194,6 @@ pv_core = { git = "https://github.com/ibm-s390-linux/s390-tools", rev = "4942504
 tempfile.workspace = true
 which.workspace = true
 rstest.workspace = true
-async-std.workspace = true
 
 test-utils.workspace = true
 
