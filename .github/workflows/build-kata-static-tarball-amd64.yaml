@@ -347,6 +347,16 @@ jobs:
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
         env:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+      - name: Check kata tarball size (GitHub release asset limit)
+        run: |
+          # https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas
+          GITHUB_ASSET_MAX_BYTES=2147483648
+          tarball_size=$(stat -c "%s" kata-static.tar.zst)
+          if [[ "${tarball_size}" -ge "${GITHUB_ASSET_MAX_BYTES}" ]]; then
+            echo "::error::tarball size (${tarball_size} bytes) >= GitHub release asset limit (${GITHUB_ASSET_MAX_BYTES} bytes)"
+            exit 1
+          fi
+          echo "tarball size: ${tarball_size} bytes"
       - name: store-artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -447,6 +457,16 @@ jobs:
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-tools-artifacts versions.yaml kata-tools-static.tar.zst
         env:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+      - name: Check kata-tools tarball size (GitHub release asset limit)
+        run: |
+          # https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas
+          GITHUB_ASSET_MAX_BYTES=2147483648
+          tarball_size=$(stat -c "%s" kata-tools-static.tar.zst)
+          if [[ "${tarball_size}" -ge "${GITHUB_ASSET_MAX_BYTES}" ]]; then
+            echo "::error::tarball size (${tarball_size} bytes) >= GitHub release asset limit (${GITHUB_ASSET_MAX_BYTES} bytes)"
+            exit 1
+          fi
+          echo "tarball size: ${tarball_size} bytes"
       - name: store-artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
