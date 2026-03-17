@@ -2322,6 +2322,7 @@ async fn cdh_handler_trusted_storage(oci: &mut Spec) -> Result<()> {
                     &dev_major_minor,
                     "luks2",
                     KATA_IMAGE_WORK_DIR,
+                    "-E lazy_journal_init",
                 )
                 .await?;
                 break;
@@ -2336,6 +2337,7 @@ pub(crate) async fn cdh_secure_mount(
     device_id: &str,
     encrypt_type: &str,
     mount_point: &str,
+    mkfs_opts: &str,
 ) -> Result<()> {
     if !confidential_data_hub::is_cdh_client_initialized() {
         return Ok(());
@@ -2345,11 +2347,12 @@ pub(crate) async fn cdh_secure_mount(
 
     info!(
         sl(),
-        "cdh_secure_mount: device_type {}, device_id {}, encrypt_type {}, integrity {}",
+        "cdh_secure_mount: device_type {}, device_id {}, encrypt_type {}, integrity {}, mkfs_opts {}",
         device_type,
         device_id,
         encrypt_type,
-        integrity
+        integrity,
+        mkfs_opts
     );
 
     let options = std::collections::HashMap::from([
@@ -2357,7 +2360,7 @@ pub(crate) async fn cdh_secure_mount(
         ("sourceType".to_string(), "empty".to_string()),
         ("targetType".to_string(), "fileSystem".to_string()),
         ("filesystemType".to_string(), "ext4".to_string()),
-        ("mkfsOpts".to_string(), "-E lazy_journal_init".to_string()),
+        ("mkfsOpts".to_string(), mkfs_opts.to_string()),
         ("encryptionType".to_string(), encrypt_type.to_string()),
         ("dataIntegrity".to_string(), integrity),
     ]);
