@@ -1443,9 +1443,10 @@ main()
 	test_path="${test_path:-"${repo}/tests"}"
 	test_dir="${GOPATH}/src/${test_path}"
 
-	if [ -z "$repo_path" ]
-	then
+	if [ -z "$repo_path" ]; then
 		repo_path=$GOPATH/src/$repo
+	else
+		test_dir=$repo_path/$test_path
 	fi
 
 	announce
