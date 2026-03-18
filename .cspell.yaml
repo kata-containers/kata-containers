@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/streetsidesoftware/cspell/main/cspell.schema.json
+version: "0.2"
+language: en,en-GB
+
+dictionaryDefinitions:
+  - name: kata-terms
+    path: ./tests/spellcheck/kata-dictionary.txt
+    addWords: true
+
+dictionaries:
+  - en-GB
+  - en_US
+  - bash
+  - git
+  - golang
+  - k8s
+  - python
+  - rust
+  - companies
+  - mnemonics
+  - peopleNames
+  - softwareTerms
+  - networking-terms
+  - kata-terms
+
+ignoreRegExpList:
+  - /@[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}/gi  # Ignores github handles
+  # Ignore code blocks
+  - /^\s*`{3,}[\s\S]*?^\s*`{3,}/gm
+  - /`[^`\n]+`/g
+
+ignorePaths:
+  - "**/vendor/**"  # vendor files aren't owned by us
+  - "**/src/runtime/virtcontainers/pkg/cloud-hypervisor/client/**"  # Generated files
+
+useGitignore: true
