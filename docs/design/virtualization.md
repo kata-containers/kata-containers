@@ -1,197 +1,324 @@
 # Virtualization in Kata Containers
 
-Kata Containers, a second layer of isolation is created on top of those provided by traditional namespace-containers. The
-hardware virtualization interface is the basis of this additional layer. Kata will launch a lightweight virtual machine,
-and use the guest’s Linux kernel to create a container workload, or workloads in the case of multi-container pods. In Kubernetes
-and in the Kata implementation, the sandbox is carried out at the pod level. In Kata, this sandbox is created using a virtual machine.
+## Overview
 
-This document describes how Kata Containers maps container technologies to virtual machines technologies, and how this is realized in
-the multiple hypervisors and virtual machine monitors that Kata supports.
+Kata Containers creates a second layer of isolation on top of traditional namespace-based containers using hardware virtualization. Kata launches a lightweight virtual machine (VM) and uses the guest Linux kernel to create container workloads. In Kubernetes, the sandbox is implemented at the pod level using VMs.
 
-## Mapping container concepts to virtual machine technologies
+This document describes:
 
-A typical deployment of Kata Containers will be in Kubernetes by way of a Container Runtime Interface (CRI) implementation. On every node,
-Kubelet will interact with a CRI implementer (such as containerd or CRI-O), which will in turn interface with Kata Containers (an OCI based runtime).
+- How Kata Containers maps container technologies to virtualization technologies
+- The multiple hypervisors and Virtual Machine Monitors (VMMs) supported by Kata
+- Guidance for selecting the appropriate hypervisor for your use case
 
-The CRI API, as defined at the [Kubernetes CRI-API repo](https://github.com/kubernetes/cri-api/), implies a few constructs being supported by the
-CRI implementation, and ultimately in Kata Containers. In order to support the full [API](https://github.com/kubernetes/cri-api/blob/a6f63f369f6d50e9d0886f2eda63d585fbd1ab6a/pkg/apis/runtime/v1alpha2/api.proto#L34-L110) with the CRI-implementer, Kata must provide the following constructs:
+### Architecture
 
-![API to construct](./arch-images/api-to-construct.png)
+A typical Kata Containers deployment integrates with Kubernetes through a Container Runtime Interface (CRI) implementation:
 
-These constructs can then be further mapped to what devices are necessary for interfacing with the virtual machine:
+```
+Kubelet → CRI (containerd/CRI-O) → Kata Containers (OCI runtime) → VM → Containers
+```
 
-![construct to VM concept](./arch-images/construct-to-vm-concept.png)
+The CRI API requires Kata to support the following constructs:
 
-Ultimately, these concepts map to specific para-virtualized devices or virtualization technologies.
+| CRI Construct | VM Equivalent | Virtualization Technology |
+|---------------|---------------|---------------------------|
+| Pod Sandbox | VM | Hypervisor/VMM |
+| Container | Process in VM | Namespace/Cgroup in guest |
+| Network | Network Interface | virtio-net, vhost-net, physical, etc. |
+| Storage | Block/File Device | virtio-block, virtio-scsi, virtio-fs |
+| Compute | vCPU/Memory | KVM, ACPI hotplug |
 
-![VM concept to underlying technology](./arch-images/vm-concept-to-tech.png)
+### Mapping Container Concepts to Virtualization Technologies
 
-Each hypervisor or VMM varies on how or if it handles each of these.
+Kata Containers implements the Kubernetes Container Runtime Interface (CRI) to provide pod and container lifecycle management. The CRI API defines abstractions that Kata must translate into virtualization primitives.
 
-## Kata Containers Hypervisor and VMM support
+The mapping from CRI constructs to virtualization technologies follows a three-layer model:
 
-Kata Containers [supports multiple hypervisors](../hypervisors.md).
+```
+CRI API Constructs → VM Abstractions → Para-virtualized Devices
+```
 
-Details of each solution and a summary are provided below.
+**Layer 1: CRI API Constructs**
+
+The CRI API ([kubernetes/cri-api](https://github.com/kubernetes/cri-api)) defines the following abstractions that Kata must implement:
+
+| Construct | Description |
+|-----------|-------------|
+| Pod Sandbox | Isolated execution environment for containers |
+| Container | Process workload within a sandbox |
+| Network | Pod and container networking interfaces |
+| Storage | Volume mounts and image storage |
+| RuntimeConfig | Resource constraints (CPU, memory, cgroups) |
+
+![CRI API to Kata Constructs](./arch-images/api-to-construct.png)
+
+**Layer 2: VM Abstractions**
+
+Kata translates CRI constructs into VM-level concepts:
+
+| CRI Construct | VM Equivalent |
+|---------------|---------------|
+| Pod Sandbox | Virtual Machine |
+| Container | Process/namespace in guest OS |
+| Network | Virtual NIC (vNIC) |
+| Storage | Virtual block device or filesystem |
+| RuntimeConfig | VM resources (vCPU, memory) |
+
+![Kata Constructs to VM Concepts](./arch-images/construct-to-vm-concept.png)
+
+**Layer 3: Para-virtualized Devices**
+
+VM abstractions are realized through para-virtualized drivers for optimal performance:
+
+| VM Concept | Device Technology |
+|------------|-------------------|
+| vNIC | virtio-net, vhost-net, macvtap |
+| Block Storage | virtio-block, virtio-scsi |
+| Shared Filesystem | virtio-fs |
+| Agent Communication | virtio-vsock |
+| Device Passthrough | VFIO with IOMMU |
+
+![VM Concepts to Underlying Technology](./arch-images/vm-concept-to-tech.png)
+
+> **Note:** Each hypervisor implements these mappings differently based on its device model and feature set. See the [Hypervisor Details](#hypervisor-details) section for specific implementations.
+
+### Device Mapping
+
+Container constructs map to para-virtualized devices:
+
+| Construct | Device Type | Technology |
+|-----------|-------------|------------|
+| Network | Network Interface | virtio-net, vhost-net |
+| Storage (ephemeral) | Block Device | virtio-block, virtio-scsi |
+| Storage (shared) | Filesystem | virtio-fs |
+| Communication | Socket | virtio-vsock |
+| GPU/Passthrough | PCI Device | VFIO, IOMMU |
+
+## Supported Hypervisors and VMMs
+
+Kata Containers supports multiple hypervisors, each with different characteristics:
+
+| Hypervisor | Language | Architectures | Type |
+|------------|----------|---------------|------|
+| [QEMU] | C | x86_64, aarch64, ppc64le, s390x, risc-v | Type 2 (KVM) |
+| [Cloud Hypervisor] | Rust | x86_64, aarch64 | Type 2 (KVM) |
+| [Firecracker] | Rust | x86_64, aarch64 | Type 2 (KVM) |
+| `Dragonball` | Rust | x86_64, aarch64 | Type 2 (KVM) Built-in |
+
+> **Note:** All supported hypervisors use KVM (Kernel-based Virtual Machine) as the underlying hardware virtualization interface on Linux.
+
+## Hypervisor Details
 
 ### QEMU/KVM
 
-Kata Containers with QEMU has complete compatibility with Kubernetes.
+QEMU is the most mature and feature-complete hypervisor option for Kata Containers.
 
-Depending on the host architecture, Kata Containers supports various machine types,
-for example `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
-machine type is `q35`. The machine type and its [`Machine accelerators`](#machine-accelerators) can
-be changed by editing the runtime [`configuration`](architecture/README.md#configuration) file.
+**Machine Types:**
 
-Devices and features used:
-- virtio VSOCK or virtio serial
-- virtio block or virtio SCSI
-- [virtio net](https://www.redhat.com/en/virtio-networking-series)
-- virtio fs or virtio 9p (recommend: virtio fs)
-- VFIO
-- hotplug
-- machine accelerators
+- `q35` (x86_64, default)
+- `s390x` (s390x)
+- `virt` (aarch64)
+- `pseries` (ppc64le)
+- `risc-v` (riscv64, experimental)
 
-Machine accelerators and hotplug are used in Kata Containers to manage resource constraints, improve boot time and reduce memory footprint. These are documented below.
+**Devices and Features:**
 
-#### Machine accelerators
+- virtio-vsock (agent communication)
+- virtio-block or virtio-scsi (storage)
+- virtio-net/vhost-net/vhost-user-net (networking)
+- virtio-fs (shared filesystem, virtio-fs recommended)
+- VFIO (device passthrough)
+- CPU and memory hotplug
+- NVDIMM (x86_64, for rootfs as persistent memory)
 
-Machine accelerators are architecture specific and can be used to improve the performance
-and enable specific features of the machine types. The following machine accelerators
-are used in Kata Containers:
+**Use Cases:**
 
-- NVDIMM: This machine accelerator is x86 specific and only supported by `q35` machine types.
-`nvdimm` is used to provide the root filesystem as a persistent memory device to the Virtual Machine.
+- Production workloads requiring full CRI API compatibility
+- Scenarios requiring device passthrough (VFIO)
+- Multi-architecture deployments
 
-#### Hotplug devices
+**Configuration:** See [`configuration-qemu.toml`](../../src/runtime/config/configuration-qemu.toml.in)
 
-The Kata Containers VM starts with a minimum amount of resources, allowing for faster boot time and a reduction in memory footprint.  As the container launch progresses,
-devices are hotplugged to the VM. For example, when a CPU constraint is specified which includes additional CPUs, they can be hot added.  Kata Containers has support
-for hot-adding the following devices:
-- Virtio block
-- Virtio SCSI
-- VFIO
-- CPU
+### Dragonball (Built-in VMM)
 
-### Firecracker/KVM
+Dragonball is a Rust-based VMM integrated directly into the Kata Containers Rust runtime as a library.
 
-Firecracker, built on many rust crates that are within [rust-VMM](https://github.com/rust-vmm),  has a very limited device model, providing a lighter
-footprint and attack surface, focusing on function-as-a-service like use cases. As a result, Kata Containers with Firecracker VMM supports a subset of the CRI API.
-Firecracker does not support file-system sharing, and as a result only block-based storage drivers are supported. Firecracker does not support device
-hotplug nor does it support VFIO. As a result, Kata Containers with Firecracker VMM does not support updating container resources after boot, nor
-does it support device passthrough.
+**Advantages:**
 
-Devices used:
-- virtio VSOCK
-- virtio block
-- virtio net
+- **Zero IPC overhead**: VMM runs in the same process as the runtime
+- **Unified lifecycle**: Simplified resource management and error handling
+- **Optimized for containers**: Purpose-built for container workloads
+- **Upcall support**: Direct VMM-to-Guest communication for efficient hotplug operations
+- **Low resource overhead**: Minimal CPU and memory footprint
+
+**Architecture:**
+```
+┌─────────────────────────────────────────┐
+│     Kata Containers Runtime (Rust)      │
+│  ┌─────────────────────────────────┐    │
+│  │      Dragonball VMM Library     │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
+```
+
+**Features:**
+
+- Built-in virtio-fs/nydus support
+- Async I/O via Tokio
+- Single binary deployment
+- Optimized startup latency
+
+**Use Cases:**
+
+- Default choice for most container workloads
+- High-density container deployments and low resource overhead scenarios
+- Scenarios requiring optimal startup performance
+
+**Configuration:** See [`configuration-dragonball.toml`](../../src/runtime-rs/config/configuration-dragonball.toml.in)
 
 ### Cloud Hypervisor/KVM
 
-[Cloud Hypervisor](https://github.com/cloud-hypervisor/cloud-hypervisor), based
-on [rust-vmm](https://github.com/rust-vmm), is designed to have a
-lighter footprint and smaller attack surface for running modern cloud
-workloads. Kata Containers with Cloud
-Hypervisor provides mostly complete compatibility with Kubernetes
-comparable to the QEMU configuration. As of the 1.12 and 2.0.0 release
-of Kata Containers, the Cloud Hypervisor configuration supports both CPU
-and memory resize, device hotplug (disk and VFIO), file-system sharing through virtio-fs,
-block-based volumes, booting from VM images backed by pmem device, and
-fine-grained seccomp filters for each VMM threads (e.g. all virtio
-device worker threads).
+Cloud Hypervisor is a Rust-based VMM designed for modern cloud workloads with a focus on performance and security.
 
-Devices and features used:
-- virtio VSOCK or virtio serial
-- virtio block
-- virtio net
-- virtio fs
-- virtio pmem
-- VFIO
-- hotplug
-- seccomp filters
-- [HTTP OpenAPI](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/vmm/src/api/openapi/cloud-hypervisor.yaml)
+**Features:**
 
-### StratoVirt/KVM
+- CPU and memory resize
+- Device hotplug (disk, VFIO)
+- virtio-fs (shared filesystem)
+- virtio-pmem (persistent memory)
+- virtio-block (block storage)
+- virtio-vsock (agent communication)
+- Fine-grained seccomp filters per VMM thread
+- HTTP OpenAPI for management
 
-[StratoVirt](https://gitee.com/openeuler/stratovirt) is an enterprise-level open source VMM oriented to cloud data centers, implements a unified architecture to support Standard-VMs, containers and serverless (Micro-VM). StratoVirt has some competitive advantages, such as lightweight and low resource overhead, fast boot, hardware acceleration, and language-level security with Rust.
+**Use Cases:**
 
-Currently, StratoVirt in Kata supports Micro-VM machine type, mainly focus on FaaS cases, supporting device hotplug (virtio block), file-system sharing through virtio fs and so on. Kata Containers with StratoVirt now use virtio-mmio bus as driver, and doesn't support CPU/memory resize nor VFIO, thus doesn't support updating container resources after booted.
+- High-performance cloud-native workloads
+- Applications requiring memory/CPU resizing
+- Security-sensitive deployments (seccomp isolation)
 
-Devices and features used currently:
-- Micro-VM machine type for FaaS(mmio, no ACPI)
-- Virtual Socket(vhost VSOCK、virtio console)
-- Virtual Storage(virtio block, mmio)
-- Virtual Networking(virtio net, mmio)
-- Shared Filesystem(virtio fs)
-- Device Hotplugging(virtio block hotplug)
-- Entropy Source(virtio RNG)
-- QMP API
+**Configuration:** See [`configuration-cloud-hypervisor.toml`](../../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in)
 
-### Summary
+### Firecracker/KVM
 
-| Solution | release introduced | brief summary |
-|-|-|-|
-| Cloud Hypervisor | 1.10 | upstream Cloud Hypervisor with rich feature support, e.g. hotplug, VFIO and FS sharing|
-| Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
-| QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
-| StratoVirt | 3.3 | upstream StratoVirt with FS sharing and virtio block hotplug, no VFIO, no CPU/memory resize |
+Firecracker is a minimalist VMM built on rust-vmm crates, optimized for serverless and FaaS workloads.
 
-## Choose a Hypervisor
+**Devices:**
 
-The table below provides a brief summary of some of the differences between the hypervisors:
+- virtio-vsock (agent communication)
+- virtio-block (block storage)
+- virtio-net (networking)
 
-| Hypervisor | Summary | Features | Limitations | Container Creation speed | Memory density | Use cases | Comment |
-|-|-|-|-|-|-|-|-|
-| [Cloud Hypervisor] | Low latency, small memory footprint, small attack surface | Minimal | | excellent | excellent | High performance modern cloud workloads | |
-| [Firecracker] | Very slimline | Extremely minimal | Doesn't support all device types | excellent | excellent | Serverless / FaaS | |
-| [QEMU] | Lots of features | Lots | | good | good | Good option for most users | |
-| [`Dragonball`] | Built-in VMM, low CPU and memory overhead | Minimal | | excellent | excellent | Optimized for most container workloads | `out-of-the-box` Kata Containers experience |
-| [StratoVirt] | Unified architecture supporting three scenarios: VM, container, and serverless | Extremely minimal(`MicroVM`) to Lots(`StandardVM`) | | excellent | excellent | Common container workloads | `StandardVM` type of StratoVirt for Kata is under development |
+**Limitations:**
 
-## Hypervisor Configuration Files
+- No filesystem sharing (virtio-fs not supported)
+- No device hotplug
+- No VFIO/passthrough support
+- No CPU/memory hotplug
+- Limited CRI API support
 
-Since each hypervisor offers different features and options, Kata Containers provides a separate configuration file for each. The configuration files contain comments explaining which options are available, their default values and how each setting can be used.
+**Use Cases:**
 
-| Hypervisor | Golang runtime config file | Golang runtime short name | Golang runtime default | Rust runtime config file | Rust runtime short name | Rust runtime default |
-|-|-|-|-|-|-|-|
-| [Cloud Hypervisor] | [`configuration-clh.toml`](../src/runtime/config/configuration-clh.toml.in) | `clh` | | [`configuration-cloud-hypervisor.toml`](../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in) | `cloud-hypervisor` | |
-| [Firecracker] | [`configuration-fc.toml`](../src/runtime/config/configuration-fc.toml.in) | `fc` | | | | |
-| [QEMU] | [`configuration-qemu.toml`](../src/runtime/config/configuration-qemu.toml.in) | `qemu` | yes | [`configuration-qemu.toml`](../src/runtime-rs/config/configuration-qemu-runtime-rs.toml.in) | `qemu` | |
-| [`Dragonball`] | | | | [`configuration-dragonball.toml`](../src/runtime-rs/config/configuration-dragonball.toml.in) | `dragonball` | yes |
-| [StratoVirt] | [`configuration-stratovirt.toml`](../src/runtime/config/configuration-stratovirt.toml.in) | `stratovirt` | | | | |
+- Serverless/FaaS workloads
+- Single-tenant microVMs
+- Scenarios prioritizing minimal attack surface
 
-> **Notes:**
->
-> - The short names listed are used by the [`kata-manager`](../utils/README.md) tool.
-> - Each runtime type has its own default hypervisor as indicated in the default columns.
-> - The [golang runtime](../src/runtime) is the current default runtime.
-> - The [rust runtime](../src/runtime-rs), also known as `runtime-rs`, is the newer runtime written in Rust.
-> - The configuration files referenced are source versions containing variables that need to be expanded during the build process.
-> - The final installed configuration files are typically located in `/opt/kata/share/defaults/kata-containers/` or `/usr/share/defaults/kata-containers/`.
-> - Some hypervisors may share the same name across both golang and rust runtimes, but their configuration file contents may differ.
-> - Absence of a configuration file for a particular runtime indicates either incompatibility or that a driver has not yet been implemented for that runtime.
+**Configuration:** See [`configuration-fc.toml`](../../src/runtime/config/configuration-fc.toml.in)
 
-To switch the configured hypervisor, refer to the [`kata-manager` documentation](../utils/README.md#choose-a-hypervisor).
+## Hypervisor Comparison Summary
+
+| Feature | QEMU | Cloud Hypervisor | Firecracker | Dragonball |
+|---------|------|------------------|-------------|------------|
+| Maturity | Excellent | Good | Good | Good |
+| CRI Compatibility | Full | Full | Partial | Full |
+| Filesystem Sharing | ✓ | ✓ | ✗ | ✓ |
+| Device Hotplug | ✓ | ✓ | ✗ | ✓ |
+| VFIO/Passthrough | ✓ | ✓ | ✗ | ✓ |
+| CPU/Memory Hotplug | ✓ | ✓ | ✗ | ✓ |
+| Security Isolation | Good | Excellent (seccomp) | Excellent | Excellent |
+| Startup Latency | Good | Excellent | Excellent | Best |
+| Resource Overhead | Medium | Low | Lowest | Lowest |
+
+## Choosing a Hypervisor
+
+### Decision Matrix
+
+| Requirement | Recommended Hypervisor |
+|-------------|------------------------|
+| Full CRI API compatibility | QEMU, Cloud Hypervisor, Dragonball |
+| Device passthrough (VFIO) | QEMU, Cloud Hypervisor, Dragonball |
+| Minimal resource overhead | Dragonball, Firecracker |
+| Fastest startup time | Dragonball, Firecracker |
+| Serverless/FaaS | Dragonball, Firecracker |
+| Production workloads | Dragonball, QEMU |
+| Memory/CPU resizing | Dragonball, Cloud Hypervisor, QEMU |
+| Maximum security isolation | Cloud Hypervisor (seccomp), Firecracker, Dragonball |
+| Multi-architecture | QEMU |
+
+### Recommendations
+
+**For Most Users:** Use the default Dragonball VMM with the Kata Containers Rust runtime. It provides the best balance of performance, security, and container density.
+
+**For Device Passthrough:** Use QEMU, Cloud Hypervisor, or Dragonball if you require VFIO device assignment.
+
+**For Serverless:** Use Dragonball or Firecracker for ultra-lightweight, single-tenant microVMs.
+
+**For Legacy/Ecosystem Compatibility:** Use QEMU for its extensive hardware emulation and multi-architecture support.
+
+## Hypervisor Configuration
+
+### Configuration Files
+
+Each hypervisor has a dedicated configuration file:
+
+| Hypervisor | Rust Runtime Configuration | Go Runtime Configuration |
+|------------|----------------|-----------------|
+| QEMU |`configuration-qemu-runtime-rs.toml` |`configuration-qemu.toml` |
+| Cloud Hypervisor | `configuration-cloud-hypervisor.toml` | `configuration-clh.toml` |
+| Firecracker | `configuration-rs-fc.toml` | `configuration-fc.toml` |
+| Dragonball | `configuration-dragonball.toml` (default) | `No` |
+
+> **Note:** Configuration files are typically installed in `/opt/kata/share/defaults/kata-containers/` or  `/opt/kata/share/defaults/kata-containers/runtime-rs/` or `/usr/share/defaults/kata-containers/`.
+
+### Switching Hypervisors
+
+Use the `kata-manager` tool to switch the configured hypervisor:
+
+```bash
+# List available hypervisors
+$ kata-manager -L
+
+# Switch to a different hypervisor
+$ sudo kata-manager -S <hypervisor-name>
+```
+
+For detailed instructions, see the [`kata-manager` documentation](../../utils/README.md).
 
 ## Hypervisor Versions
 
-The following table lists the current versions of the supported hypervisors as defined in the Kata Containers [versions.yaml](../versions.yaml):
+The following versions are used in this release (from [versions.yaml](../../versions.yaml)):
 
-| Hypervisor | Version | URL |
-|-|-|-|
-| [Cloud Hypervisor] | v51.1 | https://github.com/cloud-hypervisor/cloud-hypervisor |
-| [Firecracker] | v1.12.1 | https://github.com/firecracker-microvm/firecracker |
-| [QEMU] | v10.2.1 | https://github.com/qemu/qemu |
-| [StratoVirt] | v2.3.0 | https://github.com/openeuler-mirror/stratovirt |
-| [`Dragonball`] | builtin | https://github.com/kata-containers/kata-containers/tree/main/src/dragonball |
+| Hypervisor | Version | Repository |
+|------------|---------|------------|
+| Cloud Hypervisor | v51.1 | https://github.com/cloud-hypervisor/cloud-hypervisor |
+| Firecracker | v1.12.1 | https://github.com/firecracker-microvm/firecracker |
+| QEMU | v10.2.1 | https://github.com/qemu/qemu |
+| Dragonball | builtin | https://github.com/kata-containers/kata-containers/tree/main/src/dragonball |
 
-> **Note:** Dragonball is a built-in VMM integrated with the Kata Containers Rust runtime and does not have a separate version number.
+> **Note:** Dragonball is integrated into the Kata Containers Rust runtime and does not have a separate version number.
+> For the latest hypervisor versions, see the [versions.yaml](../../versions.yaml) file in the Kata Containers repository.
 
----
+## References
 
-[Cloud Hypervisor]: https://github.com/cloud-hypervisor/cloud-hypervisor
-[Firecracker]: https://github.com/firecracker-microvm/firecracker
+- [Kata Containers Architecture](./architecture/README.md)
+- [Configuration Guide](../../src/runtime/README.md#configuration)
+- [QEMU Documentation](https://www.qemu.org/documentation/)
+- [Cloud Hypervisor Documentation](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/api.md)
+- [Firecracker Documentation](https://github.com/firecracker-microvm/firecracker/tree/main/docs)
+- [Dragonball Source](https://github.com/kata-containers/kata-containers/tree/main/src/dragonball)
+
 [KVM]: https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine
 [QEMU]: https://www.qemu.org
+[Cloud Hypervisor]: https://github.com/cloud-hypervisor/cloud-hypervisor
+[Firecracker]: https://github.com/firecracker-microvm/firecracker
 [`Dragonball`]: https://github.com/kata-containers/kata-containers/tree/main/src/dragonball
-[StratoVirt]: https://github.com/openeuler-mirror/stratovirt
