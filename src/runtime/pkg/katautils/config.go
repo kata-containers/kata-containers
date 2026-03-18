@@ -1950,11 +1950,11 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 		return nil
 	}
 	if hypervisorType == vc.ClhHypervisor {
-		if coldPlug != config.NoPort {
-			return fmt.Errorf("cold-plug not supported on CLH")
+		if coldPlug != config.NoPort && coldPlug != config.RootPort {
+			return fmt.Errorf("only cold-plug=%s or %s supported on CLH", config.NoPort, config.RootPort)
 		}
-		if hotPlug != config.RootPort {
-			return fmt.Errorf("only hot-plug=%s supported on CLH", config.RootPort)
+		if hotPlug != config.NoPort && hotPlug != config.RootPort {
+			return fmt.Errorf("only hot-plug=%s or %s supported on CLH", config.NoPort, config.RootPort)
 		}
 	}
 
