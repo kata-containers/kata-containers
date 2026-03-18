@@ -135,3 +135,63 @@ Devices and features used currently:
 | Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
 | QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
 | StratoVirt | 3.3 | upstream StratoVirt with FS sharing and virtio block hotplug, no VFIO, no CPU/memory resize |
+
+## Choose a Hypervisor
+
+The table below provides a brief summary of some of the differences between the hypervisors:
+
+| Hypervisor | Summary | Features | Limitations | Container Creation speed | Memory density | Use cases | Comment |
+|-|-|-|-|-|-|-|-|
+| [Cloud Hypervisor] | Low latency, small memory footprint, small attack surface | Minimal | | excellent | excellent | High performance modern cloud workloads | |
+| [Firecracker] | Very slimline | Extremely minimal | Doesn't support all device types | excellent | excellent | Serverless / FaaS | |
+| [QEMU] | Lots of features | Lots | | good | good | Good option for most users | |
+| [`Dragonball`] | Built-in VMM, low CPU and memory overhead | Minimal | | excellent | excellent | Optimized for most container workloads | `out-of-the-box` Kata Containers experience |
+| [StratoVirt] | Unified architecture supporting three scenarios: VM, container, and serverless | Extremely minimal(`MicroVM`) to Lots(`StandardVM`) | | excellent | excellent | Common container workloads | `StandardVM` type of StratoVirt for Kata is under development |
+
+## Hypervisor Configuration Files
+
+Since each hypervisor offers different features and options, Kata Containers provides a separate configuration file for each. The configuration files contain comments explaining which options are available, their default values and how each setting can be used.
+
+| Hypervisor | Golang runtime config file | Golang runtime short name | Golang runtime default | Rust runtime config file | Rust runtime short name | Rust runtime default |
+|-|-|-|-|-|-|-|
+| [Cloud Hypervisor] | [`configuration-clh.toml`](../src/runtime/config/configuration-clh.toml.in) | `clh` | | [`configuration-cloud-hypervisor.toml`](../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in) | `cloud-hypervisor` | |
+| [Firecracker] | [`configuration-fc.toml`](../src/runtime/config/configuration-fc.toml.in) | `fc` | | | | |
+| [QEMU] | [`configuration-qemu.toml`](../src/runtime/config/configuration-qemu.toml.in) | `qemu` | yes | [`configuration-qemu.toml`](../src/runtime-rs/config/configuration-qemu-runtime-rs.toml.in) | `qemu` | |
+| [`Dragonball`] | | | | [`configuration-dragonball.toml`](../src/runtime-rs/config/configuration-dragonball.toml.in) | `dragonball` | yes |
+| [StratoVirt] | [`configuration-stratovirt.toml`](../src/runtime/config/configuration-stratovirt.toml.in) | `stratovirt` | | | | |
+
+> **Notes:**
+>
+> - The short names listed are used by the [`kata-manager`](../utils/README.md) tool.
+> - Each runtime type has its own default hypervisor as indicated in the default columns.
+> - The [golang runtime](../src/runtime) is the current default runtime.
+> - The [rust runtime](../src/runtime-rs), also known as `runtime-rs`, is the newer runtime written in Rust.
+> - The configuration files referenced are source versions containing variables that need to be expanded during the build process.
+> - The final installed configuration files are typically located in `/opt/kata/share/defaults/kata-containers/` or `/usr/share/defaults/kata-containers/`.
+> - Some hypervisors may share the same name across both golang and rust runtimes, but their configuration file contents may differ.
+> - Absence of a configuration file for a particular runtime indicates either incompatibility or that a driver has not yet been implemented for that runtime.
+
+To switch the configured hypervisor, refer to the [`kata-manager` documentation](../utils/README.md#choose-a-hypervisor).
+
+## Hypervisor Versions
+
+The following table lists the current versions of the supported hypervisors as defined in the Kata Containers [versions.yaml](../versions.yaml):
+
+| Hypervisor | Version | URL |
+|-|-|-|
+| [Cloud Hypervisor] | v51.1 | https://github.com/cloud-hypervisor/cloud-hypervisor |
+| [Firecracker] | v1.12.1 | https://github.com/firecracker-microvm/firecracker |
+| [QEMU] | v10.2.1 | https://github.com/qemu/qemu |
+| [StratoVirt] | v2.3.0 | https://github.com/openeuler-mirror/stratovirt |
+| [`Dragonball`] | builtin | https://github.com/kata-containers/kata-containers/tree/main/src/dragonball |
+
+> **Note:** Dragonball is a built-in VMM integrated with the Kata Containers Rust runtime and does not have a separate version number.
+
+---
+
+[Cloud Hypervisor]: https://github.com/cloud-hypervisor/cloud-hypervisor
+[Firecracker]: https://github.com/firecracker-microvm/firecracker
+[KVM]: https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine
+[QEMU]: https://www.qemu.org
+[`Dragonball`]: https://github.com/kata-containers/kata-containers/tree/main/src/dragonball
+[StratoVirt]: https://github.com/openeuler-mirror/stratovirt
