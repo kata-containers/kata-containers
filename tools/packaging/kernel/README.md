@@ -76,7 +76,7 @@ $ sudo ./build-kernel.sh install
 
 ## Debug Kernel
 
-Kata Containers provides a kernel with debug and ebpf configs enabled.
+Kata Containers provides a kernel with debug and eBPF configs enabled.
 
 To build this debug kernel, set `KERNEL_DEBUG_ENABLED=yes` for **all phases**:
 
