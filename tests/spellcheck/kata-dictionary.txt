@@ -62,6 +62,8 @@ hugepage
 MACVTAP
 memdisk
 pmem
+Sharedfs
+Initdata
 
 # Networking & Communication
 netns
@@ -94,3 +96,10 @@ dwarves
 passthroughfd
 passfd
 sendfd
+RunD
+udevd
+Reflink
+UNBINDABLE
+RAII
+Virt
+sysfs
