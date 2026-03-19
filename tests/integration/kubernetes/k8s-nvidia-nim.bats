@@ -10,6 +10,7 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu-nvidia-gpu}"
 
+# when using hostPath, ensure directory is writable by container user
 export LOCAL_NIM_CACHE="/opt/nim/.cache"
 
 SKIP_MULTI_GPU_TESTS=${SKIP_MULTI_GPU_TESTS:-false}
