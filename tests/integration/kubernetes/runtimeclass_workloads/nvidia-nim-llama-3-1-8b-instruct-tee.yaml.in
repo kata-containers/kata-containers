@@ -16,14 +16,17 @@ metadata:
     # cc_init_data annotation will be added by genpolicy with CDH configuration
     # from the custom default-initdata.toml created by create_nim_initdata_file()
 spec:
+  # Explicit user/group/supplementary groups to support nydus guest-pull.
+  # See issue https://github.com/kata-containers/kata-containers/issues/11162 and
+  # other references to this issue in the genpolicy source folder.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    supplementalGroups: [4, 20, 24, 25, 27, 29, 30, 44, 46]
   restartPolicy: Never
   runtimeClassName: kata
   imagePullSecrets:
     - name: ngc-secret-instruct
-  securityContext:
-    runAsUser: 0
-    runAsGroup: 0
-    fsGroup: 0
   containers:
   - name: ${POD_NAME_INSTRUCT}
     image: nvcr.io/nim/meta/llama-3.1-8b-instruct:1.13.1
