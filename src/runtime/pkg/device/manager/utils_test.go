@@ -22,6 +22,8 @@ func TestIsVFIO(t *testing.T) {
 	data := []testData{
 		{"/dev/vfio/16", true},
 		{"/dev/vfio/1", true},
+		{"/dev/vfio/noiommu-16", true},
+		{"/dev/vfio/noiommu-0", true},
 		{"/dev/vfio/", false},
 		{"/dev/vfio", false},
 		{"/dev/vf", false},

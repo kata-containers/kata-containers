@@ -430,6 +430,11 @@ type VFIODev struct {
 	// HostPath is the path to the device on the host we need it as a reference
 	// to match a /dev/vfio/<num> device to a device in GK mode
 	HostPath string
+
+	// NoIOMMU indicates the device uses VFIO no-IOMMU mode
+	// (enable_unsafe_noiommu_mode). In this mode the device appears as
+	// /dev/vfio/noiommu-<GROUP> on the host and IOMMUFD cannot be used.
+	NoIOMMU bool
 }
 
 // IOMMUFDID returns the IOMMUFD ID if the VFIO device is backed by IOMMUFD
