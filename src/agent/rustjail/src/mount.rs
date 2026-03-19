@@ -16,8 +16,9 @@ use nix::NixPath;
 use oci::{LinuxDevice, Mount, Process, Spec};
 use oci_spec::runtime as oci;
 use std::collections::{HashMap, HashSet};
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::mem::MaybeUninit;
+use std::os::fd::AsRawFd;
 use std::os::unix;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::RawFd;
@@ -47,6 +48,7 @@ pub struct Info {
 const MOUNTINFO_FORMAT: &str = "{d} {d} {d}:{d} {} {} {} {}";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const PROC_PATH: &str = "/proc";
+const SHARED_DIRECTORY: &str = "/run/kata-containers/shared/containers";
 
 const ERR_FAILED_PARSE_MOUNTINFO: &str = "failed to parse mountinfo file";
 const ERR_FAILED_PARSE_MOUNTINFO_FINAL_FIELDS: &str =
@@ -233,10 +235,11 @@ pub fn init_rootfs(
 
         // From https://github.com/opencontainers/runtime-spec/blob/main/config.md#mounts
         // type (string, OPTIONAL) The type of the filesystem to be mounted.
-        // bind may be only specified in the oci spec options -> flags update r#type
+        // For bind mounts, this can be empty or any string whatsoever. For consistency, we set it
+        // to 'bind'.
         let m = &{
             let mut mbind = m.clone();
-            if is_none_mount_type(mbind.typ()) && flags & MsFlags::MS_BIND == MsFlags::MS_BIND {
+            if flags.contains(MsFlags::MS_BIND) {
                 mbind.set_typ(Some("bind".to_string()));
             }
             mbind
@@ -395,13 +398,6 @@ fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> 
     }
 
     Ok(())
-}
-
-fn is_none_mount_type(typ: &Option<String>) -> bool {
-    match typ {
-        Some(t) => t == "none",
-        None => true,
-    }
 }
 
 fn mount_cgroups(
@@ -763,48 +759,20 @@ fn mount_from(
     let mut d = String::from(data);
     let mount_dest = m.destination().display().to_string();
     let mount_typ = m.typ().as_ref().unwrap();
+
+    if mount_typ == "bind" {
+        // Bind mounts need special treatment for security, handle them separately.
+        return bind_mount_from(m, rootfs, flags)
+            .inspect_err(|e| log_child!(cfd_log, "bind_mount_from failed: {:?}", e));
+    }
+
     let dest = scoped_join(rootfs, mount_dest)?
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Failed to convert path to string"))?
         .to_string();
 
     let mount_source = m.source().as_ref().unwrap().display().to_string();
-    let src = if mount_typ == "bind" {
-        let src = fs::canonicalize(&mount_source)?;
-        let dir = if src.is_dir() {
-            Path::new(&dest)
-        } else {
-            Path::new(&dest).parent().unwrap()
-        };
-
-        fs::create_dir_all(dir).inspect_err(|e| {
-            log_child!(
-                cfd_log,
-                "create dir {}: {}",
-                dir.to_str().unwrap(),
-                e.to_string()
-            )
-        })?;
-
-        // make sure file exists so we can bind over it
-        if !src.is_dir() {
-            let _ = OpenOptions::new()
-                .create(true)
-                .truncate(true)
-                .write(true)
-                .open(&dest)
-                .map_err(|e| {
-                    log_child!(
-                        cfd_log,
-                        "open/create dest error. {}: {:?}",
-                        dest.as_str(),
-                        e
-                    );
-                    e
-                })?;
-        }
-        src.to_str().unwrap().to_string()
-    } else {
+    let src = {
         let _ = fs::create_dir_all(&dest);
         if mount_typ == "cgroup2" {
             "cgroup2".to_string()
@@ -864,25 +832,126 @@ fn mount_from(
     if !label.is_empty() && selinux::is_enabled()? && use_xattr {
         xattr::set(dest.as_str(), "security.selinux", label.as_bytes())?;
     }
+    Ok(())
+}
 
-    if flags.contains(MsFlags::MS_BIND)
-        && flags.intersects(
-            !(MsFlags::MS_REC
-                | MsFlags::MS_REMOUNT
-                | MsFlags::MS_BIND
-                | MsFlags::MS_PRIVATE
-                | MsFlags::MS_SHARED
-                | MsFlags::MS_SLAVE),
+fn bind_mount_from(m: &Mount, rootfs: &str, flags: MsFlags) -> Result<()> {
+    let mount_source_fd = {
+        let shared_dir = PathBuf::from(SHARED_DIRECTORY);
+        let unsafe_mount_source = m
+            .source()
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Missing source for bind mount"))?;
+        // Policy checks ensured earlier that shared mount sources start with the `sfprefix`.
+        // Therefore, it's safe to derive the root for scoping the mount source from that prefix.
+        let (root_path, inner_path) = match unsafe_mount_source.strip_prefix(&shared_dir) {
+            Ok(inner) => (shared_dir, inner), // needs scoping
+            Err(_) => (PathBuf::from("/"), unsafe_mount_source.as_path()), // does not need scoping, i.e. scoped to root
+        };
+        let root = pathrs::Root::open(&root_path)
+            .context(format!("opening mount_source_root {:?} failed", root_path))?;
+        root.open_subpath(inner_path, pathrs::flags::OpenFlags::O_PATH)
+            .context(format!(
+                "opening {:?} in {:?} failed",
+                inner_path, root_path
+            ))?
+    };
+
+    let container_root = pathrs::Root::open(rootfs)
+        .context(format!("opening mount_source_root {:?} failed", rootfs))?;
+
+    // .metadata queries attrs with statx + AT_EMPTY_PATH, i.e. directly from the opened fd.
+    let meta = mount_source_fd.metadata().context("statx failed")?;
+    let mount_destination_fd = if meta.is_dir() {
+        container_root
+            .mkdir_all(m.destination(), &std::fs::Permissions::from_mode(0o755))
+            .context(format!(
+                "mkdir_all for {:?} in {} failed",
+                m.destination(),
+                rootfs
+            ))?
+            .reopen(pathrs::flags::OpenFlags::O_DIRECTORY)?
+    } else if meta.is_symlink() {
+        anyhow::bail!("won't bind mount from symlink {:?}: {:?}", m.destination(), meta)
+    } else {
+        // All other bind mounts (files, devices, sockets) should target a file.
+        if let Some(parent) = m.destination().parent() {
+            let _ = container_root
+                .mkdir_all(parent, &std::fs::Permissions::from_mode(0o755))
+                .context(format!("mkdir_all for {:?} in {} failed", parent, rootfs))?;
+        }
+        container_root
+            .create_file(
+                m.destination(),
+                pathrs::flags::OpenFlags::O_TRUNC,
+                &std::fs::Permissions::from_mode(0o755),
+            )
+            .context(format!(
+                "create_file for {:?} in {} failed",
+                m.destination(),
+                rootfs
+            ))?
+    };
+
+    let open_tree_flags = if flags.intersects(MsFlags::MS_REC) {
+        libc::AT_RECURSIVE
+    } else {
+        0
+    };
+    let empty_path = std::ffi::CString::new("")?;
+
+    let tree_dfd = unsafe {
+        libc::syscall(
+            libc::SYS_open_tree,
+            mount_source_fd.as_raw_fd(),
+            empty_path.as_ptr(),
+            libc::OPEN_TREE_CLONE
+                | libc::OPEN_TREE_CLOEXEC
+                | libc::AT_EMPTY_PATH as u32
+                | open_tree_flags as u32,
         )
-    {
+    };
+
+    if tree_dfd < 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    let ret = unsafe {
+        libc::syscall(
+            libc::SYS_move_mount,
+            tree_dfd,
+            empty_path.as_ptr(),
+            mount_destination_fd.as_raw_fd(),
+            empty_path.as_ptr(),
+            0x01 /* MOVE_MOUNT_F_EMPTY_PATH */ | 0x02, /* MOVE_MOUNT_T_EMPTY_PATH */
+        )
+    };
+
+    if ret < 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    if flags.intersects(
+        !(MsFlags::MS_REC
+            | MsFlags::MS_REMOUNT
+            | MsFlags::MS_BIND
+            | MsFlags::MS_PRIVATE
+            | MsFlags::MS_SHARED
+            | MsFlags::MS_SLAVE),
+    ) {
+        // TODO(burgerdev): we really should be using mount_setattr here, but the necessary API is not in nix.
+
+        // We successfully resolved the destination within the rootfs above. If nothing else messed
+        // with the filesystem in between, using the path unchecked should be safe.
+        let dest = scoped_join(rootfs, m.destination())?;
         mount(
-            Some(dest.as_str()),
-            dest.as_str(),
+            Some(&dest),
+            &dest,
             None::<&str>,
             flags | MsFlags::MS_REMOUNT,
             None::<&str>,
         )
-        .inspect_err(|e| log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e))?;
+        .context("remount failed")?;
     }
     Ok(())
 }
