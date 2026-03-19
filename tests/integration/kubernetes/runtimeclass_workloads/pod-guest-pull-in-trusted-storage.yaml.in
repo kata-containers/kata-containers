@@ -28,6 +28,9 @@ spec:
       command: ["/bin/sh", "-c"]
       args:
         - sleep 6000
+      resources:
+        limits:
+          cpu: "2"
       volumeDevices:
         - devicePath: /dev/trusted_store
           name: trusted-storage
