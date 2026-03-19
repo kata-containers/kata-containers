@@ -31,7 +31,7 @@ jobs:
         containerd_version: ['active']
         vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
     concurrency:
-      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-sandboxapi-amd64-${{ matrix.vmm}}-${{ matrix.containerd_version}}
+      group: ${{ github.workflow }}-${{ github.job }}-${{ github.event.pull_request.number || github.ref }}-sandboxapi-amd64-${{ toJSON(matrix) }}
       cancel-in-progress: true
     # TODO: enable me when https://github.com/containerd/containerd/issues/11640 is fixed
     if: false
