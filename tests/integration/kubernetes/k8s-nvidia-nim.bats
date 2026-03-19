@@ -70,8 +70,7 @@ NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64=$(echo -n "${NGC_API_KEY_SEALED_SECRET_
 export NGC_API_KEY_SEALED_SECRET_EMBEDQA_BASE64
 
 setup_langchain_flow() {
-    # shellcheck disable=SC1091  # Sourcing virtual environment activation script
-    source "${HOME}"/.cicd/venv/bin/activate
+    ensure_cicd_python_venv
 
     pip install --upgrade pip
     [[ "$(pip show langchain 2>/dev/null | awk '/^Version:/{print $2}')" = "0.2.5" ]] || pip install langchain==0.2.5
@@ -177,13 +176,6 @@ setup_file() {
 
     dpkg -s jq >/dev/null 2>&1 || sudo apt -y install jq
 
-    export PYENV_ROOT="${HOME}/.pyenv"
-    [[ -d ${PYENV_ROOT}/bin ]] && export PATH="${PYENV_ROOT}/bin:${PATH}"
-    eval "$(pyenv init - bash)"
-
-    # shellcheck disable=SC1091  # Virtual environment will be created during test execution
-    python3 -m venv "${HOME}"/.cicd/venv
-
     setup_langchain_flow
 
     policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -262,8 +254,6 @@ setup_file() {
     QUESTION="What is the capital of France?"
     ANSWER="The capital of France is Paris."
 
-    # shellcheck disable=SC1091  # Sourcing virtual environment activation script
-    source "${HOME}"/.cicd/venv/bin/activate
     # shellcheck disable=SC2031  # Variables are used in heredoc, not subshell
     cat <<EOF >"${HOME}"/.cicd/venv/langchain_nim.py
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
@@ -295,8 +285,6 @@ EOF
     # shellcheck disable=SC2031  # Variables are shared via file between BATS tests
     [[ -n "${MODEL_NAME}" ]]
 
-    # shellcheck disable=SC1091  # Sourcing virtual environment activation script
-    source "${HOME}"/.cicd/venv/bin/activate
     cat <<EOF >"${HOME}"/.cicd/venv/langchain_nim_kata_rag.py
 import os
 from langchain.chains import ConversationalRetrievalChain, LLMChain
