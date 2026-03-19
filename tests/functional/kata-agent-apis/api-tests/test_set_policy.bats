@@ -30,7 +30,7 @@ setup_file() {
 
     src_file=$(mktemp)
     local cmds=()
-    cmds+=("-c 'CopyFile json://{\"src\": \"$src_file\", \"dest\":\"/run/kata-containers/foo\"}'")
+    cmds+=("-c 'CopyFile json://{\"src\": \"$src_file\", \"dest\":\"/run/kata-containers/shared/containers/foo\"}'")
     run run_agent_ctl "${cmds[@]}"
     [ "$status" -ne 0 ]
 
