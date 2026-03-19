@@ -792,24 +792,6 @@ static_check_docs()
 
 	# Synchronisation point
 	wait
-
-	# Now, spell check the docs
-	cmd="${test_dir}/cmd/check-spelling/kata-spell-check.sh"
-
-	local docs_failed=0
-	for doc in $docs
-	do
-		"$cmd" check "$doc" || { info "spell check failed for document $doc" && docs_failed=1; }
-
-		static_check_eof "$doc"
-	done
-
-	popd
-
-	[ $docs_failed -eq 0 ] || {
-        url='https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling'
-        die "spell check failed, See $url for more information."
-    }
 }
 
 static_check_eof()

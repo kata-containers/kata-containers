@@ -231,12 +231,6 @@ Run the
 [markdown checker](https://github.com/kata-containers/kata-containers/tree/main/tests/cmd/check-markdown)
 on your documentation changes.
 
-### Spell check
-
-Run the
-[spell checker](https://github.com/kata-containers/kata-containers/tree/main/tests/cmd/check-spelling)
-on your documentation changes.
-
 ## Finally
 
 You may wish to read the documentation that the
