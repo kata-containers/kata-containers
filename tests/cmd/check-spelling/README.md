@@ -17,7 +17,7 @@ These entities include the following:
 - Email addresses
 - Code blocks
 - Most punctuation
-- GitHub userids
+- GitHub user ids
 
 ## Custom words
 

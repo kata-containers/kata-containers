@@ -4,7 +4,7 @@ Safe Path
 
 A library to safely handle filesystem paths, typically for container runtimes.
 
-There are often path related attacks, such as symlink based attacks, TOCTTOU attacks. The `safe-path` crate
+There are often path related attacks, such as symlink based attacks, time-of-check to time-of-use (TOCTOU) attacks. The `safe-path` crate
 provides several functions and utility structures to protect against path resolution related attacks.
 
 ## Support

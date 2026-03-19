@@ -3,7 +3,7 @@
 This crate is a collection of modules that provides helpers and utilities to create a TDX Dragonball VM.
 
 Currently this crate involves:
-- tdx-ioctls
+- `tdx-ioctls`
 
 ## Acknowledgement
 

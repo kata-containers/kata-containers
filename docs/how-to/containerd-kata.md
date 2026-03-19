@@ -23,7 +23,7 @@ workloads with isolated sandboxes (i.e. Kata Containers).
 
 As a result, the CRI implementations extended their semantics for the requirements:
 
-- At the beginning, [Frakti](https://github.com/kubernetes/frakti) checks the network configuration of a Pod, and
+- At the beginning, [`Frakti`](https://github.com/kubernetes/frakti) checks the network configuration of a Pod, and
   treat Pod with `host` network as trusted, while others are treated as untrusted.
 - The containerd introduced an annotation for untrusted Pods since [v1.0](https://github.com/containerd/cri/blob/v1.0.0-rc.0/docs/config.md):
   ```yaml

@@ -378,7 +378,7 @@ that is used in the test" section.  From there you can see exactly what you'll
 have to use when deploying kata-deploy in your local cluster.
 
 > [!NOTE]
-> TODO: WAINER TO FINISH THIS PART BASED ON HIS PR TO RUN A LOCAL CI
+> TODO: @wainersm TO FINISH THIS PART BASED ON HIS PR TO RUN A LOCAL CI
 
 ## Adding new runners
 
