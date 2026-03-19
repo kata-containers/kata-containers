@@ -630,8 +630,8 @@ golang.org/x/net/idna
 golang.org/x/net/internal/httpcommon
 golang.org/x/net/internal/timeseries
 golang.org/x/net/trace
-# golang.org/x/oauth2 v0.30.0
-## explicit; go 1.23.0
+# golang.org/x/oauth2 v0.34.0
+## explicit; go 1.24.0
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
 # golang.org/x/sync v0.19.0
@@ -653,12 +653,12 @@ golang.org/x/text/unicode/norm
 # google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
 ## explicit; go 1.23.0
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4
-## explicit; go 1.23.0
+# google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217
+## explicit; go 1.24.0
 google.golang.org/genproto/googleapis/rpc/code
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.72.0
-## explicit; go 1.23
+# google.golang.org/grpc v1.79.3
+## explicit; go 1.24.0
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
@@ -668,7 +668,6 @@ google.golang.org/grpc/balancer/endpointsharding
 google.golang.org/grpc/balancer/grpclb/state
 google.golang.org/grpc/balancer/pickfirst
 google.golang.org/grpc/balancer/pickfirst/internal
-google.golang.org/grpc/balancer/pickfirst/pickfirstleaf
 google.golang.org/grpc/balancer/roundrobin
 google.golang.org/grpc/binarylog/grpc_binarylog_v1
 google.golang.org/grpc/channelz
@@ -677,6 +676,7 @@ google.golang.org/grpc/connectivity
 google.golang.org/grpc/credentials
 google.golang.org/grpc/credentials/insecure
 google.golang.org/grpc/encoding
+google.golang.org/grpc/encoding/internal
 google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/experimental/stats
 google.golang.org/grpc/grpclog
@@ -685,6 +685,7 @@ google.golang.org/grpc/health/grpc_health_v1
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/backoff
 google.golang.org/grpc/internal/balancer/gracefulswitch
+google.golang.org/grpc/internal/balancer/weight
 google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/buffer
@@ -720,8 +721,8 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/protobuf v1.36.7
-## explicit; go 1.22
+# google.golang.org/protobuf v1.36.10
+## explicit; go 1.23
 google.golang.org/protobuf/encoding/protodelim
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
