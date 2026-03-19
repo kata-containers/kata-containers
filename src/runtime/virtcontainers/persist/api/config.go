@@ -157,6 +157,14 @@ type HypervisorConfig struct {
 	// Denotes whether flush requests for the device are ignored.
 	BlockDeviceCacheNoflush bool
 
+	// BlockDeviceLogicalSectorSize specifies the logical sector size reported
+	// by block devices to the guest, in bytes.
+	BlockDeviceLogicalSectorSize uint32
+
+	// BlockDevicePhysicalSectorSize specifies the physical sector size reported
+	// by block devices to the guest, in bytes.
+	BlockDevicePhysicalSectorSize uint32
+
 	// DisableBlockDeviceUse disallows a block device from being used.
 	DisableBlockDeviceUse bool
 

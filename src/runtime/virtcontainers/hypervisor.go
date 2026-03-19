@@ -754,6 +754,16 @@ type HypervisorConfig struct {
 	// Denotes whether flush requests for the device are ignored.
 	BlockDeviceCacheNoflush bool
 
+	// BlockDeviceLogicalSectorSize specifies the logical sector size reported
+	// by block devices to the guest, in bytes. Common values are 512 and 4096.
+	// Set to 0 to use the hypervisor default.
+	BlockDeviceLogicalSectorSize uint32
+
+	// BlockDevicePhysicalSectorSize specifies the physical sector size reported
+	// by block devices to the guest, in bytes. Common values are 512 and 4096.
+	// Set to 0 to use the hypervisor default.
+	BlockDevicePhysicalSectorSize uint32
+
 	// DisableBlockDeviceUse disallows a block device from being used.
 	DisableBlockDeviceUse bool
 

@@ -708,6 +708,41 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 }
 
+func TestValidateBlockDeviceSectorSize(t *testing.T) {
+	assert := assert.New(t)
+
+	for _, size := range []uint32{0, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536} {
+		assert.NoError(validateBlockDeviceSectorSize("test_field", size), "expected size %d to be accepted", size)
+	}
+
+	for _, size := range []uint32{3, 100, 1000, 3000, 5000} {
+		assert.Error(validateBlockDeviceSectorSize("test_field", size), "expected non-power-of-2 size %d to be rejected", size)
+	}
+
+	for _, size := range []uint32{1, 256} {
+		assert.Error(validateBlockDeviceSectorSize("test_field", size), "expected below-minimum size %d to be rejected", size)
+	}
+
+	for _, size := range []uint32{131072, 1048576} {
+		assert.Error(validateBlockDeviceSectorSize("test_field", size), "expected above-maximum size %d to be rejected", size)
+	}
+}
+
+func TestValidateBlockDeviceSectorSizes(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.NoError(validateBlockDeviceSectorSizes(0, 0))
+	assert.NoError(validateBlockDeviceSectorSizes(512, 0))
+	assert.NoError(validateBlockDeviceSectorSizes(0, 4096))
+	assert.NoError(validateBlockDeviceSectorSizes(512, 4096))
+	assert.NoError(validateBlockDeviceSectorSizes(4096, 4096))
+	assert.NoError(validateBlockDeviceSectorSizes(512, 512))
+
+	assert.Error(validateBlockDeviceSectorSizes(4096, 512), "logical > physical should be rejected")
+	assert.Error(validateBlockDeviceSectorSizes(4096, 1024), "logical > physical should be rejected")
+	assert.Error(validateBlockDeviceSectorSizes(65536, 512), "logical > physical should be rejected")
+}
+
 func TestNewFirecrackerHypervisorConfig(t *testing.T) {
 	dir := t.TempDir()
 
