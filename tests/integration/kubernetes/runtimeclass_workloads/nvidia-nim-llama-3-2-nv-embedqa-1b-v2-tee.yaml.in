@@ -16,15 +16,18 @@ metadata:
     # cc_init_data annotation will be added by genpolicy with CDH configuration
     # from the custom default-initdata.toml created by create_nim_initdata_file()
 spec:
+  # Explicit user/group/supplementary groups to support nydus guest-pull.
+  # See issue https://github.com/kata-containers/kata-containers/issues/11162 and
+  # other references to this issue in the genpolicy source folder.
+  securityContext:
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
   restartPolicy: Always
   runtimeClassName: kata
   serviceAccountName: default
   imagePullSecrets:
     - name: ngc-secret-embedqa
-  securityContext:
-    fsGroup: 0
-    runAsGroup: 0
-    runAsUser: 0
   containers:
   - name: ${POD_NAME_EMBEDQA}
     image: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2:1.10.1
