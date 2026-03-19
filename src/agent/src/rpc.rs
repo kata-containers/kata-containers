@@ -6,6 +6,7 @@
 use async_trait::async_trait;
 #[cfg(feature = "agent-policy")]
 use kata_agent_policy::policy::PolicyCopyFileRequest;
+use pathrs::flags::OpenFlags;
 use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
@@ -64,7 +65,6 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 #[cfg(all(test, not(target_arch = "powerpc64")))]
 use std::os::fd::AsRawFd;
-use std::os::fd::BorrowedFd;
 
 #[cfg(target_arch = "s390x")]
 use crate::ccw;
@@ -113,7 +113,7 @@ use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
 
 use nix::unistd::{Gid, Uid};
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
@@ -145,6 +145,14 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // filesystem lock. Based on this, 5 seconds seems a resonable timeout period in case the lock is
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
+
+/// This mask is applied to parent directories implicitly created for CopyFile requests.
+const IMPLICIT_DIRECTORY_PERMISSION_MASK: u32 = 0o777;
+
+/// This mask is applied to files and directories created for CopyFile requests.
+/// In addition to the permissions, it allows setuid/setgid/sticky bits.
+/// Note that the setuid bit does not have an effect on Linux, though.
+const FILE_PERMISSION_MASK: u32 = 0o7777;
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -1665,7 +1673,9 @@ impl agent_ttrpc::AgentService for AgentService {
         #[cfg(not(feature = "agent-policy"))]
         is_allowed(&req).await?;
 
-        do_copy_file(&req).map_ttrpc_err(same)?;
+        // Potentially untrustworthy data from the host needs to go into the shared dir.
+        let root_path = PathBuf::from(KATA_GUEST_SHARE_DIR);
+        do_copy_file(&req, &root_path).map_ttrpc_err(same)?;
 
         Ok(Empty::new())
     }
@@ -2225,127 +2235,166 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
     Ok(())
 }
 
-fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
-    let path = PathBuf::from(req.path.as_str());
+/// do_copy_file creates a file, directory or symlink beneath the provided directory.
+///
+/// The function guarantees that no content is written outside of the directory. However, a symlink
+/// created by this function might point outside the shared directory. Other users of that
+/// directory need to consider whether they trust the host, or handle the directory with the same
+/// care as do_copy_file.
+///
+/// Parent directories are created, if they don't exist already. For these implicit operations, the
+/// permissions are set with req.dir_mode. The actual target is created with permissions from
+/// req.file_mode, even if it's a directory.
+///
+/// If req.file_mode requests a symbolic link, the link is created pointing to the path in
+/// req.data. In that case, req.file_mode is ignored because symlinks don't have permissions on
+/// Linux.
+///
+/// If this function returns an error, the filesystem may be in an unexpected state. This is not
+/// significant for the caller, since errors are almost certainly not retriable. The runtime should
+/// abandon this VM instead.
+fn do_copy_file(req: &CopyFileRequest, shared_dir: &PathBuf) -> Result<()> {
+    let insecure_full_path = PathBuf::from(req.path.as_str());
+    let path = insecure_full_path
+        .strip_prefix(shared_dir)
+        .context(format!(
+            "removing {:?} prefix from {}",
+            shared_dir, req.path
+        ))?;
 
-    if !path.starts_with(CONTAINER_BASE) {
-        return Err(anyhow!(
-            "Path {:?} does not start with {}",
-            path,
-            CONTAINER_BASE
-        ));
-    }
+    // The shared directory might not exist yet, but we need to create it in order to open the root.
+    std::fs::create_dir_all(shared_dir)?;
+    let root = pathrs::Root::open(shared_dir)?;
 
     // Create parent directories if missing
     if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            let dir = parent.to_path_buf();
-            // Attempt to create directory, ignore AlreadyExists errors
-            if let Err(e) = fs::create_dir_all(&dir) {
-                if e.kind() != std::io::ErrorKind::AlreadyExists {
-                    return Err(e.into());
-                }
-            }
+        let dir = root
+            .mkdir_all(
+                parent,
+                &std::fs::Permissions::from_mode(req.dir_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK),
+            )
+            .context("mkdir_all parent")?
+            .reopen(OpenFlags::O_DIRECTORY)
+            .context("reopen parent")?;
 
-            // Set directory permissions and ownership
-            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(req.dir_mode))?;
-            unistd::chown(
-                &dir,
-                Some(Uid::from_raw(req.uid as u32)),
-                Some(Gid::from_raw(req.gid as u32)),
-            )?;
-        }
+        // TODO(burgerdev): why are we only applying this to the immediate parent?
+        unistd::fchown(
+            dir,
+            Some(Uid::from_raw(req.uid as u32)),
+            Some(Gid::from_raw(req.gid as u32)),
+        )
+        .context("fchown parent")?
     }
 
     let sflag = stat::SFlag::from_bits_truncate(req.file_mode);
 
     if sflag.contains(stat::SFlag::S_IFDIR) {
-        // Remove existing non-directory file if present
-        if path.exists() && !path.is_dir() {
-            fs::remove_file(&path)?;
-        }
-
-        fs::create_dir(&path).or_else(|e| {
-            if e.kind() != std::io::ErrorKind::AlreadyExists {
-                return Err(e);
+        // Directories are somewhat special: for backwards compatibility, we need to preserve an
+        // existing directory at path, so we can't just remove_all. Instead, we try to remove a
+        // file and just don't propagate the error if it's a directory or doesn't exist.
+        root.remove_file(path).or_else(|e| match e.kind() {
+            pathrs::error::ErrorKind::OsError(Some(errno))
+                if errno == libc::ENOENT || errno == libc::EISDIR =>
+            {
+                Ok(())
             }
-            Ok(())
+            _ => Err(e),
         })?;
 
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(req.file_mode))?;
+        // mkdir_all does not support the setuid/setgid/sticky bits, so we first create the
+        // directory with the stricter mask and then change permissions with the correct mask.
+        let dir = root
+            .mkdir_all(
+                path,
+                &std::fs::Permissions::from_mode(
+                    req.file_mode & IMPLICIT_DIRECTORY_PERMISSION_MASK,
+                ),
+            )
+            .context("mkdir_all dir")?
+            .reopen(OpenFlags::O_DIRECTORY)
+            .context("reopen dir")?;
+        dir.set_permissions(std::fs::Permissions::from_mode(
+            req.file_mode & FILE_PERMISSION_MASK,
+        ))?;
 
-        unistd::chown(
-            &path,
+        unistd::fchown(
+            dir,
             Some(Uid::from_raw(req.uid as u32)),
             Some(Gid::from_raw(req.gid as u32)),
-        )?;
+        )
+        .context("fchown dir")?;
 
         return Ok(());
+    }
+
+    // Remove any existing file if we're not resuming a chunked upload.
+    if req.offset == 0 {
+        // Remove anything that might already exist at the target location.
+        // This is safe even for a symlink leaf, remove_all removes the named inode in its parent dir.
+        root.remove_all(path).or_else(|e| match e.kind() {
+            pathrs::error::ErrorKind::OsError(Some(errno)) if errno == libc::ENOENT => Ok(()),
+            _ => Err(e),
+        })?;
     }
 
     // Handle symlink creation
     if sflag.contains(stat::SFlag::S_IFLNK) {
-        // Clean up existing path (whether symlink, dir, or file)
-        if path.exists() || path.is_symlink() {
-            // Use appropriate removal method based on path type
-            if path.is_symlink() {
-                unistd::unlink(&path)?;
-            } else if path.is_dir() {
-                fs::remove_dir_all(&path)?;
-            } else {
-                fs::remove_file(&path)?;
-            }
-        }
-
         // Create new symbolic link
         let symlink_target = PathBuf::from(OsStr::from_bytes(&req.data));
-        // Use BorrowedFd to wrap AT_FDCWD for symlinkat
-        let cwd_fd = unsafe { BorrowedFd::borrow_raw(libc::AT_FDCWD) };
-        unistd::symlinkat(&symlink_target, cwd_fd, &path)?;
+        root.create(path, &pathrs::InodeType::Symlink(symlink_target))
+            .context("create symlink")?;
 
         // Set symlink ownership (permissions not supported for symlinks)
-        let path_str = CString::new(path.as_os_str().as_bytes())?;
+        // TODO(burgerdev): TOCTOU issue! However, there's no API for creating the symlink and opening a handle.
+        let path_str = CString::new(shared_dir.join(path).as_os_str().as_bytes())?;
 
         let ret = unsafe { libc::lchown(path_str.as_ptr(), req.uid as u32, req.gid as u32) };
-        Errno::result(ret).map(drop)?;
+        Errno::result(ret).map(drop).context("lchown")?;
 
+        // Symlinks don't have permissions on Linux!
         return Ok(());
     }
 
-    let mut tmpfile = path.clone();
+    let mut tmpfile = path.to_path_buf();
     tmpfile.set_extension("tmp");
 
-    let file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(req.offset == 0) // Only truncate when offset is 0
-        .open(&tmpfile)?;
+    // Write file content.
+    let flags = if req.offset == 0 {
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT | OpenFlags::O_TRUNC
+    } else {
+        OpenFlags::O_RDWR | OpenFlags::O_CREAT
+    };
+    let file = root
+        .create_file(
+            &tmpfile,
+            flags,
+            &std::fs::Permissions::from_mode(req.file_mode & FILE_PERMISSION_MASK),
+        )
+        .context("create_file")?;
+    file.write_all_at(req.data.as_slice(), req.offset as u64)
+        .context("write_all_at")?;
 
-    file.write_all_at(req.data.as_slice(), req.offset as u64)?;
-    let st = stat::stat(&tmpfile)?;
+    // Check whether we're waiting for more data.
 
+    let st = nix::sys::stat::fstat(&file).context("fstat")?;
     if st.st_size != req.file_size {
         return Ok(());
     }
 
-    file.set_permissions(std::fs::Permissions::from_mode(req.file_mode))?;
+    // Things like umask can change the permissions after create, make sure that they stay
+    file.set_permissions(std::fs::Permissions::from_mode(
+        req.file_mode & FILE_PERMISSION_MASK,
+    ))
+    .context("set_permissions")?;
 
-    unistd::chown(
-        &tmpfile,
+    unistd::fchown(
+        file,
         Some(Uid::from_raw(req.uid as u32)),
         Some(Gid::from_raw(req.gid as u32)),
-    )?;
+    )
+    .context("fchown")?;
 
-    // Remove existing target path before rename
-    if path.exists() || path.is_symlink() {
-        if path.is_dir() {
-            fs::remove_dir_all(&path)?;
-        } else {
-            fs::remove_file(&path)?;
-        }
-    }
-
-    fs::rename(tmpfile, path)?;
+    nix::fcntl::renameat(&root, &tmpfile, &root, path).context("renameat")?;
 
     Ok(())
 }
@@ -2636,6 +2685,7 @@ mod tests {
 
     use super::*;
     use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
+    use anyhow::ensure;
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
     use oci::{
@@ -3729,5 +3779,333 @@ COMMIT
         let mut ids: Vec<String> = vec![resp1.container_id, resp2.container_id];
         ids.sort();
         assert_eq!(ids, vec!["container-1", "container-2"]);
+    }
+
+    #[tokio::test]
+    async fn test_do_copy_file() {
+        let temp_dir = tempdir().expect("creating temp dir failed");
+        // We start one directory deeper such that we catch problems when the shared directory does
+        // not exist yet.
+        let base = temp_dir.path().join("shared");
+
+        type Assertions = Box<dyn Fn(&Path) -> Result<()>>;
+        struct TestCase {
+            name: String,
+            request: CopyFileRequest,
+            assertions: Assertions,
+            should_fail: bool,
+        }
+
+        let tests = [
+            TestCase {
+                name: "Create a top-level file".into(),
+                request: CopyFileRequest {
+                    path: base.join("f").to_string_lossy().into(),
+                    file_mode: 0o644 | libc::S_IFREG,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let f = base.join("f");
+                    let f_stat = fs::metadata(&f).context("stat ./f failed")?;
+                    ensure!(f_stat.is_file());
+                    ensure!(0o644 == f_stat.permissions().mode() & 0o777);
+                    let content = std::fs::read_to_string(&f).context("read ./f failed")?;
+                    ensure!(content.is_empty());
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Replace a top-level file".into(),
+                request: CopyFileRequest {
+                    path: base.join("f").to_string_lossy().into(),
+                    file_mode: 0o600 | libc::S_IFREG,
+                    data: b"Hello!".to_vec(),
+                    file_size: 6,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let f = base.join("f");
+                    let f_stat = fs::metadata(&f).context("stat ./f failed")?;
+                    ensure!(f_stat.is_file());
+                    ensure!(0o600 == f_stat.permissions().mode() & 0o777);
+                    let content = std::fs::read_to_string(&f).context("read ./f failed")?;
+                    ensure!("Hello!" == content);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a file and its parent directory".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/b").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o644 | libc::S_IFREG,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let a_stat = fs::metadata(base.join("a")).context("stat ./a failed")?;
+                    ensure!(a_stat.is_dir());
+                    ensure!(0o755 == a_stat.permissions().mode() & 0o777);
+                    let b_stat = fs::metadata(base.join("a/b")).context("stat ./a/b failed")?;
+                    ensure!(b_stat.is_file());
+                    ensure!(0o644 == b_stat.permissions().mode() & 0o777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a file within an existing directory".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/c").to_string_lossy().into(),
+                    dir_mode: 0o700 | libc::S_IFDIR, // Test that existing directories are not touched - we expect this to stay 0o755.
+                    file_mode: 0o621 | libc::S_IFREG,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let a_stat = fs::metadata(base.join("a")).context("stat ./a failed")?;
+                    ensure!(a_stat.is_dir());
+                    ensure!(0o755 == a_stat.permissions().mode() & 0o777);
+                    let c_stat = fs::metadata(base.join("a/c")).context("stat ./a/c failed")?;
+                    ensure!(c_stat.is_file());
+                    ensure!(0o621 == c_stat.permissions().mode() & 0o777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a directory".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/d").to_string_lossy().into(),
+                    dir_mode: 0o700 | libc::S_IFDIR, // Test that the permissions are taken from file_mode.
+                    file_mode: 0o755 | libc::S_IFDIR,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let a_stat = fs::metadata(base.join("a")).context("stat ./a failed")?;
+                    ensure!(a_stat.is_dir());
+                    ensure!(0o755 == a_stat.permissions().mode() & 0o777);
+                    let d_stat = fs::metadata(base.join("a/d")).context("stat ./a/d failed")?;
+                    ensure!(d_stat.is_dir());
+                    ensure!(0o755 == d_stat.permissions().mode() & 0o777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a dir onto an existing file".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/b").to_string_lossy().into(),
+                    dir_mode: 0o700 | libc::S_IFDIR, // Test that the permissions are taken from file_mode.
+                    file_mode: 0o755 | libc::S_IFDIR,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let b_stat = fs::metadata(base.join("a/b")).context("stat ./a/b failed")?;
+                    ensure!(b_stat.is_dir());
+                    ensure!(0o755 == b_stat.permissions().mode() & 0o777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a file onto an existing dir".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/b").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o644 | libc::S_IFREG,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let b_stat = fs::metadata(base.join("a/b")).context("stat ./a/b failed")?;
+                    ensure!(b_stat.is_file());
+                    ensure!(0o644 == b_stat.permissions().mode() & 0o777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a dir onto an existing dir".into(),
+                request: CopyFileRequest {
+                    path: base.join("a").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o751 | libc::S_IFDIR,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    // Check that a/b still exists
+                    let b_stat = fs::metadata(base.join("a/b")).context("stat ./a/b failed")?;
+                    ensure!(b_stat.is_file());
+                    let a_stat = fs::metadata(base.join("a")).context("stat ./a failed")?;
+                    ensure!(0o751 == a_stat.permissions().mode() & 0o777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a symlink".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/link").to_string_lossy().into(),
+                    dir_mode: 0o700 | libc::S_IFDIR, // Test that the permissions are taken from file_mode.
+                    file_mode: 0o755 | libc::S_IFLNK,
+                    data: b"/etc/passwd".to_vec(),
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let link = base.join("a/link");
+                    let link_stat = nix::sys::stat::lstat(&link).context("stat ./a/link failed")?;
+                    // Linux symlinks have no permissions!
+                    ensure!(0o777 | libc::S_IFLNK == link_stat.st_mode);
+                    let target = fs::read_link(&link).context("read_link ./a/link failed")?;
+                    ensure!(target.to_string_lossy() == "/etc/passwd");
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a directory with setgid and sticky bit".into(),
+                request: CopyFileRequest {
+                    path: base.join("x/y").to_string_lossy().into(),
+                    dir_mode: 0o3755 | libc::S_IFDIR,
+                    file_mode: 0o3770 | libc::S_IFDIR,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    // Implicitly created directories should not get a sticky bit.
+                    let x_stat = fs::metadata(base.join("x")).context("stat ./x failed")?;
+                    ensure!(x_stat.is_dir());
+                    ensure!(0o755 == x_stat.permissions().mode() & 0o7777);
+                    // Explicitly created directories should.
+                    let y_stat = fs::metadata(base.join("x/y")).context("stat ./x/y failed")?;
+                    ensure!(y_stat.is_dir());
+                    ensure!(0o3770 == y_stat.permissions().mode() & 0o7777);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Chunked upload 1".into(),
+                request: CopyFileRequest {
+                    path: base.join("x/chunked").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o644 | libc::S_IFREG,
+                    offset: 0,
+                    file_size: 11,
+                    data: b"Hello ".to_vec(),
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    ensure!(
+                        !(fs::exists(base.join("x/chunked"))
+                            .context("exists ./x/chunked failed")?)
+                    );
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Chunked upload 2".into(),
+                request: CopyFileRequest {
+                    path: base.join("x/chunked").to_string_lossy().into(),
+                    dir_mode: 0o755 | libc::S_IFDIR,
+                    file_mode: 0o644 | libc::S_IFREG,
+                    offset: 6,
+                    file_size: 11,
+                    data: b"World".to_vec(),
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    let content = std::fs::read(base.join("x/chunked"))?;
+                    println!("{:?}", content);
+                    ensure!(b"Hello World".to_vec() == content);
+                    Ok(())
+                }),
+            },
+            // =================================
+            // Below are some adversarial tests.
+            // =================================
+            TestCase {
+                name: "Malicious intermediate directory is a symlink".into(),
+                request: CopyFileRequest {
+                    path: base
+                        .join("a/link/this-could-just-be-shadow-but-I-am-not-risking-it")
+                        .to_string_lossy()
+                        .into(),
+                    dir_mode: 0o700 | libc::S_IFDIR, // Test that the permissions are taken from file_mode.
+                    file_mode: 0o755 | libc::S_IFLNK,
+                    data: b"root:password:19000:0:99999:7:::\n".to_vec(),
+                    file_size: 33,
+                    ..Default::default()
+                },
+                should_fail: true,
+                assertions: Box::new(|base| -> Result<()> {
+                    let link_stat = nix::sys::stat::lstat(&base.join("a/link"))
+                        .context("stat ./a/link failed")?;
+                    ensure!(0o777 | libc::S_IFLNK == link_stat.st_mode);
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a symlink onto an existing symlink".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/link").to_string_lossy().into(),
+                    dir_mode: 0o700 | libc::S_IFDIR, // Test that the permissions are taken from file_mode.
+                    file_mode: 0o755 | libc::S_IFLNK,
+                    data: b"/etc".to_vec(),
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    // The symlink should be created at the same place (not followed), with the new content.
+                    let a_stat = fs::metadata(base.join("a")).context("stat ./a failed")?;
+                    ensure!(a_stat.is_dir());
+                    ensure!(0o751 == a_stat.permissions().mode() & 0o777);
+                    let link = base.join("a/link");
+                    let link_stat = nix::sys::stat::lstat(&link).context("stat ./a/link failed")?;
+                    // Linux symlinks have no permissions!
+                    ensure!(0o777 | libc::S_IFLNK == link_stat.st_mode);
+                    let target = fs::read_link(&link).context("read_link ./a/link failed")?;
+                    ensure!(target.to_string_lossy() == "/etc");
+                    Ok(())
+                }),
+            },
+            TestCase {
+                name: "Create a file onto an existing symlink".into(),
+                request: CopyFileRequest {
+                    path: base.join("a/link").to_string_lossy().into(),
+                    file_mode: 0o600 | libc::S_IFREG,
+                    data: b"Hello!".to_vec(),
+                    file_size: 6,
+                    ..Default::default()
+                },
+                should_fail: false,
+                assertions: Box::new(|base| -> Result<()> {
+                    // The symlink itself should be replaced with the file, not followed.
+                    let link = base.join("a/link");
+                    let link_stat = nix::sys::stat::lstat(&link).context("stat ./a/link failed")?;
+                    ensure!(0o600 | libc::S_IFREG == link_stat.st_mode);
+                    let content = std::fs::read_to_string(&link).context("read ./a/link failed")?;
+                    ensure!("Hello!" == content);
+                    Ok(())
+                }),
+            },
+        ];
+
+        let uid = unistd::getuid().as_raw() as i32;
+        let gid = unistd::getgid().as_raw() as i32;
+
+        for mut tc in tests {
+            println!("Running test case: {}", tc.name);
+            // Since we're in a unit test, using root ownership causes issues with cleaning the temp dir.
+            tc.request.uid = uid;
+            tc.request.gid = gid;
+
+            let res = do_copy_file(&tc.request, &base);
+            if tc.should_fail != res.is_err() {
+                panic!("{}: unexpected do_copy_file result: {:?}", tc.name, res)
+            }
+            (tc.assertions)(&base).context(tc.name).unwrap()
+        }
     }
 }
