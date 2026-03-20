@@ -98,7 +98,7 @@ Let's say the OCP pipeline passed running with
 but failed running with
 ``quay.io/kata-containers/kata-deploy-ci:kata-containers-9f512c016e75599a4a921bd84ea47559fe610057-amd64``
 and you'd like to know which PR caused the regression. You can either run with
-all the 60 tags between or you can utilize the [bisecter](https://github.com/ldoktor/bisecter)
+all the 60 tags between or you can utilize the [`bisecter`](https://github.com/ldoktor/bisecter)
 to optimize the number of steps in between.
 
 Before running the bisection you need a reproducer script. Sample one called

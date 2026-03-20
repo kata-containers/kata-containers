@@ -730,7 +730,7 @@ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.debug_cons
 
 ##### Connecting to the debug console
 
-Next, connect to the debug console. The VSOCKS paths vary slightly between each
+Next, connect to the debug console. The VSOCK paths vary slightly between each
 VMM solution.
 
 In case of cloud-hypervisor, connect to the `vsock` as shown:

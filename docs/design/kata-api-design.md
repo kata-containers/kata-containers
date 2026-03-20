@@ -43,7 +43,7 @@ To fulfill the [Kata design requirements](kata-design-requirements.md), and base
 |`sandbox.AddInterface(inf)`| Add new NIC to the sandbox.|
 |`sandbox.RemoveInterface(inf)`| Remove a NIC from the sandbox.|
 |`sandbox.ListInterfaces()`| List all NICs and their configurations in the sandbox, return a `pbTypes.Interface` list.|
-|`sandbox.UpdateRoutes(routes)`| Update the sandbox route table (e.g. for portmapping support), return a `pbTypes.Route` list.|
+|`sandbox.UpdateRoutes(routes)`| Update the sandbox route table (e.g. for port mapping support), return a `pbTypes.Route` list.|
 |`sandbox.ListRoutes()`| List the sandbox route table, return a `pbTypes.Route` list.|
 
 ### Sandbox Relay API

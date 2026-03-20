@@ -1,0 +1,84 @@
+# Kata Containers Dictionary
+
+# Project-Specific Terms
+Dragonball
+genpolicy
+kata
+katacontainers
+libcontainer
+osbuilder
+rootfs
+shimv2
+SPDK
+upcall
+virtcontainers
+
+# Hardware & Architecture
+AMD
+APQN
+cpuid
+DCAP
+DGPU
+IOMMU
+IOVA
+MDEV
+MKVP
+MMDS
+mmio
+NVDIMM
+OVMF
+SEV
+SLES
+SNP
+SRIOV
+TDX
+VBIOS
+VGPU
+VPMU
+
+# GPU & NVIDIA
+CUDA
+Gramine
+Mellanox
+MOFED
+NCCL
+NVCR
+NVLINK
+NVRC
+nvlib
+Quadro
+
+# Storage & Filesystems
+AUFS
+blockfile
+devicemapper
+devmapper
+hugepage
+MACVTAP
+memdisk
+pmem
+
+# Networking & Communication
+netns
+Netlink
+ttrpc
+vsock
+
+# Container, Runtime & Misc terms
+cgroupsv1
+coredump
+CPUSET
+crio
+dentries
+hypercalls
+inodes
+libelf-dev
+memcg
+nydus
+patchset
+prestart
+snapshotters
+StratoVirt
+TOCTOU
+unbootable
+userspace

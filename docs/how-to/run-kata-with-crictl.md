@@ -8,7 +8,7 @@
 
 > **Note:** `cri-tools` is only used for debugging and validation purpose, and don't use it to run production workloads.
 
-> **Note:** For how to install and configure `cri-tools` with CRI runtimes like `containerd` or CRI-O, please also refer to other [howtos](./README.md).
+> **Note:** For how to install and configure `cri-tools` with CRI runtimes like `containerd` or CRI-O, please also refer to other [how-tos](./README.md).
 
 ## Use `crictl` run Pods in Kata containers
 
