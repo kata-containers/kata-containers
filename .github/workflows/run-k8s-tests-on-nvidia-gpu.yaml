@@ -98,7 +98,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Run tests ${{ matrix.environment.vmm }}
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-nv-tests
         env:
           NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
