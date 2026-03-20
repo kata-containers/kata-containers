@@ -6,6 +6,12 @@ rust-version = "1.88"
 
 [workspace]
 members = [
+  # kata-agent
+  "src/agent",
+  "src/agent/rustjail",
+  "src/agent/policy",
+  "src/agent/vsock-exporter",
+
   # Dragonball
   "src/dragonball",
   "src/dragonball/dbs_acpi",
@@ -41,7 +47,6 @@ resolver = "2"
 
 # TODO: Add all excluded crates to root workspace
 exclude = [
-  "src/agent",
   "src/tools",
   "src/libs",
 
@@ -104,6 +109,7 @@ wasm_container = { path = "src/runtime-rs/crates/runtimes/wasm_container" }
 kata-sys-util = { path = "src/libs/kata-sys-util" }
 kata-types = { path = "src/libs/kata-types", features = ["safe-path"] }
 logging = { path = "src/libs/logging" }
+mem-agent = { path = "src/libs/mem-agent" }
 protocols = { path = "src/libs/protocols", features = ["async"] }
 runtime-spec = { path = "src/libs/runtime-spec" }
 safe-path = { path = "src/libs/safe-path" }
@@ -112,35 +118,65 @@ test-utils = { path = "src/libs/test-utils" }
 
 # Local dependencies from `src/agent`
 kata-agent-policy = { path = "src/agent/policy" }
+rustjail = { path = "src/agent/rustjail" }
+vsock-exporter = { path = "src/agent/vsock-exporter" }
 
 # Outside dependencies
 actix-rt = "2.7.0"
 anyhow = "1.0"
+async-recursion = "0.3.2"
 async-trait = "0.1.48"
+capctl = "0.2.0"
+cfg-if = "1.0.0"
+cgroups = { package = "cgroups-rs", git = "https://github.com/kata-containers/cgroups-rs", rev = "v0.3.5" }
+clap = { version = "4.5.40", features = ["derive"] }
+const_format = "0.2.30"
 containerd-shim = { version = "0.10.0", features = ["async"] }
 containerd-shim-protos = { version = "0.10.0", features = ["async"] }
+derivative = "2.2.0"
+futures = "0.3.30"
 go-flag = "0.1.0"
 hyper = "0.14.20"
 hyperlocal = "0.8.0"
+ipnetwork = "0.17.0"
 lazy_static = "1.4"
-libc = "0.2"
+libc = "0.2.94"
 log = "0.4.14"
+netlink-packet-core = "0.7.0"
+netlink-packet-route = "0.19.0"
+netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 netns-rs = "0.1.0"
 # Note: nix needs to stay sync'd with libs versions
 nix = "0.26.4"
 oci-spec = { version = "0.8.1", features = ["runtime"] }
+opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
+procfs = "0.12.0"
+prometheus = { version = "0.14.0", features = ["process"] }
 protobuf = "3.7.2"
 rand = "0.8.4"
+regex = "1.10.5"
+rstest = "0.18.0"
+rtnetlink = "0.14.0"
+scan_fmt = "0.2.6"
+scopeguard = "1.0.0"
 serde = { version = "1.0.145", features = ["derive"] }
 serde_json = "1.0.91"
+serial_test = "0.10.0"
 sha2 = "0.10.9"
 slog = "2.5.2"
 slog-scope = "4.4.0"
+slog-stdlog = "4.0.0"
+slog-term = "2.9.0"
 strum = { version = "0.24.0", features = ["derive"] }
+strum_macros = "0.26.2"
 tempfile = "3.19.1"
-thiserror = "1.0"
+thiserror = "1.0.26"
 tokio = "1.46.1"
+tokio-vsock = "0.3.4"
+toml = "0.5.8"
 tracing = "0.1.41"
 tracing-opentelemetry = "0.18.0"
+tracing-subscriber = "0.3.20"
 ttrpc = "0.8.4"
 url = "2.5.4"
+which = "4.3.0"
