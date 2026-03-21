@@ -557,6 +557,9 @@ type HypervisorConfig struct {
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
 
+	// TpmSocket is the path to the swtpm socket for vTPM device passthrough via CLH
+	TpmSocket string
+
 	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
 	// VMid is "" if the hypervisor is not created by the factory.
 	VMid string
