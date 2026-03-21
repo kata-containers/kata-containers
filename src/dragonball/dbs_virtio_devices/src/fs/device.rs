@@ -5,6 +5,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::marker::PhantomData;
@@ -453,6 +454,17 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         prefetch_list_path: Option<String>,
     ) -> FsResult<()> {
         debug!("http_server rafs");
+        let currentnetns = fs::read_link("/proc/self/ns/net").unwrap_or_default();
+        info!("========fupan====1==netns={:?}", currentnetns);
+
+        let tid = unsafe { libc::syscall(libc::SYS_gettid) as i32 };
+
+        let netnspath = format!("/proc/{}/ns/net", tid);
+        let netns = fs::read_link(netnspath.as_str()).unwrap_or_default();
+        info!("========fupan====2==netns={:?}", netns);
+
+        info!("========fupan====3==config={:?}", config);
+
         let file = Path::new(&source);
         let (mut rafs, rafs_cfg) = match config.as_ref() {
             Some(cfg) => {
