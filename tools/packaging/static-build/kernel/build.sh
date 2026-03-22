@@ -77,6 +77,7 @@ container_build+=" --build-arg ARCH=${ARCH:-}"
 
 "${container_engine}" run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env KERNEL_DEBUG_ENABLED="${KERNEL_DEBUG_ENABLED}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} build"
@@ -84,6 +85,7 @@ container_build+=" --build-arg ARCH=${ARCH:-}"
 "${container_engine}" run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	--env KERNEL_DEBUG_ENABLED="${KERNEL_DEBUG_ENABLED}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} install"

@@ -322,7 +322,8 @@ get_kernel_frag_path() {
 
 	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
 		info "Enable kernel debug"
-		local debug_configs="$(ls ${common_path}/common/debug.conf)"
+		local debug_path="${arch_path}/../debug"
+		local debug_configs="$(ls ${debug_path}/*.conf)"
 		all_configs="${all_configs} ${debug_configs}"
 	fi
 
@@ -581,6 +582,10 @@ install_kata() {
 		if [[ "${arch_target}" == "aarch64" ]]; then
 			suffix="-${conf_guest}${suffix}"
 		fi
+	fi
+
+	if [[ ${KERNEL_DEBUG_ENABLED} == "yes" ]]; then
+		suffix="-debug${suffix}"
 	fi
 
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"

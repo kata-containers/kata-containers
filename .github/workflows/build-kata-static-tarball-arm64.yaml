@@ -45,6 +45,7 @@ jobs:
           - cloud-hypervisor
           - firecracker
           - kernel
+          - kernel-debug
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
           - kernel-cca-confidential
