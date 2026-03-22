@@ -203,6 +203,8 @@ function teardown() {
 	echo "Running teardown"
 	local rc=0
 
+	journalctl -x -t kata --since "10 minutes ago" || true
+
 	local pid
 	for bin in containerd-nydus-grpc nydusd; do
 		pid=$(pidof $bin)
