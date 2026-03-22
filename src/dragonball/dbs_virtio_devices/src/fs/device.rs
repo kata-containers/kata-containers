@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0 AND BSD-3-Clause
 
+use kata_sys_util::netns::NetnsGuard;
 use std::any::Any;
 use std::collections::HashMap;
 use std::ffi::CString;
@@ -454,6 +455,11 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         prefetch_list_path: Option<String>,
     ) -> FsResult<()> {
         debug!("http_server rafs");
+        // We need to make sure the nydus worker thread in the runD main process's network namespace
+        // instead of the vmm thread's netns, which wouldn't access the host network.
+        let _netns_guard =
+            NetnsGuard::new("/proc/self/ns/net").map_err(|e| FsError::BackendFs(e.to_string()))?;
+
         let file = Path::new(&source);
         let (mut rafs, rafs_cfg) = match config.as_ref() {
             Some(cfg) => {

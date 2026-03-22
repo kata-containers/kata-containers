@@ -44,6 +44,7 @@ vm-memory = { workspace = true, features = ["backend-mmap"] }
 sendfd = "0.4.3"
 vhost-rs = { version = "0.15.0", package = "vhost", optional = true }
 timerfd = "1.0"
+kata-sys-util = { workspace = true}
 
 [dev-dependencies]
 vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }
