@@ -50,6 +50,7 @@ vm-memory = { workspace = true, features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
 vfio-bindings = { workspace = true, optional = true }
 vfio-ioctls = { workspace = true, optional = true }
+kata-sys-util = { path = "../libs/kata-sys-util" }
 
 [dev-dependencies]
 slog-async = "2.7.0"
