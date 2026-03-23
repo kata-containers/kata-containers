@@ -30,7 +30,7 @@ setup() {
 
 	busybox_pod="test-nginx"
 	kubectl run $busybox_pod --restart=Never -it --image="$busybox_image" \
-		-- sh -c 'i=1; while [ $i -le '"$wait_time"' ]; do wget --timeout=5 '"$deployment"' && break; sleep 1; i=$(expr $i + 1); done'
+		-- sh -c 'i=1; while [ $i -le '"$wait_time"' ]; do wget -c --timeout=5 '"$deployment"' && break; sleep 1; i=$(expr $i + 1); done'
 
 	# check pod's status, it should be Succeeded.
 	# or {.status.containerStatuses[0].state.terminated.reason} = "Completed"
