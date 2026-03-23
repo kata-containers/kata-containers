@@ -78,7 +78,7 @@ semver = "1.0.12"
 tempfile = "3.19.1"
 nix = "0.25.0"
 test-utils = { path = "../../libs/test-utils" }
-micro_http = { git = "https://github.com/firecracker-microvm/micro-http", branch = "main" }
+micro_http = { git = "https://github.com/firecracker-microvm/micro-http", rev = "5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba" }
 
 [package.metadata.cargo-machete]
 ignored = ["strum"]

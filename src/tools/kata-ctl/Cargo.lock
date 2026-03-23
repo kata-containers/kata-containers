@@ -154,9 +154,10 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 [[package]]
 name = "api_client"
 version = "0.1.0"
-source = "git+https://github.com/cloud-hypervisor/cloud-hypervisor?tag=v27.0#2ba6a9bfcfd79629aecf77504fa554ab821d138e"
+source = "git+https://github.com/cloud-hypervisor/cloud-hypervisor?tag=v51.0#00e106e53e7ba48b01f194f7887b20b9a0bfb905"
 dependencies = [
- "vmm-sys-util 0.10.0",
+ "thiserror 2.0.18",
+ "vmm-sys-util 0.14.0",
 ]
 
 [[package]]
@@ -554,7 +555,7 @@ dependencies = [
  "nix 0.26.4",
  "serde",
  "serde_json",
- "thiserror 1.0.50",
+ "thiserror 2.0.18",
  "tokio",
 ]
 
@@ -2091,10 +2092,10 @@ dependencies = [
 [[package]]
 name = "micro_http"
 version = "0.1.0"
-source = "git+https://github.com/firecracker-microvm/micro-http?branch=main#a4d632f2c5ea45712c0d2002dc909a63879e85c3"
+source = "git+https://github.com/firecracker-microvm/micro-http?rev=5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba#5c2254d6cf4f32a668d0d8e57ba20bebad9d4fba"
 dependencies = [
  "libc",
- "vmm-sys-util 0.11.2",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -2212,7 +2213,7 @@ dependencies = [
  "log",
  "netlink-packet-core",
  "netlink-sys",
- "thiserror 2.0.12",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2379,7 +2380,7 @@ dependencies = [
  "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
- "thiserror 2.0.12",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -2796,7 +2797,7 @@ dependencies = [
  "parking_lot",
  "procfs 0.17.0",
  "protobuf",
- "thiserror 2.0.12",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4024,7 +4025,7 @@ dependencies = [
  "byteorder",
  "enum-as-inner",
  "libc",
- "thiserror 2.0.12",
+ "thiserror 2.0.18",
  "walkdir",
 ]
 
@@ -4132,11 +4133,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.12"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
+checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
 dependencies = [
- "thiserror-impl 2.0.12",
+ "thiserror-impl 2.0.18",
 ]
 
 [[package]]
@@ -4152,9 +4153,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.12"
+version = "2.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
+checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4596,19 +4597,9 @@ dependencies = [
 
 [[package]]
 name = "vmm-sys-util"
-version = "0.10.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08604d7be03eb26e33b3cee3ed4aef2bf550b305d1cca60e84da5d28d3790b62"
-dependencies = [
- "bitflags 1.3.2",
- "libc",
-]
-
-[[package]]
-name = "vmm-sys-util"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48b7b084231214f7427041e4220d77dfe726897a6d41fddee450696e66ff2a29"
+checksum = "d21f366bf22bfba3e868349978766a965cbe628c323d58e026be80b8357ab789"
 dependencies = [
  "bitflags 1.3.2",
  "libc",

@@ -135,7 +135,7 @@ pub async fn cloud_hypervisor_vm_netdev_add_with_fds(
             "PUT",
             "vm.add-net",
             Some(&serialised),
-            request_fds,
+            &request_fds,
         )
         .map_err(|e| anyhow!(e))?;
 
