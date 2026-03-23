@@ -24,22 +24,12 @@ class Checks:
         config_path = os.path.join(os.path.dirname(__file__), "required-tests.yaml")
         with open(config_path, "r", encoding="utf8") as config_fd:
             config = yaml.load(config_fd, Loader=yaml.SafeLoader)
-        if config.get('required_tests'):
-            self.required_tests = config['required_tests']
-        else:
-            self.required_tests = []
-        if config.get('required_regexps'):
-            self.required_regexps = config['required_regexps']
-        else:
-            self.required_regexps = []
-        if config.get('paths'):
-            self.paths = OrderedDict((re.compile(key), value)
-                                       for items in config['paths']
-                                       for key, value in items.items())
-        if config.get('mapping'):
-            self.mapping = config['mapping']
-        else:
-            self.mapping = {}
+        self.required_tests = config.get('required_tests') or []
+        self.required_regexps = config.get('required_regexps') or []
+        self.paths = OrderedDict((re.compile(key), value)
+                                   for items in config.get('paths', [])
+                                   for key, value in items.items())
+        self.mapping = config.get('mapping') or {}
         self.all_set_of_tests = set(self.mapping.keys())
 
     def run(self, tests, target_branch):
