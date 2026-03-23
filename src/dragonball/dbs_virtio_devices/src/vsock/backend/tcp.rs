@@ -99,13 +99,13 @@ mod tests {
 
     #[test]
     fn test_tcp_backend_bind() {
-        let tcp_sock_addr = String::from("127.0.0.2:9000");
+        let tcp_sock_addr = String::from("127.0.0.1:9000");
         assert!(VsockTcpBackend::new(tcp_sock_addr).is_ok());
     }
 
     #[test]
     fn test_tcp_backend_accept() {
-        let tcp_sock_addr = String::from("127.0.0.2:9001");
+        let tcp_sock_addr = String::from("127.0.0.1:9001");
 
         let mut vsock_backend = VsockTcpBackend::new(tcp_sock_addr.clone()).unwrap();
         let _stream = TcpStream::connect(&tcp_sock_addr).unwrap();
@@ -115,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_tcp_backend_communication() {
-        let tcp_sock_addr = String::from("127.0.0.2:9002");
+        let tcp_sock_addr = String::from("127.0.0.1:9002");
         let test_string = String::from("TEST");
         let mut buffer = [0; 10];
 
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_tcp_backend_connect() {
-        let tcp_sock_addr = String::from("127.0.0.2:9003");
+        let tcp_sock_addr = String::from("127.0.0.1:9003");
         let vsock_backend = VsockTcpBackend::new(tcp_sock_addr).unwrap();
         // tcp backend don't support peer connection
         assert!(vsock_backend.connect(0).is_err());
@@ -147,14 +147,14 @@ mod tests {
 
     #[test]
     fn test_tcp_backend_type() {
-        let tcp_sock_addr = String::from("127.0.0.2:9004");
+        let tcp_sock_addr = String::from("127.0.0.1:9004");
         let vsock_backend = VsockTcpBackend::new(tcp_sock_addr).unwrap();
         assert_eq!(vsock_backend.r#type(), VsockBackendType::Tcp);
     }
 
     #[test]
     fn test_tcp_backend_vsock_stream() {
-        let tcp_sock_addr = String::from("127.0.0.2:9005");
+        let tcp_sock_addr = String::from("127.0.0.1:9005");
         let _vsock_backend = VsockTcpBackend::new(tcp_sock_addr.clone()).unwrap();
         let vsock_stream = TcpStream::connect(&tcp_sock_addr).unwrap();
 

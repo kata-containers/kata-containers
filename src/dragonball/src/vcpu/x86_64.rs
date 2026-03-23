@@ -45,7 +45,7 @@ impl Vcpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new_x86_64(
         id: u8,
-        vcpu_fd: Arc<VcpuFd>,
+        vcpu_fd: VcpuFd,
         io_mgr: IoManagerCached,
         cpuid: CpuId,
         exit_evt: EventFd,

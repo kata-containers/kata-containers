@@ -113,20 +113,23 @@ arm64_sys_reg!(MPIDR_EL1, 3, 0, 0, 0, 5);
 /// * `mem` - Reserved DRAM for current VM.
 pub fn setup_regs(vcpu: &VcpuFd, cpu_id: u8, boot_ip: u64, fdt_address: u64) -> Result<()> {
     // Get the register index of the PSTATE (Processor State) register.
-    vcpu.set_one_reg(arm64_core_reg!(pstate), PSTATE_FAULT_BITS_64 as u128)
-        .map_err(Error::SetCoreRegister)?;
+    vcpu.set_one_reg(
+        arm64_core_reg!(pstate),
+        &(PSTATE_FAULT_BITS_64 as u128).to_le_bytes(),
+    )
+    .map_err(Error::SetCoreRegister)?;
 
     // Other vCPUs are powered off initially awaiting PSCI wakeup.
     if cpu_id == 0 {
         // Setting the PC (Processor Counter) to the current program address (kernel address).
-        vcpu.set_one_reg(arm64_core_reg!(pc), boot_ip as u128)
+        vcpu.set_one_reg(arm64_core_reg!(pc), &(boot_ip as u128).to_le_bytes())
             .map_err(Error::SetCoreRegister)?;
 
         // Last mandatory thing to set -> the address pointing to the FDT (also called DTB).
         // "The device tree blob (dtb) must be placed on an 8-byte boundary and must
         // not exceed 2 megabytes in size." -> https://www.kernel.org/doc/Documentation/arm64/booting.txt.
         // We are choosing to place it the end of DRAM. See `get_fdt_addr`.
-        vcpu.set_one_reg(arm64_core_reg!(regs), fdt_address as u128)
+        vcpu.set_one_reg(arm64_core_reg!(regs), &(fdt_address as u128).to_le_bytes())
             .map_err(Error::SetCoreRegister)?;
     }
     Ok(())
@@ -157,9 +160,10 @@ pub fn is_system_register(regid: u64) -> bool {
 ///
 /// * `vcpu` - Structure for the VCPU that holds the VCPU's fd.
 pub fn read_mpidr(vcpu: &VcpuFd) -> Result<u64> {
-    vcpu.get_one_reg(MPIDR_EL1)
-        .map(|value| value as u64)
-        .map_err(Error::GetSysRegister)
+    let mut reg_data = 0u128.to_le_bytes();
+    vcpu.get_one_reg(MPIDR_EL1, &mut reg_data)
+        .map_err(Error::GetSysRegister)?;
+    Ok(u128::from_le_bytes(reg_data) as u64)
 }
 
 #[cfg(test)]

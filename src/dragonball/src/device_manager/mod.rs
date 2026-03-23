@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use dbs_address_space::AddressSpace;
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::{DeviceType, MMIODeviceInfo};
+#[cfg(feature = "host-device")]
 use dbs_boot::layout::MMIO_LOW_END;
 use dbs_device::device_manager::{Error as IoManagerError, IoManager, IoManagerContext};
 use dbs_device::resources::DeviceResources;
@@ -24,7 +25,6 @@ use dbs_legacy_devices::ConsoleHandler;
 use dbs_pci::CAPABILITY_BAR_SIZE;
 use dbs_utils::epoll_manager::EpollManager;
 use kvm_ioctls::VmFd;
-use virtio_queue::QueueSync;
 
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_device::resources::ResourceConstraint;
@@ -41,6 +41,7 @@ use dbs_virtio_devices::{
 
 #[cfg(feature = "host-device")]
 use dbs_pci::VfioPciDevice;
+#[cfg(feature = "host-device")]
 use dbs_pci::VirtioPciDevice;
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{
@@ -59,6 +60,7 @@ use crate::resource_manager::ResourceManager;
 use crate::vm::{KernelConfigInfo, Vm, VmConfigInfo};
 use crate::IoManagerCached;
 
+#[cfg(feature = "host-device")]
 use vm_memory::GuestRegionMmap;
 
 /// Virtual machine console device manager.
@@ -187,18 +189,23 @@ pub enum DeviceMgrError {
     /// Error from Vfio Pci
     #[error("failed to do vfio pci operation: {0:?}")]
     VfioPci(#[source] dbs_pci::VfioPciError),
+    #[cfg(feature = "host-device")]
     /// Error from Virtio Pci
     #[error("failed to do virtio pci operation")]
     VirtioPci,
+    #[cfg(feature = "host-device")]
     /// PCI system manager error
     #[error("Pci system manager error")]
     PciSystemManager,
+    #[cfg(feature = "host-device")]
     /// Dragonball pci system error
     #[error("pci error: {0:?}")]
     PciError(#[source] dbs_pci::Error),
+    #[cfg(feature = "host-device")]
     /// Virtio Pci system error
     #[error("virtio pci error: {0:?}")]
     VirtioPciError(#[source] dbs_pci::VirtioPciDeviceError),
+    #[cfg(feature = "host-device")]
     /// Unsupported pci device type
     #[error("unsupported pci device type")]
     InvalidPciDeviceType,
@@ -315,6 +322,7 @@ pub struct DeviceOpContext {
     virtio_devices: Vec<Arc<dyn DeviceIo>>,
     #[cfg(feature = "host-device")]
     vfio_manager: Option<Arc<Mutex<VfioDeviceMgr>>>,
+    #[cfg(feature = "host-device")]
     pci_system_manager: Arc<Mutex<PciSystemManager>>,
     vm_config: Option<VmConfigInfo>,
     shared_info: Arc<RwLock<InstanceInfo>>,
@@ -366,6 +374,7 @@ impl DeviceOpContext {
             shared_info,
             #[cfg(feature = "host-device")]
             vfio_manager: None,
+            #[cfg(feature = "host-device")]
             pci_system_manager: device_mgr.pci_system_manager.clone(),
         }
     }
@@ -659,6 +668,7 @@ pub struct DeviceManager {
     vhost_user_net_manager: VhostUserNetDeviceMgr,
     #[cfg(feature = "host-device")]
     pub(crate) vfio_manager: Arc<Mutex<VfioDeviceMgr>>,
+    #[cfg(feature = "host-device")]
     pub(crate) pci_system_manager: Arc<Mutex<PciSystemManager>>,
 }
 
@@ -674,15 +684,21 @@ impl DeviceManager {
         let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
         let io_manager = Arc::new(ArcSwap::new(Arc::new(IoManager::new())));
         let io_lock = Arc::new(Mutex::new(()));
+        #[cfg(feature = "host-device")]
         let io_context = DeviceManagerContext::new(io_manager.clone(), io_lock.clone());
+        #[cfg(feature = "host-device")]
         let mut mgr = PciSystemManager::new(irq_manager.clone(), io_context, res_manager.clone())?;
 
+        #[cfg(feature = "host-device")]
         let requirements = mgr.resource_requirements();
+        #[cfg(feature = "host-device")]
         let resources = res_manager
             .allocate_device_resources(&requirements, USE_SHARED_IRQ)
             .map_err(DeviceMgrError::ResourceError)?;
+        #[cfg(feature = "host-device")]
         mgr.activate(resources)?;
 
+        #[cfg(feature = "host-device")]
         let pci_system_manager = Arc::new(Mutex::new(mgr));
 
         Ok(DeviceManager {
@@ -720,6 +736,7 @@ impl DeviceManager {
                 pci_system_manager.clone(),
                 logger,
             ))),
+            #[cfg(feature = "host-device")]
             pci_system_manager,
         })
     }
@@ -1251,6 +1268,7 @@ impl DeviceManager {
     }
 
     /// Create an Virtio PCI transport layer device for the virtio backend device.
+    #[cfg(feature = "host-device")]
     pub fn create_virtio_pci_device(
         mut device: DbsVirtioDevice,
         ctx: &mut DeviceOpContext,
@@ -1366,6 +1384,7 @@ impl DeviceManager {
     }
 
     /// Create an Virtio PCI transport layer device for the virtio backend device.
+    #[cfg(feature = "host-device")]
     pub fn register_virtio_pci_device(
         device: Arc<dyn DeviceIo>,
         ctx: &DeviceOpContext,
@@ -1385,6 +1404,7 @@ impl DeviceManager {
     }
 
     /// Deregister Virtio device from IoManager
+    #[cfg(feature = "host-device")]
     pub fn deregister_virtio_device(
         device: &Arc<dyn DeviceIo>,
         ctx: &mut DeviceOpContext,
@@ -1405,11 +1425,15 @@ impl DeviceManager {
     }
 
     /// Destroy/Deregister resources for a Virtio PCI
+    #[cfg(feature = "host-device")]
     fn destroy_pci_device(
         device: Arc<dyn DeviceIo>,
         ctx: &mut DeviceOpContext,
         dev_id: u8,
     ) -> std::result::Result<(), DeviceMgrError> {
+        use virtio_queue::QueueSync;
+        use vm_memory::GuestRegionMmap;
+
         // unregister IoManager
         Self::deregister_virtio_device(&device, ctx)?;
         // unregister Resource manager
@@ -1489,6 +1513,7 @@ impl DeviceManager {
     }
 
     /// Teardown the Virtio PCI or MMIO transport layer device associated with the virtio backend device.
+    #[cfg(feature = "dbs-virtio-devices")]
     pub fn destroy_virtio_device(
         device: Arc<dyn DeviceIo>,
         ctx: &mut DeviceOpContext,
@@ -1496,12 +1521,18 @@ impl DeviceManager {
         if let Some(mmio_dev) = device.as_any().downcast_ref::<DbsMmioV2Device>() {
             Self::destroy_mmio_device(device.clone(), ctx)?;
             mmio_dev.remove();
-        } else if let Some(pci_dev) = device.as_any().downcast_ref::<VirtioPciDevice<
-            GuestAddressSpaceImpl,
-            QueueSync,
-            GuestRegionMmap,
-        >>() {
-            Self::destroy_pci_device(device.clone(), ctx, pci_dev.device_id())?;
+        }
+        #[cfg(feature = "host-device")]
+        {
+            use virtio_queue::QueueSync;
+            use vm_memory::GuestRegionMmap;
+            if let Some(pci_dev) = device.as_any().downcast_ref::<VirtioPciDevice<
+                GuestAddressSpaceImpl,
+                QueueSync,
+                GuestRegionMmap,
+            >>() {
+                Self::destroy_pci_device(device.clone(), ctx, pci_dev.device_id())?;
+            }
         }
 
         Ok(())
@@ -1572,18 +1603,25 @@ mod tests {
             let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
             let io_manager = Arc::new(ArcSwap::new(Arc::new(IoManager::new())));
             let io_lock = Arc::new(Mutex::new(()));
+
+            #[cfg(feature = "host-device")]
             let io_context = DeviceManagerContext::new(io_manager.clone(), io_lock.clone());
+            #[cfg(feature = "host-device")]
             let mut mgr =
                 PciSystemManager::new(irq_manager.clone(), io_context, res_manager.clone())
                     .unwrap();
 
+            #[cfg(feature = "host-device")]
             let requirements = mgr.resource_requirements();
+            #[cfg(feature = "host-device")]
             let resources = res_manager
                 .allocate_device_resources(&requirements, USE_SHARED_IRQ)
                 .map_err(DeviceMgrError::ResourceError)
                 .unwrap();
+            #[cfg(feature = "host-device")]
             mgr.activate(resources).unwrap();
 
+            #[cfg(feature = "host-device")]
             let pci_system_manager = Arc::new(Mutex::new(mgr));
 
             DeviceManager {
@@ -1619,6 +1657,7 @@ mod tests {
                     pci_system_manager.clone(),
                     &logger,
                 ))),
+                #[cfg(feature = "host-device")]
                 pci_system_manager,
 
                 logger,
