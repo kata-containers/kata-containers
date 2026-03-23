@@ -226,7 +226,7 @@ assets:
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.12.47"
+    version: "v6.18.15"
 
 externals:
   description: "Third-party projects used by the system"
