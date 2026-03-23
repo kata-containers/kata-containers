@@ -272,12 +272,29 @@ kbs_uninstall_cli() {
 	fi
 }
 
+# Ensure ~/.cicd/venv exists and activate it in the current shell.
+ensure_cicd_python_venv() {
+	local venv_path="${HOME}/.cicd/venv"
+	if [[ ! -f "${venv_path}/bin/activate" ]]; then
+		# NIM tests need Python 3.10 via pyenv; attestation uses system python3. Both are fine.
+		if command -v pyenv &>/dev/null; then
+			export PYENV_ROOT="${HOME}/.pyenv"
+			[[ -d "${PYENV_ROOT}/bin" ]] && export PATH="${PYENV_ROOT}/bin:${PATH}"
+			eval "$(pyenv init - bash)"
+		fi
+		mkdir -p "${HOME}/.cicd"
+		python3 -m venv "${venv_path}"
+	fi
+	# shellcheck disable=SC1091
+	source "${venv_path}/bin/activate"
+}
+
 # Ensure the sev-snp-measure utility is installed.
 #
 ensure_sev_snp_measure() {
 	command -v sev-snp-measure >/dev/null && return
 
-	source "${HOME}"/.cicd/venv/bin/activate
+	ensure_cicd_python_venv
 	pip install sev-snp-measure
 }
 
