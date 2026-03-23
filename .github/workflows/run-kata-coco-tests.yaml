@@ -144,7 +144,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    environment: ci
+    environment:
+      name: ci
+      deployment: false
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -269,7 +271,9 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-    environment: ci
+    environment:
+      name: ci
+      deployment: false
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -379,7 +383,9 @@ jobs:
         pull-type:
           - default
     runs-on: ubuntu-24.04
-    environment: ci
+    environment:
+      name: ci
+      deployment: false
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
