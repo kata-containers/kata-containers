@@ -32,5 +32,6 @@ ignoreRegExpList:
 ignorePaths:
   - "**/vendor/**"  # vendor files aren't owned by us
   - "**/src/runtime/virtcontainers/pkg/cloud-hypervisor/client/**"  # Generated files
+  - "**/requirements.txt"
 
 useGitignore: true
