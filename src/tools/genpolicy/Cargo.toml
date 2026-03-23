@@ -64,7 +64,7 @@ tower = "0.4.13"
 containerd-client = "0.4.0"
 
 # username to UID:GID mapping support
-tar = "0.4.41"
+tar = "0.4.45"
 
 # init data support
 kata-types = { path = "../../libs/kata-types" } # TODO(burgerdev): figure out how to use this from workspace without including safe-path.
