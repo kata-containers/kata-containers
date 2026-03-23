@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: Copyright 2015-2025 go-swagger maintainers
+// SPDX-License-Identifier: Apache-2.0
+
 package client
 
 import (
@@ -10,7 +13,7 @@ import (
 // so that go will reuse the TCP connections.
 // This is not enabled by default because there are servers where
 // the response never gets closed and that would make the code hang forever.
-// So instead it's provided as a http client middleware that can be used to override
+// So instead it's provided as a [http] client [middleware] that can be used to override
 // any request.
 func KeepAliveTransport(rt http.RoundTripper) http.RoundTripper {
 	return &keepAliveTransport{wrapped: rt}
