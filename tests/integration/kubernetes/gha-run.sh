@@ -176,7 +176,7 @@ function deploy_kata() {
 
 	# Workaround to avoid modifying the workflow yaml files
 	case "${KATA_HYPERVISOR}" in
-		qemu-tdx|qemu-nvidia-gpu-*)
+		qemu-snp|qemu-tdx|qemu-nvidia-gpu-*)
 			USE_EXPERIMENTAL_SETUP_SNAPSHOTTER=true
 			SNAPSHOTTER="nydus"
 			EXPERIMENTAL_FORCE_GUEST_PULL=false
@@ -220,7 +220,7 @@ function deploy_kata() {
 				# deployed when the machine is configured, as on the BM machines).
 				if [[ ${ARCH} == "x86_64" ]]; then
 					case "${KATA_HYPERVISOR}" in
-						qemu-tdx|qemu-coco-dev*|qemu-nvidia-gpu-*) EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}" ;;
+						qemu-snp|qemu-tdx|qemu-coco-dev*|qemu-nvidia-gpu-*) EXPERIMENTAL_SETUP_SNAPSHOTTER="${SNAPSHOTTER}" ;;
 						*) ;;
 					esac
 				fi

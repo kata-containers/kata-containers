@@ -150,7 +150,7 @@ install_genpolicy_drop_ins() {
 		cp "${examples_dir}/20-oci-1.2.0-drop-in.json" "${settings_d}/"
 	elif is_k3s_or_rke2; then
 		cp "${examples_dir}/20-oci-1.2.1-drop-in.json" "${settings_d}/"
-	elif is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
+	elif is_nvidia_gpu_platform || [[ "${KATA_HYPERVISOR}" == "qemu-snp" ]] || [[ "${KATA_HYPERVISOR}" == "qemu-tdx" ]] || [[ -n "${CONTAINER_ENGINE_VERSION:-}" ]]; then
 		cp "${examples_dir}/20-oci-1.3.0-drop-in.json" "${settings_d}/"
 	fi
 
