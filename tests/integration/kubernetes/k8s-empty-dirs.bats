@@ -22,10 +22,17 @@ setup() {
 	pod_name="sharevol-kata"
 	pod_logs_file=""
 	setup_common || die "setup_common failed"
-	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"
 
-	# Add policy to yaml
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+}
+
+@test "Empty dir volumes" {
+	local yaml_file
+	local mount_command
+	local dd_command
+
+	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"
 
 	mount_command=(sh -c "mount | grep cache")
 	add_exec_to_policy_settings "${policy_settings_dir}" "${mount_command[@]}"
@@ -33,11 +40,9 @@ setup() {
 	dd_command=(sh -c "dd if=/dev/zero of=/tmp/cache/file1 bs=1M count=50; echo $?")
 	add_exec_to_policy_settings "${policy_settings_dir}" "${dd_command[@]}"
 
-	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	# Add policy to yaml
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
-}
 
-@test "Empty dir volumes" {
 	# Create the pod
 	kubectl create -f "${yaml_file}"
 
@@ -55,22 +60,27 @@ setup() {
 	local agnhost_name
 	local agnhost_version
 	local gid
-	local image
 	local logs
-	local pod_file
+	local pod_yaml
+	local pod_yaml_in
 	local uid
 
 	[[ "${KATA_HYPERVISOR}" = qemu-se* ]] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	# This is a reproducer of k8s e2e "[sig-storage] EmptyDir volumes when FSGroup is specified [LinuxOnly] [NodeFeature:FSGroup] new files should be created with FSGroup ownership when container is non-root" test
-	pod_file="${pod_config_dir}/pod-empty-dir-fsgroup.yaml"
+	pod_yaml_in="${pod_config_dir}/pod-empty-dir-fsgroup.yaml.in"
+	pod_yaml="${pod_config_dir}/pod-empty-dir-fsgroup.yaml"
 	agnhost_name="${container_images_agnhost_name}"
 	agnhost_version="${container_images_agnhost_version}"
-	image="${agnhost_name}:${agnhost_version}"
+	export AGNHOST_IMAGE="${agnhost_name}:${agnhost_version}"
+
+	envsubst '${AGNHOST_IMAGE}' <"${pod_yaml_in}" >"${pod_yaml}"
+
+	# Add policy to yaml
+	auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 
 	# Try to avoid timeout by prefetching the image.
-	sed -e "s#\${agnhost_image}#${image}#" "$pod_file" |\
-		kubectl create -f -
+	kubectl create -f "${pod_yaml}"
 	cmd="kubectl get pods ${pod_name} | grep Completed"
 	waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
 
@@ -92,6 +102,7 @@ setup() {
 
 teardown() {
 	[ ! -f "$pod_logs_file" ] || rm -f "$pod_logs_file"
+	[[ -n "${pod_config_dir:-}" ]] && rm -f "${pod_config_dir}/pod-empty-dir-fsgroup.yaml"
 
 	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 	teardown_common "${node}" "${node_start_time:-}"
