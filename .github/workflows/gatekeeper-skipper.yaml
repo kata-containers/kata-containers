@@ -8,6 +8,9 @@ name: Skipper
 #     with:
 #       commit-hash: ${{ github.event.pull_request.head.sha }}
 #       target-branch: ${{ github.event.pull_request.base.ref }}
+#       # Optional: override gatekeeper source to test gatekeeper changes
+#       # gatekeeper-ref: 'my-gatekeeper-branch'  # or
+#       # gatekeeper-pr: '12345'  # uses refs/pull/12345/head
 #
 #   your-workflow:
 #     needs: skipper
@@ -20,6 +23,16 @@ on:
         required: true
         type: string
       target-branch:
+        required: false
+        type: string
+        default: ""
+      gatekeeper-ref:
+        description: 'Branch/ref to use for gatekeeper scripts (defaults to target-branch)'
+        required: false
+        type: string
+        default: ""
+      gatekeeper-pr:
+        description: 'PR number containing gatekeeper changes (used if gatekeeper-ref is not set)'
         required: false
         type: string
         default: ""
@@ -47,9 +60,28 @@ jobs:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Determine gatekeeper ref
+        id: gatekeeper-ref
+        if: ${{ github.event.pull_request.base.ref == '' && inputs.gatekeeper-ref == '' }}
+        env:
+          GATEKEEPER_PR: ${{ inputs.gatekeeper-pr }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+        run: |
+          if [[ -n "$GATEKEEPER_PR" ]]; then
+            echo "ref=refs/pull/${GATEKEEPER_PR}/head" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.base.ref || inputs.gatekeeper-ref || steps.gatekeeper-ref.outputs.ref }}
+          sparse-checkout: tools/testing/gatekeeper
+          path: LATEST_KATA_SOURCES
+          fetch-depth: 1
+          persist-credentials: false
       - id: skipper
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
         run: |
-          python3 tools/testing/gatekeeper/skips.py | tee -a "$GITHUB_OUTPUT"
+          python3 LATEST_KATA_SOURCES/tools/testing/gatekeeper/skips.py | tee -a "$GITHUB_OUTPUT"
         shell: /usr/bin/bash -x {0}
