@@ -795,7 +795,7 @@ function helm_helper() {
 		disable_snapshotter_setup=false
 		for shim in ${HELM_SHIMS}; do
 			case "${shim}" in
-				qemu-tdx|qemu-snp)
+				qemu-snp)
 					disable_snapshotter_setup=true
 					break
 					;;
@@ -804,7 +804,7 @@ function helm_helper() {
 
 		# Safety check: Fail if EXPERIMENTAL_SETUP_SNAPSHOTTER is set when using SNP/TDX shims
 		if [[ "${disable_snapshotter_setup}" == "true" ]] && [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
-			die "ERROR: HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER cannot be set when using SNP/TDX shims (qemu-snp, qemu-tdx, qemu-nvidia-gpu-snp, qemu-nvidia-gpu-tdx). snapshotter.setup must always be disabled for these shims."
+			die "ERROR: HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER cannot be set when using SNP shims (qemu-snp). snapshotter.setup must always be disabled for these shims."
 		fi
 
 		if [[ -n "${HELM_EXPERIMENTAL_SETUP_SNAPSHOTTER}" ]]; then
