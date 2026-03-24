@@ -181,16 +181,9 @@ CWD := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 standard_rust_check:
 	@echo "standard rust check..."
 	cargo fmt -- --check
-	cargo clippy --all-targets --all-features --release \
+	cargo clippy --all-targets --all-features --release --locked \
 		-- \
 		-D warnings
-	cargo check
-	@DIFF=$$(git diff HEAD); \
-	if [ -n "$$DIFF" ]; then \
-		echo "ERROR: cargo check resulted in uncommited changes"; \
-		echo "$$DIFF"; \
-		exit 1; \
-	fi
 
 # Install a file (full version).
 #
