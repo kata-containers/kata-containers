@@ -7,20 +7,17 @@
 
 FROM golang:1.24-alpine AS nydus-binary-downloader
 
-# Keep the version here aligned with "ndyus-snapshotter.version"
-# in versions.yaml
-ARG NYDUS_SNAPSHOTTER_VERSION=v0.15.10
-ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/containerd/nydus-snapshotter
+ARG NYDUS_SNAPSHOTTER_VERSION=topic/nydus-overlayfs-compact-overlay-paths
+ARG NYDUS_SNAPSHOTTER_REPO=https://github.com/fidencio/nydus-snapshotter
 
 RUN \
-	mkdir -p /opt/nydus-snapshotter && \
-	ARCH="$(uname -m)" && \
-	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64 ; fi && \
-	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
-	apk add --no-cache curl && \
-	curl -fOL --progress-bar "${NYDUS_SNAPSHOTTER_REPO}/releases/download/${NYDUS_SNAPSHOTTER_VERSION}/nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" && \
-	tar xvzpf "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz" -C /opt/nydus-snapshotter && \
-	rm "nydus-snapshotter-${NYDUS_SNAPSHOTTER_VERSION}-linux-${ARCH}.tar.gz"
+	apk add --no-cache git make && \
+	git clone -b "${NYDUS_SNAPSHOTTER_VERSION}" --depth 1 "${NYDUS_SNAPSHOTTER_REPO}" /src/nydus-snapshotter && \
+	cd /src/nydus-snapshotter && \
+	make && \
+	mkdir -p /opt/nydus-snapshotter/bin && \
+	cp bin/containerd-nydus-grpc /opt/nydus-snapshotter/bin/ && \
+	cp bin/nydus-overlayfs /opt/nydus-snapshotter/bin/
 
 #### Build binary package
 FROM ubuntu:22.04 AS rust-builder
