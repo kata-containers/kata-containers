@@ -79,7 +79,14 @@ spec:
       limits:
         nvidia.com/pgpu: "1"
         cpu: "16"
-        memory: "48Gi"
+        memory: "32Gi"
+    volumeMounts:
+      - name: nim-trusted-cache
+        mountPath: /opt/nim/.cache
+  volumes:
+  - name: nim-trusted-cache
+    emptyDir:
+      sizeLimit: 40Gi
 ---
 apiVersion: v1
 kind: Secret
