@@ -1,4 +1,4 @@
-# Per-Pod Kata Configurations
+# Pod Annotations
 
 Kata Containers gives users freedom to customize at per-pod level, by setting
 a wide range of Kata specific annotations in the pod specification.
@@ -8,17 +8,20 @@ configuration file for security reasons, notably annotations that could lead the
 runtime to execute programs on the host. Such annotations are marked with _(R)_ in
 the tables below.
 
-# Kata Configuration Annotations
+## Kata Configuration Annotations
+
 There are several kinds of Kata configurations and they are listed below.
 
-## Global Options
+### Global Options
+
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
 | `io.katacontainers.config_path` | string | Kata config file location that overrides the default config paths |
 | `io.katacontainers.pkg.oci.bundle_path` | string | OCI bundle path |
 | `io.katacontainers.pkg.oci.container_type`| string | OCI container type. Only accepts `pod_container` and `pod_sandbox` |
 
-## Runtime Options
+### Runtime Options
+
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
 | `io.katacontainers.config.runtime.experimental` | `boolean` | determines if experimental features enabled |
@@ -30,7 +33,8 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.runtime.create_container_timeout` | `uint64` | the timeout for create a container in `seconds`, default is `60` |
 | `io.katacontainers.config.runtime.experimental_force_guest_pull` | `boolean` | forces the runtime to pull the image in the guest VM, default is `false`. This is an experimental feature and might be removed in the future. |
 
-## Agent Options
+### Agent Options
+
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
 | `io.katacontainers.config.agent.enable_tracing` | `boolean` | enable tracing for the agent |
@@ -38,7 +42,15 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.agent.kernel_modules` | string | the list of kernel modules and their parameters that will be loaded in the guest kernel. Semicolon separated list of kernel modules and their parameters. These modules will be loaded in the guest kernel using `modprobe`(8). E.g., `e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0` |
 | `io.katacontainers.config.agent.cdh_api_timeout` | uint32 | timeout in second for Confidential Data Hub (CDH) API service, default is `50` |
 
-## Hypervisor Options
+### Hypervisor Options
+
+Hypervisor annotations must be explicitly whitelisted in the Kata runtime config. Example:
+
+```toml title="/path/to/configuration.toml"
+# List of valid annotation names for the hypervisor
+enable_annotations = ["enable_iommu", "virtio_fs_extra_args", "kernel_params"]
+```
+
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
 | `io.katacontainers.config.hypervisor.asset_hash_type` | string | the hash type used for assets verification, default is `sha512` |
@@ -86,7 +98,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.memory_offset` | uint64| the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_slots` | uint32| the memory slots assigned to the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.msize_9p` | uint32 | the `msize` for 9p shares |
-| `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM |
+| `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM. The path must be whitelisted in the runtime configuration's `valid_hypervisor_paths` parameter. |
 | `io.katacontainers.config.hypervisor.pcie_root_port` | specify the number of PCIe Root Port devices. The PCIe Root Port device is used to hot-plug a PCIe device (QEMU) |
 | `io.katacontainers.config.hypervisor.shared_fs` | string | the shared file system type, either `virtio-9p` or `virtio-fs` |
 | `io.katacontainers.config.hypervisor.use_vsock` | `boolean` | specify use of `vsock` for agent communication |
@@ -102,17 +114,14 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.block_device_num_queues` | `usize` | The number of queues to use for block devices (runtime-rs only) |
 | `io.katacontainers.config.hypervisor.block_device_queue_size` | uint32 | The size of the of the queue to use for block devices (runtime-rs only) |
 
-## Container Options
+### Container Options
+
 | Key | Value Type | Comments |
 |-------| ----- | ----- |
 | `io.katacontainers.container.resource.swappiness"` | `uint64` | specify the `Resources.Memory.Swappiness` |
 | `io.katacontainers.container.resource.swap_in_bytes"` | `uint64` | specify the `Resources.Memory.Swap` |
 
-# CRI-O Configuration
-
-In case of CRI-O, all annotations specified in the pod spec are passed down to Kata.
-
-# containerd Configuration
+## containerd Configuration
 
 For containerd, annotations specified in the pod spec are passed down to Kata
 starting with version `1.3.0` of containerd. Additionally, extra configuration is
@@ -138,7 +147,7 @@ $ cat /etc/containerd/config
 Additional documentation on the above configuration can be found in the
 [containerd docs](https://github.com/containerd/cri/blob/8d5a8355d07783ba2f8f451209f6bdcc7c412346/docs/config.md).
 
-# Example - Using annotations
+## Example
 
 As mentioned above, not all containers need the same modules, therefore using
 the configuration file for specifying the list of kernel modules per POD can
@@ -194,7 +203,7 @@ spec:
     tty: true
 ```
 
-# Restricted annotations
+## Restricted annotations
 
 Some annotations are _restricted_, meaning that the configuration file specifies
 the acceptable values. Currently, only hypervisor annotations are restricted,
