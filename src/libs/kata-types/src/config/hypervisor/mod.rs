@@ -1343,12 +1343,13 @@ impl SecurityInfo {
     }
 }
 
-/// Configuration information for shared filesystems, such as virtio-9p and virtio-fs.
+/// Configuration information for shared filesystems, such as virtio-fs-nydus and virtio-fs.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SharedFsInfo {
     /// Type of shared file system to use:
     /// - `virtio-fs` (default)
-    /// - `virtio-9p`
+    /// - `inline-virtio-fs`
+    /// - `virtio-fs-nydus`
     /// - `none` (disables shared filesystem)
     pub shared_fs: Option<String>,
 
@@ -1401,7 +1402,7 @@ impl SharedFsInfo {
     /// Adjusts the shared filesystem configuration after loading from a configuration file.
     ///
     /// Handles default values for `shared_fs` type, `virtio-fs` specific settings
-    /// (daemon path, cache mode, DAX), and `virtio-9p` msize.
+    /// (daemon path, cache mode, DAX) or `inline-virtio-fs` settings.
     pub fn adjust_config(&mut self) -> Result<()> {
         if self.shared_fs.as_deref() == Some(NO_VIRTIO_FS) {
             self.shared_fs = None;
@@ -1428,7 +1429,7 @@ impl SharedFsInfo {
     /// Validates the shared filesystem configuration.
     ///
     /// Checks the validity of the selected `shared_fs` type and
-    /// performs specific validations for `virtio-fs` and `virtio-9p` settings.
+    /// performs specific validations for `virtio-fs` and `inline-virtio-fs` settings.
     pub fn validate(&self) -> Result<()> {
         match self.shared_fs.as_deref() {
             None => Ok(()),
