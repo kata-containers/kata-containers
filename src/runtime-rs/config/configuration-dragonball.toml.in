@@ -62,11 +62,11 @@ firmware = "@FIRMWAREPATH@"
 
 
 # Default number of vCPUs per SB/VM:
-# unspecified or 0                --> will be set to 1
+# unspecified or 0                --> will be set to @DEFVCPUS_DB_RUNTIME_RS@
 # < 0                             --> will be set to the actual number of physical cores
 # > 0 <= number of physical cores --> will be set to the specified number
 # > number of physical cores      --> will be set to the actual number of physical cores
-default_vcpus = @DEFVCPUS@
+default_vcpus = @DEFVCPUS_DB_RUNTIME_RS@
 
 
 # Default maximum number of vCPUs per SB/VM:
@@ -109,8 +109,8 @@ default_bridges = @DEF_DGB_BRIDGES@
 reclaim_guest_freed_memory = false
 
 # Default memory size in MiB for SB/VM.
-# If unspecified then it will be set @DEFMEMSZ@ MiB.
-default_memory = @DEFMEMSZ@
+# If unspecified then it will be set @DEFMEMSZ_DB_RUNTIME_RS@ MiB.
+default_memory = @DEFMEMSZ_DB_RUNTIME_RS@
 
 # Default maximum memory in MiB per SB / VM
 # unspecified or == 0           --> will be set to the actual amount of physical RAM
