@@ -227,7 +227,7 @@ Kata's non-TEE and TEE GPU workload deployment scenarios for your Kubernetes
 nodes. We provide guidance based on the upstream Kata CI procedures for the
 NVIDIA GPU CI validation jobs. Note that, this setup:
 
-- uses the guest image pull method to pull container image layers
+- uses the nydus snapshotter to pull container image layers in the guest
 - uses the genpolicy tool to attach Kata agent security policies to the pod
   manifest
 - has dedicated (composite) attestation tests, a CUDA vectorAdd test, and a
@@ -249,6 +249,17 @@ Service NRAS
 - access to authenticated registries for container image guest-pull
 - container image signature verification and encrypted container images
 - ephemeral container data and image layer storage
+
+For the use of these features, we refer to separate documentation in the
+kata-containers and confidential-containers documentation resources.
+For example, see a
+[list of features](https://confidentialcontainers.org/docs/features/) along
+with their documentation in the confidential-containers documentation.
+
+> **Note:**
+>
+> Image signature verification for signed multi-arch images is currently not
+> supported.
 
 ### Requirements
 
@@ -272,8 +283,8 @@ selecting proper hardware and on properly configuring its firmware and OS.
 #### Containerd and Kubernetes
 
 First, set up your Kubernetes cluster. For instance, in Kata CI, our NVIDIA
-jobs use a single-node vanilla Kubernetes cluster with a 2.1 containerd
-version and Kata's current supported Kubernetes version. This cluster is
+jobs use a single-node vanilla Kubernetes cluster with containerd v2.2
+and Kata's current supported Kubernetes version. This cluster is
 being set up using the `deploy_k8s` function from the script file
 `tests/integration/kubernetes/gha-run.sh`. If you intend to run this script,
 follow these steps, and make sure you have `yq` and `helm` installed. Note
@@ -284,7 +295,7 @@ You can execute the function as follows:
 $ export GH_TOKEN="<your-gh-pat>"
 $ export KUBERNETES="vanilla"
 $ export CONTAINER_ENGINE="containerd"
-$ export CONTAINER_ENGINE_VERSION="v2.1"
+$ export CONTAINER_ENGINE_VERSION="v2.2"
 $ source tests/gha-run-k8s-common.sh
 $ deploy_k8s
 ```
@@ -300,6 +311,13 @@ $ deploy_k8s
 > `create_container_timeout` of 1200s, which is the equivalent value on shim
 > side, controlling the time the shim allows for a container to remain in
 > *container creating* state.
+> If you need a timeout of more than 1200s, you will also need to adjust the
+> agent's `image_pull_timeout`, which in turn sets the confidential data
+> hub's image pull API timeout in seconds. For this, add the
+> `agent.image_pull_timeout=<seconds>` kernel parameter to your shim
+> configuration's `kernel_params` field, or pass the parameter explicitly
+> via the `io.katacontainers.config.hypervisor.kernel_params: "..."` pod
+> annotation. The default value for this timeout is 1200s.
 
 > **Note:**
 >
@@ -356,7 +374,7 @@ $ helm install --wait --generate-name \
 
 Install the latest Kata Containers helm chart, similar to
 [existing documentation](https://github.com/kata-containers/kata-containers/blob/main/tools/packaging/kata-deploy/helm-chart/README.md)
-(minimum version: `3.24.0`).
+(minimum version: `3.29.0`).
 
 ```bash
 $ export VERSION=$(curl -sSL https://api.github.com/repos/kata-containers/kata-containers/releases/latest | jq .tag_name | tr -d '"')
@@ -370,6 +388,13 @@ $ helm install kata-deploy \
     --wait --timeout 10m \
     "${CHART}" --version "${VERSION}"
 ```
+
+> **Note:**
+>
+> For node lifecycle management, see the
+> [lifecycle-manager](https://github.com/kata-containers/lifecycle-manager)
+> repository which enables Argo Workflows-based lifecycle management for your
+> node's Kata deployments.
 
 #### Trustee's KBS for remote attestation
 
@@ -566,21 +591,21 @@ With GPU passthrough being supported by the
 you can use the tool to create a Kata agent security policy. Our CI deploys
 all sample pod manifests with a Kata agent security policy.
 
-Note that, using containerd 2.1 in upstream's CI, we use the following
-modification to the genpolicy default settings:
+Note that, in Kata CI, we use snippets such as the following to modify the
+genpolicy default settings:
 ```bash
 [
   {
     "op": "replace",
     "path": "/kata_config/oci_version",
-    "value": "1.2.1"
+    "value": "1.3.0"
   }
 ]
 ```
 This modification is applied via the genpolicy drop-in configuration file
-`src\tools\genpolicy\drop-in-examples\20-oci-1.2.1-drop-in.json`.
-When using a newer containerd version, such as containerd 2.2, the OCI
-version field needs to be adjusted to "1.3.0", for instance.
+`src/tools/genpolicy/drop-in-examples/20-oci-1.3.0-drop-in.json`.
+When using a newer (or older) containerd version, the OCI version field
+may need to be adjusted accordingly.
 
 #### Deploy pods using your own containers and manifests
 
